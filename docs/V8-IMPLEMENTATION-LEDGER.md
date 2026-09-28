@@ -11,7 +11,7 @@ FEAT-055  [REVIEW] Account access request / Admin approval (formal audit complet
 FEAT-056  [IN PROGRESS] ML lifecycle automation (queued runs, SSE, drift, cancel, notifications, transient retries; retention/recovery/acceptance still open)
 FEAT-057  [IN PROGRESS] ML feature engineering / training (feature registry + dataset plan/admin APIs; full PIT-safe feature/training/validation corpus still open)
 FEAT-061  [REVIEW] Guided tour / onboarding (formal audit complete; missing-target regression covered; browser accessibility/mobile journey and localization mechanism remain open)
-FEAT-062  [IN PROGRESS] Fundamental signals & AI insights (deterministic + Gemini/Codex orchestrator; admin diagnostics and full acceptance still open)
+FEAT-062  [IN PROGRESS] Fundamental signals & AI insights (deterministic + Gemini/Codex orchestrator, bounded investor-safe response validation, and follow-up evidence guidance; catalogue/UI/acceptance still open)
 FEAT-063  [REVIEW] Live microstructure collection (local implementation and deterministic resilience verification complete; VPS installation, live Kite path, and deployed backup destination remain external)
 FEAT-064  [REVIEW] Screener / Strategy UX (semantic versions, run/backtest pins, immutable save, readiness, provenance audit, and WP-09 return flow present; regression cleanup and full gate remain)
 FEAT-065  [IN PROGRESS] Intraday ML historical data platform (checkpoints + admin status + Mac backfill worker; current-universe orchestration, coverage, and handoff acceptance remain)
@@ -76,18 +76,19 @@ FEAT-065  [IN PROGRESS] Intraday ML historical data platform (checkpoints + admi
 | NSE official JSON feed adapter | done | `NseOfficialFundamentalHistoricalTest.php` |
 | BSE official JSON feed adapter | done | `BseOfficialFundamentalHistoricalTest.php` |
 | Investor snapshot + history APIs | done | `FundamentalInvestorSnapshotTest.php` |
-| Watchlist fundamentals tab (summary, chart, Basic/Advanced tables, cadence toggle) | partial | manual |
+| Watchlist fundamentals tab (summary, chart, Basic/Advanced tables, cadence toggle) | done locally | `FundamentalInvestorSnapshotTest.php`, JS fundamentals tests; browser pending |
 | Screener `fund_*` operands (catalog + evaluateStock) | done | `FundamentalScreenerOperandTest.php` |
 | Metric history API | done | `FundamentalInvestorSnapshotTest.php` |
-| Watchlist revenue TTM mini-chart + deterministic insights | partial | manual |
-| Advanced/collapsed statement tables | partial | `fundamentals_ui.php` + `FundamentalStatementTables.jsx` |
+| Watchlist revenue TTM mini-chart + deterministic insights | done locally | `FundamentalInvestorSnapshotTest.php`, `FundamentalSignalsTest.php`; browser pending |
+| Advanced/collapsed statement tables + user-scoped preference | done locally | `FundamentalStatementTables.jsx`, `fundamentalPreference.js`, JS fundamentals tests |
+| Metric definitions + provenance | done locally | `fundamentalDefinitions.js`, `FundamentalInvestorSnapshotService.php`, `FundamentalInvestorSnapshotTest.php` |
 | Backtest PIT fundamental operands | done | `FundamentalScreenerOperandTest.php` |
 | Screener editor fundamental indicator grouping | done | manual |
 
 ## Frontend validation baseline (2026-09-28)
 
 - Node `20.19.1` / npm `10.8.2` via the existing user NVM installation.
-- Node JS suite: **184 passed, 0 failed**; Vitest: **99 passed, 0 failed**.
+- Node JS suite: **188 passed, 0 failed**; Vitest: **99 passed, 0 failed**.
 - Vite production build: passed.
 - Typecheck: passed.
 - Static documentation check: passed.
@@ -102,7 +103,7 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 
 1. FEAT-063 external validation: install/validate the collector on the StoX VPS, then exercise the live Kite path and deployed backup destination when credentials/market conditions permit.
 2. FEAT-054 external acceptance: browser/mobile fundamentals journey and representative provider/deployed bootstrap runtime.
-3. FEAT-062 or FEAT-057: select the lower-rework dependent fundamentals consumer after the FEAT-054 review gate.
+3. FEAT-062: continue the deterministic signal catalogue and investor-facing acceptance audit; FEAT-054 is now the lower-rework dependency gate.
 
 ## Failing tests
 
