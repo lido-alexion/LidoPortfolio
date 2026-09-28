@@ -57,6 +57,7 @@ export function GuidedTourProvider({ children, user }) {
     const [skippedSteps, setSkippedSteps] = useState([]);
     const welcomeRecordedRef = useRef(false);
     const pendingLaunchRef = useRef(null);
+    const focusReturnRef = useRef(null);
 
     const targetWaitMs = serverState?.target_wait_ms ?? 4000;
 
@@ -96,6 +97,21 @@ export function GuidedTourProvider({ children, user }) {
         const { data } = await api.put('/guided-tour', { action, ...body });
         setServerState(data.data);
         return data.data;
+    }, []);
+
+    const rememberFocus = useCallback(() => {
+        const active = document.activeElement;
+        if (active && active !== document.body && typeof active.focus === 'function') {
+            focusReturnRef.current = active;
+        }
+    }, []);
+
+    const restoreFocus = useCallback(() => {
+        const element = focusReturnRef.current;
+        focusReturnRef.current = null;
+        if (element?.isConnected && typeof element.focus === 'function') {
+            window.setTimeout(() => element.focus(), 0);
+        }
     }, []);
 
     const computeTargetRect = useCallback((el) => {
@@ -168,16 +184,18 @@ export function GuidedTourProvider({ children, user }) {
         setTargetRect(null);
         closeOverlay();
         await applyAction('close', { step_id: stepId ?? undefined });
+        restoreFocus();
         logGuidedTourEvent('tour_closed', { step_id: stepId });
-    }, [applyAction, closeOverlay, currentStepId]);
+    }, [applyAction, closeOverlay, currentStepId, restoreFocus]);
 
     const completeTour = useCallback(async () => {
         setTourActive(false);
         setTargetRect(null);
         closeOverlay();
         await applyAction('complete');
+        restoreFocus();
         logGuidedTourEvent('tour_completed');
-    }, [applyAction, closeOverlay]);
+    }, [applyAction, closeOverlay, restoreFocus]);
 
     const goToStep = useCallback(async (stepId) => {
         const step = resolveTourStep(stepId);
@@ -203,6 +221,7 @@ export function GuidedTourProvider({ children, user }) {
     }, [applyAction, prepareStep]);
 
     const onWelcomeBegin = useCallback(() => {
+        rememberFocus();
         setWelcomeOpen(false);
         const resume = serverState?.current_step_id && !serverState?.completed;
         if (resume) {
@@ -210,7 +229,7 @@ export function GuidedTourProvider({ children, user }) {
             return;
         }
         startTour({ restart: false });
-    }, [serverState, startTour]);
+    }, [rememberFocus, serverState, startTour]);
 
     const onWelcomeSkip = useCallback(async () => {
         setWelcomeOpen(false);
@@ -227,6 +246,7 @@ export function GuidedTourProvider({ children, user }) {
     useEffect(() => {
         const onLaunch = (event) => {
             const restart = Boolean(event.detail?.restart);
+            rememberFocus();
             pendingLaunchRef.current = { restart, fromManual: true };
             setResumeChoiceOpen(false);
             setWelcomeOpen(false);
@@ -234,7 +254,7 @@ export function GuidedTourProvider({ children, user }) {
         };
         window.addEventListener('lido-guided-tour-launch', onLaunch);
         return () => window.removeEventListener('lido-guided-tour-launch', onLaunch);
-    }, [startTour]);
+    }, [rememberFocus, startTour]);
 
     useEffect(() => {
         if (!tourActive || !currentStepId) {

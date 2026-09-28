@@ -38,4 +38,22 @@ test.describe('FEAT-061 guided tour mobile browser acceptance', () => {
         expect(stepBox).not.toBeNull();
         expect(stepBox.width).toBeLessThanOrEqual(390);
     });
+
+    test('closing a manually launched tour restores focus to its trigger', async ({ page }) => {
+        await installInvestorWorkflowApiMocks(page);
+        await page.goto('/');
+
+        const trigger = page.locator('[data-tour="header-help"]');
+        await trigger.focus();
+        await page.evaluate(() => {
+            window.dispatchEvent(new CustomEvent('lido-guided-tour-launch', { detail: { restart: true } }));
+        });
+
+        const firstStep = page.getByRole('dialog').filter({
+            has: page.getByRole('heading', { name: 'Navigation' }),
+        });
+        await expect(firstStep).toBeVisible();
+        await firstStep.getByRole('button', { name: 'Close' }).click();
+        await expect(trigger).toBeFocused();
+    });
 });

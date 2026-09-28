@@ -17,7 +17,7 @@ Authoritative contract: `docs/archive/specs/V8-Guided-Tour-Welcome-Onboarding-Sp
 | Missing targets bounded wait and safe continuation | PASS | `waitForTarget`; provider now advances through every missing non-final step; final valid step still requires explicit Finish. |
 | Explanatory-only underlying interaction | PASS (static) | Full scrim captures background pointer events; panel is the only interactive layer. Browser interaction proof pending. |
 | Responsive positioning/scrolling | PARTIAL | Desktop Chromium and 390×844 mobile welcome-to-first-step journeys pass; full route traversal and broader device coverage remain. |
-| Keyboard/accessibility/focus return | PARTIAL | Desktop dialog semantics, pointer interaction, Escape, focus-on-panel, and background scroll lock exist; focus return and screen-reader/mobile audit remain. |
+| Keyboard/accessibility/focus return | PARTIAL | Desktop/mobile dialog semantics, pointer interaction, Escape, focus-on-panel, background scroll lock, and manual-launch focus return are browser-tested; screen-reader audit and full keyboard traversal remain. |
 | Normal i18n mechanism | PASS locally | `resources/js/src/i18n/index.js` and `messages.js` provide keyed translation lookup with locale fallback; all tour step, modal, overlay and Profile copy references translation keys rather than embedded literals. English is the current shipped dictionary; additional locales remain additive. |
 | Telemetry non-blocking and existing path | PASS | `guidedTourTelemetry.js` posts to existing frontend log endpoint and swallows failures. |
 | Refresh/interruption recovery | PASS | Backend state is authoritative and provider resumes persisted step; desktop browser journey now proves welcome-to-tour transition. |
@@ -30,4 +30,4 @@ Authoritative contract: `docs/archive/specs/V8-Guided-Tour-Welcome-Onboarding-Sp
 - Guided-tour copy/key coverage: **3/3** focused Node tests passed.
 - Playwright journeys pass for the investor welcome modal → Begin → first guided-tour step on desktop Chromium and a 390×844 mobile viewport. The journeys also exposed and fixed a real modal-backdrop stacking defect. Accessibility tooling, focus-return, refresh/resume, and full route traversal remain pending.
 
-FEAT-061 remains **REVIEW**. Keyed i18n plus desktop and narrow-mobile journeys are verified locally. Remaining evidence is accessibility/focus-return, refresh/resume, full route traversal, and broader live browser acceptance.
+FEAT-061 remains **REVIEW**. Keyed i18n plus desktop/mobile journeys and manual-launch focus return are verified locally. Remaining evidence is screen-reader/full keyboard audit, refresh/resume, full route traversal, and broader live browser acceptance.
