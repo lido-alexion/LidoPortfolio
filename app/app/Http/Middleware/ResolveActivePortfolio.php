@@ -69,6 +69,8 @@ class ResolveActivePortfolio
             'api/auth/me',
             'api/auth/csrf-token',
             'api/auth/logout',
+            'api/auth/access-requests',
+            'api/auth/access-requests/*',
             'api/auth/sessions',
             'api/auth/sessions/*',
             'api/profile',

@@ -148,6 +148,11 @@ class BrokerConnectionService
             'broker_connection_id' => $connection->id,
         ]);
 
+        if (app()->bound(\App\Services\Microstructure\MicrostructureCollectorControlService::class)) {
+            app(\App\Services\Microstructure\MicrostructureCollectorControlService::class)
+                ->signalAutoStartAfterKiteLogin($user);
+        }
+
         return $connection->fresh();
     }
 
