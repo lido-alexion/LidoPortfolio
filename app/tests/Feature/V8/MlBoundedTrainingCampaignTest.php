@@ -6,6 +6,7 @@ use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\V7\MlModelVersion;
 use App\Services\ML\MlCandidateEvidenceService;
+use App\Services\ML\MlPythonAdapter;
 use App\Services\ML\MlScoringService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -93,6 +94,16 @@ class MlBoundedTrainingCampaignTest extends TestCase
             $this->assertSame(hash('sha256', $encodedArchive), $archive->evidence_sha256);
             $this->assertSame($evidence, app(MlCandidateEvidenceService::class)->persist($model->fresh()));
             $this->assertSame(1, $model->fresh()->candidateEvidenceArchive()->count());
+
+            $adapterMetadata = (array) data_get($model->audit_metadata, 'adapter_metadata');
+            $prediction = app(MlPythonAdapter::class)->run('predict', [
+                'artifact_path' => $model->artifact_path,
+                'artifact_sha256' => $model->artifact_sha256,
+                'features' => array_fill_keys((array) ($adapterMetadata['numeric_features'] ?? []), 0.0),
+            ]);
+            $this->assertArrayHasKey('score', $prediction);
+            $this->assertArrayHasKey('contributions', $prediction);
+            $this->assertSame($model->artifact_sha256, $prediction['artifact_sha256']);
         }
     }
 }
