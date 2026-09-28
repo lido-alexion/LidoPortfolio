@@ -101,8 +101,8 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 
 ## Verified continuation checkpoint (2026-09-28)
 
-- Actual checkout is `fc8e422`; the earlier handoff SHA `3265357` is not the current HEAD.
-- The full Feature suite under local PHP CLI `memory_limit=512M` now passes **1,320/1,321**, with one intentional bounded-training skip when `STOXLA_ML_TEST_PYTHON` is absent. The previous FEAT-064 fixture cascade was repaired by giving activation-oriented legacy fixtures the executable factory configuration; the production Setup Required gate was not weakened.
+- Actual checkout is `ea263a7`; the earlier handoff SHA `3265357` is not the current HEAD.
+- The full Feature suite under local PHP CLI `memory_limit=512M` now passes **1,328/1,329**, with one intentional bounded-training skip when `STOXLA_ML_TEST_PYTHON` is absent. The previous FEAT-064 fixture cascade was repaired by giving activation-oriented legacy fixtures the executable factory configuration; the production Setup Required gate was not weakened.
 - FEAT-062 now covers the frozen deterministic catalogue with PIT-safe operating-profit/bottom-line, ROA/ROCE, working-capital/liquidity, capex, ownership/financial, persistent cash-quality and historical valuation-context signals; absent source data remains unavailable rather than inferred. It is REVIEW pending browser/mobile and real-provider acceptance.
 - FEAT-056 lifecycle tests pass **23/23** locally, but the inherited lifecycle implementation remains uncommitted and deliberately separated from FEAT-057.
 - FEAT-052 telemetry focus passes **14/14**; FEAT-065 internal/admin focus passes **9/9**. Live/deployed evidence remains external where documented.
@@ -119,6 +119,8 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 5. FEAT-063 / FEAT-054 / FEAT-055 / FEAT-061: perform only the remaining external browser/provider/VPS validations.
 
 ## Failing tests
+
+Latest rerun: **1,329 tests: 1,328 passed, 1 skipped, 0 failures/errors** under local PHP CLI `memory_limit=512M`; the existing paragraph below is historical checkpoint context.
 
 The broad direct PHPUnit Feature run with `php -d memory_limit=512M vendor/bin/phpunit tests/Feature` now completes **1,321 tests: 1,320 passed, 1 skipped, 0 failures/errors**. The skip is the environment-gated bounded FEAT-057 campaign when its matching Python runtime is not configured. OpenAPI generated-spec drift and ML constructor failures are resolved; focused ML/provider, FEAT-062, telemetry and intraday suites pass.
 
