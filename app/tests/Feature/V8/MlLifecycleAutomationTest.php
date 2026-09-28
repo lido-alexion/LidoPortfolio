@@ -1,0 +1,127 @@
+<?php
+
+namespace Tests\Feature\V8;
+
+use App\Jobs\MlRetrainJob;
+use App\Models\User;
+use App\Models\V7\MlTrainingRun;
+use App\Services\ML\MlLifecycleAutomationService;
+use Carbon\Carbon;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
+use Tests\TestCase;
+
+class MlLifecycleAutomationTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_tick_queues_job_when_schedule_due_and_no_active_run(): void
+    {
+        config([
+            'ml_lifecycle.enabled' => true,
+            'ml_lifecycle.horizons.1m.enabled' => true,
+            'ml_lifecycle.horizons.1m.schedule' => 'monthly_first_sunday_02:00',
+        ]);
+
+        Bus::fake();
+        $admin = User::factory()->create(['is_admin' => true]);
+        $now = Carbon::parse('2026-03-01 02:00:00', 'Asia/Kolkata');
+
+        $actions = app(MlLifecycleAutomationService::class)->tick($admin, $now);
+
+        $this->assertNotEmpty($actions);
+        Bus::assertDispatched(MlRetrainJob::class, fn (MlRetrainJob $job) => $job->horizon === '1m');
+    }
+
+    public function test_tick_skips_when_running_retrain_exists(): void
+    {
+        config([
+            'ml_lifecycle.enabled' => true,
+            'ml_lifecycle.horizons.1m.enabled' => true,
+            'ml_lifecycle.horizons.1m.schedule' => 'monthly_first_sunday_02:00',
+        ]);
+
+        MlTrainingRun::query()->create([
+            'horizon' => '1m',
+            'status' => 'running',
+            'cutoff_date' => now()->toDateString(),
+            'started_at' => now(),
+        ]);
+
+        Bus::fake();
+        $now = Carbon::parse('2026-03-01 02:00:00', 'Asia/Kolkata');
+        $actions = app(MlLifecycleAutomationService::class)->tick(null, $now);
+
+        $this->assertSame('skipped', $actions[0]['action'] ?? null);
+        Bus::assertNothingDispatched();
+    }
+
+    public function test_tick_skips_horizon_when_schedule_disabled(): void
+    {
+        config([
+            'ml_lifecycle.enabled' => true,
+            'ml_lifecycle.horizons.1m.enabled' => false,
+            'ml_lifecycle.horizons.1m.schedule' => 'monthly_first_sunday_02:00',
+        ]);
+
+        Bus::fake();
+        $now = Carbon::parse('2026-03-01 02:00:00', 'Asia/Kolkata');
+        $actions = app(MlLifecycleAutomationService::class)->tick(null, $now);
+
+        $this->assertSame([], $actions);
+        Bus::assertNothingDispatched();
+    }
+
+    public function test_tick_noop_when_lifecycle_env_disabled(): void
+    {
+        config([
+            'ml_lifecycle.enabled' => false,
+            'ml_lifecycle.horizons.1m.enabled' => true,
+            'ml_lifecycle.horizons.1m.schedule' => 'monthly_first_sunday_02:00',
+        ]);
+
+        Bus::fake();
+        $now = Carbon::parse('2026-03-01 02:00:00', 'Asia/Kolkata');
+        $actions = app(MlLifecycleAutomationService::class)->tick(null, $now);
+
+        $this->assertSame([], $actions);
+        Bus::assertNothingDispatched();
+    }
+
+    public function test_admin_ml_dashboard_includes_lifecycle_status(): void
+    {
+        config([
+            'ml_lifecycle.enabled' => true,
+            'ml_lifecycle.horizons.3m.enabled' => true,
+            'ml_lifecycle.drift_trigger.enabled' => true,
+        ]);
+
+        $admin = User::factory()->admin()->create();
+        $this->defaultPortfolioFor($admin);
+
+        $this->actingAs($admin)->withProfileHeader($admin)
+            ->getJson('/api/v1/admin/ml')
+            ->assertOk()
+            ->assertJsonPath('data.lifecycle.enabled', true)
+            ->assertJsonPath('data.lifecycle.drift_trigger.enabled', true)
+            ->assertJsonFragment(['horizon' => '3m', 'schedule_enabled' => true]);
+    }
+
+    public function test_admin_lifecycle_status_reflects_disabled_env(): void
+    {
+        config([
+            'ml_lifecycle.enabled' => false,
+            'ml_lifecycle.horizons.1m.enabled' => true,
+            'ml_lifecycle.drift_trigger.enabled' => false,
+        ]);
+
+        $admin = User::factory()->admin()->create();
+        $this->defaultPortfolioFor($admin);
+
+        $this->actingAs($admin)->withProfileHeader($admin)
+            ->getJson('/api/v1/admin/ml')
+            ->assertOk()
+            ->assertJsonPath('data.lifecycle.enabled', false)
+            ->assertJsonPath('data.lifecycle.horizons.0.schedule_enabled', true);
+    }
+}

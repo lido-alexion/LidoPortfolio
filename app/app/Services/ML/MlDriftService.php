@@ -11,6 +11,7 @@ class MlDriftService
     public function __construct(
         private readonly MlPythonAdapter $adapter,
         private readonly MlTrainingDatasetBuilder $datasets,
+        private readonly MlLifecycleNotificationService $lifecycleNotifications,
     ) {}
 
     public function check(MlModelVersion $model, int $windowMonths): MlDriftCheck
@@ -41,7 +42,7 @@ class MlDriftService
             'baseline_metrics' => $model->evaluation_metrics['test'] ?? $model->evaluation_metrics ?? [],
         ]);
 
-        return MlDriftCheck::query()->create([
+        $check = MlDriftCheck::query()->create([
             'model_version_id' => $model->id,
             'window_months' => $windowMonths,
             'status' => $result['status'],
@@ -49,5 +50,9 @@ class MlDriftService
             'warnings' => $result['warnings'] ?? [],
             'checked_at' => Carbon::now(),
         ]);
+
+        $this->lifecycleNotifications->notifyDriftWarning($check, $model);
+
+        return $check;
     }
 }
