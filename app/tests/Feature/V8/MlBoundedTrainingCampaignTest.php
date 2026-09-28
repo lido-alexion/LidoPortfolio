@@ -69,6 +69,18 @@ class MlBoundedTrainingCampaignTest extends TestCase
             $this->assertSame($horizon, data_get($model->audit_metadata, 'feature_profile.horizon'));
             $this->assertSame(data_get($model->audit_metadata, 'feature_profile.feature_set_id'), data_get($model->audit_metadata, 'feature_profile.feature_set_version'));
             $this->assertSame('training_partition_only', data_get($model->trainingRun?->configuration, 'preprocessing.fitted_on'));
+            $partitionCoverage = data_get($model->trainingRun?->configuration, 'feature_selection.partition_coverage');
+            $this->assertIsArray($partitionCoverage);
+            $this->assertSame(['train', 'validation', 'test'], array_keys($partitionCoverage));
+            foreach ($partitionCoverage as $partition) {
+                $this->assertGreaterThan(0, $partition['row_count']);
+                $this->assertNotEmpty($partition['features']);
+                foreach ($partition['features'] as $coverage) {
+                    $this->assertArrayHasKey('available', $coverage);
+                    $this->assertArrayHasKey('missing', $coverage);
+                    $this->assertArrayHasKey('coverage_percent', $coverage);
+                }
+            }
             $this->assertArrayHasKey('candidate_metrics', $evidence);
             $this->assertArrayHasKey('deterministic_baseline', $evidence);
             $this->assertTrue($evidence['deterministic_baseline']['comparable']);

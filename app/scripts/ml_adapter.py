@@ -189,6 +189,42 @@ def feature_coverage_from_jsonl(path: str, numeric: list[str], categorical: list
     return feature_coverage(iter_jsonl(path), numeric, categorical, total_count)
 
 
+def partition_feature_coverage(paths: dict[str, str], numeric: list[str], categorical: list[str]) -> dict[str, Any]:
+    """Report per-partition coverage without changing training-time selection.
+
+    The training partition remains authoritative for effective feature selection;
+    validation/test coverage is diagnostic only and can never add a feature back
+    into the fitted schema.
+    """
+    report: dict[str, Any] = {}
+    for partition, path in paths.items():
+        rows = list(iter_jsonl(path))
+        total = len(rows)
+        counts = {name: 0 for name in [*numeric, *categorical]}
+        for row in rows:
+            features = row.get("features", {})
+            for name in numeric:
+                if finite(features.get(name)) is not None:
+                    counts[name] += 1
+            for name in categorical:
+                value = features.get(name)
+                if value is not None and str(value).strip() and str(value) != "__unknown":
+                    counts[name] += 1
+        report[partition] = {
+            "row_count": total,
+            "features": {
+                name: {
+                    "available": counts[name],
+                    "missing": total - counts[name],
+                    "coverage_percent": round((counts[name] / total) * 100, 4) if total else 0.0,
+                    "status": "available" if counts[name] else "missing",
+                }
+                for name in [*numeric, *categorical]
+            },
+        }
+    return report
+
+
 def redundancy_diagnostics(vectors, names: list[str], threshold: float = 0.98) -> dict[str, Any]:
     """Report highly correlated encoded columns using training rows only."""
     import numpy as np
@@ -583,6 +619,11 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
         x_test,
         test_returns,
     )
+    partition_coverage = partition_feature_coverage(
+        dataset_paths,
+        configured_numeric,
+        configured_categorical,
+    ) if isinstance(dataset_paths, dict) else {}
     metadata = {
         "format": "stox-v7-logistic",
         "feature_names": feature_names_value,
@@ -594,6 +635,7 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
         "effective_feature_set": numeric + categorical,
         "excluded_features": excluded_features,
         "feature_training_coverage": feature_training_coverage,
+        "feature_partition_coverage": partition_coverage,
         "redundancy": redundancy,
         "preprocessing": state,
         "partitions": partitions,
@@ -611,6 +653,7 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
         "raw_transport": "jsonl" if isinstance(dataset_paths, dict) else "json",
         "python_peak_rss_mb": peak_rss_mb(),
         "feature_training_coverage": feature_training_coverage,
+        "feature_partition_coverage": partition_coverage,
         "excluded_features": excluded_features,
         "redundancy": redundancy,
     }
