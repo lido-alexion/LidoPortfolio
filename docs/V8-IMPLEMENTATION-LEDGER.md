@@ -44,14 +44,14 @@ FEAT-065  [IN PROGRESS] Intraday ML historical data platform (checkpoints + admi
 | Internal bootstrap API | done | `MicrostructureCollectorInternalApiTest.php` |
 | Manual hold + commands | done | same |
 | Kite login auto-start signal | done | same |
-| Minute aggregation + Parquet (dry-run) | partial | `shared/microstructure/tests/test_minute_aggregator.py`, `test_parquet_store.py` |
+| Minute aggregation + Parquet (real pyarrow validation) | done locally | `shared/microstructure/tests/test_minute_aggregator.py`, `test_parquet_store.py`, `test_collector_finalization.py` |
 | Live KiteTicker WebSocket | wired (`kite_ticker_bridge.py`) | manual VPS + kiteconnect |
-| Finalization + partition backup | partial (durable bounded retry, active-minute drain, atomic manifest/staged backup, spool pruning) | `test_finalization_state.py`, `test_collector_finalization.py`, `MicrostructureCollectorHealthAlertTest.php` |
-| Reconnect + full-mode resubscription | partial (bridge recovery path) | `test_kite_ticker_bridge.py` |
+| Finalization + partition backup | done locally (durable bounded retry, active-minute drain, corruption validation, atomic manifest/staged backup, spool pruning) | `test_finalization_state.py`, `test_collector_finalization.py`, `MicrostructureCollectorHealthAlertTest.php` |
+| Reconnect + full-mode resubscription | done locally (bridge recovery and reconnect quality) | `test_kite_ticker_bridge.py`, `test_minute_aggregator.py` |
 | No-trade/outage/reconnect quality rows | done | `test_minute_aggregator.py` |
-| Operational alerts | partial (stale heartbeat / error / disk / finalization / backup) | `MicrostructureCollectorHealthAlertTest.php` |
-| Universe refresh audit | partial (bounded additions/removals/mapping/conflict history) | `universe_audit.py`, `test_universe_audit.py` |
-| VPS venv/systemd/runtime gate | partial (provisioning + import checks + persistent paths) | `deploy/systemd/stoxla-microstructure-collector.service`, shell syntax/runtime-contract checks |
+| Operational alerts | done locally (stale heartbeat / error / disk / finalization / backup / low coverage; provider failures surface as actionable errors) | `MicrostructureCollectorHealthAlertTest.php` |
+| Universe refresh audit | done locally (bounded additions/removals/mapping/conflict history and rejected partial refresh preservation) | `universe_audit.py`, `test_universe_audit.py` |
+| VPS venv/systemd/runtime gate | external pending (provisioning + import checks + persistent paths are documented; service not installed on inspected VPS) | `deploy/systemd/stoxla-microstructure-collector.service`, shell syntax/runtime-contract checks |
 | Telegram auth reminders | done | `MicrostructureCollectorKiteAuthReminderTest.php` |
 
 ## FEAT-061 matrix (partial)
@@ -87,7 +87,7 @@ FEAT-065  [IN PROGRESS] Intraday ML historical data platform (checkpoints + admi
 ## Frontend validation baseline (2026-09-28)
 
 - Node `20.19.1` / npm `10.8.2` via the existing user NVM installation.
-- JS unit suite: **182 passed, 0 failed**.
+- Node JS suite: **184 passed, 0 failed**; Vitest: **99 passed, 0 failed**.
 - Vite production build: passed.
 - Typecheck: passed.
 - Static documentation check: passed.
@@ -100,10 +100,9 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 
 ## Next task
 
-1. FEAT-063: install and validate the collector on the StoX VPS, then exercise the live Kite path and deployed backup destination.
-3. FEAT-055 + FEAT-061 formal acceptance/security audits.
-4. FEAT-052: queue/scheduler instrumentation, full OTEL SDK alignment, browser view-duration spans.
-5. FEAT-054: official history, inline YoY cells, and per-user advanced preference API.
+1. FEAT-063 external validation: install/validate the collector on the StoX VPS, then exercise the live Kite path and deployed backup destination when credentials/market conditions permit.
+2. FEAT-054: complete watchlist fundamentals UI, inline YoY cells, and per-user advanced preference API.
+3. FEAT-052: queue/scheduler instrumentation, full OTEL SDK alignment, and browser view-duration spans.
 
 ## Failing tests
 
