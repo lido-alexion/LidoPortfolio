@@ -6,7 +6,7 @@ import json
 import os
 import shutil
 import time
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -153,7 +153,9 @@ class CollectorApp:
             return
         self._finalization.mark_finalization_started(trading_day.isoformat())
         try:
-            flushed = self.aggregator.flush_before(datetime.now(timezone.utc))
+            # At post-market finalization the active minute is complete too;
+            # use the next minute as the exclusive cutoff.
+            flushed = self.aggregator.flush_before(datetime.now(timezone.utc) + timedelta(minutes=1))
             if flushed:
                 append_rows(self.data_root, trading_day, flushed, part_name=f"part-final-{int(time.time())}.parquet")
             row_count = partition_row_count(self.data_root, trading_day)
