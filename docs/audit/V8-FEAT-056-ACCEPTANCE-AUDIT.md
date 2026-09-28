@@ -8,7 +8,7 @@ Evidence is mapped to `docs/archive/specs/V8-ML-Lifecycle-Automation-Deployment-
 |---|---|---|
 | Per-horizon bounded schedules | PASS locally | `MlLifecycleAutomationService`, `config/ml_lifecycle.php`, scheduled Artisan command and schedule tests |
 | Manual and drift-triggered canonical queue path | PASS locally | `MlScoringService` integration, `MlRetrainJob`, queue and drift tests are committed; manual, scheduled and drift triggers share the canonical durable run path |
-| Same-horizon concurrency | PASS locally | Active-run checks and queue tests reject duplicate queued/running/cancelling runs |
+| Same-horizon concurrency | PASS locally | A seeded `stox_ml_training_horizon_locks` row is locked transactionally before the active-run check and insert, so manual, scheduled and drift requests serialize across workers; queue tests cover duplicate rejection and trigger validation |
 | Durable run/progress state and SSE | PASS locally | `MlTrainingRunAdminService`, progress persistence, SSE controller and lifecycle tests; deployed worker/SSE runtime remains pending |
 | Restart recovery | PASS locally | `MlTrainingRunRecoveryService` requeues stale running/cancelling runs with durable recovery evidence and test coverage |
 | Bounded transient retry | PASS locally | `MlTrainingRunRetryService` persists bounded attempt/backoff and dispatches delayed retry |
