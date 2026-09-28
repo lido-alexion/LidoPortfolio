@@ -15,6 +15,7 @@ class ScreenerBacktestDay extends Model
 
     protected $fillable = [
         'screener_id',
+        'screener_version_id',
         'as_of_date',
         'scanned',
         'matched',
@@ -26,6 +27,7 @@ class ScreenerBacktestDay extends Model
     {
         return [
             'screener_id' => 'integer',
+            'screener_version_id' => 'integer',
             // as_of_date stays a plain Y-m-d string so date-key lookups match across drivers.
             'scanned' => 'integer',
             'matched' => 'integer',

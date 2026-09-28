@@ -2,10 +2,21 @@
 
 namespace App\Services\Screener;
 
+use App\Models\Stock;
+use App\Services\Fundamentals\FundamentalScreenerOperandService;
+use App\Services\ML\MlScreenerOperandService;
+use Carbon\Carbon;
+
 class ScreenerEvaluationService
 {
+    protected ?Stock $evaluationStock = null;
+
+    protected ?Carbon $evaluationAsOf = null;
+
     public function __construct(
         protected TechnicalIndicatorService $indicators,
+        protected FundamentalScreenerOperandService $fundamentalOperands,
+        protected MlScreenerOperandService $mlOperands,
     ) {}
 
     /**
@@ -49,43 +60,51 @@ class ScreenerEvaluationService
      * @param  array<string,list<array<string,mixed>>>  $entityBars  Index symbol → chronological bars for entity-pinned left operands.
      * @return array{matched:bool,skipped:bool,skip_reason:?string,metrics:array<string,mixed>}
      */
-    public function evaluateStock(array $definition, array $bars, array $entityBars = []): array
+    public function evaluateStock(array $definition, array $bars, array $entityBars = [], ?Stock $stock = null): array
     {
-        $lookback = $this->stockLookback($definition);
-        $validCount = $this->countValidCloses($bars);
+        $this->evaluationStock = $stock;
+        $this->evaluationAsOf = $this->asOfFromBars($bars) ?? now();
 
-        if ($validCount < $lookback) {
+        try {
+            $lookback = $this->stockLookback($definition);
+            $validCount = $this->countValidCloses($bars);
+
+            if ($validCount < $lookback) {
+                return [
+                    'matched' => false,
+                    'skipped' => true,
+                    'skip_reason' => 'insufficient_data',
+                    'metrics' => [],
+                ];
+            }
+
+            if ($this->treeNeedsVolume($definition['root'] ?? []) && ! $this->hasVolumeHistory($bars, $lookback)) {
+                return [
+                    'matched' => false,
+                    'skipped' => true,
+                    'skip_reason' => 'insufficient_volume',
+                    'metrics' => [],
+                ];
+            }
+
+            $engines = ['stock' => $this->indicators->withBars($bars)];
+            foreach ($entityBars as $symbol => $entBars) {
+                $engines[$symbol] = $this->indicators->withBars(is_array($entBars) ? $entBars : []);
+            }
+
+            $metrics = [];
+            $matched = $this->evalNode($definition['root'] ?? [], $engines, $metrics);
+
             return [
-                'matched' => false,
-                'skipped' => true,
-                'skip_reason' => 'insufficient_data',
-                'metrics' => [],
+                'matched' => $matched,
+                'skipped' => false,
+                'skip_reason' => null,
+                'metrics' => $metrics,
             ];
+        } finally {
+            $this->evaluationStock = null;
+            $this->evaluationAsOf = null;
         }
-
-        if ($this->treeNeedsVolume($definition['root'] ?? []) && ! $this->hasVolumeHistory($bars, $lookback)) {
-            return [
-                'matched' => false,
-                'skipped' => true,
-                'skip_reason' => 'insufficient_volume',
-                'metrics' => [],
-            ];
-        }
-
-        $engines = ['stock' => $this->indicators->withBars($bars)];
-        foreach ($entityBars as $symbol => $entBars) {
-            $engines[$symbol] = $this->indicators->withBars(is_array($entBars) ? $entBars : []);
-        }
-
-        $metrics = [];
-        $matched = $this->evalNode($definition['root'] ?? [], $engines, $metrics);
-
-        return [
-            'matched' => $matched,
-            'skipped' => false,
-            'skip_reason' => null,
-            'metrics' => $metrics,
-        ];
     }
 
     /**
@@ -100,7 +119,26 @@ class ScreenerEvaluationService
      * @param  array<string,list<array<string,mixed>>>  $entityBars  Index symbol → chronological bars (with 'date') for entity-pinned left operands.
      * @return array<string,array{matched:bool,skipped:bool}>  Keyed by as-of date.
      */
-    public function evaluateAcrossDates(array $definition, array $bars, array $asOfDates, array $entityBars = []): array
+    public function evaluateAcrossDates(array $definition, array $bars, array $asOfDates, array $entityBars = [], ?Stock $stock = null): array
+    {
+        $this->evaluationStock = $stock;
+
+        try {
+            return $this->evaluateAcrossDatesInner($definition, $bars, $asOfDates, $entityBars);
+        } finally {
+            $this->evaluationStock = null;
+            $this->evaluationAsOf = null;
+        }
+    }
+
+    /**
+     * @param  array{root:array}  $definition
+     * @param  list<array{date:string,open:?float,high:?float,low:?float,close:?float,volume:?float,adjusted_close?:?float}>  $bars
+     * @param  list<string>  $asOfDates
+     * @param  array<string,list<array<string,mixed>>>  $entityBars
+     * @return array<string,array{matched:bool,skipped:bool}>
+     */
+    private function evaluateAcrossDatesInner(array $definition, array $bars, array $asOfDates, array $entityBars): array
     {
         $root = $definition['root'] ?? [];
         $stockLookback = $this->stockLookback($definition);
@@ -150,6 +188,7 @@ class ScreenerEvaluationService
                 continue;
             }
 
+            $this->evaluationAsOf = Carbon::parse($asOf);
             $out[$asOf] = [
                 'matched' => $this->evalNodeAtIndex($root, $engines, $pointers),
                 'skipped' => false,
@@ -254,8 +293,60 @@ class ScreenerEvaluationService
      * @param  array<string,TechnicalIndicatorService>  $engines
      * @param  array<string,int>  $indexes
      */
+    /**
+     * @param  array<string,mixed>  $expr
+     * @param  array<string,TechnicalIndicatorService>  $engines
+     */
+    private function evaluateExprValue(array $expr, string $entity, array $engines): ?float
+    {
+        $indicatorId = (string) ($expr['indicator'] ?? '');
+        if ($entity === 'stock' && $indicatorId !== '' && $this->evaluationStock !== null && $this->evaluationAsOf !== null) {
+            if ($this->fundamentalOperands->supports($indicatorId)) {
+                return $this->fundamentalOperands->valueForIndicator(
+                    $this->evaluationStock,
+                    $indicatorId,
+                    $this->evaluationAsOf,
+                );
+            }
+            if ($this->mlOperands->supports($indicatorId)) {
+                return $this->mlOperands->valueForIndicator(
+                    $this->evaluationStock,
+                    $indicatorId,
+                    $this->evaluationAsOf,
+                );
+            }
+        }
+
+        $engine = $engines[$entity] ?? null;
+
+        return $engine?->evaluate($expr);
+    }
+
+    /**
+     * @param  array<string,mixed>  $expr
+     * @param  array<string,TechnicalIndicatorService>  $engines
+     * @param  array<string,int>  $indexes
+     */
     private function seriesValueAt(array $expr, string $entity, array $engines, array $indexes): ?float
     {
+        $indicatorId = (string) ($expr['indicator'] ?? '');
+        if ($entity === 'stock' && $indicatorId !== '' && $this->evaluationStock !== null && $this->evaluationAsOf !== null) {
+            if ($this->fundamentalOperands->supports($indicatorId)) {
+                return $this->fundamentalOperands->valueForIndicator(
+                    $this->evaluationStock,
+                    $indicatorId,
+                    $this->evaluationAsOf,
+                );
+            }
+            if ($this->mlOperands->supports($indicatorId)) {
+                return $this->mlOperands->valueForIndicator(
+                    $this->evaluationStock,
+                    $indicatorId,
+                    $this->evaluationAsOf,
+                );
+            }
+        }
+
         $engine = $engines[$entity] ?? null;
         $idx = $indexes[$entity] ?? -1;
         if ($engine === null || $idx < 0) {
@@ -264,6 +355,23 @@ class ScreenerEvaluationService
         $series = $engine->evaluateSeries($expr);
 
         return $series[$idx] ?? null;
+    }
+
+    /**
+     * @param  list<array<string,mixed>>  $bars
+     */
+    private function asOfFromBars(array $bars): ?Carbon
+    {
+        if ($bars === []) {
+            return null;
+        }
+        $last = $bars[array_key_last($bars)];
+        $date = $last['date'] ?? null;
+        if (! is_string($date) || trim($date) === '') {
+            return now();
+        }
+
+        return Carbon::parse($date);
     }
 
     /**
@@ -386,10 +494,9 @@ class ScreenerEvaluationService
         $weightFactor = $this->normalizeWeightFactor($node['weight_factor'] ?? 1);
 
         $leftEntity = $this->exprEntity($leftExpr);
-        $leftEngine = $engines[$leftEntity] ?? null;
-        $left = $leftEngine?->evaluate($leftExpr);
+        $left = $this->evaluateExprValue($leftExpr, $leftEntity, $engines);
         // RHS always evaluates on the scanned stock.
-        $right = $engines['stock']->evaluate($rightExpr);
+        $right = $this->evaluateExprValue($rightExpr, 'stock', $engines);
         $scaledRight = $right === null ? null : $right * $weightFactor;
 
         $metrics[] = [

@@ -12,6 +12,7 @@ class ScreenerRun extends Model
 
     protected $fillable = [
         'screener_id',
+        'screener_version_id',
         'triggered_by',
         'status',
         'started_at',
@@ -26,6 +27,7 @@ class ScreenerRun extends Model
     {
         return [
             'screener_id' => 'integer',
+            'screener_version_id' => 'integer',
             'started_at' => 'datetime',
             'finished_at' => 'datetime',
             'stats_json' => 'array',

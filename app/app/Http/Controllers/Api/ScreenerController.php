@@ -5,11 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Screener;
 use App\Models\ScreenerRun;
-use App\Services\Artifacts\ScreenerArtifactRegistry;
 use App\Services\Screener\ScreenerBacktestService;
 use App\Services\Screener\ScreenerCatalog;
 use App\Services\Screener\ScreenerRunService;
 use App\Services\Screener\ScreenerService;
+use App\Telemetry\LidoTelemetry;
+use App\Telemetry\LidoTelemetryCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -19,7 +20,6 @@ class ScreenerController extends Controller
         protected ScreenerService $screeners,
         protected ScreenerRunService $runs,
         protected ScreenerBacktestService $backtests,
-        protected ScreenerArtifactRegistry $artifactRegistry,
     ) {}
 
     public function meta(): JsonResponse
@@ -49,14 +49,15 @@ class ScreenerController extends Controller
 
     public function importShared(int $sourceId): JsonResponse
     {
-        $data = $this->artifactRegistry->importShared(\activePortfolio(), $sourceId);
+        $data = $this->screeners->importShared(\activePortfolio(), $sourceId);
 
         return response()->json(['data' => $data], 201);
     }
 
     public function store(Request $request): JsonResponse
     {
-        $data = $this->artifactRegistry->createFromEditorInput(\activePortfolio(), $request->all());
+        // V8 FEAT-064: ordinary Screener create stays on Screener pages (account-owned runtime row + versioning).
+        $data = $this->screeners->create(\activePortfolio(), $request->all());
 
         return response()->json(['data' => $data], 201);
     }
@@ -95,6 +96,20 @@ class ScreenerController extends Controller
                 'completed' => $run->status === 'completed',
             ];
         }
+
+        $runPayload = is_array($result['run'] ?? null) ? $result['run'] : [];
+        $runId = (int) ($runPayload['id'] ?? 0);
+        $screenerVersionId = $runId > 0
+            ? (int) ScreenerRun::query()->whereKey($runId)->value('screener_version_id')
+            : null;
+
+        app(LidoTelemetry::class)->recordBusinessEvent(LidoTelemetryCatalog::BUSINESS_SCREENER_RUN, [
+            'screener_id' => $screener->id,
+            'screener_version_id' => $screenerVersionId,
+            'run_id' => $runId > 0 ? $runId : null,
+            'scope' => $screener->scope,
+            'completed' => (bool) ($result['completed'] ?? false),
+        ]);
 
         return response()->json([
             'data' => $result['run'],

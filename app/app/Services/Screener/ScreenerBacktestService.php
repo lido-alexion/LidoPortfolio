@@ -44,12 +44,24 @@ class ScreenerBacktestService
                 'ARTIFACT_BINDING_UNAVAILABLE',
             );
         }
-        $definition = $runtimeSelection?->definition ?? (is_array($screener->definition_json)
-            ? $screener->definition_json
-            : ['root' => $screener->definition_json]);
+        $screenerVersion = app(ScreenerVersioningService::class)->ensureCurrentVersion($screener);
+        $definition = $runtimeSelection?->definition ?? (is_array($screenerVersion->definition_json)
+            ? $screenerVersion->definition_json
+            : (is_array($screener->definition_json)
+                ? $screener->definition_json
+                : ['root' => $screener->definition_json]));
+        if (! isset($definition['root'])) {
+            $definition = ['root' => $definition];
+        }
+        $semanticSnapshot = [
+            'scope' => $screenerVersion->scope ?? $screener->scope,
+            'watchlist_id' => $screenerVersion->watchlist_id,
+            'index_symbol' => $screenerVersion->index_symbol,
+        ];
 
         $backtest = ScreenerBacktest::query()->create([
             'screener_id' => $screener->id,
+            'screener_version_id' => $screenerVersion->id,
             'profile_id' => $screener->profile_id,
             'session_token' => $sessionToken,
             'range_key' => $rangeKey,
@@ -70,7 +82,9 @@ class ScreenerBacktestService
                 'days' => [],
                 'warnings' => [],
                 'as_of_dates' => array_map(static fn (Carbon $d) => $d->toDateString(), $days),
+                'screener_version_id' => $screenerVersion->id,
                 'definition_snapshot' => $definition,
+                'semantic_snapshot' => $semanticSnapshot,
             ],
         ]);
 
@@ -137,7 +151,9 @@ class ScreenerBacktestService
         $dates = $stats['as_of_dates'] ?? [];
         $dates = is_array($dates) ? array_map('strval', array_values($dates)) : [];
 
-        return $this->matrixForDates((int) $backtest->screener_id, $dates);
+        $versionId = (int) (($stats['screener_version_id'] ?? $backtest->screener_version_id) ?? 0);
+
+        return $this->matrixForDates((int) $backtest->screener_id, $dates, $versionId > 0 ? $versionId : null);
     }
 
     /**
@@ -147,21 +163,24 @@ class ScreenerBacktestService
      */
     public function matrixForScreener(Screener $screener): array
     {
-        $dates = ScreenerBacktestDay::query()
+        $version = app(ScreenerVersioningService::class)->ensureCurrentVersion($screener);
+        $datesQuery = ScreenerBacktestDay::query()
             ->where('screener_id', $screener->id)
+            ->where('screener_version_id', $version->id);
+        $dates = $datesQuery
             ->orderBy('as_of_date')
             ->pluck('as_of_date')
             ->map(fn ($d) => $this->dateKey($d))
             ->all();
 
-        return $this->matrixForDates((int) $screener->id, $dates);
+        return $this->matrixForDates((int) $screener->id, $dates, $version->id);
     }
 
     /**
      * @param  list<string>  $dates  Chronological as-of dates (Y-m-d).
      * @return array{columns:list<array<string,mixed>>,rows:list<array<string,mixed>>,run_count:int,stock_count:int}
      */
-    private function matrixForDates(int $screenerId, array $dates): array
+    private function matrixForDates(int $screenerId, array $dates, ?int $screenerVersionId = null): array
     {
         if ($dates === []) {
             return [
@@ -173,10 +192,13 @@ class ScreenerBacktestService
         }
 
         $dayMatched = [];
-        $dayRows = ScreenerBacktestDay::query()
+        $dayQuery = ScreenerBacktestDay::query()
             ->where('screener_id', $screenerId)
-            ->whereIn('as_of_date', $dates)
-            ->get(['as_of_date', 'matched']);
+            ->whereIn('as_of_date', $dates);
+        if ($screenerVersionId !== null) {
+            $dayQuery->where('screener_version_id', $screenerVersionId);
+        }
+        $dayRows = $dayQuery->get(['as_of_date', 'matched']);
         foreach ($dayRows as $day) {
             $dayMatched[$this->dateKey($day->as_of_date)] = (int) $day->matched;
         }
@@ -202,9 +224,13 @@ class ScreenerBacktestService
         }
 
         $colCount = count($columns);
-        $hits = ScreenerBacktestHit::query()
+        $hitQuery = ScreenerBacktestHit::query()
             ->where('screener_id', $screenerId)
-            ->whereIn('as_of_date', $dates)
+            ->whereIn('as_of_date', $dates);
+        if ($screenerVersionId !== null) {
+            $hitQuery->where('screener_version_id', $screenerVersionId);
+        }
+        $hits = $hitQuery
             ->orderBy('symbol')
             ->get(['as_of_date', 'stock_id', 'symbol', 'exchange', 'name']);
 
@@ -268,9 +294,19 @@ class ScreenerBacktestService
         }
 
         try {
+            $stats = $backtest->stats_json ?? [];
+            $pinned = is_array($stats['semantic_snapshot'] ?? null) ? $stats['semantic_snapshot'] : null;
+            if ($pinned !== null) {
+                $screener->forceFill([
+                    'scope' => $pinned['scope'] ?? $screener->scope,
+                    'watchlist_id' => $pinned['watchlist_id'] ?? null,
+                    'index_symbol' => $pinned['index_symbol'] ?? null,
+                ]);
+            }
+            $versionId = $this->pinnedVersionId($stats);
+
             [$stockIds, $warning] = $this->runs->resolveStockIds($screener);
             $stockIds = array_values($stockIds);
-            $stats = $backtest->stats_json ?? [];
             if ($warning !== null) {
                 $stats = $this->addWarning($stats, $warning);
             }
@@ -282,9 +318,13 @@ class ScreenerBacktestService
             // First request: pin the set of dates that need computing and clean up
             // hits left behind by a crashed earlier attempt (hits without day rows).
             if (! array_key_exists('missing_dates', $stats)) {
-                $cachedDates = $dates === [] ? [] : ScreenerBacktestDay::query()
+                $cachedQuery = ScreenerBacktestDay::query()
                     ->where('screener_id', $screener->id)
-                    ->whereIn('as_of_date', $dates)
+                    ->whereIn('as_of_date', $dates);
+                if ($versionId !== null) {
+                    $cachedQuery->where('screener_version_id', $versionId);
+                }
+                $cachedDates = $dates === [] ? [] : $cachedQuery
                     ->pluck('as_of_date')
                     ->map(fn ($d) => $this->dateKey($d))
                     ->all();
@@ -295,17 +335,20 @@ class ScreenerBacktestService
                 $stats['stock_cursor'] = 0;
                 $stats['day_agg'] = [];
                 if ($missing !== []) {
-                    ScreenerBacktestHit::query()
+                    $deleteHits = ScreenerBacktestHit::query()
                         ->where('screener_id', $screener->id)
-                        ->whereIn('as_of_date', $missing)
-                        ->delete();
+                        ->whereIn('as_of_date', $missing);
+                    if ($versionId !== null) {
+                        $deleteHits->where('screener_version_id', $versionId);
+                    }
+                    $deleteHits->delete();
                 }
             }
 
             $missing = array_map('strval', is_array($stats['missing_dates'] ?? null) ? $stats['missing_dates'] : []);
 
             if ($dates === [] || $missing === [] || $stockIds === []) {
-                return $this->finalize($backtest, $screener->id, $stats, $dates, $missing);
+                return $this->finalize($backtest, $screener->id, $stats, $dates, $missing, $versionId);
             }
 
             $definition = is_array($stats['definition_snapshot'] ?? null)
@@ -355,7 +398,7 @@ class ScreenerBacktestService
 
                 try {
                     $bars = $this->loadBarsWithDates((int) $stockId, $toDate, $barsLimit);
-                    $results = $this->evaluation->evaluateAcrossDates($definition, $bars, $missing, $entityBars);
+                    $results = $this->evaluation->evaluateAcrossDates($definition, $bars, $missing, $entityBars, $stock);
 
                     $hitRows = [];
                     $now = now();
@@ -371,6 +414,7 @@ class ScreenerBacktestService
                             $stats['matched'] = ((int) ($stats['matched'] ?? 0)) + 1;
                             $hitRows[] = [
                                 'screener_id' => $screener->id,
+                                'screener_version_id' => $versionId,
                                 'as_of_date' => $asOf,
                                 'stock_id' => $stock->id,
                                 'symbol' => $stock->symbol,
@@ -404,7 +448,7 @@ class ScreenerBacktestService
             $stats['days_done'] = (int) round(((int) ($stats['days_reused'] ?? 0)) + (count($missing) * $fraction));
 
             if ($cursor >= (int) ($stats['stock_total'] ?? count($stockIds))) {
-                return $this->finalize($backtest, $screener->id, $stats, $dates, $missing);
+                return $this->finalize($backtest, $screener->id, $stats, $dates, $missing, $versionId);
             }
 
             $backtest->stats_json = $stats;
@@ -430,7 +474,7 @@ class ScreenerBacktestService
      * @param  list<string>  $missing
      * @return array{backtest:array,continued:bool,completed:bool}
      */
-    private function finalize(ScreenerBacktest $backtest, int $screenerId, array $stats, array $dates, array $missing): array
+    private function finalize(ScreenerBacktest $backtest, int $screenerId, array $stats, array $dates, array $missing, ?int $screenerVersionId = null): array
     {
         $dayAgg = is_array($stats['day_agg'] ?? null) ? $stats['day_agg'] : [];
         $daysStats = is_array($stats['days'] ?? null) ? $stats['days'] : [];
@@ -438,7 +482,11 @@ class ScreenerBacktestService
         foreach ($missing as $asOf) {
             $agg = $dayAgg[$asOf] ?? ['scanned' => 0, 'matched' => 0, 'skipped' => 0, 'errors' => 0];
             ScreenerBacktestDay::query()->updateOrCreate(
-                ['screener_id' => $screenerId, 'as_of_date' => $asOf],
+                [
+                    'screener_id' => $screenerId,
+                    'screener_version_id' => $screenerVersionId,
+                    'as_of_date' => $asOf,
+                ],
                 [
                     'scanned' => (int) ($agg['scanned'] ?? 0),
                     'matched' => (int) ($agg['matched'] ?? 0),
@@ -591,6 +639,16 @@ class ScreenerBacktestService
             ],
             'created_at' => optional($backtest->created_at)?->toIso8601String(),
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $stats
+     */
+    private function pinnedVersionId(array $stats): ?int
+    {
+        $id = (int) ($stats['screener_version_id'] ?? 0);
+
+        return $id > 0 ? $id : null;
     }
 
     private function normalizeRangeKey(string $rangeKey): string

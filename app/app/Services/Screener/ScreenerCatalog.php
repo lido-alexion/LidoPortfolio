@@ -110,7 +110,11 @@ class ScreenerCatalog
      */
     public static function indicators(): array
     {
-        return self::$indicatorRowsCache ??= ScreenerCatalogueProjector::project(self::registry());
+        return self::$indicatorRowsCache ??= array_merge(
+            ScreenerCatalogueProjector::project(self::registry()),
+            \App\Services\Fundamentals\FundamentalScreenerOperandService::catalogRows(),
+            \App\Services\ML\MlScreenerOperandService::catalogRows(),
+        );
     }
 
     /**

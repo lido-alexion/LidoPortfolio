@@ -163,12 +163,8 @@ class ScreenerService
         $data = $this->normalizeInput($profile, $input, $screener);
         $screener->fill($data);
 
-        // Conditions or universe changed → persisted per-date backtest results are stale.
-        $invalidatesBacktest = $screener->isDirty(['definition_json', 'scope', 'watchlist_id', 'index_symbol']);
+        // Semantic version bump preserves prior backtest caches keyed by screener_version_id (FEAT-064 WP-03).
         $screener->save();
-        if ($invalidatesBacktest) {
-            app(ScreenerBacktestService::class)->clearResults($screener);
-        }
 
         $screener = $this->versioning->afterUpdate(
             $screener->fresh(),

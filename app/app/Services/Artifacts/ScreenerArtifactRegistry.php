@@ -253,7 +253,17 @@ final class ScreenerArtifactRegistry implements ArtifactRegistryInterface
             $envelope['name'] = $name.' (import)';
         }
 
-        return $this->create($envelope, $profile);
+        $formatted = $this->screeners->create($profile, $this->envelopeToInvestorCreateInput($envelope, $profile));
+        $screener = Screener::query()
+            ->where('profile_id', $profile->id)
+            ->whereKey((int) ($formatted['id'] ?? 0))
+            ->firstOrFail();
+
+        return $this->project($screener, [
+            'ownership' => 'own',
+            'read_only' => false,
+            'origin' => ArtifactOrigin::IMPORTED,
+        ]);
     }
 
     /**
@@ -263,19 +273,17 @@ final class ScreenerArtifactRegistry implements ArtifactRegistryInterface
      */
     public function importShared(PortfolioProfile $profile, int $sourceId): array
     {
-        $source = Screener::query()
-            ->sharedVisibleTo($profile)
-            ->where('id', $sourceId)
+        $formatted = $this->screeners->importShared($profile, $sourceId);
+        $screener = Screener::query()
+            ->where('profile_id', $profile->id)
+            ->whereKey((int) ($formatted['id'] ?? 0))
             ->firstOrFail();
-        $envelope = $this->projectShared($source);
-        $envelope['name'] = $source->name.' (copy)';
 
-        return $this->legacyAuthoring->createDraft(
-            $profile,
-            $envelope,
-            ArtifactOrigin::FORK,
-            ['source_legacy_screener_id' => $source->id],
-        );
+        return $this->project($screener, [
+            'ownership' => 'own',
+            'read_only' => false,
+            'origin' => ArtifactOrigin::FORK,
+        ]);
     }
 
     /**
@@ -456,6 +464,53 @@ final class ScreenerArtifactRegistry implements ArtifactRegistryInterface
      * @param  array<string, mixed>  $envelope
      * @return array<string, mixed>
      */
+    /**
+     * @param  array<string, mixed>  $envelope
+     * @return array<string, mixed>
+     */
+    private function envelopeToInvestorCreateInput(array $envelope, PortfolioProfile $profile): array
+    {
+        $input = $this->envelopeToScreenerInput($envelope, $profile);
+        $meta = is_array($envelope['metadata'] ?? null) ? $envelope['metadata'] : [];
+        $binding = is_array($meta['suggested_binding_settings'] ?? null) ? $meta['suggested_binding_settings'] : [];
+
+        if (isset($binding['scope']) && is_string($binding['scope'])) {
+            $scopeMap = [
+                'all_active_equities' => 'all_equities',
+                'all' => 'all_equities',
+                'portfolio' => 'holdings',
+                'holding' => 'holdings',
+            ];
+            $scope = $scopeMap[$binding['scope']] ?? $binding['scope'];
+            if (in_array($scope, ['holdings', 'watchlist', 'all_equities', 'index'], true)) {
+                $input['scope'] = $scope;
+            }
+        }
+
+        if (array_key_exists('watchlist_id', $binding)) {
+            $input['watchlist_id'] = $binding['watchlist_id'];
+        }
+        if (array_key_exists('index_symbol', $binding) && $binding['index_symbol'] !== null && $binding['index_symbol'] !== '') {
+            $input['index_symbol'] = $binding['index_symbol'];
+        }
+        if (array_key_exists('schedule_enabled', $binding)) {
+            $input['schedule_enabled'] = (bool) $binding['schedule_enabled'];
+        }
+        if (array_key_exists('schedule_time', $binding)) {
+            $input['schedule_time'] = $binding['schedule_time'];
+        }
+        if (array_key_exists('schedule_days', $binding) && is_array($binding['schedule_days'])) {
+            $input['schedule_days'] = $binding['schedule_days'];
+        }
+        if (array_key_exists('telegram_enabled', $binding)) {
+            $input['telegram_enabled'] = (bool) $binding['telegram_enabled'];
+        }
+
+        $input['change_notes'] = 'Imported trading artifact envelope';
+
+        return $input;
+    }
+
     private function envelopeToScreenerInput(array $envelope, PortfolioProfile $profile, ?Screener $existing = null): array
     {
         $meta = is_array($envelope['metadata'] ?? null) ? $envelope['metadata'] : [];

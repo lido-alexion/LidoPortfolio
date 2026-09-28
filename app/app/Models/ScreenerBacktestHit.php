@@ -11,6 +11,7 @@ class ScreenerBacktestHit extends Model
 
     protected $fillable = [
         'screener_id',
+        'screener_version_id',
         'as_of_date',
         'stock_id',
         'symbol',
@@ -22,6 +23,7 @@ class ScreenerBacktestHit extends Model
     {
         return [
             'screener_id' => 'integer',
+            'screener_version_id' => 'integer',
             'stock_id' => 'integer',
             // as_of_date stays a plain Y-m-d string so date-key lookups match across drivers.
         ];

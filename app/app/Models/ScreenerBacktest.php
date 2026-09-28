@@ -15,6 +15,7 @@ class ScreenerBacktest extends Model
 
     protected $fillable = [
         'screener_id',
+        'screener_version_id',
         'profile_id',
         'session_token',
         'range_key',
@@ -31,6 +32,7 @@ class ScreenerBacktest extends Model
     {
         return [
             'screener_id' => 'integer',
+            'screener_version_id' => 'integer',
             'profile_id' => 'integer',
             'reusable_artifact_version_id' => 'integer',
             'artifact_binding_revision_id' => 'integer',

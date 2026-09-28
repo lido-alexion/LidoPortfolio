@@ -15,7 +15,7 @@ use InvalidArgumentException;
 
 /**
  * Strategy Artifact Registry — envelope I/O over portfolio_tos_strategies (BC).
- * Create/import stores drafts (not enabled). Enable (activate) does not disable other enabled strategies.
+ * Create/import persist account-owned runtime Strategies (draft, not enabled). Enable (activate) does not disable siblings.
  * Eligibility refs are Screener slug/factory_key only in export — never embedded trees.
  */
 final class StrategyArtifactRegistry implements ArtifactRegistryInterface
@@ -27,7 +27,6 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
         private ArtifactValidationService $validator,
         private StrategyRegistrySupport $support,
         private IndicatorRegistry $indicatorRegistry,
-        private LegacyArtifactAuthoringService $legacyAuthoring,
     ) {}
 
     public function type(): string
@@ -100,8 +99,9 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
         $origin = ($metadata['origin'] ?? null) === ArtifactOrigin::IMPORTED
             ? ArtifactOrigin::IMPORTED
             : ArtifactOrigin::USER;
+        $config = $this->envelopeToConfig($envelope, $profile);
 
-        return $this->legacyAuthoring->createDraft($profile, $envelope, $origin);
+        return $this->persistInvestorEnvelope($profile, $envelope, $config, $origin);
     }
 
     /**
@@ -118,39 +118,14 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
         }
 
         $this->strategies->ensureActive($profile);
-        $factory = TradingStrategy::query()
-            ->where('profile_id', $profile->id)
-            ->where('factory_key', FactoryMomentumStrategy::FACTORY_KEY)
-            ->first();
-        if (! $factory) {
-            throw new InvalidArgumentException('Default factory strategy is not available.');
-        }
 
-        $envelope = $this->exportOne((string) $factory->id, $profile);
-        unset($envelope['artifact_id'], $envelope['definition_hash'], $envelope['validation']);
-        $envelope['name'] = $name;
-        $envelope['slug'] = $this->support->uniqueSlug($profile, $this->support->slugify($name, null));
-        $meta = is_array($envelope['metadata'] ?? null) ? $envelope['metadata'] : [];
-        $desc = trim((string) ($description ?? ''));
-        $tags = is_array($meta['tags'] ?? null) ? $meta['tags'] : [];
-        $tags = array_values(array_filter(
-            $tags,
-            fn ($tag) => is_string($tag) && $tag !== 'factory' && $tag !== FactoryMomentumStrategy::FACTORY_KEY
-        ));
-        $envelope['metadata'] = array_merge($meta, [
-            'origin' => ArtifactOrigin::USER,
-            'factory_key' => null,
-            'status' => ArtifactStatus::DRAFT,
-            'description' => $desc,
-            'summary' => $desc !== '' ? $desc : (string) ($meta['summary'] ?? ''),
-            'is_enabled' => false,
-            'is_selected' => false,
-            'legacy_id' => null,
-            'legacy_version_id' => null,
-            'tags' => $tags,
-        ]);
+        $created = $this->strategies->createInvestorStrategy($profile, $name, $description);
+        $strategy = TradingStrategy::query()
+            ->whereKey((int) ($created['id'] ?? 0))
+            ->with(['activeVersion', 'reusableArtifact'])
+            ->firstOrFail();
 
-        return $this->create($envelope, $profile);
+        return $this->project($strategy, $strategy->activeVersion);
     }
 
     public function update(string $idOrSlug, array $envelope, ?PortfolioProfile $profile = null): array
@@ -283,7 +258,39 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
             $envelope['name'] = $name.' (import)';
         }
 
-        return $this->create($envelope, $profile);
+        $config = $this->envelopeToConfig($envelope, $profile);
+
+        return $this->persistInvestorEnvelope($profile, $envelope, $config, ArtifactOrigin::IMPORTED);
+    }
+
+    /**
+     * @param  array<string, mixed>  $envelope
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>
+     */
+    private function persistInvestorEnvelope(
+        PortfolioProfile $profile,
+        array $envelope,
+        array $config,
+        string $origin,
+    ): array {
+        $created = $this->strategies->createInvestorStrategyFromEnvelope($profile, $envelope, $config);
+        $strategy = TradingStrategy::query()
+            ->whereKey((int) ($created['id'] ?? 0))
+            ->with(['activeVersion', 'reusableArtifact'])
+            ->firstOrFail();
+        $version = $strategy->activeVersion;
+        if ($version === null) {
+            throw new InvalidArgumentException('Strategy version missing after create.');
+        }
+
+        $projected = $this->project($strategy, $version);
+        $projected['metadata']['origin'] = $origin;
+        if ($origin === ArtifactOrigin::IMPORTED) {
+            $projected['metadata']['status'] = ArtifactStatus::DRAFT;
+        }
+
+        return $projected;
     }
 
     /**
