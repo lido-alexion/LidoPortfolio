@@ -103,6 +103,11 @@ class MlTrainingDatasetBuilderTest extends TestCase
         }
         $this->assertSame('v8-horizon-reference-1', $dataset['feature_definitions']['sampling']['version']);
         $this->assertSame('weekly', $dataset['feature_definitions']['sampling']['cadence']);
+        $profile = $dataset['feature_definitions']['resolved_feature_profile'];
+        $this->assertSame('1m', $profile['horizon']);
+        $this->assertSame($profile['feature_set_id'], $profile['feature_set_version']);
+        $this->assertSame($profile['feature_keys'], array_keys($profile['feature_versions']));
+        $this->assertSame('v8-preprocessing-1', $profile['preprocessing']['version']);
         $this->assertSame($dataset['diagnostics']['rows_written'], $dataset['diagnostics']['context_coverage']['written_rows']);
         $this->assertGreaterThan(0, $dataset['diagnostics']['context_coverage']['market_breadth_missing']);
         $this->assertGreaterThan(0, $dataset['diagnostics']['context_coverage']['sector_relative_missing']);

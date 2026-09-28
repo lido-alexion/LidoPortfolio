@@ -40,27 +40,73 @@ class MlFeatureRegistryService
      */
     public function featureSetForHorizon(string $horizon): array
     {
+        return $this->resolveFeatureProfile($horizon);
+    }
+
+    /**
+     * Resolve a reproducible feature profile from registry metadata and a
+     * target horizon. Requested keys are validated strictly so callers cannot
+     * silently train on an ineligible or unknown feature.
+     *
+     * @param list<string>|null $requestedKeys
+     * @return array<string,mixed>
+     */
+    public function resolveFeatureProfile(string $horizon, ?array $requestedKeys = null): array
+    {
         if (! in_array($horizon, MlScoringService::HORIZONS, true)) {
             throw new \InvalidArgumentException('Unsupported ML horizon: '.$horizon);
         }
 
-        $keys = [];
-        foreach (config('ml_feature_registry.features', []) as $key => $meta) {
-            $horizons = is_array($meta) ? ($meta['horizons'] ?? []) : [];
-            if (in_array($horizon, $horizons, true) && in_array($key, [
-                ...MlTrainingDatasetBuilder::NUMERIC_FEATURES,
-                ...MlTrainingDatasetBuilder::CATEGORICAL_FEATURES,
-            ], true)) {
-                $keys[] = $key;
-            }
+        $implemented = [
+            ...MlTrainingDatasetBuilder::NUMERIC_FEATURES,
+            ...MlTrainingDatasetBuilder::CATEGORICAL_FEATURES,
+        ];
+        $registry = config('ml_feature_registry.features', []);
+        $requestedKeys ??= $implemented;
+        if (count($requestedKeys) !== count(array_unique($requestedKeys))) {
+            throw new \InvalidArgumentException('Feature profile contains duplicate feature keys.');
         }
+
+        $keys = [];
+        foreach ($requestedKeys as $key) {
+            if (! in_array($key, $implemented, true) || ! isset($registry[$key]) || ! is_array($registry[$key])) {
+                throw new \InvalidArgumentException("Unknown ML feature key: {$key}");
+            }
+            $horizons = $registry[$key]['horizons'] ?? [];
+            if (! is_array($horizons) || ! in_array($horizon, $horizons, true)) {
+                throw new \InvalidArgumentException("Feature {$key} is not eligible for {$horizon}.");
+            }
+            $keys[] = $key;
+        }
+        if ($keys === []) {
+            throw new \InvalidArgumentException("Resolved ML feature profile for {$horizon} is empty.");
+        }
+
+        $featureMetadata = [];
+        foreach ($keys as $key) {
+            $featureMetadata[$key] = $this->normalizedMetadata($key, $registry[$key]);
+        }
+        $definitionHash = $this->definitionHash($horizon, $keys);
+        $featureSetVersion = $this->featureSetVersion($horizon, $keys);
 
         return [
             'horizon' => $horizon,
             'registry_version' => (string) config('ml_feature_registry.registry_version', 'v8-registry-1'),
-            'feature_set_version' => $this->featureSetVersion($horizon, $keys),
-            'definition_hash' => $this->definitionHash($horizon, $keys),
+            'feature_set_id' => $featureSetVersion,
+            'feature_set_version' => $featureSetVersion,
+            'definition_hash' => $definitionHash,
             'feature_keys' => $keys,
+            'feature_versions' => array_map(fn (array $meta): string => (string) ($meta['formula_version'] ?? 'unversioned'), $featureMetadata),
+            'feature_metadata' => $featureMetadata,
+            'preprocessing' => config('ml_feature_registry.preprocessing', [
+                'version' => 'v8-preprocessing-1',
+                'missing_values' => 'median_with_missingness_flags',
+                'fitted_on' => 'training_partition_only',
+            ]),
+            'exclusions' => array_values(array_map(
+                fn (string $key): array => ['feature' => $key, 'reason' => 'horizon_ineligible'],
+                array_values(array_diff($implemented, $keys)),
+            )),
             'numeric' => array_values(array_intersect($keys, MlTrainingDatasetBuilder::NUMERIC_FEATURES)),
             'categorical' => array_values(array_intersect($keys, MlTrainingDatasetBuilder::CATEGORICAL_FEATURES)),
         ];

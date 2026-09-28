@@ -424,6 +424,7 @@ class MlTrainingDatasetBuilder
     private function featureDefinitions(string $horizon): array
     {
         $horizonDays = ['1m' => 21, '3m' => 63, '6m' => 126][$horizon] ?? throw new RuntimeException('Unsupported ML horizon.');
+        $featureProfile = app(MlFeatureRegistryService::class)->featureSetForHorizon($horizon);
 
         return [
             'version' => 'v8-features-1',
@@ -440,6 +441,7 @@ class MlTrainingDatasetBuilder
             ],
             'benchmark_mapping' => $this->benchmarkMappingDefinition(),
             'sampling' => $this->samplingPolicyForHorizon($horizonDays),
+            'resolved_feature_profile' => $featureProfile,
         ];
     }
 

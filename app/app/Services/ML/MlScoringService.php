@@ -285,8 +285,11 @@ class MlScoringService
     /** @return array<string,mixed> */
     private function trainingConfig(string $horizon): array
     {
+        $featureProfile = app(MlFeatureRegistryService::class)->featureSetForHorizon($horizon);
+
         return [
-            'feature_set' => [...MlTrainingDatasetBuilder::NUMERIC_FEATURES, ...MlTrainingDatasetBuilder::CATEGORICAL_FEATURES],
+            'feature_set' => $featureProfile['feature_keys'],
+            'feature_profile' => $featureProfile,
             'preprocessing' => ['missing_values' => 'median_with_missingness_flags', 'fitted_on' => 'training_partition_only'],
             'label_definition' => [
                 'version' => 'v7-risk-aware-benchmark-relative-1',

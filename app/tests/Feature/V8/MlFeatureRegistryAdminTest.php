@@ -8,6 +8,7 @@ use App\Models\V7\MlDriftCheck;
 use App\Models\V7\MlModelVersion;
 use App\Models\V7\MlTrainingRun;
 use App\Services\ML\MlTrainingDatasetBuilder;
+use App\Services\ML\MlFeatureRegistryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -31,6 +32,42 @@ class MlFeatureRegistryAdminTest extends TestCase
                 ...MlTrainingDatasetBuilder::NUMERIC_FEATURES,
                 ...MlTrainingDatasetBuilder::CATEGORICAL_FEATURES,
             ]));
+    }
+
+    public function test_feature_profiles_are_ordered_versioned_and_horizon_resolved(): void
+    {
+        $service = app(MlFeatureRegistryService::class);
+        $oneMonth = $service->resolveFeatureProfile('1m');
+        $threeMonth = $service->resolveFeatureProfile('3m');
+
+        $this->assertSame($oneMonth['feature_keys'], array_keys($oneMonth['feature_versions']));
+        $this->assertSame($oneMonth['feature_set_id'], $oneMonth['feature_set_version']);
+        $this->assertNotSame($oneMonth['definition_hash'], '');
+        $this->assertSame($oneMonth, $service->resolveFeatureProfile('1m'));
+        $this->assertNotSame($oneMonth['feature_set_id'], $threeMonth['feature_set_id']);
+        $this->assertSame('v8-preprocessing-1', $oneMonth['preprocessing']['version']);
+    }
+
+    public function test_feature_profile_rejects_unknown_duplicate_and_ineligible_keys(): void
+    {
+        $service = app(MlFeatureRegistryService::class);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $service->resolveFeatureProfile('1m', ['momentum_score', 'momentum_score']);
+    }
+
+    public function test_feature_profile_rejects_unknown_key(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        app(MlFeatureRegistryService::class)->resolveFeatureProfile('1m', ['not_registered']);
+    }
+
+    public function test_feature_profile_rejects_ineligible_key_in_requested_horizon(): void
+    {
+        config(['ml_feature_registry.features.momentum_score.horizons' => ['3m', '6m']]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        app(MlFeatureRegistryService::class)->resolveFeatureProfile('1m', ['momentum_score']);
     }
 
     public function test_admin_can_preview_dataset_plan_for_horizon(): void

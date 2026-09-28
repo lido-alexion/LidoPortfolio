@@ -99,6 +99,9 @@ class MlScoringLifecycleTest extends TestCase
         $model = MlModelVersion::query()->findOrFail($modelId);
         $this->assertSame(['momentum_score', 'sector'], $model->feature_set);
         $this->assertSame(['momentum_score', 'sector'], $model->audit_metadata['effective_feature_set']);
+        $this->assertSame('3m', $model->audit_metadata['feature_profile']['horizon']);
+        $this->assertNotEmpty($model->audit_metadata['feature_profile']['feature_set_id']);
+        $this->assertSame($model->audit_metadata['feature_profile']['feature_set_id'], $model->audit_metadata['feature_profile']['feature_set_version']);
         $this->assertSame('roe', $model->audit_metadata['excluded_features'][0]['feature']);
         $this->assertSame(['momentum_score', 'sector'], MlTrainingRun::query()->findOrFail($model->training_run_id)->selected_features);
 

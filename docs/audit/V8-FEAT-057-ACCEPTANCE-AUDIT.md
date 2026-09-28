@@ -7,16 +7,16 @@ This is a code-reconciliation checkpoint against `docs/archive/specs/V8-ML-Featu
 | Requirement | Status | Evidence / finding |
 |---|---|---|
 | Versioned machine-readable feature registry | VERIFIED locally | `MlFeatureRegistryService` now emits stable IDs, formula version, source, transformation, lookback, horizons, sector applicability, tier, missing policy, PIT classification, deprecation field and definition hash |
-| Immutable feature-set versioning | IMPLEMENTED/UNVERIFIED | Horizon feature sets now expose deterministic version/hash; persistence through every trained model still requires audit |
+| Immutable feature-set versioning | PASS locally | `MlFeatureRegistryService::resolveFeatureProfile` emits deterministic feature-set ID/version, ordered keys, per-feature versions, preprocessing identity, exclusions and definition hash; invalid/duplicate/ineligible requests fail loudly |
 | Balanced V8 candidate catalogue | PARTIAL | 49 numeric features plus sector exist; growth/profitability/risk/volume/pattern/market/sector families are present, but frozen catalogue-to-registry completeness needs a formal key matrix |
-| Horizon-specific applicability | PARTIAL | Registry declares all current features for all horizons; architect-governed differentiated profiles are not yet complete |
+| Horizon-specific applicability | PASS locally for current catalogue | Every registered feature declares eligible horizons; resolver filters/validates against the canonical ordered implemented set and rejects ineligible requests. Current catalogue intentionally permits the present implemented families across all three horizons pending evidence-based pruning |
 | 1m / 3m / 6m sampling | PASS locally | `MlTrainingDatasetBuilder` now emits versioned horizon-aware sampling metadata and selects the last available trading day per ISO week for 1m, and per month for 3m/6m; `MlTrainingDatasetBuilderTest` covers all three policies and label-safe streamed builds |
 | Current active/eligible training universe | PASS locally | Dataset universe now requires active NSE stocks, excludes benchmarks and requires price history |
 | PIT fundamentals | VERIFIED locally | Fundamental facts are filtered by availability date and latest known revision per period/as-of row |
 | PIT prices and labels | VERIFIED locally | Features use as-of unadjusted prices; labels use adjusted prices only in the forward label window |
 | PIT market breadth / sector context | PARTIAL | `MlUniverseMembership`, dated snapshot capture command, and `MlHistoricalUniverseMembershipService` now provide auditable effective-dated membership/sector snapshots; context services refuse current-universe fallback. Streamed dataset diagnostics now count candidate/written context coverage. Historical source backfill and production snapshot population remain |
 | Intraday/minute boundary | PASS by search | No minute/order-book/microstructure features are wired into FEAT-057 builder; FEAT-065 remains separate |
-| Missing-value policy | IMPLEMENTED/UNVERIFIED | Registry declares median-plus-flag/unknown-category policy; actual fitting/preprocessing is delegated to the Python adapter and needs runtime evidence |
+| Missing-value policy | IMPLEMENTED/UNVERIFIED | Resolved profile pins `v8-preprocessing-1` and median-plus-flag/unknown-category policy; actual fitting/preprocessing remains delegated to the Python adapter and needs runtime evidence |
 | Outlier handling / redundancy pruning | PARTIAL | Effective feature-set/excluded-feature metadata exists; training-time clipping, redundancy and stability selection need direct evidence |
 | Logistic baseline | PASS by architecture | `MlScoringService` persists `interpretable_logistic_baseline` model path |
 | Gradient-boosted challenger | PASS by architecture | Challenger evidence and `hist_gradient_boosting_challenger` path exist |
@@ -28,10 +28,11 @@ This is a code-reconciliation checkpoint against `docs/archive/specs/V8-ML-Featu
 | Deterministic StoX baseline comparison | PASS locally | Baseline file is evaluated against the exact test partition and persisted in training evidence |
 | Promotion evidence | PASS locally | Candidate/rejected lifecycle, thresholds, challenger evidence and explicit Admin promotion gate exist |
 | Explainability | IMPLEMENTED/UNVERIFIED | Adapter contract requires contributions and scoring exposes them; investor-facing evidence needs acceptance review |
+| Dataset/model feature-set identity | PASS locally | Dataset `feature_definitions.resolved_feature_profile` and model `audit_metadata.feature_profile` pin horizon, registry, feature keys/versions, preprocessing and definition hash; model training config carries the same profile |
 | FEAT-056 boundary | PASS by architecture | Scheduling, deployment and live drift remain in FEAT-056 services rather than dataset construction |
 
 ## Verified implementation slice
 
-Horizon-aware sampling and a controlled dated membership snapshot ingestion boundary are now implemented and tested. The next mandatory slice is to reconcile horizon-specific feature applicability and complete historical snapshot backfill/coverage evidence. The current implementation remains **IN PROGRESS** until PIT context coverage, preprocessing/runtime, and acceptance evidence are closed.
+Horizon-aware sampling, dated membership snapshots, explicit horizon profiles, and dataset/model feature-set identity are now implemented and tested. The current implementation remains **IN PROGRESS** until historical PIT snapshot coverage/backfill, preprocessing runtime evidence, redundancy handling, and full acceptance evidence are closed.
 
-Latest evidence: `MlTrainingDatasetBuilderTest` **9/9** (570 assertions) covers weekly/monthly sampling, active-universe exclusion, label purging, and explicit missing-context diagnostics; `MlMarketContextFeaturesTest` plus `MlUniverseMembershipSnapshotTest` **5/5** (18 assertions) covers dated membership, idempotency, period closure, and no-current-universe fallback. The V8 Feature suite is **155/155** (595 assertions).
+Latest evidence: `MlTrainingDatasetBuilderTest` **9/9** covers weekly/monthly sampling, active-universe exclusion, label purging, context coverage, and persisted resolved profiles; `MlFeatureRegistryAdminTest` covers deterministic profiles and invalid requests; `MlScoringLifecycleTest` verifies model audit pinning. The V8 Feature suite is **155/155** (595 assertions).
