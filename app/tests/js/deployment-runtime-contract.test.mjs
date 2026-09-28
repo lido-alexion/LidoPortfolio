@@ -27,6 +27,7 @@ test('release and rollback require a PHP-FPM refresh plus public build identity 
     assert.match(health, /public build-info commit .* does not match active release/);
     assert.match(health, /scheduler heartbeat is stale/);
     assert.match(health, /production DebugAgent is enabled/);
+    assert.match(health, /production app key is missing from cached config/);
     assert.match(health, /LIDO_AGENT_DEBUG_ENABLED=false/);
     assert.match(health, /storage\/logs/);
 });
@@ -73,6 +74,8 @@ test('production activation fails closed for debug auth and normalizes PHP writa
     assert.match(middleware, /app\(\)->environment\('production'\)/);
     assert.doesNotMatch(middleware, /query\('debug_token'\)/);
     assert.match(deploy, /production shared \.env must explicitly set LIDO_AGENT_DEBUG_ENABLED=false/);
+    assert.match(deploy, /effective production app key is missing from cached config/);
+    assert.match(deploy, /validate_cached_app_config "\$RELEASE_DIR"/);
     assert.match(deploy, /prepare_writable_tree/);
     assert.match(health, /PHP_FPM_GROUP/);
     assert.match(health, /perm -2000/);
@@ -90,4 +93,30 @@ test('production activation fails closed for debug auth and normalizes PHP writa
     for (const channel of ['single', 'daily', 'frontend', 'provider', 'scheduler', 'emergency']) {
         assert.match(logging, new RegExp(`'${channel}'[\\s\\S]*?'permission'\\s*=>\\s*0664`));
     }
+});
+
+test('microstructure collector unit matches the provisioned runtime layout', async () => {
+    const [unit, deploy, health, requirements, runbook] = await Promise.all([
+        source('deploy/systemd/stoxla-microstructure-collector.service'),
+        source('deploy/scripts/stoxla-deploy-release.sh'),
+        source('deploy/scripts/stoxla-runtime-health-check.sh'),
+        source('shared/microstructure/requirements.txt'),
+        source('deploy/STOXLA-VPS-DEPLOY.md'),
+    ]);
+
+    assert.match(unit, /User=nitty/);
+    assert.match(unit, /Group=www-data/);
+    assert.match(unit, /WorkingDirectory=\/var\/www\/stoxla\/current\/shared\/microstructure/);
+    assert.match(unit, /ExecStart=\/var\/www\/stoxla\/shared\/python\/microstructure\/bin\/python -m collector/);
+    assert.match(unit, /EnvironmentFile=-\/var\/www\/stoxla\/shared\/\.env\.microstructure-collector/);
+    assert.match(unit, /MICROSTRUCTURE_(DATA_ROOT|BACKUP_ROOT|HEARTBEAT_FILE|COMMAND_FILE|FINALIZATION_STATE_FILE)=\/var\/www\/stoxla\/shared\/storage\/app\/microstructure/);
+    assert.match(unit, /Restart=on-failure/);
+    assert.match(unit, /StandardOutput=journal/);
+    assert.match(deploy, /prepare_microstructure_python/);
+    assert.match(deploy, /shared\/microstructure\/requirements\.txt/);
+    assert.match(health, /import kiteconnect, pyarrow, polars/);
+    assert.match(requirements, /kiteconnect/);
+    assert.match(requirements, /pyarrow/);
+    assert.match(runbook, /stoxla-microstructure-collector\.service/);
+    assert.match(runbook, /systemctl enable stoxla-microstructure-collector/);
 });

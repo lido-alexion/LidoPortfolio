@@ -1,6 +1,7 @@
 [Unit]
 Description=StoX live microstructure collector (FEAT-063)
-After=network.target
+Wants=network-online.target
+After=network-online.target
 
 [Service]
 Type=simple
@@ -18,6 +19,8 @@ EnvironmentFile=-/var/www/stoxla/shared/.env.microstructure-collector
 ExecStart=/var/www/stoxla/shared/python/microstructure/bin/python -m collector
 Restart=on-failure
 RestartSec=10
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target

@@ -26,7 +26,7 @@ This audit maps the frozen FEAT-063 contract to the current repository evidence.
 | Admin status and bounded controls with server-side Admin authorization | PASS | Laravel controller/control service, Admin UI, authorization tests, controls for start/stop/resubscribe/finalization/backup/universe. |
 | Manual hold survives restart and authentication | PASS | Persisted Laravel state and login signal tests; live service restart proof pending. |
 | Operational alerts and duplicate suppression | PASS | Existing StoX alert publisher handles condition persistence/dedup; stale/error/disk/finalization/backup/low-coverage conditions are covered, while collector-side reconnect and universe failures surface through the actionable error condition. |
-| VPS dependency, systemd, persistent paths, writable storage, import checks | PARTIAL | Deploy script provisions dedicated venv; runtime gate checks imports; systemd uses `current/shared/microstructure` and persistent shared storage. Read-only VPS inspection on 2026-09-28 found the service `not-found`/inactive and expected venv/code/data paths absent; deployment has not yet been applied. |
+| VPS dependency, systemd, persistent paths, writable storage, import checks | PASS locally / deployed validation pending | Deploy script provisions the dedicated venv; runtime gate checks `kiteconnect`, `pyarrow` and `polars`; the systemd unit and runbook are statically validated for the release module path, venv, environment file, persistent storage paths, journal logging and restart policy. Read-only VPS inspection on 2026-09-28 found the service `not-found`/inactive and expected venv/code/data paths absent; deployment has not yet been applied. |
 | Live Kite authentication → tick → Parquet → heartbeat | EXTERNAL VALIDATION PENDING | VPS is reachable, but the collector service is not installed and no live Kite session was exercised. No success is claimed. |
 
 ## Verification executed
@@ -41,7 +41,7 @@ This audit maps the frozen FEAT-063 contract to the current repository evidence.
 
 ## Remaining exit-gate work
 
-1. Install and validate the collector service on the StoX VPS, including restart/hold behavior.
+1. Install and validate the collector service on the StoX VPS, including restart/hold behavior; the repository unit/runbook contract is now statically validated.
 2. Exercise the live Kite session → WebSocket → tick → Parquet → heartbeat path when credentials and market conditions permit.
 3. Validate the configured secondary backup destination in the deployed environment.
 
