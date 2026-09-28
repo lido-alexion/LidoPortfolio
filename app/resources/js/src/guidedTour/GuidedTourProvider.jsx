@@ -14,6 +14,7 @@ import GuidedTourWelcomeModal from './GuidedTourWelcomeModal';
 import GuidedTourOverlay from './GuidedTourOverlay';
 import {
     INVESTOR_TOUR_STEPS,
+    nextTourStep,
     resolveTourStep,
     stepIndex,
 } from './investorTourSteps';
@@ -145,8 +146,7 @@ export function GuidedTourProvider({ children, user }) {
         const rect = await prepareStep(step);
         if (!rect && step) {
             setSkippedSteps((prev) => [...prev, step.id]);
-            const nextIdx = stepIndex(step.id) + 1;
-            const next = INVESTOR_TOUR_STEPS[nextIdx];
+            const next = nextTourStep(step.id);
             if (next) {
                 setCurrentStepId(next.id);
                 await applyAction('update_step', { step_id: next.id });
@@ -189,7 +189,7 @@ export function GuidedTourProvider({ children, user }) {
         if (!rect) {
             setSkippedSteps((prev) => [...prev, step.id]);
             logGuidedTourEvent('step_skipped', { step_id: step.id });
-            const next = INVESTOR_TOUR_STEPS[stepIndex(step.id) + 1];
+            const next = nextTourStep(step.id);
             if (next) {
                 // Missing targets fail soft for every step, not only the
                 // first step at launch. The final valid step still requires
