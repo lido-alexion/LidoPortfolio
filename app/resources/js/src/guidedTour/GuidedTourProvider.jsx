@@ -120,10 +120,12 @@ export function GuidedTourProvider({ children, user }) {
                 : (target?.selector ? document.querySelector(target.selector) : null);
             if (element && typeof element.focus === 'function') {
                 element.focus();
-                return;
+                if (document.activeElement === element || attempt >= 10) {
+                    return;
+                }
             }
-            if (attempt < 3) {
-                window.setTimeout(() => focus(attempt + 1), 50);
+            if (attempt < 10) {
+                window.setTimeout(() => focus(attempt + 1), 100);
             }
         };
         focus();

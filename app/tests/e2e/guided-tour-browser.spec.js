@@ -49,8 +49,10 @@ test.describe('FEAT-061 guided tour mobile browser acceptance', () => {
         await page.goto('/');
 
         const trigger = page.locator('[data-tour="header-help"]');
-        await trigger.focus();
+        await expect(trigger).toBeVisible();
+        await page.waitForTimeout(250);
         await page.evaluate(() => {
+            document.querySelector('[data-tour="header-help"]')?.focus();
             window.dispatchEvent(new CustomEvent('lido-guided-tour-launch', { detail: { restart: true } }));
         });
 
