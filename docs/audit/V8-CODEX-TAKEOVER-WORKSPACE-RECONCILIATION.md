@@ -48,3 +48,15 @@ Preserve the inherited implementation and provenance changes. Repair the two bac
 ## Codex takeover changes
 
 Commit `2965d39` (`reconcile V8 inherited backtest and microstructure gaps`) contains only the focused reconciliation artifacts, version-aware backtest cache repair, and the FEAT-063 schema/aggregator/test expansion. The remaining inherited work is still uncommitted in the working tree and was not reset, cleaned, stashed, or folded into that commit.
+
+## Continuation checkpoint — 2026-09-28
+
+The frontend baseline was re-established with Node `20.19.1` and npm `10.8.2` from the existing NVM installation. Vite build, typecheck, static documentation checks, and the JavaScript unit suite now pass (`182/182`). The five inherited failures were classified as three superseded V8 expectations, one stale documentation expectation, and one genuine request-account documentation gap; the tests/catalog were corrected to the frozen behavior.
+
+Focused FEAT-063 commits after takeover:
+
+- `b0ef1f3` — durable finalization state, bounded retry, market-session gating, atomic manifests/backups, and finalized-day spool pruning.
+- `23fddb0` — Admin status exposure and operational alerts for finalization/backup failure.
+- `660a82f` — reconnect resubscription of the complete active universe in Kite full mode.
+
+The collector remains **IN PROGRESS**. Remaining exit-gate work includes explicit coverage/outage quality reporting, full trading-calendar/session tests, universe identity audit/refresh behavior, backup retry evidence, alert cooldown verification, and VPS runtime/live Kite validation. FEAT-055 and FEAT-061 remain **REVIEW** pending their formal acceptance audits.

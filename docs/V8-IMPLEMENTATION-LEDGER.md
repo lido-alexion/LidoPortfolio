@@ -12,7 +12,7 @@ FEAT-056  [IN PROGRESS] ML lifecycle automation (queued runs, SSE, drift, cancel
 FEAT-057  [IN PROGRESS] ML feature engineering / training (feature registry + dataset plan/admin APIs; full PIT-safe feature/training/validation corpus still open)
 FEAT-061  [REVIEW] Guided tour / onboarding (backend/frontend foundation and tests present; full acceptance/accessibility/i18n/runtime audit still open)
 FEAT-062  [IN PROGRESS] Fundamental signals & AI insights (deterministic + Gemini/Codex orchestrator; admin diagnostics and full acceptance still open)
-FEAT-063  [IN PROGRESS] Live microstructure collection (control plane + Python worker; OI/microprice + bounded raw-tick spool; full schema, lifecycle, quality, backup, alerting, and VPS hardening gaps)
+FEAT-063  [IN PROGRESS] Live microstructure collection (control plane + Python worker; expanded schema, bounded spool, durable finalization/retry, atomic backup, reconnect recovery, and actionable finalization/backup alerts; calendar/quality/universe/VPS validation gaps remain)
 FEAT-064  [REVIEW] Screener / Strategy UX (semantic versions, run/backtest pins, immutable save, readiness, provenance audit, and WP-09 return flow present; regression cleanup and full gate remain)
 FEAT-065  [IN PROGRESS] Intraday ML historical data platform (checkpoints + admin status + Mac backfill worker; current-universe orchestration, coverage, and handoff acceptance remain)
 ```
@@ -44,10 +44,11 @@ FEAT-065  [IN PROGRESS] Intraday ML historical data platform (checkpoints + admi
 | Internal bootstrap API | done | `MicrostructureCollectorInternalApiTest.php` |
 | Manual hold + commands | done | same |
 | Kite login auto-start signal | done | same |
-| Minute aggregation + Parquet (dry-run) | partial | `shared/microstructure/tests/test_minute_aggregator.py` |
+| Minute aggregation + Parquet (dry-run) | partial | `shared/microstructure/tests/test_minute_aggregator.py`, `test_parquet_store.py` |
 | Live KiteTicker WebSocket | wired (`kite_ticker_bridge.py`) | manual VPS + kiteconnect |
-| Finalization + partition backup | partial (`retry_backup`, post-finalize copy) | — |
-| Operational alerts | partial (stale heartbeat / error / disk via `MicrostructureCollectorHealthService`) | `MicrostructureCollectorHealthAlertTest.php` |
+| Finalization + partition backup | partial (durable bounded retry, atomic manifest/staged backup, spool pruning) | `test_finalization_state.py`, `MicrostructureCollectorHealthAlertTest.php` |
+| Reconnect + full-mode resubscription | partial (bridge recovery path) | `test_kite_ticker_bridge.py` |
+| Operational alerts | partial (stale heartbeat / error / disk / finalization / backup) | `MicrostructureCollectorHealthAlertTest.php` |
 | Telegram auth reminders | done | `MicrostructureCollectorKiteAuthReminderTest.php` |
 
 ## FEAT-061 matrix (partial)
@@ -80,14 +81,23 @@ FEAT-065  [IN PROGRESS] Intraday ML historical data platform (checkpoints + admi
 | Backtest PIT fundamental operands | done | `FundamentalScreenerOperandTest.php` |
 | Screener editor fundamental indicator grouping | done | manual |
 
+## Frontend validation baseline (2026-09-28)
+
+- Node `20.19.1` / npm `10.8.2` via the existing user NVM installation.
+- JS unit suite: **182 passed, 0 failed**.
+- Vite production build: passed.
+- Typecheck: passed.
+- Static documentation check: passed.
+- No `lint` script is declared in `app/package.json`; an attempted lint command reports the missing script rather than an application lint failure.
+- The five inherited JS failures were resolved as three superseded V8 expectations (C), one stale documentation/help expectation (D), and one genuine request-account documentation gap fixed in the request-account catalog (D/B).
+
 ## Takeover reconciliation
 
 See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md` for the exact inherited working-tree inventory, baseline results, undocumented work, and risk classification. This ledger is verified against the current workspace as of 2026-09-28; it is not a claim that any epic is production complete.
 
 ## Next task
 
-1. Repair and regression-test version-aware Screener backtest compatibility.
-2. FEAT-063: complete minute schema, lifecycle/quality/finalization/backup semantics, universe recovery, and VPS runtime readiness.
+1. FEAT-063: complete quality/coverage semantics, session/calendar evidence, universe identity refresh, operational alert suppression, and VPS runtime readiness; then run the full exit gate.
 3. FEAT-055 + FEAT-061 formal acceptance/security audits.
 4. FEAT-052: queue/scheduler instrumentation, full OTEL SDK alignment, browser view-duration spans.
 5. FEAT-054: official history, inline YoY cells, and per-user advanced preference API.
