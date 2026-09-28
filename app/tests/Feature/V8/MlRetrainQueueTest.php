@@ -87,8 +87,12 @@ class MlRetrainQueueTest extends TestCase
     {
         Bus::fake();
 
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
-        app(\App\Services\ML\MlScoringService::class)->queueRetrainRun('1m', null, 'drift');
+        try {
+            app(\App\Services\ML\MlScoringService::class)->queueRetrainRun('1m', null, 'drift');
+            $this->fail('A drift trigger without evidence must be rejected.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertSame('A drift-triggered run must reference its drift check.', $exception->errors()['drift_check_id'][0]);
+        }
         Bus::assertNothingDispatched();
     }
 
@@ -96,8 +100,12 @@ class MlRetrainQueueTest extends TestCase
     {
         Bus::fake();
 
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
-        app(\App\Services\ML\MlScoringService::class)->queueRetrainRun('1m', null, 'manual', 42);
+        try {
+            app(\App\Services\ML\MlScoringService::class)->queueRetrainRun('1m', null, 'manual', 42);
+            $this->fail('A non-drift trigger must not carry drift evidence.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertSame('Only drift-triggered runs may reference a drift check.', $exception->errors()['drift_check_id'][0]);
+        }
         Bus::assertNothingDispatched();
     }
 }
