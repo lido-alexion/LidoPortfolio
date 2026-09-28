@@ -9,7 +9,7 @@ FEAT-052  [REVIEW] OpenTelemetry / LidoTelemetry (config, OTLP HTTP exporter, AP
 FEAT-054  [REVIEW] Historical fundamental bootstrap (summary/derived metrics, provenance, user-scoped Advanced preference, history UI, Screener boundary, and bootstrap evidence complete locally; browser/provider/deployed runtime acceptance remains)
 FEAT-055  [REVIEW] Account access request / Admin approval (formal audit complete; production Turnstile/mail and deployed multi-worker validation remain external)
 FEAT-056  [IN PROGRESS] ML lifecycle automation (queued runs, SSE, drift, cancel, notifications, transient retries; retention/recovery/acceptance still open)
-FEAT-057  [IN PROGRESS] ML feature engineering / training (versioned horizon-resolved registry, dataset/model feature-set pinning, PIT context refusal of current-universe fallback, dated snapshot coverage diagnostics, resumable historical snapshot backfill, horizon-derived purge/embargo evidence, and training-only preprocessing verified locally; authoritative provider population, paired training/validation evidence, redundancy acceptance, and full explainability acceptance remain open)
+FEAT-057  [IN PROGRESS] ML feature engineering / training (versioned horizon-resolved registry, dataset/model feature-set pinning, PIT context refusal of current-universe fallback, authoritative dated provider adapter with resumable backfill, horizon-derived purge/embargo evidence, training-only preprocessing, paired active/baseline evidence contract, and pinned model explainability verified locally; bounded real training evidence, production archive population, full frozen catalogue matrix, and investor-facing explainability acceptance remain open)
 FEAT-061  [REVIEW] Guided tour / onboarding (formal audit complete; missing-target regression covered; browser accessibility/mobile journey and localization mechanism remain open)
 FEAT-062  [IN PROGRESS] Fundamental signals & AI insights (deterministic catalogue, comparison evidence, growth relationships, provider-neutral orchestration, bounded investor-safe validation, and follow-up guidance; broader catalogue/sufficiency/UI acceptance still open)
 FEAT-063  [REVIEW] Live microstructure collection (local implementation and deterministic resilience verification complete; VPS installation, live Kite path, and deployed backup destination remain external)
@@ -103,11 +103,11 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 
 1. FEAT-063 external validation: install/validate the collector on the StoX VPS, then exercise the live Kite path and deployed backup destination when credentials/market conditions permit.
 2. FEAT-054 external acceptance: browser/mobile fundamentals journey and representative provider/deployed bootstrap runtime.
-3. FEAT-057: complete authoritative snapshot-provider integration and paired active/baseline training evidence, then close explainability and horizon-specific validation acceptance.
+3. FEAT-057: run bounded real training against populated dated snapshots, complete the frozen feature matrix and end-to-end paired evidence/explainability acceptance.
 
 ## Failing tests
 
-The broad direct PHPUnit Feature run with `php -d memory_limit=512M vendor/bin/phpunit tests/Feature` completed **1,309 tests: 1,172 passed** in 5m09s. OpenAPI generated-spec drift was fixed by the canonical `openapi:v1` command and `OpenApiV1ContractTest` now passes. Remaining grouped failures are inherited V1–V3/Lending setup expectations that activate strategies without the V8 FEAT-064 readiness prerequisites; they are classified C (superseded fixture expectation) pending a dedicated regression review, not silently rewritten. ML lifecycle constructor failures are corrected and focused V8/ML suites pass.
+The broad direct PHPUnit Feature run with `php -d memory_limit=512M vendor/bin/phpunit tests/Feature` completed **1,316 tests: 1,183 passed**, with one primary failure and 132 cascading errors from inherited V1–V3/Lending setup expectations that activate strategies without the V8 FEAT-064 readiness prerequisites. They remain classified C pending dedicated fixture reconciliation; no fixtures were silently rewritten. OpenAPI generated-spec drift and ML constructor failures are resolved, and the focused ML/provider suites pass.
 
 ## MlScoringService ownership reconciliation
 
