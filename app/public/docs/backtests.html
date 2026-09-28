@@ -106,7 +106,7 @@
         <a href="backtests.html">This topic</a>
       </div>
     </header>
-    
+
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Strategy Backtests</h1>
       <p class="muted"><code>backtests</code> · screen: <code>/backtests</code></p>
@@ -129,37 +129,37 @@
         <dl class="doc-list">
         <dt>New Backtest</dt>
         <dd>Choose period (range_key), initial capital (min ₹1,000), optional name/notes/tags, then Start. A notice warns that the run can take several minutes and that you should keep the page open. Progress shows stage, % complete, current simulation date, and eligibility precompute % while PREPARING.</dd>
-    
+
         <dt>Continue polling</dt>
         <dd>After Start, the client POSTs /v1/backtests/{id}/continue while continued=true (up to ~2000 slices). Navigate to the detail page automatically when completed.</dd>
-    
+
         <dt>Open / Delete</dt>
         <dd>History table actions. Open goes to the run detail. Delete permanently removes that run and its trades, snapshots, and statistics.</dd>
-    
+
         <dt>Duplicate</dt>
         <dd>Starts a new Strategy Backtest via the existing POST /v1/backtests create path. The new run keeps the original from_date, to_date, range_key, initial capital, notes, and tags, and runs against the current Strategy (strategy_version_id is omitted so the server resolves ensureActive). Completed trades, trade results, statistics, and portfolio snapshots are not copied. Duplicate does not revive Strategy version-fork. If the original row is missing period dates or a valid initial capital, Duplicate stops and reports the gap instead of inventing values.</dd>
-    
+
         <dt>Detail — Save name / notes / tags</dt>
         <dd>PUT /v1/backtests/{id} updates metadata without re-running simulation.</dd>
-    
+
         <dt>Detail — Resume banner</dt>
         <dd>If you open an in-progress run, the page auto-resumes Continue polling until completed or failed.</dd>
-    
+
         <dt>Trade timeline</dt>
         <dd>Sticky symbol column × trading-day columns. Cell day count coloured green (profitable close), red (loss), or muted (open). Horizontal scroll for long periods.</dd>
-    
+
         <dt>Portfolio growth chart</dt>
         <dd>Daily portfolio value line with reference line at initial capital. Tooltip: date, portfolio, cash, invested value.</dd>
-    
+
         <dt>Collapsible Trades / Transactions</dt>
         <dd>Trades and Transactions tables start collapsed (row count shown in the header). Expand a section to inspect the full table without scrolling past long lists by default.</dd>
-    
+
         <dt>Scroll to top / bottom</dt>
         <dd>Floating arrow buttons at the bottom-right of the detail page jump to the start or end of the main scroll area.</dd>
-    
+
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
-    
+
         <dt>Validation and errors</dt>
         <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
     </dl>
@@ -170,25 +170,25 @@
         <dl class="doc-list">
         <dt>Active Strategy snapshot</dt>
         <dd>Each run locks the active Strategy version (and linked Screener versions) at start time so results stay reproducible.</dd>
-    
+
         <dt>Paper portfolio</dt>
         <dd>Simulated cash and positions — no broker orders, reservations, or ledger transactions.</dd>
-    
+
         <dt>Eligibility precompute</dt>
         <dd>PREPARING stage rebuilds historical screener hits per day before day-by-day simulation.</dd>
-    
+
         <dt>Statistics block</dt>
         <dd>Aggregates at completion: return_pct, CAGR, maximum_drawdown, win_rate, trade counts, holding periods, utilization, cash_remaining, maximum_concurrent_positions. Per-trade CAGR is blank for holds shorter than 30 calendar days (annualizing overnight gains is meaningless and can overflow storage).</dd>
-    
+
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
-    
+
         <dt>Data freshness</dt>
         <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
     </dl>
       </section>
 
-      
+
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
@@ -196,7 +196,7 @@
         </div>
       </section>
     </article>
-    
+
     <footer class="muted">
       Generated from the StoX in-app documentation source. Product screens still require sign-in.
     </footer>

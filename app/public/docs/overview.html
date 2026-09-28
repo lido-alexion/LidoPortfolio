@@ -106,7 +106,7 @@
         <a href="overview.html">This topic</a>
       </div>
     </header>
-    
+
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">App documentation</h1>
       <p class="muted"><code>overview</code> · screen: <code>/docs/</code></p>
@@ -125,22 +125,22 @@
         <dl class="doc-list">
         <dt>Header (?)</dt>
         <dd>Opens static Documentation for the current route in a new browser tab (available before and after login).</dd>
-    
+
         <dt>Public static HTML</dt>
         <dd>No login or JavaScript required to view /docs/*.html. Product screens linked from topics still require sign-in.</dd>
-    
+
         <dt>Topic index</dt>
         <dd>Open /docs/index.html for the full topic list.</dd>
-    
+
         <dt>Direct topic URLs</dt>
         <dd>Share /docs/{keyword}.html (for example /docs/strategy.html) with humans or AI crawlers.</dd>
-    
+
         <dt>Sidebar toggle (Ctrl/Cmd+B)</dt>
         <dd>Collapses or expands the primary sidebar on wide screens, or opens/closes the navigation overlay on narrower screens. Ignored while typing in form fields.</dd>
-    
+
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
-    
+
         <dt>Validation and errors</dt>
         <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
     </dl>
@@ -151,28 +151,28 @@
         <dl class="doc-list">
         <dt>Contextual keyword</dt>
         <dd>Each app route maps to a stable keyword (for example dashboard, screener, strategy). Static files use that keyword as the HTML filename.</dd>
-    
+
         <dt>Active portfolio</dt>
         <dd>Most screens read and write data for the portfolio selected in the header switcher.</dd>
-    
+
         <dt>Primary sidebar</dt>
         <dd>Primary navigation is sidebar-only and fully configuration-driven (<code>config/navigation.js</code> + <code>navigation/</code> registry). Sections: Favourites, Quick Actions, then groups — Portfolio, Market, Trading, Knowledge, Administration. Reusable primitives: NavMenuItem, NavGroup, NavBadge, NavTooltip. Icons come from a single registry (no duplicated Lucide imports in rows). Routes use ROUTES constants. Editors stay internal. Future plugins register via navigationRegistry.registerModule. Ctrl/Cmd+B toggles the sidebar. See docs/current/frontend-and-navigation.md.</dd>
-    
+
         <dt>Page chrome</dt>
         <dd>Above the page content, breadcrumbs (Home → group → page) and the current page title come from the same navigation catalog. Tags such as NEW or BETA and numeric badges can appear on sidebar items and the page title row. Disabled items stay visible but are not clickable; external items open in a new tab. Permission keys on catalog entries are reserved for future access filtering. Browser Back/Forward work with normal history entries from sidebar links.</dd>
-    
+
         <dt>Trading OS flow</dt>
         <dd>See topic Trading OS pages &amp; flow for which page shows what and how recommendations move from Screener → Strategy → Recommendations → Review.</dd>
-    
+
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
-    
+
         <dt>Data freshness</dt>
         <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
     </dl>
       </section>
 
-      
+
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
@@ -180,7 +180,7 @@
         </div>
       </section>
     </article>
-    
+
     <footer class="muted">
       Generated from the StoX in-app documentation source. Product screens still require sign-in.
     </footer>

@@ -29,6 +29,13 @@ The current docs are feature-oriented rather than version-oriented:
 12. [Implementation Alignment And Gaps](docs/current/implementation-alignment-and-gaps.md)
 13. [StoX Trading Artifacts AI Guide](docs/current/stox-trading-artifacts-ai-guide.md)
 
+## StoX V8 implementation
+
+- Frozen V8 register: [docs/archive/specs/LidoPortfolio-V8-Wishlist.md](docs/archive/specs/LidoPortfolio-V8-Wishlist.md)
+- Active implementation ledger: [docs/V8-IMPLEMENTATION-LEDGER.md](docs/V8-IMPLEMENTATION-LEDGER.md)
+- V8 acceptance audit (living): [docs/V8-ACCEPTANCE-AUDIT.md](docs/V8-ACCEPTANCE-AUDIT.md)
+- V8 gap audit (requirement-level, not complete): [docs/V8-GAP-AUDIT.md](docs/V8-GAP-AUDIT.md)
+
 ## Archive
 
 The old chronological/versioned specs and audits were retired to [docs/archive/](docs/archive/). They remain useful for historical context but are no longer the first source of truth for current product behaviour.

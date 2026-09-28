@@ -106,7 +106,7 @@
         <a href="screener.html">This topic</a>
       </div>
     </header>
-    
+
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Screener</h1>
       <p class="muted"><code>screener</code> · screen: <code>/screeners</code></p>
@@ -124,29 +124,29 @@
         <h2>Controls</h2>
         <dl class="doc-list">
         <dt>Create / open screener</dt>
-        <dd>Opens the condition editor. Saving a new definition creates an Artifact Library Draft; it is not runnable until published and bound.</dd>
-    
+        <dd>Opens the condition editor. Saving a new definition creates an account-owned Screener on My screens (runnable after save).</dd>
+
         <dt>Run / schedule</dt>
         <dd>Execute now or attach a cron schedule + optional Telegram delivery.</dd>
-    
+
         <dt>Share across your portfolios</dt>
         <dd>Mark a screener shared so your other portfolios (same account only) can list and import a private copy. Other users cannot see it.</dd>
-    
+
         <dt>Screener Registry</dt>
-        <dd>Open the compatibility registry to inspect/export runtime Screeners or validate/import Screener JSON as an Artifact Library Draft.</dd>
-    
+        <dd>Open the compatibility registry to inspect/export runtime Screeners or validate/import Screener JSON into My screens.</dd>
+
         <dt>Guide tab (editor)</dt>
         <dd>Plain-language indicator definitions and Investopedia links.</dd>
-    
+
         <dt>Rule naming and intent</dt>
         <dd>Use descriptive names and notes so future you can understand why each screener exists without re-reading every condition.</dd>
-    
+
         <dt>Schedule with caution</dt>
         <dd>Automated schedules are powerful; start with manual runs until logic is trusted.</dd>
-    
+
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
-    
+
         <dt>Validation and errors</dt>
         <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
     </dl>
@@ -157,31 +157,31 @@
         <dl class="doc-list">
         <dt>Eligibility vs scoring</dt>
         <dd>Screeners admit candidates; Strategy scoring ranks them afterward.</dd>
-    
+
         <dt>Scopes</dt>
         <dd>Holdings, watchlist, all equities, or index constituents.</dd>
-    
+
         <dt>Same-account sharing</dt>
         <dd><code>is_shared</code> lists the screener under Shared screens for your other portfolios only — not a global catalog for other users.</dd>
-    
+
         <dt>Factory Minervini Trend Template</dt>
         <dd>Shipped default screener often referenced by the default Minervini Strategy.</dd>
-    
+
         <dt>Registry vs editor</dt>
         <dd>The registry manages reusable artifact metadata and JSON I/O; the editor builds conditions and runs screens.</dd>
-    
+
         <dt>Eligibility contract</dt>
         <dd>If a stock never passes eligibility, strategy scoring never gets a chance to rank it.</dd>
-    
+
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
-    
+
         <dt>Data freshness</dt>
         <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
     </dl>
       </section>
 
-      
+
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
@@ -189,7 +189,7 @@
         </div>
       </section>
     </article>
-    
+
     <footer class="muted">
       Generated from the StoX in-app documentation source. Product screens still require sign-in.
     </footer>

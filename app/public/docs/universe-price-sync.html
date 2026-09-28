@@ -106,7 +106,7 @@
         <a href="universe-price-sync.html">This topic</a>
       </div>
     </header>
-    
+
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Universe price sync</h1>
       <p class="muted"><code>universe-price-sync</code> · screen: <code>/settings/universe-price-sync</code></p>
@@ -125,16 +125,16 @@
         <dl class="doc-list">
         <dt>Sync status / controls</dt>
         <dd>Monitor batch progress, windows, and enablement.</dd>
-    
+
         <dt>Gap failures / ignored gaps</dt>
         <dd>Drill into symbols that failed fill or were intentionally skipped.</dd>
-    
+
         <dt>Manual run</dt>
         <dd>You can still trigger a batch anytime from the UI/CLI, including weekends, even when the scheduler skips.</dd>
-    
+
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
-    
+
         <dt>Validation and errors</dt>
         <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
     </dl>
@@ -145,25 +145,25 @@
         <dl class="doc-list">
         <dt>Batch executor</dt>
         <dd>Per-stock provider fetch loop with rate-limit awareness and sync logging.</dd>
-    
+
         <dt>History depth</dt>
         <dd>Longer windows improve indicators and backtests.</dd>
-    
+
         <dt>Weekend policy</dt>
         <dd>No new market bars on Sat/Sun. Scheduler skips unless the prior equity session’s last maintenance batch ended failed/partial. Daily holdings/benchmark/index cron skips weekends and trade holidays too. Ops overdue Telegram follows the same rule: silent when Friday succeeded, still fires when Friday’s last batch failed/partial.</dd>
-    
+
         <dt>Hung batch recovery</dt>
         <dd>If a batch is killed mid-run, the in-progress lock auto-clears after ~30 minutes and orphan “running” sync-log rows are marked failed.</dd>
-    
+
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
-    
+
         <dt>Data freshness</dt>
         <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
     </dl>
       </section>
 
-      
+
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
@@ -171,7 +171,7 @@
         </div>
       </section>
     </article>
-    
+
     <footer class="muted">
       Generated from the StoX in-app documentation source. Product screens still require sign-in.
     </footer>

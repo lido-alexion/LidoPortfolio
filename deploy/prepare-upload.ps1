@@ -61,6 +61,7 @@ Copy-Item (Join-Path $PSScriptRoot 'cpanel-repair-indiavix-scale.php') (Join-Pat
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-mobile-debug.php') (Join-Path $staging 'portfolio/cpanel-mobile-debug.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-ping.php') (Join-Path $staging 'portfolio/cpanel-ping.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-api-probe.php') (Join-Path $staging 'portfolio/cpanel-api-probe.php') -Force
+Copy-Item (Join-Path $PSScriptRoot 'cpanel-lido-telemetry-probe.php') (Join-Path $staging 'portfolio/cpanel-lido-telemetry-probe.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-probe-price-providers.php') (Join-Path $staging 'portfolio/cpanel-probe-price-providers.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-gap-analysis.php') (Join-Path $staging 'portfolio/cpanel-gap-analysis.php') -Force
 Copy-Item (Join-Path $PSScriptRoot 'cpanel-deactivate-bse-unpriceable.php') (Join-Path $staging 'portfolio/cpanel-deactivate-bse-unpriceable.php') -Force

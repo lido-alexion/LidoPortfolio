@@ -106,7 +106,7 @@
         <a href="trading-os-flow.html">This topic</a>
       </div>
     </header>
-    
+
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Trading OS pages &amp; flow</h1>
       <p class="muted"><code>trading-os-flow</code> · screen: <code>/documentation?q=trading-os-flow</code></p>
@@ -151,13 +151,13 @@ flowchart TD
         <dl class="doc-list">
         <dt>Run decision pipeline</dt>
         <dd>On Recommendations — regenerates ideas using current Screener hits, Discovery/Evaluation facts, and Strategy config. Production also runs this unattended once per portfolio calendar day via Laravel schedule:run (you can still run it manually). Requires a successful market-dataset sync within 24 hours of the pipeline run (72 hours if the pipeline runs on Monday). The check uses timestamps, not calendar dates. If the dataset is older than that window, the pipeline stops before Discovery and does not create evaluation results or recommendations. Existing older prices are not used as a fallback. Exchange holidays are not treated specially.</dd>
-    
+
         <dt>Approve / Reject / Defer</dt>
         <dd>On Recommendations for actionable ideas. Approve moves buys/sells to Pending Execution.</dd>
-    
+
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
-    
+
         <dt>Validation and errors</dt>
         <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
     </dl>
@@ -168,28 +168,28 @@ flowchart TD
         <dl class="doc-list">
         <dt>Dataset freshness for the pipeline</dt>
         <dd>The daily decision pipeline runs only when the last successful market-dataset sync is within 24 hours of that run (72 hours if the run is on Monday). The check uses timestamps, not calendar dates, and does not treat exchange holidays specially. If the dataset is too old, Discovery / Evaluation / Recommendations are not created from that run.</dd>
-    
+
         <dt>Discovery optional to visit</dt>
         <dd>You configure Screener + Strategy and act on Recommendations. Discovery is not listed in the left Market navigation. It still runs inside the decision pipeline (candidates → long-focused factor facts). Opening <code>/candidates</code> is optional unless you are inspecting or debugging. Evaluation scores live on the Discovery table (no separate Evaluations page).</dd>
-    
+
         <dt>Eligibility vs scoring vs ideas</dt>
         <dd>Screener admits; Discovery/Evaluation measures (long-focused); Strategy scores and filters; Recommendations is where you act.</dd>
-    
+
         <dt>Strategy never lists stocks</dt>
         <dd>Changing Strategy only changes policy. You must generate (pipeline) to refresh Recommendations.</dd>
-    
+
         <dt>HOLD / WATCH</dt>
         <dd>Insights on Recommendations; not sent to Telegram; not Approve→Pending Execution.</dd>
-    
+
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
-    
+
         <dt>Data freshness</dt>
         <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
     </dl>
       </section>
 
-      
+
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
@@ -197,7 +197,7 @@ flowchart TD
         </div>
       </section>
     </article>
-    
+
     <footer class="muted">
       Generated from the StoX in-app documentation source. Product screens still require sign-in.
     </footer>

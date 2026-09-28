@@ -22,6 +22,21 @@ fail() {
   exit 1
 }
 
+validate_cached_app_config() {
+  local app_state
+  local app_env
+  local debug_enabled
+  local app_key_length
+
+  app_state="$("$PHP_BIN" artisan tinker --execute='echo config("app.env")."|".(config("portfolio.debug_agent.enabled") ? "true" : "false")."|".strlen((string) config("app.key"));' --no-interaction)"
+  IFS='|' read -r app_env debug_enabled app_key_length <<< "$app_state"
+
+  [[ "$app_env" == "production" && "$debug_enabled" == "false" ]] \
+    || fail "effective production DebugAgent state is unsafe: enabled or non-production environment"
+  [[ "$app_key_length" =~ ^[1-9][0-9]*$ ]] \
+    || fail "effective production app key is missing from cached config"
+}
+
 if [[ "$APP_ROOT" != /var/www/stoxla ]]; then
   fail "refusing unexpected app root: $APP_ROOT"
 fi
@@ -65,6 +80,7 @@ mv -Tf "$APP_ROOT/current.new" "$APP_ROOT/current"
   "$PHP_BIN" artisan route:cache --no-interaction
   "$PHP_BIN" artisan view:cache --no-interaction
   "$PHP_BIN" artisan event:cache --no-interaction
+  validate_cached_app_config
   "$PHP_BIN" artisan queue:restart --no-interaction
 )
 

@@ -106,7 +106,7 @@
         <a href="cash.html">This topic</a>
       </div>
     </header>
-    
+
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Cash</h1>
       <p class="muted"><code>cash</code> · screen: <code>/cash</code></p>
@@ -125,37 +125,37 @@
         <dl class="doc-list">
         <dt>Deposit / Withdraw / Adjust</dt>
         <dd>Change cash with amount stepper, optional remarks, and transaction date. Withdrawals cannot exceed available physical cash (balance − reserved). They still succeed if cash then sits below the required reserve.</dd>
-    
+
         <dt>Reserved cash</dt>
         <dd>Expand to see reservations tied to pending-execution buys.</dd>
-    
+
         <dt>Required cash reserve</dt>
         <dd>Rupee floor from Portfolio Settings → Portfolio cash reserve %. Based on max(invested amount, current holdings market value), not a % of cash.</dd>
-    
+
         <dt>Unallocated Cash</dt>
         <dd>Presentation-only residual after the reserve that unused strategy allocation has not claimed. Not a ledger line and not a withdrawal entitlement.</dd>
-    
+
         <dt>Strategy capital allocation</dt>
         <dd>Edit enabled-strategy allocation % (must sum to 100 to save). Also editable on Strategy Registry. Shows allocated capital, unused allocation, lent, borrowed, and retained capital (accounting floor, not physical cash).</dd>
-    
+
         <dt>Recalls &amp; lending</dt>
         <dd>View recalls (lifecycle, settled vs outstanding), Recall Bridge Loans, and Proceeds from Stock Sale. No manual Create Bridge Loan or Mark Available — those are automated.</dd>
-    
+
         <dt>Statement</dt>
         <dd>Chronological cash ledger. Types include deposit, withdrawal, adjustment, buy, sell, and V4-SPEC-004 special movements Loan / Recall / Bridge. Amount is signed: positive enters trading cash, negative leaves. Intra-strategy loan/recall/bridge transfers post both signs so the physical pool is unchanged. Delayed Proceeds from Stock Sale post as Recall or Bridge (not Deposit). Kind labels still show Proceeds from Stock Sale when that is the note.</dd>
-    
+
         <dt>Transaction date usage</dt>
         <dd>Use the intended accounting date for deposits/withdrawals so statement chronology and downstream analytics remain meaningful.</dd>
-    
+
         <dt>Reservation drilldown</dt>
         <dd>Expand reserved cash to understand which pending executions are consuming capital before adjusting balances.</dd>
-    
+
         <dt>Recalls &amp; lending refresh</dt>
         <dd>Refresh the panel after settlement jobs run to see updated outstanding amounts and Proceeds from Stock Sale status.</dd>
-    
+
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
-    
+
         <dt>Validation and errors</dt>
         <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
     </dl>
@@ -166,55 +166,55 @@
         <dl class="doc-list">
         <dt>Available physical cash</dt>
         <dd>max(0, total cash − pending-execution reservations). Withdrawals cannot exceed this amount.</dd>
-    
+
         <dt>Investable capital</dt>
         <dd>(cash − required reserve − pending reserved) + market value of strategy-owned holdings. Unmanaged holdings are excluded from the 100% strategy split.</dd>
-    
+
         <dt>Strategy allocation %</dt>
         <dd>Policy share of investable capital (TradingStrategy.allocation_pct). Distinct from score-band allocation_pct on the Strategy Capital Allocation tab and from holdings market-value %. Editable on Cash and Strategy Registry.</dd>
-    
+
         <dt>Retained capital</dt>
         <dd>Per-strategy nearest-integer rupees of allocated capital ÷ recommended minimum holdings. Lending cannot consume it later; it is not a cash bucket.</dd>
-    
+
         <dt>Capital priority</dt>
         <dd>Funding order: own capital first, then recall eligible lent capital, then borrow if needed. Execute at the actual available amount — not the full target when funding is short.</dd>
-    
+
         <dt>Recall</dt>
         <dd>Lender recalling an outstanding loan. Full Recall = entire outstanding. Partial Recall = ₹5,000 multiples only. Eligibility = commitment date + current recall period (Settings). One active recall; follow-up after complete + cooldown floor(period/2).</dd>
-    
+
         <dt>Immediate settlement (75% rule)</dt>
         <dd>Target 100% of the recall amount; at least 75% of that recall amount from own cash and/or Recall Bridge Loan is required for immediate settlement. Settles max available up to 100%. Below 75% → Pending — funds being arranged (liquidation / Proceeds from Stock Sale).</dd>
-    
+
         <dt>Recall Bridge Loan</dt>
         <dd>Helps fulfil a recall only. Cannot fund investments, cannot itself be recalled, no interest, no ₹5,000 repayment blocks, needs 10% stock cushion. Repaid as funds become available.</dd>
-    
+
         <dt>Proceeds from Stock Sale</dt>
         <dd>Sale executed ≠ cash available. After settlement delay, proceeds apply to recall/bridge; partial apply leaves remainder outstanding; excess stays own capital.</dd>
-    
+
         <dt>Good-faith automation</dt>
         <dd>Strategies repay and recall according to rules when capital is needed or available. Inter-strategy lending has no interest. There is no auto-return toggle controlling this behaviour.</dd>
-    
+
         <dt>Loan repayment</dt>
         <dd>Any amount ≤ outstanding reduces loan outstanding. Does not move stock or change allocation %. The cash statement records signed Loan rows that net to zero on the physical pool. Distinct from automated Recall when the lender needs capital back.</dd>
-    
+
         <dt>Loan / Recall / Bridge cash types</dt>
         <dd>Special cash-ledger types are exactly loan, recall, and bridge. Sign is the accounting: positive = money entered trading cash; negative = money left. There are no LOAN_IN / LOAN_OUT (etc.) types. Notes are human context only. Not a tax or chart-of-accounts ledger.</dd>
-    
+
         <dt>Balance vs available</dt>
         <dd>Balance is total cash ledger value; available subtracts open reservations and is the true deployable amount.</dd>
-    
+
         <dt>Sale vs proceeds</dt>
         <dd>A stock sale for a recall shows as executed first; Proceeds from Stock Sale become available only after the settlement delay.</dd>
-    
+
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
-    
+
         <dt>Data freshness</dt>
         <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
     </dl>
       </section>
 
-      
+
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
@@ -222,7 +222,7 @@
         </div>
       </section>
     </article>
-    
+
     <footer class="muted">
       Generated from the StoX in-app documentation source. Product screens still require sign-in.
     </footer>

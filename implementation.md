@@ -3415,4 +3415,176 @@ Document in this section. Authenticator TOTP for broker execution shipped as V4-
 
 - **Market Breadth update (2026-07-28):** Removed NSE/BSE toggle and BSE index rows. Calculations now run on NSE/NSE+ constituents only (BSE-only excluded). Date dropdown reloads only table data, chart remains fixed to Nifty 50 history.
 
+## V8 FEAT-055 — Account access request workflow (in progress, 2026-09-27)
+
+**Spec:** `docs/archive/specs/V8-Account-Access-Request-Admin-Approval-Specification.md`. **Ledger:** `docs/V8-IMPLEMENTATION-LEDGER.md`.
+
+- Public `POST /api/auth/access-requests` (CAPTCHA + rate limits) starts email verification; `POST /api/auth/access-requests/verify/{token}` creates a pending request when policy allows.
+- Admin (under existing `admin` middleware): list/detail/history, Create invite (reuses `UserInviteService` + `UserInvitationMail`), Ignore, Reject, ban list/clear.
+- Tables: `portfolio_access_request_verifications`, `portfolio_access_requests`, `portfolio_access_request_bans`, `portfolio_access_request_audit_events`.
+- Config: `config/access_requests.php`, env `TURNSTILE_*`, `ACCESS_REQUEST_*`.
+- UI: `/request-account`, `/request-account/verify/:token`, login link, User management → Account access requests panel.
+- Tests: `tests/Feature/V8/AccessRequestWorkflowTest.php` (9 tests).
+- Turnstile widget on `RequestAccountPage` when `VITE_TURNSTILE_SITE_KEY` is set; `portfolio:purge-access-request-verifications` scheduled daily; ignore-cooldown test added.
+- Admin detail API returns `history`, `audit_events`, and `bans`; User management review panel shows prior requests + audit trail (`AccessRequestsAdminSection.jsx`).
+- Admin Ignore/Reject collect optional internal reason via browser prompt (`AccessRequestsAdminSection`); FEAT-055 checklist in `docs/V8-ACCEPTANCE-AUDIT.md`.
+
+## V8 FEAT-052 — LidoTelemetry / OpenTelemetry (foundation, 2026-09-27)
+
+**Spec:** `docs/archive/specs/V8-StoX-OpenTelemetry-LidoTelemetry-Integration-Specification.md`.
+
+- Config `config/lido_telemetry.php`; env `LIDO_TELEMETRY_*`, `VITE_LIDO_TELEMETRY_ENABLED`.
+- `App\Telemetry\*`: W3C `TraceContext`, OTLP/JSON HTTP exporter (fail-open), `LidoTelemetry` HTTP + business events, `LidoTelemetryCatalog` names.
+- `LidoTelemetryHttpMiddleware` on `api` + `web` groups; echoes `traceparent` when enabled.
+- Frontend: `telemetry/lidoTelemetry.js` (traceparent on API requests, route-view hooks in `App.jsx`).
+- Browser route view duration: `lidoTelemetry.js` tracks wall vs active (visibility) time and POSTs `POST /api/telemetry/route-view` → `stox.ui.route_view` business span (`LidoTelemetryRouteViewTest.php`, `tests/js/lidoTelemetryRouteView.test.mjs`).
+- Tests: `LidoTelemetryHttpTest.php`, `LidoTelemetryRouteViewTest.php`, `LidoTelemetryBusinessEventsTest.php`.
+- Queue + scheduler business spans via `JobProcessing` / `JobProcessed` / `JobFailed` / `ScheduledTaskStarting` listeners (`AppServiceProvider`).
+- Business catalogue wiring (partial): fundamentals/ML/screener events (`stox.screener.run` includes `screener_version_id` + `run_id` for provenance correlation); `stox.fundamentals.ai_insights` when `GET …/fundamentals/...?include_ai_insights=1` (`LidoTelemetryBusinessEventsTest`); `stox.auth.login_succeeded` / `stox.auth.login_failed` on `POST /api/auth/login` (`AuthController`, `LidoTelemetryBusinessEventsTest`); `stox.recommendation.viewed` / `stox.recommendation.accepted`; `stox.order.placement_requested` / `stox.order.placed` / `stox.order.cancel_requested`.
+- Production Collector check: `deploy/cpanel-lido-telemetry-probe.php` (`?token=…&send=1`) emits `stox.telemetry.collector_probe` when `LIDO_TELEMETRY_ENABLED` + OTLP endpoint are set.
+- Not yet implemented: official OpenTelemetry PHP/JS SDKs (current path uses lightweight OTLP/JSON exporter + W3C traceparent).
+
+## V8 FEAT-063 — Live microstructure collector (foundation, 2026-09-27)
+
+**Spec:** `docs/archive/specs/V8-Live-Microstructure-Data-Collection-Specification.md`.
+
+- `config/microstructure_collector.php`, table `portfolio_microstructure_collector_state`, `MicrostructureCollectorControlService`, admin APIs `GET/POST /api/microstructure-collector/*`, UI `/settings/microstructure-collector`.
+- Command/heartbeat files for the VPS Python worker; `BrokerConnectionService::completeLogin` queues `start` when not on manual hold.
+- Python skeleton: `shared/microstructure/collector/` (`python -m collector` from `shared/microstructure`).
+- Tests: `tests/Feature/V8/MicrostructureCollectorAdminTest.php`.
+- Internal bootstrap API: `GET /api/internal/microstructure-collector/bootstrap` (Bearer `MICROSTRUCTURE_COLLECTOR_INTERNAL_TOKEN`) exposes Kite session, NIFTY 500 mapped instrument tokens, calendar flag, manual hold.
+- Python: `minute_aggregator`, `parquet_store`, `collector_app` with `MICROSTRUCTURE_DRY_RUN` path; unit tests `shared/microstructure/tests/` (aggregator, spool, parquet; `unittest discover` from that directory).
+- Live path: `kite_ticker_bridge.py` (KiteTicker full mode, threaded), minute flush to Parquet, post-finalize copy to `MICROSTRUCTURE_BACKUP_ROOT`; systemd unit `deploy/systemd/stoxla-microstructure-collector.service`.
+- `MicrostructureCollectorHealthService` feeds `AdminOperationalAlertService` with stale heartbeat, collector error, and low-disk keys during market hours (unless manual hold). Config: `heartbeat_stale_minutes`, `market_timezone`. Tests: `tests/Feature/V8/MicrostructureCollectorHealthAlertTest.php`.
+- `MicrostructureCollectorKiteAuthReminderService` + `portfolio:send-microstructure-kite-auth-reminders` (pre-market + hourly Telegram via `NotificationPublisher`, static `/dashboard` connect link). Tests: `MicrostructureCollectorKiteAuthReminderTest.php`.
+- Minute schema_v1 extended: `microprice_close` / `microprice_avg`, derivative `oi_close`, `oi_delta`, `oi_day_high`, `oi_day_low` (`minute_aggregator.py`, `schema_v1.py`; unit tests).
+- Bounded raw-tick spool: `raw_tick_spool.py` (size + age limits via `MICROSTRUCTURE_RAW_SPOOL_MAX_MB` / `MICROSTRUCTURE_RAW_SPOOL_MAX_AGE_MINUTES`), wired on live tick ingest; heartbeat exposes `raw_tick_spool` stats. Tests: `tests/test_raw_tick_spool.py`.
+- Depth/spread summaries: min/max spread (abs/rel), tick-averaged spread, bid/ask order-count sums on `schema_v1` minute rows (`minute_aggregator.py`).
+- Not yet implemented: VPS-hardening, production Parquet validation.
+
+## V8 FEAT-054 — Historical fundamentals bootstrap (foundation, 2026-09-27)
+
+**Spec:** `docs/archive/specs/V8-Historical-Fundamentals-Bootstrap-Specification.md`.
+
+- Tables `stox_fundamental_bootstrap_runs` / `stox_fundamental_bootstrap_jobs`; `FundamentalBootstrapService` (one job per active stock, priority historical ingest chain, anomaly guard, terminal quality statuses).
+- `FundamentalHistoricalIngestService` merges NSE → BSE → Yahoo sources (`config/fundamentals_bootstrap.php`). NSE official facts load from operator `FUNDAMENTALS_NSE_OFFICIAL_FEED_URL` JSON when enabled (`NseOfficialFundamentalHistoricalTest.php`); BSE URL config reserved. Bootstrap jobs call ingest instead of Yahoo-only fetch. Unit test: `FundamentalHistoricalIngestTest.php`.
+- Manual operator command `stox:fundamentals-bootstrap` (`--dry-run`, `--all`, `--stock`, `--stocks`, `--status=failed|complete_partial`, `--run`, `--batch`).
+- Admin read-only: `GET /api/v1/admin/fundamentals/bootstrap` and `bootstrap` block on `GET /api/v1/admin/fundamentals`.
+- Tests: `tests/Feature/V8/FundamentalBootstrapWorkflowTest.php`.
+- `FundamentalDataService` V8 correctness: strict four-quarter TTM (`ttmFlowSum`), quarterly YoY / annual YoY growth (`growthMetric`), FCF requires both OCF and capex, investor ratio guards (P/E, P/B, ROE, D/E). Tests: `FundamentalMetricCorrectnessTest.php`.
+- Investor APIs: enriched `GET /api/v1/stocks/{stock}/fundamentals` via `FundamentalInvestorSnapshotService` (summary, coverage, market price); `GET /api/v1/stocks/{stock}/fundamentals/history?cadence=quarterly|annual` for multi-period basic fact rows; `GET /api/v1/stocks/{stock}/fundamentals/metrics/{metric}/history?range=1y|3y|5y|10y&frequency=default|quarterly|daily|monthly` — flow metrics at quarterly PIT boundaries; valuation metrics (`pe`, `pb`) default to **monthly** series from daily adjusted-price PIT points. Tests: `FundamentalInvestorSnapshotTest.php`.
+- Watchlist **Fundamentals** tab: snapshot, insights, revenue + P/E + P/B (TTM) mini-charts, **valuation chart frequency** (monthly / daily / quarterly PIT TTM on P/E and P/B), quarterly/annual toggle, Basic + collapsible Advanced statement tables with inline quarterly YoY % (`FundamentalStatementTables.jsx`, `config/fundamentals_ui.php`). Contextual help in `appDocumentation.js`.
+- Screeners: `FundamentalScreenerOperandService` + `fund_*` catalog rows; `ScreenerEvaluationService::evaluateExprValue()` resolves fundamentals on `evaluateStock()` (not only series/backtest path). Tests: `FundamentalScreenerOperandTest.php`; unit tests use `ScreenerEvaluationTestSupport`.
+- Screener backtests pass `Stock` into `evaluateAcrossDates()` so `fund_*` operands respect PIT `as_of` per session (`ScreenerBacktestService`).
+- Screener editor groups fundamental operands under a **Fundamentals** `<optgroup>` (`ScreenerEditorPage.jsx`).
+- BSE official JSON feed adapter (`BseOfficialFundamentalHistoricalTest.php`).
+- Bank/NBFC canonical facts (interest income/expense, NII, GNPA/NNPA ratios, CAR, provisions) via ingest + `FundamentalBankMetricsService` (NIM from reported fact or TTM NII/interest income); Yahoo/yfinance interest mappings; screener operands `fund_gross_npa_ratio`, `fund_net_npa_ratio`, `fund_capital_adequacy_ratio`, `fund_net_interest_margin`. Test: `FundamentalBankMetricsTest.php`.
+- Curated catalogue: `config/fundamentals_catalog.php`, `FundamentalMetricCatalog`, `GET /api/v1/fundamentals/metric-catalog` (+ admin alias); labels drive investor snapshot and screener operands. Test: `FundamentalMetricCatalogTest.php`.
+- Not yet implemented: live NSE/BSE exchange APIs at scale; combo chart overlays (V9).
+
+## V8 FEAT-062 — Fundamental signals (deterministic foundation, 2026-09-27)
+
+**Spec:** `docs/archive/specs/V8-Fundamental-Signals-AI-Insights-Specification.md`.
+
+- `FundamentalSignalsService` — rule-based positive/risk signals (ROE, leverage, revenue YoY, FCF vs earnings) without LLM.
+- `GET /api/v1/stocks/{stock}/fundamentals?include_insights=1` embeds `insights` block matching the spec contract shape (AI `not_requested`).
+- Watchlist Fundamentals tab shows deterministic summary bullets + revenue TTM mini-chart (`FundamentalMetricMiniChart.jsx`).
+- Tests: `tests/Feature/V8/FundamentalSignalsTest.php`.
+- `AIInsightsService` → `FundamentalInsightsAiOrchestrator` with `GeminiFundamentalInsightsProvider` + `CodexFundamentalInsightsProvider` (primary/secondary failover, fail-open `unavailable`).
+- `?include_ai_insights=1` on fundamentals API; tests: `FundamentalSignalsTest`, `FundamentalAiInsightsTest.php`.
+- Env: `FUNDAMENTALS_AI_*` in `.env.example`.
+- Admin fundamentals status includes `ai_insights` provider diagnostics (`FundamentalInsightsAiOrchestrator::adminDiagnostics`); test `FundamentalAiAdminDiagnosticsTest.php`.
+- Expanded deterministic cash-flow quality signals: `weak_ocf_vs_net_income`, `strong_ocf_vs_net_income` (`FundamentalSignalsTest`).
+- Working-capital signals: `receivables_growth_vs_revenue`, `inventory_growth_vs_revenue` (15pp spread vs quarterly revenue YoY). CWIP watch: `cwip_expansion_ambiguous` (annual YoY / share of PPE). Yahoo/yfinance fact keys: `trade_receivables`, `inventory`, `current_assets`, `capital_work_in_progress`, etc. (`FundamentalSignalsTest`).
+- `FundamentalSectorContextService` — multi-metric sector peer percentiles (ROE, operating margin, debt/equity, P/E vs peer median) on `insights.sector_context.peer_percentiles`; watchlist Fundamentals tab shows summary + peer comparison table; test `FundamentalSectorContextTest.php`.
+- Standalone investor page `/fundamentals/insights/:symbol?` (`FundamentalInsightsPage.jsx`) loads deterministic + optional AI insights (`include_ai_insights=1`); shared renderer `FundamentalInsightsSignals.jsx`; sidebar nav entry.
+- Admin **Settings → Fundamental Data**: AI provider diagnostics + persisted `ai_insights_primary_provider` on `stox_fundamental_settings` (`PUT /api/v1/admin/fundamentals/settings`); orchestrator reads DB override before env (`FundamentalAiAdminDiagnosticsTest`).
+- `stox_fundamental_ai_invocations` audit log + env limits (`FUNDAMENTALS_AI_DAILY_*`); `rate_limited` when exceeded (`FundamentalAiUsageLimitTest.php`).
+- Invocation log stores token counts and `estimated_cost_usd` from `fundamentals_ai.estimated_cost_per_million_tokens`; admin status rolls up today tokens + est. spend USD (`FundamentalAiUsageLimitTest`).
+- Admin `POST /api/v1/admin/fundamentals/ai-insights/test` provider probe; usage summary on admin status (`FundamentalAiAdminDiagnosticsTest`).
+
+## V8 FEAT-064 — Screener / Strategy authoring UX (partial, 2026-09-27)
+
+**Spec:** `docs/archive/specs/V8-Core-Investor-Workflow-UX-Simplification.md`.
+
+- `POST /api/screeners` creates account-owned runtime Screeners via `ScreenerService::create` (no Artifact Library Draft redirect).
+- `ScreenerEditorPage` navigates to `/screeners/{id}` after save; clearer read-only message for library-bound rows.
+- `POST /api/v1/strategies` creates account-owned draft Strategies via `StrategyConfigurationService::createInvestorStrategy`; `CreateStrategyPanel` on Strategy page uses this route (registry name-only create remains for library drafts).
+- `LegacyArtifactAuthoringCutoverTest` covers screener + strategy runtime create; JS contract test adjusted for screener navigation.
+- Screener semantic versioning includes universe (`scope`, `watchlist_id`, `index_symbol`) in version hash; `portfolio_screener_versions` stores selector columns; runs pin `screener_version_id` (`ScreenerProvenanceTest`); run API payloads include `screener_version_id` (`ScreenerRunService::formatRun`).
+- Strategy save is copy-on-write: `updateActiveConfig()` supersedes prior `TradingStrategyVersion` and creates the next version when config hash changes; recommendations keep their pinned `strategy_version_id` (`StrategyImmutableSaveTest`).
+- `StrategyEligibilityService::syncStrategyScreeners()` records `screener_version_id` per dependency.
+- Version-aware screener backtest cache: `screener_version_id` on backtest jobs, day/hit rows; editor matrix filters current version; semantic edits no longer wipe all cached dates (`ScreenerBacktestVersionTest`).
+- Strategy readiness: `StrategyReadinessService`, `readiness` + `setup_required` on strategy payloads; enable blocked with validation errors until eligibility and indicator weights are valid (`StrategyReadinessTest`); Strategy page shows requirements and disables Enable when setup is incomplete.
+- Provenance regression: `StrategyProvenanceRegressionTest` proves recommendations keep pinned `strategy_version_id` config after strategy save forks.
+- WP-09 contextual Create Screener from Strategy: `strategyScreenerReturnFlow.js`, Strategy **Create new Screener** button, Screener new-editor return/cancel; tests `tests/js/strategyScreenerReturnFlow.test.mjs`.
+- WP-10 migration gate report: `StrategyProvenanceMigrationReportService`, admin `GET /api/v1/admin/strategy-provenance/migration-report` (resolved / unresolved / orphaned / mismatched counts per provenance column; `not_null_enforcement_recommended` gate). Test `StrategyProvenanceMigrationReportTest.php`. Settings **Strategy Registry (Admin)** shows gate status banner.
+- WP-05 definition-copy sharing: `POST /api/screeners/shared/{id}/import` and `POST /api/v1/screener-registry/shared/{id}/import` copy via `ScreenerService::importShared` (account-owned runtime Screener + versioning), not Artifact Library Drafts; registry/shared UI opens `/screeners/{id}`. Test `ScreenerDefinitionCopySharingTest.php`.
+- Registry JSON import: `POST /api/v1/screener-registry/import` validates envelope then persists via `ScreenerService::create` (`ScreenerArtifactRegistry::importEnvelope`); UI opens `/screeners/{id}`. Test `ScreenerRegistryImportRuntimeTest.php`.
+- Strategy registry create/import: `POST /api/v1/strategy-registry` (name-only) and `POST /api/v1/strategy-registry/import` persist runtime draft Strategies via `StrategyConfigurationService` (`StrategyRegistryImportRuntimeTest.php`); UI opens `/strategy?strategy_id=`.
+- Mandatory audit acceptance (ROC gate + scope/watchlist/index versioning): `Feat064MandatoryAuditAcceptanceTest.php` (recommendation/transaction pin strategy V1 → screener V1 after V2 edits; `GET /api/v1/recommendations/{id}` exposes `provenance.pinned_screeners` with immutable `definition_json` via `StrategyProvenanceResolutionService`).
+- Browser smoke: `tests/e2e/screener-investor-workflow.spec.js` (list → new → save → `/screeners/{id}`; mocked API).
+- Library-bound Strategy/Screener editors show investor-facing read-only copy (upgrade via Artifact Library publish + bind).
+
+## V8 FEAT-057 — ML feature engineering (foundation, 2026-09-27)
+
+**Spec:** `docs/archive/specs/V8-ML-Feature-Engineering-Training-Validation-Specification.md`.
+
+- `config/ml_feature_registry.php` (`v8-registry-10`) + `MlFeatureRegistryService` (metadata + `implemented` flags).
+- Training features expanded to **49 numeric + sector** (bank/NBFC: GNPA/NNPA/CAR/NIM when facts exist; null otherwise — `FundamentalBankMetricsService`, `FundamentalBankMetricsTest.php`) (deterministic OHLC pattern set: ATR%, range position, consolidation width, candle body/range, downside vol, up-day ratio, 20d high distance; quality: current ratio, gross margin). Tests: `MlPatternFeaturesTest.php`. (1m/3m/6m relative strength, benchmark 3m/6m returns + benchmark SMA trend + benchmark 20d vol, MA20/50/200 trend, sector-relative 3m, cross-sectional breadth above SMA20, drawdown, 20d/63d vol, valuation, growth, OCF/NI, etc.) via `MlTrainingDatasetBuilder`, `MlSectorRelativeStrengthService`, `MlMarketBreadthFeatureService`; test `MlMarketContextFeaturesTest.php`.
+- Secondary **Ridge return regressor** in `ml_adapter.py` (`return_regressor` artifact + training evidence); investor predictions expose `expected_benchmark_relative_return_pct` (`MlScoringService`, watchlist ML tab, admin run evidence panel).
+- `ml_adapter.py` trains **HistGradientBoostingClassifier** challenger alongside logistic baseline; evidence on `MlTrainingRun.configuration.challenger_evidence` and model `audit_metadata` (`MlChallengerEvidenceTest.php`).
+- When `config/ml.php` `challenger_promotion` passes (`STOXLA_ML_CHALLENGER_*`), training also registers a separate **candidate** `MlModelVersion` (`model_family` = `hist_gradient_boosting_challenger`) with its own joblib artifact; `GET .../promotion-review` exposes `challenger_sibling` (`MlChallengerEvidenceTest.php`, `MlPromotionReviewTest.php`); ML admin **Promote challenger** when sibling is promotion-eligible (`MlScoringAdminPage.jsx`).
+- `MlChronologicalValidationGridService` persists monthly chronological validation windows + benchmark-volatility regime slices on training runs (`chronological_validation_grid` v2); test `MlChronologicalValidationGridTest.php`.
+- Admin: `GET /api/v1/admin/ml/features`, `GET /api/v1/admin/ml/dataset-plan?horizon=&cutoff_date=` (wraps `MlTrainingDatasetBuilder::plan`).
+- Screener operands: `ml_success_score_{1m,3m,6m}` via `MlScreenerOperandService` (queries `stox_ml_predictions` directly to avoid DI cycle with `MlScoringService`); catalog + evaluation wired in `ScreenerCatalog` / `ScreenerEvaluationService`.
+- Tests: `MlFeatureRegistryAdminTest.php`, `MlScreenerOperandTest.php`.
+- Investor bundle: `MlScoringService::investorHorizonInsights` / `refreshInvestorHorizonInsights`; `GET /api/v1/stocks/{stock}/ml-insights`, `POST /api/v1/stocks/{stock}/ml-insights/refresh`; watchlist research **ML scores** tab (`WatchlistResearchPanel.jsx`); test `MlStockInsightsTest.php`.
+- Admin run detail: `MlTrainingRunAdminService` exposes `challenger_evidence`, `chronological_validation_grid` summary, and `metrics`; ML admin **Evidence** panel on completed runs (`MlScoringAdminPage.jsx`).
+- Logistic baseline and **HistGradientBoosting challenger** probabilities are **Platt/isotonic-calibrated** on the validation partition (`ml_adapter.py`); metadata + promotion review expose `calibration` (Brier, reliability buckets).
+- Not yet implemented: optional intraday-derived features; gradient-boosted return model (Ridge is the V8 secondary baseline).
+
+## V8 FEAT-065 — Intraday ML historical platform (foundation, 2026-09-27)
+
+**Spec:** `docs/archive/specs/V8-Intraday-ML-Historical-Data-Platform-Specification.md`.
+
+- `config/intraday_ml_platform.php`; `stox_intraday_backfill_checkpoints` migration; `IntradayHistoricalPlatformService` + admin `GET /api/v1/admin/intraday-platform`.
+- Mac worker: `shared/intraday/backfill_worker.py` (dry-run + checkpoint POST; apply mode writes Parquet via `parquet_store.py` when `--bars-json` is supplied); internal API `GET/POST /api/internal/intraday-backfill/*` with `STOXLA_INTRADAY_BACKFILL_INTERNAL_TOKEN` (`IntradayBackfillInternalApiTest.php`).
+- Parquet layout: `shared/intraday/parquet_store.py` (`schema_v1/year=YYYY/month=MM/*.parquet`, zstd); `shared/intraday/requirements.txt` (pyarrow).
+- Operator docs: `shared/intraday/README.md` (Parquet corpus on Mac, separate from FEAT-063 live collector).
+- Tests: `IntradayPlatformAdminTest.php`, `IntradayBackfillInternalApiTest.php`, `shared/intraday/tests/test_backfill_worker.py`, `shared/intraday/tests/test_parquet_store.py`.
+- Kite historical client: `shared/intraday/kite_historical_client.py` (chunked minute fetch; env `STOXLA_KITE_*`); worker auto-fetches on `--apply` when credentials + instrument token are set.
+- Coverage + analytics: `coverage_report.py` (CLI inventory), `dataset_builder.py` (DuckDB symbol summary + PIT-bounded Polars daily OHLC from 1m bars).
+- Not yet implemented: full NIFTY 500 / index corpus backfill at scale; Mac POC performance sign-off.
+
+## V8 FEAT-056 — ML lifecycle automation (foundation, 2026-09-27)
+
+**Spec:** `docs/archive/specs/V8-ML-Lifecycle-Automation-Deployment-Operations-Specification.md`.
+
+- `config/ml_lifecycle.php` — per-horizon bounded schedules (disabled by default), `STOXLA_ML_LIFECYCLE_ENABLED`.
+- `MlLifecycleAutomationService` — one running retrain per horizon guard, schedule-due evaluation, dispatches `MlRetrainJob` (queue) which calls existing `MlScoringService::retrain`.
+- `portfolio:ml-lifecycle-tick` scheduled every minute (Asia/Kolkata by default).
+- Drift-triggered early retrain: `ml_lifecycle.drift_trigger` + `MlDriftTriggerEvaluator` reads recent `warning` drift checks on the active model; `MlRetrainJob` records `trigger` / `drift_check_id` on the training run configuration (no auto-promote).
+- Durable training progress on `stox_ml_training_runs.configuration.progress`; admin `GET /admin/ml/runs`, `GET /admin/ml/runs/{id}`, SSE `GET /admin/ml/runs/{id}/stream` (`MlTrainingRunAdminTest.php`); ML admin UI run history table.
+- Tests: `MlLifecycleAutomationTest.php` (includes `STOXLA_ML_LIFECYCLE_ENABLED` tick noop + admin `lifecycle.enabled` payload), `MlDriftTriggerLifecycleTest.php` (including `STOXLA_ML_DRIFT_TRIGGER_ENABLED=false` tick noop), `MlTrainingRunAdminTest.php`, `MlLifecycleRetentionGateTest.php` (retention only on lifecycle tick when `STOXLA_ML_RETENTION_ENABLED`).
+- Admin promotion evidence: `GET /api/v1/admin/ml/models/{model}/promotion-review` (`MlScoringService::promotionReview`); test `MlPromotionReviewTest.php`.
+- Admin ML page: **Promotion review** panel via `GET /api/v1/admin/ml/models/{model}/promotion-review` (`MlScoringAdminPage.jsx`); horizon cards show `latest_drift_check` from `GET /api/v1/admin/ml` dashboard payload; dashboard includes `lifecycle` schedule/drift/retention gate status (`MlLifecycleAutomationService::adminStatus`).
+- Admin queued retrain: `POST /api/v1/admin/ml/retrain-queue` + `MlScoringAdminPage` EventSource on `/runs/{id}/stream` (`MlRetrainQueueTest.php`).
+- Bounded retained artifact pruning: `MlArtifactRetentionService`, `GET /api/v1/admin/ml/retention-plan?apply=1`, optional tick via `STOXLA_ML_RETENTION_ENABLED` (`MlArtifactRetentionTest.php`); **ML Scoring** admin retention panel (preview per horizon + **Apply prune now** when enabled).
+- Gap audit: [docs/V8-GAP-AUDIT.md](docs/V8-GAP-AUDIT.md).
+- Training cancellation: queued runs cancel immediately; running runs enter `cancelling` and stop at dataset/training checkpoints (`MlTrainingRunCancellationService`, `POST /api/v1/admin/ml/runs/{run}/cancel`). Queued retrains create a `queued` run row before `MlRetrainJob` dispatch. Tests: `MlTrainingRunCancelTest.php`.
+- Action-oriented lifecycle notifications: `MlLifecycleNotificationService` via `NotificationPublisher` (training failure, eligible candidate, drift warning, promotion, rollback); `STOXLA_ML_LIFECYCLE_NOTIFICATIONS_ENABLED`. Test `MlLifecycleNotificationTest.php`.
+- Bounded transient retries: `MlTrainingRunRetryService` + `STOXLA_ML_RETRY_MAX_ATTEMPTS` / backoff; re-queues same run via delayed `MlRetrainJob`. Test `MlTrainingRunRetryTest.php`.
+
+## V8 FEAT-061 — Guided tour / welcome onboarding (2026-09-27)
+
+**Spec:** `docs/archive/specs/V8-Guided-Tour-Welcome-Onboarding-Specification.md`.
+
+- Config `config/guided_tour.php`; table `portfolio_user_onboarding_state`; `GuidedTourService` + `GET/PUT /api/guided-tour`.
+- Investor-only eligibility (`!is_admin`); welcome prompt cap, dismiss forever, resume/restart, completion semantics.
+- Frontend: `guidedTour/` provider, welcome modal, spotlight overlay, config-driven `investorTourSteps.js`, Profile relaunch, `data-tour` hooks on shell targets.
+- Telemetry via existing `POST /api/logs/frontend` (`guided_tour:*` messages).
+- Tests: `tests/Feature/V8/GuidedTourTest.php`.
+- Remaining: full acceptance audit, i18n key migration if/when app-wide i18n lands.
+
 - **Universe Price Sync fix (2026-07-28):** Restored missing ormatGapRangeList import in UniversePriceSyncPage.jsx to prevent post-load React crash on /settings/universe-price-sync (error: ormatGapRangeList is not defined).

@@ -4,7 +4,7 @@
 
 > **Audience:** AI agents and developers authoring portable Indicator / Screener / Strategy JSON **without** reading application source code.
 >
-> **Generated:** 2026-09-15T11:31:28.163Z
+> **Generated:** 2026-09-28T19:12:21.751Z
 > **Deploy download:** `/docs/stox-trading-artifacts-ai-guide.md` (also linked from Screener Registry and Strategy Registry).
 > **Repo copy:** `docs/current/stox-trading-artifacts-ai-guide.md`
 
@@ -661,7 +661,7 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 
 The Screener Registry is a compatibility view of Portfolio runtime Screeners. Existing rows still use the same condition tree the run engine executes; mapped rows link to the authoritative Artifact Library.
 
-Export downloads a Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates an account-owned Artifact Library Draft without creating a runnable Portfolio row. Publish and bind the Draft explicitly. Copying a shared legacy Screener from another Portfolio also creates a Library Fork Draft.
+Export downloads a Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates an account-owned Screener on My screens (opens the editor). Copying a shared Screener from another of your portfolios creates an independent private copy the same way.
 
 ## Importing JSON — start here
 
@@ -1214,9 +1214,9 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 
 **UI / docs route label:** `/strategy/registry`
 
-The Strategy Registry is the V3 compatibility surface for strategy rows in the current portfolio. A portfolio may have **multiple enabled Strategies** at once. After V5 mapping, rows are read-only here and link to the authoritative Artifact Library lifecycle. New definitions and imports create account-owned Library Drafts without a runnable Portfolio row. Immutable publication, binding enablement, explicit upgrades and archive belong to the Artifact Library; the legacy registry remains available for migration-era runtime rows and portable inspection.
+The Strategy Registry is the V3 compatibility surface for strategy rows in the current portfolio. A portfolio may have **multiple enabled Strategies** at once. After V5 mapping, rows are read-only here and link to the authoritative Artifact Library lifecycle. Name-only **Create Strategy** and validated JSON **Import** add draft runtime Strategies (enable from here or the Strategy editor). Library-bound rows stay read-only projections — upgrade via Artifact Library publish + binding.
 
-Export downloads the portable Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates and opens an **Artifact Library Draft**. Publish and bind it explicitly. Enabled rows show **Allocation %**. An **Allocation** editor (same PUT `/v1/capital/allocations` as Cash) lets you set percentages that must sum to 100.
+Export downloads the portable Trading Artifact JSON envelope. **Validate** checks the envelope. **Import** stays disabled until validation succeeds, then creates a draft Strategy and opens the Strategy editor. Enabled rows show **Allocation %**. An **Allocation** editor (same PUT `/v1/capital/allocations` as Cash) lets you set percentages that must sum to 100.
 
 Existing Minervini (`momentum_factory`) migrates automatically to slug `momentum_strategy` with eligibility linked to `minervini_trend_template`.
 
@@ -1724,9 +1724,9 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 
 ### Controls
 
-- **Create Strategy** — Name + optional description. Creates a draft from the default factory configuration (POST `/v1/strategy-registry`) and opens the editor. JSON import remains available for authored packs.
+- **Create Strategy** — Name + optional description. Creates an account-owned draft Strategy from the default momentum template (POST `/v1/strategies`) and opens the Strategy editor. Artifact Library import (`/v1/strategy-registry/import`) remains for portable JSON packs.
 - **Search / filters** — Filter by status (active/draft/archived) and origin (factory/user).
-- **Enable** — Turn this strategy on for the portfolio. Other enabled strategies stay enabled. Success shows a toast. Recommendation generation runs independently for every enabled strategy.
+- **Enable** — Turn this strategy on for the portfolio when readiness is satisfied (`setup_required` is false). Incomplete strategies show a Setup required list (missing eligibility, indicator weights, etc.). Other enabled strategies stay enabled.
 - **Allocation % (list)** — Enabled rows show the stored strategy allocation_pct (read-only in the table).
 - **Allocation editor** — Edit enabled-strategy allocation % with a live sum; Save calls PUT /v1/capital/allocations (same as Cash). Client requires sum ≈ 100 before save; server errors are shown.
 - **Archive** — Sets the strategy to archived without changing other enabled strategies. The last remaining enabled strategy cannot be archived until another is enabled. Past holdings/recommendations keep attribution.

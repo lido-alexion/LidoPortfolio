@@ -106,7 +106,7 @@
         <a href="admin-alerts.html">This topic</a>
       </div>
     </header>
-    
+
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Admin operational alerts</h1>
       <p class="muted"><code>admin-alerts</code> · screen: <code>/settings/admin-alerts</code></p>
@@ -124,10 +124,10 @@
         <dl class="doc-list">
         <dt>Alert inbox</dt>
         <dd>Acknowledge or clear operational alerts.</dd>
-    
+
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
-    
+
         <dt>Validation and errors</dt>
         <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
     </dl>
@@ -138,22 +138,22 @@
         <dl class="doc-list">
         <dt>Ops vs trading alerts</dt>
         <dd>Operational alerts concern infrastructure/data health and unattended pipeline/broker jobs; alert policies concern holdings rules.</dd>
-    
+
         <dt>Weekend overdue silence</dt>
         <dd>If Friday’s last universe batch and daily holdings sync succeeded, Sat/Sun overdue Telegram is suppressed. Failed Friday runs still alert because weekend retry should run.</dd>
-    
+
         <dt>Unattended pipeline (V4-FEAT-010)</dt>
         <dd>Production cron only needs php artisan schedule:run every minute. The daily pipeline, broker reconcile, and Automatic submit are Laravel schedule events (one effective pipeline decision per portfolio calendar day). Failures stay in this inbox and Telegram; they are not emailed.</dd>
-    
+
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
-    
+
         <dt>Data freshness</dt>
         <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
     </dl>
       </section>
 
-      
+
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
@@ -161,7 +161,7 @@
         </div>
       </section>
     </article>
-    
+
     <footer class="muted">
       Generated from the StoX in-app documentation source. Product screens still require sign-in.
     </footer>

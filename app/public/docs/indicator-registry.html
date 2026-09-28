@@ -106,7 +106,7 @@
         <a href="indicator-registry.html">This topic</a>
       </div>
     </header>
-    
+
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Indicator Registry</h1>
       <p class="muted"><code>indicator-registry</code> · screen: <code>/settings/indicators</code></p>
@@ -1027,25 +1027,25 @@
         <dl class="doc-list">
         <dt>Search</dt>
         <dd>Match against indicator id, display name, or description.</dd>
-    
+
         <dt>Category / Type / Status filters</dt>
         <dd>Narrow the catalogue (e.g. momentum primaries, stub composites, liquidity).</dd>
-    
+
         <dt>Indicator row</dt>
         <dd>Open the detail page for full metadata, parameters, consumers, and capabilities.</dd>
-    
+
         <dt>Dependency tree</dt>
         <dd>On detail, expand declared depends_on relationships recursively (e.g. momentum_score → rsi).</dd>
-    
+
         <dt>Formula explanation</dt>
         <dd>Read-only prose describing how the indicator is computed; not editable in the UI.</dd>
-    
+
         <dt>Catalogue guide</dt>
         <dd>This documentation topic — full id list, meanings, defaults, ranges, and Screener vs Strategy usage.</dd>
-    
+
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
-    
+
         <dt>Validation and errors</dt>
         <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
     </dl>
@@ -1056,37 +1056,37 @@
         <dl class="doc-list">
         <dt>Primary / Composite / Metric</dt>
         <dd>Primaries are OHLCV calculators (often screenable). Composites combine dependencies into scores (Strategy or Liquidity/Tradability). Metrics are descriptive Stock Analytics / Discovery fields.</dd>
-    
+
         <dt>Screenable vs strategy-scorable</dt>
         <dd>Screenable Primaries appear in Screener conditions. Strategy-scorable Composites appear in Strategy weights. No id is both. Liquidity/Tradability composites are intentionally not strategy-scorable.</dd>
-    
+
         <dt>EMA / SMA / RSI (plain language)</dt>
         <dd>SMA = equal-weight average of closes. EMA = exponential average (faster). RSI = 0–100 momentum from average gains vs losses. Relative Strength (Strategy) is stock vs benchmark — not the RSI oscillator.</dd>
-    
+
         <dt>Id uniqueness and aliases</dt>
         <dd>Registry id is unique. Strategy aliases: momentum→momentum_score, trend→trend_score, pattern_bonus→breakout_score, volume→volume_score, risk→risk_score. Prefer canonical keys in new JSON.</dd>
-    
+
         <dt>Parameter ranges</dt>
         <dd>Screener Primary params declare default/min/max/step (periods usually 1–400). Strategy Composite params declare type/label/default. Stay inside ranges — Validate/Import rejects out-of-range values (no silent clamp). Omitted Screener params use TechnicalIndicatorService fallbacks, which may differ from catalogue UI defaults.</dd>
-    
+
         <dt>Parameter naming convention</dt>
         <dd>Use catalogue param ids exactly: period/fast/slow/signal/mult for Primaries; lookback_days/rsi_period/sma_fast/benchmark etc. for Strategy Composites. Do not invent synonyms.</dd>
-    
+
         <dt>Circuit heuristics</dt>
         <dd>Circuit Frequency / Risk use OHLCV heuristics (large move + locked range), not official exchange circuit feeds.</dd>
-    
+
         <dt>Immutable calculators</dt>
         <dd>Shipping calculators are release-owned. Registry UI is read-only documentation; artifact drafts do not rewrite TechnicalIndicatorService math.</dd>
-    
+
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
-    
+
         <dt>Data freshness</dt>
         <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
     </dl>
       </section>
 
-      
+
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
@@ -1094,7 +1094,7 @@
         </div>
       </section>
     </article>
-    
+
     <footer class="muted">
       Generated from the StoX in-app documentation source. Product screens still require sign-in.
     </footer>

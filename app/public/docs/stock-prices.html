@@ -106,7 +106,7 @@
         <a href="stock-prices.html">This topic</a>
       </div>
     </header>
-    
+
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Stock price history</h1>
       <p class="muted"><code>stock-prices</code> · screen: <code>/holdings/:stockId/prices</code></p>
@@ -125,25 +125,25 @@
         <dl class="doc-list">
         <dt>Chart / table</dt>
         <dd>Browse historical OHLCV for the selected stock.</dd>
-    
+
         <dt>Range: All / Since Buy</dt>
         <dd>All = all available cached instrument history. Since Buy = current open position episode.</dd>
-    
+
         <dt>Force sync / backfill</dt>
         <dd>Request a fresh pull of history from configured providers.</dd>
-    
+
         <dt>Possible patterns</dt>
         <dd>Patterns detected on the visible window, with links to the Patterns guide.</dd>
-    
+
         <dt>Range and sampling</dt>
         <dd>Adjust time range and sampling to separate long-trend context from short-term noise.</dd>
-    
+
         <dt>Force sync intentionally</dt>
         <dd>Run force sync when bars are missing/stale or when verifying a newly added symbol; avoid repetitive sync loops.</dd>
-    
+
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
-    
+
         <dt>Validation and errors</dt>
         <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
     </dl>
@@ -154,25 +154,25 @@
         <dl class="doc-list">
         <dt>Provider fallback</dt>
         <dd>NSE → Yahoo → Alpha Vantage (BSE path uses bhavcopy → Yahoo → AV).</dd>
-    
+
         <dt>OD-17 all history</dt>
         <dd>All is not capped by the old ~550-day V1 depth target; it uses all available provider/listing history in cache.</dd>
-    
+
         <dt>Cached bars</dt>
         <dd>Screeners and pattern scans run on stored daily OHLCV, not live ticks.</dd>
-    
+
         <dt>Indicator dependency</dt>
         <dd>Screeners, pattern scans, and evaluation factors depend on this stored history; bar integrity matters system-wide.</dd>
-    
+
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
-    
+
         <dt>Data freshness</dt>
         <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
     </dl>
       </section>
 
-      
+
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
@@ -180,7 +180,7 @@
         </div>
       </section>
     </article>
-    
+
     <footer class="muted">
       Generated from the StoX in-app documentation source. Product screens still require sign-in.
     </footer>

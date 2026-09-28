@@ -106,7 +106,7 @@
         <a href="transactions.html">This topic</a>
       </div>
     </header>
-    
+
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Transactions</h1>
       <p class="muted"><code>transactions</code> · screen: <code>/transactions</code></p>
@@ -125,28 +125,28 @@
         <dl class="doc-list">
         <dt>Add transaction</dt>
         <dd>Record a buy or sell with symbol autocomplete, quantity, price, fees, and date. Sells that could affect more than one owner show an Owner control (Strategy or Unmanaged). Holdings → Sell prefills that owner. Exercised rights shares are recorded here as a normal buy at the subscription price — not on the Corporate action page.</dd>
-    
+
         <dt>Bulk CSV import</dt>
         <dd>Paste CSV (Stock, Quantity, Average Price, Transaction Type, optional Owner as unmanaged or strategy:{id}), review editable rows (exchange, date defaulting to today, fees), then Save all. The batch commits all-or-nothing via a bulk API — on failure nothing is saved and you can fix and retry the same batch; a completed batch cannot be submitted again. Ambiguous sells without Owner are rejected.</dd>
-    
+
         <dt>Page tabs</dt>
         <dd>Switch between Transaction History and Pending Execution (or closed / squared-off views where available).</dd>
-    
+
         <dt>Edit / delete</dt>
         <dd>Correct ledger rows; deleting a row linked to a recommendation can reopen pending execution.</dd>
-    
+
         <dt>Exit reason column</dt>
         <dd>On sells linked to recommendations, shows the persisted primary exit attribution from the ledger (not recomputed).</dd>
-    
+
         <dt>CSV import discipline</dt>
         <dd>After pasting CSV, review each parsed row (type, quantity, price, date, exchange, fees). Save commits the whole batch or nothing — correcting mistakes before save avoids cleanup. A failed import leaves zero new ledger rows; retry after fixing. A successful batch cannot be re-submitted.</dd>
-    
+
         <dt>Sell prefill from holdings</dt>
         <dd>When launched from Holdings, symbol/type/quantity are prefilled to reduce input errors; still validate price, date, and fee assumptions before saving.</dd>
-    
+
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
-    
+
         <dt>Validation and errors</dt>
         <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
     </dl>
@@ -157,31 +157,31 @@
         <dl class="doc-list">
         <dt>Ledger-true holdings</dt>
         <dd>Holdings are derived from transactions — not edited independently as the source of truth.</dd>
-    
+
         <dt>FIFO realization</dt>
         <dd>Sells match against earlier buys to compute realized P/L and allocated fees.</dd>
-    
+
         <dt>Sell owner attribution</dt>
         <dd>If exactly one owner holds the stock, that lot is used. If a recommendation or Owner field identifies the Strategy/unmanaged lot, that owner is used. If more than one owner could be affected and none is identified, the sell is rejected — not split, FIFO’d, or taken from the largest lot. Quantity cannot exceed that owner’s holding even if another owner has more shares. A sell does not move leftover shares to a different owner.</dd>
-    
+
         <dt>Auto fees</dt>
         <dd>Fee components (Zerodha-style delivery defaults) can be configured under Settings.</dd>
-    
+
         <dt>Persisted exit reason</dt>
         <dd>When a sell fill records an EXIT recommendation, exit_reason is copied from the recommendation’s primary attribution onto portfolio_transactions. Canonical values match §13.2; the UI does not invent or recalculate attribution.</dd>
-    
+
         <dt>Mutability caution</dt>
         <dd>Editing historical rows can ripple through cost basis and performance metrics. Re-check Holdings and Review pages after major edits.</dd>
-    
+
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
-    
+
         <dt>Data freshness</dt>
         <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
     </dl>
       </section>
 
-      
+
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
@@ -189,7 +189,7 @@
         </div>
       </section>
     </article>
-    
+
     <footer class="muted">
       Generated from the StoX in-app documentation source. Product screens still require sign-in.
     </footer>

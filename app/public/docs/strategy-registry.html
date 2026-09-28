@@ -106,7 +106,7 @@
         <a href="strategy-registry.html">This topic</a>
       </div>
     </header>
-    
+
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Strategy Registry</h1>
       <p class="muted"><code>strategy-registry</code> · screen: <code>/strategy/registry</code></p>
@@ -114,8 +114,8 @@
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>The Strategy Registry is the V3 compatibility surface for strategy rows in the current portfolio. A portfolio may have <strong>multiple enabled Strategies</strong> at once. After V5 mapping, rows are read-only here and link to the authoritative Artifact Library lifecycle. New definitions and imports create account-owned Library Drafts without a runnable Portfolio row. Immutable publication, binding enablement, explicit upgrades and archive belong to the Artifact Library; the legacy registry remains available for migration-era runtime rows and portable inspection.</p>
-<p>Export downloads the portable Trading Artifact JSON envelope. <strong>Validate</strong> checks the envelope. <strong>Import</strong> stays disabled until validation succeeds, then creates and opens an <strong>Artifact Library Draft</strong>. Publish and bind it explicitly. Enabled rows show <strong>Allocation %</strong>. An <strong>Allocation</strong> editor (same PUT <code>/v1/capital/allocations</code> as Cash) lets you set percentages that must sum to 100.</p>
+        <p>The Strategy Registry is the V3 compatibility surface for strategy rows in the current portfolio. A portfolio may have <strong>multiple enabled Strategies</strong> at once. After V5 mapping, rows are read-only here and link to the authoritative Artifact Library lifecycle. Name-only <strong>Create Strategy</strong> and validated JSON <strong>Import</strong> add draft runtime Strategies (enable from here or the Strategy editor). Library-bound rows stay read-only projections — upgrade via Artifact Library publish + binding.</p>
+<p>Export downloads the portable Trading Artifact JSON envelope. <strong>Validate</strong> checks the envelope. <strong>Import</strong> stays disabled until validation succeeds, then creates a draft Strategy and opens the Strategy editor. Enabled rows show <strong>Allocation %</strong>. An <strong>Allocation</strong> editor (same PUT <code>/v1/capital/allocations</code> as Cash) lets you set percentages that must sum to 100.</p>
 <p>Existing Minervini (<code>momentum_factory</code>) migrates automatically to slug <code>momentum_strategy</code> with eligibility linked to <code>minervini_trend_template</code>.</p>
 <h2>Importing JSON — start here</h2>
 <p>If Validate or Import reports many field errors, you almost always missed a <strong>mandatory</strong> envelope field, forgot <code>scoring_model</code>, enabled weights that do not sum to 100, or embedded a Screener condition tree. Strategies reference Screeners by <strong>slug / factory_key only</strong> — never paste <code>definition.root</code> into a Strategy. Use the minimum schema below, then expand.</p>
@@ -891,44 +891,44 @@
         <h2>Controls</h2>
         <dl class="doc-list">
         <dt>Create Strategy</dt>
-        <dd>Name + optional description. Creates a draft from the default factory configuration (POST <code>/v1/strategy-registry</code>) and opens the editor. JSON import remains available for authored packs.</dd>
-    
+        <dd>Name + optional description. Creates an account-owned draft Strategy from the default momentum template (POST <code>/v1/strategies</code>) and opens the Strategy editor. Artifact Library import (<code>/v1/strategy-registry/import</code>) remains for portable JSON packs.</dd>
+
         <dt>Search / filters</dt>
         <dd>Filter by status (active/draft/archived) and origin (factory/user).</dd>
-    
+
         <dt>Enable</dt>
-        <dd>Turn this strategy on for the portfolio. Other enabled strategies stay enabled. Success shows a toast. Recommendation generation runs independently for every enabled strategy.</dd>
-    
+        <dd>Turn this strategy on for the portfolio when readiness is satisfied (<code>setup_required</code> is false). Incomplete strategies show a Setup required list (missing eligibility, indicator weights, etc.). Other enabled strategies stay enabled.</dd>
+
         <dt>Allocation % (list)</dt>
         <dd>Enabled rows show the stored strategy allocation_pct (read-only in the table).</dd>
-    
+
         <dt>Allocation editor</dt>
         <dd>Edit enabled-strategy allocation % with a live sum; Save calls PUT /v1/capital/allocations (same as Cash). Client requires sum ≈ 100 before save; server errors are shown.</dd>
-    
+
         <dt>Archive</dt>
         <dd>Sets the strategy to archived without changing other enabled strategies. The last remaining enabled strategy cannot be archived until another is enabled. Past holdings/recommendations keep attribution.</dd>
-    
+
         <dt>Export JSON</dt>
         <dd>Download the portable Trading Artifact envelope (schema_version, slug, name, metadata, definition with eligibility_sources + scoring_model, dependencies). Best template for a new import — includes thresholds/exits/gates when present.</dd>
-    
+
         <dt>Validate</dt>
         <dd>Check pasted JSON against Trading Artifact Strategy rules. On success, a green “Validated successfully” cue appears above Validate/Import and the JSON result panel still shows details. Import stays disabled until this reports ok. Editing the JSON clears validation.</dd>
-    
+
         <dt>Import</dt>
         <dd>Enabled only after successful Validate. Creates a draft strategy in this portfolio and shows a success toast (not an inline alert). Does not change Recommendations until Enable. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.scoring_model with enabled weights = 100.</dd>
-    
+
         <dt>Download AI authoring guide (.md)</dt>
         <dd>Download /docs/stox-trading-artifacts-ai-guide.md — consolidated Indicator + Screener + Strategy + Authoring + Cookbook Markdown for AI agents and offline authoring.</dd>
-    
+
         <dt>Edit</dt>
         <dd>Jump to /strategy?strategy_id=… to edit that strategy’s tabs and Save. Available for every registry row, not only enabled strategies.</dd>
-    
+
         <dt>Version history</dt>
         <dd>On detail for owned strategies, list definition snapshots and change notes. Draft definition-hash changes append versions; active editor Save remains in-place BC.</dd>
-    
+
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
-    
+
         <dt>Validation and errors</dt>
         <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
     </dl>
@@ -939,43 +939,43 @@
         <dl class="doc-list">
         <dt>Slug</dt>
         <dd>Stable machine id (snake_case: <code>swing_rs</code>). Unique per portfolio. Used for uniqueness and selection. Not the display title — that is <code>name</code>. Only a–z, 0–9, and underscore after normalisation.</dd>
-    
+
         <dt>Strategy allocation %</dt>
         <dd>Policy share of investable capital (TradingStrategy.allocation_pct). Editable on Strategy Registry and Cash; must sum to 100 across enabled strategies. Distinct from score-band allocation_pct on the Strategy Capital Allocation tab.</dd>
-    
+
         <dt>Uniqueness</dt>
         <dd>slug is unique per portfolio (Import may suffix on collision). name is soft-unique (may get &quot; (import)&quot;). Multiple strategies may be enabled per portfolio. scoring keys should appear once in scoring_model. Screener refs may be shared across strategies.</dd>
-    
+
         <dt>Multiple enabled strategies</dt>
         <dd>Enablement rule: more than one STATUS_ACTIVE strategy may exist per portfolio. Import creates an Artifact Library Draft; publication and binding are explicit. Enabling a binding does not archive siblings. The editor strategy_id query is UI selection, not exclusive-active.</dd>
-    
+
         <dt>No Screener duplication</dt>
         <dd>eligibility_sources reference Screeners by screener_slug / screener_factory_key. Condition trees stay on Screener Registry — never embed root/children on a Strategy.</dd>
-    
+
         <dt>definition vs config_json</dt>
         <dd>Import/export JSON uses the field <code>definition</code>. Version rows store the same config in <code>config_json</code>. Do not invent a <code>config_json</code> field on the envelope.</dd>
-    
+
         <dt>scoring_model vs indicators</dt>
         <dd>Portable JSON prefers scoring_model. The engine also accepts indicators as an alias; Import normalises both. Enabled weights must sum to 100.</dd>
-    
+
         <dt>Mandatory envelope fields</dt>
         <dd>schema_version (&quot;1.0&quot;), artifact_type (&quot;strategy&quot;), slug, name, metadata (object), and definition.scoring_model with enabled weights summing to 100.</dd>
-    
+
         <dt>Minervini auto-migrate</dt>
         <dd>ensureActive / seedFactoryStrategy backfills slug momentum_strategy, metadata, and Minervini screener eligibility links without overwriting user-edited scores.</dd>
-    
+
         <dt>Optional sections are live</dt>
         <dd>thresholds, portfolio_rules, exit_strategy, and market_gates are runtime-usable and Import-preserved — not reserved. Prefer Export-then-edit for full defaults.</dd>
-    
+
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
-    
+
         <dt>Data freshness</dt>
         <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
     </dl>
       </section>
 
-      
+
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
@@ -983,7 +983,7 @@
         </div>
       </section>
     </article>
-    
+
     <footer class="muted">
       Generated from the StoX in-app documentation source. Product screens still require sign-in.
     </footer>

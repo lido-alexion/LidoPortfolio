@@ -106,7 +106,7 @@
         <a href="review-reports.html">This topic</a>
       </div>
     </header>
-    
+
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Review reports</h1>
       <p class="muted"><code>review-reports</code> · screen: <code>/review/reports/:id</code></p>
@@ -125,22 +125,22 @@
         <dl class="doc-list">
         <dt>Generate</dt>
         <dd>POST <code>/api/v1/reviews/generate</code>. Optional From / To dates are sent as <code>period_start</code> / <code>period_end</code> query parameters, not a JSON body. Leave both empty to keep the existing 90-day default.</dd>
-    
+
         <dt>Open / row click</dt>
         <dd>Opens the stored report detail. Detail has Back to reports.</dd>
-    
+
         <dt>Pagination</dt>
         <dd>Uses the existing API <code>page</code> / <code>pageSize</code> (default 20). No extra filters.</dd>
-    
+
         <dt>Review sidebar</dt>
         <dd>Sidebar stays a single Review entry to <code>/review</code>. Stored report numbers are not the live dashboard cards.</dd>
-    
+
         <dt>Empty state Generate</dt>
         <dd>When there are no reports (<code>total === 0</code>), Generate remains available on this page including in the empty state.</dd>
-    
+
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
-    
+
         <dt>Validation and errors</dt>
         <dd>Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.</dd>
     </dl>
@@ -151,25 +151,25 @@
         <dl class="doc-list">
         <dt>Stored snapshot</dt>
         <dd>Header, metric cards, remaining metric table, and methodology come from the persisted report. Methodology strings are shown as stored.</dd>
-    
+
         <dt>Accepted (not executed)</dt>
         <dd>The persisted key <code>recommendation_accepted</code> is labelled Accepted (not executed). Executed recommendations use <code>recommendation_executed</code>.</dd>
-    
+
         <dt>OD-03 / SPEC-001</dt>
         <dd>Review does not feed strategy ranking. Reports do not introduce FIFO/LIFO/tax-lot accounting.</dd>
-    
+
         <dt>No frontend formulas</dt>
         <dd>XIRR and percents follow live-dashboard formatting conventions, with labels that mark values as coming from the stored report.</dd>
-    
+
         <dt>Active portfolio context</dt>
         <dd>Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.</dd>
-    
+
         <dt>Data freshness</dt>
         <dd>Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.</dd>
     </dl>
       </section>
 
-      
+
       <section class="panel">
         <h2>Related topics</h2>
         <div class="related">
@@ -177,7 +177,7 @@
         </div>
       </section>
     </article>
-    
+
     <footer class="muted">
       Generated from the StoX in-app documentation source. Product screens still require sign-in.
     </footer>
