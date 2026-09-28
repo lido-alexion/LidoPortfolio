@@ -54,4 +54,8 @@ app/tmp-*.json
 **/__pycache__/
 *.py[cod]
 
+# Bounded local ML campaign outputs; reproducibility metadata and fixtures belong
+# in tracked tests, not generated serialized model binaries.
+/shared/ml/models/*.joblib
+
 sync_config.jsonc
