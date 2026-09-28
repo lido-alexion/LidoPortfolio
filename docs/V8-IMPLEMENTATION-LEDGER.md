@@ -13,7 +13,7 @@ FEAT-057  [IN PROGRESS] ML feature engineering / training (versioned horizon-res
 FEAT-061  [REVIEW] Guided tour / onboarding (formal audit complete; missing-target regression covered; browser accessibility/mobile journey and localization mechanism remain open)
 FEAT-062  [IN PROGRESS] Fundamental signals & AI insights (deterministic catalogue, comparison evidence, growth relationships, provider-neutral orchestration, bounded investor-safe validation, and follow-up guidance; broader catalogue/sufficiency/UI acceptance still open)
 FEAT-063  [REVIEW] Live microstructure collection (local implementation and deterministic resilience verification complete; VPS installation, live Kite path, and deployed backup destination remain external)
-FEAT-064  [REVIEW] Screener / Strategy UX (semantic versions, run/backtest pins, immutable save, readiness, provenance audit, and WP-09 return flow present; regression cleanup and full gate remain)
+FEAT-064  [REVIEW] Screener / Strategy UX (semantic versions, run/backtest pins, immutable save, readiness, provenance audit, WP-09 return flow and legacy fixture reconciliation present; browser acceptance remains)
 FEAT-065  [IN PROGRESS] Intraday ML historical data platform (checkpoints + admin status + Mac backfill worker; current-universe orchestration, coverage, and handoff acceptance remain)
 ```
 
@@ -99,15 +99,25 @@ FEAT-065  [IN PROGRESS] Intraday ML historical data platform (checkpoints + admi
 
 See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-FEAT-063-ACCEPTANCE-AUDIT.md`, `docs/audit/V8-FEAT-055-ACCEPTANCE-AUDIT.md`, and `docs/audit/V8-FEAT-061-ACCEPTANCE-AUDIT.md` for evidence and remaining external validation. This ledger is verified against the current workspace as of 2026-09-28; it is not a claim that any epic is production complete.
 
+## Verified continuation checkpoint (2026-09-28)
+
+- Actual checkout is `fc42436`; the earlier handoff SHA `3265357` is not the current HEAD.
+- The full Feature suite under local PHP CLI `memory_limit=512M` now passes **1,318/1,319**, with one intentional bounded-training skip when `STOXLA_ML_TEST_PYTHON` is absent. The previous FEAT-064 fixture cascade was repaired by giving activation-oriented legacy fixtures the executable factory configuration; the production Setup Required gate was not weakened.
+- FEAT-062 added deterministic derived net-debt direction and consecutive comparable-period FCF trend signals. Its frozen signal matrix remains explicit about unsupported/data-dependent catalogue rows.
+- FEAT-056 lifecycle tests pass **23/23** locally, but the inherited lifecycle implementation remains uncommitted and deliberately separated from FEAT-057.
+- FEAT-052 telemetry focus passes **14/14**; FEAT-065 internal/admin focus passes **9/9**. Live/deployed evidence remains external where documented.
+
 ## Next task
 
-1. FEAT-063 external validation: install/validate the collector on the StoX VPS, then exercise the live Kite path and deployed backup destination when credentials/market conditions permit.
-2. FEAT-054 external acceptance: browser/mobile fundamentals journey and representative provider/deployed bootstrap runtime.
-3. FEAT-057: run bounded real training against populated dated snapshots, complete the frozen feature matrix and end-to-end paired evidence/explainability acceptance.
+1. FEAT-056: reconcile the preserved lifecycle WIP into tested commits, including route/controller wiring, durable run recovery and explicit promotion/rollback evidence.
+2. FEAT-057: run bounded real training against populated dated snapshots and complete artifact reload, paired comparison, runtime explainability and coverage evidence.
+3. FEAT-062: implement the remaining frozen partial signal rows, then browser/provider acceptance.
+4. FEAT-065 / FEAT-052: close current-universe orchestration and telemetry/collector deployment evidence without conflating FEAT-065 with FEAT-063 backup.
+5. FEAT-063 / FEAT-054 / FEAT-055 / FEAT-061: perform only the remaining external browser/provider/VPS validations.
 
 ## Failing tests
 
-The broad direct PHPUnit Feature run with `php -d memory_limit=512M vendor/bin/phpunit tests/Feature` completed **1,316 tests: 1,183 passed**, with one primary failure and 132 cascading errors from inherited V1–V3/Lending setup expectations that activate strategies without the V8 FEAT-064 readiness prerequisites. They remain classified C pending dedicated fixture reconciliation; no fixtures were silently rewritten. OpenAPI generated-spec drift and ML constructor failures are resolved, and the focused ML/provider suites pass.
+The broad direct PHPUnit Feature run with `php -d memory_limit=512M vendor/bin/phpunit tests/Feature` now completes **1,319 tests: 1,318 passed, 1 skipped, 0 failures/errors**. The skip is the environment-gated bounded FEAT-057 campaign when its matching Python runtime is not configured. OpenAPI generated-spec drift and ML constructor failures are resolved; focused ML/provider, FEAT-062, telemetry and intraday suites pass.
 
 ## MlScoringService ownership reconciliation
 
