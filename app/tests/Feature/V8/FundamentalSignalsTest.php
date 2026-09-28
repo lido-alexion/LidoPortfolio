@@ -5,6 +5,8 @@ namespace Tests\Feature\V8;
 use App\Models\Stock;
 use App\Models\User;
 use App\Services\Fundamentals\FundamentalDataService;
+use App\Services\Fundamentals\FundamentalSignalsService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -225,5 +227,25 @@ class FundamentalSignalsTest extends TestCase
             ->assertOk()
             ->assertJsonFragment(['signal_key' => 'revenue_growth_accelerating'])
             ->assertJsonFragment(['basis' => 'quarterly_yoy_trend']);
+    }
+
+    public function test_sufficiency_weights_stale_fallback_and_sparse_evidence(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'STALE', 'exchange' => 'NSE', 'name' => 'Stale Co']);
+        $service = app(FundamentalDataService::class);
+        foreach (['2024-03-31', '2024-06-30', '2024-09-30', '2024-12-31'] as $period) {
+            $service->storeFacts($stock, [
+                ['statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'revenue', 'period_end' => $period, 'value' => 100, 'availability_date' => '2025-01-01', 'provider' => 'yahoo'],
+                ['statement_type' => 'income_statement', 'cadence' => 'quarterly', 'fact_key' => 'net_income', 'period_end' => $period, 'value' => 10, 'availability_date' => '2025-01-01', 'provider' => 'yahoo'],
+                ['statement_type' => 'cash_flow', 'cadence' => 'quarterly', 'fact_key' => 'operating_cash_flow', 'period_end' => $period, 'value' => 12, 'availability_date' => '2025-01-01', 'provider' => 'yahoo'],
+            ]);
+        }
+
+        $insights = app(FundamentalSignalsService::class)->deterministicInsights($stock, Carbon::parse('2026-06-01'));
+
+        $this->assertContains('stale_revenue', $insights['data_sufficiency']['quality_factors']);
+        $this->assertContains('fallback_provider_revenue', $insights['data_sufficiency']['quality_factors']);
+        $this->assertLessThan(1.0, $insights['data_sufficiency']['score']);
+        $this->assertContains('missing:debt history', array_keys($insights['data_sufficiency']['weighting']));
     }
 }

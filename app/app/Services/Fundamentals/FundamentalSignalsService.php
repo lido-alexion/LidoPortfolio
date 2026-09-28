@@ -125,7 +125,7 @@ class FundamentalSignalsService
         $sector = $this->sectorContext->contextFor($stock, $asOf, $price);
         $this->evaluateSectorComparisons($sector, $positive, $risk, $watch);
         $missing = $this->missingEvidence($stock, $asOf);
-        $rating = count($missing) >= 4 ? 'low' : (($positive !== [] || $risk !== [] || $watch !== []) ? 'medium' : 'high');
+        $sufficiency = $this->sufficiencyAssessment($stock, $asOf, $missing);
 
         return [
             'summary' => $this->buildSummary($positive, $risk, $watch),
@@ -135,9 +135,11 @@ class FundamentalSignalsService
             'sector_context' => $sector,
             'follow_up_checks' => $this->followUpChecks(array_merge($risk, $watch)),
             'data_sufficiency' => [
-                'rating' => $rating,
+                'rating' => $sufficiency['rating'],
+                'score' => $sufficiency['score'],
                 'missing_information' => $missing,
-                'quality_factors' => $this->qualityFactors($stock, $asOf),
+                'quality_factors' => $sufficiency['quality_factors'],
+                'weighting' => $sufficiency['weighting'],
             ],
             'ai' => [
                 'status' => 'not_requested',
@@ -298,12 +300,28 @@ class FundamentalSignalsService
     protected function evaluateLeverageSignals(Stock $stock, Carbon $asOf, array &$positive, array &$risk, array &$watch): void
     {
         $debt = $this->fundamentals->growthMetric($stock, 'debt', FundamentalDataService::CADENCE_QUARTERLY, $asOf);
-        if ($debt['value'] === null) return;
-        $evidence = ['debt_yoy_pct' => (float) $debt['value'], 'basis' => 'quarterly_yoy'];
-        if ((float) $debt['value'] >= 15) {
-            $risk[] = $this->signal('debt_increasing', 'Debt increased materially year over year', $evidence);
-        } elseif ((float) $debt['value'] <= -15) {
-            $positive[] = $this->signal('debt_decreasing', 'Debt decreased materially year over year', $evidence);
+        if ($debt['value'] !== null) {
+            $evidence = ['debt_yoy_pct' => (float) $debt['value'], 'basis' => 'quarterly_yoy'];
+            if ((float) $debt['value'] >= 15) {
+                $risk[] = $this->signal('debt_increasing', 'Debt increased materially year over year', $evidence);
+            } elseif ((float) $debt['value'] <= -15) {
+                $positive[] = $this->signal('debt_decreasing', 'Debt decreased materially year over year', $evidence);
+            }
+        }
+
+        $debtToEbitda = $this->fundamentals->metric($stock, 'debt_to_ebitda', 'ttm', $asOf)['value'];
+        if ($debtToEbitda !== null && (float) $debtToEbitda >= 4.0) {
+            $watch[] = $this->signal('debt_to_ebitda_elevated', 'Debt / EBITDA is at or above 4×', [
+                'debt_to_ebitda' => (float) $debtToEbitda,
+                'basis' => 'ttm',
+            ]);
+        }
+        $interestCoverage = $this->fundamentals->metric($stock, 'interest_coverage', 'ttm', $asOf)['value'];
+        if ($interestCoverage !== null && (float) $interestCoverage < 2.0) {
+            $risk[] = $this->signal('interest_coverage_thin', 'Interest coverage is below 2×', [
+                'interest_coverage' => (float) $interestCoverage,
+                'basis' => 'ttm',
+            ]);
         }
     }
 
@@ -505,6 +523,52 @@ class FundamentalSignalsService
             if (($row['provenance']['source_label'] ?? null) === 'Multiple sources') $factors[] = 'mixed_provider_'.$metric;
         }
         return array_values(array_unique($factors));
+    }
+
+    /**
+     * Score evidence quality separately from the existence of a calculated
+     * value. Stale or fallback facts remain factual, but they reduce the
+     * confidence available to the interpretation layer.
+     *
+     * @param list<string> $missing
+     * @return array{rating:string,score:float,quality_factors:list<string>,weighting:array<string,float>}
+     */
+    protected function sufficiencyAssessment(Stock $stock, Carbon $asOf, array $missing): array
+    {
+        $factors = $this->qualityFactors($stock, $asOf);
+        $quarterlyPeriods = FundamentalFact::query()
+            ->where('stock_id', $stock->id)
+            ->where('cadence', FundamentalDataService::CADENCE_QUARTERLY)
+            ->whereDate('availability_date', '<=', $asOf->toDateString())
+            ->distinct('period_end')
+            ->count('period_end');
+        if ($quarterlyPeriods < 4) {
+            $factors[] = 'sparse_quarterly_history';
+        }
+        $factors = array_values(array_unique($factors));
+
+        $weighting = [];
+        foreach ($factors as $factor) {
+            $weighting[$factor] = match (true) {
+                str_starts_with($factor, 'stale_') => 0.20,
+                str_starts_with($factor, 'fallback_provider_') => 0.10,
+                str_starts_with($factor, 'mixed_provider_') => 0.15,
+                $factor === 'sparse_quarterly_history' => 0.20,
+                default => 0.15,
+            };
+        }
+        foreach ($missing as $item) {
+            $weighting['missing:'.$item] = 0.15;
+        }
+
+        $score = round(max(0.0, min(1.0, 1.0 - array_sum($weighting))), 2);
+
+        return [
+            'rating' => $score >= 0.75 ? 'high' : ($score >= 0.45 ? 'medium' : 'low'),
+            'score' => $score,
+            'quality_factors' => $factors,
+            'weighting' => $weighting,
+        ];
     }
 
     /** @param list<array<string, mixed>> $watch */

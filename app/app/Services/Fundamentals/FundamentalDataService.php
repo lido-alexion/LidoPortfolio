@@ -132,6 +132,8 @@ class FundamentalDataService
             ? $ttm('capital_expenditure')
             : $this->factValue($facts, 'capital_expenditure');
         $eps = $basis === 'ttm' ? $ttm('eps') : $this->factValue($facts, 'eps');
+        $ebitda = $basis === 'ttm' ? $ttm('ebitda') : $this->factValue($facts, 'ebitda');
+        $interestExpense = $basis === 'ttm' ? $ttm('interest_expense') : $this->factValue($facts, 'interest_expense');
         $equity = $this->factValue($facts, 'equity');
         $debt = $this->factValue($facts, 'debt');
         $cash = $this->factValue($facts, 'cash_and_equivalents');
@@ -153,6 +155,12 @@ class FundamentalDataService
                 ? $this->ratioWithPositiveDenominator($netIncome, $equity) * 100
                 : null,
             'net_debt' => $this->minus($debt, $cash),
+            'ebitda' => $ebitda,
+            'interest_expense' => $interestExpense,
+            'debt_to_ebitda' => $ebitda !== null && $ebitda > 0 && $debt !== null ? $debt / $ebitda : null,
+            'interest_coverage' => $interestExpense !== null && abs($interestExpense) > 0 && $ebitda !== null
+                ? $ebitda / abs($interestExpense)
+                : null,
             'free_cash_flow' => $freeCashFlow,
             'market_cap' => $marketCap,
             'enterprise_value' => $enterpriseValue,
