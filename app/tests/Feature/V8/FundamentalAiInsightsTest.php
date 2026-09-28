@@ -50,6 +50,11 @@ class FundamentalAiInsightsTest extends TestCase
             ->assertJsonPath('data.insights.ai.status', 'ok')
             ->assertJsonPath('data.insights.ai.provider', 'gemini')
             ->assertJsonPath('data.insights.summary', 'Material leverage and cash conversion risks dominate.');
+
+        Http::assertSent(function ($request) {
+            $body = json_encode($request->data());
+            return str_contains($body, 'deterministic_signals') && ! str_contains($body, 'api_key');
+        });
     }
 
     public function test_failover_to_codex_when_gemini_fails(): void
