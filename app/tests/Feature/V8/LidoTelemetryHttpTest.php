@@ -26,6 +26,7 @@ class LidoTelemetryHttpTest extends TestCase
         config([
             'lido_telemetry.enabled' => true,
             'lido_telemetry.otlp_traces_endpoint' => 'http://collector.test/v1/traces',
+            'lido_telemetry.otlp_metrics_endpoint' => 'http://collector.test/v1/metrics',
         ]);
 
         $response = $this->withHeaders([
@@ -34,7 +35,8 @@ class LidoTelemetryHttpTest extends TestCase
 
         $response->assertOk();
         $response->assertHeader('traceparent');
-        Http::assertSentCount(1);
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($request): bool => isset($request->data()['resourceMetrics']));
     }
 
     public function test_business_telemetry_omits_sensitive_attributes(): void

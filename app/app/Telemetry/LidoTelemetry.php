@@ -10,6 +10,7 @@ class LidoTelemetry
 {
     public function __construct(
         protected OtlpHttpTraceExporter $exporter,
+        protected OtlpHttpMetricsExporter $metricsExporter,
     ) {}
 
     public function enabled(): bool
@@ -76,6 +77,10 @@ class LidoTelemetry
         }
 
         $this->exporter->export($spanPayload);
+        $this->metricsExporter->export('stox.http.server.duration', $durationMs, [
+            'http.method' => $request->method(),
+            'http.status_class' => (string) intdiv($status, 100).'xx',
+        ], 'ms');
     }
 
     /**

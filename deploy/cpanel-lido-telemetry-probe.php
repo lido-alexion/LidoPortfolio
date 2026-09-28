@@ -38,8 +38,10 @@ try {
 
     $enabled = (bool) config('lido_telemetry.enabled', false);
     $endpoint = config('lido_telemetry.otlp_traces_endpoint');
+    $metricsEndpoint = config('lido_telemetry.otlp_metrics_endpoint');
     echo 'LIDO_TELEMETRY_ENABLED: '.($enabled ? 'true' : 'false')."\n";
     echo 'LIDO_TELEMETRY_OTLP_TRACES_ENDPOINT: '.(is_string($endpoint) && $endpoint !== '' ? $endpoint : '(not set)')."\n";
+    echo 'LIDO_TELEMETRY_OTLP_METRICS_ENDPOINT: '.(is_string($metricsEndpoint) && $metricsEndpoint !== '' ? $metricsEndpoint : '(not set)')."\n";
     echo 'service: '.config('lido_telemetry.service_name').' @ '.config('lido_telemetry.environment')."\n\n";
 
     if (! $enabled) {

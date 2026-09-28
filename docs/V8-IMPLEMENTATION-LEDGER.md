@@ -5,7 +5,7 @@ Authoritative specs: `docs/archive/specs/LidoPortfolio-V8-Wishlist.md` and linke
 ## Epic status
 
 ```text
-FEAT-052  [REVIEW] OpenTelemetry / LidoTelemetry (producer core, shared middleware/route wiring and documented OTLP configuration; queue/scheduler/browser spans and full acceptance still open)
+FEAT-052  [REVIEW] OpenTelemetry / LidoTelemetry (producer core, shared middleware/route wiring, fail-open OTLP traces/events, focused OTLP metrics and documented configuration; queue/scheduler/browser and Collector acceptance remain open)
 FEAT-054  [REVIEW] Historical fundamental bootstrap (summary/derived metrics, provenance, user-scoped Advanced preference, history UI, Screener boundary, and bootstrap evidence complete locally; browser/provider/deployed runtime acceptance remains)
 FEAT-055  [REVIEW] Account access request / Admin approval (formal audit complete; production Turnstile/mail and deployed multi-worker validation remain external)
 FEAT-056  [IN PROGRESS] ML lifecycle automation (queued runs, SSE, drift, cancel, notifications, transient retries, retention, stale-run recovery and mixed scoring integration committed; deployed lifecycle acceptance remains open)
