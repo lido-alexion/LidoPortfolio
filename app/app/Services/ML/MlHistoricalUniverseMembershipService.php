@@ -3,6 +3,9 @@
 namespace App\Services\ML;
 
 use App\Models\V8\MlUniverseMembership;
+use App\Models\Stock;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class MlHistoricalUniverseMembershipService
 {
@@ -65,5 +68,69 @@ class MlHistoricalUniverseMembershipService
         $this->sectorMemo[$key] = $sector !== '' ? $sector : null;
 
         return $this->sectorMemo[$key];
+    }
+
+    /**
+     * Materialize a point-in-time eligible-universe snapshot from StoX's
+     * current master. This is the controlled ingestion boundary; historical
+     * backfills must provide their own dated source rather than pretending the
+     * current master was true in the past.
+     *
+     * @return array{snapshot_key:string,effective_from:string,active_count:int,closed_count:int,inserted_count:int}
+     */
+    public function captureCurrentEligibleSnapshot(Carbon $effectiveFrom, string $source, ?string $snapshotKey = null): array
+    {
+        $date = $effectiveFrom->toDateString();
+        $snapshotKey ??= $source.':'.$date;
+        $stocks = Stock::query()
+            ->where('is_active', true)
+            ->where('admin_deactivated', false)
+            ->where('is_benchmark', false)
+            ->where('exchange', 'NSE')
+            ->orderBy('id')
+            ->get(['id', 'sector']);
+
+        return DB::transaction(function () use ($date, $snapshotKey, $source, $stocks): array {
+            $closedCount = MlUniverseMembership::query()
+                ->where('universe_key', self::ACTIVE_ELIGIBLE_NSE)
+                ->whereNull('effective_to')
+                ->whereDate('effective_from', '<', $date)
+                ->update(['effective_to' => Carbon::parse($date)->subDay()->toDateString(), 'updated_at' => now()]);
+
+            $insertedCount = 0;
+            foreach ($stocks as $stock) {
+                $membership = MlUniverseMembership::query()
+                    ->where('stock_id', $stock->id)
+                    ->where('universe_key', self::ACTIVE_ELIGIBLE_NSE)
+                    ->whereDate('effective_from', $date)
+                    ->first();
+                if ($membership === null) {
+                    $membership = new MlUniverseMembership([
+                        'stock_id' => $stock->id,
+                        'universe_key' => self::ACTIVE_ELIGIBLE_NSE,
+                        'effective_from' => $date,
+                    ]);
+                }
+                if (! $membership->exists) {
+                    $insertedCount++;
+                }
+                $membership->fill([
+                    'effective_to' => null,
+                    'sector_snapshot' => $stock->sector,
+                    'source' => $source,
+                    'snapshot_key' => $snapshotKey,
+                ])->save();
+            }
+
+            $this->resetMemo();
+
+            return [
+                'snapshot_key' => $snapshotKey,
+                'effective_from' => $date,
+                'active_count' => $stocks->count(),
+                'closed_count' => $closedCount,
+                'inserted_count' => $insertedCount,
+            ];
+        });
     }
 }
