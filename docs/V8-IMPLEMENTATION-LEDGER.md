@@ -97,15 +97,16 @@ FEAT-065  [IN PROGRESS] Intraday ML historical data platform (schema/checkpoints
 
 ## Takeover reconciliation
 
-See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-FEAT-063-ACCEPTANCE-AUDIT.md`, `docs/audit/V8-FEAT-055-ACCEPTANCE-AUDIT.md`, and `docs/audit/V8-FEAT-061-ACCEPTANCE-AUDIT.md` for evidence and remaining external validation. This ledger is verified against the current workspace as of 2026-09-28 at HEAD `921b19b`; it is not a claim that any epic is production complete.
+See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-FEAT-063-ACCEPTANCE-AUDIT.md`, `docs/audit/V8-FEAT-055-ACCEPTANCE-AUDIT.md`, and `docs/audit/V8-FEAT-061-ACCEPTANCE-AUDIT.md` for evidence and remaining external validation. This ledger is verified against the current workspace as of 2026-09-28 at HEAD `bd4148b`; it is not a claim that any epic is production complete.
 
 ## Verified continuation checkpoint (2026-09-28)
 
-- Actual checkout is `921b19b`; the earlier handoff SHA `3265357` is not the current HEAD.
+- Actual checkout is `bd4148b`; the earlier handoff SHA `3265357` is not the current HEAD.
 - The full Feature suite under local PHP CLI `memory_limit=512M` now passes **1,332/1,333**, with one intentional bounded-training skip when `STOXLA_ML_TEST_PYTHON` is absent. The previous FEAT-064 fixture cascade was repaired by giving activation-oriented legacy fixtures the executable factory configuration; the production Setup Required gate was not weakened.
 - FEAT-062 now covers the frozen deterministic catalogue with PIT-safe operating-profit/bottom-line, ROA/ROCE, working-capital/liquidity, capex, ownership/financial, persistent cash-quality and historical valuation-context signals; absent source data remains unavailable rather than inferred. It is REVIEW pending browser/mobile and real-provider acceptance.
 - FEAT-056 lifecycle focus passes locally, including stale running-run recovery and stale cancellation finalization; mixed `MlScoringService` integration remains deliberately separated from FEAT-057.
 - FEAT-056 scoring reconciliation is now committed as `2900e50`, with explicit `completed_rejected` quality outcomes and regression coverage in `73307cb`; FEAT-056 remains IN PROGRESS only for remaining deployment/acceptance evidence and any frozen lifecycle gaps.
+- FEAT-056 eligible runs now use the frozen `completed_eligible` terminal state, with `completed_rejected` and `failed` kept distinct (`bd4148b`).
 - FEAT-052 telemetry focus passes **14/14**; FEAT-065 internal/admin focus passes **9/9**. Live/deployed evidence remains external where documented.
 - FEAT-056 lifecycle support is now committed as `18dc08b`; the mixed `MlScoringService` integration remains intentionally uncommitted pending ownership separation.
 - FEAT-065 current-universe backfill orchestration is now committed as `c039937`; it consumes an explicit operator-supplied symbol/token manifest and does not add automated backup.
