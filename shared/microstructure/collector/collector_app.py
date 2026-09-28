@@ -17,6 +17,7 @@ from collector.minute_aggregator import MinuteAggregator
 from collector.finalization_state import FinalizationState
 from collector.parquet_store import append_rows, is_partition_finalized, partition_dir, partition_row_count, write_finalization_manifest
 from collector.raw_tick_spool import RawTickSpool
+from collector.universe_audit import UniverseAudit
 
 
 class CollectorApp:
@@ -47,6 +48,7 @@ class CollectorApp:
         self._coverage_counts: dict[str, int] = {}
         self._connection_was_lost = False
         self._raw_spool = RawTickSpool.from_env(self.data_root)
+        self._universe_audit = UniverseAudit(Path(os.environ.get("MICROSTRUCTURE_UNIVERSE_AUDIT_FILE", str(self.data_root / "universe-audit.json"))))
         self._finalization = FinalizationState(
             Path(os.environ.get("MICROSTRUCTURE_FINALIZATION_STATE_FILE", str(self.data_root / "finalization-state.json"))),
             max_retries=int(os.environ.get("MICROSTRUCTURE_FINALIZATION_MAX_RETRIES", "3")),
@@ -122,6 +124,7 @@ class CollectorApp:
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "data_root": str(self.data_root),
             "raw_tick_spool": self._raw_spool.stats(),
+            "universe_audit": self._universe_audit.load().get("latest"),
         }
         self.heartbeat_file.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
@@ -313,6 +316,9 @@ class CollectorApp:
         kite = bootstrap.get("kite")
         universe = bootstrap.get("universe") or []
         self.subscribed_count = len(universe)
+        audit = self._universe_audit.record(universe, "manual_refresh" if refresh else "bootstrap")
+        if audit.get("conflicts"):
+            self.latest_error = "universe mapping conflicts detected"
         if not kite:
             self._stop_live()
             self.collector_state = "awaiting_kite_session"
