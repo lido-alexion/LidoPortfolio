@@ -284,10 +284,14 @@ class CollectorApp:
             return
 
         if self._dry_run:
+            for meta in universe:
+                self.aggregator.ensure_instrument(meta)
             self._simulate_ticks(universe)
             self.collector_state = "collecting_dry_run"
             self.websocket_connected = True
         else:
+            for meta in universe:
+                self.aggregator.ensure_instrument(meta)
             self._ensure_live_collection(kite, universe)
 
         self.flush_completed_minutes()

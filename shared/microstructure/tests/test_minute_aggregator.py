@@ -9,6 +9,22 @@ from collector.minute_aggregator import MinuteAggregator  # noqa: E402
 
 
 class MinuteAggregatorTest(unittest.TestCase):
+    def test_active_instrument_without_tick_is_retained_as_no_trade(self) -> None:
+        agg = MinuteAggregator()
+        meta = {
+            "instrument_id": 3,
+            "source_instrument_token": 101,
+            "exchange": "NSE",
+            "tradingsymbol": "QUIET",
+        }
+        at = datetime(2026, 9, 27, 10, 15, 30, tzinfo=timezone.utc)
+        agg.ensure_instrument(meta, at=at)
+        rows = agg.flush_before(datetime(2026, 9, 27, 10, 16, 0, tzinfo=timezone.utc))
+        self.assertEqual(1, len(rows))
+        self.assertEqual("no_trade", rows[0]["coverage_class"])
+        self.assertEqual("no_update", rows[0]["partial_reason"])
+        self.assertIsNone(rows[0]["close"])
+
     def test_ingest_and_flush(self) -> None:
         agg = MinuteAggregator()
         meta = {

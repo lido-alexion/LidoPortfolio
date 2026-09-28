@@ -281,6 +281,13 @@ class MinuteAggregator:
     def ingest(self, meta: dict[str, Any], tick: dict[str, Any], at: datetime | None = None) -> None:
         now = at or datetime.now(timezone.utc)
         minute = floor_minute(now)
+        bucket = self.ensure_instrument(meta, at=now)
+        bucket.ingest_tick(tick)
+
+    def ensure_instrument(self, meta: dict[str, Any], at: datetime | None = None) -> MinuteBucket:
+        """Create an explicit no-trade bucket for an active universe member."""
+        now = at or datetime.now(timezone.utc)
+        minute = floor_minute(now)
         key = (int(meta["instrument_id"]), minute)
         bucket = self._buckets.get(key)
         if bucket is None:
@@ -290,9 +297,11 @@ class MinuteAggregator:
                 exchange=str(meta.get("exchange") or "NSE"),
                 tradingsymbol=str(meta.get("tradingsymbol") or ""),
                 minute_timestamp=minute,
+                coverage_class="no_trade",
+                partial_reason="no_update",
             )
             self._buckets[key] = bucket
-        bucket.ingest_tick(tick)
+        return bucket
 
     def flush_before(self, cutoff_minute: datetime) -> list[dict[str, Any]]:
         cutoff = floor_minute(cutoff_minute)
