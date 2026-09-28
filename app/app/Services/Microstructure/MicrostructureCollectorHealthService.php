@@ -18,6 +18,8 @@ class MicrostructureCollectorHealthService
 
     public const ALERT_KEY_BACKUP_FAILED = 'microstructure_collector_backup_failed';
 
+    public const ALERT_KEY_COVERAGE_LOW = 'microstructure_collector_coverage_low';
+
     public function __construct(
         protected MicrostructureCollectorControlService $control,
     ) {}
@@ -90,6 +92,27 @@ class MicrostructureCollectorHealthService
                 'Microstructure backup failed',
                 (string) ($finalization['backup_error'] ?? 'The finalized partition backup failed.'),
                 ['trading_day' => $finalization['trading_day'] ?? null],
+            );
+        }
+
+        $coverage = is_array($status['coverage_summary'] ?? null) ? $status['coverage_summary'] : [];
+        $coveragePercent = is_numeric($coverage['coverage_percent'] ?? null) ? (float) $coverage['coverage_percent'] : null;
+        $coverageThreshold = (float) config('microstructure_collector.coverage_warning_percent', 90);
+        if (($status['session_phase'] ?? null) === 'post_market'
+            && $coveragePercent !== null
+            && $coveragePercent < $coverageThreshold
+            && (int) ($coverage['expected_instrument_minutes'] ?? 0) > 0) {
+            $alerts[] = $this->alert(
+                self::ALERT_KEY_COVERAGE_LOW,
+                'warning',
+                'Microstructure coverage is low',
+                sprintf('The finalized trading-day collector coverage is %.2f%%, below the %.2f%% warning threshold.', $coveragePercent, $coverageThreshold),
+                [
+                    'trading_day' => $coverage['trading_day'] ?? null,
+                    'coverage_percent' => $coveragePercent,
+                    'threshold_percent' => $coverageThreshold,
+                    'quality_counts' => $coverage['quality_counts'] ?? [],
+                ],
             );
         }
 

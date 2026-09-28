@@ -81,6 +81,7 @@ export default function MicrostructureCollectorAdminPage() {
                             <div className="col-md-4"><strong>Kite session</strong><br />{formatValue(status.kite_session_connected)}</div>
                             <div className="col-md-4"><strong>WebSocket</strong><br />{formatValue(status.websocket_connected)}</div>
                             <div className="col-md-4"><strong>Collector state</strong><br />{formatValue(status.collector_state)}</div>
+                            <div className="col-md-4"><strong>Session phase</strong><br />{formatValue(status.session_phase)}</div>
                             <div className="col-md-4"><strong>Subscribed instruments</strong><br />{formatValue(status.subscribed_instrument_count)}</div>
                             <div className="col-md-4"><strong>NIFTY 500 symbols (cache)</strong><br />{formatValue(status.nifty500_symbol_count)}</div>
                             <div className="col-md-4"><strong>Last packet</strong><br />{formatValue(status.last_packet_at)}</div>

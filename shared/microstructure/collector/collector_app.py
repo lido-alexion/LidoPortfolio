@@ -117,6 +117,7 @@ class CollectorApp:
                 "expected_instrument_minutes": expected_rows,
                 "coverage_percent": round((total_rows / expected_rows) * 100, 2) if expected_rows else None,
             },
+            "session_phase": self._session_phase(),
             "latest_finalized_partition": trading_day if is_partition_finalized(self.data_root, self._market_day()) else None,
             "backup_status": self._backup_status,
             "finalization": self._finalization.load(),

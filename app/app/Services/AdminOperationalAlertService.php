@@ -46,6 +46,8 @@ class AdminOperationalAlertService
 
     public const KEY_MICROSTRUCTURE_COLLECTOR_BACKUP_FAILED = MicrostructureCollectorHealthService::ALERT_KEY_BACKUP_FAILED;
 
+    public const KEY_MICROSTRUCTURE_COLLECTOR_COVERAGE_LOW = MicrostructureCollectorHealthService::ALERT_KEY_COVERAGE_LOW;
+
     public const SETTING_UNATTENDED_FAILURES = 'unattended_ops_failures';
 
     /** @var list<string> */

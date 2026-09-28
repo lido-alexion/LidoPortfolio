@@ -80,6 +80,7 @@ class MicrostructureCollectorControlService
             'last_packet_at' => $heartbeat['last_packet_at'] ?? null,
             'reconnect_count' => $heartbeat['reconnect_count'] ?? null,
             'collector_state' => $heartbeat['collector_state'] ?? 'unknown',
+            'session_phase' => $heartbeat['session_phase'] ?? null,
             'coverage_summary' => $heartbeat['coverage_summary'] ?? null,
             'latest_finalized_partition' => $heartbeat['latest_finalized_partition'] ?? null,
             'backup_status' => $heartbeat['backup_status'] ?? null,

@@ -90,4 +90,26 @@ class MicrostructureCollectorHealthAlertTest extends TestCase
         $this->assertContains(AdminOperationalAlertService::KEY_MICROSTRUCTURE_COLLECTOR_FINALIZATION_FAILED, $keys);
         $this->assertContains(AdminOperationalAlertService::KEY_MICROSTRUCTURE_COLLECTOR_BACKUP_FAILED, $keys);
     }
+
+    public function test_post_market_low_coverage_is_actionable_alert(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-07 16:00:00', 'Asia/Kolkata'));
+        config(['microstructure_collector.coverage_warning_percent' => 90]);
+        $path = config('microstructure_collector.heartbeat_file');
+        File::put($path, json_encode([
+            'session_phase' => 'post_market',
+            'coverage_summary' => [
+                'trading_day' => '2026-07-07',
+                'expected_instrument_minutes' => 1000,
+                'coverage_percent' => 42.5,
+                'quality_counts' => ['partial' => 425, 'outage' => 575],
+            ],
+        ], JSON_THROW_ON_ERROR));
+
+        $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())
+            ->pluck('key')
+            ->all();
+
+        $this->assertContains(AdminOperationalAlertService::KEY_MICROSTRUCTURE_COLLECTOR_COVERAGE_LOW, $keys);
+    }
 }
