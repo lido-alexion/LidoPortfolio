@@ -521,6 +521,10 @@ class StaggeredEntryPhase1FoundationTest extends TestCase
     protected function seedTwoStrategies(): array
     {
         [$profile, $stock, $run, $first] = $this->seedOpenReady();
+        $readyConfig = app(StrategyConfigurationService::class)
+            ->seedFactoryStrategy($profile)
+            ->activeVersion
+            ->config_json;
         $second = TradingStrategy::query()->create([
             'profile_id' => $profile->id,
             'name' => 'Second Enabled',
@@ -533,7 +537,12 @@ class StaggeredEntryPhase1FoundationTest extends TestCase
             'strategy_id' => $second->id,
             'version' => 1,
             'version_label' => '1.0',
-            'config_json' => $first->activeVersion->config_json,
+            // This fixture activates a second strategy. Keep the valid
+            // screener reference for that activation; the first strategy's
+            // local scoring setup intentionally disables eligibility below.
+            'config_json' => array_merge($first->activeVersion->config_json, [
+                'eligibility_sources' => $readyConfig['eligibility_sources'] ?? [],
+            ]),
             'status' => TradingStrategyVersion::STATUS_DRAFT,
         ]);
         $second->forceFill(['active_version_id' => $v2->id])->save();
