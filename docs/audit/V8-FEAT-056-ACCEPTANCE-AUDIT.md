@@ -1,6 +1,6 @@
 # FEAT-056 ML Lifecycle Automation / Deployment / Operations — acceptance audit
 
-Status: **IN PROGRESS**
+Status: **REVIEW — local lifecycle implementation and tests complete; deployed worker/runtime evidence pending**
 
 Evidence is mapped to `docs/archive/specs/V8-ML-Lifecycle-Automation-Deployment-Operations-Specification.md`.
 
@@ -22,4 +22,4 @@ Evidence is mapped to `docs/archive/specs/V8-ML-Lifecycle-Automation-Deployment-
 | Durable stale-run recovery | PASS locally | `MlTrainingRunRecoveryService` requeues stale running runs after worker restart, finalizes stale cancellation requests without requeueing, and is invoked at lifecycle ticks; `MlLifecycleAutomationTest` covers both paths |
 | Production queue/scheduler deployment | EXTERNAL VALIDATION PENDING | VPS worker, scheduler, queue restart and notification-provider runtime have not been claimed |
 
-The epic remains **IN PROGRESS** until deployed worker/runtime evidence and the remaining lifecycle acceptance criteria are recorded. The mixed scoring integration is committed in `2900e50`, with explicit quality-rejection semantics in `73307cb`/`bd4148b`; local lifecycle recovery, retention gating and the broad Feature suite are green. No deployed worker/runtime success is claimed.
+The epic is **REVIEW**. Local lifecycle implementation, recovery, retention, promotion/rollback boundaries, authorization, notifications and the broad Feature suite are green. Remaining evidence is limited to deployed worker/scheduler/queue restart, live cancellation/progress/SSE, notification-channel and production archive/runtime acceptance. No deployed worker/runtime success is claimed.

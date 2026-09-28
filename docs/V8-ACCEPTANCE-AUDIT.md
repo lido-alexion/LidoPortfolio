@@ -23,7 +23,7 @@ Status key: **done** | **partial** | **not started** | **n/a**
 cd app && php artisan test tests/Feature/V8/
 ```
 
-Latest recorded: **1,336/1,336** Feature tests under `tests/Feature/` (0 skipped, 0 failures under PHP CLI 512 MB with the matching x86_64 ML runtime); the focused configured V8 suite is 190/190. The FEAT-064 browser journey `screener-investor-workflow.spec.js` passes 2/2 under Node 20.19.1. `npm run test:js`, Vitest, build, typecheck and docs checks are green; isolated Python ML, intraday and microstructure suites are green.
+Latest recorded: **1,336 passed / 1,337 total** Feature tests under `tests/Feature/` (1 extension-only skip, 0 failures under PHP CLI 512 MB with the matching x86_64 ML runtime); the focused configured V8 suite is 191 total with 189 passed and 2 environment skips. The FEAT-064 and FEAT-061 browser smoke journeys pass 3/3 under Node 20.19.1. `npm run test:js`, Vitest, build, typecheck and docs checks are green; isolated Python ML, intraday and microstructure suites are green.
 
 ## FEAT-055 checklist (frozen decisions 055-01 … 055-10)
 
