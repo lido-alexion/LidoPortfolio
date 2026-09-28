@@ -2,6 +2,7 @@
 
 namespace App\Services\ML;
 
+use App\Models\V7\MlCandidateEvidenceArchive;
 use App\Models\V7\MlModelVersion;
 
 /** FEAT-057 evidence only; promotion and lifecycle decisions remain FEAT-056. */
@@ -10,7 +11,33 @@ class MlCandidateEvidenceService
     /** @return array<string,mixed> */
     public function persist(MlModelVersion $candidate): array
     {
+        $existing = MlCandidateEvidenceArchive::query()
+            ->where('model_version_id', $candidate->id)
+            ->first();
+        if ($existing !== null) {
+            $audit = is_array($candidate->audit_metadata) ? $candidate->audit_metadata : [];
+            $candidate->forceFill(['audit_metadata' => array_replace_recursive($audit, ['candidate_evidence' => $existing->evidence])])->save();
+
+            return $existing->evidence;
+        }
+
         $evidence = $this->build($candidate);
+        $encoded = json_encode($evidence, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        $featureSetVersion = data_get($candidate->audit_metadata, 'feature_profile.feature_set_version');
+        $datasetVersion = data_get($candidate->audit_metadata, 'dataset.version')
+            ?? data_get($candidate->trainingRun?->configuration, 'dataset.version');
+        MlCandidateEvidenceArchive::query()->create([
+            'model_version_id' => $candidate->id,
+            'horizon' => $candidate->horizon,
+            'model_version' => $candidate->version,
+            'feature_set_version' => $featureSetVersion,
+            'dataset_version' => $datasetVersion,
+            'artifact_path' => $candidate->artifact_path,
+            'artifact_sha256' => $candidate->artifact_sha256,
+            'evidence_sha256' => hash('sha256', $encoded),
+            'evidence' => $evidence,
+            'archived_at' => now(),
+        ]);
         $audit = is_array($candidate->audit_metadata) ? $candidate->audit_metadata : [];
         $candidate->forceFill(['audit_metadata' => array_replace_recursive($audit, ['candidate_evidence' => $evidence])])->save();
 

@@ -74,6 +74,13 @@ class MlBoundedTrainingCampaignTest extends TestCase
             $this->assertTrue($evidence['deterministic_baseline']['comparable']);
             $this->assertFalse($evidence['active_model']['comparable']);
             $this->assertSame($evidence, $model->fresh()->audit_metadata['candidate_evidence']);
+            $archive = $model->fresh()->candidateEvidenceArchive;
+            $this->assertNotNull($archive);
+            $this->assertSame($model->artifact_sha256, $archive->artifact_sha256);
+            $encodedArchive = json_encode($archive->evidence, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            $this->assertSame(hash('sha256', $encodedArchive), $archive->evidence_sha256);
+            $this->assertSame($evidence, app(MlCandidateEvidenceService::class)->persist($model->fresh()));
+            $this->assertSame(1, $model->fresh()->candidateEvidenceArchive()->count());
         }
     }
 }

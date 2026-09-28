@@ -5,6 +5,7 @@ namespace App\Models\V7;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class MlModelVersion extends Model
 {
@@ -58,5 +59,10 @@ class MlModelVersion extends Model
     public function predictions(): HasMany
     {
         return $this->hasMany(MlPrediction::class, 'model_version_id');
+    }
+
+    public function candidateEvidenceArchive(): HasOne
+    {
+        return $this->hasOne(MlCandidateEvidenceArchive::class, 'model_version_id');
     }
 }
