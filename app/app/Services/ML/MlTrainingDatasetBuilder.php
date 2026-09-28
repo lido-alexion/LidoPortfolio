@@ -5,6 +5,7 @@ namespace App\Services\ML;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\V7\FundamentalFact;
+use App\Services\Fundamentals\FundamentalBankMetricsService;
 use App\Services\Fundamentals\FundamentalDataService;
 use Carbon\Carbon;
 use RuntimeException;
@@ -12,17 +13,65 @@ use RuntimeException;
 class MlTrainingDatasetBuilder
 {
     public const NUMERIC_FEATURES = [
+        'relative_strength_1m',
         'relative_strength_3m',
+        'relative_strength_6m',
+        'benchmark_return_3m',
+        'benchmark_return_6m',
+        'benchmark_trend_score',
+        'sector_relative_strength_3m',
+        'market_breadth_nifty',
         'momentum_score',
+        'price_return_1m',
+        'price_return_3m',
+        'price_return_6m',
+        'price_return_12m',
         'trend_score',
+        'trend_score_ma50',
+        'trend_score_ma200',
+        'benchmark_realized_volatility_20d',
         'roe',
         'debt_equity',
         'revenue_growth_proxy',
+        'eps_growth_yoy',
+        'net_income_growth_yoy',
+        'operating_margin',
+        'net_margin',
+        'fcf_margin',
+        'ocf_to_net_income_ratio',
+        'pe_ratio',
+        'pb_ratio',
+        'realized_volatility_20d',
+        'realized_volatility_63d',
+        'volatility_ratio_20_63',
+        'volume_trend_20d',
+        'net_debt_equity',
+        'current_drawdown_pct',
+        'distance_52w_high_pct',
+        'distance_20d_high_pct',
+        'volume_ratio_20d',
+        'atr_pct_14',
+        'consolidation_width_20d_pct',
+        'range_position_20d',
+        'candle_body_to_range_1d',
+        'downside_volatility_20d',
+        'up_day_ratio_20d',
+        'current_ratio',
+        'gross_margin',
+        'gross_npa_ratio',
+        'net_npa_ratio',
+        'capital_adequacy_ratio',
+        'net_interest_margin',
     ];
 
     public const CATEGORICAL_FEATURES = ['sector'];
 
-    public function __construct(private readonly FundamentalDataService $fundamentals) {}
+    public function __construct(
+        private readonly FundamentalDataService $fundamentals,
+        private readonly FundamentalBankMetricsService $bankMetrics,
+        private readonly MlMarketBreadthFeatureService $marketBreadth,
+        private readonly MlSectorRelativeStrengthService $sectorRelative,
+    ) {}
 
     /** @return array{rows:list<array<string,mixed>>,partitions:array<string,mixed>,feature_definitions:array<string,mixed>,diagnostics:array<string,mixed>} */
     public function build(string $horizon, Carbon $cutoff): array
@@ -64,6 +113,9 @@ class MlTrainingDatasetBuilder
      */
     public function buildStreamed(string $horizon, Carbon $cutoff, string $directory): array
     {
+        $this->marketBreadth->resetMemo();
+        $this->sectorRelative->resetMemo();
+
         $horizonDays = ['1m' => 21, '3m' => 63, '6m' => 126][$horizon] ?? throw new RuntimeException('Unsupported ML horizon.');
         $benchmark = Stock::query()->where('symbol', 'NIFTY50')->first();
         if ($benchmark === null) {
@@ -206,6 +258,7 @@ class MlTrainingDatasetBuilder
     private function universeQuery()
     {
         return Stock::query()
+            ->where('is_active', true)
             ->where(function ($query): void {
                 $query->where('is_benchmark', false)->orWhereNull('is_benchmark');
             })
@@ -421,25 +474,96 @@ class MlTrainingDatasetBuilder
     public function featuresFor(Stock $stock, Carbon $asOf): array
     {
         $benchmark = $this->benchmarkFor($stock);
-        $stockPrices = $this->prices($stock, $asOf);
+        $series = $this->priceSeries($stock, $asOf);
+        $stockPrices = $series['features'];
         $benchmarkPrices = $benchmark ? $this->prices($benchmark, $asOf) : [];
+        $highs = $series['highs'];
+        $lows = $series['lows'];
         $close = $this->closeAtOrBefore($stockPrices, $asOf->toDateString());
         $benchmarkClose = $this->closeAtOrBefore($benchmarkPrices, $asOf->toDateString());
+        $stock1m = $this->returnOver($stockPrices, $asOf->toDateString(), 21);
+        $benchmark1m = $this->returnOver($benchmarkPrices, $asOf->toDateString(), 21);
         $stock3m = $this->returnOver($stockPrices, $asOf->toDateString(), 63);
         $benchmark3m = $this->returnOver($benchmarkPrices, $asOf->toDateString(), 63);
-        $momentum = $this->returnOver($stockPrices, $asOf->toDateString(), 21);
+        $momentum = $stock1m;
         $sma = $this->sma($stockPrices, $asOf->toDateString(), 20);
+        $benchmarkSma = $this->sma($benchmarkPrices, $asOf->toDateString(), 20);
         $roe = $this->fundamentals->metric($stock, 'roe', 'ttm', $asOf);
         $debtEquity = $this->fundamentals->metric($stock, 'debt_equity', 'ttm', $asOf);
         $revenue = $this->fundamentals->growthMetric($stock, 'revenue', 'quarterly', $asOf);
 
+        $margins = $this->marginFeaturesFromService($stock, $asOf);
+        $volatility = $this->realizedVolatility($stockPrices, $asOf->toDateString(), 63, array_flip(array_keys($stockPrices)));
+        $stock6m = $this->returnOver($stockPrices, $asOf->toDateString(), 126);
+        $benchmark6m = $this->returnOver($benchmarkPrices, $asOf->toDateString(), 126);
+        $pe = $close !== null ? $this->fundamentals->metric($stock, 'pe', 'ttm', $asOf, $close) : ['value' => null];
+        $pb = $close !== null ? $this->fundamentals->metric($stock, 'pb', 'ttm', $asOf, $close) : ['value' => null];
+        $epsGrowth = $this->fundamentals->growthMetric($stock, 'eps', FundamentalDataService::CADENCE_QUARTERLY, $asOf);
+        $niGrowth = $this->fundamentals->growthMetric($stock, 'net_income', FundamentalDataService::CADENCE_QUARTERLY, $asOf);
+        $ocf = $this->fundamentals->metric($stock, 'operating_cash_flow', 'ttm', $asOf);
+        $priceIndex = array_flip(array_keys($stockPrices));
+        $volumes = $series['volumes'];
+        $sma50 = $this->sma($stockPrices, $asOf->toDateString(), 50, $priceIndex);
+        $sma200 = $this->sma($stockPrices, $asOf->toDateString(), 200, $priceIndex);
+        $benchmarkPriceIndex = array_flip(array_keys($benchmarkPrices));
+
         return [
+            'relative_strength_1m' => $stock1m !== null && $benchmark1m !== null ? $stock1m - $benchmark1m : null,
             'relative_strength_3m' => $stock3m !== null && $benchmark3m !== null ? $stock3m - $benchmark3m : null,
+            'relative_strength_6m' => $stock6m !== null && $benchmark6m !== null ? $stock6m - $benchmark6m : null,
+            'benchmark_return_3m' => $benchmark3m,
+            'benchmark_return_6m' => $benchmark6m,
+            'benchmark_trend_score' => $benchmarkClose !== null && $benchmarkSma !== null && $benchmarkSma != 0
+                ? (($benchmarkClose / $benchmarkSma) - 1) * 100
+                : null,
+            'sector_relative_strength_3m' => $this->sectorRelative->relativeStrength3m($stock, $asOf->toDateString()),
+            'market_breadth_nifty' => $this->marketBreadth->pctAboveSma20($asOf->toDateString()),
             'momentum_score' => $momentum,
+            'price_return_1m' => $stock1m,
+            'price_return_3m' => $this->returnOver($stockPrices, $asOf->toDateString(), 63),
+            'price_return_6m' => $this->returnOver($stockPrices, $asOf->toDateString(), 126),
+            'price_return_12m' => $this->returnOver($stockPrices, $asOf->toDateString(), 252),
             'trend_score' => $close !== null && $sma !== null && $sma != 0 ? (($close / $sma) - 1) * 100 : null,
+            'trend_score_ma50' => $close !== null && $sma50 !== null && $sma50 != 0 ? (($close / $sma50) - 1) * 100 : null,
+            'trend_score_ma200' => $close !== null && $sma200 !== null && $sma200 != 0 ? (($close / $sma200) - 1) * 100 : null,
+            'benchmark_realized_volatility_20d' => $this->realizedVolatility(
+                $benchmarkPrices,
+                $asOf->toDateString(),
+                20,
+                $benchmarkPriceIndex,
+            ),
             'roe' => $roe['value'],
             'debt_equity' => $debtEquity['value'],
             'revenue_growth_proxy' => $revenue['value'],
+            'eps_growth_yoy' => $epsGrowth['value'],
+            'net_income_growth_yoy' => $niGrowth['value'],
+            'operating_margin' => $margins['operating_margin'],
+            'net_margin' => $margins['net_margin'],
+            'fcf_margin' => $margins['fcf_margin'],
+            'ocf_to_net_income_ratio' => $this->ratio(
+                $ocf['value'] !== null ? (float) $ocf['value'] : null,
+                $this->fundamentals->metric($stock, 'net_income', 'ttm', $asOf)['value'],
+            ),
+            'pe_ratio' => $pe['value'],
+            'pb_ratio' => $pb['value'],
+            'realized_volatility_20d' => $this->realizedVolatility($stockPrices, $asOf->toDateString(), 20, $priceIndex),
+            'realized_volatility_63d' => $volatility,
+            'volatility_ratio_20_63' => $this->volatilityRatio20_63($stockPrices, $asOf->toDateString(), $priceIndex),
+            'volume_trend_20d' => $this->volumeTrend20d($volumes, $asOf->toDateString(), $priceIndex),
+            'net_debt_equity' => $this->netDebtEquityFromService($stock, $asOf, $close),
+            'current_drawdown_pct' => $this->currentDrawdownPct($stockPrices, $asOf->toDateString(), $priceIndex),
+            'distance_52w_high_pct' => $this->distance52wHigh($stockPrices, $asOf->toDateString(), $priceIndex),
+            'distance_20d_high_pct' => $this->distanceFromHigh($highs, $stockPrices, $asOf->toDateString(), 20, $priceIndex),
+            'volume_ratio_20d' => $this->volumeRatio20d($volumes, $asOf->toDateString(), $priceIndex),
+            'atr_pct_14' => $this->atrPct14($highs, $lows, $stockPrices, $asOf->toDateString(), $priceIndex),
+            'consolidation_width_20d_pct' => $this->consolidationWidthPct($highs, $lows, $stockPrices, $asOf->toDateString(), 20, $priceIndex),
+            'range_position_20d' => $this->rangePosition($highs, $lows, $stockPrices, $asOf->toDateString(), 20, $priceIndex),
+            'candle_body_to_range_1d' => $this->candleBodyToRange($highs, $lows, $stockPrices, $asOf->toDateString(), $priceIndex),
+            'downside_volatility_20d' => $this->downsideVolatility($stockPrices, $asOf->toDateString(), 20, $priceIndex),
+            'up_day_ratio_20d' => $this->upDayRatio($stockPrices, $asOf->toDateString(), 20, $priceIndex),
+            'current_ratio' => $this->currentRatioFromService($stock, $asOf),
+            'gross_margin' => $this->grossMarginFromService($stock, $asOf),
+            ...$this->bankMetrics->metricsForStock($stock, $asOf),
             'sector' => $stock->sector ?: '__unknown',
             'as_of' => $asOf->toDateTimeString(),
             'benchmark_symbol' => $benchmark?->symbol ?: 'NIFTY50',
@@ -468,7 +592,18 @@ class MlTrainingDatasetBuilder
             $date = $observation['reference_date'];
             $futureDate = $observation['label_end'];
             $index = $dateIndex[$date];
-            $features = $this->featuresForPrices($stock, $date, $prices, $benchmarkPrices, $facts, $series['index'], $benchmarkSeries['index']);
+            $features = $this->featuresForPrices(
+                $stock,
+                $date,
+                $prices,
+                $benchmarkPrices,
+                $facts,
+                $series['index'],
+                $benchmarkSeries['index'],
+                $series['volumes'] ?? [],
+                $series['highs'] ?? [],
+                $series['lows'] ?? [],
+            );
             $entry = (float) ($labelPrices[$date] ?? 0);
             $future = (float) ($labelPrices[$futureDate] ?? 0);
             $benchmarkEntry = $this->closeAtOrBefore($benchmarkLabelPrices, $date, $benchmarkSeries['dates']);
@@ -490,25 +625,147 @@ class MlTrainingDatasetBuilder
     }
 
     /** @return array<string,float|null> */
-    private function featuresForPrices(Stock $stock, string $date, array $prices, array $benchmarkPrices, array $facts, array $priceIndex, array $benchmarkIndex): array
-    {
+    private function featuresForPrices(
+        Stock $stock,
+        string $date,
+        array $prices,
+        array $benchmarkPrices,
+        array $facts,
+        array $priceIndex,
+        array $benchmarkIndex,
+        array $volumes = [],
+        array $highs = [],
+        array $lows = [],
+    ): array {
+        $stock1m = $this->returnOver($prices, $date, 21, $priceIndex);
+        $benchmark1m = $this->returnOver($benchmarkPrices, $date, 21, $benchmarkIndex);
         $stock3m = $this->returnOver($prices, $date, 63, $priceIndex);
         $benchmark3m = $this->returnOver($benchmarkPrices, $date, 63, $benchmarkIndex);
-        $momentum = $this->returnOver($prices, $date, 21, $priceIndex);
+        $stock6m = $this->returnOver($prices, $date, 126, $priceIndex);
+        $benchmark6m = $this->returnOver($benchmarkPrices, $date, 126, $benchmarkIndex);
+        $momentum = $stock1m;
         $close = $this->closeAtOrBefore($prices, $date, array_keys($priceIndex));
+        $benchmarkClose = $this->closeAtOrBefore($benchmarkPrices, $date, array_keys($benchmarkIndex));
         $sma = $this->sma($prices, $date, 20, $priceIndex);
-        $asOf = Carbon::parse($date);
-        $metrics = $this->historicalMetrics($facts, $date);
+        $benchmarkSma = $this->sma($benchmarkPrices, $date, 20, $benchmarkIndex);
+        $sma50 = $this->sma($prices, $date, 50, $priceIndex);
+        $sma200 = $this->sma($prices, $date, 200, $priceIndex);
+        $metrics = $this->historicalMetrics($facts, $date, $close);
 
         return [
+            'relative_strength_1m' => $stock1m !== null && $benchmark1m !== null ? $stock1m - $benchmark1m : null,
             'relative_strength_3m' => $stock3m !== null && $benchmark3m !== null ? $stock3m - $benchmark3m : null,
+            'relative_strength_6m' => $stock6m !== null && $benchmark6m !== null ? $stock6m - $benchmark6m : null,
+            'benchmark_return_3m' => $benchmark3m,
+            'benchmark_return_6m' => $benchmark6m,
+            'benchmark_trend_score' => $benchmarkClose !== null && $benchmarkSma !== null && $benchmarkSma != 0
+                ? (($benchmarkClose / $benchmarkSma) - 1) * 100
+                : null,
+            'sector_relative_strength_3m' => $this->sectorRelative->relativeStrength3m($stock, $date),
+            'market_breadth_nifty' => $this->marketBreadth->pctAboveSma20($date),
             'momentum_score' => $momentum,
+            'price_return_1m' => $stock1m,
+            'price_return_3m' => $this->returnOver($prices, $date, 63, $priceIndex),
+            'price_return_6m' => $this->returnOver($prices, $date, 126, $priceIndex),
+            'price_return_12m' => $this->returnOver($prices, $date, 252, $priceIndex),
             'trend_score' => $close !== null && $sma !== null && $sma != 0 ? (($close / $sma) - 1) * 100 : null,
+            'trend_score_ma50' => $close !== null && $sma50 !== null && $sma50 != 0 ? (($close / $sma50) - 1) * 100 : null,
+            'trend_score_ma200' => $close !== null && $sma200 !== null && $sma200 != 0 ? (($close / $sma200) - 1) * 100 : null,
+            'benchmark_realized_volatility_20d' => $this->realizedVolatility($benchmarkPrices, $date, 20, $benchmarkIndex),
             'roe' => $metrics['roe'],
             'debt_equity' => $metrics['debt_equity'],
             'revenue_growth_proxy' => $metrics['revenue_growth'],
+            'eps_growth_yoy' => $metrics['eps_growth_yoy'],
+            'net_income_growth_yoy' => $metrics['net_income_growth_yoy'],
+            'operating_margin' => $metrics['operating_margin'],
+            'net_margin' => $metrics['net_margin'],
+            'fcf_margin' => $metrics['fcf_margin'],
+            'ocf_to_net_income_ratio' => $metrics['ocf_to_net_income_ratio'],
+            'pe_ratio' => $metrics['pe_ratio'],
+            'pb_ratio' => $metrics['pb_ratio'],
+            'realized_volatility_20d' => $this->realizedVolatility($prices, $date, 20, $priceIndex),
+            'realized_volatility_63d' => $this->realizedVolatility($prices, $date, 63, $priceIndex),
+            'volatility_ratio_20_63' => $this->volatilityRatio20_63($prices, $date, $priceIndex),
+            'volume_trend_20d' => $this->volumeTrend20d($volumes, $date, $priceIndex),
+            'net_debt_equity' => $metrics['net_debt_equity'],
+            'current_drawdown_pct' => $this->currentDrawdownPct($prices, $date, $priceIndex),
+            'distance_52w_high_pct' => $this->distance52wHigh($prices, $date, $priceIndex),
+            'distance_20d_high_pct' => $this->distanceFromHigh($highs, $prices, $date, 20, $priceIndex),
+            'volume_ratio_20d' => $this->volumeRatio20d($volumes, $date, $priceIndex),
+            'atr_pct_14' => $this->atrPct14($highs, $lows, $prices, $date, $priceIndex),
+            'consolidation_width_20d_pct' => $this->consolidationWidthPct($highs, $lows, $prices, $date, 20, $priceIndex),
+            'range_position_20d' => $this->rangePosition($highs, $lows, $prices, $date, 20, $priceIndex),
+            'candle_body_to_range_1d' => $this->candleBodyToRange($highs, $lows, $prices, $date, $priceIndex),
+            'downside_volatility_20d' => $this->downsideVolatility($prices, $date, 20, $priceIndex),
+            'up_day_ratio_20d' => $this->upDayRatio($prices, $date, 20, $priceIndex),
+            'current_ratio' => $metrics['current_ratio'],
+            'gross_margin' => $metrics['gross_margin'],
+            'gross_npa_ratio' => $metrics['gross_npa_ratio'],
+            'net_npa_ratio' => $metrics['net_npa_ratio'],
+            'capital_adequacy_ratio' => $metrics['capital_adequacy_ratio'],
+            'net_interest_margin' => $metrics['net_interest_margin'],
             'sector' => $stock->sector ?: '__unknown',
         ];
+    }
+
+    private function ratio(?float $numerator, ?float $denominator): ?float
+    {
+        if ($numerator === null || $denominator === null || $denominator == 0.0) {
+            return null;
+        }
+
+        return round($numerator / $denominator, 6);
+    }
+
+    /** @return array{operating_margin:?float,net_margin:?float,fcf_margin:?float} */
+    private function marginFeaturesFromService(Stock $stock, Carbon $asOf): array
+    {
+        $revenue = $this->fundamentals->metric($stock, 'revenue', 'ttm', $asOf);
+        $rev = $revenue['value'] !== null ? (float) $revenue['value'] : null;
+        if ($rev === null || $rev === 0.0) {
+            return ['operating_margin' => null, 'net_margin' => null, 'fcf_margin' => null];
+        }
+        $op = $this->fundamentals->metric($stock, 'operating_profit', 'ttm', $asOf)['value'];
+        $ni = $this->fundamentals->metric($stock, 'net_income', 'ttm', $asOf)['value'];
+        $fcf = $this->fundamentals->metric($stock, 'free_cash_flow', 'ttm', $asOf)['value'];
+
+        return [
+            'operating_margin' => $op !== null ? ((float) $op / $rev) * 100 : null,
+            'net_margin' => $ni !== null ? ((float) $ni / $rev) * 100 : null,
+            'fcf_margin' => $fcf !== null ? ((float) $fcf / $rev) * 100 : null,
+        ];
+    }
+
+    private function realizedVolatility(array $prices, string $date, int $lookback, ?array $index = null): ?float
+    {
+        $dates = array_keys($prices);
+        $position = $index[$date] ?? array_search($date, $dates, true);
+        if ($position === false || $position === null || $position < $lookback) {
+            return null;
+        }
+
+        $returns = [];
+        for ($i = $position - $lookback + 1; $i <= $position; $i++) {
+            $prev = (float) $prices[$dates[$i - 1]];
+            $curr = (float) $prices[$dates[$i]];
+            if ($prev <= 0.0) {
+                continue;
+            }
+            $returns[] = log($curr / $prev);
+        }
+
+        if (count($returns) < 5) {
+            return null;
+        }
+
+        $mean = array_sum($returns) / count($returns);
+        $variance = 0.0;
+        foreach ($returns as $r) {
+            $variance += ($r - $mean) ** 2;
+        }
+        $variance /= count($returns);
+
+        return round(sqrt($variance) * sqrt(252) * 100, 6);
     }
 
     /** @return array{features:array<string,float>,labels:array<string,float>,dates:list<string>,index:array<string,int>} */
@@ -516,17 +773,324 @@ class MlTrainingDatasetBuilder
     {
         $features = [];
         $labels = [];
+        $volumes = [];
         $dates = [];
-        StockPrice::query()->where('stock_id', $stock->id)->whereDate('price_date', '<=', $to->toDateString())->orderBy('price_date')->get(['price_date', 'close_price', 'adjusted_close_price'])->each(function (StockPrice $price) use (&$features, &$labels, &$dates): void {
+        $highs = [];
+        $lows = [];
+        StockPrice::query()->where('stock_id', $stock->id)->whereDate('price_date', '<=', $to->toDateString())->orderBy('price_date')->get(['price_date', 'close_price', 'adjusted_close_price', 'high_price', 'low_price', 'volume'])->each(function (StockPrice $price) use (&$features, &$labels, &$volumes, &$dates, &$highs, &$lows): void {
             if ($price->close_price === null) {
                 return;
             }
             $date = $price->price_date->toDateString();
             $dates[] = $date;
-            $features[$date] = (float) $price->close_price;
+            $close = (float) $price->close_price;
+            $features[$date] = $close;
             $labels[$date] = (float) ($price->adjusted_close_price ?? $price->close_price);
+            $volumes[$date] = (int) ($price->volume ?? 0);
+            $highs[$date] = (float) ($price->high_price ?? $close);
+            $lows[$date] = (float) ($price->low_price ?? $close);
         });
-        return ['features' => $features, 'labels' => $labels, 'dates' => $dates, 'index' => array_flip($dates)];
+
+        return ['features' => $features, 'labels' => $labels, 'volumes' => $volumes, 'highs' => $highs, 'lows' => $lows, 'dates' => $dates, 'index' => array_flip($dates)];
+    }
+
+    /** @return array<string,int> */
+    private function volumeSeries(Stock $stock, Carbon $to): array
+    {
+        return $this->priceSeries($stock, $to)['volumes'];
+    }
+
+    private function currentDrawdownPct(array $prices, string $date, ?array $index = null): ?float
+    {
+        $dates = array_keys($prices);
+        $position = $index[$date] ?? array_search($date, $dates, true);
+        if ($position === false || $position === null) {
+            return null;
+        }
+        $window = array_slice(array_values($prices), 0, $position + 1);
+        $peak = max($window);
+        $close = (float) $prices[$date];
+        if ($peak <= 0) {
+            return null;
+        }
+
+        return round((($close / $peak) - 1) * 100, 6);
+    }
+
+    private function distance52wHigh(array $prices, string $date, ?array $index = null): ?float
+    {
+        $dates = array_keys($prices);
+        $position = $index[$date] ?? array_search($date, $dates, true);
+        if ($position === false || $position === null) {
+            return null;
+        }
+        $lookback = min(252, $position + 1);
+        $window = array_slice(array_values($prices), $position - $lookback + 1, $lookback);
+        $high = max($window);
+        $close = (float) $prices[$date];
+        if ($high <= 0) {
+            return null;
+        }
+
+        return round((($close / $high) - 1) * 100, 6);
+    }
+
+    /** @param array<string,int> $volumes */
+    private function volumeRatio20d(array $volumes, string $date, ?array $index = null): ?float
+    {
+        if ($volumes === []) {
+            return null;
+        }
+        $dates = array_keys($volumes);
+        $position = $index[$date] ?? array_search($date, $dates, true);
+        if ($position === false || $position === null || $position < 19) {
+            return null;
+        }
+        $slice = array_slice(array_values($volumes), $position - 19, 20);
+        $avg = array_sum($slice) / count($slice);
+        if ($avg <= 0) {
+            return null;
+        }
+
+        return round(((float) $volumes[$date]) / $avg, 6);
+    }
+
+    /** @param array<string,int> $volumes */
+    private function volumeTrend20d(array $volumes, string $date, ?array $index = null): ?float
+    {
+        if ($volumes === []) {
+            return null;
+        }
+        $dates = array_keys($volumes);
+        $position = $index[$date] ?? array_search($date, $dates, true);
+        if ($position === false || $position === null || $position < 19) {
+            return null;
+        }
+        $slice = array_slice(array_values($volumes), $position - 19, 20);
+        $recent = array_slice($slice, -5);
+        $prior = array_slice($slice, 0, 15);
+        $recentAvg = array_sum($recent) / max(1, count($recent));
+        $priorAvg = array_sum($prior) / max(1, count($prior));
+        if ($priorAvg <= 0) {
+            return null;
+        }
+
+        return round((($recentAvg / $priorAvg) - 1) * 100, 6);
+    }
+
+    private function volatilityRatio20_63(array $prices, string $date, ?array $index = null): ?float
+    {
+        $short = $this->realizedVolatility($prices, $date, 20, $index);
+        $long = $this->realizedVolatility($prices, $date, 63, $index);
+        if ($short === null || $long === null || $long == 0.0) {
+            return null;
+        }
+
+        return round($short / $long, 6);
+    }
+
+    private function netDebtEquityFromService(Stock $stock, Carbon $asOf, ?float $close): ?float
+    {
+        $netDebt = $this->fundamentals->metric($stock, 'net_debt', 'ttm', $asOf, $close)['value'];
+        $equity = $this->fundamentals->metric($stock, 'equity', 'ttm', $asOf, $close)['value'];
+        if ($netDebt === null || $equity === null || (float) $equity == 0.0) {
+            return null;
+        }
+
+        return round((float) $netDebt / (float) $equity, 6);
+    }
+
+    private function currentRatioFromService(Stock $stock, Carbon $asOf): ?float
+    {
+        $facts = $this->fundamentals->factMap($stock, FundamentalDataService::CADENCE_QUARTERLY, $asOf);
+        $assets = isset($facts['current_assets']) ? (float) $facts['current_assets']->value : null;
+        $liabilities = isset($facts['current_liabilities']) ? (float) $facts['current_liabilities']->value : null;
+        if ($assets === null || $liabilities === null || $liabilities <= 0.0) {
+            return null;
+        }
+
+        return round($assets / $liabilities, 6);
+    }
+
+    private function grossMarginFromService(Stock $stock, Carbon $asOf): ?float
+    {
+        $revenue = $this->fundamentals->metric($stock, 'revenue', 'ttm', $asOf)['value'];
+        $facts = $this->fundamentals->factMap($stock, FundamentalDataService::CADENCE_QUARTERLY, $asOf);
+        $gross = null;
+        if (isset($facts['gross_profit'])) {
+            $gross = (float) $facts['gross_profit']->value;
+        }
+        if ($revenue === null || $gross === null || (float) $revenue == 0.0) {
+            return null;
+        }
+
+        return round(($gross / (float) $revenue) * 100, 6);
+    }
+
+    /** @param array<string,float> $highs */
+    private function distanceFromHigh(array $highs, array $closes, string $date, int $lookback, ?array $index = null): ?float
+    {
+        if ($highs === []) {
+            return null;
+        }
+        $dates = array_keys($closes);
+        $position = $index[$date] ?? array_search($date, $dates, true);
+        if ($position === false || $position === null || $position + 1 < $lookback) {
+            return null;
+        }
+        $windowDates = array_slice($dates, $position - $lookback + 1, $lookback);
+        $peak = max(array_map(fn (string $d): float => (float) ($highs[$d] ?? $closes[$d]), $windowDates));
+        $close = (float) $closes[$date];
+        if ($peak <= 0.0) {
+            return null;
+        }
+
+        return round((($close / $peak) - 1) * 100, 6);
+    }
+
+    /** @param array<string,float> $highs @param array<string,float> $lows */
+    private function consolidationWidthPct(array $highs, array $lows, array $closes, string $date, int $lookback, ?array $index = null): ?float
+    {
+        $dates = array_keys($closes);
+        $position = $index[$date] ?? array_search($date, $dates, true);
+        if ($position === false || $position === null || $position + 1 < $lookback) {
+            return null;
+        }
+        $windowDates = array_slice($dates, $position - $lookback + 1, $lookback);
+        $maxHigh = max(array_map(fn (string $d): float => (float) ($highs[$d] ?? $closes[$d]), $windowDates));
+        $minLow = min(array_map(fn (string $d): float => (float) ($lows[$d] ?? $closes[$d]), $windowDates));
+        $close = (float) $closes[$date];
+        if ($close <= 0.0) {
+            return null;
+        }
+
+        return round((($maxHigh - $minLow) / $close) * 100, 6);
+    }
+
+    /** @param array<string,float> $highs @param array<string,float> $lows */
+    private function rangePosition(array $highs, array $lows, array $closes, string $date, int $lookback, ?array $index = null): ?float
+    {
+        $dates = array_keys($closes);
+        $position = $index[$date] ?? array_search($date, $dates, true);
+        if ($position === false || $position === null || $position + 1 < $lookback) {
+            return null;
+        }
+        $windowDates = array_slice($dates, $position - $lookback + 1, $lookback);
+        $maxHigh = max(array_map(fn (string $d): float => (float) ($highs[$d] ?? $closes[$d]), $windowDates));
+        $minLow = min(array_map(fn (string $d): float => (float) ($lows[$d] ?? $closes[$d]), $windowDates));
+        $close = (float) $closes[$date];
+        $span = $maxHigh - $minLow;
+        if ($span <= 0.0) {
+            return null;
+        }
+
+        return round((($close - $minLow) / $span) * 100, 6);
+    }
+
+    /** @param array<string,float> $highs @param array<string,float> $lows */
+    private function atrPct14(array $highs, array $lows, array $closes, string $date, ?array $index = null, int $period = 14): ?float
+    {
+        $dates = array_keys($closes);
+        $position = $index[$date] ?? array_search($date, $dates, true);
+        if ($position === false || $position === null || $position < $period) {
+            return null;
+        }
+        $trs = [];
+        for ($i = $position - $period + 1; $i <= $position; $i++) {
+            $d = $dates[$i];
+            $prev = $dates[$i - 1];
+            $high = (float) ($highs[$d] ?? $closes[$d]);
+            $low = (float) ($lows[$d] ?? $closes[$d]);
+            $prevClose = (float) $closes[$prev];
+            $trs[] = max($high - $low, abs($high - $prevClose), abs($low - $prevClose));
+        }
+        $atr = array_sum($trs) / count($trs);
+        $close = (float) $closes[$date];
+        if ($close <= 0.0) {
+            return null;
+        }
+
+        return round(($atr / $close) * 100, 6);
+    }
+
+    /** @param array<string,float> $highs @param array<string,float> $lows */
+    private function candleBodyToRange(array $highs, array $lows, array $closes, string $date, ?array $index = null): ?float
+    {
+        $dates = array_keys($closes);
+        $position = $index[$date] ?? array_search($date, $dates, true);
+        if ($position === false || $position === null || $position < 1) {
+            return null;
+        }
+        $d = $dates[$position];
+        $prev = $dates[$position - 1];
+        $high = (float) ($highs[$d] ?? $closes[$d]);
+        $low = (float) ($lows[$d] ?? $closes[$d]);
+        $range = $high - $low;
+        if ($range <= 0.0) {
+            return null;
+        }
+        $body = abs((float) $closes[$d] - (float) $closes[$prev]);
+
+        return round($body / $range, 6);
+    }
+
+    private function downsideVolatility(array $prices, string $date, int $lookback, ?array $index = null): ?float
+    {
+        $dates = array_keys($prices);
+        $position = $index[$date] ?? array_search($date, $dates, true);
+        if ($position === false || $position === null || $position < $lookback) {
+            return null;
+        }
+        $returns = [];
+        for ($i = $position - $lookback + 1; $i <= $position; $i++) {
+            $prev = (float) $prices[$dates[$i - 1]];
+            $curr = (float) $prices[$dates[$i]];
+            if ($prev <= 0.0) {
+                continue;
+            }
+            $r = log($curr / $prev);
+            if ($r < 0) {
+                $returns[] = $r;
+            }
+        }
+        if (count($returns) < 3) {
+            return null;
+        }
+        $mean = array_sum($returns) / count($returns);
+        $variance = 0.0;
+        foreach ($returns as $r) {
+            $variance += ($r - $mean) ** 2;
+        }
+        $variance /= count($returns);
+
+        return round(sqrt($variance) * sqrt(252) * 100, 6);
+    }
+
+    private function upDayRatio(array $prices, string $date, int $lookback, ?array $index = null): ?float
+    {
+        $dates = array_keys($prices);
+        $position = $index[$date] ?? array_search($date, $dates, true);
+        if ($position === false || $position === null || $position < $lookback) {
+            return null;
+        }
+        $up = 0;
+        $total = 0;
+        for ($i = $position - $lookback + 1; $i <= $position; $i++) {
+            $prev = (float) $prices[$dates[$i - 1]];
+            $curr = (float) $prices[$dates[$i]];
+            if ($prev <= 0.0) {
+                continue;
+            }
+            $total++;
+            if ($curr > $prev) {
+                $up++;
+            }
+        }
+        if ($total === 0) {
+            return null;
+        }
+
+        return round($up / $total, 6);
     }
 
     /** @return list<array<string,mixed>> */
@@ -541,8 +1105,8 @@ class MlTrainingDatasetBuilder
         ])->all();
     }
 
-    /** @return array{roe:?float,debt_equity:?float,revenue_growth:?float} */
-    private function historicalMetrics(array $facts, string $asOf): array
+    /** @return array<string,?float> */
+    private function historicalMetrics(array $facts, string $asOf, ?float $close = null): array
     {
         $byKeyPeriod = [];
         foreach ($facts as $fact) {
@@ -567,15 +1131,53 @@ class MlTrainingDatasetBuilder
         $netIncome = $sum('net_income');
         $equity = isset($byKey['equity'][0]) ? (float) ($byKey['equity'][0]['value'] ?? 0) : null;
         $debt = isset($byKey['debt'][0]) ? (float) ($byKey['debt'][0]['value'] ?? 0) : null;
+        $cash = isset($byKey['cash_and_equivalents'][0]) ? (float) ($byKey['cash_and_equivalents'][0]['value'] ?? 0) : null;
+        $netDebt = $debt !== null && $cash !== null ? $debt - $cash : null;
         $revenue = $byKey['revenue'] ?? [];
-        $growth = count($revenue) >= 2 && (float) ($revenue[1]['value'] ?? 0) !== 0.0
-            ? (((float) ($revenue[0]['value'] ?? 0) - (float) ($revenue[1]['value'] ?? 0)) / abs((float) $revenue[1]['value'])) * 100
-            : null;
+        $growth = $this->yoyGrowthPercent($revenue);
+        $netIncomeSeries = $byKey['net_income'] ?? [];
+        $epsSeries = $byKey['eps'] ?? [];
+        $revenueTtm = $sum('revenue');
+        $operatingProfitTtm = $sum('operating_profit');
+        $ocfTtm = $sum('operating_cash_flow');
+        $capexTtm = $sum('capital_expenditure');
+        $fcfTtm = $ocfTtm !== null && $capexTtm !== null ? $ocfTtm - abs($capexTtm) : null;
+
+        $epsTtm = $sum('eps');
+        $grossProfitTtm = $sum('gross_profit');
+        $currentAssets = isset($byKey['current_assets'][0]) ? (float) ($byKey['current_assets'][0]['value'] ?? 0) : null;
+        $currentLiabilities = isset($byKey['current_liabilities'][0]) ? (float) ($byKey['current_liabilities'][0]['value'] ?? 0) : null;
+        $equityLatest = isset($byKey['equity'][0]) ? (float) ($byKey['equity'][0]['value'] ?? 0) : null;
+
         return [
             'roe' => $netIncome !== null && $equity ? ($netIncome / $equity) * 100 : null,
             'debt_equity' => $debt !== null && $equity ? $debt / $equity : null,
+            'net_debt_equity' => $netDebt !== null && $equity && $equity != 0.0 ? $netDebt / $equity : null,
             'revenue_growth' => $growth,
+            'eps_growth_yoy' => $this->yoyGrowthPercent($epsSeries),
+            'net_income_growth_yoy' => $this->yoyGrowthPercent($netIncomeSeries),
+            'operating_margin' => $revenueTtm && $operatingProfitTtm !== null ? ($operatingProfitTtm / $revenueTtm) * 100 : null,
+            'net_margin' => $revenueTtm && $netIncome !== null ? ($netIncome / $revenueTtm) * 100 : null,
+            'fcf_margin' => $revenueTtm && $fcfTtm !== null ? ($fcfTtm / $revenueTtm) * 100 : null,
+            'ocf_to_net_income_ratio' => $netIncome !== null && $ocfTtm !== null && $netIncome != 0.0 ? $ocfTtm / $netIncome : null,
+            'pe_ratio' => $close !== null && $epsTtm !== null && $epsTtm > 0 ? $close / $epsTtm : null,
+            'pb_ratio' => $close !== null && $equityLatest !== null && $equityLatest > 0 ? $close / $equityLatest : null,
+            'current_ratio' => $currentAssets !== null && $currentLiabilities !== null && $currentLiabilities > 0
+                ? $currentAssets / $currentLiabilities
+                : null,
+            'gross_margin' => $revenueTtm && $grossProfitTtm !== null ? ($grossProfitTtm / $revenueTtm) * 100 : null,
+            ...$this->bankMetrics->metricsFromFactRows($facts, $asOf),
         ];
+    }
+
+    /** @param list<array<string,mixed>> $series */
+    private function yoyGrowthPercent(array $series): ?float
+    {
+        if (count($series) < 2 || (float) ($series[1]['value'] ?? 0) === 0.0) {
+            return null;
+        }
+
+        return (((float) ($series[0]['value'] ?? 0) - (float) ($series[1]['value'] ?? 0)) / abs((float) $series[1]['value'])) * 100;
     }
 
     /** @param list<string> $dates */
