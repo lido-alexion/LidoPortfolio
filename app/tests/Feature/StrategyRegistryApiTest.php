@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Engines\Strategy\FactoryMomentumStrategy;
 use App\Engines\Strategy\MinerviniTrendTemplateScreener;
-use App\Models\ReusableArtifact;
 use App\Models\TradingStrategy;
 use App\Models\User;
 use App\Services\Artifacts\ArtifactType;
@@ -110,7 +109,8 @@ class StrategyRegistryApiTest extends TestCase
 
         $this->assertSame('draft', $created['metadata']['status']);
         $this->assertSame('imported', $created['metadata']['origin']);
-        $this->assertNotEmpty($created['artifact_uuid']);
+        $importedId = (int) ($created['artifact_id'] ?? 0);
+        $this->assertGreaterThan(0, $importedId);
 
         // Original Minervini still active
         $this->assertSame(
@@ -122,11 +122,13 @@ class StrategyRegistryApiTest extends TestCase
             1,
             TradingStrategy::query()->where('profile_id', $profile->id)->where('status', TradingStrategy::STATUS_ACTIVE)->count()
         );
-        $this->assertDatabaseHas('portfolio_reusable_artifacts', [
-            'artifact_uuid' => $created['artifact_uuid'],
-            'owner_user_id' => $user->id,
-            'artifact_type' => ArtifactType::STRATEGY,
-        ]);
+        $this->assertNull(
+            TradingStrategy::query()->whereKey($importedId)->value('reusable_artifact_id')
+        );
+        $this->assertGreaterThan(
+            1,
+            TradingStrategy::query()->where('profile_id', $profile->id)->count()
+        );
         $this->assertTrue(
             TradingStrategy::query()
                 ->where('profile_id', $profile->id)
@@ -232,8 +234,8 @@ class StrategyRegistryApiTest extends TestCase
         $factory->refresh();
         $this->assertSame(TradingStrategy::STATUS_ACTIVE, $factory->status);
         $this->assertSame($factoryVersionId, $factory->active_version_id);
-        $this->assertSame('draft', $created['status']);
-        $this->assertSame(1, TradingStrategy::query()->where('profile_id', $profile->id)->count());
+        $this->assertSame('draft', $created['metadata']['status']);
+        $this->assertSame(2, TradingStrategy::query()->where('profile_id', $profile->id)->count());
     }
 
     public function test_create_from_default_produces_distinct_draft_without_json(): void
@@ -256,21 +258,19 @@ class StrategyRegistryApiTest extends TestCase
             ->assertCreated()
             ->json('data');
 
-        $this->assertNotEmpty($created['artifact_uuid']);
         $this->assertSame('Strategy B', $created['name']);
         $this->assertSame('draft', $created['metadata']['status']);
         $this->assertSame('user', $created['metadata']['origin']);
-        $row = ReusableArtifact::query()->where('artifact_uuid', $created['artifact_uuid'])->firstOrFail();
-        $this->assertSame($user->id, $row->owner_user_id);
-        $this->assertSame(ArtifactType::STRATEGY, $row->artifact_type);
-        $this->assertSame('Second concurrent strategy', $row->versions()->sole()->content_json['metadata']['description']);
+        $row = TradingStrategy::query()->where('profile_id', $profile->id)->where('name', 'Strategy B')->firstOrFail();
+        $this->assertNull($row->reusable_artifact_id);
+        $this->assertSame('Second concurrent strategy', $row->description);
         $this->assertSame(1, TradingStrategy::query()
             ->where('profile_id', $profile->id)
             ->where('status', TradingStrategy::STATUS_ACTIVE)
             ->count());
     }
 
-    public function test_two_created_strategies_are_independent_library_drafts(): void
+    public function test_two_created_strategies_are_independent_runtime_drafts(): void
     {
         $user = User::factory()->create();
         $profile = $this->defaultPortfolioFor($user);
@@ -287,12 +287,10 @@ class StrategyRegistryApiTest extends TestCase
             ->assertCreated()
             ->json('data');
 
-        $this->assertNotSame($b['artifact_uuid'], $c['artifact_uuid']);
-        $this->assertSame($runtimeCount, TradingStrategy::query()->where('profile_id', $profile->id)->count());
-        $this->assertSame(2, ReusableArtifact::query()
-            ->where('owner_user_id', $user->id)
-            ->whereIn('artifact_uuid', [$b['artifact_uuid'], $c['artifact_uuid']])
-            ->count());
+        $this->assertNotSame((int) $b['artifact_id'], (int) $c['artifact_id']);
+        $this->assertSame($runtimeCount + 2, TradingStrategy::query()->where('profile_id', $profile->id)->count());
+        $this->assertNull(TradingStrategy::query()->whereKey((int) $b['artifact_id'])->value('reusable_artifact_id'));
+        $this->assertNull(TradingStrategy::query()->whereKey((int) $c['artifact_id'])->value('reusable_artifact_id'));
     }
 
     public function test_cannot_archive_the_last_enabled_strategy(): void

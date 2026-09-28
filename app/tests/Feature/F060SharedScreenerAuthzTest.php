@@ -91,10 +91,9 @@ class F060SharedScreenerAuthzTest extends TestCase
             ->assertCreated()
             ->json('data');
 
-        $this->assertSame('draft', $import['status']);
-        $this->assertSame('fork', $import['metadata']['origin']);
-        $this->assertNotEmpty($import['artifact_uuid']);
-        $this->assertSame(0, Screener::query()->where('profile_id', $other->id)->count());
+        $this->assertNotEmpty($import['id']);
+        $this->assertFalse($import['compatibility_read_only']);
+        $this->assertSame(1, Screener::query()->where('profile_id', $other->id)->count());
     }
 
     public function test_cross_user_shared_list_get_import_denied(): void
@@ -372,7 +371,7 @@ class F060SharedScreenerAuthzTest extends TestCase
             ->postJson("/api/screeners/shared/{$sharedId}/import")
             ->assertCreated()
             ->json('data');
-        $artifactUuid = $imported['artifact_uuid'];
+        $copyId = (int) $imported['id'];
 
         $this->actingAs($owner)
             ->withHeader('X-Profile-Id', (string) $ownerProfile->id)
@@ -384,12 +383,7 @@ class F060SharedScreenerAuthzTest extends TestCase
             ])
             ->assertOk();
 
-        $this->assertDatabaseHas('portfolio_reusable_artifacts', [
-            'artifact_uuid' => $artifactUuid,
-            'owner_user_id' => $owner->id,
-            'artifact_type' => 'screener',
-        ]);
-        $this->assertSame(0, Screener::query()->where('profile_id', $other->id)->count());
+        $this->assertSame('Source Screen', Screener::query()->whereKey($copyId)->value('name'));
 
         $this->actingAs($owner)
             ->withHeader('X-Profile-Id', (string) $ownerProfile->id)
@@ -397,7 +391,7 @@ class F060SharedScreenerAuthzTest extends TestCase
             ->assertOk();
 
         $this->assertFalse(Screener::query()->where('id', $sharedId)->exists());
-        $this->assertDatabaseHas('portfolio_reusable_artifacts', ['artifact_uuid' => $artifactUuid]);
+        $this->assertTrue(Screener::query()->whereKey($copyId)->exists());
     }
 
     public function test_name_collision_uses_one_then_two(): void
@@ -411,15 +405,17 @@ class F060SharedScreenerAuthzTest extends TestCase
             ->withHeader('X-Profile-Id', (string) $other->id)
             ->postJson("/api/screeners/shared/{$sharedId}/import")
             ->assertCreated()
-            ->json('data.slug');
-        $this->assertSame('momentum_screener', $first);
+            ->json('data');
+        $this->assertSame('Momentum Screener', $first['name']);
+        $this->assertSame('momentum_screener', $first['slug']);
 
         $second = $this->actingAs($owner)
             ->withHeader('X-Profile-Id', (string) $other->id)
             ->postJson("/api/screeners/shared/{$sharedId}/import")
             ->assertCreated()
-            ->json('data.slug');
-        $this->assertSame('momentum_screener_2', $second);
+            ->json('data');
+        $this->assertSame('Momentum Screener (1)', $second['name']);
+        $this->assertSame('momentum_screener_1', $second['slug']);
     }
 
     public function test_same_profile_own_list_unaffected(): void

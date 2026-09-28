@@ -80,17 +80,18 @@ class ScreenerRegistryApiTest extends TestCase
         $importPayload['slug'] = 'imported_copy';
         $importPayload['name'] = 'Imported Copy';
 
-        $this->actingAs($user)
+        $imported = $this->actingAs($user)
             ->postJson('/api/v1/screener-registry/import', $importPayload)
             ->assertCreated()
-            ->assertJsonPath('data.slug', 'imported_copy');
+            ->assertJsonPath('data.slug', 'imported_copy')
+            ->assertJsonPath('data.metadata.origin', 'imported')
+            ->assertJsonPath('data.metadata.ownership', 'own')
+            ->json('data');
 
-        $this->assertSame(1, Screener::query()->where('profile_id', $profile->id)->count());
-        $this->assertDatabaseHas('portfolio_reusable_artifacts', [
-            'owner_user_id' => $user->id,
-            'artifact_type' => ArtifactType::SCREENER,
-            'slug' => 'imported_copy',
-        ]);
+        $this->assertSame(2, Screener::query()->where('profile_id', $profile->id)->count());
+        $importedId = (int) ($imported['artifact_id'] ?? 0);
+        $this->assertNotSame($id, $importedId);
+        $this->assertNull(Screener::query()->whereKey($importedId)->value('reusable_artifact_id'));
 
         $definition['root']['children'][0]['right']['value'] = 20;
         $this->actingAs($user)
@@ -161,17 +162,20 @@ class ScreenerRegistryApiTest extends TestCase
             ->assertJsonPath('data.metadata.ownership', 'shared')
             ->assertJsonPath('data.metadata.read_only', true);
 
-        $this->actingAs($owner)
+        $imported = $this->actingAs($owner)
             ->withHeader('X-Profile-Id', (string) $otherProfile->id)
             ->postJson('/api/v1/screener-registry/shared/'.$sourceId.'/import')
-            ->assertCreated();
+            ->assertCreated()
+            ->assertJsonPath('data.metadata.origin', 'fork')
+            ->assertJsonPath('data.metadata.ownership', 'own')
+            ->json('data');
 
-        $this->assertFalse(Screener::query()->where('profile_id', $otherProfile->id)->exists());
-        $this->assertDatabaseHas('portfolio_reusable_artifacts', [
-            'owner_user_id' => $owner->id,
-            'artifact_type' => ArtifactType::SCREENER,
-            'origin' => 'fork',
-        ]);
+        $copyId = (int) ($imported['artifact_id'] ?? 0);
+        $this->assertNotSame($sourceId, $copyId);
+        $this->assertTrue(Screener::query()->where('profile_id', $otherProfile->id)->whereKey($copyId)->exists());
+        $this->assertNull(
+            Screener::query()->where('profile_id', $otherProfile->id)->whereKey($copyId)->value('reusable_artifact_id')
+        );
         $this->assertTrue(
             Screener::query()->where('profile_id', $ownerProfile->id)->where('is_shared', true)->exists()
         );

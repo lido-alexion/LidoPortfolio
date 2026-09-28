@@ -79,7 +79,7 @@ class TechnicalIndicatorServiceTest extends TestCase
         $shortHigh = $svc->withBars($short)->evaluate(['indicator' => 'high_52w']);
         $this->assertEqualsWithDelta(150.0, $shortHigh, 1e-9);
 
-        $eval = new ScreenerEvaluationService(new TechnicalIndicatorService);
+        $eval = ScreenerEvaluationTestSupport::evaluationService();
         $definition = [
             'root' => [
                 'type' => 'condition',
@@ -114,7 +114,7 @@ class TechnicalIndicatorServiceTest extends TestCase
         $this->assertEqualsWithDelta(10.5, $value, 1e-9);
         $this->assertSame(1, ScreenerCatalog::minBars('sma', ['period' => 1]));
 
-        $eval = new ScreenerEvaluationService(new TechnicalIndicatorService);
+        $eval = ScreenerEvaluationTestSupport::evaluationService();
         $result = $eval->evaluateStock([
             'root' => [
                 'type' => 'condition',
@@ -129,7 +129,7 @@ class TechnicalIndicatorServiceTest extends TestCase
 
     public function test_weight_factor_scales_right_hand_side(): void
     {
-        $eval = new ScreenerEvaluationService(new TechnicalIndicatorService);
+        $eval = ScreenerEvaluationTestSupport::evaluationService();
         $bars = [
             ['open' => 10.0, 'high' => 11.0, 'low' => 9.0, 'close' => 10.0, 'volume' => 100.0],
         ];
@@ -171,7 +171,7 @@ class TechnicalIndicatorServiceTest extends TestCase
 
     public function test_left_entity_evaluates_on_index_bars(): void
     {
-        $eval = new ScreenerEvaluationService(new TechnicalIndicatorService);
+        $eval = ScreenerEvaluationTestSupport::evaluationService();
         // Stock range_pct = (12-9)/10 = 30%; index range_pct = (101-100)/100 = 1%.
         $stockBars = [
             ['open' => 10.0, 'high' => 12.0, 'low' => 9.0, 'close' => 10.0, 'volume' => 100.0],
@@ -205,7 +205,7 @@ class TechnicalIndicatorServiceTest extends TestCase
 
     public function test_entity_lookbacks_and_stock_lookback_split(): void
     {
-        $eval = new ScreenerEvaluationService(new TechnicalIndicatorService);
+        $eval = ScreenerEvaluationTestSupport::evaluationService();
         $definition = [
             'root' => [
                 'type' => 'group',
@@ -244,7 +244,7 @@ class TechnicalIndicatorServiceTest extends TestCase
 
     public function test_condition_tree_and_or_and_insufficient_bars(): void
     {
-        $eval = new ScreenerEvaluationService(new TechnicalIndicatorService);
+        $eval = ScreenerEvaluationTestSupport::evaluationService();
         $bars = [];
         for ($i = 0; $i < 60; $i++) {
             $c = 100.0 + $i * 0.5;

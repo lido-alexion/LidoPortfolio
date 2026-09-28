@@ -71,6 +71,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
     const [allocDraft, setAllocDraft] = useState([]);
     const [allocBusy, setAllocBusy] = useState(false);
     const [allocError, setAllocError] = useState('');
+    const [provenanceGate, setProvenanceGate] = useState(null);
     const importValidated = Boolean(validateResult?.ok);
 
     const syncAllocDraft = (list) => {
@@ -115,6 +116,16 @@ export default function StrategyRegistryPage({ adminMode = false }) {
         load();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [q, status, origin]);
+
+    useEffect(() => {
+        if (!adminMode) {
+            setProvenanceGate(null);
+            return;
+        }
+        api.get('/v1/admin/strategy-provenance/migration-report', { skipErrorToast: true })
+            .then((res) => setProvenanceGate(res.data?.data || null))
+            .catch(() => setProvenanceGate(null));
+    }, [adminMode]);
 
     const countsLabel = useMemo(() => {
         if (!meta?.counts) return '';
@@ -197,13 +208,15 @@ export default function StrategyRegistryPage({ adminMode = false }) {
             const envelope = parseImportPayload();
             const res = await api.post('/v1/strategy-registry/import', envelope);
             const created = res.data?.data;
-            showToast(
-                `Imported “${created?.name || 'strategy'}” as an Artifact Library Draft (slug ${created?.slug || '—'}).`,
-            );
+            showToast(`Imported “${created?.name || 'strategy'}” (slug ${created?.slug || '—'}). Open the Strategy editor to review.`);
             setImportText('');
             setValidateResult(null);
-            const path = createdArtifactPath(created);
-            if (path) navigate(path);
+            const id = createdStrategyId(created);
+            if (id) navigate(`/strategy?strategy_id=${encodeURIComponent(id)}`);
+            else {
+                const path = createdArtifactPath(created);
+                if (path) navigate(path);
+            }
         } catch (err) {
             setError(err?.response?.data?.error?.message || err.message || 'Import failed');
         } finally {
@@ -267,8 +280,8 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                 <div>
                     <h2 className="h4 mb-1">{adminMode ? 'Strategy Registry (Admin)' : 'Strategy Registry'}</h2>
                     <p className="text-muted small mb-0">
-                        Compatibility view for Portfolio runtime Strategies. New definitions and imports become Artifact Library Drafts.
-                        Published bindings control enablement; Strategies reference Screeners by slug / factory key.
+                        Compatibility view for Portfolio runtime Strategies. Name-only create and validated JSON import add draft
+                        Strategies you enable from here; eligibility references Screeners by slug / factory key only.
                     </p>
                     {countsLabel && <p className="text-muted small mb-0 mt-1">{countsLabel}</p>}
                 </div>
@@ -368,6 +381,18 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                     </div>
                 </div>
             </div>
+
+            {adminMode && provenanceGate ? (
+                <div className={`alert py-2 mb-0 ${provenanceGate.gate?.not_null_enforcement_recommended ? 'alert-success' : 'alert-warning'}`}>
+                    <strong>Provenance migration gate (WP-10):</strong>
+                    {provenanceGate.gate?.not_null_enforcement_recommended
+                        ? ' All tracked provenance columns are resolved — safe to plan NOT NULL enforcement after review.'
+                        : ` Blocking rows remain (unresolved ${provenanceGate.gate?.totals?.unresolved ?? 0}, orphaned ${provenanceGate.gate?.totals?.orphaned ?? 0}, mismatched ${provenanceGate.gate?.totals?.mismatched ?? 0}).`}
+                    <span className="text-muted small d-block mt-1">
+                        Admin API: <code>GET /api/v1/admin/strategy-provenance/migration-report</code>
+                    </span>
+                </div>
+            ) : null}
 
             {error && <div className="alert alert-danger mb-0">{error}</div>}
 

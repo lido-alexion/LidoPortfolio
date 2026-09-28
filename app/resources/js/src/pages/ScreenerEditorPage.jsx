@@ -9,6 +9,13 @@ import NumberInput from '../components/NumberInput';
 import ComboButton from '../components/ComboButton';
 import { buildExplorerComparePath } from '../utils/explorerLinks';
 import { resolveExternalStockUrl } from '../utils/externalStockLinks';
+import {
+    STRATEGY_SCREENER_CREATE_QUERY,
+    STRATEGY_SCREENER_CREATE_VALUE,
+    STRATEGY_SCREENER_CREATED_PARAM,
+    STRATEGY_SCREENER_RETURN_CANCEL,
+    STRATEGY_SCREENER_RETURN_PARAM,
+} from '../utils/strategyScreenerReturnFlow';
 
 const WIDE_LAYOUT_QUERY = '(min-width: 1400px)';
 const NAME_MAX_LENGTH = 120;
@@ -205,6 +212,9 @@ function CollapsibleSection({
 function OperandEditor({ value, onChange, meta, side, bare = false, leading = null }) {
     const isConstant = value?.type === 'constant';
     const indicators = meta?.indicators || [];
+    const fundIndicators = indicators.filter((i) => i.category === 'fundamental' || String(i.id).startsWith('fund_'));
+    const mlIndicators = indicators.filter((i) => i.category === 'ml' || String(i.id).startsWith('ml_'));
+    const technicalIndicators = indicators.filter((i) => !fundIndicators.includes(i) && !mlIndicators.includes(i));
     const selected = indicators.find((i) => i.id === value?.indicator);
     const entities = side === 'left' ? (meta?.left_entities || []) : [];
     const entity = value?.entity || 'stock';
@@ -296,9 +306,27 @@ function OperandEditor({ value, onChange, meta, side, bare = false, leading = nu
                             });
                         }}
                     >
-                        {indicators.map((ind) => (
-                            <option key={ind.id} value={ind.id}>{ind.label}</option>
-                        ))}
+                        {technicalIndicators.length > 0 ? (
+                            <optgroup label="Technical">
+                                {technicalIndicators.map((ind) => (
+                                    <option key={ind.id} value={ind.id}>{ind.label}</option>
+                                ))}
+                            </optgroup>
+                        ) : null}
+                        {fundIndicators.length > 0 ? (
+                            <optgroup label="Fundamentals">
+                                {fundIndicators.map((ind) => (
+                                    <option key={ind.id} value={ind.id}>{ind.label}</option>
+                                ))}
+                            </optgroup>
+                        ) : null}
+                        {mlIndicators.length > 0 ? (
+                            <optgroup label="ML scores">
+                                {mlIndicators.map((ind) => (
+                                    <option key={ind.id} value={ind.id}>{ind.label}</option>
+                                ))}
+                            </optgroup>
+                        ) : null}
                     </select>
                     <div className="d-flex flex-wrap gap-2">
                         {(selected?.params || []).map((p) => (
@@ -527,6 +555,9 @@ export default function ScreenerEditorPage() {
     const isNew = id === 'new' || location.pathname.replace(/\/$/, '').endsWith('/screeners/new');
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
+    const strategyReturnStrategyId = searchParams.get('strategy_id') || '';
+    const strategyReturnActive = searchParams.get(STRATEGY_SCREENER_CREATE_QUERY) === STRATEGY_SCREENER_CREATE_VALUE
+        && strategyReturnStrategyId !== '';
     const [meta, setMeta] = useState(null);
     const [watchlists, setWatchlists] = useState([]);
     const [form, setForm] = useState(null);
@@ -681,7 +712,7 @@ export default function ScreenerEditorPage() {
 
     const save = async () => {
         if (form.compatibility_read_only) {
-            showToast('This Screener is managed in the Artifact Library. Create a Draft there to make changes.', 'warning');
+            showToast('This Screener is bound to a published library artifact. Open the artifact to publish an upgrade, or copy it as a new Screener.', 'warning');
             return false;
         }
         setSubmitted(true);
@@ -696,8 +727,15 @@ export default function ScreenerEditorPage() {
             if (isNew) {
                 const res = await api.post('/screeners', payload);
                 const created = res.data?.data;
-                showToast(`Screener "${payload.name.trim()}" created as an Artifact Library Draft.`);
-                navigate(created?.library_path || `/artifact-library/${encodeURIComponent(created?.reusable_artifact_uuid || '')}`, { replace: true });
+                showToast(`Screener "${payload.name.trim()}" saved.`);
+                if (strategyReturnActive && created?.id) {
+                    navigate(
+                        `/strategy?strategy_id=${encodeURIComponent(strategyReturnStrategyId)}&${STRATEGY_SCREENER_CREATED_PARAM}=${encodeURIComponent(String(created.id))}`,
+                        { replace: true },
+                    );
+                    return true;
+                }
+                navigate(created?.id ? `/screeners/${created.id}` : '/screeners/registry', { replace: true });
                 return true;
             }
             const res = await api.put(`/screeners/${id}`, payload);
@@ -1131,11 +1169,32 @@ export default function ScreenerEditorPage() {
             <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
                 <Link to="/screeners" className="btn btn-sm btn-outline-secondary">← Screeners</Link>
                 <h1 className="h3 mb-0">{isNew ? 'New screener' : 'Edit screener'}</h1>
+                {strategyReturnActive ? (
+                    <button
+                        type="button"
+                        className="btn btn-sm btn-outline-primary ms-auto"
+                        id="screener-cancel-return-strategy"
+                        onClick={() => navigate(
+                            `/strategy?strategy_id=${encodeURIComponent(strategyReturnStrategyId)}&${STRATEGY_SCREENER_RETURN_PARAM}=${STRATEGY_SCREENER_RETURN_CANCEL}`,
+                        )}
+                    >
+                        Cancel — return to Strategy
+                    </button>
+                ) : null}
             </div>
+
+            {strategyReturnActive ? (
+                <div className="alert alert-secondary py-2 mb-3" role="status">
+                    Creating a Screener for your Strategy. Save to return and add it to eligibility, or cancel to go back without creating one.
+                </div>
+            ) : null}
 
             {form.compatibility_read_only ? (
                 <div className="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2" role="status">
-                    <span>This is a read-only runtime projection. Draft, publish, and explicitly upgrade it in the Artifact Library.</span>
+                    <span>
+                        This Screener is bound to a published Artifact Library version, so you cannot edit it here.
+                        Open the library entry to create a draft, publish an upgrade, and bind it to this portfolio.
+                    </span>
                     {form.reusable_artifact_uuid ? <Link className="btn btn-sm btn-primary" to={`/artifact-library/${form.reusable_artifact_uuid}`}>Open artifact</Link> : null}
                 </div>
             ) : null}

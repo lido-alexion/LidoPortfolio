@@ -14,6 +14,17 @@ import {
     validateMaxHoldings,
     validateWeakestPositionWindowDays,
 } from '../utils/strategyPageRules';
+import {
+    clearStrategyScreenerReturnDraft,
+    configWithEligibilityScreener,
+    readStrategyScreenerReturnDraft,
+    STRATEGY_SCREENER_CREATED_PARAM,
+    STRATEGY_SCREENER_RETURN_CANCEL,
+    STRATEGY_SCREENER_RETURN_PARAM,
+    STRATEGY_SCREENER_CREATE_QUERY,
+    STRATEGY_SCREENER_CREATE_VALUE,
+    writeStrategyScreenerReturnDraft,
+} from '../utils/strategyScreenerReturnFlow';
 
 const SECTIONS = [
     { id: 'general', label: 'General' },
@@ -200,6 +211,8 @@ export default function StrategyPage() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const strategyId = searchParams.get('strategy_id') || '';
+    const screenerCreatedId = searchParams.get(STRATEGY_SCREENER_CREATED_PARAM) || '';
+    const screenerReturn = searchParams.get(STRATEGY_SCREENER_RETURN_PARAM) || '';
     const [section, setSection] = useState('general');
     const [saving, setSaving] = useState(false);
     const [availableScreeners, setAvailableScreeners] = useState([]);
@@ -214,7 +227,7 @@ export default function StrategyPage() {
     const [lifecycleBusy, setLifecycleBusy] = useState(false);
 
     const { loading, reload: load } = useApiGet({
-        deps: [strategyId],
+        deps: [strategyId, screenerCreatedId, screenerReturn],
         errorFallback: 'Failed to load strategy',
         request: async () => {
             const [{ data }, screenersRes, indexesRes, registryRes] = await Promise.all([
@@ -234,6 +247,32 @@ export default function StrategyPage() {
                 : (Array.isArray(screenersRes?.data) ? screenersRes.data : []);
             setAvailableScreeners(list);
             setBenchmarkIndexes(indexesRes?.data?.data?.indexes || []);
+
+            const effectiveStrategyId = strategyId || String(data?.data?.strategy_id ?? data?.data?.id ?? '');
+            const shouldRestoreDraft = Boolean(screenerCreatedId)
+                || screenerReturn === STRATEGY_SCREENER_RETURN_CANCEL;
+            const draft = shouldRestoreDraft ? readStrategyScreenerReturnDraft() : null;
+            if (draft && String(draft.strategyId) === String(effectiveStrategyId)) {
+                setMeta(draft.meta);
+                let nextConfig = draft.config;
+                if (screenerCreatedId) {
+                    const scr = list.find((s) => Number(s.id) === Number(screenerCreatedId));
+                    nextConfig = configWithEligibilityScreener(nextConfig, screenerCreatedId, {
+                        name: scr?.name,
+                        description: scr?.description,
+                    });
+                    showToast(`“${scr?.name || 'Screener'}” added to eligibility sources.`, 'success');
+                } else {
+                    showToast('Returned to Strategy editor with your unsaved changes.', 'info');
+                }
+                setConfig(nextConfig);
+                if (draft.section) setSection(draft.section);
+                clearStrategyScreenerReturnDraft();
+                if (effectiveStrategyId) {
+                    navigate(`/strategy?strategy_id=${encodeURIComponent(effectiveStrategyId)}`, { replace: true });
+                }
+            }
+
             return data?.data;
         },
     });
@@ -263,7 +302,7 @@ export default function StrategyPage() {
 
     const save = async () => {
         if (meta.compatibility_read_only) {
-            showToast('This Strategy is managed in the Artifact Library. Create a Draft there to make changes.', 'warning');
+            showToast('This Strategy is library-bound. Open the Artifact Library entry to draft, publish, and bind an upgrade.', 'warning');
             return;
         }
         const enabledPositive = (config.indicators || []).some(
@@ -814,22 +853,32 @@ export default function StrategyPage() {
         const id = Number(addScreenerId);
         if (!id || assignedIds.has(id)) return;
         const scr = availableScreeners.find((s) => Number(s.id) === id);
-        setConfig((prev) => ({
-            ...prev,
-            eligibility_sources: [
-                ...(prev.eligibility_sources || []),
-                {
-                    screener_id: id,
-                    screener_name: scr?.name || `Screener #${id}`,
-                    description: scr?.description || '',
-                    enabled: true,
-                    priority: (prev.eligibility_sources || []).length + 1,
-                    display_order: (prev.eligibility_sources || []).length,
-                    condition_count: null,
-                },
-            ],
+        setConfig((prev) => configWithEligibilityScreener(prev, id, {
+            name: scr?.name,
+            description: scr?.description,
         }));
         setAddScreenerId('');
+    };
+
+    const startCreateScreenerFromStrategy = () => {
+        const sid = strategyId || (meta.id != null ? String(meta.id) : '');
+        if (!sid) {
+            showToast('Select or create a strategy first.', 'warning');
+            return;
+        }
+        if (meta.compatibility_read_only) {
+            showToast('This Strategy is library-bound. Upgrade it from the Artifact Library (draft → publish → bind).', 'warning');
+            return;
+        }
+        writeStrategyScreenerReturnDraft({
+            strategyId: sid,
+            meta,
+            config,
+            section: 'eligibility',
+        });
+        navigate(
+            `/screeners/new?${STRATEGY_SCREENER_CREATE_QUERY}=${STRATEGY_SCREENER_CREATE_VALUE}&strategy_id=${encodeURIComponent(sid)}`,
+        );
     };
 
     if (loading) {
@@ -1120,10 +1169,22 @@ export default function StrategyPage() {
                                             ))}
                                     </select>
                                 </div>
-                                <div className="col-md-4">
+                                <div className="col-md-4 d-flex flex-wrap gap-2">
                                     <button type="button" className="btn btn-outline-primary" onClick={addEligibility} disabled={!addScreenerId}>Add</button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-primary"
+                                        id="strategy-create-screener"
+                                        onClick={startCreateScreenerFromStrategy}
+                                        disabled={meta.compatibility_read_only}
+                                    >
+                                        Create new Screener
+                                    </button>
                                 </div>
                             </div>
+                            <p className="text-muted small mb-0 mt-2">
+                                Create new Screener opens the editor and returns here with your unsaved Strategy fields restored; the new Screener is selected when you save it.
+                            </p>
                         </div>
                     </div>
                     <DataTableCard

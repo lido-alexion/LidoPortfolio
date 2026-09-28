@@ -231,7 +231,7 @@ class LiquidityTradabilityRuntimeTest extends TestCase
         $this->assertSame(60, ScreenerCatalog::minBars('liquidity_score', []));
         $this->assertSame(60, ScreenerCatalog::minBars('tradability_score', []));
 
-        $eval = new ScreenerEvaluationService(new TechnicalIndicatorService);
+        $eval = ScreenerEvaluationTestSupport::evaluationService();
         $result = $eval->evaluateStock([
             'root' => [
                 'type' => 'condition',

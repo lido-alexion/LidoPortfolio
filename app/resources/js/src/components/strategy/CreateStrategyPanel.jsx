@@ -31,14 +31,12 @@ export default function CreateStrategyPanel({ open, onClose, onCreated, disabled
         setBusy(true);
         setError('');
         try {
-            const res = await api.post('/v1/strategy-registry', {
+            const res = await api.post('/v1/strategies', {
                 name: trimmed,
                 description: description.trim(),
             });
             const created = res.data?.data;
-            showToast(
-                `Created “${created?.name || trimmed}” as an Artifact Library Draft. Publish and bind it when ready.`,
-            );
+            showToast(`Created “${created?.name || trimmed}”. Configure eligibility and scoring, then save when ready.`);
             reset();
             onCreated?.(created);
         } catch (err) {
@@ -57,8 +55,7 @@ export default function CreateStrategyPanel({ open, onClose, onCreated, disabled
             <div className="card-body d-grid gap-2">
                 <h3 className="h6 mb-0">New Strategy</h3>
                 <p className="text-muted small mb-0">
-                    Creates an Artifact Library Draft from the default factory configuration.
-                    Review it, publish an immutable version, then bind it to the Portfolio.
+                    Starts from the default momentum template with Setup Required eligibility. Edit and save on the Strategy page.
                 </p>
                 {error ? <div className="alert alert-danger py-2 mb-0">{error}</div> : null}
                 <div>
@@ -118,7 +115,7 @@ export default function CreateStrategyPanel({ open, onClose, onCreated, disabled
 }
 
 export function createdStrategyId(created) {
-    const raw = created?.artifact_id ?? created?.metadata?.legacy_id ?? created?.id;
+    const raw = created?.id ?? created?.artifact_id ?? created?.metadata?.legacy_id;
     const n = Number(raw);
     return Number.isFinite(n) && n > 0 ? String(n) : '';
 }

@@ -47,6 +47,9 @@ class IndicatorSeriesParityTest extends TestCase
         $last = count($bars) - 1;
 
         foreach (ScreenerCatalog::indicatorIds() as $id) {
+            if (str_starts_with($id, 'fund_') || str_starts_with($id, 'ml_')) {
+                continue;
+            }
             $expr = ['indicator' => $id];
             $single = $engine->evaluate($expr);
             $series = $engine->evaluateSeries($expr);
@@ -100,7 +103,7 @@ class IndicatorSeriesParityTest extends TestCase
 
     public function test_evaluate_across_dates_matches_per_day_evaluation_and_skips_short_history(): void
     {
-        $svc = new ScreenerEvaluationService(new TechnicalIndicatorService);
+        $svc = ScreenerEvaluationTestSupport::evaluationService();
 
         // 30 sessions, close rises 100 → 129. Condition: sma(5) > 110.
         $bars = [];
@@ -156,7 +159,7 @@ class IndicatorSeriesParityTest extends TestCase
 
     public function test_evaluate_across_dates_entity_alignment_uses_last_entity_bar_on_or_before_date(): void
     {
-        $svc = new ScreenerEvaluationService(new TechnicalIndicatorService);
+        $svc = ScreenerEvaluationTestSupport::evaluationService();
 
         $mkBars = function (array $closes, string $startDate): array {
             $bars = [];

@@ -324,7 +324,7 @@ class MultiStrategyLifecycleAssuranceTest extends TestCase
             'strategy_id' => $second->id,
             'version' => 1,
             'version_label' => '1.0',
-            'config_json' => $first->activeVersion?->config_json ?? ['indicators' => []],
+            'config_json' => $first->activeVersion?->config_json ?? $this->executableStrategyConfig($profile),
             'status' => TradingStrategyVersion::STATUS_DRAFT,
         ]);
         $second->forceFill(['active_version_id' => $version->id])->save();

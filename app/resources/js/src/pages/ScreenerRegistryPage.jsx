@@ -120,10 +120,11 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
             const envelope = parseImportPayload();
             const res = await api.post('/v1/screener-registry/import', envelope);
             const created = res.data?.data;
-            showToast(`Imported “${created?.name || 'screener'}” as an Artifact Library Draft (slug ${created?.slug || '—'}).`);
+            showToast(`Imported “${created?.name || 'screener'}” to My screens (slug ${created?.slug || '—'}).`);
             setImportText('');
             setValidateResult(null);
-            if (created?.library_path) navigate(created.library_path);
+            const screenerId = created?.artifact_id || created?.metadata?.legacy_id;
+            if (screenerId) navigate(`/screeners/${screenerId}`);
         } catch (err) {
             setError(err?.response?.data?.error?.message || err.message || 'Import failed');
         } finally {
@@ -155,8 +156,9 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
         try {
             const res = await api.post(`/v1/screener-registry/shared/${encodeURIComponent(sourceId)}/import`);
             const created = res.data?.data;
-            showToast(`Copied shared Screener as Artifact Library Draft “${created?.name || 'screener'}”.`);
-            if (created?.library_path) navigate(created.library_path);
+            showToast(`Copied shared Screener to My screens (“${created?.name || 'screener'}”).`);
+            const screenerId = created?.artifact_id || created?.metadata?.legacy_id;
+            if (screenerId) navigate(`/screeners/${screenerId}`);
         } catch (err) {
             setError(err?.response?.data?.error?.message || err.message || 'Shared import failed');
         } finally {
@@ -170,8 +172,8 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
                 <div>
                     <h2 className="h4 mb-1">{adminMode ? 'Screener Registry (Admin)' : 'Screener Registry'}</h2>
                     <p className="text-muted small mb-0">
-                        Compatibility view for Portfolio runtime Screeners. New imports become Artifact Library Drafts;
-                        publish and bind them explicitly before execution.
+                        Compatibility view for Portfolio runtime Screeners. Validated JSON import and shared copy create
+                        account-owned Screeners on My screens (editable in the classic editor).
                     </p>
                     {countsLabel && <p className="text-muted small mb-0 mt-1">{countsLabel}</p>}
                 </div>

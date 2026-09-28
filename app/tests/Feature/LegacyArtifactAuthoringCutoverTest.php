@@ -2,8 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\ReusableArtifact;
-use App\Models\ReusableArtifactVersion;
 use App\Models\Screener;
 use App\Models\TradingStrategy;
 use App\Models\User;
@@ -14,59 +12,74 @@ class LegacyArtifactAuthoringCutoverTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_legacy_screener_create_produces_only_a_library_draft(): void
+    public function test_screener_create_persists_account_owned_runtime_row(): void
     {
         $owner = User::factory()->create();
         $profile = $this->defaultPortfolioFor($owner);
         $before = Screener::query()->where('profile_id', $profile->id)->count();
 
-        $created = $this->actingAs($owner)->postJson('/api/screeners', [
-            'name' => 'Draft-only Screener',
+        $this->actingAs($owner)->postJson('/api/screeners', [
+            'name' => 'Investor Screener',
             'scope' => 'holdings',
             'definition_json' => $this->screenerDefinition(),
             'schedule_enabled' => true,
             'schedule_time' => '09:30',
             'schedule_days' => [1, 2, 3, 4, 5],
         ])->assertCreated()
-            ->assertJsonPath('data.status', ReusableArtifactVersion::STATUS_DRAFT)
-            ->assertJsonPath('data.metadata.compatibility_read_only', true)
-            ->json('data');
+            ->assertJsonPath('data.compatibility_read_only', false)
+            ->assertJsonPath('data.scope', 'holdings')
+            ->assertJsonMissingPath('data.library_path');
 
-        $this->assertSame($before, Screener::query()->where('profile_id', $profile->id)->count());
-        $artifact = ReusableArtifact::query()->where('artifact_uuid', $created['artifact_uuid'])->firstOrFail();
-        $draft = $artifact->versions()->sole();
-        $this->assertSame('screener', $artifact->artifact_type);
-        $this->assertSame('holdings', $draft->content_json['metadata']['suggested_binding_settings']['scope']);
-        $this->assertTrue($draft->content_json['metadata']['suggested_binding_settings']['schedule_enabled']);
+        $this->assertSame($before + 1, Screener::query()->where('profile_id', $profile->id)->count());
+        $this->assertNull(Screener::query()->where('profile_id', $profile->id)->where('name', 'Investor Screener')->value('reusable_artifact_id'));
     }
 
-    public function test_legacy_strategy_create_and_import_produce_library_drafts_without_runtime_rows(): void
+    public function test_strategy_create_persists_account_owned_runtime_row(): void
+    {
+        $owner = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($owner);
+        $before = TradingStrategy::query()->where('profile_id', $profile->id)->count();
+
+        $this->actingAs($owner)->postJson('/api/v1/strategies', [
+            'name' => 'Investor Strategy',
+            'description' => 'Swing',
+        ])->assertCreated()
+            ->assertJsonPath('data.compatibility_read_only', false)
+            ->assertJsonPath('data.status', TradingStrategy::STATUS_DRAFT)
+            ->assertJsonPath('data.name', 'Investor Strategy')
+            ->assertJsonMissingPath('data.library_path');
+
+        $this->assertGreaterThan($before, TradingStrategy::query()->where('profile_id', $profile->id)->count());
+        $row = TradingStrategy::query()->where('profile_id', $profile->id)->where('name', 'Investor Strategy')->first();
+        $this->assertNotNull($row);
+        $this->assertNull($row->reusable_artifact_id);
+    }
+
+    public function test_strategy_registry_create_and_import_persist_runtime_rows(): void
     {
         $owner = User::factory()->create();
         $profile = $this->defaultPortfolioFor($owner);
         $this->actingAs($owner)->getJson('/api/v1/strategy-registry')->assertOk();
         $before = TradingStrategy::query()->where('profile_id', $profile->id)->count();
 
-        $created = $this->postJson('/api/v1/strategy-registry', [
-            'name' => 'Draft-only Strategy',
+        $this->postJson('/api/v1/strategy-registry', [
+            'name' => 'Registry Strategy',
             'description' => 'Created from the default',
         ])->assertCreated()
-            ->assertJsonPath('data.status', ReusableArtifactVersion::STATUS_DRAFT)
-            ->json('data');
+            ->assertJsonPath('data.metadata.status', 'draft')
+            ->assertJsonMissingPath('data.library_path');
 
-        $this->assertSame($before, TradingStrategy::query()->where('profile_id', $profile->id)->count());
-        $this->assertDatabaseHas('portfolio_reusable_artifacts', [
-            'artifact_uuid' => $created['artifact_uuid'],
-            'artifact_type' => 'strategy',
-            'owner_user_id' => $owner->id,
-        ]);
+        $this->assertSame($before + 1, TradingStrategy::query()->where('profile_id', $profile->id)->count());
+        $row = TradingStrategy::query()->where('profile_id', $profile->id)->where('name', 'Registry Strategy')->first();
+        $this->assertNotNull($row);
+        $this->assertNull($row->reusable_artifact_id);
 
-        $imported = $this->postJson('/api/v1/strategy-registry/import', $this->strategyEnvelope())
+        $this->postJson('/api/v1/strategy-registry/import', $this->strategyEnvelope())
             ->assertCreated()
             ->assertJsonPath('data.metadata.origin', 'imported')
-            ->json('data');
-        $this->assertSame('/artifact-library/'.$imported['artifact_uuid'], $imported['library_path']);
-        $this->assertSame($before, TradingStrategy::query()->where('profile_id', $profile->id)->count());
+            ->assertJsonMissingPath('data.library_path');
+
+        $this->assertSame($before + 2, TradingStrategy::query()->where('profile_id', $profile->id)->count());
     }
 
     /** @return array<string,mixed> */

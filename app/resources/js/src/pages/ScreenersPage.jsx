@@ -29,7 +29,7 @@ export default function ScreenersPage() {
     };
 
     return (
-        <div className="container-fluid py-3 screeners-page">
+        <div className="container-fluid py-3 screeners-page" data-tour="screeners-main">
             <div className="mb-3 d-flex flex-wrap justify-content-between align-items-start gap-2">
                 <div>
                     <h1 className="h3 mb-0">Screener</h1>
