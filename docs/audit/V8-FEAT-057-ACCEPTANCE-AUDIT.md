@@ -32,4 +32,6 @@ This is a code-reconciliation checkpoint against `docs/archive/specs/V8-ML-Featu
 
 ## Verified implementation slice
 
-Horizon-aware sampling and a controlled dated membership snapshot ingestion boundary are now implemented and tested. The next mandatory slice is to wire membership coverage into dataset diagnostics and reconcile horizon-specific feature applicability. The current implementation remains **IN PROGRESS** until PIT context coverage, preprocessing/runtime, and acceptance evidence are closed.
+Horizon-aware sampling and a controlled dated membership snapshot ingestion boundary are now implemented and tested. The next mandatory slice is to reconcile horizon-specific feature applicability and complete historical snapshot backfill/coverage evidence. The current implementation remains **IN PROGRESS** until PIT context coverage, preprocessing/runtime, and acceptance evidence are closed.
+
+Latest evidence: `MlTrainingDatasetBuilderTest` **9/9** (570 assertions) covers weekly/monthly sampling, active-universe exclusion, label purging, and explicit missing-context diagnostics; `MlMarketContextFeaturesTest` plus `MlUniverseMembershipSnapshotTest` **5/5** (18 assertions) covers dated membership, idempotency, period closure, and no-current-universe fallback. The V8 Feature suite is **155/155** (595 assertions).
