@@ -19,6 +19,7 @@ Evidence is mapped to `docs/archive/specs/V8-ML-Lifecycle-Automation-Deployment-
 | Retention and stale/superseded candidates | PASS locally | retention service and promotion review tests; production archive/runtime proof remains |
 | Notifications and actionable failures | PASS locally | lifecycle notification tests and existing StoX notification boundary; deployed channel validation remains |
 | Admin authorization/auditability | PASS locally | Admin route group and focused authorization/lifecycle tests |
+| Durable stale-run recovery | PASS locally | `MlTrainingRunRecoveryService` requeues stale running runs after worker restart, finalizes stale cancellation requests without requeueing, and is invoked at lifecycle ticks; `MlLifecycleAutomationTest` covers both paths |
 | Production queue/scheduler deployment | EXTERNAL VALIDATION PENDING | VPS worker, scheduler, queue restart and notification-provider runtime have not been claimed |
 
-The epic remains **IN PROGRESS** until the preserved mixed scoring integration is deliberately reconciled, durable queue recovery is exercised in deployment, and the remaining lifecycle acceptance evidence is recorded.
+The epic remains **IN PROGRESS** until the preserved mixed scoring integration is deliberately reconciled, durable queue recovery is exercised in deployment, and the remaining lifecycle acceptance evidence is recorded. Local lifecycle recovery and the broad Feature suite are green; no deployed worker/runtime success is claimed.
