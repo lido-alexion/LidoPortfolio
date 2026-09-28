@@ -25,7 +25,7 @@ Authoritative contract: `docs/archive/specs/V8-Historical-Fundamentals-Bootstrap
 | Screener eligibility boundary | PASS | Selected `fund_*` operands use the canonical metric service, PIT values, and unavailable semantics; `FundamentalScreenerOperandTest` and related bank tests pass. |
 | Authorization and account isolation | PASS | Authenticated stock fundamentals routes and existing portfolio/profile middleware; V8 API tests cover intended investor access and Admin boundaries. |
 | Official upgrade/fallback auditability | PASS locally | Deterministic source ranking and canonical revision storage allow later official rows to replace lower-ranked fallback rows; live provider upgrade exercise remains external. |
-| Production/runtime acceptance | EXTERNAL VALIDATION PENDING | Representative provider calls, real active-universe bootstrap duration, mobile/deployed queue/runtime proof remain to be exercised. Local Chromium now covers the Watchlist fundamentals summary, provenance, historical Basic/Advanced tables and user-scoped preference reload (1/1 focused journey). |
+| Production/runtime acceptance | EXTERNAL VALIDATION PENDING | Representative provider calls and deployed queue/runtime proof remain to be exercised. Local Chromium now covers the Watchlist fundamentals summary, provenance, historical Basic/Advanced tables and user-scoped preference reload on desktop and a 390px touch viewport (2/2 focused journeys). |
 
 ## Verification executed
 
@@ -36,4 +36,4 @@ Authoritative contract: `docs/archive/specs/V8-Historical-Fundamentals-Bootstrap
 
 ## Status decision
 
-FEAT-054 is **REVIEW** rather than COMPLETE because the repository evidence and focused desktop Chromium journey are complete for the deterministic implementation, but mobile visual acceptance and real provider/deployed bootstrap runtime validation remain external.
+FEAT-054 is **REVIEW** rather than COMPLETE because the repository evidence and focused desktop/mobile Chromium journeys are complete for the deterministic implementation, but real provider and deployed bootstrap runtime validation remain external.
