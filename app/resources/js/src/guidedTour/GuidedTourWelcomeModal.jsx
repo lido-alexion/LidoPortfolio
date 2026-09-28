@@ -18,14 +18,14 @@ export default function GuidedTourWelcomeModal({
     return (
         <>
             <div className="modal-backdrop show" />
-            <div ref={dialogRef} className="modal show d-block lido-guided-tour-modal" role="dialog" aria-modal="true" aria-labelledby="guided-tour-welcome-title" tabIndex={-1}>
+            <div ref={dialogRef} className="modal show d-block lido-guided-tour-modal" role="dialog" aria-modal="true" aria-labelledby="guided-tour-welcome-title" aria-describedby="guided-tour-welcome-description" tabIndex={-1}>
             <div className="modal-dialog modal-dialog-centered">
                 <div className="modal-content">
                     <div className="modal-header">
                         <h2 className="modal-title h5" id="guided-tour-welcome-title">{t('guidedTour.welcome.title')}</h2>
                     </div>
                     <div className="modal-body">
-                        <p className="mb-2">
+                        <p className="mb-2" id="guided-tour-welcome-description">
                             {t('guidedTour.welcome.body')}
                         </p>
                         <p className="text-muted small mb-0">

@@ -23,6 +23,7 @@ test.describe('FEAT-061 guided tour mobile browser acceptance', () => {
 
         const welcome = page.getByRole('dialog', { name: 'Welcome to StoX' });
         await expect(welcome).toBeVisible();
+        await expect(welcome).toHaveAttribute('aria-describedby', 'guided-tour-welcome-description');
         const welcomeBox = await welcome.boundingBox();
         expect(welcomeBox).not.toBeNull();
         expect(welcomeBox.width).toBeLessThanOrEqual(390);
@@ -37,6 +38,7 @@ test.describe('FEAT-061 guided tour mobile browser acceptance', () => {
             has: page.getByRole('heading', { name: 'Navigation' }),
         });
         await expect(firstStep).toBeVisible();
+        await expect(firstStep).toHaveAttribute('aria-describedby', 'lido-guided-tour-description');
         await expect(firstStep.getByRole('button', { name: 'Next' })).toBeVisible();
         const stepBox = await firstStep.boundingBox();
         expect(stepBox).not.toBeNull();
@@ -86,6 +88,7 @@ test.describe('FEAT-061 guided tour mobile browser acceptance', () => {
         await page.getByRole('button', { name: 'Begin tour' }).click();
         const resume = page.getByRole('dialog', { name: 'Resume tour?' });
         await expect(resume).toBeVisible();
+        await expect(resume).toHaveAttribute('aria-describedby', 'guided-tour-resume-description');
         for (let index = 0; index < 3; index += 1) {
             await page.keyboard.press('Tab');
             await expect(resume.locator(':focus')).toBeVisible();
@@ -117,5 +120,37 @@ test.describe('FEAT-061 guided tour mobile browser acceptance', () => {
             await expect(page.getByText(`${current} of 8`)).toBeVisible({ timeout: 10_000 });
         }
         await expect(overlay.getByRole('button', { name: 'Finish' })).toBeVisible();
+    });
+});
+
+test.describe('FEAT-061 guided tour tablet browser acceptance', () => {
+    test.use({ viewport: { width: 1024, height: 768 }, isMobile: false, hasTouch: false });
+
+    test('keeps the welcome dialog and first step inside a tablet viewport', async ({ page }) => {
+        await installInvestorWorkflowApiMocks(page, {
+            guidedTourState: {
+                eligible: true,
+                show_welcome_prompt: true,
+                can_manual_relaunch: true,
+                welcome_shown_at: null,
+                completed_at: null,
+                tour_in_progress: false,
+            },
+        });
+        await page.goto('/');
+
+        const welcome = page.getByRole('dialog', { name: 'Welcome to StoX' });
+        await expect(welcome).toBeVisible();
+        const welcomeBox = await welcome.boundingBox();
+        expect(welcomeBox).not.toBeNull();
+        expect(welcomeBox.width).toBeLessThanOrEqual(1024);
+        await page.getByRole('button', { name: 'Begin tour' }).click();
+
+        const step = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Navigation' }) });
+        await expect(step).toBeVisible();
+        const stepBox = await step.boundingBox();
+        expect(stepBox).not.toBeNull();
+        expect(stepBox.width).toBeLessThanOrEqual(1024);
+        await expect(step).toHaveAttribute('aria-describedby', 'lido-guided-tour-description');
     });
 });

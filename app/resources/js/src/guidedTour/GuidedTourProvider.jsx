@@ -322,14 +322,14 @@ export function GuidedTourProvider({ children, user }) {
                     {resumeChoiceOpen && (
                         <>
                             <div className="modal-backdrop show" />
-                            <div ref={resumeDialogRef} className="modal show d-block lido-guided-tour-modal" role="dialog" aria-modal="true" aria-labelledby="guided-tour-resume-title" tabIndex={-1}>
+                            <div ref={resumeDialogRef} className="modal show d-block lido-guided-tour-modal" role="dialog" aria-modal="true" aria-labelledby="guided-tour-resume-title" aria-describedby="guided-tour-resume-description" tabIndex={-1}>
                             <div className="modal-dialog modal-dialog-centered">
                                 <div className="modal-content">
                                     <div className="modal-header">
                                         <h2 className="modal-title h5" id="guided-tour-resume-title">{t('guidedTour.resume.title')}</h2>
                                     </div>
                                     <div className="modal-body">
-                                        <p className="mb-0">{t('guidedTour.resume.body')}</p>
+                                        <p className="mb-0" id="guided-tour-resume-description">{t('guidedTour.resume.body')}</p>
                                     </div>
                                     <div className="modal-footer d-flex flex-wrap gap-2">
                                         <button

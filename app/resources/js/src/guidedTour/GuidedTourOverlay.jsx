@@ -136,6 +136,7 @@ export default function GuidedTourOverlay({
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="lido-guided-tour-title"
+                aria-describedby="lido-guided-tour-description"
                 tabIndex={-1}
             >
                 <div className="card-body">
@@ -143,7 +144,7 @@ export default function GuidedTourOverlay({
                         {t('guidedTour.step.progress', { current: stepIndex + 1, total: stepCount })}
                     </p>
                     <h3 className="h6" id="lido-guided-tour-title">{t(step.titleKey)}</h3>
-                    <p className="small mb-3">{t(step.bodyKey)}</p>
+                    <p className="small mb-3" id="lido-guided-tour-description">{t(step.bodyKey)}</p>
                     {!targetRect && (
                         <p className="small text-warning mb-3">{t('guidedTour.step.hiddenTarget')}</p>
                     )}
