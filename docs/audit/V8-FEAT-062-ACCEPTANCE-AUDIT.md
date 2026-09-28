@@ -2,7 +2,7 @@
 
 Status: **REVIEW — implementation and automated verification complete; accessibility/real-provider validation pending**
 
-This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-AI-Insights-Specification.md`. The deterministic catalogue mapping and PIT comparison implementation are complete for structured source facts; unavailable source facts remain explicitly unavailable. Browser/mobile acceptance and production provider validation remain external evidence gates.
+This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-AI-Insights-Specification.md`. The deterministic catalogue mapping and PIT comparison implementation are complete for structured source facts; unavailable source facts remain explicitly unavailable. Local Chromium desktop/mobile browser acceptance is covered; screen-reader accessibility and production provider validation remain external evidence gates.
 
 ## Evidence matrix
 
