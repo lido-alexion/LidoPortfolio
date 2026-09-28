@@ -9,7 +9,7 @@ FEAT-052  [REVIEW] OpenTelemetry / LidoTelemetry (config, OTLP HTTP exporter, AP
 FEAT-054  [REVIEW] Historical fundamental bootstrap (summary/derived metrics, provenance, user-scoped Advanced preference, history UI, Screener boundary, and bootstrap evidence complete locally; browser/provider/deployed runtime acceptance remains)
 FEAT-055  [REVIEW] Account access request / Admin approval (formal audit complete; production Turnstile/mail and deployed multi-worker validation remain external)
 FEAT-056  [IN PROGRESS] ML lifecycle automation (queued runs, SSE, drift, cancel, notifications, transient retries; retention/recovery/acceptance still open)
-FEAT-057  [IN PROGRESS] ML feature engineering / training (versioned horizon-resolved registry, dataset/model feature-set pinning, PIT context refusal of current-universe fallback, dated snapshot coverage diagnostics, and training-only preprocessing verified locally; historical backfill, redundancy handling, and full training/validation acceptance remain open)
+FEAT-057  [IN PROGRESS] ML feature engineering / training (versioned horizon-resolved registry, dataset/model feature-set pinning, PIT context refusal of current-universe fallback, dated snapshot coverage diagnostics, resumable historical snapshot backfill, horizon-derived purge/embargo evidence, and training-only preprocessing verified locally; authoritative provider population, paired training/validation evidence, redundancy acceptance, and full explainability acceptance remain open)
 FEAT-061  [REVIEW] Guided tour / onboarding (formal audit complete; missing-target regression covered; browser accessibility/mobile journey and localization mechanism remain open)
 FEAT-062  [IN PROGRESS] Fundamental signals & AI insights (deterministic catalogue, comparison evidence, growth relationships, provider-neutral orchestration, bounded investor-safe validation, and follow-up guidance; broader catalogue/sufficiency/UI acceptance still open)
 FEAT-063  [REVIEW] Live microstructure collection (local implementation and deterministic resilience verification complete; VPS installation, live Kite path, and deployed backup destination remain external)
@@ -103,8 +103,12 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 
 1. FEAT-063 external validation: install/validate the collector on the StoX VPS, then exercise the live Kite path and deployed backup destination when credentials/market conditions permit.
 2. FEAT-054 external acceptance: browser/mobile fundamentals journey and representative provider/deployed bootstrap runtime.
-3. FEAT-057: complete historical membership backfill/coverage policy and deterministic redundancy diagnostics, then close horizon-specific training/validation acceptance.
+3. FEAT-057: complete authoritative snapshot-provider integration and paired active/baseline training evidence, then close explainability and horizon-specific validation acceptance.
 
 ## Failing tests
 
-The broad direct PHPUnit Feature run with `php -d memory_limit=512M vendor/bin/phpunit tests/Feature` reached **1,307 tests: 1,168 passed, 4 grouped failure sites**, with unrelated OpenAPI/generated-spec drift and inherited V1–V3 screener-fixture failures; two ML lifecycle constructor failures were corrected and the focused V8/ML suites pass. The Artisan wrapper still reported a 128MB OOM before completion.
+The broad direct PHPUnit Feature run with `php -d memory_limit=512M vendor/bin/phpunit tests/Feature` completed **1,309 tests: 1,172 passed** in 5m09s. OpenAPI generated-spec drift was fixed by the canonical `openapi:v1` command and `OpenApiV1ContractTest` now passes. Remaining grouped failures are inherited V1–V3/Lending setup expectations that activate strategies without the V8 FEAT-064 readiness prerequisites; they are classified C (superseded fixture expectation) pending a dedicated regression review, not silently rewritten. ML lifecycle constructor failures are corrected and focused V8/ML suites pass.
+
+## MlScoringService ownership reconciliation
+
+The uncommitted `MlScoringService` diff was inspected and intentionally not committed as part of FEAT-057. Queueing, cancellation, retries, lifecycle notifications, challenger registration, promotion review, drift dashboard, and investor insight orchestration are FEAT-056-owned work and remain preserved as inherited WIP. The FEAT-057 profile pinning used by training/artifacts is already committed and tested; no additional scoring slice was found that could be safely committed without pulling the FEAT-056 dependency set into this commit.
