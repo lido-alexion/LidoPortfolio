@@ -97,12 +97,12 @@ FEAT-065  [REVIEW] Intraday ML historical data platform (schema/checkpoints/admi
 
 ## Takeover reconciliation
 
-See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-FEAT-063-ACCEPTANCE-AUDIT.md`, `docs/audit/V8-FEAT-055-ACCEPTANCE-AUDIT.md`, and `docs/audit/V8-FEAT-061-ACCEPTANCE-AUDIT.md` for evidence and remaining external validation. This ledger is verified against the current workspace as of 2026-09-28; it is not a claim that any epic is production complete.
+See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-FEAT-063-ACCEPTANCE-AUDIT.md`, `docs/audit/V8-FEAT-055-ACCEPTANCE-AUDIT.md`, and `docs/audit/V8-FEAT-061-ACCEPTANCE-AUDIT.md` for evidence and remaining external validation. This ledger is verified against the current workspace as of 2026-09-29; it is not a claim that any epic is production complete.
 
-## Verified continuation checkpoint (2026-09-28)
+## Verified continuation checkpoint (2026-09-29)
 
 - The current checkout is the authoritative source for the exact HEAD; the earlier handoff SHA `3265357` is not the current baseline.
-- The full Feature suite under local PHP CLI `memory_limit=512M` is **1,336 passed / 1,337 total / 1 skipped** when the documented x86_64 ML runtime is configured. The single skip is the extension-only OpenTelemetry assertion under the normal CLI; the extension-enabled direct PHPUnit run passes it. The previous FEAT-064 fixture cascade was repaired by giving activation-oriented legacy fixtures the executable factory configuration; the production Setup Required gate was not weakened.
+- The full Feature suite under local PHP CLI `memory_limit=512M` is **1,346 passed / 1,347 total / 1 skipped** when the documented x86_64 ML runtime is configured. The single skip is the extension-only OpenTelemetry assertion under the normal CLI; the extension-enabled direct PHPUnit run passes it. The previous FEAT-064 fixture cascade was repaired by giving activation-oriented legacy fixtures the executable factory configuration; the production Setup Required gate was not weakened.
 - FEAT-064 browser smoke now passes **2/2**: screener create/save/runtime detail and incomplete Strategy Setup Required with Enable disabled; the browser test runs against deterministic API mocks and does not claim live membership-drift validation. FEAT-061 desktop/narrow-mobile welcome-to-tour, persisted-step resume and full configured-route traversal smoke now pass **4/4** in the focused guided-tour suite.
 - FEAT-062 now covers the frozen deterministic catalogue with PIT-safe operating-profit/bottom-line, ROA/ROCE, working-capital/liquidity, capex, ownership/financial, persistent cash-quality and historical valuation-context signals; absent source data remains unavailable rather than inferred. It is REVIEW pending browser/mobile and real-provider acceptance.
 - FEAT-056 lifecycle focus passes locally, including stale running-run recovery and stale cancellation finalization; mixed `MlScoringService` integration remains deliberately separated from FEAT-057.
@@ -148,7 +148,7 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 
 Historical context: earlier reruns recorded **1,329 tests: 1,328 passed, 1 skipped, 0 failures/errors** under local PHP CLI `memory_limit=512M`; the current authoritative suite result is recorded above in the verified continuation checkpoint.
 
-The broad direct PHPUnit Feature run with `php -d memory_limit=512M vendor/bin/phpunit tests/Feature` currently completes **1,336 passed / 1,337 total / 1 skipped / 0 failures** with the matching x86_64 ML runtime. The skip is the normal-CLI OpenTelemetry extension check; the extension-enabled direct test passes. OpenAPI generated-spec drift and ML constructor failures are resolved; focused ML/provider, FEAT-062, telemetry and intraday suites pass.
+The broad direct PHPUnit Feature run with `php -d memory_limit=512M vendor/bin/phpunit tests/Feature` currently completes **1,346 passed / 1,347 total / 1 skipped / 0 failures** with the matching x86_64 ML runtime. The skip is the normal-CLI OpenTelemetry extension check; the extension-enabled direct test passes. OpenAPI generated-spec drift and ML constructor failures are resolved; focused ML/provider, FEAT-062, telemetry and intraday suites pass.
 
 ## MlScoringService ownership reconciliation
 
