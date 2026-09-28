@@ -9,7 +9,7 @@ FEAT-052  [REVIEW] OpenTelemetry / LidoTelemetry (config, OTLP HTTP exporter, AP
 FEAT-054  [REVIEW] Historical fundamental bootstrap (summary/derived metrics, provenance, user-scoped Advanced preference, history UI, Screener boundary, and bootstrap evidence complete locally; browser/provider/deployed runtime acceptance remains)
 FEAT-055  [REVIEW] Account access request / Admin approval (formal audit complete; production Turnstile/mail and deployed multi-worker validation remain external)
 FEAT-056  [IN PROGRESS] ML lifecycle automation (queued runs, SSE, drift, cancel, notifications, transient retries; retention/recovery/acceptance still open)
-FEAT-057  [IN PROGRESS] ML feature engineering / training (versioned registry, active-universe gate, horizon-aware sampling, and dataset plan/admin APIs verified locally; PIT context and full training/validation corpus still open)
+FEAT-057  [IN PROGRESS] ML feature engineering / training (versioned horizon-resolved registry, dataset/model feature-set pinning, PIT context refusal of current-universe fallback, dated snapshot coverage diagnostics, and training-only preprocessing verified locally; historical backfill, redundancy handling, and full training/validation acceptance remain open)
 FEAT-061  [REVIEW] Guided tour / onboarding (formal audit complete; missing-target regression covered; browser accessibility/mobile journey and localization mechanism remain open)
 FEAT-062  [IN PROGRESS] Fundamental signals & AI insights (deterministic catalogue, comparison evidence, growth relationships, provider-neutral orchestration, bounded investor-safe validation, and follow-up guidance; broader catalogue/sufficiency/UI acceptance still open)
 FEAT-063  [REVIEW] Live microstructure collection (local implementation and deterministic resilience verification complete; VPS installation, live Kite path, and deployed backup destination remain external)
@@ -103,8 +103,8 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 
 1. FEAT-063 external validation: install/validate the collector on the StoX VPS, then exercise the live Kite path and deployed backup destination when credentials/market conditions permit.
 2. FEAT-054 external acceptance: browser/mobile fundamentals journey and representative provider/deployed bootstrap runtime.
-3. FEAT-057: make market-breadth and sector-relative features point-in-time safe using historical membership evidence, then reconcile horizon-specific feature applicability.
+3. FEAT-057: complete historical membership backfill/coverage policy and deterministic redundancy diagnostics, then close horizon-specific training/validation acceptance.
 
 ## Failing tests
 
-(none recorded yet this session)
+The broad direct PHPUnit Feature run with `php -d memory_limit=512M vendor/bin/phpunit tests/Feature` reached **1,307 tests: 1,168 passed, 4 grouped failure sites**, with unrelated OpenAPI/generated-spec drift and inherited V1–V3 screener-fixture failures; two ML lifecycle constructor failures were corrected and the focused V8/ML suites pass. The Artisan wrapper still reported a 128MB OOM before completion.
