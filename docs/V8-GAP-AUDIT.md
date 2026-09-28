@@ -11,7 +11,7 @@
 | FEAT-055 | **REVIEW** | Domain, security, concurrency and notification-isolation behavior are locally verified; real Turnstile, mail delivery and deployed multi-worker contention remain external. |
 | FEAT-056 | **REVIEW** | Durable lifecycle, retries, cancellation, recovery, retention, explicit promotion/rollback boundaries and notifications are locally verified; deployed worker/scheduler/SSE and production notification/archive evidence remain external. |
 | FEAT-057 | **REVIEW** | Versioned/PIT-safe registry, same-architecture bounded 1m/3m/6m training, archive integrity, paired baseline evidence, partition coverage and artifact explainability are verified; production provider population, deployed active-model pairing and investor browser acceptance remain external. |
-| FEAT-061 | **REVIEW** | Keyed i18n, missing-target behavior, desktop/mobile journeys, focus return and Tab containment are verified; screen-reader review, refresh/resume and full route traversal remain. |
+| FEAT-061 | **REVIEW** | Keyed i18n, missing-target behavior, persisted resume, full configured-route traversal, desktop/mobile/tablet journeys, focus return and Tab containment are verified; screen-reader review and broader-device acceptance remain. |
 | FEAT-062 | **REVIEW** | Deterministic catalogue, PIT comparisons, provider-neutral bounded AI validation and degradation behavior are locally verified; browser/mobile and real-provider acceptance remain external. |
 | FEAT-063 | **REVIEW** | Collector lifecycle, quality states, recovery, finalization, backup gating, alerts and resilience tests are locally verified; VPS installation, live Kite full-mode collection and deployed backup remain external. |
 | FEAT-064 | **REVIEW** | Runtime create/import/shared copy, immutable provenance/readiness semantics, legacy fixture reconciliation and Playwright journeys are verified; live membership-drift/runtime acceptance remains external. |
@@ -19,7 +19,7 @@
 
 ## Evidence anchors (implemented slices)
 
-- **Tests:** `app/tests/Feature/V8/` (191 total, 189 passed and 2 environment skips with configured ML runtime); `app/tests/e2e/screener-investor-workflow.spec.js` plus `guided-tour-browser.spec.js` (5 targeted browser cases); `shared/intraday/tests` and `shared/microstructure/tests/` (isolated project-compatible suites).
+- **Tests:** `app/tests/Feature/V8/` (191 total, 189 passed and 2 environment skips with configured ML runtime); `app/tests/e2e/fundamental-insights-browser.spec.js`, `screener-investor-workflow.spec.js` and `guided-tour-browser.spec.js` (focused Chromium acceptance 9/9); `shared/intraday/tests` and `shared/microstructure/tests/` (isolated project-compatible suites).
 - **Ledger:** [docs/V8-IMPLEMENTATION-LEDGER.md](V8-IMPLEMENTATION-LEDGER.md).
 - **Behavior:** [implementation.md](../implementation.md) § V8 FEAT-* sections.
 
