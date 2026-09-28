@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
+import FundamentalInsightsSignals from './FundamentalInsightsSignals';
+import FundamentalMetricMiniChart from './FundamentalMetricMiniChart';
+import FundamentalStatementTables from './FundamentalStatementTables';
+import { formatCoveragePeriods, formatFundamentalMetric } from '../utils/fundamentalDisplay';
 
 function MetricGrid({ rows }) {
     return (
@@ -30,6 +34,20 @@ export default function WatchlistResearchPanel({ stockId }) {
     const [tab, setTab] = useState('stock');
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState(null);
+    const [fundamentals, setFundamentals] = useState(null);
+    const [fundamentalsHistory, setFundamentalsHistory] = useState(null);
+    const [fundamentalsRevenueSeries, setFundamentalsRevenueSeries] = useState(null);
+    const [fundamentalsPeSeries, setFundamentalsPeSeries] = useState(null);
+    const [fundamentalsPbSeries, setFundamentalsPbSeries] = useState(null);
+    const [fundamentalsInsights, setFundamentalsInsights] = useState(null);
+    const [fundamentalsCadence, setFundamentalsCadence] = useState('quarterly');
+    const [valuationChartFrequency, setValuationChartFrequency] = useState('monthly');
+    const [fundamentalsLoading, setFundamentalsLoading] = useState(false);
+    const [fundamentalsError, setFundamentalsError] = useState(null);
+    const [mlInsights, setMlInsights] = useState(null);
+    const [mlLoading, setMlLoading] = useState(false);
+    const [mlRefreshing, setMlRefreshing] = useState(false);
+    const [mlError, setMlError] = useState(null);
     const [preview, setPreview] = useState(null);
     const [error, setError] = useState(null);
     const [previewError, setPreviewError] = useState(null);
@@ -103,6 +121,99 @@ export default function WatchlistResearchPanel({ stockId }) {
         return () => { cancelled = true; };
     }, [stockId]);
 
+    useEffect(() => {
+        if (!stockId || tab !== 'fundamentals') {
+            return undefined;
+        }
+        let cancelled = false;
+        setFundamentalsLoading(true);
+        setFundamentalsError(null);
+        setFundamentalsHistory(null);
+        setFundamentalsRevenueSeries(null);
+        setFundamentalsPeSeries(null);
+        setFundamentalsPbSeries(null);
+        setFundamentalsInsights(null);
+        Promise.all([
+            api.get(`/v1/stocks/${stockId}/fundamentals`, { params: { include_insights: 1 }, skipErrorToast: true }),
+            api.get(`/v1/stocks/${stockId}/fundamentals/history`, {
+                params: { cadence: fundamentalsCadence },
+                skipErrorToast: true,
+            }),
+            api.get(`/v1/stocks/${stockId}/fundamentals/metrics/revenue/history`, {
+                params: { range: '5y' },
+                skipErrorToast: true,
+            }),
+            api.get(`/v1/stocks/${stockId}/fundamentals/metrics/pe/history`, {
+                params: { range: '5y', frequency: valuationChartFrequency },
+                skipErrorToast: true,
+            }),
+            api.get(`/v1/stocks/${stockId}/fundamentals/metrics/pb/history`, {
+                params: { range: '5y', frequency: valuationChartFrequency },
+                skipErrorToast: true,
+            }),
+        ])
+            .then(([snapRes, histRes, revRes, peRes, pbRes]) => {
+                if (!cancelled) {
+                    const snap = snapRes?.data?.data ?? snapRes?.data ?? null;
+                    setFundamentals(snap);
+                    setFundamentalsInsights(snap?.insights ?? null);
+                    setFundamentalsHistory(histRes?.data?.data ?? histRes?.data ?? null);
+                    setFundamentalsRevenueSeries(revRes?.data?.data ?? revRes?.data ?? null);
+                    setFundamentalsPeSeries(peRes?.data?.data ?? peRes?.data ?? null);
+                    setFundamentalsPbSeries(pbRes?.data?.data ?? pbRes?.data ?? null);
+                }
+            })
+            .catch((e) => {
+                if (!cancelled) {
+                    setFundamentalsError(e?.response?.data?.error?.message || e.message || 'Failed to load fundamentals');
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setFundamentalsLoading(false);
+            });
+
+        return () => { cancelled = true; };
+    }, [stockId, tab, fundamentalsCadence, valuationChartFrequency]);
+
+    useEffect(() => {
+        if (!stockId || tab !== 'ml') {
+            return undefined;
+        }
+        let cancelled = false;
+        setMlLoading(true);
+        setMlError(null);
+        api.get(`/v1/stocks/${stockId}/ml-insights`, { skipErrorToast: true })
+            .then((res) => {
+                if (!cancelled) {
+                    setMlInsights(res?.data?.data ?? res?.data ?? null);
+                }
+            })
+            .catch((e) => {
+                if (!cancelled) {
+                    setMlError(e?.response?.data?.error?.message || e.message || 'Failed to load ML scores');
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setMlLoading(false);
+            });
+
+        return () => { cancelled = true; };
+    }, [stockId, tab]);
+
+    const refreshMlInsights = async () => {
+        if (!stockId) return;
+        setMlRefreshing(true);
+        setMlError(null);
+        try {
+            const res = await api.post(`/v1/stocks/${stockId}/ml-insights/refresh`, {}, { skipErrorToast: true });
+            setMlInsights(res?.data?.data ?? res?.data ?? null);
+        } catch (e) {
+            setMlError(e?.response?.data?.error?.message || e.message || 'Failed to refresh ML scores');
+        } finally {
+            setMlRefreshing(false);
+        }
+    };
+
     if (!stockId) return null;
 
     const stock = data?.stock_analytics;
@@ -117,6 +228,8 @@ export default function WatchlistResearchPanel({ stockId }) {
                 <div className="btn-group btn-group-sm" role="group" aria-label="Research tabs">
                     {[
                         ['stock', 'Stock Analytics'],
+                        ['fundamentals', 'Fundamentals'],
+                        ['ml', 'ML scores'],
                         ['evaluation', 'Evaluation Profile'],
                         ['recommendation', 'Recommendation Preview'],
                     ].map(([id, label]) => (
@@ -134,6 +247,151 @@ export default function WatchlistResearchPanel({ stockId }) {
             <div className="card-body">
                 {loading ? <div className="text-muted small">Loading research analytics…</div> : null}
                 {error ? <div className="alert alert-warning py-2 small mb-0">{error}</div> : null}
+                {tab === 'fundamentals' ? (
+                    fundamentalsLoading ? (
+                        <div className="text-muted small">Loading fundamentals…</div>
+                    ) : fundamentalsError ? (
+                        <div className="alert alert-warning py-2 small mb-0">{fundamentalsError}</div>
+                    ) : fundamentals ? (
+                        <div className="d-grid gap-3">
+                            <div className="d-flex flex-wrap gap-3 small text-muted">
+                                <span>
+                                    As of {fundamentals.as_of}
+                                    {fundamentals.market_price != null ? ` · Price ₹${Number(fundamentals.market_price).toFixed(2)}` : ''}
+                                </span>
+                                {fundamentals.freshness?.status ? (
+                                    <span className="badge text-bg-secondary">
+                                        Freshness: {fundamentals.freshness.status}
+                                    </span>
+                                ) : null}
+                            </div>
+                            <MetricGrid rows={(fundamentals.summary || []).map((row) => [
+                                row.label,
+                                formatFundamentalMetric(row.value, row.id),
+                            ])}
+                            />
+                            {fundamentalsInsights ? (
+                                <FundamentalInsightsSignals insights={fundamentalsInsights} />
+                            ) : null}
+                            <FundamentalMetricMiniChart
+                                label={fundamentalsRevenueSeries?.label ? `${fundamentalsRevenueSeries.label} trend` : 'Revenue (TTM) trend'}
+                                points={fundamentalsRevenueSeries?.points}
+                            />
+                            <div className="d-flex flex-wrap align-items-center gap-2 small">
+                                <span className="text-muted">Valuation chart frequency</span>
+                                <select
+                                    className="form-select form-select-sm w-auto"
+                                    value={valuationChartFrequency}
+                                    onChange={(event) => setValuationChartFrequency(event.target.value)}
+                                    aria-label="Valuation chart frequency"
+                                >
+                                    <option value="monthly">Monthly (default)</option>
+                                    <option value="daily">Daily</option>
+                                    <option value="quarterly">Quarterly (PIT TTM)</option>
+                                </select>
+                            </div>
+                            <FundamentalMetricMiniChart
+                                label={fundamentalsPeSeries?.label ? `${fundamentalsPeSeries.label} trend` : 'P/E (TTM) trend'}
+                                points={fundamentalsPeSeries?.points}
+                            />
+                            <FundamentalMetricMiniChart
+                                label={fundamentalsPbSeries?.label ? `${fundamentalsPbSeries.label} trend` : 'P/B (TTM) trend'}
+                                points={fundamentalsPbSeries?.points}
+                            />
+                            {fundamentals.coverage ? (
+                                <p className="text-muted small mb-0">
+                                    Quarterly history: {formatCoveragePeriods(fundamentals.coverage, 'quarterly')}
+                                    {' · '}
+                                    Annual history: {formatCoveragePeriods(fundamentals.coverage, 'annual')}
+                                </p>
+                            ) : null}
+                            <FundamentalStatementTables
+                                history={fundamentalsHistory}
+                                cadence={fundamentalsCadence}
+                                onCadenceChange={setFundamentalsCadence}
+                            />
+                        </div>
+                    ) : (
+                        <p className="text-muted small mb-0">No fundamentals loaded.</p>
+                    )
+                ) : null}
+                {tab === 'ml' ? (
+                    mlLoading ? (
+                        <div className="text-muted small">Loading ML scores…</div>
+                    ) : mlError ? (
+                        <div className="alert alert-warning py-2 small mb-0">{mlError}</div>
+                    ) : mlInsights ? (
+                        <div className="d-grid gap-3">
+                            <p className="text-muted small mb-0">{mlInsights.disclaimer}</p>
+                            <div className="table-responsive">
+                                <table className="table table-sm align-middle mb-0">
+                                    <thead>
+                                        <tr className="small text-muted">
+                                            <th>Horizon</th>
+                                            <th>Score</th>
+                                            <th>Confidence</th>
+                                            <th>Exp. vs benchmark</th>
+                                            <th>As of</th>
+                                            <th>Model</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {(mlInsights.horizons || []).map((row) => (
+                                            <tr key={row.horizon}>
+                                                <td>{row.horizon}</td>
+                                                <td className="fw-semibold">
+                                                    {row.prediction?.score != null
+                                                        ? Number(row.prediction.score).toFixed(3)
+                                                        : '—'}
+                                                </td>
+                                                <td>
+                                                    {row.prediction?.confidence != null
+                                                        ? Number(row.prediction.confidence).toFixed(3)
+                                                        : '—'}
+                                                </td>
+                                                <td className="small">
+                                                    {row.prediction?.expected_benchmark_relative_return_pct != null
+                                                        ? `${Number(row.prediction.expected_benchmark_relative_return_pct).toFixed(2)}%`
+                                                        : '—'}
+                                                </td>
+                                                <td className="small text-muted">{row.prediction?.as_of ?? '—'}</td>
+                                                <td className="small text-muted">
+                                                    {row.active_model
+                                                        ? `v${row.active_model.version}`
+                                                        : 'No active model'}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div>
+                                <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-primary"
+                                    disabled={mlRefreshing}
+                                    onClick={refreshMlInsights}
+                                >
+                                    {mlRefreshing ? 'Refreshing…' : 'Refresh scores'}
+                                </button>
+                            </div>
+                            {(mlInsights.horizons || []).some((h) => h.prediction?.explanations?.top_positive?.length) ? (
+                                <div className="small">
+                                    <div className="text-muted mb-1">Top positive drivers (3m)</div>
+                                    <ul className="mb-0 ps-3">
+                                        {(mlInsights.horizons.find((h) => h.horizon === '3m')?.prediction?.explanations?.top_positive || [])
+                                            .slice(0, 3)
+                                            .map((item, idx) => (
+                                                <li key={item.feature || idx}>{item.feature || item.label || 'Feature'}</li>
+                                            ))}
+                                    </ul>
+                                </div>
+                            ) : null}
+                        </div>
+                    ) : (
+                        <p className="text-muted small mb-0">No ML insights loaded.</p>
+                    )
+                ) : null}
                 {!loading && !error && tab === 'stock' && stock ? (
                     <MetricGrid rows={[
                         ['Beta', fmt(stock.beta)],
