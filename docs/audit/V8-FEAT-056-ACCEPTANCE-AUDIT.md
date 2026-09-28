@@ -12,7 +12,7 @@ Evidence is mapped to `docs/archive/specs/V8-ML-Lifecycle-Automation-Deployment-
 | Durable run/progress state and SSE | PASS locally | `MlTrainingRunAdminService`, progress persistence, SSE controller and lifecycle tests; deployed worker/SSE runtime remains pending |
 | Restart recovery | PASS locally | `MlTrainingRunRecoveryService` requeues stale running/cancelling runs with durable recovery evidence and test coverage |
 | Bounded transient retry | PASS locally | `MlTrainingRunRetryService` persists bounded attempt/backoff and dispatches delayed retry |
-| Quality rejection vs operational failure | PARTIAL | FEAT-057 eligibility is persisted; final `completed_rejected` mapping and full mixed-service integration require the preserved `MlScoringService` reconciliation |
+| Quality rejection vs operational failure | PASS locally | `MlScoringService` now persists `completed_rejected` for a completed run whose candidate misses frozen thresholds, while operational exceptions remain `failed`; `MlChallengerEvidenceTest` covers the distinction |
 | Cooperative cancellation | PASS locally | queued/running cancellation service and checkpoint assertions are covered; live worker cancellation remains pending |
 | Explicit promotion / atomic rollback | PASS locally | existing promotion/rollback services and tests; full route/UI/runtime acceptance remains |
 | No automatic promotion/rollback | PASS by tests | lifecycle automation only queues training and evaluates drift; promotion remains explicit Admin action |
@@ -22,4 +22,4 @@ Evidence is mapped to `docs/archive/specs/V8-ML-Lifecycle-Automation-Deployment-
 | Durable stale-run recovery | PASS locally | `MlTrainingRunRecoveryService` requeues stale running runs after worker restart, finalizes stale cancellation requests without requeueing, and is invoked at lifecycle ticks; `MlLifecycleAutomationTest` covers both paths |
 | Production queue/scheduler deployment | EXTERNAL VALIDATION PENDING | VPS worker, scheduler, queue restart and notification-provider runtime have not been claimed |
 
-The epic remains **IN PROGRESS** until the preserved mixed scoring integration is deliberately reconciled, durable queue recovery is exercised in deployment, and the remaining lifecycle acceptance evidence is recorded. Local lifecycle recovery and the broad Feature suite are green; no deployed worker/runtime success is claimed.
+The epic remains **IN PROGRESS** until deployed worker/runtime evidence and the remaining lifecycle acceptance criteria are recorded. The preserved mixed scoring integration is now committed in `2900e50`; local lifecycle recovery, quality-rejection semantics and the broad Feature suite are green. No deployed worker/runtime success is claimed.
