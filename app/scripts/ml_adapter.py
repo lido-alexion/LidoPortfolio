@@ -189,6 +189,22 @@ def feature_coverage_from_jsonl(path: str, numeric: list[str], categorical: list
     return feature_coverage(iter_jsonl(path), numeric, categorical, total_count)
 
 
+def redundancy_diagnostics(vectors, names: list[str], threshold: float = 0.98) -> dict[str, Any]:
+    """Report highly correlated encoded columns using training rows only."""
+    import numpy as np
+
+    if len(names) != vectors.shape[1] or vectors.shape[1] < 2:
+        return {"threshold": threshold, "fit_partition": "train", "high_correlation_pairs": []}
+    correlation = np.corrcoef(vectors, rowvar=False)
+    pairs: list[dict[str, Any]] = []
+    for left in range(len(names)):
+        for right in range(left + 1, len(names)):
+            value = finite(correlation[left, right])
+            if value is not None and abs(value) >= threshold:
+                pairs.append({"left": names[left], "right": names[right], "correlation": round(value, 6)})
+    return {"threshold": threshold, "fit_partition": "train", "high_correlation_pairs": pairs}
+
+
 def encode_row(row: dict[str, Any], numeric: list[str], categorical: list[str], state: dict[str, Any]) -> list[float]:
     features = row.get("features", {})
     vector: list[float] = []
@@ -439,6 +455,8 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
     if len(numeric) + len(categorical) < MINIMUM_EFFECTIVE_FEATURES:
         raise ValueError("training dataset has no usable configured features")
 
+    redundancy = redundancy_diagnostics(x_train, feature_names_value, float(request.get("redundancy_threshold", 0.98)))
+
     if len(set(y_train)) < 2:
         raise ValueError("training set contains one class")
     model = LogisticRegression(class_weight="balanced", max_iter=1000, random_state=int(request.get("seed", 7047)))
@@ -576,6 +594,7 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
         "effective_feature_set": numeric + categorical,
         "excluded_features": excluded_features,
         "feature_training_coverage": feature_training_coverage,
+        "redundancy": redundancy,
         "preprocessing": state,
         "partitions": partitions,
         "runtime": {"python": sys.version.split()[0], "sklearn": __import__("sklearn").__version__},
@@ -593,6 +612,7 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
         "python_peak_rss_mb": peak_rss_mb(),
         "feature_training_coverage": feature_training_coverage,
         "excluded_features": excluded_features,
+        "redundancy": redundancy,
     }
     metadata["diagnostics"] = diagnostics
     artifact_path = request.get("artifact_path")

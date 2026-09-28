@@ -55,6 +55,21 @@ class MlAdapterContractTest(unittest.TestCase):
         self.assertIn("live_hit_rate_deterioration", body["warnings"])
 
     @unittest.skipUnless(SKLEARN_AVAILABLE, "scikit-learn is provided by the managed ML runtime")
+    def test_redundancy_diagnostics_fit_only_on_training_matrix(self):
+        import numpy as np
+
+        spec = importlib.util.spec_from_file_location("ml_adapter_redundancy", SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        diagnostics = module.redundancy_diagnostics(
+            np.asarray([[1.0, 2.0, 0.0], [2.0, 4.0, 1.0], [3.0, 6.0, 0.0], [4.0, 8.0, 1.0]]),
+            ["a", "b", "constant"],
+            0.98,
+        )
+        self.assertEqual(diagnostics["fit_partition"], "train")
+        self.assertEqual(diagnostics["high_correlation_pairs"], [{"left": "a", "right": "b", "correlation": 1.0}])
+
+    @unittest.skipUnless(SKLEARN_AVAILABLE, "scikit-learn is provided by the managed ML runtime")
     def test_int8_label_metrics_use_python_width_counts_for_large_partitions(self):
         import numpy as np
 
