@@ -395,6 +395,14 @@ class MlTrainingDatasetBuilder
             'split_basis' => 'chronological_monthly_sampling_buckets',
             'sampling_buckets' => $bucketPartitions,
             'sampling' => $this->samplingPolicyForHorizon($horizonDays),
+            'purge_embargo' => [
+                'version' => 'v8-label-window-purge-1',
+                'horizon_observations' => $horizonDays,
+                'rule' => 'exclude_rows_whose_forward_label_window_reaches_or_crosses_next_partition_start',
+                'train_boundary' => $validationStartBucket,
+                'validation_boundary' => $testStartBucket,
+                'embargo_observations' => $horizonDays,
+            ],
             'horizon_aware' => [
                 'label_observations' => $horizonDays,
                 'nominal_train_end_bucket' => $buckets[$nominalTrainEndIndex],

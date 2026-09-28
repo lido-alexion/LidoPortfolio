@@ -3,6 +3,7 @@
 namespace App\Services\ML;
 
 use App\Models\V8\MlUniverseMembership;
+use App\Models\V8\MlUniverseSnapshotBackfillRun;
 use App\Models\Stock;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -190,5 +191,134 @@ class MlHistoricalUniverseMembershipService
                 'inserted_count' => $insertedCount,
             ];
         });
+    }
+
+    /**
+     * Materialize dated membership supplied by an authoritative historical
+     * source. Current Stock rows are deliberately never consulted here.
+     *
+     * @param list<array{effective_from:string,memberships:list<array{stock_id:int,sector_snapshot?:?string,snapshot_key?:?string}>}> $snapshots
+     * @return array{run_id:int,status:string,requested_dates:list<string>,processed_dates:list<string>,failed_dates:list<string>,skipped_dates:list<string>}
+     */
+    public function backfillHistoricalSnapshots(array $snapshots, string $source, ?int $runId = null, string $universeKey = self::ACTIVE_ELIGIBLE_NSE): array
+    {
+        $normalized = [];
+        foreach ($snapshots as $snapshot) {
+            $date = Carbon::parse((string) ($snapshot['effective_from'] ?? ''))->toDateString();
+            if (isset($normalized[$date])) {
+                throw new \InvalidArgumentException("Duplicate historical universe snapshot: {$date}");
+            }
+            $normalized[$date] = [
+                'effective_from' => $date,
+                'memberships' => array_values($snapshot['memberships'] ?? []),
+            ];
+        }
+        ksort($normalized);
+        $requestedDates = array_keys($normalized);
+        $run = $runId !== null
+            ? MlUniverseSnapshotBackfillRun::query()->findOrFail($runId)
+            : MlUniverseSnapshotBackfillRun::query()->create([
+                'universe_key' => $universeKey,
+                'source' => $source,
+                'requested_dates' => $requestedDates,
+                'processed_dates' => [],
+                'failed_dates' => [],
+                'status' => 'queued',
+            ]);
+
+        $processed = array_values(array_unique(array_map('strval', $run->processed_dates ?? [])));
+        $failed = array_values(array_unique(array_map('strval', $run->failed_dates ?? [])));
+        $skipped = [];
+        $run->forceFill(['status' => 'running', 'started_at' => $run->started_at ?? now(), 'last_error' => null])->save();
+
+        $date = null;
+        try {
+            foreach ($normalized as $date => $snapshot) {
+                if (in_array($date, $processed, true) || $this->snapshotBoundaryExists($date, $universeKey)) {
+                    if (! in_array($date, $processed, true)) {
+                        $processed[] = $date;
+                    }
+                    $skipped[] = $date;
+                    continue;
+                }
+                DB::transaction(function () use ($date, $snapshot, $source, $universeKey): void {
+                    $memberships = collect($snapshot['memberships']);
+                    $stockIds = $memberships->pluck('stock_id')->map(fn ($id): int => (int) $id)->values()->all();
+                    if (count($stockIds) !== count(array_unique($stockIds))) {
+                        throw new \InvalidArgumentException("Duplicate stock membership in historical snapshot: {$date}");
+                    }
+                    if ($stockIds !== [] && Stock::query()->whereIn('id', $stockIds)->count() !== count($stockIds)) {
+                        throw new \InvalidArgumentException("Historical snapshot references an unknown stock: {$date}");
+                    }
+
+                    $priorOpen = MlUniverseMembership::query()
+                        ->where('universe_key', $universeKey)
+                        ->whereDate('effective_from', '<', $date)
+                        ->whereNull('effective_to')
+                        ->get();
+                    foreach ($priorOpen as $membership) {
+                        if (! in_array((int) $membership->stock_id, $stockIds, true)) {
+                            $membership->forceFill(['effective_to' => Carbon::parse($date)->subDay()->toDateString()])->save();
+                        }
+                    }
+                    foreach ($memberships as $entry) {
+                        $stockId = (int) $entry['stock_id'];
+                        $existing = MlUniverseMembership::query()
+                            ->where('stock_id', $stockId)
+                            ->where('universe_key', $universeKey)
+                            ->whereDate('effective_from', $date)
+                            ->first();
+                        $existing ??= new MlUniverseMembership([
+                            'stock_id' => $stockId,
+                            'universe_key' => $universeKey,
+                            'effective_from' => $date,
+                        ]);
+                        $existing->forceFill([
+                            'effective_to' => null,
+                            'sector_snapshot' => $entry['sector_snapshot'] ?? null,
+                            'source' => $source,
+                            'snapshot_key' => $entry['snapshot_key'] ?? $source.':'.$date,
+                        ])->save();
+                    }
+                });
+                $processed[] = $date;
+                $run->forceFill(['processed_dates' => array_values(array_unique($processed)), 'failed_dates' => $failed])->save();
+                $this->resetMemo();
+            }
+        } catch (\Throwable $e) {
+            $failed[] = $date ?? 'unknown';
+            $run->forceFill([
+                'status' => 'failed',
+                'failed_dates' => array_values(array_unique($failed)),
+                'processed_dates' => array_values(array_unique($processed)),
+                'last_error' => substr($e->getMessage(), 0, 1000),
+            ])->save();
+            throw $e;
+        }
+
+        $status = count($processed) === count($requestedDates) ? 'completed' : 'partial';
+        $run->forceFill([
+            'status' => $status,
+            'processed_dates' => array_values(array_unique($processed)),
+            'failed_dates' => array_values(array_unique($failed)),
+            'completed_at' => $status === 'completed' ? now() : null,
+        ])->save();
+
+        return [
+            'run_id' => (int) $run->id,
+            'status' => $status,
+            'requested_dates' => $requestedDates,
+            'processed_dates' => array_values(array_unique($processed)),
+            'failed_dates' => array_values(array_unique($failed)),
+            'skipped_dates' => $skipped,
+        ];
+    }
+
+    private function snapshotBoundaryExists(string $date, string $universeKey): bool
+    {
+        return MlUniverseMembership::query()
+            ->where('universe_key', $universeKey)
+            ->whereDate('effective_from', $date)
+            ->exists();
     }
 }

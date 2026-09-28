@@ -321,6 +321,9 @@ class MlTrainingDatasetBuilderTest extends TestCase
                 fclose($handle);
             }
             $this->assertSame('chronological_monthly_sampling_buckets', $dataset['partitions']['split_basis']);
+            $this->assertSame('v8-label-window-purge-1', $dataset['partitions']['purge_embargo']['version']);
+            $this->assertSame(['1m' => 21, '3m' => 63, '6m' => 126][$horizon], $dataset['partitions']['purge_embargo']['horizon_observations']);
+            $this->assertSame($dataset['partitions']['purge_embargo']['horizon_observations'], $dataset['partitions']['purge_embargo']['embargo_observations']);
             $this->assertLessThan($dataset['partitions']['validation_start'], $dataset['diagnostics']['train_max_label_end']);
             $this->assertLessThan($dataset['partitions']['test_start'], $dataset['diagnostics']['validation_max_label_end']);
             if ($horizon !== '1m') {
