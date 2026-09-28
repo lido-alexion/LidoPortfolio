@@ -29,6 +29,7 @@ class MlCandidateEvidenceService
             ->first();
         $candidateMetrics = $this->metrics($candidate->evaluation_metrics ?? []);
         $activeMetrics = $active ? $this->metrics($active->evaluation_metrics ?? []) : null;
+        $activeComparable = $active ? $this->sameEvaluationWindow($candidate, $active) : false;
         $baseline = is_array($run?->baselines) ? ($run->baselines['deterministic_stox'] ?? null) : null;
         $baselineMetrics = is_array($baseline) ? $this->metrics($baseline) : null;
 
@@ -46,8 +47,10 @@ class MlCandidateEvidenceService
                 'model_version' => $active->version,
                 'feature_set_version' => data_get($active->audit_metadata, 'feature_profile.feature_set_version'),
                 'metrics' => $activeMetrics,
-                'delta' => $this->delta($candidateMetrics, $activeMetrics),
-                'comparable' => $this->sameEvaluationWindow($candidate, $active),
+                'validation_split_id' => data_get($active->audit_metadata, 'chronological_split.split_basis'),
+                'delta' => $activeComparable ? $this->delta($candidateMetrics, $activeMetrics) : null,
+                'comparable' => $activeComparable,
+                'unavailable_reason' => $activeComparable ? null : 'evaluation_window_mismatch',
             ] : [
                 'model_id' => null,
                 'model_version' => null,
@@ -76,6 +79,10 @@ class MlCandidateEvidenceService
     /** @param array<string,mixed> $metrics */
     private function metrics(array $metrics): array
     {
+        if (is_array($metrics['test'] ?? null)) {
+            $metrics = array_replace($metrics, $metrics['test']);
+        }
+
         return array_intersect_key($metrics, array_flip(['roc_auc', 'pr_auc', 'benchmark_relative_return', 'deterministic_baseline_delta', 'hit_rate', 'calibration', 'class_distribution']));
     }
 
