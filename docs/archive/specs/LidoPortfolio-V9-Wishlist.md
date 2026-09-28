@@ -4,9 +4,10 @@
 |---|---|
 | **Document type** | Canonical V9 planning register |
 | **Created** | 2026-09-09 |
-| **Status** | EARLY PLANNING |
+| **Status** | **FROZEN / IMPLEMENTATION-READY** |
 | **Canonical path** | `specs/LidoPortfolio-V9-Wishlist.md` |
 | **Predecessor** | `specs/LidoPortfolio-V8-Wishlist.md` |
+| **Final audit / sequence** | [`V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md`](V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md) |
 
 ## 1. Purpose
 
@@ -16,9 +17,11 @@ StoX telemetry instrumentation and integration with the existing standalone Lido
 
 The V9 assistance roadmap also builds on the task-oriented user-journey corpus under `docs/user-journeys/`. The human-readable journeys remain useful independently; V9 can progressively expose the same knowledge through deterministic search, conversational assistance, automation-ready UI contracts and eventually agentic actions.
 
+The complete V9 specification set has passed the final cross-specification audit. The normative reconciliation notes, dependency graph and implementation sequence are frozen in [`V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md`](V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md). StoX V9 is therefore declared **IMPLEMENTATION-READY**.
+
 ## 2. Current V9 backlog
 
-The backlog below is ordered by intended development priority. `V9-UX-001` is the highest-priority V9 epic. Later items may still be developed in parallel where dependencies permit, but this order is the default planning sequence.
+All registered V9 epics are frozen and implementation-ready. The table order remains the planning/register order; the dependency-aware execution sequence is defined in Section 5 and in the final audit document.
 
 | ID | Feature | Scope / rationale | Status |
 |---|---|---|---|
@@ -48,7 +51,24 @@ The assistance epics are intentionally progressive rather than one monolithic ch
 
 Typeahead and chatbot may share the same maintained journey/question metadata, but deterministic typeahead must not depend on an LLM. V9-AI-002 may extend the chatbot UX with governed read and mutation tools, but read-only investigation and write/action authority must remain separable capabilities.
 
-## 5. Inherited boundary
+## 5. Frozen implementation sequence
+
+The full dependency graph and sequencing rationale are authoritative in [`V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md`](V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md).
+
+Recommended release sequence:
+
+1. **V9-UX-001 foundation slice** — journey governance, conformance workflow, automation harness, deterministic test-data and CI conventions. Keep the epic open.
+2. **V9-COMM-001** — canonical notification framework and account-lifecycle messaging.
+3. **V9-DATA-001** — shared export framework.
+4. **Deterministic/user-facing feature wave** — `V9-UX-002`, `V9-OPS-001`, `V9-UX-003`, and `V9-VIZ-001`, parallelized where dependencies permit.
+5. **V4-FEAT-017** — shared AI platform/governance.
+6. **V9-AI-001** — documentation-grounded chatbot.
+7. **V9-AI-002** — tool-augmented reasoning and governed actions.
+8. **V9-UX-001 final closure** — final journey reconciliation/E2E coverage across the completed V9 product, followed by release audit.
+
+Implementation may parallelize independent work, but must preserve the hard dependencies and release gates defined in the final audit document.
+
+## 6. Inherited boundary
 
 V8 `V4-FEAT-052` owns StoX OpenTelemetry instrumentation and export to the independently deployable LidoTelemetry product. StoX must not absorb LidoTelemetry storage, analytics, dashboards or platform administration into its own codebase.
 
@@ -58,4 +78,20 @@ AI/ML additions must preserve inherited deterministic, explainable Strategy beha
 
 Documentation-grounded AI must distinguish sourced StoX behavior from model-generated explanation. Model-provider configuration must not weaken authorization, privacy, audit or execution safeguards. Agentic capabilities must use explicit governed actions rather than unrestricted database mutation or arbitrary UI control for money-moving workflows.
 
-Detailed V9 behavior will be frozen during V9 planning against the completed V7/V8 foundations and the then-current StoX implementation.
+## 7. Implementation-ready declaration
+
+The final V9 cross-spec audit found no unresolved product-level contradiction and no remaining PO decision in the registered V9 scope.
+
+The final audit's normative reconciliations include:
+
+- UX-001 starts first as a foundation but closes last as the release-level journey/E2E gate;
+- V9-COMM-001 is the shared notification framework for dependent epics;
+- user-specific AI budget/path exhaustion removes only the affected path for that user while preserving the single canonical capability order;
+- AI-002 intentionally extends AI-001 from visible-page explanation to governed account-data reasoning;
+- deterministic calculations remain in StoX services rather than being delegated to the LLM;
+- OPS operational export and VIZ chart-data export reuse the shared DATA framework where practical;
+- V8 telemetry and historical-fundamentals ownership boundaries remain intact.
+
+**StoX V9 is hereby declared FROZEN / IMPLEMENTATION-READY.**
+
+The implementation agent may begin automatically from this register, the linked frozen specifications, and the final audit/sequence document. No additional planning handoff is required unless implementation discovers a genuinely new material product decision or a direct frozen-spec contradiction.
