@@ -217,6 +217,8 @@ class MlLifecycleAutomationTest extends TestCase
         $this->assertSame(2, $row['active_run']['retry']['attempt']);
         $this->assertTrue($row['active_run']['cancellation']['requested']);
         $this->assertSame('temporary worker issue', $row['active_run']['failure']['message']);
+        $this->assertSame('running', $row['latest_run']['status']);
+        $this->assertSame('scheduled', $row['latest_run']['trigger']);
     }
 
     public function test_tick_requeues_stale_running_run_after_worker_restart(): void

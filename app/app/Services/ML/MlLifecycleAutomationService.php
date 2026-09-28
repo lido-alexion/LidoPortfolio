@@ -193,6 +193,8 @@ class MlLifecycleAutomationService
         foreach (MlScoringService::HORIZONS as $horizon) {
             $settings = $this->scheduleSettings($horizon);
             $active = $this->activeRunForHorizon($horizon);
+            $latest = MlTrainingRun::query()->where('horizon', $horizon)->latest('id')->first();
+            $latestConfiguration = is_array($latest?->configuration) ? $latest->configuration : [];
             $horizons[] = [
                 'horizon' => $horizon,
                 'schedule' => $settings['schedule'],
@@ -200,6 +202,15 @@ class MlLifecycleAutomationService
                 'schedule_options' => $settings['options'],
                 'schedule_due_now' => $this->scheduleDue($horizon, $now),
                 'next_scheduled_at' => $this->nextScheduledAt($horizon, $now),
+                'latest_run' => $latest ? [
+                    'id' => $latest->id,
+                    'status' => $latest->status,
+                    'trigger' => $latestConfiguration['trigger'] ?? 'manual',
+                    'completed_at' => $latest->completed_at?->toIso8601String(),
+                    'progress' => $latestConfiguration['progress'] ?? null,
+                    'retry' => $latestConfiguration['retry'] ?? null,
+                    'failure' => $latest->failure,
+                ] : null,
                 'active_run' => $active ? [
                     'id' => $active->id,
                     'status' => $active->status,

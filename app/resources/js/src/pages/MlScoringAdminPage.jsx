@@ -251,6 +251,7 @@ export default function MlScoringAdminPage() {
                                         <th>Schedule</th>
                                         <th>Next run</th>
                                         <th>Due now</th>
+                                        <th>Latest result</th>
                                         <th>Active run</th>
                                     </tr>
                                 </thead>
@@ -281,6 +282,9 @@ export default function MlScoringAdminPage() {
                                             </td>
                                             <td className="small">{row.next_scheduled_at || '—'}</td>
                                             <td>{row.schedule_due_now ? 'yes' : 'no'}</td>
+                                            <td className="small">
+                                                {row.latest_run ? `${row.latest_run.status} · ${row.latest_run.trigger}` : '—'}
+                                            </td>
                                             <td>
                                                 {row.active_run ? (
                                                     <span>
