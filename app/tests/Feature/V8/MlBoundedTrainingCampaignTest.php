@@ -71,6 +71,8 @@ class MlBoundedTrainingCampaignTest extends TestCase
             $this->assertSame('training_partition_only', data_get($model->trainingRun?->configuration, 'preprocessing.fitted_on'));
             $this->assertArrayHasKey('candidate_metrics', $evidence);
             $this->assertArrayHasKey('deterministic_baseline', $evidence);
+            $this->assertTrue($evidence['deterministic_baseline']['comparable']);
+            $this->assertFalse($evidence['active_model']['comparable']);
             $this->assertSame($evidence, $model->fresh()->audit_metadata['candidate_evidence']);
         }
     }
