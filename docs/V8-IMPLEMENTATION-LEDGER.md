@@ -88,7 +88,7 @@ FEAT-065  [REVIEW] Intraday ML historical data platform (schema/checkpoints/admi
 ## Frontend validation baseline (2026-09-28)
 
 - Node `20.19.1` / npm `10.8.2` via the existing user NVM installation.
-- Node JS suite: **188 passed, 0 failed**; Vitest: **99 passed, 0 failed**.
+- Node JS suite: **189 passed, 0 failed**; Vitest: **99 passed, 0 failed**.
 - Vite production build: passed.
 - Typecheck: passed.
 - Static documentation check: passed.
@@ -106,7 +106,7 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 - FEAT-064 browser smoke now passes **2/2**: screener create/save/runtime detail and incomplete Strategy Setup Required with Enable disabled; the browser test runs against deterministic API mocks and does not claim live membership-drift validation. FEAT-061 desktop and narrow-mobile welcome-to-tour smoke passes **2/2**.
 - FEAT-062 now covers the frozen deterministic catalogue with PIT-safe operating-profit/bottom-line, ROA/ROCE, working-capital/liquidity, capex, ownership/financial, persistent cash-quality and historical valuation-context signals; absent source data remains unavailable rather than inferred. It is REVIEW pending browser/mobile and real-provider acceptance.
 - FEAT-056 lifecycle focus passes locally, including stale running-run recovery and stale cancellation finalization; mixed `MlScoringService` integration remains deliberately separated from FEAT-057.
-- FEAT-056 scoring reconciliation is now committed as `2900e50`, with explicit `completed_rejected` quality outcomes and regression coverage in `73307cb`; FEAT-056 remains IN PROGRESS only for remaining deployment/acceptance evidence and any frozen lifecycle gaps.
+- FEAT-056 scoring reconciliation is now committed as `2900e50`, with explicit `completed_rejected` quality outcomes and regression coverage in `73307cb`; FEAT-056 remains REVIEW for remaining deployment/acceptance evidence.
 - FEAT-056 eligible runs now use the frozen `completed_eligible` terminal state, with `completed_rejected` and `failed` kept distinct (`bd4148b`).
 - FEAT-052 telemetry focus passes **14/14**; FEAT-065 internal/admin focus passes **9/9**. The browser path now has an optional official OpenTelemetry SDK/fetch instrumentation module, disabled unless an OTLP endpoint is explicitly configured; live/deployed evidence remains external where documented.
 - FEAT-056 lifecycle support and scoring reconciliation are committed in focused slices; the current checkout contains no separate uncommitted `MlScoringService` lifecycle diff pending ownership separation.
@@ -119,11 +119,11 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 - The matching x86_64 bounded ML campaign now persists per-feature train/validation/test coverage for all three horizons when `STOXLA_ML_TEST_PYTHON` points to the isolated runtime.
 - The same bounded campaign also reloads each persisted logistic artifact through the PHP adapter and verifies non-empty native contribution output; investor-facing browser acceptance remains external.
 - FEAT-057 is now REVIEW: implementation and bounded same-architecture 1m/3m/6m evidence are complete locally; production dated-provider population, deployed active-model pairing where applicable and investor-facing browser acceptance remain external.
-- Shared V8 API routes, middleware aliases, console commands, scheduler entries and environment documentation are wired in `c22c0bf`; dependent feature files remain intentionally preserved in the inherited workspace.
+- Shared V8 API routes, middleware aliases, console commands, scheduler entries and environment documentation are wired in `c22c0bf`; unrelated inherited feature files remain intentionally preserved in the working tree.
 
 ## Next task
 
-1. FEAT-056: reconcile the preserved lifecycle WIP into tested commits, including mixed scoring integration, quality-rejection mapping and deployed worker/runtime evidence.
+1. FEAT-056: perform deployed worker/runtime validation for the committed lifecycle implementation; no separate lifecycle WIP is currently pending ownership reconciliation.
 2. FEAT-057: complete authoritative-provider/runtime coverage evidence, active-model paired runtime evidence where an active model exists, artifact prediction reload and investor-facing explainability acceptance.
 3. FEAT-062: perform browser/mobile and real-provider acceptance; deterministic catalogue/PIT implementation is complete locally.
 4. FEAT-065 / FEAT-052: close current-universe orchestration and telemetry/collector deployment evidence without conflating FEAT-065 with FEAT-063 backup.
@@ -131,9 +131,9 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 
 ## Failing tests
 
-Latest rerun: **1,329 tests: 1,328 passed, 1 skipped, 0 failures/errors** under local PHP CLI `memory_limit=512M`; the existing paragraph below is historical checkpoint context.
+Historical context: earlier reruns recorded **1,329 tests: 1,328 passed, 1 skipped, 0 failures/errors** under local PHP CLI `memory_limit=512M`; the current authoritative suite result is recorded above in the verified continuation checkpoint.
 
-The broad direct PHPUnit Feature run with `php -d memory_limit=512M vendor/bin/phpunit tests/Feature` now completes **1,321 tests: 1,320 passed, 1 skipped, 0 failures/errors**. The skip is the environment-gated bounded FEAT-057 campaign when its matching Python runtime is not configured. OpenAPI generated-spec drift and ML constructor failures are resolved; focused ML/provider, FEAT-062, telemetry and intraday suites pass.
+The broad direct PHPUnit Feature run with `php -d memory_limit=512M vendor/bin/phpunit tests/Feature` currently completes **1,336 passed / 1,337 total / 1 skipped / 0 failures** with the matching x86_64 ML runtime. The skip is the normal-CLI OpenTelemetry extension check; the extension-enabled direct test passes. OpenAPI generated-spec drift and ML constructor failures are resolved; focused ML/provider, FEAT-062, telemetry and intraday suites pass.
 
 ## MlScoringService ownership reconciliation
 

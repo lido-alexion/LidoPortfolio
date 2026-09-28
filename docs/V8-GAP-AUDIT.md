@@ -6,20 +6,20 @@
 
 | Epic | Verdict | Remaining work (authoritative gaps) |
 |------|---------|-------------------------------------|
-| FEAT-052 | **partial** | Fail-open OTLP traces/events plus focused HTTP duration metrics are wired; optional official browser SDK/fetch instrumentation is now available behind explicit endpoint configuration; PHP SDK instrumentation and production Collector probe remain open |
-| FEAT-054 | **partial** | Bank/NBFC + metric catalog; valuation history API + Watchlist P/E/P/B frequency toggle; gaps: live NSE/BSE exchange APIs at scale |
-| FEAT-055 | **done** | — |
-| FEAT-056 | **partial** | Retention opt-in + admin UI; lifecycle schedule/drift gates (`STOXLA_ML_LIFECYCLE_*`, `STOXLA_ML_DRIFT_TRIGGER_ENABLED`); no auto-promote/rollback |
-| FEAT-057 | **partial** | 50/50 registered features; calibration; chrono grid v2 + benchmark-vol regime slices; durable candidate archive; same-architecture bounded 1m/3m/6m campaign with partition coverage and artifact reload/contribution evidence; production provider population and browser/deployed acceptance remain external |
-| FEAT-061 | **done** | — |
-| FEAT-062 | **partial** | Insights page, orchestrator, admin provider prefs, invocation log + daily limits + token/cost rollups, provider test API/UI; gaps: provider-native billing hooks |
-| FEAT-063 | **partial** | VPS hardening; live Parquet production validation (`shared/microstructure/tests/test_parquet_store.py` + minute aggregator tests for schema_v1 fields) |
-| FEAT-064 | **partial** | Runtime create/import/shared copy; audit PHPUnit; provenance incl. `definition_json`; Playwright screener and incomplete-Strategy `Setup Required` journey; remaining live membership drift/runtime acceptance |
-| FEAT-065 | **partial** | Full NIFTY 500 + index backfill at scale (`instrument_resolver.py` + sample token map; Kite client + DuckDB/Polars builders shipped) |
+| FEAT-052 | **REVIEW** | Local producer, official browser/PHP SDK paths and fail-open tests are verified; Collector receipt, PHP extension deployment, queue/scheduler propagation and production probe remain external. |
+| FEAT-054 | **REVIEW** | Local bootstrap, source precedence, derived metrics, history UI and Screener boundary are verified; browser/mobile, live provider and deployed bootstrap evidence remain external. |
+| FEAT-055 | **REVIEW** | Domain, security, concurrency and notification-isolation behavior are locally verified; real Turnstile, mail delivery and deployed multi-worker contention remain external. |
+| FEAT-056 | **REVIEW** | Durable lifecycle, retries, cancellation, recovery, retention, explicit promotion/rollback boundaries and notifications are locally verified; deployed worker/scheduler/SSE and production notification/archive evidence remain external. |
+| FEAT-057 | **REVIEW** | Versioned/PIT-safe registry, same-architecture bounded 1m/3m/6m training, archive integrity, paired baseline evidence, partition coverage and artifact explainability are verified; production provider population, deployed active-model pairing and investor browser acceptance remain external. |
+| FEAT-061 | **REVIEW** | Keyed i18n, missing-target behavior, desktop/mobile journeys, focus return and Tab containment are verified; screen-reader review, refresh/resume and full route traversal remain. |
+| FEAT-062 | **REVIEW** | Deterministic catalogue, PIT comparisons, provider-neutral bounded AI validation and degradation behavior are locally verified; browser/mobile and real-provider acceptance remain external. |
+| FEAT-063 | **REVIEW** | Collector lifecycle, quality states, recovery, finalization, backup gating, alerts and resilience tests are locally verified; VPS installation, live Kite full-mode collection and deployed backup remain external. |
+| FEAT-064 | **REVIEW** | Runtime create/import/shared copy, immutable provenance/readiness semantics, legacy fixture reconciliation and Playwright journeys are verified; live membership-drift/runtime acceptance remains external. |
+| FEAT-065 | **REVIEW** | Schema-versioned Parquet, resumable/idempotent backfill, retries, checkpoints, coverage, DuckDB/Polars and manual-backup architecture are locally verified; live Kite POC/full corpus and handoff evidence remain external. |
 
 ## Evidence anchors (implemented slices)
 
-- **Tests:** `app/tests/Feature/V8/` (190 cases with configured ML runtime); `app/tests/e2e/screener-investor-workflow.spec.js` (2 browser cases); `shared/intraday/tests` and `shared/microstructure/tests/` (isolated project-compatible suites).
+- **Tests:** `app/tests/Feature/V8/` (191 total, 189 passed and 2 environment skips with configured ML runtime); `app/tests/e2e/screener-investor-workflow.spec.js` plus `guided-tour-browser.spec.js` (5 targeted browser cases); `shared/intraday/tests` and `shared/microstructure/tests/` (isolated project-compatible suites).
 - **Ledger:** [docs/V8-IMPLEMENTATION-LEDGER.md](V8-IMPLEMENTATION-LEDGER.md).
 - **Behavior:** [implementation.md](../implementation.md) § V8 FEAT-* sections.
 
@@ -27,7 +27,7 @@
 
 1. `php artisan test tests/Feature/V8/` green.
 2. `npm run build` (Node 22) green.
-3. Per-epic rows above reviewed; no epic marked **done** without spec § completion criteria met.
+3. Per-epic rows above reviewed; no epic marked **COMPLETE** without spec § completion criteria met. All epics currently remain REVIEW or partial pending external evidence.
 4. Migrations applied via `deploy/cpanel-migrate.php` when schema changed.
 
 **Conclusion:** V8 is **not** production-complete per frozen wishlist; continue implementation on partial epics before claiming release closure.
