@@ -10,6 +10,22 @@ return [
         'missing_values' => 'median_with_missingness_flags',
         'fitted_on' => 'training_partition_only',
         'categorical_unknown' => '__unknown',
+        'outliers' => [
+            'version' => 'v8-outlier-policy-1',
+            'method' => 'training_quantile_clip',
+            'lower_quantile' => 0.01,
+            'upper_quantile' => 0.99,
+            'features' => [
+                'debt_equity',
+                'revenue_growth_proxy',
+                'eps_growth_yoy',
+                'net_income_growth_yoy',
+                'net_debt_equity',
+                'pe_ratio',
+                'pb_ratio',
+            ],
+            'fitted_on' => 'training_partition_only',
+        ],
     ],
     'features' => [
         'relative_strength_1m' => [

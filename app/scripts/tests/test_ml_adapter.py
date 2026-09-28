@@ -70,6 +70,54 @@ class MlAdapterContractTest(unittest.TestCase):
         self.assertEqual(diagnostics["high_correlation_pairs"], [{"left": "a", "right": "b", "correlation": 1.0}])
 
     @unittest.skipUnless(SKLEARN_AVAILABLE, "scikit-learn is provided by the managed ML runtime")
+    def test_outlier_bounds_are_fit_on_training_rows_and_persisted_in_state(self):
+        spec = importlib.util.spec_from_file_location("ml_adapter_outliers", SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        rows = [
+            {"features": {"revenue_growth_proxy": value}}
+            for value in [-100.0, -1.0, 0.0, 1.0, 100.0]
+        ]
+        _, _, state = module.prepare(
+            rows,
+            ["revenue_growth_proxy"],
+            [],
+            outlier_policy={
+                "version": "test-outlier-policy",
+                "method": "training_quantile_clip",
+                "lower_quantile": 0.25,
+                "upper_quantile": 0.75,
+                "features": ["revenue_growth_proxy"],
+                "fitted_on": "training_partition_only",
+            },
+        )
+        self.assertEqual(state["outliers"]["fitted_on"], "training_partition_only")
+        self.assertEqual(state["outliers"]["bounds"], {"revenue_growth_proxy": {"lower": -1.0, "upper": 1.0}})
+        encoded = module.encode_row(
+            {"features": {"revenue_growth_proxy": 1000.0}},
+            ["revenue_growth_proxy"],
+            [],
+            state,
+        )
+        self.assertEqual(encoded, [1.0, 0.0])
+
+    @unittest.skipUnless(SKLEARN_AVAILABLE, "scikit-learn is provided by the managed ML runtime")
+    def test_naturally_bounded_features_are_not_clipped_by_default_policy(self):
+        spec = importlib.util.spec_from_file_location("ml_adapter_bounded", SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        rows = [{"features": {"operating_margin": value}} for value in [-10.0, 0.0, 10.0]]
+        _, _, state = module.prepare(rows, ["operating_margin"], [])
+        self.assertEqual(state["outliers"]["bounds"], {})
+        encoded = module.encode_row(
+            {"features": {"operating_margin": 1000.0}},
+            ["operating_margin"],
+            [],
+            state,
+        )
+        self.assertEqual(encoded, [1000.0, 0.0])
+
+    @unittest.skipUnless(SKLEARN_AVAILABLE, "scikit-learn is provided by the managed ML runtime")
     def test_int8_label_metrics_use_python_width_counts_for_large_partitions(self):
         import numpy as np
 

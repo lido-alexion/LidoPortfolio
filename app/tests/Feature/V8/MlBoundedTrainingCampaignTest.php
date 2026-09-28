@@ -70,6 +70,8 @@ class MlBoundedTrainingCampaignTest extends TestCase
             $this->assertSame($horizon, data_get($model->audit_metadata, 'feature_profile.horizon'));
             $this->assertSame(data_get($model->audit_metadata, 'feature_profile.feature_set_id'), data_get($model->audit_metadata, 'feature_profile.feature_set_version'));
             $this->assertSame('training_partition_only', data_get($model->trainingRun?->configuration, 'preprocessing.fitted_on'));
+            $this->assertSame('v8-outlier-policy-1', data_get($model->audit_metadata, 'adapter_metadata.preprocessing.outliers.version'));
+            $this->assertSame('training_partition_only', data_get($model->audit_metadata, 'adapter_metadata.preprocessing.outliers.fitted_on'));
             $this->assertSame('hist_gradient_boosting_challenger', data_get($model->trainingRun?->configuration, 'challenger_evidence.model_family'));
             $this->assertContains(data_get($model->trainingRun?->configuration, 'return_regressor_evidence.status'), ['trained', 'skipped']);
             $partitionCoverage = data_get($model->trainingRun?->configuration, 'feature_selection.partition_coverage');

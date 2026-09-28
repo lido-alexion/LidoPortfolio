@@ -20,6 +20,23 @@ from typing import Any
 
 MINIMUM_EFFECTIVE_FEATURES = 1
 
+DEFAULT_OUTLIER_POLICY = {
+    "version": "v8-outlier-policy-1",
+    "method": "training_quantile_clip",
+    "lower_quantile": 0.01,
+    "upper_quantile": 0.99,
+    "features": [
+        "debt_equity",
+        "revenue_growth_proxy",
+        "eps_growth_yoy",
+        "net_income_growth_yoy",
+        "net_debt_equity",
+        "pe_ratio",
+        "pb_ratio",
+    ],
+    "fitted_on": "training_partition_only",
+}
+
 
 class ValidationCalibratedClassifier:
     """A persisted wrapper calibrated only from the chronological validation set."""
@@ -83,7 +100,62 @@ def finite(value: Any) -> float | None:
     return number if math.isfinite(number) else None
 
 
-def prepare(rows: list[dict[str, Any]], numeric: list[str], categorical: list[str], state: dict[str, Any] | None = None):
+def normalize_outlier_policy(policy: dict[str, Any] | None, numeric: list[str]) -> dict[str, Any]:
+    configured = dict(DEFAULT_OUTLIER_POLICY)
+    if isinstance(policy, dict):
+        configured.update({key: value for key, value in policy.items() if key in configured})
+    try:
+        lower = float(configured["lower_quantile"])
+        upper = float(configured["upper_quantile"])
+    except (TypeError, ValueError):
+        raise ValueError("outlier quantiles must be numeric")
+    if not (0.0 <= lower < upper <= 1.0):
+        raise ValueError("outlier quantiles must satisfy 0 <= lower < upper <= 1")
+    configured["lower_quantile"] = lower
+    configured["upper_quantile"] = upper
+    configured["features"] = [name for name in configured.get("features", []) if name in numeric]
+    return configured
+
+
+def quantile_bounds(values: list[float], lower: float, upper: float) -> tuple[float, float]:
+    """Return deterministic linear-interpolated quantile bounds."""
+    if not values:
+        raise ValueError("cannot calculate outlier bounds without training values")
+    ordered = sorted(values)
+
+    def at(probability: float) -> float:
+        position = (len(ordered) - 1) * probability
+        left = int(position)
+        right = min(left + 1, len(ordered) - 1)
+        fraction = position - left
+        return ordered[left] + (ordered[right] - ordered[left]) * fraction
+
+    return at(lower), at(upper)
+
+
+def fit_outlier_state(rows: list[dict[str, Any]], numeric: list[str], policy: dict[str, Any] | None) -> dict[str, Any]:
+    configured = normalize_outlier_policy(policy, numeric)
+    bounds: dict[str, dict[str, float]] = {}
+    for name in configured["features"]:
+        values = [
+            value for row in rows
+            if (value := finite(row.get("features", {}).get(name))) is not None
+        ]
+        if values:
+            lower, upper = quantile_bounds(values, configured["lower_quantile"], configured["upper_quantile"])
+            bounds[name] = {"lower": lower, "upper": upper}
+    configured["bounds"] = bounds
+    return configured
+
+
+def apply_outlier(value: float, name: str, state: dict[str, Any]) -> float:
+    bounds = state.get("outliers", {}).get("bounds", {}).get(name)
+    if not isinstance(bounds, dict):
+        return value
+    return min(max(value, float(bounds["lower"])), float(bounds["upper"]))
+
+
+def prepare(rows: list[dict[str, Any]], numeric: list[str], categorical: list[str], state: dict[str, Any] | None = None, outlier_policy: dict[str, Any] | None = None):
     if state is None:
         medians: dict[str, float] = {}
         for name in numeric:
@@ -96,7 +168,7 @@ def prepare(rows: list[dict[str, Any]], numeric: list[str], categorical: list[st
             name: sorted({str(row.get("features", {}).get(name)) for row in rows if row.get("features", {}).get(name) is not None})
             for name in categorical
         }
-        state = {"medians": medians, "categories": categories}
+        state = {"medians": medians, "categories": categories, "outliers": fit_outlier_state(rows, numeric, outlier_policy)}
 
     vectors: list[list[float]] = []
     names: list[str] = []
@@ -111,7 +183,8 @@ def prepare(rows: list[dict[str, Any]], numeric: list[str], categorical: list[st
         vector: list[float] = []
         for name in numeric:
             value = finite(features.get(name))
-            vector.extend([state["medians"][name] if value is None else value, 1.0 if value is None else 0.0])
+            value = state["medians"][name] if value is None else apply_outlier(value, name, state)
+            vector.extend([value, 1.0 if finite(features.get(name)) is None else 0.0])
         for name in categorical:
             value = str(features.get(name)) if features.get(name) is not None else "__unknown"
             options = state["categories"].get(name, [])
@@ -131,7 +204,7 @@ def feature_names(numeric: list[str], categorical: list[str], state: dict[str, A
     return names
 
 
-def state_from_jsonl(path: str, numeric: list[str], categorical: list[str]) -> dict[str, Any]:
+def state_from_jsonl(path: str, numeric: list[str], categorical: list[str], outlier_policy: dict[str, Any] | None = None) -> dict[str, Any]:
     numeric_values = {name: [] for name in numeric}
     categories = {name: set() for name in categorical}
     for row in iter_jsonl(path):
@@ -151,7 +224,12 @@ def state_from_jsonl(path: str, numeric: list[str], categorical: list[str]) -> d
         values.sort()
         middle = len(values) // 2
         medians[name] = values[middle] if len(values) % 2 else (values[middle - 1] + values[middle]) / 2
-    return {"medians": medians, "categories": {name: sorted(values) for name, values in categories.items()}}
+    rows = list(iter_jsonl(path))
+    return {
+        "medians": medians,
+        "categories": {name: sorted(values) for name, values in categories.items()},
+        "outliers": fit_outlier_state(rows, numeric, outlier_policy),
+    }
 
 
 def feature_coverage(rows, numeric: list[str], categorical: list[str], total_count: int) -> tuple[list[str], list[str], list[dict[str, Any]], dict[str, dict[str, int]]]:
@@ -246,7 +324,8 @@ def encode_row(row: dict[str, Any], numeric: list[str], categorical: list[str], 
     vector: list[float] = []
     for name in numeric:
         value = finite(features.get(name))
-        vector.extend([state["medians"][name] if value is None else value, 1.0 if value is None else 0.0])
+        value = state["medians"][name] if value is None else apply_outlier(value, name, state)
+        vector.extend([value, 1.0 if finite(features.get(name)) is None else 0.0])
     for name in categorical:
         value = str(features.get(name)) if features.get(name) is not None else "__unknown"
         options = state["categories"].get(name, [])
@@ -461,6 +540,8 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("feature profile does not match configured adapter feature lists")
         if feature_profile.get("horizon") is None or feature_profile.get("feature_set_id") is None:
             raise ValueError("feature profile must pin horizon and feature_set_id")
+    preprocessing = feature_profile.get("preprocessing", {}) if isinstance(feature_profile, dict) else {}
+    outlier_policy = preprocessing.get("outliers") if isinstance(preprocessing, dict) else None
     if total_count < 12:
         raise ValueError("training dataset is too small")
     configured_numeric = numeric.copy()
@@ -471,7 +552,7 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
 
     if isinstance(dataset_paths, dict):
         numeric, categorical, excluded_features, feature_training_coverage = feature_coverage_from_jsonl(train_path, configured_numeric, configured_categorical, train_count)
-        state = state_from_jsonl(train_path, numeric, categorical)
+        state = state_from_jsonl(train_path, numeric, categorical, outlier_policy)
         x_train, y_train, train_returns, train_drawdowns, _ = matrix_from_jsonl(train_path, numeric, categorical, state, train_count)
         x_validation, y_validation, validation_returns, validation_drawdowns, _ = matrix_from_jsonl(validation_path, numeric, categorical, state, validation_count)
         x_test, y_test, test_returns, test_drawdowns, test_identities = matrix_from_jsonl(test_path, numeric, categorical, state, test_count, include_identities=True)
@@ -481,7 +562,7 @@ def train(request: dict[str, Any]) -> dict[str, Any]:
         y_train, train_returns, train_drawdowns, _ = compact_outcomes(train_rows)
         y_validation, validation_returns, validation_drawdowns, _ = compact_outcomes(validation_rows)
         y_test, test_returns, test_drawdowns, test_identities = compact_outcomes(test_rows)
-        x_train_list, feature_names_value, state = prepare(train_rows, numeric, categorical)
+        x_train_list, feature_names_value, state = prepare(train_rows, numeric, categorical, outlier_policy=outlier_policy)
         x_validation_list, _, _ = prepare(validation_rows, numeric, categorical, state)
         x_test_list, _, _ = prepare(test_rows, numeric, categorical, state)
         x_train = np.asarray(x_train_list, dtype=float)
