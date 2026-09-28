@@ -2,7 +2,7 @@
 
 **Purpose:** Honest end-state check against frozen V8 specs. Complements [V8-ACCEPTANCE-AUDIT.md](V8-ACCEPTANCE-AUDIT.md) (test gates + checklists).
 
-**Last verified:** 2026-09-29 — `STOXLA_ML_TEST_PYTHON=/tmp/stox-v8-ml-x86-venv.anZaFw/bin/python arch -x86_64 php -d memory_limit=512M vendor/bin/phpunit tests/Feature` (**1,346 passed / 1,347 total, 1 extension-only skip, 0 failures, 11,008 assertions**); Node 20.19.1 JS/Vitest/build/typecheck/docs checks green; focused Chromium acceptance passed 9/9; Python ML/microstructure/intraday focused suites green.
+**Last verified:** 2026-09-29 — `STOXLA_ML_TEST_PYTHON=/tmp/stox-v8-ml-x86-venv.anZaFw/bin/python arch -x86_64 php -d memory_limit=512M vendor/bin/phpunit tests/Feature` (**1,346 passed / 1,347 total, 1 extension-only skip, 0 failures, 11,008 assertions**); Node 20.19.1 JS/Vitest/build/typecheck/docs checks green; focused guided-tour Chromium acceptance passed 11/11 and the focused FEAT-062/Screener journeys are green; Python microstructure/intraday focused suites pass in the project-compatible environment.
 
 | Epic | Verdict | Remaining work (authoritative gaps) |
 |------|---------|-------------------------------------|
@@ -19,14 +19,14 @@
 
 ## Evidence anchors (implemented slices)
 
-- **Tests:** `app/tests/Feature/V8/` (191 total, 189 passed and 2 environment skips with configured ML runtime); `app/tests/e2e/fundamental-insights-browser.spec.js`, `screener-investor-workflow.spec.js` and `guided-tour-browser.spec.js` (focused Chromium acceptance 9/9); `shared/intraday/tests` and `shared/microstructure/tests/` (isolated project-compatible suites).
+- **Tests:** full `app/tests/Feature` (1,347 total, 1,346 passed, 1 extension-only skip); `app/tests/e2e/fundamental-insights-browser.spec.js`, `screener-investor-workflow.spec.js` and `guided-tour-browser.spec.js` (guided-tour focused Chromium 11/11); `shared/intraday/tests` (22/22) and `shared/microstructure/tests/` (28/28) in the isolated project-compatible environment.
 - **Ledger:** [docs/V8-IMPLEMENTATION-LEDGER.md](V8-IMPLEMENTATION-LEDGER.md).
 - **Behavior:** [implementation.md](../implementation.md) § V8 FEAT-* sections.
 
 ## Production deploy gate (not satisfied until gaps closed)
 
 1. `php artisan test tests/Feature/V8/` green.
-2. `npm run build` (Node 22) green.
+2. `npm run build` (Node 20.19.1 project-compatible runtime) green.
 3. Per-epic rows above reviewed; no epic marked **COMPLETE** without spec § completion criteria met. All epics currently remain REVIEW or partial pending external evidence.
 4. Migrations applied via `deploy/cpanel-migrate.php` when schema changed.
 
