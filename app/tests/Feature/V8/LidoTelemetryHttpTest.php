@@ -57,4 +57,25 @@ class LidoTelemetryHttpTest extends TestCase
             return str_contains((string) $body, 'stock_id');
         });
     }
+
+    public function test_business_telemetry_continues_incoming_trace_context(): void
+    {
+        Http::fake();
+        config([
+            'lido_telemetry.enabled' => true,
+            'lido_telemetry.otlp_traces_endpoint' => 'http://collector.test/v1/traces',
+        ]);
+
+        $request = \Illuminate\Http\Request::create('/api/test', 'GET');
+        $request->headers->set('traceparent', '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01');
+        app()->instance('request', $request);
+
+        app(\App\Telemetry\LidoTelemetry::class)->recordBusinessEvent('stox.test.trace');
+
+        Http::assertSent(function ($httpRequest): bool {
+            $payload = $httpRequest->data();
+
+            return data_get($payload, 'resourceSpans.0.scopeSpans.0.spans.0.traceId') === '4bf92f3577b34da6a3ce929d0e0e4736';
+        });
+    }
 }
