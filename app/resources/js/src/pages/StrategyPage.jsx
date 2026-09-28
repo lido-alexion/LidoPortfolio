@@ -155,6 +155,8 @@ function applyPayload(payload, setMeta, setConfig) {
         enabled_indicator_count: payload.enabled_indicator_count ?? payload.enabled_factor_count,
         weight_total: payload.weight_total,
         weights_valid: payload.weights_valid,
+        setup_required: Boolean(payload.setup_required),
+        readiness: payload.readiness || null,
         reusable_artifact_uuid: payload.reusable_artifact_uuid,
         compatibility_read_only: Boolean(payload.compatibility_read_only),
     });
@@ -930,8 +932,22 @@ export default function StrategyPage() {
 
             {compatibilityReadOnly ? (
                 <div className="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2" role="status">
-                    <span>This is a read-only runtime projection. Draft, publish, and explicitly upgrade it in the Artifact Library.</span>
+                    <span>
+                        This Strategy is bound to a published Artifact Library version, so you cannot edit it here.
+                        Open the library entry to create a draft, publish an upgrade, and bind it to this portfolio.
+                    </span>
                     {meta.reusable_artifact_uuid ? <Link className="btn btn-sm btn-primary" to={`/artifact-library/${meta.reusable_artifact_uuid}`}>Open artifact</Link> : null}
+                </div>
+            ) : null}
+
+            {meta.setup_required && Array.isArray(meta.readiness?.requirements) && meta.readiness.requirements.length > 0 ? (
+                <div className="alert alert-warning" role="status">
+                    <div className="fw-semibold mb-1">Setup required</div>
+                    <ul className="mb-0 small">
+                        {meta.readiness.requirements.map((req) => (
+                            <li key={req.code}>{req.message}</li>
+                        ))}
+                    </ul>
                 </div>
             ) : null}
 
@@ -992,7 +1008,8 @@ export default function StrategyPage() {
                                     type="button"
                                     id="strategy-editor-enable"
                                     className="btn btn-primary btn-sm"
-                                    disabled={lifecycleBusy || compatibilityReadOnly}
+                                    disabled={lifecycleBusy || compatibilityReadOnly || meta.setup_required}
+                                    title={meta.setup_required ? 'Complete setup requirements before enabling' : undefined}
                                     onClick={onEnableCurrent}
                                 >
                                     Enable
