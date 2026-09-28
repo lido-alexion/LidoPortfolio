@@ -37,6 +37,11 @@ test.describe('FEAT-061 guided tour mobile browser acceptance', () => {
         const stepBox = await firstStep.boundingBox();
         expect(stepBox).not.toBeNull();
         expect(stepBox.width).toBeLessThanOrEqual(390);
+
+        for (let index = 0; index < 6; index += 1) {
+            await page.keyboard.press('Tab');
+            await expect(firstStep.locator(':focus')).toBeVisible();
+        }
     });
 
     test('closing a manually launched tour restores focus to its trigger', async ({ page }) => {

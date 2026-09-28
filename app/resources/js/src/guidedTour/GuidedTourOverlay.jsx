@@ -68,6 +68,24 @@ export default function GuidedTourOverlay({
             if (event.key === 'Escape') {
                 event.preventDefault();
                 onClose();
+                return;
+            }
+            if (event.key === 'Tab' && panelRef.current) {
+                const focusable = Array.from(panelRef.current.querySelectorAll(
+                    'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+                ));
+                if (focusable.length === 0) {
+                    event.preventDefault();
+                    return;
+                }
+                const currentIndex = focusable.indexOf(document.activeElement);
+                const nextIndex = event.shiftKey
+                    ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
+                    : (currentIndex < 0 || currentIndex === focusable.length - 1 ? 0 : currentIndex + 1);
+                if (currentIndex < 0 || (event.shiftKey && currentIndex === 0) || (!event.shiftKey && currentIndex === focusable.length - 1)) {
+                    event.preventDefault();
+                    focusable[nextIndex].focus();
+                }
             }
         };
         document.addEventListener('keydown', onKey);

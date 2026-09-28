@@ -102,16 +102,31 @@ export function GuidedTourProvider({ children, user }) {
     const rememberFocus = useCallback(() => {
         const active = document.activeElement;
         if (active && active !== document.body && typeof active.focus === 'function') {
-            focusReturnRef.current = active;
+            focusReturnRef.current = {
+                element: active,
+                selector: active.getAttribute('data-tour')
+                    ? `[data-tour="${active.getAttribute('data-tour')}"]`
+                    : null,
+            };
         }
     }, []);
 
     const restoreFocus = useCallback(() => {
-        const element = focusReturnRef.current;
+        const target = focusReturnRef.current;
         focusReturnRef.current = null;
-        if (element?.isConnected && typeof element.focus === 'function') {
-            window.setTimeout(() => element.focus(), 0);
-        }
+        const focus = (attempt = 0) => {
+            const element = target?.element?.isConnected
+                ? target.element
+                : (target?.selector ? document.querySelector(target.selector) : null);
+            if (element && typeof element.focus === 'function') {
+                element.focus();
+                return;
+            }
+            if (attempt < 3) {
+                window.setTimeout(() => focus(attempt + 1), 50);
+            }
+        };
+        focus();
     }, []);
 
     const computeTargetRect = useCallback((el) => {
