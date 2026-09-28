@@ -73,6 +73,10 @@
             "description": "Routes under `/api/v1/execution`."
         },
         {
+            "name": "fundamentals",
+            "description": "Routes under `/api/v1/fundamentals`."
+        },
+        {
             "name": "imports",
             "description": "Routes under `/api/v1/imports`."
         },
@@ -133,6 +137,10 @@
             "description": "Routes under `/api/v1/stocks`."
         },
         {
+            "name": "strategies",
+            "description": "Routes under `/api/v1/strategies`."
+        },
+        {
             "name": "strategy",
             "description": "Routes under `/api/v1/strategy`."
         },
@@ -158,6 +166,150 @@
                 "summary": "GET adminStatus",
                 "description": "Live route: `GET /api/v1/admin/fundamentals`. Action: `App\\Http\\Controllers\\Api\\V1\\FundamentalDataController@adminStatus`. Requires admin (`is_admin`).",
                 "operationId": "get_admin_fundamentals",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/ai-insights/test": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "POST testAiInsights",
+                "description": "Live route: `POST /api/v1/admin/fundamentals/ai-insights/test`. Action: `App\\Http\\Controllers\\Api\\V1\\FundamentalDataController@testAiInsights`. Requires admin (`is_admin`).",
+                "operationId": "post_admin_fundamentals_ai-insights_test",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "GET bootstrapStatus",
+                "description": "Live route: `GET /api/v1/admin/fundamentals/bootstrap`. Action: `App\\Http\\Controllers\\Api\\V1\\FundamentalDataController@bootstrapStatus`. Requires admin (`is_admin`).",
+                "operationId": "get_admin_fundamentals_bootstrap",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/metric-catalog": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "GET metricCatalog",
+                "description": "Live route: `GET /api/v1/admin/fundamentals/metric-catalog`. Action: `App\\Http\\Controllers\\Api\\V1\\FundamentalDataController@metricCatalog`. Requires admin (`is_admin`).",
+                "operationId": "get_admin_fundamentals_metric-catalog",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/XProfileId"
@@ -370,6 +522,50 @@
                 "x-stox-admin": true
             }
         },
+        "/api/v1/admin/intraday-platform": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "GET status",
+                "description": "Live route: `GET /api/v1/admin/intraday-platform`. Action: `App\\Http\\Controllers\\Api\\V1\\IntradayPlatformAdminController@status`. Requires admin (`is_admin`).",
+                "operationId": "get_admin_intraday-platform",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
         "/api/v1/admin/ml": {
             "get": {
                 "tags": [
@@ -378,6 +574,94 @@
                 "summary": "GET adminIndex",
                 "description": "Live route: `GET /api/v1/admin/ml`. Action: `App\\Http\\Controllers\\Api\\V1\\MlScoringController@adminIndex`. Requires admin (`is_admin`).",
                 "operationId": "get_admin_ml",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/dataset-plan": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "GET datasetPlan",
+                "description": "Live route: `GET /api/v1/admin/ml/dataset-plan`. Action: `App\\Http\\Controllers\\Api\\V1\\MlScoringController@datasetPlan`. Requires admin (`is_admin`).",
+                "operationId": "get_admin_ml_dataset-plan",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/features": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "GET featureRegistry",
+                "description": "Live route: `GET /api/v1/admin/ml/features`. Action: `App\\Http\\Controllers\\Api\\V1\\MlScoringController@featureRegistry`. Requires admin (`is_admin`).",
+                "operationId": "get_admin_ml_features",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/XProfileId"
@@ -551,6 +835,102 @@
                 "x-stox-admin": true
             }
         },
+        "/api/v1/admin/ml/models/{model}/promotion-review": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "GET promotionReview",
+                "description": "Live route: `GET /api/v1/admin/ml/models/{model}/promotion-review`. Action: `App\\Http\\Controllers\\Api\\V1\\MlScoringController@promotionReview`. Requires admin (`is_admin`).",
+                "operationId": "get_admin_ml_models_model_promotion-review",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "model",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/retention-plan": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "GET retentionPlan",
+                "description": "Live route: `GET /api/v1/admin/ml/retention-plan`. Action: `App\\Http\\Controllers\\Api\\V1\\MlScoringController@retentionPlan`. Requires admin (`is_admin`).",
+                "operationId": "get_admin_ml_retention-plan",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
         "/api/v1/admin/ml/retrain": {
             "post": {
                 "tags": [
@@ -559,6 +939,62 @@
                 "summary": "POST retrain",
                 "description": "Live route: `POST /api/v1/admin/ml/retrain`. Action: `App\\Http\\Controllers\\Api\\V1\\MlScoringController@retrain`. Requires admin (`is_admin`).",
                 "operationId": "post_admin_ml_retrain",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/retrain-queue": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "POST queueRetrain",
+                "description": "Live route: `POST /api/v1/admin/ml/retrain-queue`. Action: `App\\Http\\Controllers\\Api\\V1\\MlScoringController@queueRetrain`. Requires admin (`is_admin`).",
+                "operationId": "post_admin_ml_retrain-queue",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/XProfileId"
@@ -656,6 +1092,326 @@
                                 "type": "object",
                                 "additionalProperties": true,
                                 "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/runs": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "GET trainingRuns",
+                "description": "Live route: `GET /api/v1/admin/ml/runs`. Action: `App\\Http\\Controllers\\Api\\V1\\MlScoringController@trainingRuns`. Requires admin (`is_admin`).",
+                "operationId": "get_admin_ml_runs",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/runs/{run}": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "GET trainingRun",
+                "description": "Live route: `GET /api/v1/admin/ml/runs/{run}`. Action: `App\\Http\\Controllers\\Api\\V1\\MlScoringController@trainingRun`. Requires admin (`is_admin`).",
+                "operationId": "get_admin_ml_runs_run",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "run",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/runs/{run}/cancel": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "POST cancelTrainingRun",
+                "description": "Live route: `POST /api/v1/admin/ml/runs/{run}/cancel`. Action: `App\\Http\\Controllers\\Api\\V1\\MlScoringController@cancelTrainingRun`. Requires admin (`is_admin`).",
+                "operationId": "post_admin_ml_runs_run_cancel",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "run",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/runs/{run}/stream": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "GET trainingRunStream",
+                "description": "Live route: `GET /api/v1/admin/ml/runs/{run}/stream`. Action: `App\\Http\\Controllers\\Api\\V1\\MlScoringController@trainingRunStream`. Requires admin (`is_admin`).",
+                "operationId": "get_admin_ml_runs_run_stream",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "run",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/schedules/{horizon}": {
+            "put": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "PUT updateSchedule",
+                "description": "Live route: `PUT /api/v1/admin/ml/schedules/{horizon}`. Action: `App\\Http\\Controllers\\Api\\V1\\MlScoringController@updateSchedule`. Requires admin (`is_admin`).",
+                "operationId": "put_admin_ml_schedules_horizon",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "horizon",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/strategy-provenance/migration-report": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "GET migrationReport",
+                "description": "Live route: `GET /api/v1/admin/strategy-provenance/migration-report`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyProvenanceController@migrationReport`. Requires admin (`is_admin`).",
+                "operationId": "get_admin_strategy-provenance_migration-report",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
                             }
                         }
                     }
@@ -5345,6 +6101,46 @@
                 }
             }
         },
+        "/api/v1/fundamentals/metric-catalog": {
+            "get": {
+                "tags": [
+                    "fundamentals"
+                ],
+                "summary": "GET metricCatalog",
+                "description": "Live route: `GET /api/v1/fundamentals/metric-catalog`. Action: `App\\Http\\Controllers\\Api\\V1\\FundamentalDataController@metricCatalog`.",
+                "operationId": "get_fundamentals_metric-catalog",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/imports": {
             "post": {
                 "tags": [
@@ -8409,6 +9205,218 @@
                 }
             }
         },
+        "/api/v1/stocks/{stock}/fundamentals/history": {
+            "get": {
+                "tags": [
+                    "stocks"
+                ],
+                "summary": "GET history",
+                "description": "Live route: `GET /api/v1/stocks/{stock}/fundamentals/history`. Action: `App\\Http\\Controllers\\Api\\V1\\FundamentalDataController@history`.",
+                "operationId": "get_stocks_stock_fundamentals_history",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "stock",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/stocks/{stock}/fundamentals/metrics/{metric}/history": {
+            "get": {
+                "tags": [
+                    "stocks"
+                ],
+                "summary": "GET metricHistory",
+                "description": "Live route: `GET /api/v1/stocks/{stock}/fundamentals/metrics/{metric}/history`. Action: `App\\Http\\Controllers\\Api\\V1\\FundamentalDataController@metricHistory`.",
+                "operationId": "get_stocks_stock_fundamentals_metrics_metric_history",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "stock",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "metric",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/stocks/{stock}/ml-insights": {
+            "get": {
+                "tags": [
+                    "stocks"
+                ],
+                "summary": "GET stockMlInsights",
+                "description": "Live route: `GET /api/v1/stocks/{stock}/ml-insights`. Action: `App\\Http\\Controllers\\Api\\V1\\MlScoringController@stockMlInsights`.",
+                "operationId": "get_stocks_stock_ml-insights",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "stock",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/stocks/{stock}/ml-insights/refresh": {
+            "post": {
+                "tags": [
+                    "stocks"
+                ],
+                "summary": "POST refreshStockMlInsights",
+                "description": "Live route: `POST /api/v1/stocks/{stock}/ml-insights/refresh`. Action: `App\\Http\\Controllers\\Api\\V1\\MlScoringController@refreshStockMlInsights`.",
+                "operationId": "post_stocks_stock_ml-insights_refresh",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "stock",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/stocks/{stock}/ml-predictions": {
             "post": {
                 "tags": [
@@ -8428,6 +9436,58 @@
                         "schema": {
                             "type": "string"
                         }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/strategies": {
+            "post": {
+                "tags": [
+                    "strategies"
+                ],
+                "summary": "POST store",
+                "description": "Live route: `POST /api/v1/strategies`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyController@store`.",
+                "operationId": "post_strategies",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
                 "responses": {
