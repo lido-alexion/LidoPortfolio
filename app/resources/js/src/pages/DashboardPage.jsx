@@ -8,6 +8,7 @@ import { DataTableCard } from '../components/DataTable';
 import AnalyseStockButton from '../components/AnalyseStockButton';
 import DashboardTopMoverCard from '../components/DashboardTopMoverCard';
 import DashboardAllocationCard from '../components/DashboardAllocationCard';
+import DashboardLayoutToolbar from '../components/DashboardLayoutToolbar';
 import KiteReadinessCard from '../components/KiteReadinessCard';
 import PortfolioReconciliationCard from '../components/PortfolioReconciliationCard';
 import PercentGradientBar from '../components/PercentGradientBar';
@@ -35,6 +36,7 @@ import { patternGuideLink } from '../utils/patternGuideLinks';
 import { normalizeDashboardChartNumber } from '../utils/dashboardState';
 import { formatInrCompactWhole, formatInrWhole, formatTablePercent0 } from '../utils/tableFormat';
 import { formatChartAxisDate, formatTransactionDateDisplay } from '../utils/transactionDate';
+import { migrateDashboardLayout } from '../utils/dashboardLayouts';
 import {
     CartesianGrid,
     Line,
@@ -301,6 +303,7 @@ export default function DashboardPage() {
     const [servedFromCache, setServedFromCache] = useState(false);
     const [cachedAt, setCachedAt] = useState(null);
     const [marketDiagnosticsExpanded, setMarketDiagnosticsExpanded] = useState(loadMarketDiagnosticsExpanded);
+    const [dashboardLayout, setDashboardLayout] = useState(() => migrateDashboardLayout(null));
 
     const handleTopMoverPeriodChange = useCallback((period) => {
         setTopMoverPeriod(period);
@@ -683,21 +686,25 @@ export default function DashboardPage() {
 
     const cards = [
         {
+            id: 'portfolio_value',
             title: 'Portfolio Value',
             value: formatInrWhole(data.portfolio_value),
             valueClassName: portfolioVsInvestedClass,
         },
         {
+            id: 'invested_value',
             title: 'Invested Value',
             value: formatInrWhole(data.invested_value),
             valueClassName: '',
         },
         {
+            id: 'total_gain_loss',
             title: 'Total Gain/Loss',
             value: `${formatInrWhole(data.total_gain_loss)}${profitLossPctLabel}`,
             valueClassName: portfolioVsInvestedClass,
         },
         {
+            id: 'xirr',
             title: 'XIRR',
             value: data.xirr != null ? `${Number(data.xirr).toFixed(2)}%` : 'N/A',
             valueClassName: signedMetricClass(data.xirr),
@@ -794,6 +801,7 @@ export default function DashboardPage() {
 
     return (
         <div className="row g-3">
+            <DashboardLayoutToolbar userId={userId} onLayoutChange={setDashboardLayout} />
             {activePortfolio?.portfolio_type !== 'paper' ? <div className="col-12">
                 <KiteReadinessCard executionMode={activePortfolio?.execution_mode} />
             </div> : <div className="col-12"><div className="alert alert-warning mb-0"><strong>PAPER portfolio</strong> · Uses simulated cash and execution. Kite submission and reconciliation are unavailable.</div></div>}
@@ -861,8 +869,8 @@ export default function DashboardPage() {
             <div className="col-12">
                 <h2 className="h6 text-muted mb-0">Portfolio</h2>
             </div>
-            {cards.map(({ title, value, valueClassName }) => (
-                <div className="col-12 col-md-6 col-lg-4" key={title}>
+            {cards.filter((card) => dashboardLayout.desktop.summaryFields.find((field) => field.id === card.id)?.visible !== false).map(({ id, title, value, valueClassName }) => (
+                <div className="col-12 col-md-6 col-lg-4" key={id}>
                     <div className="card h-100">
                         <div className="card-body">
                             <div className="text-muted small">{title}</div>

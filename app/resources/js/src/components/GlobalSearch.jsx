@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { holdingsPricesPath } from '../navigation/routes';
 import { normalizeGlobalSearchQuery, searchVisiblePages } from '../utils/globalSearch';
+import { explainJourneyMatch, searchJourneyTopics } from '../data/journeyMetadata';
 
 const MIN_STOCK_QUERY_LENGTH = 2;
 const STOCK_DEBOUNCE_MS = 300;
@@ -36,11 +37,14 @@ function useConstrainedWidth() {
 function resultLabel(result) {
     return result.kind === 'stock'
         ? `${result.symbol}${result.name ? `, ${result.name}` : ''}${result.exchange ? `, ${result.exchange}` : ''}`
+        : result.kind === 'help'
+            ? `${result.title}, ${result.secondary}`
         : `${result.label}, ${result.secondary}`;
 }
 
 function SearchResults({ results, activeIndex, onHover, onSelect }) {
     const pages = results.filter((result) => result.kind === 'page');
+    const help = results.filter((result) => result.kind === 'help');
     const stocks = results.filter((result) => result.kind === 'stock');
     let index = 0;
 
@@ -65,11 +69,13 @@ function SearchResults({ results, activeIndex, onHover, onSelect }) {
                                     }}
                                 >
                                     <span className="lido-global-search-result-label">
-                                        {result.kind === 'stock' ? result.symbol : result.label}
+                                        {result.kind === 'stock' ? result.symbol : result.kind === 'help' ? result.title : result.label}
                                     </span>
                                     <span className="lido-global-search-result-secondary">
                                         {result.kind === 'stock'
                                             ? `${result.name || 'Stock'}${result.exchange ? ` · ${result.exchange}` : ''}`
+                                            : result.kind === 'help'
+                                                ? `${result.secondary} · ${result.matchReason}`
                                             : result.secondary}
                                     </span>
                                 </Link>
@@ -85,6 +91,7 @@ function SearchResults({ results, activeIndex, onHover, onSelect }) {
     return (
         <div className="lido-global-search-results" aria-label="Search results">
             {renderGroup('Pages', pages)}
+            {renderGroup('How do I?', help)}
             {renderGroup('Stocks', stocks)}
         </div>
     );
@@ -157,6 +164,11 @@ function GlobalSearchFeature({ user }) {
     const [stockLoading, setStockLoading] = useState(false);
     const [stockError, setStockError] = useState(false);
     const [activeIndex, setActiveIndex] = useState(-1);
+    const [helpHistory, setHelpHistory] = useState(() => {
+        try {
+            return JSON.parse(localStorage.getItem(`stox_help_history_${user?.id}`) || '[]');
+        } catch { return []; }
+    });
     const triggerRef = useRef(null);
     const inputRef = useRef(null);
     const surfaceRef = useRef(null);
@@ -165,8 +177,20 @@ function GlobalSearchFeature({ user }) {
     const lastPathRef = useRef(location.pathname);
 
     const pageResults = useMemo(() => searchVisiblePages(query, user), [query, user]);
+    const helpResults = useMemo(() => searchJourneyTopics(query, {
+        currentPath: location.pathname,
+        history: helpHistory,
+    }).filter((topic) => topic.score >= 12).map((topic) => ({
+        kind: 'help',
+        title: topic.title,
+        secondary: topic.category,
+        sourceId: topic.id,
+        destination: `/documentation?journey=${encodeURIComponent(topic.id)}&q=${encodeURIComponent(topic.id)}`,
+        matchReason: explainJourneyMatch(topic, query),
+    })), [query, location.pathname, helpHistory]);
     const results = useMemo(() => [
         ...pageResults,
+        ...helpResults,
         ...stockResults.map((stock) => ({
             kind: 'stock',
             symbol: stock.symbol,
@@ -175,7 +199,7 @@ function GlobalSearchFeature({ user }) {
             sourceId: stock.id,
             destination: holdingsPricesPath(stock.id),
         })),
-    ], [pageResults, stockResults]);
+    ], [helpResults, pageResults, stockResults]);
 
     const clearTransientState = useCallback(() => {
         requestGenerationRef.current += 1;
@@ -186,6 +210,12 @@ function GlobalSearchFeature({ user }) {
         setActiveIndex(-1);
     }, []);
 
+    const openSearch = useCallback(() => {
+        window.dispatchEvent(new CustomEvent('lido-global-search-open', { detail: { modal: isConstrained } }));
+        openRef.current = true;
+        setOpen(true);
+    }, [isConstrained]);
+
     const closeSearch = useCallback((restoreFocus = true) => {
         openRef.current = false;
         setOpen(false);
@@ -194,12 +224,6 @@ function GlobalSearchFeature({ user }) {
             window.setTimeout(() => triggerRef.current?.focus(), 0);
         }
     }, [clearTransientState]);
-
-    const openSearch = useCallback(() => {
-        window.dispatchEvent(new CustomEvent('lido-global-search-open', { detail: { modal: isConstrained } }));
-        openRef.current = true;
-        setOpen(true);
-    }, [isConstrained]);
 
     useEffect(() => {
         if (!open) return undefined;
@@ -223,6 +247,17 @@ function GlobalSearchFeature({ user }) {
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
     }, [isConstrained, open]);
+
+    useEffect(() => {
+        const onShortcut = (event) => {
+            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+                event.preventDefault();
+                if (!openRef.current) openSearch();
+            }
+        };
+        document.addEventListener('keydown', onShortcut);
+        return () => document.removeEventListener('keydown', onShortcut);
+    }, [openSearch]);
 
     useEffect(() => {
         const closeForMobileUtility = (event) => {
@@ -281,6 +316,11 @@ function GlobalSearchFeature({ user }) {
     }, [closeSearch, open]);
 
     const selectResult = (result) => {
+        if (result.kind === 'help') {
+            const next = [result.sourceId, ...helpHistory.filter((id) => id !== result.sourceId)].slice(0, 8);
+            setHelpHistory(next);
+            try { localStorage.setItem(`stox_help_history_${user?.id}`, JSON.stringify(next)); } catch { /* best effort */ }
+        }
         closeSearch(false);
         navigate(result.destination);
     };
@@ -311,7 +351,7 @@ function GlobalSearchFeature({ user }) {
                 type="button"
                 className="lido-global-search-trigger lido-icon-action"
                 aria-label="Open global search"
-                title="Search pages or stocks"
+                title="Search pages, stocks, or How do I? help (Ctrl/Cmd+K)"
                 aria-expanded={open}
                 aria-haspopup={isConstrained ? 'dialog' : undefined}
                 onClick={open ? () => closeSearch(true) : openSearch}
