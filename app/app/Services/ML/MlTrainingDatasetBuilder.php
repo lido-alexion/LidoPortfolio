@@ -596,7 +596,7 @@ class MlTrainingDatasetBuilder
             'current_ratio' => $this->currentRatioFromService($stock, $asOf),
             'gross_margin' => $this->grossMarginFromService($stock, $asOf),
             ...$this->bankMetrics->metricsForStock($stock, $asOf),
-            'sector' => $stock->sector ?: '__unknown',
+            'sector' => $this->historicalSector($stock, $asOf->toDateString()),
             'as_of' => $asOf->toDateTimeString(),
             'benchmark_symbol' => $benchmark?->symbol ?: 'NIFTY50',
             'benchmark_close' => $benchmarkClose,
@@ -736,8 +736,13 @@ class MlTrainingDatasetBuilder
             'net_npa_ratio' => $metrics['net_npa_ratio'],
             'capital_adequacy_ratio' => $metrics['capital_adequacy_ratio'],
             'net_interest_margin' => $metrics['net_interest_margin'],
-            'sector' => $stock->sector ?: '__unknown',
+            'sector' => $this->historicalSector($stock, $date),
         ];
+    }
+
+    private function historicalSector(Stock $stock, string $referenceDate): string
+    {
+        return $this->sectorRelative->sectorForDate((int) $stock->id, $referenceDate) ?? '__unknown';
     }
 
     private function ratio(?float $numerator, ?float $denominator): ?float

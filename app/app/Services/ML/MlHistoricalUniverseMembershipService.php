@@ -227,6 +227,9 @@ class MlHistoricalUniverseMembershipService
             $normalized[$date] = [
                 'effective_from' => $date,
                 'memberships' => array_values($snapshot['memberships'] ?? []),
+                'snapshot_key' => $snapshot['snapshot_key'] ?? null,
+                'response_version' => $snapshot['response_version'] ?? null,
+                'diagnostics' => $snapshot['diagnostics'] ?? null,
             ];
         }
         ksort($normalized);
@@ -299,7 +302,7 @@ class MlHistoricalUniverseMembershipService
                             'exchange' => $entry['exchange'] ?? 'NSE',
                         ])->save();
                     }
-                    $this->recordSnapshotBoundary($date, $source, (string) ($snapshot['snapshot_key'] ?? $source.':'.$date), count($stockIds), $universeKey, isset($snapshot['response_version']) ? (string) $snapshot['response_version'] : null);
+                    $this->recordSnapshotBoundary($date, $source, (string) ($snapshot['snapshot_key'] ?? $source.':'.$date), count($stockIds), $universeKey, isset($snapshot['response_version']) ? (string) $snapshot['response_version'] : null, $snapshot['diagnostics'] ?? null);
                 });
                 $processed[] = $date;
                 $run->forceFill(['processed_dates' => array_values(array_unique($processed)), 'failed_dates' => $failed])->save();
@@ -342,11 +345,11 @@ class MlHistoricalUniverseMembershipService
      * @param list<string> $dates
      * @return array<string,mixed>
      */
-    public function backfillFromProvider(array $dates, MlHistoricalUniverseProvider $provider, string $source, int $maxAttempts = 3, string $universeKey = self::ACTIVE_ELIGIBLE_NSE): array
+    public function backfillFromProvider(array $dates, MlHistoricalUniverseProvider $provider, string $source, int $maxAttempts = 3, string $universeKey = self::ACTIVE_ELIGIBLE_NSE, ?int $runId = null): array
     {
         $requested = array_values(array_unique(array_map(fn (string $date): string => Carbon::parse($date)->toDateString(), $dates)));
         sort($requested);
-        $run = MlUniverseSnapshotBackfillRun::query()->create([
+        $run = $runId !== null ? MlUniverseSnapshotBackfillRun::query()->findOrFail($runId) : MlUniverseSnapshotBackfillRun::query()->create([
             'universe_key' => $universeKey,
             'source' => $source,
             'requested_dates' => $requested,
@@ -356,6 +359,10 @@ class MlHistoricalUniverseMembershipService
             'status' => 'running',
             'started_at' => now(),
         ]);
+        if ($runId !== null) {
+            $requested = array_values(array_unique(array_map('strval', $run->requested_dates ?? $requested)));
+            sort($requested);
+        }
         $failed = [];
         $retryCounts = [];
         foreach ($requested as $date) {
@@ -389,7 +396,7 @@ class MlHistoricalUniverseMembershipService
             'completed_at' => $failed === [] ? now() : null,
         ])->save();
 
-        return $run->fresh()->toArray();
+        return ['run_id' => (int) $run->id, ...$run->fresh()->toArray()];
     }
 
     private function snapshotBoundaryExists(string $date, string $universeKey): bool
@@ -400,7 +407,7 @@ class MlHistoricalUniverseMembershipService
             ->exists();
     }
 
-    private function recordSnapshotBoundary(string $date, string $source, string $snapshotKey, int $memberCount, string $universeKey, ?string $responseVersion = null): void
+    private function recordSnapshotBoundary(string $date, string $source, string $snapshotKey, int $memberCount, string $universeKey, ?string $responseVersion = null, ?array $diagnostics = null): void
     {
         $boundary = MlUniverseSnapshotBoundary::query()
             ->where('universe_key', $universeKey)
@@ -414,6 +421,7 @@ class MlHistoricalUniverseMembershipService
             'snapshot_key' => $snapshotKey,
             'provider_response_version' => $responseVersion,
             'member_count' => $memberCount,
+            'quality_diagnostics' => $diagnostics,
         ])->save();
     }
 }

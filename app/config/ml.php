@@ -3,6 +3,8 @@
 return [
     'historical_universe' => [
         'archive_path' => env('STOXLA_ML_HISTORICAL_UNIVERSE_ARCHIVE', ''),
+        'mii_path' => env('STOXLA_ML_NSE_MII_PATH', ''),
+        'bhavcopy_path' => env('STOXLA_ML_NSE_BHAVCOPY_PATH', ''),
         'source' => env('STOXLA_ML_HISTORICAL_UNIVERSE_SOURCE', 'configured_authoritative_archive'),
     ],
     'python' => env('STOXLA_ML_PYTHON', '/var/www/stoxla/shared/python/ml/bin/python'),

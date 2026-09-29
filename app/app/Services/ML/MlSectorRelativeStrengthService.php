@@ -21,6 +21,11 @@ class MlSectorRelativeStrengthService
         $this->memberships->resetMemo();
     }
 
+    public function sectorForDate(int $stockId, string $date): ?string
+    {
+        return $this->memberships->sectorForDate($stockId, $date);
+    }
+
     public function relativeStrength3m(Stock $stock, string $asOfDate): ?float
     {
         $sector = $this->memberships->sectorForDate((int) $stock->id, $asOfDate);

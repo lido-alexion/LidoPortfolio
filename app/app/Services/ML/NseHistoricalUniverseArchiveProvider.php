@@ -1,0 +1,209 @@
+<?php
+
+namespace App\Services\ML;
+
+use App\Contracts\MlHistoricalUniverseProvider;
+use App\Exceptions\MlHistoricalUniverseProviderException;
+use App\Models\Stock;
+use Carbon\Carbon;
+use SplFileObject;
+use ZipArchive;
+
+/**
+ * Reconstructs dated NSE company-equity universes from immutable NSE exports.
+ * This class intentionally has no current-universe fallback.
+ */
+class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvider
+{
+    public const PARSER_VERSION = 'nse-pit-universe-parser-1';
+    private const ALLOWED_SERIES = ['EQ', 'BE', 'BZ'];
+
+    /** @var array<string,array<string,mixed>> */
+    private array $fileMemo = [];
+
+    public function snapshotForDate(string $date): array
+    {
+        $date = Carbon::parse($date)->toDateString();
+        $file = $this->findSourceFile($date, (string) config('ml.historical_universe.mii_path', ''), 'nse_mii_security_file')
+            ?? $this->findSourceFile($date, (string) config('ml.historical_universe.bhavcopy_path', ''), 'nse_cash_bhavcopy');
+        if ($file === null) {
+            throw new MlHistoricalUniverseProviderException("NSE historical universe date unavailable: {$date}", true);
+        }
+
+        $parsed = $this->parseFile($file['path'], $file['source'], $date);
+        $mapped = [];
+        $unknown = [];
+        $seen = [];
+        foreach ($parsed['members'] as $member) {
+            $stock = $this->resolve($member);
+            if ($stock === null) {
+                $unknown[] = $member['isin'] ?: $member['symbol'];
+                continue;
+            }
+            if (isset($seen[$stock->id])) {
+                continue;
+            }
+            $seen[$stock->id] = true;
+            $mapped[] = [
+                'stock_id' => (int) $stock->id,
+                'sector_snapshot' => $member['sector'] ?? null,
+                'provider_symbol' => $member['symbol'],
+                'exchange' => 'NSE',
+            ];
+        }
+
+        $sourceCount = count($parsed['members']);
+        $mappedCount = count($mapped);
+        $percentage = $sourceCount === 0 ? 100.0 : round($mappedCount / $sourceCount * 100, 4);
+        $diagnostics = [
+            'requested_date' => $date,
+            'effective_date' => $date,
+            'nse_source_file' => $file['path'],
+            'source' => $file['source'],
+            'format_version' => $parsed['format_version'],
+            'source_company_equity_member_count' => $sourceCount,
+            'mapped_count' => $mappedCount,
+            'unmapped_count' => count($unknown),
+            'unmapped_identifiers' => array_values(array_unique(array_filter($unknown))),
+            'mapping_percentage' => $percentage,
+            'parser_version' => self::PARSER_VERSION,
+        ];
+        if ($percentage < 90.0) {
+            throw new MlHistoricalUniverseProviderException(
+                "NSE historical universe mapping below 90% for {$date} ({$percentage}%)",
+                false,
+                $diagnostics,
+            );
+        }
+
+        return [
+            'effective_from' => $date,
+            'source' => $file['source'],
+            'snapshot_key' => $file['source'].':'.$date.':'.sha1($file['path']),
+            'response_version' => $parsed['format_version'].';'.self::PARSER_VERSION,
+            'diagnostics' => $diagnostics,
+            'memberships' => $mapped,
+        ];
+    }
+
+    /** @return array{format_version:string,members:list<array{symbol:string,isin:?string,series:string,sector:?string}>} */
+    public function parseLegacyBhavcopy(string $contents): array
+    {
+        return $this->parseDelimited($contents, 'legacy-bhavcopy');
+    }
+
+    /** @return array{format_version:string,members:list<array{symbol:string,isin:?string,series:string,sector:?string}>} */
+    /** @return array{format_version:string,members:list<array{symbol:string,isin:?string,series:string,sector:?string}>} */
+    public function parseUdiff(string $contents): array
+    {
+        return $this->parseDelimited($contents, 'udiff');
+    }
+
+    /** @return array{format_version:string,members:list<array{symbol:string,isin:?string,series:string,sector:?string}>} */
+    public function parseMii(string $contents): array
+    {
+        return $this->parseDelimited($contents, 'mii-security-file');
+    }
+
+    /** @return array{path:string,source:string}|null */
+    private function findSourceFile(string $date, string $configured, string $source): ?array
+    {
+        if ($configured === '') {
+            return null;
+        }
+        $candidates = is_file($configured) ? [$configured] : (glob(rtrim($configured, '/').'/*') ?: []);
+        $tokens = [Carbon::parse($date)->format('Ymd'), Carbon::parse($date)->format('dmY'), str_replace('-', '', $date)];
+        foreach ($candidates as $path) {
+            if (! is_file($path)) {
+                continue;
+            }
+            if (is_file($configured) || collect($tokens)->contains(fn ($token) => str_contains(basename($path), $token))) {
+                return ['path' => $path, 'source' => $source];
+            }
+        }
+        return null;
+    }
+
+    /** @return array{format_version:string,members:list<array{symbol:string,isin:?string,series:string,sector:?string}>} */
+    private function parseFile(string $path, string $source, string $date): array
+    {
+        $contents = file_get_contents($path);
+        if ($contents === false) {
+            throw new MlHistoricalUniverseProviderException("Unable to read NSE source file: {$path}", true);
+        }
+        if (str_ends_with(strtolower($path), '.zip')) {
+            $zip = new ZipArchive();
+            if ($zip->open($path) !== true || $zip->numFiles < 1) {
+                throw new MlHistoricalUniverseProviderException("Unable to read NSE ZIP source: {$path}", true);
+            }
+            $contents = (string) $zip->getFromIndex(0);
+            $zip->close();
+        }
+        $format = $source === 'nse_mii_security_file'
+            ? $this->parseMii($contents)
+            : (preg_match('/trad(dt|ing.?date)|fininstrmid/i', substr($contents, 0, 1000))
+                ? $this->parseUdiff($contents)
+                : $this->parseLegacyBhavcopy($contents));
+        if ($format['members'] === [] && trim($contents) !== '') {
+            throw new MlHistoricalUniverseProviderException("NSE source contains no eligible company-equity rows: {$date}");
+        }
+        return $format;
+    }
+
+    /** @return array{format_version:string,members:list<array{symbol:string,isin:?string,series:string,sector:?string}>} */
+    private function parseDelimited(string $contents, string $format): array
+    {
+        $contents = preg_replace('/^\xEF\xBB\xBF/', '', $contents) ?? $contents;
+        $lines = preg_split('/\r\n|\n|\r/', trim($contents)) ?: [];
+        if ($lines === []) {
+            return ['format_version' => $format, 'members' => []];
+        }
+        $delimiter = substr_count($lines[0], "\t") > substr_count($lines[0], ',') ? "\t" : ',';
+        $header = array_map(fn ($v) => $this->header((string) $v), str_getcsv(array_shift($lines), $delimiter));
+        $index = array_flip($header);
+        $symbolKey = $this->firstKey($index, ['symbol', 'ticker', 'tradingsymbol', 'tckrsymb']);
+        $seriesKey = $this->firstKey($index, ['series', 'scty srs', 'sctysrs', 'securityseries']);
+        $isinKey = $this->firstKey($index, ['isin', 'isin number', 'isinno', 'isinno']);
+        if ($symbolKey === null || $seriesKey === null) {
+            throw new MlHistoricalUniverseProviderException("NSE {$format} header is missing symbol/series columns");
+        }
+        $sectorKey = $this->firstKey($index, ['sector', 'industry']);
+        $members = [];
+        $priority = ['EQ' => 1, 'BE' => 2, 'BZ' => 3];
+        $dedupe = [];
+        foreach ($lines as $line) {
+            if (trim($line) === '') continue;
+            $columns = str_getcsv($line, $delimiter);
+            $symbol = strtoupper(trim((string) ($columns[$index[$symbolKey]] ?? '')));
+            $series = strtoupper(trim((string) ($columns[$index[$seriesKey]] ?? '')));
+            $isin = $isinKey !== null ? strtoupper(trim((string) ($columns[$index[$isinKey]] ?? ''))) : '';
+            if ($symbol === '' || ! in_array($series, self::ALLOWED_SERIES, true) || str_starts_with($isin, 'INF')) continue;
+            $key = $isin !== '' ? 'I:'.$isin : 'S:'.$symbol;
+            $row = ['symbol' => $symbol, 'isin' => $isin !== '' ? $isin : null, 'series' => $series, 'sector' => $sectorKey !== null ? trim((string) ($columns[$index[$sectorKey]] ?? '')) ?: null : null];
+            if (! isset($dedupe[$key]) || $priority[$series] < $priority[$dedupe[$key]['series']]) $dedupe[$key] = $row;
+        }
+        foreach ($dedupe as $member) $members[] = $member;
+        return ['format_version' => $format, 'members' => $members];
+    }
+
+    private function header(string $header): string
+    {
+        return strtolower(trim(preg_replace('/\s+/', ' ', str_replace(['"', "'"], '', $header)) ?? ''));
+    }
+
+    private function firstKey(array $index, array $keys): ?string
+    {
+        foreach ($keys as $key) if (isset($index[$key])) return $key;
+        return null;
+    }
+
+    private function resolve(array $member): ?Stock
+    {
+        $query = Stock::query()->where('exchange', 'NSE')->where('is_benchmark', false);
+        if ($member['isin']) {
+            $stock = (clone $query)->whereRaw('UPPER(isin) = ?', [$member['isin']])->first();
+            if ($stock) return $stock;
+        }
+        return $query->whereRaw('UPPER(symbol) = ?', [$member['symbol']])->first();
+    }
+}
