@@ -56,7 +56,7 @@ jobs:
             [[ -n "$file" ]] || continue
 
             case "$file" in
-              app/app/*|app/bootstrap/*|app/config/*|app/database/*|app/routes/*|app/scripts/**|app/deploy/**|app/tests/*.php|app/tests/**/*.php|app/composer.json|app/composer.lock|app/phpunit.xml|deploy/**|.github/workflows/*.yml|.github/workflows/*.yaml)
+              app/app/*|app/bootstrap/*|app/config/*|app/database/*|app/routes/*|app/scripts/**|app/deploy/**|app/tests/*.php|app/tests/**/*.php|app/composer.json|app/composer.lock|app/phpunit.xml|shared/**|deploy/**|.github/workflows/*.yml|.github/workflows/*.yaml)
                 backend=true
                 deployable=true
                 ;;
@@ -181,6 +181,11 @@ jobs:
       - name: Build production assets for VPS root
         env:
           VITE_APP_BASE: /build/
+          VITE_LIDO_TELEMETRY_ENABLED: 'true'
+          VITE_LIDO_TELEMETRY_OTLP_TRACES_ENDPOINT: /otel/v1/traces
+          VITE_LIDO_TELEMETRY_SERVICE_NAME: stox
+          VITE_LIDO_TELEMETRY_SERVICE_VERSION: v8
+          VITE_LIDO_TELEMETRY_ENVIRONMENT: production
         run: npm run build
 
   package:
@@ -234,7 +239,17 @@ jobs:
       - name: Build production assets for VPS root
         env:
           VITE_APP_BASE: /build/
+          VITE_LIDO_TELEMETRY_ENABLED: 'true'
+          VITE_LIDO_TELEMETRY_OTLP_TRACES_ENDPOINT: /otel/v1/traces
+          VITE_LIDO_TELEMETRY_SERVICE_NAME: stox
+          VITE_LIDO_TELEMETRY_SERVICE_VERSION: v8
+          VITE_LIDO_TELEMETRY_ENVIRONMENT: production
         run: npm run build
+
+      - name: Stage repository runtime modules
+        run: |
+          rm -rf shared
+          cp -a ../shared ./shared
 
       - name: Create release archive
         run: |
