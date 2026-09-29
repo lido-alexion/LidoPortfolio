@@ -58,4 +58,12 @@ test.describe('V8 accessibility acceptance', () => {
         await expect(page.getByRole('heading', { name: 'Request an account' })).toBeVisible();
         await expectNoAccessibilityViolations(page, 'body', { allViolations: true });
     });
+
+    test('FEAT-062 fundamental insights page has no WCAG 2A/2AA violations', async ({ page }) => {
+        await installInvestorWorkflowApiMocks(page);
+        await page.goto('/fundamentals/insights/TCS');
+        await expect(page.getByRole('heading', { name: 'Fundamental insights' }).last()).toBeVisible();
+        await expect(page.getByText('StoX deterministic evidence')).toBeVisible();
+        await expectNoAccessibilityViolations(page, 'main', { allViolations: true });
+    });
 });
