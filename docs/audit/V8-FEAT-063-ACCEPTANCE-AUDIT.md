@@ -1,7 +1,8 @@
 # V8 FEAT-063 Acceptance Audit
 
-Date: 2026-09-28
-Status: **REVIEW — implementation and automated verification complete; VPS/live Kite validation pending**
+Original audit date: 2026-09-28
+Updated: 2026-09-29
+Status: **REVIEW — live VPS collection, day finalization, and backup validated; remaining deployed operational-control acceptance is open**
 
 This audit maps the frozen FEAT-063 contract to the current repository evidence. It is intentionally conservative: local code/tests do not substitute for live Kite or VPS evidence.
 
@@ -26,8 +27,9 @@ This audit maps the frozen FEAT-063 contract to the current repository evidence.
 | Admin status and bounded controls with server-side Admin authorization | PASS | Laravel controller/control service, Admin UI, authorization tests, controls for start/stop/resubscribe/finalization/backup/universe. |
 | Manual hold survives restart and authentication | PASS | Persisted Laravel state and login signal tests; live service restart proof pending. |
 | Operational alerts and duplicate suppression | PASS | Existing StoX alert publisher handles condition persistence/dedup; stale/error/disk/finalization/backup/low-coverage conditions are covered, while collector-side reconnect and universe failures surface through the actionable error condition. |
-| VPS dependency, systemd, persistent paths, writable storage, import checks | PASS locally / deployed validation pending | Deploy script provisions the dedicated venv; runtime gate checks `kiteconnect`, `pyarrow` and `polars`; the systemd unit and runbook are statically validated for the release module path, venv, environment file, persistent storage paths, journal logging and restart policy. Read-only VPS inspection on 2026-09-28 found the service `not-found`/inactive and expected venv/code/data paths absent; deployment has not yet been applied. |
-| Live Kite authentication → tick → Parquet → heartbeat | EXTERNAL VALIDATION PENDING | VPS is reachable, but the collector service is not installed and no live Kite session was exercised. No success is claimed. |
+| VPS dependency, systemd, persistent paths, writable storage, import checks | PASS — deployed | Dedicated Python environment and systemd collector were provisioned on the VPS; the service was enabled and active during the 2026-09-29 acceptance run. Persistent primary and backup Parquet paths were writable. |
+| Live Kite authentication → tick → Parquet → heartbeat | PASS — production path observed | After activation of the paid Kite Connect app, the collector connected, subscribed to 499 mapped instruments, received real FULL-mode packets, wrote raw spool data, and generated minute Parquet partitions. |
+| Post-market finalization → validation → backup → spool cleanup | PASS — 2026-09-29 | Both `_FINALIZED.json` markers report `finalized_at=2026-09-29T10:00:03.103706+00:00` and `row_count=15213`; recursive `diff -qr` of the primary and backup date partitions returned no differences; the raw tick spool contained no files after finalization. |
 
 ## Verification executed
 
@@ -39,10 +41,22 @@ This audit maps the frozen FEAT-063 contract to the current repository evidence.
 - Laravel V8 suite before this continuation: **140 passed, 531 assertions**; fixed-date calendar/reminder additions pass.
 - Frontend after this continuation: JS **190/190**, Vitest **101/101**, with build/typecheck/docs checks rerun after the frontend acceptance additions.
 
+## Production acceptance evidence — 2026-09-29
+
+The production acceptance run confirmed:
+
+- `stoxla-microstructure-collector.service` was enabled and active after market close.
+- Earlier same-day checks established a usable paid Kite Connect session, live WebSocket packets, 499 subscribed instruments, raw-tick spool growth, and real FULL-mode minute Parquet output.
+- Post-market finalization produced 15,213 rows. The primary and backup `_FINALIZED.json` files contain the same UTC finalization timestamp and row count.
+- `diff -qr` over the full primary/backup date partitions returned no differences.
+- The raw-tick spool directory contained no files after finalization, consistent with the bounded-spool cleanup requirement.
+- The journal recorded WebSocket close code `1006` at 15:30 IST. Finalization and backup nevertheless completed; treat the close as an operational observation, not proof of a data-integrity failure.
+
 ## Remaining exit-gate work
 
-1. Install and validate the collector service on the StoX VPS, including restart/hold behavior; the repository unit/runbook contract is now statically validated.
-2. Exercise the live Kite session → WebSocket → tick → Parquet → heartbeat path when credentials and market conditions permit.
-3. Validate the configured secondary backup destination in the deployed environment.
+1. Validate deployed Admin status/controls, persistent manual hold, restart/reconnect/resubscription, and retry paths against the production service.
+2. Review the 15:30 WebSocket `1006` close in normal market-close behavior and ensure it does not cause repeated post-market reconnect errors.
+3. Continue routine monitoring of storage thresholds and later trading-day collection stability.
 
-FEAT-063 is **REVIEW** because repository implementation and deterministic automated verification now cover the frozen local behavior, while the VPS is currently unprovisioned and no live Kite run has been claimed.
+FEAT-063 remains **REVIEW**: the live collection and end-of-day data/backup path passed production checks, while the broader deployed operational-control and recovery acceptance is not yet evidenced.
+
