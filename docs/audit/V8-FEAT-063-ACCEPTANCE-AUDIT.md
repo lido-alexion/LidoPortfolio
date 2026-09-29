@@ -29,7 +29,7 @@ This audit maps the frozen FEAT-063 contract to the current repository evidence.
 | Operational alerts and duplicate suppression | PASS | Existing StoX alert publisher handles condition persistence/dedup; stale/error/disk/finalization/backup/low-coverage conditions are covered, while collector-side reconnect and universe failures surface through the actionable error condition. |
 | VPS dependency, systemd, persistent paths, writable storage, import checks | PASS — deployed | Dedicated Python environment and systemd collector were provisioned on the VPS; the service was enabled and active during the 2026-09-29 acceptance run. Persistent primary and backup Parquet paths were writable. |
 | Live Kite authentication → tick → Parquet → heartbeat | PASS — production path observed | After activation of the paid Kite Connect app, the collector connected, subscribed to 499 mapped instruments, received real FULL-mode packets, wrote raw spool data, and generated minute Parquet partitions. |
-| Post-market finalization → validation → backup → spool cleanup | PASS — 2026-09-29 | Both `_FINALIZED.json` markers report `finalized_at=2026-09-29T10:00:03.103706+00:00` and `row_count=15213`; recursive `diff -qr` of the primary and backup date partitions returned no differences; the raw tick spool contained no files after finalization. |
+| Post-market finalization → validation → backup → spool cleanup | PARTIAL — 2026-09-29 | Finalization markers report `finalized_at=2026-09-29T10:00:03.103706+00:00` and `row_count=15213`; recursive `diff -qr` found no differences between the primary and `microstructure-backup` date partitions; the raw tick spool contained no files. Both paths are under the same VPS shared-storage tree, so independent secondary-storage durability has not been demonstrated. |
 
 ## Verification executed
 
@@ -50,13 +50,15 @@ The production acceptance run confirmed:
 - Post-market finalization produced 15,213 rows. The primary and backup `_FINALIZED.json` files contain the same UTC finalization timestamp and row count.
 - `diff -qr` over the full primary/backup date partitions returned no differences.
 - The raw-tick spool directory contained no files after finalization, consistent with the bounded-spool cleanup requirement.
-- The journal recorded WebSocket close code `1006` at 15:30 IST. Finalization and backup nevertheless completed; treat the close as an operational observation, not proof of a data-integrity failure.
+- The matching `microstructure-backup` partition proves the copy is complete and byte-for-byte comparable, but it is located under the same VPS shared-storage tree as the primary partition. It does not yet prove an independent secondary backup or failure domain.
+- The journal recorded WebSocket close code `1006` at 15:30 IST. Finalization completed; treat the close as an operational observation, not proof of a data-integrity failure.
 
 ## Remaining exit-gate work
 
 1. Validate deployed Admin status/controls, persistent manual hold, restart/reconnect/resubscription, and retry paths against the production service.
-2. Review the 15:30 WebSocket `1006` close in normal market-close behavior and ensure it does not cause repeated post-market reconnect errors.
-3. Continue routine monitoring of storage thresholds and later trading-day collection stability.
+2. Confirm and validate the configured backup target is independent of the primary VPS storage failure domain; current evidence only proves a matching copy under the same shared-storage tree.
+3. Review the 15:30 WebSocket `1006` close in normal market-close behavior and ensure it does not cause repeated post-market reconnect errors.
+4. Continue routine monitoring of storage thresholds and later trading-day collection stability.
 
 FEAT-063 remains **REVIEW**: the live collection and end-of-day data/backup path passed production checks, while the broader deployed operational-control and recovery acceptance is not yet evidenced.
 
