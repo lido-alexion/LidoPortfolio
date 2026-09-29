@@ -93,7 +93,7 @@ FEAT-065  [REVIEW] Intraday ML historical data platform (schema/checkpoints/admi
 - Typecheck: passed.
 - Static documentation check: passed.
 - No `lint` script is declared in `app/package.json`; an attempted lint command reports the missing script rather than an application lint failure.
-- FEAT-052 browser telemetry now has focused Vitest coverage for uncaught exception/unhandled rejection hook registration, bounded redaction, and fail-open setup (`otelBrowser.test.jsx`).
+- FEAT-052 browser telemetry now has focused Vitest coverage for uncaught exception/unhandled rejection hook registration, raw-reason exclusion, and fail-open setup (`otelBrowser.test.jsx`).
 - The five inherited JS failures were resolved as three superseded V8 expectations (C), one stale documentation/help expectation (D), and one genuine request-account documentation gap fixed in the request-account catalog (D/B).
 
 ## Takeover reconciliation

@@ -35,7 +35,7 @@ vi.mock('@opentelemetry/sdk-trace-base', () => ({
 }));
 
 describe('browser OpenTelemetry failure hooks', () => {
-    it('registers uncaught exception and rejection hooks without exporting secrets', async () => {
+    it('registers uncaught exception and rejection hooks without exporting raw reasons', async () => {
         vi.stubEnv('VITE_LIDO_TELEMETRY_ENABLED', 'true');
         vi.stubEnv('VITE_LIDO_TELEMETRY_OTLP_TRACES_ENDPOINT', 'https://telemetry.example.test/v1/traces');
 
@@ -58,9 +58,9 @@ describe('browser OpenTelemetry failure hooks', () => {
         const firstAttributes = tracer.startSpan.mock.results[0].value.setAttributes.mock.calls[0][0];
         const secondAttributes = tracer.startSpan.mock.results[1].value.setAttributes.mock.calls[0][0];
         expect(firstAttributes['stox.browser.failure_kind']).toBe('uncaught_exception');
-        expect(firstAttributes['error.message']).not.toContain('super-secret');
-        expect(firstAttributes['error.message']).not.toContain('abc123');
-        expect(secondAttributes['error.message']).not.toContain('top-secret-value');
+        expect(firstAttributes).not.toHaveProperty('error.message');
+        expect(secondAttributes).not.toHaveProperty('error.message');
+        expect(firstAttributes['stox.browser.reason_present']).toBe(true);
         expect(tracer.startSpan.mock.results[0].value.setStatus).toHaveBeenCalled();
         expect(tracer.startSpan.mock.results[0].value.end).toHaveBeenCalledOnce();
     });

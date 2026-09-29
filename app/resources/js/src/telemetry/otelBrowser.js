@@ -14,28 +14,19 @@ function bounded(value, fallback) {
     return (normalized || fallback).slice(0, MAX_ATTRIBUTE_LENGTH);
 }
 
-function redactSensitiveText(value) {
-    return bounded(value, 'unknown')
-        .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [REDACTED]')
-        .replace(/\b(?:password|passwd|secret|token|api[_-]?key|authorization)\s*[:=]\s*[^\s,;]+/gi, '$1=[REDACTED]')
-        .replace(/([?&](?:token|secret|api[_-]?key|password)=)[^&\s]+/gi, '$1[REDACTED]');
-}
-
 /**
  * Keep browser failure attributes safe for export. Do not attach the raw
- * Error object: its stack and message can contain request data or user input.
  */
 export function browserFailureAttributes(kind, reason) {
     const errorType = reason instanceof Error
         ? reason.name
         : (reason?.constructor?.name || typeof reason);
-    const message = reason instanceof Error ? reason.message : reason;
     const path = typeof window !== 'undefined' ? window.location?.pathname : '';
 
     return {
         'stox.browser.failure_kind': bounded(kind, 'unknown'),
         'error.type': bounded(errorType, 'UnknownError'),
-        'error.message': redactSensitiveText(message),
+        'stox.browser.reason_present': Boolean(reason),
         'url.path': bounded(path, '/'),
     };
 }
