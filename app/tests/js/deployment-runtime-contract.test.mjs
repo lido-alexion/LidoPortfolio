@@ -74,6 +74,8 @@ test('production activation fails closed for debug auth and normalizes PHP writa
     assert.match(middleware, /app\(\)->environment\('production'\)/);
     assert.doesNotMatch(middleware, /query\('debug_token'\)/);
     assert.match(deploy, /production shared \.env must explicitly set LIDO_AGENT_DEBUG_ENABLED=false/);
+    assert.match(deploy, /normalize_official_otel_config/);
+    assert.match(deploy, /OTEL_SDK_DISABLED=false/);
     assert.match(deploy, /effective production app key is missing from cached config/);
     assert.match(deploy, /validate_cached_app_config "\$RELEASE_DIR"/);
     assert.match(deploy, /prepare_writable_tree/);
