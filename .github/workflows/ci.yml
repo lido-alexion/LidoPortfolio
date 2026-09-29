@@ -104,7 +104,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: curl, fileinfo, mbstring, pdo_mysql, pdo_sqlite, xml
+          extensions: curl, fileinfo, mbstring, opentelemetry, pdo_mysql, pdo_sqlite, xml
           coverage: none
           tools: composer
       - name: Cache Composer packages
