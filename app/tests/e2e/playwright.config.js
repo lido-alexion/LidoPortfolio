@@ -5,16 +5,16 @@ export default defineConfig({
     testMatch: '*.spec.js',
     fullyParallel: false,
     forbidOnly: !!process.env.CI,
-    retries: 0,
+    retries: process.env.CI ? 1 : 0,
     workers: 1,
-    reporter: [['list']],
+    reporter: [['list'], ['html', { outputFolder: 'test-results/journey-report', open: 'never' }]],
     use: {
         ...devices['Desktop Chrome'],
-        baseURL: 'http://127.0.0.1:4177',
+        baseURL: process.env.STOX_E2E_BASE_URL || 'http://127.0.0.1:4177',
         headless: true,
-        trace: 'off',
-        screenshot: 'off',
-        video: 'off',
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
+        video: 'retain-on-failure',
     },
     projects: [
         {
@@ -65,7 +65,7 @@ export default defineConfig({
             },
         },
     ],
-    webServer: {
+    webServer: process.env.STOX_PRODUCTION_BASE_URL ? undefined : {
         command: 'npx vite --config tests/e2e/vite.config.js',
         url: 'http://127.0.0.1:4177/',
         reuseExistingServer: !process.env.CI,

@@ -1,6 +1,7 @@
 <?php
 
 use App\Jobs\DailyMarketDataJob;
+use App\Models\ExportArtifact;
 use App\Services\AlertExpirationService;
 use App\Services\AlertNotificationService;
 use App\Services\BenchmarkPriceSyncService;
@@ -33,6 +34,17 @@ Artisan::command('portfolio:daily-sync', function () {
     DailyMarketDataJob::dispatchSync();
     $this->info('Daily portfolio sync completed.');
 })->purpose('Run daily market data sync manually');
+
+Artisan::command('portfolio:purge-export-artifacts', function () {
+    $removed = 0;
+    ExportArtifact::query()->where('expires_at', '<', now())->chunkById(100, function ($artifacts) use (&$removed) {
+        foreach ($artifacts as $artifact) {
+            if ($artifact->path && \Storage::disk('local')->exists($artifact->path)) \Storage::disk('local')->delete($artifact->path);
+            $artifact->delete(); $removed++;
+        }
+    });
+    $this->info("Purged {$removed} expired export artifact(s).");
+})->purpose('Delete expired V9 export artifacts');
 
 Artisan::command('portfolio:sync-nse-holidays', function () {
     try {
@@ -409,6 +421,11 @@ Schedule::command('portfolio:expire-alerts')
     ->hourly()
     ->timezone($timezone)
     ->name('alert-max-age-cleanup');
+
+Schedule::command('portfolio:purge-export-artifacts')
+    ->hourly()
+    ->timezone($timezone)
+    ->name('purge-export-artifacts');
 
 Schedule::command('portfolio:purge-access-request-verifications')
     ->daily()

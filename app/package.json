@@ -4,8 +4,9 @@
     "type": "module",
     "scripts": {
         "docs:static": "node scripts/generate-static-docs.mjs",
+        "journeys:metadata": "node scripts/generate-journey-metadata.mjs",
         "docs:static:check": "node scripts/check-static-docs.mjs",
-        "build": "node scripts/generate-static-docs.mjs && vite build",
+        "build": "npm run journeys:metadata && node scripts/generate-static-docs.mjs && vite build",
         "dev": "vite",
         "test:js": "node --test tests/js/*.test.mjs && vitest run",
         "test:js:unit": "node --test tests/js/*.test.mjs",
@@ -13,6 +14,8 @@
         "test:js:auth": "node --test tests/js/auth-redirect.test.mjs",
         "test:js:tos": "vitest run",
         "test:e2e:tos": "playwright test --config tests/e2e/playwright.config.js",
+        "test:e2e:journeys": "playwright test --config tests/e2e/playwright.config.js",
+        "test:e2e:production-smoke": "STOX_PRODUCTION_BASE_URL=1 STOX_E2E_BASE_URL=$STOX_E2E_BASE_URL playwright test tests/e2e/production-smoke.spec.js --config tests/e2e/playwright.config.js",
         "typecheck": "tsc --noEmit"
     },
     "devDependencies": {

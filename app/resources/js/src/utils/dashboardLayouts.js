@@ -70,6 +70,10 @@ export function readLocalDashboardLayout(userId) {
     try { return migrateDashboardLayout(JSON.parse(localStorage.getItem(accountLayoutStorageKey(userId)) || 'null')); } catch { return factoryDashboardLayout(); }
 }
 
+export function hasLocalDashboardLayout(userId) {
+    try { return localStorage.getItem(accountLayoutStorageKey(userId)) !== null; } catch { return false; }
+}
+
 export function writeLocalDashboardLayout(userId, layout) {
     const migrated = migrateDashboardLayout(layout);
     localStorage.setItem(accountLayoutStorageKey(userId), JSON.stringify(migrated));

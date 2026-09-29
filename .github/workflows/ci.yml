@@ -162,3 +162,5 @@ jobs:
         env:
           VITE_APP_BASE: /portfolio/build/
         run: npm run build
+      - name: Run blocking Chromium journey checks
+        run: npm run test:e2e:journeys

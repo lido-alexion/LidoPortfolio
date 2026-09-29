@@ -3,6 +3,7 @@ import test from 'node:test';
 import { JOURNEY_TOPICS, searchJourneyTopics } from '../../resources/js/src/data/journeyMetadata.js';
 
 test('journey metadata has stable IDs and actionable contracts', () => {
+    assert.equal(JOURNEY_TOPICS.length, 59);
     assert.equal(new Set(JOURNEY_TOPICS.map((topic) => topic.id)).size, JOURNEY_TOPICS.length);
     for (const topic of JOURNEY_TOPICS) {
         assert.match(topic.id, /^(SCR|STR|REC|EXE|E2E)-\d+$/);

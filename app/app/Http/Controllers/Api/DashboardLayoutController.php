@@ -33,6 +33,14 @@ class DashboardLayoutController extends Controller
         return response()->json(['data' => $dashboardLayout->fresh()]);
     }
 
+    public function duplicate(Request $request, DashboardLayout $dashboardLayout): JsonResponse
+    {
+        abort_unless($dashboardLayout->user_id === $request->user()->id, 404);
+        $name = $request->validate(['name' => ['required', 'string', 'max:120']])['name'];
+        $copy = DashboardLayout::create(['user_id' => $request->user()->id, 'name' => $name, 'definition' => $dashboardLayout->definition, 'schema_version' => $dashboardLayout->schema_version, 'is_default' => false]);
+        return response()->json(['data' => $copy], 201);
+    }
+
     public function destroy(Request $request, DashboardLayout $dashboardLayout): JsonResponse
     {
         abort_unless($dashboardLayout->user_id === $request->user()->id, 404);

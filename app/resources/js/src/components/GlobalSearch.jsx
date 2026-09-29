@@ -97,7 +97,7 @@ function SearchResults({ results, activeIndex, onHover, onSelect }) {
     );
 }
 
-function SearchSurface({ mobile, inputRef, surfaceRef, query, setQuery, results, activeIndex, onKeyDown, onHover, onSelect, onClose, stockLoading, stockError }) {
+function SearchSurface({ mobile, inputRef, surfaceRef, query, setQuery, results, activeIndex, onKeyDown, onHover, onSelect, onClose, onClearHistory, hasHistory, stockLoading, stockError }) {
     const hasQuery = Boolean(normalizeGlobalSearchQuery(query));
     const hasResults = results.length > 0;
     const status = stockLoading
@@ -143,8 +143,9 @@ function SearchSurface({ mobile, inputRef, surfaceRef, query, setQuery, results,
                 {hasQuery && stockLoading ? 'Searching stocks…' : null}
                 {hasQuery && !stockLoading && stockError ? 'Stock search is temporarily unavailable.' : null}
                 {hasQuery && !stockLoading && !stockError && !hasResults ? 'No matches' : null}
-                {!hasQuery ? 'Search pages or stocks' : null}
+                {!hasQuery ? 'Search pages, stocks, or How do I? help' : null}
             </div>
+            {!hasQuery && hasHistory ? <button type="button" className="btn btn-sm btn-link px-0" onClick={onClearHistory}>Clear recent help searches</button> : null}
             {hasResults ? (
                 <SearchResults results={results} activeIndex={activeIndex} onHover={onHover} onSelect={onSelect} />
             ) : (
@@ -325,6 +326,11 @@ function GlobalSearchFeature({ user }) {
         navigate(result.destination);
     };
 
+    const clearHelpHistory = () => {
+        setHelpHistory([]);
+        try { localStorage.removeItem(`stox_help_history_${user?.id}`); } catch { /* best effort */ }
+    };
+
     const onKeyDown = (event) => {
         if (event.key === 'Escape') {
             event.preventDefault();
@@ -373,6 +379,8 @@ function GlobalSearchFeature({ user }) {
                         onHover={setActiveIndex}
                         onSelect={selectResult}
                         onClose={() => closeSearch(true)}
+                        onClearHistory={clearHelpHistory}
+                        hasHistory={helpHistory.length > 0}
                         stockLoading={stockLoading}
                         stockError={stockError}
                     />

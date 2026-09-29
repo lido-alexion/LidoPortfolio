@@ -304,6 +304,20 @@ export default function DashboardPage() {
     const [cachedAt, setCachedAt] = useState(null);
     const [marketDiagnosticsExpanded, setMarketDiagnosticsExpanded] = useState(loadMarketDiagnosticsExpanded);
     const [dashboardLayout, setDashboardLayout] = useState(() => migrateDashboardLayout(null));
+    const [dashboardVariant, setDashboardVariant] = useState(() => (typeof window !== 'undefined' && window.innerWidth < 768 ? 'mobile' : 'desktop'));
+
+    useEffect(() => {
+        if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+        const media = window.matchMedia('(max-width: 767.98px)');
+        const update = () => setDashboardVariant(media.matches ? 'mobile' : 'desktop');
+        update();
+        media.addEventListener?.('change', update);
+        return () => media.removeEventListener?.('change', update);
+    }, []);
+
+    const activeDashboardLayout = dashboardLayout[dashboardVariant] || dashboardLayout.desktop;
+    const isDashboardCardVisible = useCallback((id) => activeDashboardLayout.cards.find((card) => card.id === id)?.visible !== false, [activeDashboardLayout]);
+    const dashboardCardStyle = useCallback((id) => ({ order: activeDashboardLayout.cards.find((card) => card.id === id)?.order ?? 0 }), [activeDashboardLayout]);
 
     const handleTopMoverPeriodChange = useCallback((period) => {
         setTopMoverPeriod(period);
@@ -869,8 +883,8 @@ export default function DashboardPage() {
             <div className="col-12">
                 <h2 className="h6 text-muted mb-0">Portfolio</h2>
             </div>
-            {cards.filter((card) => dashboardLayout.desktop.summaryFields.find((field) => field.id === card.id)?.visible !== false).map(({ id, title, value, valueClassName }) => (
-                <div className="col-12 col-md-6 col-lg-4" key={id}>
+            {isDashboardCardVisible('portfolio-summary') && cards.filter((card) => activeDashboardLayout.summaryFields.find((field) => field.id === card.id)?.visible !== false).map(({ id, title, value, valueClassName }) => (
+                <div className="col-12 col-md-6 col-lg-4" key={id} style={dashboardCardStyle('portfolio-summary')}>
                     <div className="card h-100">
                         <div className="card-body">
                             <div className="text-muted small">{title}</div>
@@ -879,12 +893,12 @@ export default function DashboardPage() {
                     </div>
                 </div>
             ))}
-            <DashboardTopMoverCard
+            {isDashboardCardVisible('top-movers') ? <div style={dashboardCardStyle('top-movers')}><DashboardTopMoverCard
                 gainer={topGainer}
                 loser={topLoser}
                 period={topMoverPeriod}
                 onPeriodChange={handleTopMoverPeriodChange}
-            />
+            /></div> : null}
             {cashAvailableValid ? (
                 <div className="col-12 col-md-6 col-lg-4" key="Cash available">
                     <div className="card h-100">
@@ -978,8 +992,8 @@ export default function DashboardPage() {
                             </div>
                         </div>
                     ))}
-                    {marketAnalytics ? (
-                        <div className="col-12">
+                    {isDashboardCardVisible('market-diagnostics') && marketAnalytics ? (
+                        <div className="col-12" style={dashboardCardStyle('market-diagnostics')}>
                             <h2 className="h6 text-muted mb-2">Market analytics</h2>
                             <div className="card lido-market-health-card">
                                 <div className="card-body py-3">
@@ -1204,7 +1218,7 @@ export default function DashboardPage() {
                     ) : null}
                 </>
             ) : null}
-            <div className="col-12">
+            {isDashboardCardVisible('alerts') ? <div className="col-12" style={dashboardCardStyle('alerts')}>
                 {alerts.length > 0 ? (
                     <DataTableCard
                         className="h-100"
@@ -1243,16 +1257,16 @@ export default function DashboardPage() {
                         </div>
                     </div>
                 )}
-            </div>
-            <div className="col-12 col-lg-6">
+            </div> : null}
+            {isDashboardCardVisible('calendar') ? <div className="col-12 col-lg-6" style={dashboardCardStyle('calendar')}>
                 <DashboardCalendarCard
                     events={calendarEvents}
                     loading={calendarLoading}
                     error={calendarError}
                     onOpenCalendar={() => navigate('/calendar')}
                 />
-            </div>
-            <div className="col-12">
+            </div> : null}
+            {isDashboardCardVisible('patterns') ? <div className="col-12" style={dashboardCardStyle('patterns')}>
                 <DataTableCard
                     className="h-100"
                     title={(
@@ -1275,8 +1289,8 @@ export default function DashboardPage() {
                         </Link>
                     )}
                 />
-            </div>
-            <div className="col-12 col-lg-6">
+            </div> : null}
+            {isDashboardCardVisible('relative-strength') ? <div className="col-12 col-lg-6" style={dashboardCardStyle('relative-strength')}>
                 <DataTableCard
                     className="h-100"
                     title={(
@@ -1294,8 +1308,8 @@ export default function DashboardPage() {
                     bodyClassName="pt-2"
                     emptyMessage={`No relative strength data. Values need ${rsBenchmarkSymbol} and stock OHLCV (run daily price sync).`}
                 />
-            </div>
-            <div className="col-12 col-lg-6" id="dashboard-allocation">
+            </div> : null}
+            {isDashboardCardVisible('allocation') ? <div className="col-12 col-lg-6" id="dashboard-allocation" style={dashboardCardStyle('allocation')}>
                 <DashboardAllocationCard
                     className="h-100"
                     allocation={data.allocation || []}
@@ -1304,8 +1318,8 @@ export default function DashboardPage() {
                     storageKey="dashboard-allocation-v2"
                     emptyMessage="No allocation data"
                 />
-            </div>
-            <div className="col-12">
+            </div> : null}
+            {isDashboardCardVisible('portfolio-growth') ? <div className="col-12" style={dashboardCardStyle('portfolio-growth')}>
                 <div className="card">
                     <div className="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
                         <span>Portfolio Growth (transaction-aware history)</span>
@@ -1386,8 +1400,8 @@ export default function DashboardPage() {
                         )}
                     </div>
                 </div>
-            </div>
-            <div className="col-12">
+            </div> : null}
+            {isDashboardCardVisible('portfolio-growth') ? <div className="col-12" style={dashboardCardStyle('portfolio-growth')}>
                 <div className="card">
                     <div className="card-header">
                         Unrealized P/L (portfolio value − invested)
@@ -1447,7 +1461,7 @@ export default function DashboardPage() {
                         )}
                     </div>
                 </div>
-            </div>
+            </div> : null}
         </div>
     );
 }

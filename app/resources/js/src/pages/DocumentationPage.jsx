@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { appUrl } from '../appBase';
 import { findDocumentationByKeyword } from '../utils/documentationLinks';
 import { JOURNEY_TOPICS } from '../data/journeyMetadata';
+import api from '../api';
 
 /**
  * Legacy /documentation?q=… entry — redirects to static HTML under /docs/.
@@ -15,7 +16,10 @@ export default function DocumentationPage() {
     const [feedback, setFeedback] = useState(null);
 
     useEffect(() => {
-        if (topic) return undefined;
+        if (topic) {
+            api.post('/help-feedback', { topic_id: topic.id, event: 'selected' }, { skipErrorToast: true }).catch(() => {});
+            return undefined;
+        }
         const doc = findDocumentationByKeyword(q);
         const keyword = (doc?.keyword || 'overview').trim() || 'overview';
         const target = appUrl(`/docs/${encodeURIComponent(keyword)}.html`);
@@ -23,6 +27,10 @@ export default function DocumentationPage() {
     }, [q, topic]);
 
     if (topic) {
+        const recordFeedback = (event) => {
+            setFeedback(event === 'helpful' ? 'Thanks for the feedback.' : 'Thanks — this topic is marked for review.');
+            api.post('/help-feedback', { topic_id: topic.id, event }, { skipErrorToast: true }).catch(() => {});
+        };
         return (
             <div className="container-fluid py-4" data-testid="journey-help-topic">
                 <div className="card shadow-sm">
@@ -39,8 +47,8 @@ export default function DocumentationPage() {
                         </div>
                         <div className="mt-3 d-flex align-items-center gap-2" aria-label="Help feedback">
                             <span className="small text-muted">Was this helpful?</span>
-                            <button type="button" className="btn btn-sm btn-outline-success" onClick={() => setFeedback('Thanks for the feedback.')}>Helpful</button>
-                            <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setFeedback('Thanks — this topic is marked for review.')}>Not helpful</button>
+                            <button type="button" className="btn btn-sm btn-outline-success" onClick={() => recordFeedback('helpful')}>Helpful</button>
+                            <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => recordFeedback('not_helpful')}>Not helpful</button>
                             {feedback && <span className="small text-muted" role="status">{feedback}</span>}
                         </div>
                     </div>

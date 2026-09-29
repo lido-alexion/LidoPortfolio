@@ -22,6 +22,7 @@ class V9DashboardLayoutApiTest extends TestCase
 
         $this->actingAs($other)->getJson('/api/dashboard-layouts')->assertOk()->assertJsonCount(0, 'data');
         $this->actingAs($user)->getJson('/api/dashboard-layouts')->assertOk()->assertJsonPath('data.0.id', $id);
+        $this->actingAs($user)->postJson("/api/dashboard-layouts/{$id}/duplicate", ['name' => 'Investor copy'])->assertCreated()->assertJsonPath('data.name', 'Investor copy');
         $this->actingAs($other)->putJson("/api/dashboard-layouts/{$id}", ['name' => 'Hijack'])->assertNotFound();
     }
 }

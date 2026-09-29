@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\DataQualityController;
 use App\Http\Controllers\Api\ExplorerAnalyticsController;
 use App\Http\Controllers\Api\FrontendLogController;
 use App\Http\Controllers\Api\GuidedTourController;
+use App\Http\Controllers\Api\HelpFeedbackController;
 use App\Http\Controllers\Api\HistoricalHoldingsController;
 use App\Http\Controllers\Api\HoldingController;
 use App\Http\Controllers\Api\IndexController;
@@ -226,6 +227,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
 
     Route::get('/guided-tour', [GuidedTourController::class, 'show']);
     Route::put('/guided-tour', [GuidedTourController::class, 'update']);
+    Route::post('/help-feedback', [HelpFeedbackController::class, 'store']);
 
     Route::get('/stocks/search', [StockController::class, 'search'])
         ->middleware('throttle:stock-search');
@@ -265,6 +267,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/stocks/{stock}/market-prices', [StockPriceController::class, 'market']);
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::apiResource('dashboard-layouts', DashboardLayoutController::class)->except(['show', 'create', 'edit']);
+    Route::post('/dashboard-layouts/{dashboardLayout}/duplicate', [DashboardLayoutController::class, 'duplicate'])->whereNumber('dashboardLayout');
     Route::get('/exports/catalog', [ExportController::class, 'catalog']);
     Route::post('/exports', [ExportController::class, 'store']);
     Route::get('/exports/{token}', [ExportController::class, 'status'])->whereUuid('token');
@@ -272,6 +275,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::get('/exports/{token}/download', [ExportController::class, 'download'])->whereUuid('token')->name('api.exports.download');
     Route::get('/exports/basket', [ExportController::class, 'basket']);
     Route::put('/exports/basket', [ExportController::class, 'updateBasket']);
+    Route::post('/exports/basket/export', [ExportController::class, 'exportBasket']);
     Route::get('/market-depth', [MarketDepthController::class, 'show']);
     Route::get('/patterns/scan', [PatternScanController::class, 'index']);
     Route::get('/stocks/{stock}/pattern-scan', [PatternScanController::class, 'stock']);

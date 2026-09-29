@@ -25,7 +25,7 @@ class ExportFileWriter
         foreach (array_values($sheets) as $index => $sheet) {
             $rows = [$sheet['columns'], ...array_map(fn ($row) => array_map(fn ($column) => data_get($row, $column), $sheet['columns']), $sheet['rows'])];
             $xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>';
-            foreach ($rows as $rowIndex => $row) { $xml .= '<row r="'.($rowIndex + 1).'">'; foreach ($row as $columnIndex => $value) { $cell = htmlspecialchars($this->safeCell($value), ENT_XML1); $xml .= '<c r="'.($this->column($columnIndex).($rowIndex + 1)).'" t="inlineStr"><is><t>'.$cell.'</t></is></c>'; } $xml .= '</row>'; }
+            foreach ($rows as $rowIndex => $row) { $xml .= '<row r="'.($rowIndex + 1).'">'; foreach ($row as $columnIndex => $value) { $safe = $this->safeCell($value); $cell = htmlspecialchars($safe, ENT_XML1); $ref = $this->column($columnIndex).($rowIndex + 1); $xml .= is_numeric($safe) && ! preg_match('/^0\d/', $safe) ? '<c r="'.$ref.'"><v>'.$cell.'</v></c>' : '<c r="'.$ref.'" t="inlineStr"><is><t>'.$cell.'</t></is></c>'; } $xml .= '</row>'; }
             $sheetXml[] = $xml.'</sheetData></worksheet>';
             $zip->addFromString("xl/worksheets/sheet".($index + 1).'.xml', end($sheetXml));
         }
