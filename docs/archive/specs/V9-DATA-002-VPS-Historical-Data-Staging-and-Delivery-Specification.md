@@ -136,7 +136,7 @@ Security requirements:
 - At quota/safe-threshold pressure, new historical collection pauses/defer and Admin sees an operational warning.
 - Quota pressure SHALL NOT silently purge an otherwise protected active batch.
 - Acknowledged payloads are retained **7 days**, then automatically deleted if not leased and no active lifecycle transition exists.
-- Failed/rejected payloads become deletion-eligible after **30 days** even if never acknowledged.
+- Failed/rejected/unacknowledged payloads are **not automatically deleted**. Retain them until a successful replacement for the same trading day has been durably imported and acknowledged; only then may the superseded failed payload become deletion-eligible. If no successful replacement is acknowledged, retain the payload and pause new collection at quota.
 - If a failed/rejected batch is superseded by a successful replacement that is imported and acknowledged, the superseded failed payload becomes immediately deletion-eligible.
 - There is no Admin retention-hold feature.
 - Admin cannot manually delete READY or unacknowledged batches.
@@ -152,7 +152,7 @@ After payload deletion, retain lightweight metadata for **1 year**, including at
 - acknowledgment timestamp where applicable;
 - enrolled-device identity;
 - deletion timestamp;
-- deletion reason, such as `acknowledged_retention_expired`, `failed_rejected_expired`, or `superseded_by_successful_replacement`.
+- deletion reason, such as `acknowledged_retention_expired` or `superseded_by_successful_replacement`.
 
 VPS transfer/audit logs are retained **30 days** and cover enrollment/revocation, discovery, lease lifecycle, downloads, acknowledgment, deletion and failures.
 
@@ -206,7 +206,7 @@ The following new V9/SKR decisions are frozen:
 - one trading day per sealed base batch;
 - 7-day acknowledged payload grace period;
 - 20 GB default configurable VPS staging quota;
-- failed/rejected payload expiry after 30 days;
+- failed/rejected/unacknowledged payloads are retained until exact successful replacement acknowledgment; no automatic deletion without verified local import;
 - no retention hold;
 - automatic deletion according to lifecycle rules;
 - one enrolled Mac/device only;
@@ -254,10 +254,10 @@ V9-DATA-002 is complete only when:
 9. Lease, Pause/Stop recovery, crash recovery and idempotent acknowledgment pass automated tests.
 10. Mac acknowledgment occurs only after full atomic durable import.
 11. Quota pressure pauses/defer collection instead of unsafe purge.
-12. 7-day/30-day retention rules and automatic cleanup are enforced exactly.
+12. Acknowledged payloads follow the 7-day grace period; unacknowledged/failed payloads are never automatically deleted, and a superseded failed payload becomes deletion-eligible only after successful replacement acknowledgment.
 13. Deleted-batch metadata and audit retention meet the frozen periods.
 14. Admin UI exposes the frozen minimal operational/diagnostic surface and safe retry actions.
 15. Existing FEAT-065 Parquet corpus remains canonical, readable and compatible with DuckDB/Polars.
-16. Tests cover checksum mismatch, schema rejection, incomplete day, stale lease, duplicate ack, crash between import and ack, low quota, failed-batch expiry, supplemental repair and blocking oldest-batch behavior.
+16. Tests cover checksum mismatch, schema rejection, incomplete day, stale lease, duplicate ack, crash between import and ack, low quota, unacknowledged-batch retention beyond 30 days, superseded-batch deletion only after successful replacement acknowledgment, supplemental repair and blocking oldest-batch behavior.
 
 **Document state: FROZEN / IMPLEMENTATION-READY.** No remaining PO decision is required unless implementation discovers a direct contradiction with FEAT-065 or a materially new product behavior.
