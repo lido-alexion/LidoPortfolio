@@ -85,7 +85,7 @@ FEAT-065  [REVIEW] Intraday ML historical data platform (schema/checkpoints/admi
 | Backtest PIT fundamental operands | done | `FundamentalScreenerOperandTest.php` |
 | Screener editor fundamental indicator grouping | done | manual |
 
-## Frontend validation baseline (2026-09-28)
+## Frontend validation baseline (2026-09-29)
 
 - Node `20.19.1` / npm `10.8.2` via the existing user NVM installation.
 - Node JS suite: **190 passed, 0 failed**; Vitest: **101 passed, 0 failed**.
