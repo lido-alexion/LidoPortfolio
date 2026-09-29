@@ -20,8 +20,8 @@ return new class extends Migration
             $table->timestamp('universe_refreshed_at')->nullable();
             $table->timestamps();
 
-            $table->foreign('manual_hold_by_user_id')->references('id')->on('portfolio_users')->nullOnDelete();
-            $table->foreign('last_command_by_user_id')->references('id')->on('portfolio_users')->nullOnDelete();
+            $table->foreign('manual_hold_by_user_id', 'ms_collector_hold_user_fk')->references('id')->on('portfolio_users')->nullOnDelete();
+            $table->foreign('last_command_by_user_id', 'ms_collector_cmd_user_fk')->references('id')->on('portfolio_users')->nullOnDelete();
         });
 
         DB::table('portfolio_microstructure_collector_state')->insert([
