@@ -3,157 +3,261 @@
 | Field | Value |
 |---|---|
 | **Epic** | V9-DATA-002 |
-| **Status** | **PO REVIEW — ARCHITECTURE DRAFT** |
+| **Status** | **FROZEN / IMPLEMENTATION-READY** |
 | **Issue** | [V9-DATA-002](https://github.com/lido-alexion/LidoPortfolio/issues/16) |
 | **Related Mac app** | [SKR-001 — StoX-Kite-Rain](https://github.com/lido-alexion/StoX-Kite-Rain/issues/1) |
 | **Companion spec** | [Mac downloader specification](https://github.com/lido-alexion/StoX-Kite-Rain/blob/main/docs/SK-001-MacOS-Downloader-Specification.md) |
 | **Inherited V8 specification** | [`V8-Intraday-ML-Historical-Data-Platform-Specification.md`](V8-Intraday-ML-Historical-Data-Platform-Specification.md) — V4-FEAT-065 |
-| **V8 boundary** | V9-DATA-002 changes acquisition/staging/delivery topology while inheriting the frozen FEAT-065 corpus, quality, storage and research contracts unless explicitly overridden below. |
 
 ## 1. Goal
 
-Use the StoX VPS, whose static IP is whitelisted by Kite, to fetch historical 1-minute OHLCV data, hold it in bounded staging storage, and deliver sealed batches to the Mac when StoX-Kite-Rain automatically syncs over an eligible connection. The Mac remains the canonical research-data home. VPS copies are temporary and must not be deleted until the Mac has verified and committed them and acknowledged the exact batch.
+V9-DATA-002 changes the acquisition/delivery topology of the frozen FEAT-065 historical-data platform without redefining its canonical research corpus. The StoX VPS, whose static IP is whitelisted by Kite, fetches historical 1-minute OHLCV, stages immutable verified trading-day batches, and exposes a secure pull surface to StoX-Kite-Rain. The Mac remains the canonical research-data home.
 
-This epic is an operational/topology extension of V4-FEAT-065, not a replacement historical-data product. FEAT-065 remains the authority for the canonical research corpus and its downstream analytical contract except where this V9 specification explicitly supersedes a V8 choice.
+Kite requests originate only from the VPS. The Mac never stores Kite credentials and never needs inbound connectivity, SSH, or a VPN. StoX-Kite-Rain initiates authenticated outbound HTTPS pulls to the dedicated transfer endpoint.
 
-## 2. Frozen FEAT-065 decisions inherited by V9-DATA-002
+## 2. Inherited FEAT-065 contract
 
-The following FEAT-065 decisions are already product-approved and SHALL NOT be reopened by this epic:
+The following V8 decisions remain normative and SHALL NOT be reopened by implementation:
 
-- the MacBook Pro remains the primary historical-data, research and heavy offline ML machine;
-- Apache Parquet remains the canonical historical storage format; MariaDB/MySQL is not the minute-level canonical store;
-- the equity universe remains the current NIFTY 500 fixed universe, with survivorship bias explicitly accepted;
-- selected broad-market and sector indices remain part of the historical corpus;
-- Zerodha Kite Connect historical API remains the initial historical source, while normalized storage/analytics stay provider-agnostic;
-- historical acquisition remains resumable, restart-safe and idempotent with durable checkpoints, bounded retry/backoff, explicit 429/error handling, duplicate prevention, failed-window tracking, progress reporting and pause/resume support;
-- DuckDB remains the SQL analytical engine over Parquet and Polars/Python remains the dataframe/feature-construction stack;
-- downstream datasets remain point-in-time safe;
-- prospective live microstructure remains separately owned by V4-FEAT-063;
-- derivative/open-interest enrichment remains optional Dataset B work and must not block the core OHLCV corpus;
-- ClickHouse is not introduced initially;
-- canonical data and metadata remain organized for straightforward manual external-disk backup; StoX does not introduce an automated backup subsystem for this corpus;
-- approved model artifacts may later move to the VPS without requiring the full historical corpus to reside there.
+- MacBook Pro remains the primary historical-data, research and heavy offline ML machine.
+- Apache Parquet remains the canonical minute-level storage format.
+- Current NIFTY 500 fixed universe remains the equity universe; survivorship bias remains explicitly accepted.
+- Configured broad-market and sector indices remain part of the corpus.
+- Zerodha Kite Connect historical API remains the initial provider, while normalized schema and analytics remain provider-agnostic.
+- Acquisition remains resumable, restart-safe and idempotent with durable checkpoints, bounded retry/backoff, explicit 429/error handling, duplicate prevention, failed-window tracking, progress reporting and pause/resume.
+- DuckDB remains the SQL analytical engine over Parquet; Polars/Python remains the dataframe/feature-construction stack.
+- Downstream datasets remain point-in-time safe.
+- FEAT-063 prospective live microstructure remains a separate domain.
+- Dataset B derivative/OI enrichment remains optional and non-blocking.
+- ClickHouse is not introduced initially.
+- No automated backup subsystem is added for the Mac corpus; existing manual external-disk backup remains the operational assumption.
 
-### Explicit V9 overrides/additions
+## 3. Explicit V9 overrides/additions
 
-V9-DATA-002 changes or adds only the following frozen product behavior relative to FEAT-065:
+1. **History depth:** initial bootstrap attempts the maximum provider-available 1-minute OHLCV for every in-scope instrument instead of FEAT-065's earlier arbitrary eight-year ceiling.
+2. **Acquisition topology:** provider acquisition runs from the whitelisted StoX VPS.
+3. **Temporary staging:** the VPS may temporarily hold historical payloads solely for reliable delivery to the Mac.
+4. **Delivery unit:** one sealed base batch represents exactly one trading day; a day-batch may contain multiple Parquet files.
+5. **Supplemental repair batches:** a later repair for an already-imported day is a separate immutable supplemental batch containing only previously missing logical rows. It never overwrites accepted candles.
+6. **Accepted-data immutability:** once a day-batch is successfully imported and acknowledged, later provider corrections are ignored. Accepted candles are not silently refreshed or mutated.
 
-1. **History depth override:** the initial bootstrap SHALL attempt the **maximum historical 1-minute OHLCV available from the configured provider** for every in-scope instrument, rather than retaining FEAT-065's earlier arbitrary "up to 8 years" ceiling. Actual coverage remains subject to listing date, provider availability, suspensions and source gaps.
-2. **Acquisition topology:** Kite historical requests originate from the whitelisted StoX VPS rather than requiring the Mac to perform provider acquisition directly.
-3. **Temporary VPS staging:** acquired historical data may exist temporarily on the VPS solely for reliable staged delivery to the canonical Mac corpus.
-4. **Transfer batch boundary:** one sealed transfer batch represents **one trading day** across the relevant in-scope instruments/data available for that day. Provider request windows may be smaller or instrument-specific internally; those request work units do not redefine the sealed delivery batch.
-5. **Mac delivery application:** StoX-Kite-Rain performs automatic authenticated outbound HTTPS discovery/download/verification/import/acknowledgment from Mac to VPS.
+## 4. Collection schedule and completeness
 
-All other FEAT-065 product decisions continue unchanged unless a later explicit V9 decision says otherwise.
+- Incremental collection runs once per trading day after market close, default **18:00 IST**.
+- The official market calendar determines trading vs non-trading days. Known holidays produce no empty batch and are not gaps.
+- Latest completed trading day is prioritized before bounded historical gap repair.
+- Failed provider requests receive bounded automatic retry/backoff before being marked unresolved.
+- Incomplete trading days remain unresolved and are retried on later runs; an incomplete day SHALL NOT be published READY.
+- Each run may also repair a bounded backlog of known failed/missing historical windows.
+- Admin may trigger **Retry unresolved gaps** and may re-queue a specific trading day only when it is unresolved or missing.
+- Already accepted/imported days cannot be force-refreshed.
 
-## 3. System boundaries
+## 5. Batch lifecycle
 
-- **V9-DATA-002 (this epic):** Kite historical fetching from whitelisted VPS egress, resumable VPS checkpoints, staging, immutable daily manifests/batches, secure pull endpoints, transfer leases, acknowledgment verification, retention/deletion, and VPS operations.
-- **SKR-001 / StoX-Kite-Rain:** Mac menu-bar app, network eligibility/speed policy, automatic discovery and pull, local validation/import into the FEAT-065 canonical corpus, progress controls, and UI.
-- **V4-FEAT-065:** canonical normalized OHLCV/index corpus semantics, Parquet authority, research-machine role, quality/coverage expectations, source abstraction, PIT safety and DuckDB/Polars analytical access.
-- The two V9/SKR specs share a versioned manifest and transfer protocol. A protocol change requires coordinated updates to both specs.
-- Kite requests originate only from the whitelisted VPS. The Mac initiates outbound HTTPS pulls; the VPS never connects inbound to the Mac. No Mac Kite credential, inbound Mac port, or SSH tunnel is part of this design.
-- FEAT-063 live microstructure remains a separate data domain.
+The frozen lifecycle is:
 
-## 4. Proposed lifecycle
+1. **COLLECTING** — provider windows are fetched into a working area using FEAT-065 resumability/checkpoint semantics.
+2. **ASSEMBLING** — normalized data for one trading day is assembled; request-window boundaries do not define transfer boundaries.
+3. **VALIDATING** — completeness, schema, coverage and semantic checks run on the VPS.
+4. **READY** — a versioned manifest is sealed and the batch becomes immutable.
+5. **LEASED** — StoX-Kite-Rain owns the batch for transfer/import under a renewable lease.
+6. **ACKNOWLEDGED** — the Mac has durably and atomically imported the exact batch and acknowledged the exact batch ID + manifest hash.
+7. **DELETION-ELIGIBLE** — lifecycle retention conditions are met.
+8. **DELETED** — payload removed; lightweight retained metadata remains according to the audit policy.
 
-These architectural requirements remain under PO review only where explicitly identified as open later in this document:
+Collection may continue while a Mac transfer is active, but only into separate working areas/new batches. A READY/LEASED batch can never be mutated by the collector.
 
-1. **Collect:** fetch bounded Kite historical request windows to a VPS working area. Persist checkpoints so failed work can resume without skipping ranges. Apply inherited FEAT-065 retry/backoff, rate-limit, failed-window and progress semantics.
-2. **Assemble daily batch:** normalize provider responses into the inherited FEAT-065 data contract and assemble one trading-day delivery batch. Holidays/non-trading days do not produce empty required batches.
-3. **Seal:** validate completed files; create a versioned manifest and calculate file sizes and SHA-256 hashes; atomically publish the result as READY. READY batches and their manifests are immutable.
-4. **Discover and lease:** the Mac lists READY batches and obtains an expiring lease for a batch. A lease protects it from deletion or simultaneous claim. Expired leases make interrupted work recoverable; they do not delete data.
-5. **Download:** the Mac writes to temporary local files and resumes only against the same batch ID and manifest hash. New Kite collection writes to separate working files/batches and cannot mutate READY data.
-6. **Verify and import:** the Mac checks files against the manifest, checks Parquet readability/schema/counts, and atomically commits to its canonical FEAT-065 corpus. Repeated imports must be idempotent.
-7. **Acknowledge:** after durable local commit, the Mac sends batch ID plus manifest hash. VPS accepts only an exact match to its sealed manifest.
-8. **Retain then delete:** acknowledged data waits through a configurable grace period, then becomes eligible for deletion. Interrupted, rejected, or unacknowledged batches remain available. VPS quota/expiry rules remain to be frozen.
+## 6. Manifest and READY invariant
 
-The collector must never modify files being transferred. Collection and published batches use separate working/published areas. Collection can continue during transfer only by creating new working data or batches.
+A sealed manifest SHALL contain at least:
 
-## 5. Manifest and integrity rules
+- batch ID and batch kind (`base` or `supplemental_repair`);
+- trading date and covered market/session bounds;
+- manifest version and schema version;
+- seal timestamp;
+- normalized instrument identities and source instrument tokens where relevant;
+- per-file path, byte size, SHA-256, row count and schema identity;
+- aggregate file/row counts;
+- expected vs actual instrument count where determinable;
+- expected vs actual row count where determinable;
+- missing instruments/windows;
+- market-calendar identity/version;
+- completeness status;
+- canonical manifest hash;
+- source/provenance metadata required by FEAT-065.
 
-A manifest SHALL contain batch ID, manifest/schema versions, seal time, covered trading date/ranges, instrument identity/token, and per-file path, byte size, SHA-256, row count, and schema identity. It SHALL also include aggregate file/row counts and a canonical manifest hash.
+**READY means the VPS semantic completeness rules have passed.** The Mac is not required to duplicate the VPS semantic-completeness engine; it verifies transport/file integrity, Parquet readability, schema compatibility and safe import.
 
-Canonical candle identity/value semantics inherit FEAT-065 fields, including at least instrument identity, exchange, trading symbol, timestamp, OHLCV, source, source instrument token and schema version. The transfer protocol may add non-destructive delivery/provenance fields without changing FEAT-065 analytical semantics.
+Manifest canonicalization/versioning is an implementation detail, but a protocol version change must be coordinated with SKR-001.
 
-The Mac rejects a batch if files are missing, size/hash differs, Parquet cannot be read, schema is unsupported, or manifest counts disagree. A rejected batch is never acknowledged or deleted.
+## 7. Transfer API and security
 
-Manifest encoding/canonicalization, compatibility policy and transfer-level semantic validation are technical design choices unless they create a new user-visible compatibility or retention policy.
+A dedicated public HTTPS endpoint SHALL be used, e.g. `data.stoxla.in`.
 
-## 6. Idempotency and canonical storage
+This public machine surface exposes only:
 
-- Never append to or mutate a READY VPS batch.
-- Retry work and duplicate delivery must converge to the same logical FEAT-065 corpus.
-- Candle duplicate identity SHALL be based on the existing normalized FEAT-065 instrument identity plus candle timestamp; Kite transport token alone must not become the permanent analytical key.
-- The Mac canonical destination remains schema-versioned Parquet with deterministic organization suitable for DuckDB/Polars and manual external-disk backup.
-- Existing FEAT-065 canonical files are authoritative existing corpus state; V9/SKR import must adopt them non-destructively rather than create a competing canonical tree.
-- Import must not expose partial partitions. The implementation may use temporary files, atomic rename/publish, compaction and deterministic merge as needed, provided existing valid corpus data remains readable and duplicate logical rows are prevented.
-- Transfer retry after a crash must reconcile server lease, batch manifest, local temporary files and committed state before resuming.
+- READY-batch discovery;
+- lease acquisition/renewal/release;
+- resumable download;
+- acknowledgment;
+- minimal device-authenticated transfer status required by StoX-Kite-Rain;
+- a small fixed-size speed-test object served from the same endpoint/path class.
 
-Exact local file sizing/compaction remains an implementation choice, consistent with FEAT-065's rule to avoid pathological tiny-file proliferation while preserving useful date/instrument pruning.
+Collector controls, gap retries, quota operations, enrollment/revocation and diagnostics remain behind normal authenticated StoX Admin UI and are not exposed as public transfer operations.
 
-## 7. Completeness, corrections and recovery
+Security requirements:
 
-FEAT-065 already requires explicit coverage and missingness reporting by instrument/date range, failed-window visibility and repairability. V9-DATA-002 inherits those requirements.
+- public TLS validated through normal trusted certificate/hostname validation; no certificate pinning required;
+- standard HTTP byte-range support for resumable downloads;
+- dedicated device transfer credential distinct from Kite and user browser sessions;
+- one-time short-lived enrollment code generated in StoX Admin and exchanged over HTTPS;
+- only **one enrolled Mac/device at a time**;
+- device credential is long-lived until explicitly revoked/replaced;
+- credential stored in macOS Keychain and never placed in URLs/logs;
+- no inbound listener on the Mac;
+- path traversal and cross-batch access rejected;
+- rate/size limits applied to the transfer API.
 
-Therefore:
+## 8. Lease semantics
 
-- a trading-day batch must not be represented as complete merely because some files were successfully fetched;
-- known unavailable/suspended/unlisted instruments or provider gaps must be represented in coverage metadata rather than fabricated;
-- failed request windows remain retryable and visible;
-- a later provider correction or repaired gap must be applied reproducibly and must not silently mutate prior research provenance;
-- non-trading exchange holidays do not constitute missing trading-day batches.
+- One batch lease at a time is sufficient because only one Mac may be enrolled.
+- Lease duration: **30 minutes**.
+- Lease renews automatically while downloading, verifying, importing, or explicitly paused.
+- Explicit **Pause** has no maximum duration and continues lightweight lease renewal.
+- **Stop** releases the lease.
+- Successful acknowledgment immediately releases the lease.
+- If the app crashes/disappears and cannot renew, lease expiry makes the batch recoverable.
+- Repeated identical acknowledgment for the same device, batch ID and manifest hash is idempotently successful; a conflicting manifest hash is rejected.
 
-The exact automated recheck cadence for incomplete/repaired days may be selected by implementation so long as retries are bounded, observable and do not violate provider limits.
+## 9. VPS quota and retention
 
-## 8. Races, recovery and quota
+- Default staging quota: **20 GB**, configurable operationally.
+- All staged payloads, including acknowledged payloads still within grace period, count against the same real disk quota.
+- At quota/safe-threshold pressure, new historical collection pauses/defer and Admin sees an operational warning.
+- Quota pressure SHALL NOT silently purge an otherwise protected active batch.
+- Acknowledged payloads are retained **7 days**, then automatically deleted if not leased and no active lifecycle transition exists.
+- Failed/rejected payloads become deletion-eligible after **30 days** even if never acknowledged.
+- If a failed/rejected batch is superseded by a successful replacement that is imported and acknowledged, the superseded failed payload becomes immediately deletion-eligible.
+- There is no Admin retention-hold feature.
+- Admin cannot manually delete READY or unacknowledged batches.
 
-A per-batch lease serializes transfer lifecycle operations. It protects the batch from deletion; immutability protects it from collector mutation. These are separate guarantees.
+## 10. Deleted-batch metadata and audit
 
-Network loss, Mac sleep/quit, process crash, checksum failure or Parquet failure leaves the VPS copy intact. VPS disk pressure must stop/defer new fetches before it threatens unacknowledged batches. It must report quota pressure and must never silently purge an unacknowledged batch.
+After payload deletion, retain lightweight metadata for **1 year**, including at least:
 
-Lease duration/renewal/takeover mechanics are implementation-level unless they materially change user-visible Pause/Stop behavior. VPS staging quota, acknowledged deletion grace period and any operator disposition of indefinitely unacknowledged batches remain product/operational decisions to freeze.
+- batch ID;
+- trading date;
+- manifest hash;
+- batch kind;
+- acknowledgment timestamp where applicable;
+- enrolled-device identity;
+- deletion timestamp;
+- deletion reason, such as `acknowledged_retention_expired`, `failed_rejected_expired`, or `superseded_by_successful_replacement`.
 
-## 9. Security and operator visibility
+VPS transfer/audit logs are retained **30 days** and cover enrollment/revocation, discovery, lease lifecycle, downloads, acknowledgment, deletion and failures.
 
-Provide authenticated TLS endpoints for batch discovery, lease/renew/release, resumable download, acknowledgment and status. Keep Kite credentials on the VPS; use a separate revocable credential for Mac transfer access. Confine paths to a batch, validate manifests, apply rate/size limits, redact secrets, and audit claim/download/ack/delete.
+The Admin UI provides searchable recent deleted-batch metadata by trading date, batch ID, manifest hash, acknowledgment/deletion timestamp and deletion reason.
 
-Credential mechanics, endpoint naming/routing and protocol encoding are technical implementation choices, provided the credential is least-privilege, independently revocable, protected in macOS Keychain, never exposed in URLs/logs, and no inbound listener/SSH requirement is introduced on the Mac.
+## 11. Admin operations UI
 
-## 10. Draft acceptance criteria
+Provide a minimal Admin operations surface showing:
 
-1. VPS fetches the maximum provider-available historical 1-minute OHLCV for the current NIFTY 500 fixed universe plus configured indices, subject to actual source availability.
-2. Acquisition honors the inherited FEAT-065 source-normalization, resumability, idempotency, rate-limit, failed-window, provenance, coverage and PIT-safety contracts.
-3. Delivery batches are sealed on a one-trading-day boundary and atomically published with valid manifests.
-4. Published batches remain immutable while READY or leased.
-5. Mac discovers and pulls through authenticated outbound HTTPS and safely resumes a simulated interruption.
-6. Concurrent collection creates separate working data and cannot make a transfer miss, read partial, or delete files.
-7. Corrupt/incomplete/wrong-schema files are rejected without acknowledgment or VPS deletion.
-8. A durable valid Mac commit into the existing FEAT-065 canonical Parquet corpus followed by exact acknowledgment transitions only that batch toward delayed deletion.
-9. Duplicate transfers and acknowledgments are idempotent; duplicate logical candle rows are not created.
-10. Expired leases recover without data loss.
-11. Quota pressure never silently deletes unacknowledged data.
-12. Existing valid FEAT-065 corpus files remain readable and are adopted non-destructively.
-13. DuckDB/Polars analytical access and the manual-backup-friendly canonical structure remain intact after V9 imports.
-14. Tests cover interruption, concurrent collection/transfer, stale lease, duplicate ack, checksum mismatch, incomplete trading day, repair/correction, and crashes between local commit and ack.
+- current staging usage vs 20 GB/default configured quota;
+- collector state;
+- latest complete trading day;
+- unresolved gaps;
+- READY / leased / acknowledged / failed batch states;
+- current enrolled Mac/device;
+- revoke/replace enrollment;
+- recent operational errors;
+- deleted-batch metadata history.
 
-## 11. Remaining PO decisions before freeze
+Gap diagnostics are trading-day level by default, with expandable per-instrument/window details.
 
-The FEAT-065 reconciliation removes historical-corpus questions that were already frozen. The remaining product decisions are specific to the new staging/delivery behavior:
+Allowed safe actions:
 
-1. **VPS retention policy:** staging quota, acknowledged-batch grace period, and operator handling of indefinitely unacknowledged batches.
-2. **Mac auto-sync/network policy:** enabled-by-default behavior, eligible Wi-Fi/network rules, minimum download-speed policy, optional bandwidth ceiling and retry/recheck behavior.
-3. **User controls:** exact Pause / Stop / Resume semantics. **Automatic sync only** remains the confirmed normal trigger; there is no normal manual Start action.
-4. **Mac application UX:** menu-bar-only versus companion settings/status window, and the minimum user-visible sync history/status needed.
-5. **macOS distribution/runtime policy:** portable bundle expectations, signing/notarization, minimum macOS version, update behavior and launch-at-login default.
+- Retry unresolved gaps;
+- re-queue a specific unresolved/missing trading day;
+- revoke/replace the enrolled Mac.
 
-The following are delegated to architecture/implementation and are no longer PO questions unless implementation uncovers a material product tradeoff: canonical manifest serialization/version field mechanics, request-window sizing, lease timers/renewal protocol, HTTP endpoint names, credential token format/rotation mechanics, atomic filesystem technique, Parquet compaction algorithm, and retry backoff constants.
+Do not expose arbitrary payload deletion or low-level file mutation.
 
-## 12. Related work
+## 12. Ordering and repair rules
 
-- Inherited V8 historical-data specification: [`V8-Intraday-ML-Historical-Data-Platform-Specification.md`](V8-Intraday-ML-Historical-Data-Platform-Specification.md)
-- VPS epic: [V9-DATA-002 issue](https://github.com/lido-alexion/LidoPortfolio/issues/16)
-- Mac epic: [SKR-001 issue](https://github.com/lido-alexion/StoX-Kite-Rain/issues/1)
-- Mac spec: [SK-001 specification](https://github.com/lido-alexion/StoX-Kite-Rain/blob/main/docs/SK-001-MacOS-Downloader-Specification.md)
+- VPS collection priority: latest completed trading day first, then bounded historical gap repair.
+- Mac download/import priority: oldest unresolved READY base or required supplemental repair batch first.
+- A problematic oldest required batch blocks advancement; later batches are not silently skipped.
+- Supplemental repair batches add only genuinely missing logical rows and never overwrite accepted rows.
+- Base and supplemental batches are each atomic logical units for verification/import/acknowledgment.
 
-**Document state:** architecture draft for PO review. FEAT-065 inheritance, maximum-provider-history override and one-trading-day sealed batch boundary are frozen. Do not implement remaining open product behavior until the decisions in Section 11 are resolved and both companion specs are frozen.
+## 13. Parquet/storage rules
+
+- A trading-day batch may contain multiple Parquet files.
+- Physical file count/target size remains an FEAT-065/POC implementation-tuning concern, not a product requirement.
+- The Mac imports the entire day-batch atomically; individual files are not committed piecemeal.
+- No immediate compaction is required after each import. Compaction may be introduced later only if measured file-count/query-performance evidence justifies it.
+- Existing FEAT-065 corpus is adopted non-destructively; V9 must not create a competing canonical tree.
+
+## 14. Frozen PO decisions
+
+The following new V9/SKR decisions are frozen:
+
+- maximum provider-available historical bootstrap;
+- one trading day per sealed base batch;
+- 7-day acknowledged payload grace period;
+- 20 GB default configurable VPS staging quota;
+- failed/rejected payload expiry after 30 days;
+- no retention hold;
+- automatic deletion according to lifecycle rules;
+- one enrolled Mac/device only;
+- one-time Admin enrollment code + long-lived revocable device credential;
+- dedicated public HTTPS transfer subdomain;
+- normal public TLS validation, no certificate pinning;
+- standard HTTP range requests;
+- 30-minute renewable batch lease;
+- idempotent acknowledgment;
+- 1-year deleted-batch metadata retention;
+- 30-day VPS transfer/audit log retention;
+- latest-day-first collection and bounded gap repair;
+- oldest-required-batch-first Mac processing;
+- no skipping of a blocking problematic batch;
+- provider corrections to already accepted candles are ignored;
+- supplemental immutable repair batches may fill only genuinely missing rows;
+- minimal Admin operational UI with safe retry/re-enrollment actions only.
+
+## 15. Implementation-delegated details
+
+The implementation agent may choose without further PO approval, provided the frozen behavior above is preserved:
+
+- exact provider request-window sizes and pacing constants;
+- manifest serialization/canonicalization details;
+- endpoint route names and payload field naming;
+- lease-renewal cadence below the 30-minute expiry;
+- exact filesystem atomic-publish technique;
+- exact Parquet compression/file sizing;
+- retry/backoff constants within bounded-retry rules;
+- internal scheduler mechanism;
+- speed-test object size within the frozen small fixed-size 5–10 MB tuning range.
+
+## 16. Acceptance criteria
+
+V9-DATA-002 is complete only when:
+
+1. VPS can backfill the maximum provider-available history for the inherited NIFTY 500 + configured index universe with FEAT-065 resumability/idempotency/coverage semantics.
+2. Daily incremental collection runs after market close and never publishes an incomplete day as READY.
+3. Holidays/non-trading days are handled by market calendar without false gaps.
+4. READY batches are immutable, one-trading-day logical units with complete semantic/integrity manifests.
+5. Supplemental repair batches can fill missing rows without mutating accepted values.
+6. Concurrent collection and transfer cannot expose partial/mutating READY data.
+7. Transfer API is authenticated, resumable via byte ranges, least-privilege, and isolated to machine-transfer functions.
+8. One-time enrollment produces one revocable enrolled Mac credential; replacement/revocation works.
+9. Lease, Pause/Stop recovery, crash recovery and idempotent acknowledgment pass automated tests.
+10. Mac acknowledgment occurs only after full atomic durable import.
+11. Quota pressure pauses/defer collection instead of unsafe purge.
+12. 7-day/30-day retention rules and automatic cleanup are enforced exactly.
+13. Deleted-batch metadata and audit retention meet the frozen periods.
+14. Admin UI exposes the frozen minimal operational/diagnostic surface and safe retry actions.
+15. Existing FEAT-065 Parquet corpus remains canonical, readable and compatible with DuckDB/Polars.
+16. Tests cover checksum mismatch, schema rejection, incomplete day, stale lease, duplicate ack, crash between import and ack, low quota, failed-batch expiry, supplemental repair and blocking oldest-batch behavior.
+
+**Document state: FROZEN / IMPLEMENTATION-READY.** No remaining PO decision is required unless implementation discovers a direct contradiction with FEAT-065 or a materially new product behavior.
