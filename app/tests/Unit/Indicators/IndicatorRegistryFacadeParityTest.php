@@ -10,7 +10,7 @@ use App\Services\Indicators\ScreenerMinBars;
 use App\Services\Indicators\ScreenerPrimarySeed;
 use App\Services\Indicators\StrategyCompositeSeed;
 use App\Services\Screener\ScreenerCatalog;
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 
 /**
  * Epic 2: catalogues project from Registry without behaviour drift.

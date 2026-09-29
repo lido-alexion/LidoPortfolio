@@ -13,7 +13,7 @@ use App\Services\Indicators\IndicatorStatus;
 use App\Services\Indicators\IndicatorType;
 use App\Services\Screener\ScreenerCatalog;
 use InvalidArgumentException;
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 
 class IndicatorRegistryTest extends TestCase
 {
