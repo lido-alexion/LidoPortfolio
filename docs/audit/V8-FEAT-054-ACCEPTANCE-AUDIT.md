@@ -25,7 +25,7 @@ Authoritative contract: `docs/archive/specs/V8-Historical-Fundamentals-Bootstrap
 | Screener eligibility boundary | PASS | Selected `fund_*` operands use the canonical metric service, PIT values, and unavailable semantics; `FundamentalScreenerOperandTest` and related bank tests pass. |
 | Authorization and account isolation | PASS | Authenticated stock fundamentals routes and existing portfolio/profile middleware; V8 API tests cover intended investor access and Admin boundaries. |
 | Official upgrade/fallback auditability | PASS locally | Deterministic source ranking and canonical revision storage allow later official rows to replace lower-ranked fallback rows; live provider upgrade exercise remains external. |
-| Production/runtime acceptance | EXTERNAL VALIDATION PENDING | Representative provider calls and deployed queue/runtime proof remain to be exercised. Local Chromium now covers the Watchlist fundamentals summary, provenance, historical Basic/Advanced tables and user-scoped preference reload on desktop and a 390px touch viewport (2/2 focused journeys). |
+| Production/runtime acceptance | EXTERNAL VALIDATION PENDING | Representative provider calls and deployed queue/runtime proof remain to be exercised. Local Chromium now covers the Watchlist fundamentals summary, provenance, historical Basic/Advanced tables and user-scoped preference reload on desktop and a 390px touch viewport (2/2 focused journeys); the focused axe scan reports no critical WCAG violations on the fundamentals page. |
 
 ## Verification executed
 

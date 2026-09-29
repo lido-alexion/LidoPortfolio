@@ -296,6 +296,7 @@ function OperandEditor({ value, onChange, meta, side, bare = false, leading = nu
                 <>
                     <select
                         className="form-select form-select-sm mb-2"
+                        aria-label={`${side} indicator`}
                         value={value?.indicator || 'close'}
                         onChange={(e) => {
                             const ind = indicators.find((i) => i.id === e.target.value);
@@ -400,6 +401,7 @@ function ConditionNode({ node, onChange, onRemove, meta, depth }) {
                     <select
                         className="form-select form-select-sm"
                         style={{ width: 100 }}
+                        aria-label="Condition group operator"
                         value={node.op || 'AND'}
                         onChange={(e) => onChange({ ...node, op: e.target.value })}
                     >
@@ -960,8 +962,9 @@ export default function ScreenerEditorPage() {
     const configSection = (
         <>
             <div className="mb-3">
-                <label className="form-label">Name</label>
+                <label className="form-label" htmlFor="screener-name">Name</label>
                 <input
+                    id="screener-name"
                     className={`form-control${showFieldError('name') ? ' is-invalid' : ''}`}
                     value={form.name}
                     onChange={(e) => {
@@ -976,8 +979,9 @@ export default function ScreenerEditorPage() {
                 </div>
             </div>
             <div className="mb-3">
-                <label className="form-label">Description</label>
+                <label className="form-label" htmlFor="screener-description">Description</label>
                 <textarea
+                    id="screener-description"
                     className={`form-control${showFieldError('description') ? ' is-invalid' : ''}`}
                     rows={2}
                     value={form.description}
@@ -992,8 +996,9 @@ export default function ScreenerEditorPage() {
                 </div>
             </div>
             <div className="mb-3">
-                <label className="form-label">Scope</label>
+                <label className="form-label" htmlFor="screener-scope">Scope</label>
                 <select
+                    id="screener-scope"
                     className={`form-select lido-screener-config-select${showFieldError('scope') ? ' is-invalid' : ''}`}
                     value={form.scope}
                     onChange={(e) => {
@@ -1009,8 +1014,9 @@ export default function ScreenerEditorPage() {
             </div>
             {form.scope === 'watchlist' && (
                 <div className="mb-3">
-                    <label className="form-label">Watchlist</label>
+                    <label className="form-label" htmlFor="screener-watchlist">Watchlist</label>
                     <select
+                        id="screener-watchlist"
                         className={`form-select lido-screener-config-select${showFieldError('watchlist_id') ? ' is-invalid' : ''}`}
                         value={form.watchlist_id}
                         onChange={(e) => {
@@ -1030,8 +1036,9 @@ export default function ScreenerEditorPage() {
             )}
             {form.scope === 'index' && (
                 <div className="mb-3">
-                    <label className="form-label">Index</label>
+                    <label className="form-label" htmlFor="screener-index">Index</label>
                     <select
+                        id="screener-index"
                         className={`form-select lido-screener-config-select${showFieldError('index_symbol') ? ' is-invalid' : ''}`}
                         value={form.index_symbol}
                         onChange={(e) => {

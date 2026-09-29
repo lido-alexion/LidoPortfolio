@@ -25,14 +25,16 @@ Authoritative contract: `docs/archive/specs/V8-Core-Investor-Workflow-UX-Simplif
 | Complete Strategies can activate; multiple enabled Strategies remain supported | PASS locally | `StrategyReadinessTest`, `MultiStrategyLifecycleAssuranceTest`. |
 | Contextual Screener creation preserves Strategy state and selects the result | PASS locally | `strategyScreenerReturnFlow.test.mjs`, WP-09 Strategy/Screener editor hooks. |
 | Historical recommendation/transaction provenance remains resolvable | PASS locally | `Feat064MandatoryAuditAcceptanceTest`, `StrategyProvenanceRegressionTest`, `StrategyProvenanceMigrationReportTest`. |
-| Responsive investor workflow and browser acceptance | PASS locally / broader acceptance pending | Focused Chromium Screener workflow passes 2/2; full configured Playwright run passes all 23 executed journeys. Broader deployed/device validation remains external. |
+| Responsive investor workflow and browser acceptance | PASS locally / broader acceptance pending | Focused Chromium Screener workflow passes 2/2; full configured Playwright run passes all 25 executed journeys. Broader deployed/device validation remains external. |
+| Automated accessibility scan | PASS locally / assistive technology pending | `v8-accessibility.spec.js` runs axe WCAG 2A/2AA critical-violation scans against the Screener editor; the scan passes after explicit labels were added to editor controls. Native screen-reader and broader device acceptance remain external. |
 
 ## Verification executed
 
 - Full Laravel Feature suite: **1,345 passed / 1,347 total / 2 skipped**, 9,565 assertions under the matching x86_64 ML runtime.
 - FEAT-064 backend/provenance/readiness suites pass within that run.
 - Focused Screener/Strategy Chromium journey: **2/2 passed** with deterministic API fixtures.
-- Full configured Playwright run: **23 executed passed**, with 21 intentional viewport/configuration skips.
+- Full configured Playwright run: **25 executed passed**, with 21 intentional viewport/configuration skips.
+- Focused axe accessibility journeys: **3/3 passed** for guided-tour dialogs, fundamentals, and the Screener editor.
 - Node/Vitest/build/typecheck/docs and `git diff --check` pass.
 
 ## External validation pending
