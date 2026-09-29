@@ -142,7 +142,7 @@ jobs:
         run: php artisan migrate:fresh --seed --force
 
       - name: Run backend test suite
-        run: php -d memory_limit=512M vendor/bin/phpunit
+        run: php -d memory_limit=512M artisan test
 
       - name: Verify OpenAPI contract
         run: php artisan openapi:v1 --check

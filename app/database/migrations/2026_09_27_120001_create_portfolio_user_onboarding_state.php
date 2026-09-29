@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('portfolio_user_onboarding_state', function (Blueprint $table) {
+        Schema::create('stox_user_onboarding_state', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id')->unique();
             $table->string('tour_version', 64);
@@ -25,6 +25,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('portfolio_user_onboarding_state');
+        Schema::dropIfExists('stox_user_onboarding_state');
     }
 };
