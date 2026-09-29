@@ -17,6 +17,16 @@ class AccessRequestWorkflowTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_public_access_request_config_exposes_only_the_turnstile_site_key(): void
+    {
+        config(['access_requests.captcha.turnstile.site_key' => '0x4AAAA']);
+
+        $this->getJson('/api/auth/access-requests/config')
+            ->assertOk()
+            ->assertJsonPath('data.turnstile_site_key', '0x4AAAA')
+            ->assertJsonMissingPath('data.turnstile_secret_key');
+    }
+
     protected function setUp(): void
     {
         parent::setUp();

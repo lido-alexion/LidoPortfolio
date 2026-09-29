@@ -107,6 +107,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
+    Route::get('/access-requests/config', [AccessRequestPublicController::class, 'config']);
     Route::post('/access-requests', [AccessRequestPublicController::class, 'store'])
         ->middleware('throttle:access-request');
     Route::post('/access-requests/verify/{token}', [AccessRequestPublicController::class, 'verify'])

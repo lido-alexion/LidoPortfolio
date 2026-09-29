@@ -31,6 +31,15 @@ class AccessRequestPublicController extends Controller
         return response()->json($result);
     }
 
+    public function config(): JsonResponse
+    {
+        return response()->json([
+            'data' => [
+                'turnstile_site_key' => config('access_requests.captcha.turnstile.site_key'),
+            ],
+        ]);
+    }
+
     public function verify(Request $request, string $token): JsonResponse
     {
         $result = $this->accessRequests->completeVerification($token);
