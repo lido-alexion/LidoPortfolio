@@ -4,7 +4,7 @@
 |---|---|
 | **Document type** | Canonical V9 planning register |
 | **Created** | 2026-09-09 |
-| **Status** | **FROZEN / IMPLEMENTATION-READY** |
+| **Status** | **EXISTING SCOPE FROZEN / IMPLEMENTATION-READY; V9-DATA-002 IN PO REVIEW** |
 | **Canonical path** | `specs/LidoPortfolio-V9-Wishlist.md` |
 | **Predecessor** | `specs/LidoPortfolio-V8-Wishlist.md` |
 | **Final audit / sequence** | [`V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md`](V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md) |
@@ -18,7 +18,7 @@ StoX telemetry instrumentation and integration with the existing standalone Lido
 
 The V9 assistance roadmap also builds on the task-oriented user-journey corpus under `docs/user-journeys/`. The human-readable journeys remain useful independently; V9 can progressively expose the same knowledge through deterministic search, conversational assistance, automation-ready UI contracts, governed agentic actions, and contextual embedded AI insights.
 
-The original registered V9 specification set passed the final cross-specification audit in [`V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md`](V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md). `V9-AI-003` was subsequently added as an explicitly frozen extension. Its dependency placement and implementation order are normative in this register and its own frozen specification. StoX V9 remains **IMPLEMENTATION-READY**.
+The original registered V9 specification set passed the final cross-specification audit in [`V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md`](V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md). `V9-AI-003` was subsequently added as an explicitly frozen extension. Its dependency placement and implementation order are normative in this register and its own frozen specification. The previously frozen V9 scope remains **IMPLEMENTATION-READY**; the V9-DATA-002 extension remains in PO review.
 
 For the AI implementation wave, [`V9-AI-Technical-Architecture-Specification.md`](V9-AI-Technical-Architecture-Specification.md) is a normative companion to all four AI epic specifications. It freezes the preferred PHP/Laravel + Python split, private HTTP/SSE inter-service contract, Laravel security/domain authority, Python inference/RAG/orchestration role, FastMCP/Pydantic choices, non-use of LangChain as the core orchestration framework, internal tool gateway, deployment topology, failure isolation, testing strategy, and prohibited shortcuts. The implementation agent must read this architecture specification together with `V4-FEAT-017`, `V9-AI-001`, `V9-AI-002`, and `V9-AI-003` before implementing AI scope.
 
@@ -105,6 +105,6 @@ Normative V9 reconciliations include:
 - V8 telemetry and historical-fundamentals ownership boundaries remain intact;
 - the AI implementation uses the frozen Laravel + Python architecture defined in `V9-AI-Technical-Architecture-Specification.md` rather than leaving core technology/service boundaries to implementation inference.
 
-**StoX V9 is hereby declared FROZEN / IMPLEMENTATION-READY, including `V9-AI-003`.**
+**The previously audited V9 scope, including `V9-AI-003`, is FROZEN / IMPLEMENTATION-READY. V9-DATA-002 is explicitly excluded from that declaration until PO freeze.**
 
 The implementation agent may begin automatically from this register, its linked frozen specifications, the AI technical architecture, and the final audit/sequence document as qualified above. This authorization covers the previously frozen V9 scope only. V9-DATA-002 and its linked SKR-001 companion remain PO REVIEW / ARCHITECTURE DRAFT and are not implementation-ready until the open PO decisions are resolved and both specs are frozen. No additional planning handoff is required for the already-frozen scope unless implementation discovers a genuinely new material product decision or a direct frozen-spec contradiction.
