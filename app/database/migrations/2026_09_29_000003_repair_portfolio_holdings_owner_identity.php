@@ -17,6 +17,13 @@ return new class extends Migration
             return;
         }
 
+        // The deployed database is MySQL. SQLite is used for the fast test
+        // suite and has no SHOW INDEX equivalent; its schema is built from
+        // the current migrations and already has the owner-aware constraint.
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            return;
+        }
+
         // Older deployments may have rows created before owner-aware holdings
         // identity was introduced. Normalize those rows before enforcing the
         // three-column identity so a transaction edit cannot create a duplicate.
