@@ -10,7 +10,7 @@ FEAT-054  [REVIEW] Historical fundamental bootstrap (summary/derived metrics, pr
 FEAT-055  [REVIEW] Account access request / Admin approval (formal audit complete; production Turnstile/mail and deployed multi-worker validation remain external)
 FEAT-056  [REVIEW] ML lifecycle automation (queued runs, persistent per-horizon queue locking, SSE, drift, cancel, notifications, transient retries, retention, stale-run recovery and mixed scoring integration committed; deployed lifecycle acceptance remains open)
 FEAT-057  [REVIEW] ML feature engineering / training (versioned horizon-resolved registry, PIT context refusal of current-universe fallback, authoritative dated provider adapter with resumable backfill, horizon-derived purge/embargo, training-only missing-value/outlier preprocessing, paired active/baseline evidence, pinned explainability, durable archive integrity, per-partition feature coverage and bounded same-architecture 1m/3m/6m training evidence verified locally; production provider population, deployed active-model pairing where applicable and investor-facing acceptance remain open)
-FEAT-061  [REVIEW] Guided tour / onboarding (formal audit complete; missing-target regression, keyed i18n, desktop/mobile/tablet welcome-to-tour journeys, persisted-step resume, in-progress browser-refresh recovery, scrim interception, full configured-route traversal, labelled modal descriptions, welcome/resume/step focus containment, Escape handling and manual-launch focus return covered; production session interruption and screen-reader/device acceptance remain open)
+FEAT-061  [REVIEW] Guided tour / onboarding (formal audit complete; missing-target regression, keyed i18n, viewport-safe placement, desktop/mobile/tablet welcome-to-tour journeys, persisted-step resume, in-progress browser-refresh recovery, scrim interception, full configured-route traversal, labelled modal descriptions, welcome/resume/step focus containment, Escape handling and manual-launch focus return covered; production session interruption and screen-reader/device acceptance remain open)
 FEAT-062  [REVIEW] Fundamental signals & AI insights (complete deterministic catalogue matrix with PIT comparison evidence, provider-neutral orchestration, bounded investor-safe validation, follow-up guidance, local desktop/mobile degradation coverage and full axe accessibility coverage; screen-reader/device and real-provider acceptance remain)
 FEAT-063  [REVIEW] Live microstructure collection (local implementation, deterministic resilience verification, and systemd/provisioning contract validation complete; VPS installation, live Kite path, and deployed backup destination remain external)
 FEAT-064  [REVIEW] Screener / Strategy UX (semantic versions, run/backtest pins, immutable save, readiness, provenance audit, WP-09 return flow and legacy fixture reconciliation present; dedicated acceptance audit plus Playwright coverage now document screener CRUD and incomplete-Strategy Setup Required behavior; live membership-drift/runtime acceptance remains)
@@ -88,7 +88,7 @@ FEAT-065  [REVIEW] Intraday ML historical data platform (schema/checkpoints/admi
 ## Frontend validation baseline (2026-09-29)
 
 - Node `20.19.1` / npm `10.8.2` via the existing user NVM installation.
-- Node JS suite: **190 passed, 0 failed**; Vitest: **101 passed, 0 failed**.
+- Node JS suite: **193 passed, 0 failed**; Vitest: **101 passed, 0 failed**.
 - Vite production build: passed.
 - Typecheck: passed.
 - Static documentation check: passed.

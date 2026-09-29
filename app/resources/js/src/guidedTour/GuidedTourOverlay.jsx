@@ -1,51 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { t } from '../i18n';
-
-function tooltipStyle(targetRect, placement) {
-    if (!targetRect) {
-        return {
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            maxWidth: 'min(420px, calc(100vw - 2rem))',
-        };
-    }
-
-    const margin = 12;
-    const base = { maxWidth: 'min(420px, calc(100vw - 2rem))' };
-
-    if (placement === 'right') {
-        return {
-            ...base,
-            top: targetRect.top + targetRect.height / 2,
-            left: targetRect.left + targetRect.width + margin,
-            transform: 'translateY(-50%)',
-        };
-    }
-    if (placement === 'left') {
-        return {
-            ...base,
-            top: targetRect.top + targetRect.height / 2,
-            left: targetRect.left - margin,
-            transform: 'translate(-100%, -50%)',
-        };
-    }
-    if (placement === 'bottom') {
-        return {
-            ...base,
-            top: targetRect.top + targetRect.height + margin,
-            left: targetRect.left + targetRect.width / 2,
-            transform: 'translateX(-50%)',
-        };
-    }
-
-    return {
-        ...base,
-        top: targetRect.top - margin,
-        left: targetRect.left + targetRect.width / 2,
-        transform: 'translate(-50%, -100%)',
-    };
-}
+import { guidedTourTooltipStyle } from './guidedTourPosition';
 
 export default function GuidedTourOverlay({
     active,
@@ -121,7 +76,7 @@ export default function GuidedTourOverlay({
     }
 
     const isLast = stepIndex >= stepCount - 1;
-    const tooltipPosition = tooltipStyle(targetRect, step.placement || 'bottom');
+    const tooltipPosition = guidedTourTooltipStyle(targetRect, step.placement || 'bottom');
 
     return (
         <div className="lido-guided-tour">
