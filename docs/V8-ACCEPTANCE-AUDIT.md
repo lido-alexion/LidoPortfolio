@@ -13,7 +13,7 @@ Status key: **COMPLETE** | **REVIEW** | **IN PROGRESS** | **NOT STARTED** | **N/
 | FEAT-057 ML feature engineering / training | REVIEW | Registry `v8-registry-10`, 50/50 implemented features; calibration, chronological validation, durable candidate archive, bounded same-architecture 1m/3m/6m training, partition coverage and artifact reload/contribution evidence; production/browser acceptance remains external |
 | FEAT-061 Guided tour | REVIEW | §FEAT-061 checklist, `GuidedTourTest.php`, persisted resume, full configured-route traversal and desktop/mobile/tablet browser journeys are locally verified; live refresh/session interruption, screen-reader and broader-device acceptance remain |
 | FEAT-062 Fundamental signals & AI | REVIEW | Deterministic signal catalogue, PIT comparisons, provider-neutral orchestrator, insights page, admin preferences, invocation audit, daily limits and provider test; browser/mobile and real-provider validation remain |
-| FEAT-063 Live microstructure | REVIEW | Collector, spool, OI/microprice, spread min/max, quality lifecycle, finalization/backup resilience and alerts; VPS/live Kite/deployed backup remain external |
+| FEAT-063 Live microstructure | REVIEW | Production VPS collector and paid Kite FULL-mode stream validated with 499 instruments; 2026-09-29 finalization marker records 15,213 rows, primary/backup partitions match recursively, and raw spool is empty after cleanup. Deployed Admin controls, persistent hold, restart/reconnect and retry acceptance remain open; journal recorded a WebSocket 1006 close at 15:30 IST. |
 | FEAT-064 Screener/Strategy UX | REVIEW | Runtime create/import/shared copy; WP-09/10; `Feat064MandatoryAuditAcceptanceTest`; provenance `definition_json`; Playwright screener and incomplete-Strategy `Setup Required` journey; live membership drift/runtime acceptance remains external |
 | FEAT-065 Intraday ML historical platform | REVIEW | Kite client, Parquet store, DuckDB/Polars builders, instrument map, checkpoints and retryable backfill; live POC/full NIFTY 500 corpus remains external |
 
@@ -104,3 +104,9 @@ Latest recorded: **1,346 passed / 1,347 total** Feature tests under `tests/Featu
 1. Close remaining partial epics per [V8-GAP-AUDIT.md](V8-GAP-AUDIT.md) with spec-level evidence only.
 2. Re-run full PHPUnit + frontend build before production deploy.
 3. Do not mark V8 release-complete until every epic is **COMPLETE** or explicitly **N/A**; REVIEW means implementation is locally complete but bounded external evidence remains.
+
+## Production acceptance evidence — 2026-09-29
+
+FEAT-063 production checks confirmed the VPS collector was enabled and active; paid Kite Connect delivered real FULL-mode ticks for 499 mapped instruments; and minute Parquet output was produced. Post-market finalization recorded 15,213 rows in identical primary and backup `_FINALIZED.json` markers. Recursive comparison of the day partitions found no differences, and the raw-tick spool contained no files after finalization. The journal recorded a WebSocket close code `1006` at 15:30 IST; finalization and backup completed despite that close.
+
+FEAT-063 remains **REVIEW**. Deployed Admin controls, persistent manual hold, restart/reconnect/resubscription, retry flows, and normal market-close handling of the WebSocket close still need acceptance evidence.
