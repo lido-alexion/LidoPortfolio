@@ -302,6 +302,8 @@ This epic does not support:
 
 Integrate with the existing V8 account-access/invitation lifecycle rather than replacing it.
 
+The beta-resilience behavior for unreliable inbox delivery is normative in [`V9-Account-Access-Request-Email-Resilience-Specification.md`](V9-Account-Access-Request-Email-Resilience-Specification.md). In particular, email verification is advisory rather than a prerequisite for Admin review/approval; unverified requests are Admin-visible immediately; unverified pending requests expire from the active queue after seven days; and the manual Copy invitation email fallback must remain available after invite creation.
+
 Account creation, access-request approval, invitation generation, invitation acceptance and activation remain distinct auditable steps.
 
 Email delivery is a channel outcome, not the authority that grants access.
@@ -367,7 +369,8 @@ V9-COMM-001 is complete only when:
 - SMTP uses the dedicated `stox@lidoalexion.com` identity and protected environment secrets;
 - queueing/retry/idempotency/deduplication are tested;
 - no optional product email silently overrides user preference;
-- real SMTP smoke validation passes.
+- real SMTP smoke validation passes;
+- the linked beta access-request resilience specification is implemented, including optional verification for Admin approval, seven-day unverified cleanup, verification-state visibility, resend support, and manual Copy invitation email fallback.
 
 ## 20. Frozen PO decisions
 
@@ -400,3 +403,6 @@ The following product decisions are frozen:
 - Provide master Optional emails switch plus category controls.
 - All optional product email categories are OFF by default for new accounts.
 - Optional events never silently bypass the user's email preference; truly mandatory events must be explicitly classified mandatory.
+- During beta, email verification is advisory for access-request approval; Admin may approve an explicitly unverified request.
+- Unverified pending access requests expire from the active queue after seven days without hard deletion.
+- Preserve/reintroduce the manual Copy invitation email fallback using the same existing invite after automated delivery is attempted.
