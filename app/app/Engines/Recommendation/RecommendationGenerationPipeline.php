@@ -459,12 +459,12 @@ class RecommendationGenerationPipeline
                 ->values();
         }
 
-        $eligibility = $this->eligibility->resolve($profile, is_array($config) ? $config : []);
+        $eligibility = $this->eligibility->resolve($profile, is_array($config) ? $config : [], $strategyVersion);
         $eligibleSet = array_fill_keys($eligibility['eligible_security_ids'] ?? [], true);
         $eligibilityRestricted = in_array($eligibility['mode'] ?? 'unrestricted', ['screener_union'], true);
 
         $exitConfig = is_array($config['exit_strategy'] ?? null) ? $config['exit_strategy'] : [];
-        $exitScreenerHits = $this->eligibility->resolveExitScreenerHits($profile, $exitConfig);
+        $exitScreenerHits = $this->eligibility->resolveExitScreenerHits($profile, $exitConfig, $strategyVersion);
 
         $heldQty = Holding::query()
             ->where('profile_id', $profile->id)

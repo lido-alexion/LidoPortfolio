@@ -293,7 +293,7 @@ class StrategyRegistryApiTest extends TestCase
         $this->assertNull(TradingStrategy::query()->whereKey((int) $c['artifact_id'])->value('reusable_artifact_id'));
     }
 
-    public function test_cannot_archive_the_last_enabled_strategy(): void
+    public function test_can_archive_the_last_enabled_strategy_when_no_obligation_exists(): void
     {
         $user = User::factory()->create();
         $profile = $this->defaultPortfolioFor($user);
@@ -307,10 +307,10 @@ class StrategyRegistryApiTest extends TestCase
 
         $this->actingAs($user)
             ->postJson('/api/v1/strategy-registry/'.$factory->id.'/archive')
-            ->assertStatus(422)
-            ->assertJsonPath('error.code', 'STRATEGY_ARCHIVE_FAILED');
+            ->assertOk()
+            ->assertJsonPath('data.metadata.status', TradingStrategy::STATUS_ARCHIVED);
 
         $factory->refresh();
-        $this->assertSame(TradingStrategy::STATUS_ACTIVE, $factory->status);
+        $this->assertSame(TradingStrategy::STATUS_ARCHIVED, $factory->status);
     }
 }

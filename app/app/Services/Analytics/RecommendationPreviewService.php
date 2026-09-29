@@ -177,7 +177,7 @@ class RecommendationPreviewService
         $screeners = $eligibilityMeta['screeners'] ?? null;
         if (! is_array($screeners)) {
             $config = $version->config_json ?? [];
-            $resolved = $this->eligibility->resolve($profile, is_array($config) ? $config : []);
+            $resolved = $this->eligibility->resolve($profile, is_array($config) ? $config : [], $version);
             $screeners = $this->eligibility->explainForSecurity($resolved, (int) $stock->id);
             $mode = $resolved['mode'] ?? 'unrestricted';
         } else {

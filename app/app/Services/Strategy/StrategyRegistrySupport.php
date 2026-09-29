@@ -213,23 +213,6 @@ final class StrategyRegistrySupport
             app(StrategyReadinessService::class)->assertReadyForEnable($strategy, $version);
 
             $config = is_array($version->config_json) ? $version->config_json : [];
-            $sources = is_array($config['eligibility_sources'] ?? null) ? $config['eligibility_sources'] : [];
-            // Re-resolve portable refs if any lack local ids
-            $needsResolve = false;
-            foreach ($sources as $src) {
-                if (! is_array($src) || (int) ($src['screener_id'] ?? 0) < 1) {
-                    $needsResolve = true;
-                    break;
-                }
-            }
-            if ($needsResolve && $sources !== []) {
-                $resolved = $this->resolveEligibilitySources($profile, $sources);
-                $config['eligibility_sources'] = $resolved;
-                $version->forceFill([
-                    'config_json' => $config,
-                    'definition_hash' => $this->hashDefinition($config),
-                ])->save();
-            }
 
             TradingStrategyVersion::query()
                 ->where('strategy_id', $strategy->id)
@@ -247,11 +230,6 @@ final class StrategyRegistrySupport
                 'active_version_id' => $version->id,
             ])->save();
 
-            $this->eligibility->syncStrategyScreeners(
-                $version,
-                is_array($config['eligibility_sources'] ?? null) ? $config['eligibility_sources'] : []
-            );
-
             return $strategy->fresh(['activeVersion']);
         });
     }
@@ -267,19 +245,6 @@ final class StrategyRegistrySupport
 
         if ($strategy->status === TradingStrategy::STATUS_ARCHIVED) {
             return $strategy->fresh(['activeVersion']);
-        }
-
-        if ($strategy->status === TradingStrategy::STATUS_ACTIVE) {
-            $otherEnabled = TradingStrategy::query()
-                ->where('profile_id', $profile->id)
-                ->where('status', TradingStrategy::STATUS_ACTIVE)
-                ->where('id', '!=', $strategy->id)
-                ->exists();
-            if (! $otherEnabled) {
-                throw new InvalidArgumentException(
-                    'Cannot archive the last enabled strategy. Enable another strategy first.'
-                );
-            }
         }
 
         $strategy->forceFill([
