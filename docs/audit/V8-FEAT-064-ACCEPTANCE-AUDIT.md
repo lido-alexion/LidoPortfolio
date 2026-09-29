@@ -25,7 +25,7 @@ Authoritative contract: `docs/archive/specs/V8-Core-Investor-Workflow-UX-Simplif
 | Complete Strategies can activate; multiple enabled Strategies remain supported | PASS locally | `StrategyReadinessTest`, `MultiStrategyLifecycleAssuranceTest`. |
 | Contextual Screener creation preserves Strategy state and selects the result | PASS locally | `strategyScreenerReturnFlow.test.mjs`, WP-09 Strategy/Screener editor hooks. |
 | Historical recommendation/transaction provenance remains resolvable | PASS locally | `Feat064MandatoryAuditAcceptanceTest`, `StrategyProvenanceRegressionTest`, `StrategyProvenanceMigrationReportTest`. |
-| Responsive investor workflow and browser acceptance | PASS locally / broader acceptance pending | Focused Chromium Screener workflow passes 2/2; full configured Playwright run passes all 29 executed journeys. Broader deployed/device validation remains external. |
+| Responsive investor workflow and browser acceptance | PASS locally / broader acceptance pending | Focused Chromium Screener workflow passes 2/2; full configured Playwright run passes all 30 executed journeys across 51 configured tests. Broader deployed/device validation remains external. |
 | Automated accessibility scan | PASS locally / assistive technology pending | `v8-accessibility.spec.js` runs full axe WCAG 2A/2AA scans against the Screener editor; the scan passes after explicit labels and shared dark-theme contrast fixes. Native screen-reader and broader device acceptance remain external. |
 
 ## Verification executed
@@ -33,8 +33,8 @@ Authoritative contract: `docs/archive/specs/V8-Core-Investor-Workflow-UX-Simplif
 - Full Laravel Feature suite: **1,346 passed / 1,347 total / 1 skipped**, 11,014 assertions under the matching x86_64 ML runtime.
 - FEAT-064 backend/provenance/readiness suites pass within that run.
 - Focused Screener/Strategy Chromium journey: **2/2 passed** with deterministic API fixtures.
-- Full configured Playwright run: **29 executed passed**, with 21 intentional viewport/configuration skips.
-- Focused full WCAG 2A/2AA axe accessibility journeys: **4/4 passed** for guided-tour dialogs, fundamentals, Screener editor, and Request an account.
+- Full configured Playwright run: **30 executed passed**, with 21 intentional viewport/configuration skips across 51 configured tests.
+- Focused full WCAG 2A/2AA axe accessibility journeys: **5/5 passed** for guided-tour dialogs, fundamentals, investor insights, Screener editor, and Request an account.
 - Node/Vitest/build/typecheck/docs and `git diff --check` pass.
 
 ## External validation pending

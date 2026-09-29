@@ -1,6 +1,6 @@
 # FEAT-062 Fundamental Signals & AI Insights — acceptance audit
 
-Status: **REVIEW — implementation and automated verification complete; accessibility/real-provider validation pending**
+Status: **REVIEW — implementation and automated verification complete; screen-reader/device and real-provider validation pending**
 
 This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-AI-Insights-Specification.md`. The deterministic catalogue mapping and PIT comparison implementation are complete for structured source facts; unavailable source facts remain explicitly unavailable. Local Chromium desktop/mobile browser acceptance is covered; screen-reader accessibility and production provider validation remain external evidence gates.
 
@@ -23,14 +23,14 @@ This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-
 | Usage limits and telemetry | PASS locally | `FundamentalAiUsageLimitTest.php`; provider cost/latency evidence is persisted locally |
 | Follow-up evidence guidance | PASS locally | CWIP, receivables, inventory, cash-quality, debt, dilution and ownership signals map to investigation prompts; prompts are not conclusions |
 | Data sufficiency | PASS locally for implemented inputs | Missing evidence, sparse quarterly history, stale facts, fallback provider, and mixed-provider basis contribute explicit deterministic weighting/score; historical freshness is represented in provenance and confidence |
-| Investor insights UI | PASS locally / external accessibility pending | `FundamentalInsightsPage.jsx`, `FundamentalInsightsSignals.jsx`, and `fundamental-insights-browser.spec.js`; deterministic evidence remains visible when AI is unavailable, API/provider failure renders a warning, the evidence card remains within a 390px viewport, and the focused full WCAG 2A/2AA axe scan passes on the fundamentals/insights surface. |
+| Investor insights UI | PASS locally / screen-reader/device acceptance pending | `FundamentalInsightsPage.jsx`, `FundamentalInsightsSignals.jsx`, and `fundamental-insights-browser.spec.js`; deterministic evidence remains visible when AI is unavailable, API/provider failure renders a warning, the evidence card remains within a 390px viewport, and the focused full WCAG 2A/2AA axe scan passes on the investor insights surface. |
 | Production provider/runtime proof | EXTERNAL VALIDATION PENDING | No real Gemini/Codex provider call is claimed in this environment |
 | Recommendation prohibition and credential safety | PASS locally | prompt/validator tests and server-side configuration; external provider review remains |
 
 ## Verification
 
 - Targeted FEAT-062 Laravel tests after the catalogue/input-boundary slices: **31/31, 101 assertions** across deterministic signals, sector comparisons, AI response handling, provider diagnostics and usage limits; AI provider/boundary suites remain covered by the existing focused tests.
-- Focused Chromium browser acceptance: **3/3 passed** locally with deterministic API mocks, covering deterministic evidence, AI/provider-unavailable degradation, and a 390px mobile viewport. The focused full WCAG 2A/2AA axe suite now passes **5/5**, including the investor insights page. Screen-reader/accessibility review and real-provider validation remain external.
+- Focused Chromium browser acceptance: **3/3 passed** locally with deterministic API mocks, covering deterministic evidence, AI/provider-unavailable degradation, and a 390px mobile viewport. The focused full WCAG 2A/2AA axe suite now passes **5/5**, including the investor insights page. Screen-reader/device review and real-provider validation remain external.
 - Full Feature suite: **1,346 passed / 1,347 total / 1 skip / 0 failures**, 11,014 assertions, under PHP CLI `memory_limit=512M` with the documented matching ML runtime.
 - Frontend Node suite: **190/190**.
 - Vitest: **99/99**.
