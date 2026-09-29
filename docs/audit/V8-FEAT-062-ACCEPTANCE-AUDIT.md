@@ -33,7 +33,7 @@ This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-
 - Focused Chromium browser acceptance: **3/3 passed** locally with deterministic API mocks, covering deterministic evidence, AI/provider-unavailable degradation, and a 390px mobile viewport. The focused full WCAG 2A/2AA axe suite now passes **5/5**, including the investor insights page. Screen-reader/device review and real-provider validation remain external.
 - Full Feature suite: **1,346 passed / 1,347 total / 1 skip / 0 failures**, 11,014 assertions, under PHP CLI `memory_limit=512M` with the documented matching ML runtime.
 - Frontend Node suite: **190/190**.
-- Vitest: **99/99**.
+- Vitest: **101/101**.
 - Build, typecheck, static docs check and `git diff --check`: passed.
 
 ## Next implementation slice

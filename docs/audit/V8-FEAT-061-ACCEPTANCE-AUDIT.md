@@ -25,7 +25,7 @@ Authoritative contract: `docs/archive/specs/V8-Guided-Tour-Welcome-Onboarding-Sp
 ## Verification executed
 
 - Laravel Guided Tour tests passed in the prior V8 suite.
-- JS suite: node tests **190/190** and Vitest **99/99** after the latest frontend regression run.
+- JS suite: node tests **190/190** and Vitest **101/101** after the latest frontend regression run.
 - Vite build, typecheck, static docs check: passed.
 - Guided-tour copy/key coverage: **3/3** focused Node tests passed.
 - Playwright journeys pass for the investor welcome modal → Begin → first guided-tour step, persisted-step resume, in-progress `page.reload()` recovery, scrim interception of highlighted navigation, and all 8 configured route steps on desktop Chromium/1024×768 tablet/390×844 mobile. Welcome/resume/step focus containment, labelled descriptions and Escape behavior are covered, and the journeys exposed and fixed a real modal-backdrop stacking defect. Screen-reader tooling, production session interruption, and broader device acceptance remain pending.

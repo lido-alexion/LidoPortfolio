@@ -37,7 +37,7 @@ This audit maps the frozen FEAT-063 contract to the current repository evidence.
 - Microstructure resilience suite after this continuation: **28 passed, 0 skipped**, including real Parquet corruption, backup failure/retry, fixed-date lifecycle, quality edge, coverage deduplication, and universe partial-refresh cases.
 - Actual Parquet write/read, manifest, backup, and spool-pruning smoke test: passed.
 - Laravel V8 suite before this continuation: **140 passed, 531 assertions**; fixed-date calendar/reminder additions pass.
-- Frontend after this continuation: JS **190/190**, Vitest **99/99**, with build/typecheck/docs checks rerun after the frontend acceptance additions.
+- Frontend after this continuation: JS **190/190**, Vitest **101/101**, with build/typecheck/docs checks rerun after the frontend acceptance additions.
 
 ## Remaining exit-gate work
 
