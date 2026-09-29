@@ -5,7 +5,7 @@ Authoritative specs: `docs/archive/specs/LidoPortfolio-V8-Wishlist.md` and linke
 ## Epic status
 
 ```text
-FEAT-052  [REVIEW] OpenTelemetry / LidoTelemetry (producer core, shared middleware/route wiring, fail-open OTLP traces/events/metrics, browser fetch instrumentation, queue/scheduler context propagation and documented configuration; PHP SDK/extension, Collector and deployed acceptance remain open)
+FEAT-052  [REVIEW] OpenTelemetry / LidoTelemetry (producer core, shared middleware/route wiring, fail-open OTLP traces/events/metrics, browser fetch plus uncaught-exception/unhandled-rejection instrumentation, queue/scheduler context propagation and documented configuration; PHP SDK/extension, Collector and deployed acceptance remain open)
 FEAT-054  [REVIEW] Historical fundamental bootstrap (summary/derived metrics, provenance, user-scoped Advanced preference, history UI, Screener boundary, bootstrap evidence and focused desktop/390px Chromium Watchlist acceptance complete locally; provider/deployed runtime acceptance remains)
 FEAT-055  [REVIEW] Account access request / Admin approval (formal audit complete; production Turnstile/mail and deployed multi-worker validation remain external)
 FEAT-056  [REVIEW] ML lifecycle automation (queued runs, persistent per-horizon queue locking, SSE, drift, cancel, notifications, transient retries, retention, stale-run recovery and mixed scoring integration committed; deployed lifecycle acceptance remains open)
@@ -88,11 +88,12 @@ FEAT-065  [REVIEW] Intraday ML historical data platform (schema/checkpoints/admi
 ## Frontend validation baseline (2026-09-28)
 
 - Node `20.19.1` / npm `10.8.2` via the existing user NVM installation.
-- Node JS suite: **189 passed, 0 failed**; Vitest: **99 passed, 0 failed**.
+- Node JS suite: **190 passed, 0 failed**; Vitest: **101 passed, 0 failed**.
 - Vite production build: passed.
 - Typecheck: passed.
 - Static documentation check: passed.
 - No `lint` script is declared in `app/package.json`; an attempted lint command reports the missing script rather than an application lint failure.
+- FEAT-052 browser telemetry now has focused Vitest coverage for uncaught exception/unhandled rejection hook registration, bounded redaction, and fail-open setup (`otelBrowser.test.jsx`).
 - The five inherited JS failures were resolved as three superseded V8 expectations (C), one stale documentation/help expectation (D), and one genuine request-account documentation gap fixed in the request-account catalog (D/B).
 
 ## Takeover reconciliation
