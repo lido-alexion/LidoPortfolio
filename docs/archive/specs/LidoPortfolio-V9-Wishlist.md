@@ -106,7 +106,7 @@ V9-DATA-002 is complete only when both sides of the coupled protocol are compati
 - existing FEAT-065 corpus remains canonical and DuckDB/Polars-compatible;
 - no Kite credential reaches the Mac;
 - no inbound listener, SSH tunnel or VPN is required on the Mac;
-- destructive cleanup cannot violate the frozen 7-day/30-day lifecycle rules.
+- cleanup never deletes an unacknowledged/failed payload before a successful local import and matching acknowledgment; acknowledged payloads follow the 7-day grace period.
 
 ## 7. Implementation-ready declaration
 
