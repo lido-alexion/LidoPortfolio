@@ -105,7 +105,7 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
             return json(route, { token: 'e2e-csrf' });
         }
         if (path.endsWith('/api/auth/me') && method === 'GET') {
-            return json(route, { user: TEST_USER });
+            return json(route, { user: options.user ?? TEST_USER });
         }
         if (path.endsWith('/api/portfolios') && method === 'GET') {
             return json(route, { data: [TEST_PORTFOLIO] });

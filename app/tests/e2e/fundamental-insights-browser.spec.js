@@ -68,6 +68,23 @@ test.describe('FEAT-054 historical fundamentals browser acceptance', () => {
         await expect(page.getByRole('heading', { name: 'Advanced financial data' })).toBeVisible();
         await expect(page.getByRole('button', { name: /Hide advanced financial data/ })).toHaveAttribute('aria-expanded', 'true');
     });
+
+    test('does not share the Advanced preference with another authenticated user', async ({ page }) => {
+        await installInvestorWorkflowApiMocks(page, { user: { id: 1, name: 'User A', is_admin: false, default_portfolio_id: 1 } });
+        await page.goto('/watchlist/TCS');
+        await page.getByRole('button', { name: 'Fundamentals' }).click();
+        await page.getByRole('button', { name: /Show advanced financial data/ }).click();
+        await expect(page.evaluate(() => window.localStorage.getItem('lido.fundamentals.advancedExpanded.user.1'))).resolves.toBe('1');
+
+        const secondPage = await page.context().newPage();
+        await installInvestorWorkflowApiMocks(secondPage, { user: { id: 2, name: 'User B', is_admin: false, default_portfolio_id: 1 } });
+        await secondPage.goto('/watchlist/TCS');
+        await secondPage.getByRole('button', { name: 'Fundamentals' }).click();
+        await expect(secondPage.getByRole('button', { name: /Show advanced financial data/ })).toBeVisible();
+        await expect(secondPage.getByRole('button', { name: /Hide advanced financial data/ })).not.toBeVisible();
+        await expect(secondPage.evaluate(() => window.localStorage.getItem('lido.fundamentals.advancedExpanded.user.2'))).resolves.toBeNull();
+        await secondPage.close();
+    });
 });
 
 test.describe('FEAT-054 historical fundamentals mobile acceptance', () => {
