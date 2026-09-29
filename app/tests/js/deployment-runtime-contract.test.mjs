@@ -29,6 +29,7 @@ test('release and rollback require a PHP-FPM refresh plus public build identity 
     assert.match(health, /production DebugAgent is enabled/);
     assert.match(health, /production app key is missing from cached config/);
     assert.match(health, /LIDO_AGENT_DEBUG_ENABLED=false/);
+    assert.match(health, /lido_telemetry\.otel_sdk_disabled/);
     assert.match(health, /storage\/logs/);
 });
 
