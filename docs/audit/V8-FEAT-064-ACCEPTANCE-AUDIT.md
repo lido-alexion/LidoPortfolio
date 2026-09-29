@@ -29,7 +29,7 @@ Authoritative contract: `docs/archive/specs/V8-Core-Investor-Workflow-UX-Simplif
 
 ## Verification executed
 
-- Full Laravel Feature suite: **1,346 passed / 1,347 total / 1 skipped**, 11,014 assertions under the matching x86_64 ML runtime.
+- Full Laravel Feature suite: **1,345 passed / 1,347 total / 2 skipped**, 9,565 assertions under the matching x86_64 ML runtime.
 - FEAT-064 backend/provenance/readiness suites pass within that run.
 - Focused Screener/Strategy Chromium journey: **2/2 passed** with deterministic API fixtures.
 - Full configured Playwright run: **23 executed passed**, with 21 intentional viewport/configuration skips.
