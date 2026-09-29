@@ -2,7 +2,7 @@
 
 **Purpose:** Honest end-state check against frozen V8 specs. Complements [V8-ACCEPTANCE-AUDIT.md](V8-ACCEPTANCE-AUDIT.md) (test gates + checklists).
 
-**Last verified:** 2026-09-29 — `STOXLA_ML_TEST_PYTHON=/tmp/stox-v8-ml-x86-venv.anZaFw/bin/python arch -x86_64 php -d memory_limit=512M vendor/bin/phpunit tests/Feature` (**1,345 passed / 1,347 total, 2 skips, 0 failures, 9,565 assertions**); Node 20.19.1 JS/Vitest/build/typecheck/docs checks green; the full configured Playwright run passed **23/23 executed tests** with 21 intentional viewport/configuration skips, including guided-tour 11/11, FEAT-062 insights, FEAT-064 Screener, and responsive-shell journeys; Python microstructure/intraday focused suites pass in the project-compatible environment.
+**Last verified:** 2026-09-29 — `STOXLA_ML_TEST_PYTHON=/tmp/stox-v8-ml-x86-venv.anZaFw/bin/python arch -x86_64 php -d memory_limit=512M vendor/bin/phpunit tests/Feature` (**1,345 passed / 1,347 total, 2 skips, 0 failures, 9,565 assertions**); Node 20.19.1 JS/Vitest/build/typecheck/docs checks green; the full configured Playwright run passed **25/25 executed tests** with 21 intentional viewport/configuration skips, including FEAT-054 fundamentals, guided-tour 11/11, FEAT-062 insights, FEAT-064 Screener, and responsive-shell journeys; Python microstructure/intraday focused suites pass in the project-compatible environment.
 
 | Epic | Verdict | Remaining work (authoritative gaps) |
 |------|---------|-------------------------------------|
@@ -19,7 +19,7 @@
 
 ## Evidence anchors (implemented slices)
 
-- **Tests:** full `app/tests/Feature` (1,347 total, 1,345 passed, 2 skips); full configured Playwright run (44 configured, 23 executed passed, 21 intentional skips); `shared/intraday/tests` (22/22) and `shared/microstructure/tests/` (28/28) in the isolated project-compatible environment.
+- **Tests:** full `app/tests/Feature` (1,347 total, 1,345 passed, 2 skips); full configured Playwright run (46 configured, 25 executed passed, 21 intentional skips); `shared/intraday/tests` (22/22) and `shared/microstructure/tests/` (28/28) in the isolated project-compatible environment.
 - **Ledger:** [docs/V8-IMPLEMENTATION-LEDGER.md](V8-IMPLEMENTATION-LEDGER.md).
 - **Behavior:** [implementation.md](../implementation.md) § V8 FEAT-* sections.
 
