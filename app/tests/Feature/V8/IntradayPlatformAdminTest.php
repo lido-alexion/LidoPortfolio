@@ -34,4 +34,33 @@ class IntradayPlatformAdminTest extends TestCase
             ->assertJsonPath('data.universe', 'nifty500')
             ->assertJsonPath('data.checkpoint_counts.complete', 1);
     }
+
+    public function test_admin_pause_and_resume_are_durable(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $this->defaultPortfolioFor($admin);
+
+        $this->actingAs($admin)
+            ->postJson('/api/v1/admin/intraday-platform/pause')
+            ->assertOk()
+            ->assertJsonPath('data.paused', true);
+
+        $this->getJson('/api/v1/admin/intraday-platform')
+            ->assertOk()
+            ->assertJsonPath('data.paused', true);
+
+        $this->postJson('/api/v1/admin/intraday-platform/resume')
+            ->assertOk()
+            ->assertJsonPath('data.paused', false);
+    }
+
+    public function test_investor_cannot_control_intraday_backfill(): void
+    {
+        $user = User::factory()->create(['is_admin' => false]);
+        $this->defaultPortfolioFor($user);
+
+        $this->actingAs($user)
+            ->postJson('/api/v1/admin/intraday-platform/pause')
+            ->assertForbidden();
+    }
 }

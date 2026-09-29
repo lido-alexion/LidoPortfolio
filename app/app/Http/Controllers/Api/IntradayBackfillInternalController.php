@@ -36,6 +36,22 @@ class IntradayBackfillInternalController extends Controller
 
     public function listCheckpoints(IntradayBackfillCheckpointService $checkpoints): JsonResponse
     {
+        if (request()->query('symbol') !== null) {
+            $checkpoint = $checkpoints->find(
+                (string) request()->query('symbol'),
+                (string) request()->query('exchange', 'NSE'),
+                request()->query('window_start'),
+                request()->query('window_end'),
+            );
+
+            return response()->json(['data' => $checkpoint?->toArray()]);
+        }
+
         return response()->json(['data' => $checkpoints->recent()]);
+    }
+
+    public function control(IntradayBackfillCheckpointService $checkpoints): JsonResponse
+    {
+        return response()->json(['data' => $checkpoints->control()->toArray()]);
     }
 }

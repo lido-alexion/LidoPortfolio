@@ -141,6 +141,7 @@ Route::prefix('internal/intraday-backfill')
         Route::get('/plan', [\App\Http\Controllers\Api\IntradayBackfillInternalController::class, 'plan']);
         Route::get('/checkpoints', [\App\Http\Controllers\Api\IntradayBackfillInternalController::class, 'listCheckpoints']);
         Route::post('/checkpoints', [\App\Http\Controllers\Api\IntradayBackfillInternalController::class, 'upsertCheckpoint']);
+        Route::get('/control', [\App\Http\Controllers\Api\IntradayBackfillInternalController::class, 'control']);
     });
 Route::get('/wiki/shared/{token}', [WikiShareController::class, 'show'])->where('token', '[A-Za-z0-9]{64}');
 Route::get('/wiki/shared/{token}/images/{image}', [WikiShareController::class, 'image'])
@@ -543,6 +544,8 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
         Route::post('/admin/fundamentals/ai-insights/test', [FundamentalDataController::class, 'testAiInsights']);
         Route::get('/admin/fundamentals/metric-catalog', [FundamentalDataController::class, 'metricCatalog']);
         Route::get('/admin/intraday-platform', [\App\Http\Controllers\Api\V1\IntradayPlatformAdminController::class, 'status']);
+        Route::post('/admin/intraday-platform/pause', [\App\Http\Controllers\Api\V1\IntradayPlatformAdminController::class, 'pause']);
+        Route::post('/admin/intraday-platform/resume', [\App\Http\Controllers\Api\V1\IntradayPlatformAdminController::class, 'resume']);
         Route::get('/admin/ml', [MlScoringController::class, 'adminIndex']);
         Route::put('/admin/ml/schedules/{horizon}', [MlScoringController::class, 'updateSchedule'])->whereIn('horizon', ['1m', '3m', '6m']);
         Route::get('/admin/ml/retention-plan', [MlScoringController::class, 'retentionPlan']);

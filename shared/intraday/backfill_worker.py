@@ -15,8 +15,10 @@ import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 from instrument_resolver import load_index_map, load_universe_symbols, resolve_instrument_token
 from kite_historical_client import KiteHistoricalConfig, fetch_minute_bars_chunked
@@ -31,6 +33,7 @@ class WorkerConfig:
     dry_run: bool
     max_attempts: int = 3
     backoff_seconds: float = 1.0
+    window_days: int = 30
 
 
 @dataclass
@@ -48,7 +51,32 @@ def load_config() -> WorkerConfig:
         dry_run=os.environ.get("STOXLA_INTRADAY_DRY_RUN", "1") not in ("0", "false", "False"),
         max_attempts=max(1, int(os.environ.get("STOXLA_INTRADAY_MAX_ATTEMPTS", "3"))),
         backoff_seconds=max(0.0, float(os.environ.get("STOXLA_INTRADAY_BACKOFF_SECONDS", "1"))),
+        window_days=max(1, int(os.environ.get("STOXLA_INTRADAY_WINDOW_DAYS", "30"))),
     )
+
+
+@dataclass(frozen=True)
+class BackfillWorkUnit:
+    symbol: str
+    exchange: str
+    window_start: str
+    window_end: str
+
+
+def plan_windows(window_start: str, window_end: str, window_days: int = 30) -> list[tuple[str, str]]:
+    """Split an inclusive date range into deterministic provider-safe windows."""
+    start = date.fromisoformat(window_start)
+    end = date.fromisoformat(window_end)
+    if end < start:
+        raise ValueError("window_end must not precede window_start")
+    size = max(1, int(window_days))
+    windows: list[tuple[str, str]] = []
+    cursor = start
+    while cursor <= end:
+        last = min(cursor + timedelta(days=size - 1), end)
+        windows.append((cursor.isoformat(), last.isoformat()))
+        cursor = last + timedelta(days=1)
+    return windows
 
 
 def post_checkpoint(cfg: WorkerConfig, payload: dict[str, Any]) -> dict[str, Any]:
@@ -70,6 +98,43 @@ def post_checkpoint(cfg: WorkerConfig, payload: dict[str, Any]) -> dict[str, Any
     )
     with urllib.request.urlopen(request, timeout=60) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def get_checkpoint(cfg: WorkerConfig, symbol: str, exchange: str, window_start: str, window_end: str) -> dict[str, Any] | None:
+    """Read one durable checkpoint; absent means the work unit is unplanned."""
+    if cfg.dry_run:
+        return None
+    if not cfg.token:
+        raise RuntimeError("STOXLA_INTRADAY_BACKFILL_INTERNAL_TOKEN is required when dry_run is disabled.")
+    query = urlencode({
+        "symbol": symbol.upper(),
+        "exchange": exchange.upper(),
+        "window_start": window_start,
+        "window_end": window_end,
+    })
+    request = urllib.request.Request(
+        f"{cfg.api_base}/internal/intraday-backfill/checkpoints?{query}",
+        headers={"X-Intraday-Backfill-Token": cfg.token},
+        method="GET",
+    )
+    with urllib.request.urlopen(request, timeout=60) as response:
+        body = json.loads(response.read().decode("utf-8"))
+    return body.get("data") if isinstance(body, dict) else None
+
+
+def get_pause_state(cfg: WorkerConfig) -> bool:
+    if cfg.dry_run:
+        return False
+    if not cfg.token:
+        raise RuntimeError("STOXLA_INTRADAY_BACKFILL_INTERNAL_TOKEN is required when dry_run is disabled.")
+    request = urllib.request.Request(
+        f"{cfg.api_base}/internal/intraday-backfill/control",
+        headers={"X-Intraday-Backfill-Token": cfg.token},
+        method="GET",
+    )
+    with urllib.request.urlopen(request, timeout=60) as response:
+        body = json.loads(response.read().decode("utf-8"))
+    return bool((body.get("data") or {}).get("paused", False))
 
 
 def load_kite_credentials(instrument_token_cli: int | None = None, symbol: str | None = None) -> KiteWorkerCredentials:
@@ -157,11 +222,12 @@ def run_universe(
     """Process one bounded window for the pinned current-universe snapshot."""
     results = []
     for symbol in sorted({item.upper() for item in symbols if item.strip()}):
-        results.append(run_once(
+        results.extend(run_planned(
             symbol,
             window_start,
             window_end,
             cfg,
+            exchange="NSE",
             kite=load_kite_credentials(symbol=symbol),
         ))
     return results
@@ -176,14 +242,45 @@ def run_index_map(
     """Process configured broad/sector indices separately from equities."""
     results = []
     for symbol, token in sorted(index_map.items()):
-        results.append(run_once(
+        results.extend(run_planned(
             symbol,
             window_start,
             window_end,
             cfg,
-            kite=load_kite_credentials(instrument_token_cli=token, symbol=symbol),
             exchange="NSE_INDEX",
+            kite=load_kite_credentials(instrument_token_cli=token, symbol=symbol),
         ))
+    return results
+
+
+def run_planned(
+    symbol: str,
+    window_start: str,
+    window_end: str,
+    cfg: WorkerConfig,
+    *,
+    exchange: str = "NSE",
+    bars: list[dict[str, Any]] | None = None,
+    kite: KiteWorkerCredentials | None = None,
+    checkpoint_reader=None,
+    pause_reader=None,
+) -> list[dict[str, Any]]:
+    """Consume durable bounded work units, resuming after completed units."""
+    reader = checkpoint_reader or (lambda unit: get_checkpoint(
+        cfg, unit.symbol, unit.exchange, unit.window_start, unit.window_end
+    ))
+    paused = pause_reader or (lambda: get_pause_state(cfg))
+    results: list[dict[str, Any]] = []
+    for start, end in plan_windows(window_start, window_end, cfg.window_days):
+        unit = BackfillWorkUnit(symbol.upper(), exchange.upper(), start, end)
+        checkpoint = reader(unit)
+        if checkpoint and checkpoint.get("status") == "complete":
+            results.append({"status": "skipped", "symbol": unit.symbol, "window_start": start, "window_end": end})
+            continue
+        if paused():
+            results.append({"status": "paused", "symbol": unit.symbol, "window_start": start, "window_end": end})
+            break
+        results.append(run_once(unit.symbol, start, end, cfg, bars=bars, kite=kite, exchange=unit.exchange))
     return results
 
 
@@ -200,6 +297,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--window-start", required=True)
     parser.add_argument("--window-end", required=True)
+    parser.add_argument("--window-days", type=int, default=None)
     parser.add_argument("--apply", action="store_true", help="Disable dry-run (requires API token)")
     parser.add_argument(
         "--bars-json",
@@ -213,6 +311,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     cfg = load_config()
+    if args.window_days is not None:
+        cfg.window_days = max(1, args.window_days)
     if args.apply:
         cfg.dry_run = False
 
@@ -251,7 +351,9 @@ def main(argv: list[str] | None = None) -> int:
                 "results": run_index_map(index_map, args.window_start, args.window_end, cfg),
             }
         else:
-            result = run_once(
+            if bars is not None and len(plan_windows(args.window_start, args.window_end, cfg.window_days)) > 1:
+                raise ValueError("--bars-json can only be used with one bounded work unit.")
+            result = run_planned(
                 args.symbol,
                 args.window_start,
                 args.window_end,
@@ -267,10 +369,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(json.dumps(result, indent=2))
-    if result.get("status") == "failed" or any(
+    failed = result.get("status") == "failed" or any(
         isinstance(item, dict) and item.get("status") == "failed"
-        for item in result.get("results", [])
-    ):
+        for item in (result if isinstance(result, list) else result.get("results", []))
+    )
+    if failed:
         return 2
     return 0
 

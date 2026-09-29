@@ -3,6 +3,7 @@
 namespace App\Services\ML;
 
 use App\Models\V8\IntradayBackfillCheckpoint;
+use App\Models\V8\IntradayBackfillControl;
 use Illuminate\Support\Facades\File;
 
 /**
@@ -43,6 +44,9 @@ class IntradayHistoricalPlatformService
             'corpus_root_exists' => $exists,
             'parquet_file_count' => $parquetFiles,
             'checkpoint_counts' => $counts,
+            'paused' => (bool) (IntradayBackfillControl::query()
+                ->where('control_key', 'global')
+                ->value('paused') ?? false),
         ];
     }
 }
