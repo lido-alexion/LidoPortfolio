@@ -249,7 +249,7 @@ if [[ -L "$APP_ROOT/current" ]]; then
   for item in "$RELEASE_DIR"/*; do
     name="$(basename "$item")"
     case "$name" in
-      .env|storage)
+      .env|storage|shared)
         ;;
       *)
         if [[ -e "$APP_ROOT/$name" && ! -L "$APP_ROOT/$name" ]]; then
@@ -287,7 +287,7 @@ shopt -s dotglob nullglob
 for item in "$RELEASE_DIR"/*; do
   name="$(basename "$item")"
   case "$name" in
-    .env|storage)
+    .env|storage|shared)
       ;;
     *)
       ln -sfn "current/$name" "$APP_ROOT/$name"
