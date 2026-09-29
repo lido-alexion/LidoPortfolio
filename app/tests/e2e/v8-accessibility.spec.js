@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 
-async function expectNoCriticalViolations(page, include, { allViolations = false } = {}) {
+async function expectNoAccessibilityViolations(page, include, { allViolations = false } = {}) {
     const builder = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']);
     if (await page.locator(include).count() > 0) {
         builder.include(include);
@@ -30,32 +30,32 @@ test.describe('V8 accessibility acceptance', () => {
         await page.goto('/');
         const welcome = page.getByRole('dialog', { name: 'Welcome to StoX' });
         await expect(welcome).toBeVisible();
-        await expectNoCriticalViolations(page, '.lido-guided-tour-modal', { allViolations: true });
+        await expectNoAccessibilityViolations(page, '.lido-guided-tour-modal', { allViolations: true });
 
         await welcome.getByRole('button', { name: 'Begin tour' }).click();
         const step = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Navigation' }) });
         await expect(step).toBeVisible();
-        await expectNoCriticalViolations(page, '.lido-guided-tour-panel', { allViolations: true });
+        await expectNoAccessibilityViolations(page, '.lido-guided-tour-panel', { allViolations: true });
     });
 
-    test('FEAT-054 fundamentals page has no critical accessibility violations', async ({ page }) => {
+    test('FEAT-054 fundamentals page has no WCAG 2A/2AA violations', async ({ page }) => {
         await installInvestorWorkflowApiMocks(page);
         await page.goto('/watchlist/TCS');
         await page.getByRole('button', { name: 'Fundamentals' }).click();
-        await expect(page.getByText('Fundamentals')).toBeVisible();
-        await expectNoCriticalViolations(page, 'main');
+        await expect(page.getByRole('button', { name: 'Fundamentals', exact: true })).toBeVisible();
+        await expectNoAccessibilityViolations(page, 'main', { allViolations: true });
     });
 
-    test('FEAT-064 screener editor has no critical accessibility violations', async ({ page }) => {
+    test('FEAT-064 screener editor has no WCAG 2A/2AA violations', async ({ page }) => {
         await installInvestorWorkflowApiMocks(page);
         await page.goto('/screeners/new');
         await expect(page.getByRole('heading', { name: 'New screener' })).toBeVisible();
-        await expectNoCriticalViolations(page, 'main');
+        await expectNoAccessibilityViolations(page, 'main', { allViolations: true });
     });
 
-    test('FEAT-055 request-account form has no critical accessibility violations', async ({ page }) => {
+    test('FEAT-055 request-account form has no WCAG 2A/2AA violations', async ({ page }) => {
         await page.goto('/request-account');
         await expect(page.getByRole('heading', { name: 'Request an account' })).toBeVisible();
-        await expectNoCriticalViolations(page, 'body');
+        await expectNoAccessibilityViolations(page, 'body', { allViolations: true });
     });
 });

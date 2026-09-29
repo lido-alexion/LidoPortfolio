@@ -57,6 +57,9 @@
     --lido-chart-tooltip-border: #404040;
     --lido-chart-tooltip-text: #e5e7eb;
     --lido-chart-tooltip-label: #f3f4f6;
+    --lido-a11y-brand-bg: #005a9c;
+    --lido-a11y-link: #65b5ff;
+    --lido-a11y-muted: #b7c0ca;
     color-scheme: dark;
 }
 
@@ -108,6 +111,9 @@
     --lido-chart-tooltip-border: #d1d5db;
     --lido-chart-tooltip-text: #111827;
     --lido-chart-tooltip-label: #374151;
+    --lido-a11y-brand-bg: #005a9c;
+    --lido-a11y-link: #005a9c;
+    --lido-a11y-muted: #4b5563;
     color-scheme: light;
 }
 
@@ -390,11 +396,11 @@ body {
 }
 
 .lido-execution-safety.is-normal .lido-execution-safety-state {
-    color: #198754;
+    color: var(--lido-text-success);
 }
 
 .lido-execution-safety.is-halted .lido-execution-safety-state {
-    color: #dc3545;
+    color: var(--lido-text-danger);
 }
 
 .lido-icon-action {
@@ -1194,8 +1200,7 @@ body {
 .lido-sidebar-block-meta {
     font-size: 0.65rem;
     font-weight: 600;
-    opacity: 0.55;
-    color: var(--lido-sidebar-fg);
+    color: var(--lido-text-muted);
 }
 
 .lido-sidebar-block-empty {
@@ -3030,7 +3035,7 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
 }
 
 .lido-segment-toggle-btn.is-active {
-    background-color: var(--lido-brand);
+    background-color: var(--lido-a11y-brand-bg);
     color: #fff;
 }
 
@@ -3569,6 +3574,16 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
 
 .contentPane .text-muted {
     color: var(--lido-text-muted) !important;
+}
+
+.contentPane .btn-outline-primary {
+    color: var(--lido-a11y-link);
+    border-color: var(--lido-a11y-link);
+}
+
+.contentPane .btn-outline-secondary {
+    color: var(--lido-a11y-muted);
+    border-color: var(--lido-a11y-muted);
 }
 
 .contentPane .nav-tabs {

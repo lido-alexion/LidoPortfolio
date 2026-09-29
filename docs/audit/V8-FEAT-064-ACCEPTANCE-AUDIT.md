@@ -26,7 +26,7 @@ Authoritative contract: `docs/archive/specs/V8-Core-Investor-Workflow-UX-Simplif
 | Contextual Screener creation preserves Strategy state and selects the result | PASS locally | `strategyScreenerReturnFlow.test.mjs`, WP-09 Strategy/Screener editor hooks. |
 | Historical recommendation/transaction provenance remains resolvable | PASS locally | `Feat064MandatoryAuditAcceptanceTest`, `StrategyProvenanceRegressionTest`, `StrategyProvenanceMigrationReportTest`. |
 | Responsive investor workflow and browser acceptance | PASS locally / broader acceptance pending | Focused Chromium Screener workflow passes 2/2; full configured Playwright run passes all 29 executed journeys. Broader deployed/device validation remains external. |
-| Automated accessibility scan | PASS locally / assistive technology pending | `v8-accessibility.spec.js` runs axe WCAG 2A/2AA critical-violation scans against the Screener editor; the scan passes after explicit labels were added to editor controls. Native screen-reader and broader device acceptance remain external. |
+| Automated accessibility scan | PASS locally / assistive technology pending | `v8-accessibility.spec.js` runs full axe WCAG 2A/2AA scans against the Screener editor; the scan passes after explicit labels and shared dark-theme contrast fixes. Native screen-reader and broader device acceptance remain external. |
 
 ## Verification executed
 
