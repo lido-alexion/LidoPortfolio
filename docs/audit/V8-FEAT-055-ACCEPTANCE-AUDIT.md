@@ -34,6 +34,7 @@ Authoritative contract: `docs/archive/specs/V8-Account-Access-Request-Admin-Appr
 - `AccessRequestWorkflowTest` plus `AccessRequestSecurityAuditTest`: **12 passed, 74 assertions**.
 - Full Laravel V8 suite after the audit changes: **148 passed, 546 assertions**.
 - Full JS suite after the audit changes: node tests **190/190**, Vitest **99/99**, build/typecheck/docs checks passed.
+- Focused axe accessibility journeys: **4/4 passed** for guided-tour dialogs, fundamentals, Screener editor, and the public Request an account form; native screen-reader and deployed-provider acceptance remain external.
 - PHP syntax and `git diff --check` run on focused slices.
 
 ## External validation pending

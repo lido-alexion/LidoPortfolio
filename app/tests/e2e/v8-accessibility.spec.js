@@ -50,4 +50,10 @@ test.describe('V8 accessibility acceptance', () => {
         await expect(page.getByRole('heading', { name: 'New screener' })).toBeVisible();
         await expectNoCriticalViolations(page, 'main');
     });
+
+    test('FEAT-055 request-account form has no critical accessibility violations', async ({ page }) => {
+        await page.goto('/request-account');
+        await expect(page.getByRole('heading', { name: 'Request an account' })).toBeVisible();
+        await expectNoCriticalViolations(page, 'body');
+    });
 });
