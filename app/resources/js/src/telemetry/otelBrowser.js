@@ -64,7 +64,9 @@ export function registerBrowserOpenTelemetry() {
         const provider = new WebTracerProvider({
             resource: resourceFromAttributes({
                 'service.name': import.meta.env.VITE_LIDO_TELEMETRY_SERVICE_NAME || 'stox',
-                'service.version': import.meta.env.VITE_LIDO_TELEMETRY_SERVICE_VERSION || 'v8',
+                'service.version': import.meta.env.VITE_LIDO_TELEMETRY_SERVICE_VERSION
+                    || import.meta.env.VITE_BUILD_ID
+                    || 'local',
                 'deployment.environment.name': import.meta.env.VITE_LIDO_TELEMETRY_ENVIRONMENT || 'production',
             }),
             spanProcessors: [new BatchSpanProcessor(exporter)],
@@ -76,6 +78,7 @@ export function registerBrowserOpenTelemetry() {
                 /\/api\/telemetry(?:\/|$)/,
                 /\/api\/logs\/frontend(?:\/|$)/,
             ],
+            propagateTraceHeaderCorsUrls: [/^\//, window.location.origin],
             clearTimingResources: true,
             ignoreNetworkEvents: true,
         });

@@ -19,6 +19,7 @@ use Illuminate\Http\Request;
 use App\Telemetry\LidoTelemetry;
 use App\Telemetry\LidoTelemetryCatalog;
 use App\Telemetry\TraceContext;
+use App\Telemetry\OtelDiagnosticLogWriter;
 use Illuminate\Console\Events\ScheduledTaskFailed;
 use Illuminate\Console\Events\ScheduledTaskFinished;
 use Illuminate\Console\Events\ScheduledTaskStarting;
@@ -32,6 +33,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
+use OpenTelemetry\API\Behavior\Internal\Logging as OpenTelemetryLogging;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -131,11 +133,21 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(20)->by($request->ip());
         });
 
+        RateLimiter::for('telemetry-relay', function (Request $request) {
+            return [
+                Limit::perMinute(120)->by($request->ip()),
+                Limit::perHour(2000)->by($request->ip()),
+            ];
+        });
+
         RateLimiter::for('universe-price-sync', function (Request $request) {
             return Limit::perMinute(12)->by($request->user()?->id ?: $request->ip());
         });
 
         $this->registerTelemetryListeners();
+        if (config('lido_telemetry.official_sdk_enabled') && extension_loaded('opentelemetry')) {
+            OpenTelemetryLogging::setLogWriter(new OtelDiagnosticLogWriter);
+        }
     }
 
     protected function registerTelemetryListeners(): void

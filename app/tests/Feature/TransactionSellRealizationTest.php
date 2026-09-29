@@ -90,4 +90,42 @@ class TransactionSellRealizationTest extends TestCase
         $this->assertSame('190.0000', $sellRow['realized_pl']);
         $this->assertSame('13.1000', $sellRow['squared_off_fees']);
     }
+
+    public function test_recalculating_a_fully_squared_off_stock_is_idempotent(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Squared Off Edit',
+            'email' => 'squared-off-'.Str::random(8).'@example.com',
+            'password' => 'password123',
+        ]);
+        $profile = $this->defaultPortfolioFor($user);
+        $stock = Stock::query()->create([
+            'symbol' => 'SQOFF',
+            'exchange' => 'NSE',
+            'name' => 'Squared Off Stock',
+            'is_active' => true,
+            'is_benchmark' => false,
+        ]);
+        foreach ([['buy', 100, '2026-01-01'], ['sell', 110, '2026-01-02']] as [$type, $price, $date]) {
+            Transaction::query()->create([
+                'profile_id' => $profile->id,
+                'stock_id' => $stock->id,
+                'type' => $type,
+                'quantity' => 1,
+                'price' => $price,
+                'fees' => 0,
+                'transaction_date' => $date,
+            ]);
+        }
+
+        $service = app(\App\Services\HoldingsCalculationService::class);
+        $service->recalculateForProfileStock($profile, $stock);
+        $service->recalculateForProfileStock($profile, $stock);
+
+        $this->assertSame(1, \App\Models\Holding::query()
+            ->where('profile_id', $profile->id)
+            ->where('stock_id', $stock->id)
+            ->where('owner_key', \App\Models\Holding::OWNER_UNMANAGED)
+            ->count());
+    }
 }

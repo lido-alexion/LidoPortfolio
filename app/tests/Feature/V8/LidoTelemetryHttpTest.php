@@ -70,6 +70,26 @@ class LidoTelemetryHttpTest extends TestCase
         Http::assertSent(fn ($request): bool => isset($request->data()['resourceMetrics']));
     }
 
+    public function test_effective_context_uses_the_active_official_span_when_requested(): void
+    {
+        $span = \OpenTelemetry\API\Trace\Span::wrap(
+            \OpenTelemetry\API\Trace\SpanContext::create(
+                '4bf92f3577b34da6a3ce929d0e0e4736',
+                '00f067aa0ba902b7',
+                \OpenTelemetry\API\Trace\TraceFlags::SAMPLED,
+            ),
+        );
+        $scope = $span->activate();
+
+        try {
+            $context = \App\Telemetry\TraceContext::effective(true);
+            $this->assertSame('4bf92f3577b34da6a3ce929d0e0e4736', $context?->traceId);
+            $this->assertSame('00f067aa0ba902b7', $context?->spanId);
+        } finally {
+            $scope->detach();
+        }
+    }
+
     public function test_business_telemetry_omits_sensitive_attributes(): void
     {
         Http::fake();
@@ -110,6 +130,35 @@ class LidoTelemetryHttpTest extends TestCase
 
             return data_get($payload, 'resourceSpans.0.scopeSpans.0.spans.0.traceId') === '4bf92f3577b34da6a3ce929d0e0e4736';
         });
+    }
+
+    public function test_browser_otlp_relay_forwards_only_bounded_json_to_fixed_collector(): void
+    {
+        Http::fake();
+        config([
+            'lido_telemetry.enabled' => true,
+            'lido_telemetry.browser_relay_upstream' => 'http://127.0.0.1:4318/v1/traces',
+        ]);
+
+        $payload = ['resourceSpans' => [['scopeSpans' => [['spans' => [['name' => 'browser.fetch']]]]]]];
+        $response = $this->withHeaders(['Content-Type' => 'application/json'])
+            ->postJson('/api/telemetry/otlp/v1/traces', $payload);
+
+        $response->assertStatus(202);
+        Http::assertSent(fn ($request): bool =>
+            $request->url() === 'http://127.0.0.1:4318/v1/traces'
+            && data_get(json_decode($request->body(), true), 'resourceSpans.0.scopeSpans.0.spans.0.name') === 'browser.fetch'
+        );
+    }
+
+    public function test_browser_otlp_relay_rejects_non_json_and_malformed_payloads(): void
+    {
+        $this->withHeaders(['Content-Type' => 'text/plain'])
+            ->call('POST', '/api/telemetry/otlp/v1/traces', [], [], [], [], 'not-json')
+            ->assertStatus(415);
+
+        $this->postJson('/api/telemetry/otlp/v1/traces', ['metrics' => []])
+            ->assertStatus(422);
     }
 
     public function test_sync_queue_payload_and_processing_preserve_causal_trace_context(): void

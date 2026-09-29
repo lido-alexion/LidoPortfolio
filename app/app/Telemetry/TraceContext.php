@@ -2,7 +2,7 @@
 
 namespace App\Telemetry;
 
-use Illuminate\Support\Str;
+use OpenTelemetry\API\Trace\Span;
 
 final class TraceContext
 {
@@ -41,6 +41,33 @@ final class TraceContext
     public static function active(): ?self
     {
         return self::$active;
+    }
+
+    public static function effective(bool $officialSdkActive = false): ?self
+    {
+        if ($officialSdkActive && class_exists(Span::class)) {
+            try {
+                $spanContext = Span::getCurrent()->getContext();
+                if ($spanContext->isValid()) {
+                    return new self(
+                        strtolower($spanContext->getTraceId()),
+                        strtolower($spanContext->getSpanId()),
+                        $spanContext->isSampled(),
+                    );
+                }
+            } catch (\Throwable) {
+                // Context lookup is best effort and must never affect the app.
+            }
+        }
+
+        return self::$active;
+    }
+
+    public static function officialSdkActive(): bool
+    {
+        return (bool) config('lido_telemetry.enabled', false)
+            && (bool) config('lido_telemetry.official_sdk_enabled', false)
+            && extension_loaded('opentelemetry');
     }
 
     public function childSpan(): self

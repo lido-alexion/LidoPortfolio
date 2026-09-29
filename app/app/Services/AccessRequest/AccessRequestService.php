@@ -110,7 +110,7 @@ class AccessRequestService
 
     public function genericSubmitMessage(): string
     {
-        return 'If this email address can receive messages, you will receive a verification link shortly.';
+        return 'If this email is eligible for an access request, a verification email will be sent shortly. If you already have an account, use the login page.';
     }
 
     protected function emailLockKey(string $normalized): string

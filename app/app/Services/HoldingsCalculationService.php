@@ -54,7 +54,11 @@ class HoldingsCalculationService
     {
         $lots = $this->recalculateOwnerLotsForProfileStock($profile, $stock);
 
-        return $lots->first() ?? Holding::query()->create([
+        return $lots->first() ?? Holding::query()->updateOrCreate([
+            'profile_id' => $profile->id,
+            'stock_id' => $stock->id,
+            'owner_key' => Holding::OWNER_UNMANAGED,
+        ], [
             'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'strategy_id' => null,

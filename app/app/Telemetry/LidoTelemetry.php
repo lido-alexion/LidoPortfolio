@@ -20,9 +20,7 @@ class LidoTelemetry
 
     public function officialSdkInstrumentationActive(): bool
     {
-        return $this->enabled()
-            && (bool) config('lido_telemetry.official_sdk_enabled', false)
-            && extension_loaded('opentelemetry');
+        return TraceContext::officialSdkActive();
     }
 
     public function pseudonymousUserId(?User $user): ?string
@@ -42,7 +40,8 @@ class LidoTelemetry
             return;
         }
 
-        $context = TraceContext::fromRequest($request->headers->get('traceparent'));
+        $context = TraceContext::effective($this->officialSdkInstrumentationActive())
+            ?? TraceContext::fromRequest($request->headers->get('traceparent'));
         $span = $context->childSpan();
         $now = (int) (microtime(true) * 1_000_000_000);
         $start = $now - (int) max(0, $durationMs * 1_000_000);
@@ -104,10 +103,11 @@ class LidoTelemetry
             return;
         }
 
-        $context = TraceContext::active()
+        $context = TraceContext::effective($this->officialSdkInstrumentationActive())
             ?? (app()->bound('request')
                 ? TraceContext::fromRequest(request()->headers->get('traceparent'))
                 : TraceContext::freshRoot());
+        $span = $context->childSpan();
         $now = (int) (microtime(true) * 1_000_000_000);
         $otlpAttributes = [];
         foreach ($attributes as $key => $value) {
@@ -123,7 +123,8 @@ class LidoTelemetry
 
         $this->exporter->export([
             'traceId' => $context->traceId,
-            'spanId' => $context->spanId,
+            'spanId' => $span->spanId,
+            'parentSpanId' => $context->spanId,
             'name' => $name,
             'kind' => 1,
             'startTimeUnixNano' => (string) $now,

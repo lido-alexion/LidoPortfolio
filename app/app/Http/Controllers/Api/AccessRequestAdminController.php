@@ -17,6 +17,13 @@ class AccessRequestAdminController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        if ($request->query->has('pending_only')) {
+            $pendingOnly = $request->query('pending_only');
+            if (is_string($pendingOnly) && in_array(strtolower($pendingOnly), ['true', 'false'], true)) {
+                $request->merge(['pending_only' => strtolower($pendingOnly) === 'true']);
+            }
+        }
+
         $validated = $request->validate([
             'status' => ['nullable', 'string', 'max:32'],
             'search' => ['nullable', 'string', 'max:255'],

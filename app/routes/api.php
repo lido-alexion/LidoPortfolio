@@ -128,6 +128,8 @@ Route::post('/reset-password/accept', [PasswordResetAcceptController::class, 'ac
 Route::get('/auth/me', [AuthController::class, 'me']);
 Route::get('/auth/csrf-token', [AuthController::class, 'csrfToken']);
 Route::get('/build-info', [BuildInfoController::class, 'show']);
+Route::post('/telemetry/otlp/v1/traces', [\App\Http\Controllers\Api\LidoTelemetryController::class, 'relayTraces'])
+    ->middleware('throttle:telemetry-relay');
 
 Route::prefix('internal/microstructure-collector')
     ->middleware('microstructure.collector.internal')

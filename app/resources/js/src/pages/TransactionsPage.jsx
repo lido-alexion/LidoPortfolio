@@ -578,6 +578,8 @@ export default function TransactionsPage() {
 
         setSymbolValidation(null);
 
+        setTransactionDateInput(formatTransactionDateDisplay(tx.transaction_date));
+
     }, []);
 
 

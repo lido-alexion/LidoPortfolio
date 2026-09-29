@@ -117,6 +117,33 @@ class AccessRequestWorkflowTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_admin_access_request_list_accepts_string_boolean_query_values(): void
+    {
+        $admin = $this->makeUser(['is_admin' => true]);
+        AccessRequest::query()->create([
+            'full_name' => 'Pending Applicant',
+            'email_normalized' => 'pending-'.Str::random(6).'@example.com',
+            'status' => AccessRequest::STATUS_PENDING,
+            'verified_at' => now(),
+        ]);
+        AccessRequest::query()->create([
+            'full_name' => 'Resolved Applicant',
+            'email_normalized' => 'resolved-'.Str::random(6).'@example.com',
+            'status' => AccessRequest::STATUS_IGNORED,
+            'verified_at' => now(),
+        ]);
+
+        $this->actingAsUser($admin)
+            ->getJson('/api/access-requests?pending_only=false')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('pending_count', 1);
+
+        $this->getJson('/api/access-requests?pending_only=true')
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+    }
+
     public function test_admin_can_reject_pending_request(): void
     {
         $admin = $this->makeUser(['is_admin' => true]);
@@ -183,7 +210,8 @@ class AccessRequestWorkflowTest extends TestCase
             'full_name' => 'X',
             'email' => $existing->email,
             'captcha_token' => 'ok',
-        ])->assertOk();
+        ])->assertOk()
+            ->assertJsonPath('message', 'If this email is eligible for an access request, a verification email will be sent shortly. If you already have an account, use the login page.');
 
         $this->assertDatabaseCount('portfolio_access_request_verifications', 0);
     }

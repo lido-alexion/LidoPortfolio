@@ -7,6 +7,8 @@ return [
     'service_version' => env('LIDO_TELEMETRY_SERVICE_VERSION', 'v8'),
     'otlp_traces_endpoint' => env('LIDO_TELEMETRY_OTLP_TRACES_ENDPOINT'),
     'otlp_metrics_endpoint' => env('LIDO_TELEMETRY_OTLP_METRICS_ENDPOINT'),
+    'browser_relay_upstream' => env('LIDO_TELEMETRY_BROWSER_RELAY_UPSTREAM', 'http://127.0.0.1:4318/v1/traces'),
+    'browser_relay_max_bytes' => (int) env('LIDO_TELEMETRY_BROWSER_RELAY_MAX_BYTES', 262144),
     // The official PHP SDK/auto-instrumentation is opt-in and requires the
     // opentelemetry PHP extension plus standard OTEL_* exporter settings.
     'official_sdk_enabled' => (bool) env('LIDO_TELEMETRY_OFFICIAL_SDK_ENABLED', false),
