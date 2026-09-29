@@ -19,10 +19,11 @@ Authoritative contract: `docs/archive/specs/V8-Core-Investor-Workflow-UX-Simplif
 | Screener semantic versions are immutable | PASS locally | `ScreenerProvenanceTest`, `ScreenerBacktestVersionTest`. |
 | Runs and backtests pin exact Screener versions | PASS locally | `ScreenerBacktestVersionTest`, `Feat064MandatoryAuditAcceptanceTest`. |
 | Strategy versions are immutable copy-on-write records | PASS locally | `StrategyImmutableSaveTest`, `StrategyProvenanceResolutionTest`. |
-| Strategy versions pin exact Screener versions | PASS locally | `StrategyProvenanceTest`, `StrategyProvenanceResolutionTest`, `Feat064MandatoryAuditAcceptanceTest`. |
+| Strategy versions pin exact Screener versions | PASS locally | `StrategyProvenanceTest`, `StrategyProvenanceResolutionTest`, `StrategyProvenanceRegressionTest::test_strategy_execution_uses_exact_pinned_screener_run_version`, and `Feat064MandatoryAuditAcceptanceTest`; production eligibility now filters runs by the persisted `StrategyScreener.screener_version_id`. |
+| Strategy activation preserves immutable dependency/config semantics | PASS locally | `StrategyProvenanceRegressionTest::test_activation_does_not_mutate_existing_strategy_version_or_repin_dependencies`; activation no longer resolves portable refs, rewrites `config_json`/`definition_hash`, deletes links, or re-syncs dependencies. |
 | Incomplete Strategies may persist as Setup Required | PASS locally | `StrategyReadinessTest` and browser assertion in `screener-investor-workflow.spec.js`. |
 | Setup Required Strategies cannot activate or execute | PASS locally | `StrategyReadinessTest`; browser verifies Enable is disabled. |
-| Complete Strategies can activate; multiple enabled Strategies remain supported | PASS locally | `StrategyReadinessTest`, `MultiStrategyLifecycleAssuranceTest`. |
+| Complete Strategies can activate; multiple enabled Strategies remain supported | PASS locally | `StrategyReadinessTest`, `MultiStrategyLifecycleAssuranceTest`; `StrategyProvenanceRegressionTest::test_last_active_strategy_can_be_archived` proves the obsolete minimum-one restriction is removed. |
 | Contextual Screener creation preserves Strategy state and selects the result | PASS locally | `strategyScreenerReturnFlow.test.mjs`, WP-09 Strategy/Screener editor hooks. |
 | Historical recommendation/transaction provenance remains resolvable | PASS locally | `Feat064MandatoryAuditAcceptanceTest`, `StrategyProvenanceRegressionTest`, `StrategyProvenanceMigrationReportTest`. |
 | Responsive investor workflow and browser acceptance | PASS locally / broader acceptance pending | Focused Chromium Screener workflow passes 2/2; full configured Playwright run passes all 31 executed journeys across 52 configured tests. Broader deployed/device validation remains external. |
@@ -36,6 +37,7 @@ Authoritative contract: `docs/archive/specs/V8-Core-Investor-Workflow-UX-Simplif
 - Full configured Playwright run: **31 executed passed**, with 21 intentional viewport/configuration skips across 52 configured tests.
 - Focused full WCAG 2A/2AA axe accessibility journeys: **5/5 passed** for guided-tour dialogs, fundamentals, investor insights, Screener editor, and Request an account.
 - Node/Vitest/build/typecheck/docs and `git diff --check` pass.
+- Correction regression slice: **24/24 Laravel tests passed**, 120 assertions, including exact pinned runtime selection, activation immutability, last-active archive, checkpoint validation and Admin pause/resume authorization.
 
 ## External validation pending
 

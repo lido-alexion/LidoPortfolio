@@ -12,9 +12,11 @@ Evidence is mapped to `docs/archive/specs/V8-Intraday-ML-Historical-Data-Platfor
 | Schema-versioned Parquet with ZSTD | PASS locally | `parquet_store.py`, `schema_v1`, atomic staging replacement, isolated Parquet tests |
 | Idempotent windowed writes | PASS locally | Same-symbol/day writes upsert by timestamp and preserve prior windows; repeated-write regression passes |
 | DuckDB and Polars analytical access | PASS locally | `dataset_builder.py`; isolated project-compatible suite runs with DuckDB/Polars |
-| Resumable/idempotent backfill and Laravel checkpoints | PASS locally | Mac worker posts bounded checkpoint rows through the internal token-protected API; worker and API tests cover stable ordering and checkpoint payloads |
+| Resumable/idempotent backfill and Laravel checkpoints | PASS locally | `backfill_worker.py` deterministically plans bounded instrument/exchange/date work units, reads durable checkpoints before each unit, skips compatible completed units, and resumes the first unfinished unit; `test_planned_run_skips_completed_windows_and_resumes_first_incomplete` and API checkpoint-read coverage pass |
 | Coverage/quality reporting | PASS locally | `coverage_report.py` and tests expose symbol/date/bar counts and empty-root behavior |
-| Retry/backoff and failed-window tracking | PASS locally / runtime population pending | Kite client retries bounded 429/5xx/network failures with exponential backoff; worker records failed windows through the durable checkpoint API and returns a non-zero process status for failed windows. Production-scale retry behavior and a populated corpus run remain external |
+| Retry/backoff and failed-window tracking | PASS locally / runtime population pending | Kite client retries bounded 429/5xx/network failures with exponential backoff; each bounded unit records failed state through the durable checkpoint API and remains retryable. |
+| Durable pause/resume control | PASS locally | `stox_intraday_backfill_controls` persists the global operator hold; Admin-only pause/resume endpoints survive restart, the internal worker control read prevents new units, and `test_planned_run_honours_durable_pause_before_next_unit` plus API/Admin tests cover the contract |
+| Bounded checkpoint state semantics | PASS locally | Checkpoint service validates `pending/running/complete/failed`, rejects invalid windows/statuses, clears stale completion timestamps on retry, and exposes filtered durable checkpoint reads |
 | POC before full corpus | EXTERNAL VALIDATION PENDING | No live Kite credential/corpus campaign is claimed in this environment; this is the remaining frozen runtime gate |
 | Optional derivatives/OI do not block Dataset A | PASS by architecture | Canonical Dataset A writer is OHLCV-only; no derivative dependency is introduced |
 | No automated backup subsystem | PASS | README explicitly documents manual external-disk backup and no application backup path is implemented |
@@ -23,6 +25,7 @@ Evidence is mapped to `docs/archive/specs/V8-Intraday-ML-Historical-Data-Platfor
 ## Verification
 
 - Isolated project-compatible intraday suite: **22/22 passed**, including DuckDB, Polars, real Parquet paths, index/equity partition separation, bounded retry/backoff and failed-window reporting.
+- Correction slice: **25/25 intraday Python tests passed locally** (7 Parquet-dependent tests skipped in the default interpreter); focused Laravel correction tests passed **24/24** with 120 assertions.
 - No live Kite credentials or full NIFTY 500 corpus population was available for runtime validation.
 
 The epic is **REVIEW**. The implementation and isolated project-compatible verification are complete locally; a bounded real Kite POC, populated-corpus performance/coverage run, and live corpus handoff acceptance remain external because no Kite credentials or target corpus runtime are available here.
