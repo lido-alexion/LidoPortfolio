@@ -2,19 +2,21 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 
-async function expectNoCriticalViolations(page, include) {
+async function expectNoCriticalViolations(page, include, { allViolations = false } = {}) {
     const builder = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']);
     if (await page.locator(include).count() > 0) {
         builder.include(include);
     }
     const results = await builder.analyze();
 
-    expect(results.violations.filter((violation) => violation.impact === 'critical'))
-        .toEqual([]);
+    const violations = allViolations
+        ? results.violations
+        : results.violations.filter((violation) => violation.impact === 'critical');
+    expect(violations).toEqual([]);
 }
 
 test.describe('V8 accessibility acceptance', () => {
-    test('FEAT-061 guided-tour dialog has no critical accessibility violations', async ({ page }) => {
+    test('FEAT-061 guided-tour dialogs have no WCAG 2A/2AA violations', async ({ page }) => {
         await installInvestorWorkflowApiMocks(page, {
             guidedTourState: {
                 eligible: true,
@@ -28,12 +30,12 @@ test.describe('V8 accessibility acceptance', () => {
         await page.goto('/');
         const welcome = page.getByRole('dialog', { name: 'Welcome to StoX' });
         await expect(welcome).toBeVisible();
-        await expectNoCriticalViolations(page, '.lido-guided-tour-modal');
+        await expectNoCriticalViolations(page, '.lido-guided-tour-modal', { allViolations: true });
 
         await welcome.getByRole('button', { name: 'Begin tour' }).click();
         const step = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Navigation' }) });
         await expect(step).toBeVisible();
-        await expectNoCriticalViolations(page, '.lido-guided-tour-panel');
+        await expectNoCriticalViolations(page, '.lido-guided-tour-panel', { allViolations: true });
     });
 
     test('FEAT-054 fundamentals page has no critical accessibility violations', async ({ page }) => {

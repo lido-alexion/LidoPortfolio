@@ -158,7 +158,7 @@ export default function GuidedTourOverlay({
                         <div className="d-flex gap-2">
                             <button
                                 type="button"
-                                className="btn btn-outline-secondary btn-sm"
+                                className="btn btn-outline-light btn-sm"
                                 onClick={onBack}
                                 disabled={stepIndex <= 0}
                             >

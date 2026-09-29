@@ -37,7 +37,7 @@ export default function GuidedTourWelcomeModal({
                             {t('guidedTour.action.dismissForever')}
                         </button>
                         <div className="d-flex flex-wrap gap-2">
-                            <button type="button" className="btn btn-outline-secondary" onClick={onSkip}>
+                            <button type="button" className="btn btn-outline-light" onClick={onSkip}>
                                 {t('guidedTour.action.skip')}
                             </button>
                             <button type="button" className="btn btn-primary" onClick={onBegin}>
