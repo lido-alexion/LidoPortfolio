@@ -11,6 +11,10 @@ class ExportBasket extends Model
 {
     protected $table = 'portfolio_export_baskets';
 
+    protected $attributes = [
+        'items' => '[]',
+    ];
+
     protected function casts(): array { return ['items' => 'array']; }
 
     public function user(): BelongsTo { return $this->belongsTo(User::class); }

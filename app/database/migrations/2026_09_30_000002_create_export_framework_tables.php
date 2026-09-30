@@ -26,7 +26,9 @@ return new class extends Migration
         Schema::create('portfolio_export_baskets', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->unique()->constrained('portfolio_users')->cascadeOnDelete();
-            $table->json('items')->default('[]');
+            // MySQL does not allow defaults on JSON columns. ExportBasket
+            // initializes this value at the model/application boundary.
+            $table->json('items');
             $table->timestamps();
         });
     }
