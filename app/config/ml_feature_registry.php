@@ -364,6 +364,7 @@ return [
             'horizons' => ['1m', '3m', '6m'],
             'description' => 'Stock 3m return minus sector-peer median 3m return (%).',
             'tier' => 'challenger',
+            'coverage_class' => 'evidence_required',
             'evidence_required' => true,
         ],
         'market_breadth_nifty' => [
@@ -380,6 +381,7 @@ return [
             'horizons' => ['1m', '3m', '6m'],
             'description' => 'Sector classification bucket.',
             'tier' => 'challenger',
+            'coverage_class' => 'evidence_required',
             'evidence_required' => true,
         ],
     ],

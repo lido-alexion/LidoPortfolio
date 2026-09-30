@@ -3,9 +3,9 @@
 namespace App\Console\Commands;
 
 use App\Services\ML\MlHistoricalUniverseMembershipService;
+use App\Services\ML\MlHistoricalReferenceDateService;
 use App\Services\ML\NseHistoricalUniverseArchiveProvider;
 use Carbon\Carbon;
-use Carbon\CarbonPeriod;
 use Illuminate\Console\Command;
 
 class BackfillNseHistoricalUniverseCommand extends Command
@@ -21,16 +21,15 @@ class BackfillNseHistoricalUniverseCommand extends Command
 
     protected $description = 'Build and backfill PIT active_eligible_nse snapshots from dated NSE MII/bhavcopy files';
 
-    public function handle(MlHistoricalUniverseMembershipService $memberships, NseHistoricalUniverseArchiveProvider $provider): int
+    public function handle(MlHistoricalUniverseMembershipService $memberships, NseHistoricalUniverseArchiveProvider $provider, MlHistoricalReferenceDateService $referenceDates): int
     {
         if ($this->option('mii-path')) config(['ml.historical_universe.mii_path' => (string) $this->option('mii-path')]);
         if ($this->option('bhavcopy-path')) config(['ml.historical_universe.bhavcopy_path' => (string) $this->option('bhavcopy-path')]);
-        $dates = $this->option('dates')
-            ? array_values(array_filter(array_map('trim', explode(',', (string) $this->option('dates')))))
-            : (($this->option('from') && $this->option('to')) ? iterator_to_array(CarbonPeriod::create($this->option('from'), $this->option('to'))) : []);
-        $dates = array_map(static fn ($date): string => Carbon::parse($date)->toDateString(), $dates);
+        $dates = $this->resolveDates($referenceDates);
         if ($dates === []) {
-            $this->error('Provide --dates or both --from and --to.');
+            $this->error($this->option('from') || $this->option('to')
+                ? 'No StoX historical market dates were found in the requested range.'
+                : 'Provide --dates or both --from and --to.');
             return self::FAILURE;
         }
         try {
@@ -48,5 +47,24 @@ class BackfillNseHistoricalUniverseCommand extends Command
             $this->error($exception->getMessage());
             return self::FAILURE;
         }
+    }
+
+    /** @return list<string> */
+    public function resolveDates(MlHistoricalReferenceDateService $referenceDates): array
+    {
+        if ($this->option('dates')) {
+            return array_values(array_filter(array_map(
+                static fn (string $date): string => Carbon::parse(trim($date))->toDateString(),
+                explode(',', (string) $this->option('dates')),
+            )));
+        }
+        if (! $this->option('from') || ! $this->option('to')) {
+            return [];
+        }
+
+        return $referenceDates->datesBetween(
+            Carbon::parse((string) $this->option('from')),
+            Carbon::parse((string) $this->option('to')),
+        );
     }
 }

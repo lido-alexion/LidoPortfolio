@@ -6,7 +6,6 @@ use App\Contracts\MlHistoricalUniverseProvider;
 use App\Exceptions\MlHistoricalUniverseProviderException;
 use App\Models\Stock;
 use Carbon\Carbon;
-use SplFileObject;
 use ZipArchive;
 
 /**
@@ -18,9 +17,6 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
     public const PARSER_VERSION = 'nse-pit-universe-parser-1';
     private const ALLOWED_SERIES = ['EQ', 'BE', 'BZ'];
 
-    /** @var array<string,array<string,mixed>> */
-    private array $fileMemo = [];
-
     public function snapshotForDate(string $date): array
     {
         $date = Carbon::parse($date)->toDateString();
@@ -31,6 +27,12 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
         }
 
         $parsed = $this->parseFile($file['path'], $file['source'], $date);
+        if ($parsed['members'] === []) {
+            throw new MlHistoricalUniverseProviderException(
+                "NSE historical universe source contains no eligible company-equity members: {$date}",
+                false,
+            );
+        }
         $mapped = [];
         $unknown = [];
         $seen = [];
@@ -54,7 +56,7 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
 
         $sourceCount = count($parsed['members']);
         $mappedCount = count($mapped);
-        $percentage = $sourceCount === 0 ? 100.0 : round($mappedCount / $sourceCount * 100, 4);
+        $percentage = round($mappedCount / $sourceCount * 100, 4);
         $diagnostics = [
             'requested_date' => $date,
             'effective_date' => $date,
@@ -154,6 +156,9 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
     private function parseDelimited(string $contents, string $format): array
     {
         $contents = preg_replace('/^\xEF\xBB\xBF/', '', $contents) ?? $contents;
+        if (trim($contents) === '') {
+            return ['format_version' => $format, 'members' => []];
+        }
         $lines = preg_split('/\r\n|\n|\r/', trim($contents)) ?: [];
         if ($lines === []) {
             return ['format_version' => $format, 'members' => []];

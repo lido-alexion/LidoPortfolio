@@ -74,6 +74,25 @@ class NseHistoricalUniverseArchiveProviderTest extends TestCase
         File::delete($path);
     }
 
+    public function test_empty_or_excluded_sources_never_materialize_zero_member_boundaries(): void
+    {
+        foreach (['', "SYMBOL,SERIES,ISIN\n", "SYMBOL,SERIES,ISIN\nETF,EQ,INF000000001\n"] as $contents) {
+            $path = storage_path('framework/testing/nse-empty-'.bin2hex(random_bytes(4)).'.csv');
+            File::put($path, $contents);
+            config(['ml.historical_universe.bhavcopy_path' => $path, 'ml.historical_universe.mii_path' => '']);
+
+            try {
+                app(NseHistoricalUniverseArchiveProvider::class)->snapshotForDate('2024-08-30');
+                $this->fail('Expected empty-source rejection.');
+            } catch (MlHistoricalUniverseProviderException $exception) {
+                $this->assertFalse($exception->retryable);
+                $this->assertStringContainsString('no eligible company-equity', $exception->getMessage());
+            }
+            $this->assertDatabaseCount('stox_ml_universe_snapshot_boundaries', 0);
+            File::delete($path);
+        }
+    }
+
     public function test_missing_date_does_not_fallback_to_current_stock_master(): void
     {
         Stock::query()->create(['symbol' => 'CURRENT', 'exchange' => 'NSE', 'name' => 'Current', 'is_active' => true]);

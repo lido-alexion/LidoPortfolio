@@ -112,6 +112,8 @@ Before FEAT-056 lifecycle automation may be enabled:
 
 ## 7. Non-goals
 
+The `ml:backfill-nse-universe --from=... --to=...` form resolves dates from StoX market history and excludes weekends and active trade holidays. Use `--dates=YYYY-MM-DD,...` when an explicit reference-date set is required; explicit dates are not replaced by a calendar expansion.
+
 - Do not redefine the historical universe as NIFTY500.
 - Do not create historical facts by copying today's stock master.
 - Do not infer historical sectors from today's sector classification.

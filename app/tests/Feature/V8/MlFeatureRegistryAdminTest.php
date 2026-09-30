@@ -48,6 +48,17 @@ class MlFeatureRegistryAdminTest extends TestCase
         $this->assertSame('v8-preprocessing-1', $oneMonth['preprocessing']['version']);
     }
 
+    public function test_sector_features_are_challengers_with_evidence_required_coverage(): void
+    {
+        $features = collect(app(MlFeatureRegistryService::class)->catalog()['features'])->keyBy('key');
+
+        foreach (['sector', 'sector_relative_strength_3m'] as $key) {
+            $this->assertSame('challenger', $features[$key]['tier']);
+            $this->assertSame('evidence_required', $features[$key]['coverage_class']);
+            $this->assertNotSame('core', $features[$key]['tier']);
+        }
+    }
+
     public function test_frozen_catalogue_includes_deterministic_pattern_features_for_all_horizons(): void
     {
         $catalogue = app(MlFeatureRegistryService::class)->catalog();

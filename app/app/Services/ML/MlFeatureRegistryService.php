@@ -117,7 +117,11 @@ class MlFeatureRegistryService
     {
         $group = (string) ($meta['group'] ?? 'uncategorized');
         $isCategorical = ($meta['kind'] ?? 'numeric') === 'categorical';
-        $core = in_array($key, ['relative_strength_3m', 'price_return_3m', 'benchmark_trend_score', 'roe', 'debt_equity', 'operating_margin', 'net_margin', 'realized_volatility_20d', 'sector_relative_strength_3m', 'sector'], true);
+        $core = in_array($key, ['relative_strength_3m', 'price_return_3m', 'benchmark_trend_score', 'roe', 'debt_equity', 'operating_margin', 'net_margin', 'realized_volatility_20d'], true);
+        $tier = isset($meta['tier']) ? (string) $meta['tier'] : ($core ? 'core' : 'challenger');
+        $coverageClass = isset($meta['coverage_class'])
+            ? (string) $meta['coverage_class']
+            : (($meta['evidence_required'] ?? false) ? 'evidence_required' : ($core ? 'standard' : 'evidence_required'));
         $source = match (true) {
             str_contains($group, 'fundamental') => 'fundamental_facts_with_availability_date',
             str_contains($group, 'sector') => 'stox_sector_context',
@@ -132,8 +136,8 @@ class MlFeatureRegistryService
             'lookback' => $this->lookbackFor($key),
             'horizon_applicability' => $meta['horizons'] ?? [],
             'sector_applicability' => str_contains($group, 'bank') ? ['bank', 'nbfc'] : ['all'],
-            'tier' => $core ? 'core' : 'challenger',
-            'coverage_class' => $core ? 'standard' : 'evidence_required',
+            'tier' => $tier,
+            'coverage_class' => $coverageClass,
             'missing_value_policy' => $isCategorical ? 'unknown_category' : 'median_plus_missingness_flag',
             'pit_safety' => ($meta['pit_safe'] ?? false) ? 'point_in_time_safe' : 'not_verified',
             'deprecation' => null,
