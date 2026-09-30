@@ -200,7 +200,7 @@ class V1DocumentBuilder
 
         $parameters = array_merge(
             $entry['authenticated'] ? [['$ref' => '#/components/parameters/XProfileId']] : [],
-            $this->pathParameters($entry['path']),
+            $this->pathParameters($entry['path'], $overlay['pathParameterSchemas'] ?? []),
             $overlay['parameters'] ?? [],
         );
 
@@ -285,7 +285,7 @@ class V1DocumentBuilder
     /**
      * @return list<array<string, mixed>>
      */
-    protected function pathParameters(string $path): array
+    protected function pathParameters(string $path, array $schemas = []): array
     {
         preg_match_all('/\{([^}]+)\}/', $path, $matches);
         $params = [];
@@ -294,7 +294,7 @@ class V1DocumentBuilder
                 'name' => $name,
                 'in' => 'path',
                 'required' => true,
-                'schema' => [
+                'schema' => $schemas[$name] ?? [
                     'type' => $this->pathParamType($name),
                 ],
             ];

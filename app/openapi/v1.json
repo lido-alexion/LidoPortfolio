@@ -722,6 +722,1375 @@
                 "x-stox-admin": true
             }
         },
+        "/api/v1/admin/ml/acceptance": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Inspect production acceptance evidence",
+                "description": "Live route: `GET /api/v1/admin/ml/acceptance`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@report`. Requires admin (`is_admin`).",
+                "operationId": "get_admin_ml_acceptance",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Safe acceptance payload wrapped in `data`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "413": {
+                        "description": "Content-Length exceeds the 1,500,000-byte acceptance request limit.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Laravel validation `{message, errors}`: invalid input, source quotas/state, queue prerequisites or campaign/backfill preconditions. Invalid base64 returns `{message, request_id}`."
+                    },
+                    "429": {
+                        "description": "Acceptance rate limit exceeded (60 requests per minute).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/acceptance/backfills/preview": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Queue a preview of sealed historical sources",
+                "description": "Live route: `POST /api/v1/admin/ml/acceptance/backfills/preview`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@preview`. Requires admin (`is_admin`).",
+                "operationId": "post_admin_ml_acceptance_backfills_preview",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Safe acceptance payload wrapped in `data`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "413": {
+                        "description": "Content-Length exceeds the 1,500,000-byte acceptance request limit.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Laravel validation `{message, errors}`: invalid input, source quotas/state, queue prerequisites or campaign/backfill preconditions. Invalid base64 returns `{message, request_id}`."
+                    },
+                    "429": {
+                        "description": "Acceptance rate limit exceeded (60 requests per minute).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "sources"
+                                ],
+                                "properties": {
+                                    "sources": {
+                                        "type": "array",
+                                        "minItems": 1,
+                                        "maxItems": 5000,
+                                        "uniqueItems": true,
+                                        "items": {
+                                            "type": "string",
+                                            "format": "uuid"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/acceptance/backfills/{backfill}": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Inspect an acceptance backfill",
+                "description": "Live route: `GET /api/v1/admin/ml/acceptance/backfills/{backfill}`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@backfill`. Requires admin (`is_admin`).",
+                "operationId": "get_admin_ml_acceptance_backfills_backfill",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "backfill",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Safe acceptance payload wrapped in `data`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "404": {
+                        "description": "Resource missing, route parameter/action invalid, or inspected backfill is not an acceptance backfill.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "413": {
+                        "description": "Content-Length exceeds the 1,500,000-byte acceptance request limit.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Laravel validation `{message, errors}`: invalid input, source quotas/state, queue prerequisites or campaign/backfill preconditions. Invalid base64 returns `{message, request_id}`."
+                    },
+                    "429": {
+                        "description": "Acceptance rate limit exceeded (60 requests per minute).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/acceptance/backfills/{backfill}/{action}": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Apply, resume or cancel an acceptance backfill",
+                "description": "Live route: `POST /api/v1/admin/ml/acceptance/backfills/{backfill}/{action}`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@backfillAction`. Requires admin (`is_admin`).",
+                "operationId": "post_admin_ml_acceptance_backfills_backfill_action",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "backfill",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "action",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "apply",
+                                "resume",
+                                "cancel"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Safe acceptance payload wrapped in `data`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "404": {
+                        "description": "Resource missing, route parameter/action invalid, or inspected backfill is not an acceptance backfill.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "413": {
+                        "description": "Content-Length exceeds the 1,500,000-byte acceptance request limit.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Laravel validation `{message, errors}`: invalid input, source quotas/state, queue prerequisites or campaign/backfill preconditions. Invalid base64 returns `{message, request_id}`."
+                    },
+                    "429": {
+                        "description": "Acceptance rate limit exceeded (60 requests per minute).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/acceptance/campaigns": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Create an acceptance campaign and queue preflight",
+                "description": "Live route: `POST /api/v1/admin/ml/acceptance/campaigns`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@createCampaign`. Requires admin (`is_admin`).",
+                "operationId": "post_admin_ml_acceptance_campaigns",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Safe acceptance payload wrapped in `data`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "413": {
+                        "description": "Content-Length exceeds the 1,500,000-byte acceptance request limit.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Laravel validation `{message, errors}`: invalid input, source quotas/state, queue prerequisites or campaign/backfill preconditions. Invalid base64 returns `{message, request_id}`."
+                    },
+                    "429": {
+                        "description": "Acceptance rate limit exceeded (60 requests per minute).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "cutoff_date"
+                                ],
+                                "properties": {
+                                    "cutoff_date": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "description": "Not later than today."
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/acceptance/campaigns/{campaign}": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Inspect an acceptance campaign",
+                "description": "Live route: `GET /api/v1/admin/ml/acceptance/campaigns/{campaign}`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@campaign`. Requires admin (`is_admin`).",
+                "operationId": "get_admin_ml_acceptance_campaigns_campaign",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "campaign",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Safe acceptance payload wrapped in `data`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "404": {
+                        "description": "Resource missing, route parameter/action invalid, or inspected backfill is not an acceptance backfill.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "413": {
+                        "description": "Content-Length exceeds the 1,500,000-byte acceptance request limit.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Laravel validation `{message, errors}`: invalid input, source quotas/state, queue prerequisites or campaign/backfill preconditions. Invalid base64 returns `{message, request_id}`."
+                    },
+                    "429": {
+                        "description": "Acceptance rate limit exceeded (60 requests per minute).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/acceptance/campaigns/{campaign}/{action}": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Start, resume or cancel an acceptance campaign",
+                "description": "Live route: `POST /api/v1/admin/ml/acceptance/campaigns/{campaign}/{action}`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@campaignAction`. Requires admin (`is_admin`).",
+                "operationId": "post_admin_ml_acceptance_campaigns_campaign_action",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "campaign",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "action",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "start",
+                                "resume",
+                                "cancel"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Safe acceptance payload wrapped in `data`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "404": {
+                        "description": "Resource missing, route parameter/action invalid, or inspected backfill is not an acceptance backfill.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "413": {
+                        "description": "Content-Length exceeds the 1,500,000-byte acceptance request limit.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Laravel validation `{message, errors}`: invalid input, source quotas/state, queue prerequisites or campaign/backfill preconditions. Invalid base64 returns `{message, request_id}`."
+                    },
+                    "429": {
+                        "description": "Acceptance rate limit exceeded (60 requests per minute).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/acceptance/sources": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "List private source manifests (25 per page)",
+                "description": "Live route: `GET /api/v1/admin/ml/acceptance/sources`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@sources`. Requires admin (`is_admin`).",
+                "operationId": "get_admin_ml_acceptance_sources",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Safe acceptance payload wrapped in `data`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "413": {
+                        "description": "Content-Length exceeds the 1,500,000-byte acceptance request limit.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Laravel validation `{message, errors}`: invalid input, source quotas/state, queue prerequisites or campaign/backfill preconditions. Invalid base64 returns `{message, request_id}`."
+                    },
+                    "429": {
+                        "description": "Acceptance rate limit exceeded (60 requests per minute).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            },
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Create a private source manifest",
+                "description": "Live route: `POST /api/v1/admin/ml/acceptance/sources`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@createSource`. Requires admin (`is_admin`).",
+                "operationId": "post_admin_ml_acceptance_sources",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Safe acceptance payload wrapped in `data`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "413": {
+                        "description": "Content-Length exceeds the 1,500,000-byte acceptance request limit.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Laravel validation `{message, errors}`: invalid input, source quotas/state, queue prerequisites or campaign/backfill preconditions. Invalid base64 returns `{message, request_id}`."
+                    },
+                    "429": {
+                        "description": "Acceptance rate limit exceeded (60 requests per minute).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "version",
+                                    "source",
+                                    "date",
+                                    "filename",
+                                    "bytes",
+                                    "sha256"
+                                ],
+                                "properties": {
+                                    "version": {
+                                        "type": "integer",
+                                        "enum": [
+                                            1
+                                        ]
+                                    },
+                                    "source": {
+                                        "type": "string",
+                                        "enum": [
+                                            "nse_mii_security_file",
+                                            "nse_cash_bhavcopy"
+                                        ]
+                                    },
+                                    "date": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "description": "Not later than today."
+                                    },
+                                    "filename": {
+                                        "type": "string",
+                                        "maxLength": 150,
+                                        "description": "Official NSE/MII dated CSV or ZIP filename matching the selected source family."
+                                    },
+                                    "bytes": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 16777216
+                                    },
+                                    "sha256": {
+                                        "type": "string",
+                                        "pattern": "^[a-f0-9]{64}$"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/acceptance/sources/{source}": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Inspect a private source manifest",
+                "description": "Live route: `GET /api/v1/admin/ml/acceptance/sources/{source}`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@source`. Requires admin (`is_admin`).",
+                "operationId": "get_admin_ml_acceptance_sources_source",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "source",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Safe acceptance payload wrapped in `data`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "404": {
+                        "description": "Resource missing, route parameter/action invalid, or inspected backfill is not an acceptance backfill.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "413": {
+                        "description": "Content-Length exceeds the 1,500,000-byte acceptance request limit.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Laravel validation `{message, errors}`: invalid input, source quotas/state, queue prerequisites or campaign/backfill preconditions. Invalid base64 returns `{message, request_id}`."
+                    },
+                    "429": {
+                        "description": "Acceptance rate limit exceeded (60 requests per minute).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/acceptance/sources/{source}/chunks": {
+            "put": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Upload a base64 source chunk at the expected byte offset",
+                "description": "Live route: `PUT /api/v1/admin/ml/acceptance/sources/{source}/chunks`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@chunk`. Requires admin (`is_admin`).",
+                "operationId": "put_admin_ml_acceptance_sources_source_chunks",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "source",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Safe acceptance payload wrapped in `data`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "404": {
+                        "description": "Resource missing, route parameter/action invalid, or inspected backfill is not an acceptance backfill.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "413": {
+                        "description": "Content-Length exceeds the 1,500,000-byte acceptance request limit.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Laravel validation `{message, errors}`: invalid input, source quotas/state, queue prerequisites or campaign/backfill preconditions. Invalid base64 returns `{message, request_id}`."
+                    },
+                    "429": {
+                        "description": "Acceptance rate limit exceeded (60 requests per minute).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "offset",
+                                    "chunk"
+                                ],
+                                "properties": {
+                                    "offset": {
+                                        "type": "integer",
+                                        "minimum": 0
+                                    },
+                                    "chunk": {
+                                        "type": "string",
+                                        "format": "byte",
+                                        "maxLength": 1398104
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/acceptance/sources/{source}/{action}": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Finalize, resume or cancel a source upload",
+                "description": "Live route: `POST /api/v1/admin/ml/acceptance/sources/{source}/{action}`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@sourceAction`. Requires admin (`is_admin`).",
+                "operationId": "post_admin_ml_acceptance_sources_source_action",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "source",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "action",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "finalize",
+                                "resume",
+                                "cancel"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Safe acceptance payload wrapped in `data`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "404": {
+                        "description": "Resource missing, route parameter/action invalid, or inspected backfill is not an acceptance backfill.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "413": {
+                        "description": "Content-Length exceeds the 1,500,000-byte acceptance request limit.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Laravel validation `{message, errors}`: invalid input, source quotas/state, queue prerequisites or campaign/backfill preconditions. Invalid base64 returns `{message, request_id}`."
+                    },
+                    "429": {
+                        "description": "Acceptance rate limit exceeded (60 requests per minute).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
         "/api/v1/admin/ml/dataset-plan": {
             "get": {
                 "tags": [

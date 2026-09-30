@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Support\OpenApi\V1DocumentBuilder;
+use App\Support\OpenApi\V1OperationOverlays;
 use Tests\TestCase;
 
 class OpenApiV1ContractTest extends TestCase
@@ -136,6 +137,46 @@ class OpenApiV1ContractTest extends TestCase
         $this->assertStringContainsString('pageSize', $spec['info']['description']);
     }
 
+    public function test_acceptance_operations_document_statuses_errors_and_actions(): void
+    {
+        $spec = json_decode(file_get_contents(app(V1DocumentBuilder::class)->canonicalPath()), true, 512, JSON_THROW_ON_ERROR);
+        $base = '/api/v1/admin/ml/acceptance';
+        $expected = [
+            'GET ' => 200, 'GET /sources' => 200, 'POST /sources' => 201,
+            'GET /sources/{source}' => 200, 'PUT /sources/{source}/chunks' => 200,
+            'POST /sources/{source}/{action}' => 200, 'POST /backfills/preview' => 202,
+            'GET /backfills/{backfill}' => 200, 'POST /backfills/{backfill}/{action}' => 200,
+            'POST /campaigns' => 202, 'GET /campaigns/{campaign}' => 200,
+            'POST /campaigns/{campaign}/{action}' => 200,
+        ];
+        foreach ($expected as $key => $status) {
+            [$method, $suffix] = explode(' ', $key, 2);
+            $op = $spec['paths'][$base.$suffix][strtolower($method)];
+            $id = strtolower($method).'_admin_ml_acceptance'.str_replace(['/', '{', '}'], ['_', '', ''], $suffix);
+            $this->assertSame($id, $op['operationId']);
+            foreach ([$status, 401, 403, 413, 422, 429] as $code) {
+                $this->assertArrayHasKey($code, $op['responses'], $key);
+            }
+            $this->assertSame(['data'], $op['responses'][$status]['content']['application/json']['schema']['required']);
+            if ($status !== 200) {
+                $this->assertArrayNotHasKey(200, $op['responses']);
+            }
+            if (str_contains($suffix, '{')) {
+                $this->assertArrayHasKey(404, $op['responses']);
+            }
+        }
+        foreach (['sources' => ['finalize', 'resume', 'cancel'], 'backfills' => ['apply', 'resume', 'cancel'], 'campaigns' => ['start', 'resume', 'cancel']] as $resource => $actions) {
+            $parameter = ['sources' => 'source', 'backfills' => 'backfill', 'campaigns' => 'campaign'][$resource];
+            $op = $spec['paths'][$base.'/'.$resource.'/{'.$parameter.'}/{action}']['post'];
+            $params = array_column($op['parameters'], 'schema', 'name');
+            $this->assertSame($actions, $params['action']['enum']);
+            $this->assertSame($resource === 'backfills' ? 'integer' : 'string', $params[$parameter]['type']);
+            $this->assertArrayNotHasKey('requestBody', $op);
+        }
+        $this->assertSame(1398104, $spec['paths'][$base.'/sources/{source}/chunks']['put']['requestBody']['content']['application/json']['schema']['properties']['chunk']['maxLength']);
+        $this->assertSame(file_get_contents(app(V1DocumentBuilder::class)->canonicalPath()), file_get_contents(public_path('docs/openapi-v1.json')));
+    }
+
     public function test_openapi_v1_artisan_check_passes(): void
     {
         $this->artisan('openapi:v1', ['--check' => true])->assertSuccessful();
@@ -145,7 +186,7 @@ class OpenApiV1ContractTest extends TestCase
     {
         $builder = app(V1DocumentBuilder::class);
         $live = array_flip($builder->laravelOperationKeys());
-        foreach (array_keys(\App\Support\OpenApi\V1OperationOverlays::all()) as $key) {
+        foreach (array_keys(V1OperationOverlays::all()) as $key) {
             $this->assertArrayHasKey($key, $live, 'Overlay key is not a live /api/v1 route: '.$key);
         }
     }

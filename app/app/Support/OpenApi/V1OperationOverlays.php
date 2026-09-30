@@ -50,7 +50,7 @@ final class V1OperationOverlays
             ],
         ];
 
-        return [
+        return V1AcceptanceOverlays::all() + [
             'GET /api/v1/dataset/status' => [
                 'summary' => 'Dataset / daily-sync inspection status',
                 'description' => 'Returns DataEngine datasetStatus(). `dataset_version` is the current immutable version_key (V4-FEAT-023) or `none`. `published` / `daily_sync.synced_today` mean successfully synced today in cron_timezone. Freshness for the decision pipeline uses `daily_sync.synced_at` (V4-FEAT-022), not `published`.',
