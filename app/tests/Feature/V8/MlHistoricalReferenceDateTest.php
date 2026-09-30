@@ -56,7 +56,7 @@ class MlHistoricalReferenceDateTest extends TestCase
             'title' => 'Test holiday', 'anchor_date' => '2026-01-05',
             'recurrence_type' => CalendarEvent::RECURRENCE_NONE, 'is_active' => true,
         ]);
-        $path = storage_path('framework/testing/nse-range-'.bin2hex(random_bytes(4)).'.csv');
+        $path = storage_path('framework/testing/nse-20260102-'.bin2hex(random_bytes(4)).'.csv');
         File::put($path, "SYMBOL,SERIES,ISIN\nRANGE,EQ,INE000000001\n");
 
         $this->artisan('ml:backfill-nse-universe', [
@@ -70,14 +70,16 @@ class MlHistoricalReferenceDateTest extends TestCase
     public function test_command_explicit_dates_are_not_calendar_filtered_or_expanded(): void
     {
         Stock::query()->create(['symbol' => 'EXPLICIT', 'exchange' => 'NSE', 'name' => 'Explicit Co', 'isin' => 'INE000000001']);
-        $path = storage_path('framework/testing/nse-explicit-'.bin2hex(random_bytes(4)).'.csv');
-        File::put($path, "SYMBOL,SERIES,ISIN\nEXPLICIT,EQ,INE000000001\n");
+        $directory = storage_path('framework/testing/nse-explicit-'.bin2hex(random_bytes(4)));
+        File::makeDirectory($directory);
+        File::put($directory.'/nse-20260103.csv', "SYMBOL,SERIES,ISIN\nEXPLICIT,EQ,INE000000001\n");
+        File::put($directory.'/nse-20260105.csv', "SYMBOL,SERIES,ISIN\nEXPLICIT,EQ,INE000000001\n");
 
         $this->artisan('ml:backfill-nse-universe', [
-            '--dates' => '2026-01-03,2026-01-05', '--bhavcopy-path' => $path,
+            '--dates' => '2026-01-03,2026-01-05', '--bhavcopy-path' => $directory,
         ])->assertSuccessful();
 
         $this->assertSame(['2026-01-03', '2026-01-05'], MlUniverseSnapshotBackfillRun::query()->latest('id')->firstOrFail()->requested_dates);
-        File::delete($path);
+        File::deleteDirectory($directory);
     }
 }
