@@ -7,6 +7,7 @@ use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\V8\MlUniverseSnapshotBackfillRun;
 use App\Services\ML\MlHistoricalReferenceDateService;
+use App\Support\TradingCalendar;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
@@ -14,6 +15,12 @@ use Tests\TestCase;
 class MlHistoricalReferenceDateTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        TradingCalendar::clearHolidayCache();
+    }
 
     public function test_range_uses_market_history_and_excludes_weekends_and_trade_holidays(): void
     {

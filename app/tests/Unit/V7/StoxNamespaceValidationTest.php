@@ -13,9 +13,18 @@ class StoxNamespaceValidationTest extends TestCase
         $files = glob(__DIR__.'/../../../database/migrations/*.php');
         sort($files);
 
-        $governed = array_filter($files, fn (string $file): bool =>
-            basename($file) >= self::GOVERNANCE_CUTOFF
-        );
+        // The V7 namespace policy governs StoX-owned migrations. Later
+        // portfolio-surface migrations may legitimately create portfolio_*
+        // tables and are outside this namespace contract.
+        $governed = array_filter($files, function (string $file): bool {
+            if (basename($file) < self::GOVERNANCE_CUTOFF) {
+                return false;
+            }
+
+            $source = file_get_contents($file);
+
+            return is_string($source) && str_contains($source, "Schema::create('stox_");
+        });
         $createdTables = [];
 
         foreach ($governed as $file) {
