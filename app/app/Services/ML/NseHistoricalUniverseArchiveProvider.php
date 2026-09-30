@@ -14,7 +14,7 @@ use ZipArchive;
  */
 class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvider
 {
-    public const PARSER_VERSION = 'nse-pit-universe-parser-1';
+    public const PARSER_VERSION = 'nse-pit-universe-parser-2';
     private const ALLOWED_SERIES = ['EQ', 'BE', 'BZ'];
 
     public function snapshotForDate(string $date): array
@@ -60,6 +60,8 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
         $diagnostics = [
             'requested_date' => $date,
             'effective_date' => $date,
+            'source_validated_date' => $file['validated_date'],
+            'source_date_basis' => $file['date_basis'],
             'nse_source_file' => $file['path'],
             'source' => $file['source'],
             'format_version' => $parsed['format_version'],
@@ -107,27 +109,90 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
         return $this->parseDelimited($contents, 'mii-security-file');
     }
 
-    /** @return array{path:string,source:string}|null */
+    /** @return array{path:string,source:string,validated_date:string,date_basis:string}|null */
     private function findSourceFile(string $date, string $configured, string $source): ?array
     {
         if ($configured === '') {
             return null;
         }
         $candidates = is_file($configured) ? [$configured] : (glob(rtrim($configured, '/').'/*') ?: []);
-        $tokens = [Carbon::parse($date)->format('Ymd'), Carbon::parse($date)->format('dmY'), str_replace('-', '', $date)];
+        $isSingleFile = is_file($configured);
         foreach ($candidates as $path) {
             if (! is_file($path)) {
                 continue;
             }
-            if (is_file($configured) || collect($tokens)->contains(fn ($token) => str_contains(basename($path), $token))) {
-                return ['path' => $path, 'source' => $source];
+            $filenameDates = $this->datesFromFilename(basename($path));
+            if (! $isSingleFile && ! in_array($date, $filenameDates, true)) {
+                if ($filenameDates !== []) {
+                    continue;
+                }
             }
+            if ($isSingleFile && $filenameDates !== [] && ! in_array($date, $filenameDates, true)) {
+                throw new MlHistoricalUniverseProviderException(
+                    "NSE source filename date does not match requested date: {$path} ({$date})",
+                    false,
+                );
+            }
+            $filenameDate = in_array($date, $filenameDates, true) ? $date : ($filenameDates[0] ?? null);
+
+            $contents = $this->readSourceContents($path);
+            $contentDates = $this->datesFromContents($contents);
+            if (! $isSingleFile && $filenameDates === [] && ($contentDates === [] || $contentDates[0] !== $date)) {
+                continue;
+            }
+            if (count($contentDates) > 1) {
+                throw new MlHistoricalUniverseProviderException(
+                    "NSE source contains multiple trading dates and is not a single-session source: {$path}",
+                    false,
+                );
+            }
+            if ($contentDates !== [] && $contentDates[0] !== $date) {
+                throw new MlHistoricalUniverseProviderException(
+                    "NSE source content date does not match requested date: {$path} ({$date})",
+                    false,
+                );
+            }
+            if ($filenameDate !== null && $contentDates !== [] && $filenameDate !== $contentDates[0]) {
+                throw new MlHistoricalUniverseProviderException(
+                    "NSE source filename and content dates disagree: {$path}",
+                    false,
+                );
+            }
+            if ($filenameDates === [] && $contentDates === []) {
+                if ($isSingleFile) {
+                    throw new MlHistoricalUniverseProviderException(
+                        "NSE source date cannot be proven from filename or contents: {$path}",
+                        false,
+                    );
+                }
+                continue;
+            }
+            return [
+                'path' => $path,
+                'source' => $source,
+                'validated_date' => $contentDates[0] ?? $filenameDate,
+                'date_basis' => $contentDates !== [] && $filenameDate !== null ? 'filename_and_content' : ($contentDates !== [] ? 'content' : 'filename'),
+            ];
         }
         return null;
     }
 
     /** @return array{format_version:string,members:list<array{symbol:string,isin:?string,series:string,sector:?string}>} */
     private function parseFile(string $path, string $source, string $date): array
+    {
+        $contents = $this->readSourceContents($path);
+        $format = $source === 'nse_mii_security_file'
+            ? $this->parseMii($contents)
+            : (preg_match('/trad(dt|ing.?date)|fininstrmid/i', substr($contents, 0, 1000))
+                ? $this->parseUdiff($contents)
+                : $this->parseLegacyBhavcopy($contents));
+        if ($format['members'] === [] && trim($contents) !== '') {
+            throw new MlHistoricalUniverseProviderException("NSE source contains no eligible company-equity rows: {$date}");
+        }
+        return $format;
+    }
+
+    private function readSourceContents(string $path): string
     {
         $contents = file_get_contents($path);
         if ($contents === false) {
@@ -141,15 +206,58 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
             $contents = (string) $zip->getFromIndex(0);
             $zip->close();
         }
-        $format = $source === 'nse_mii_security_file'
-            ? $this->parseMii($contents)
-            : (preg_match('/trad(dt|ing.?date)|fininstrmid/i', substr($contents, 0, 1000))
-                ? $this->parseUdiff($contents)
-                : $this->parseLegacyBhavcopy($contents));
-        if ($format['members'] === [] && trim($contents) !== '') {
-            throw new MlHistoricalUniverseProviderException("NSE source contains no eligible company-equity rows: {$date}");
+        return $contents;
+    }
+
+    /** @return list<string> */
+    private function datesFromFilename(string $filename): array
+    {
+        $dates = [];
+        preg_match_all('/(?<!\d)(\d{4}[-_.]?\d{2}[-_.]?\d{2}|\d{2}[-_.]?\d{2}[-_.]?\d{4}|\d{2}[A-Za-z]{3}\d{4})(?!\d)/', $filename, $matches);
+        foreach ($matches[1] ?? [] as $raw) {
+            $raw = strtoupper($raw);
+            foreach (['Ymd', 'dmY', 'dMY'] as $format) {
+                $normalized = str_replace(['-', '_', '.'], '', $raw);
+                $candidate = $format === 'Ymd' ? substr($normalized, 0, 8) : $normalized;
+                $date = $this->parseDateValue($candidate, $format);
+                if ($date !== null) $dates[] = $date;
+            }
         }
-        return $format;
+        return array_values(array_unique($dates));
+    }
+
+    /** @return list<string> */
+    private function datesFromContents(string $contents): array
+    {
+        $contents = preg_replace('/^\xEF\xBB\xBF/', '', $contents) ?? $contents;
+        $lines = preg_split('/\r\n|\n|\r/', trim($contents)) ?: [];
+        if ($lines === [] || trim($lines[0]) === '') return [];
+        $delimiter = substr_count($lines[0], "\t") > substr_count($lines[0], ',') ? "\t" : ',';
+        $headers = array_map(fn ($v) => $this->header((string) $v), str_getcsv(array_shift($lines), $delimiter));
+        $index = array_flip($headers);
+        $dateKey = $this->firstKey($index, ['trad dt', 'traddt', 'trading date', 'tradingdate', 'bizdt', 'date', 'timestamp']);
+        if ($dateKey === null) return [];
+        $dates = [];
+        foreach ($lines as $line) {
+            if (trim($line) === '') continue;
+            $columns = str_getcsv($line, $delimiter);
+            $value = trim((string) ($columns[$index[$dateKey]] ?? ''));
+            $date = $this->parseDateValue($value);
+            if ($date !== null) $dates[] = $date;
+        }
+        return array_values(array_unique($dates));
+    }
+
+    private function parseDateValue(string $value, ?string $format = null): ?string
+    {
+        $value = trim($value);
+        if ($value === '') return null;
+        $formats = $format === null ? ['Ymd', 'Y-m-d', 'Y_m_d', 'Y.m.d', 'd-m-Y', 'd/m/Y', 'd_m_Y', 'd.m.Y', 'dMY', 'd-M-Y', 'd/M/Y'] : [$format];
+        foreach ($formats as $candidateFormat) {
+            $date = \DateTimeImmutable::createFromFormat('!'.$candidateFormat, strtoupper($value));
+            if ($date !== false && $date->format($candidateFormat) === strtoupper($value)) return $date->format('Y-m-d');
+        }
+        return null;
     }
 
     /** @return array{format_version:string,members:list<array{symbol:string,isin:?string,series:string,sector:?string}>} */

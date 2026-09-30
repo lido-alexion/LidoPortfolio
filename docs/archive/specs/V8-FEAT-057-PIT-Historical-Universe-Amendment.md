@@ -91,11 +91,12 @@ Codex must implement the following without weakening the parent FEAT-057 specifi
 4. Filter to company-equity `EQ`/`BE`/`BZ` membership and apply stable ISIN-first identity mapping.
 5. Enforce the >=90% mapping quality gate before materialization.
 6. Persist source/mapping diagnostics and unmapped identifiers for audit.
-7. Reuse the existing durable `MlHistoricalUniverseMembershipService`, snapshot-boundary and backfill-run model rather than inventing parallel lifecycle storage.
-8. Make backfill idempotent and resumable.
-9. Change historical categorical `sector` construction to effective-dated membership `sectorForDate(stock_id, reference_date)`; use `__unknown` when absent.
-10. Reclassify both `sector` and `sector_relative_strength_3m` as challenger/evidence-required and bump the immutable feature-registry version.
-11. Add regression tests for current-sector leakage, ISIN rename mapping, ETF/fund exclusion, legacy/UDiFF parsing, mapping-quality rejection, idempotency, missing-date failure and the prohibition on current-universe fallback.
+7. Validate every source date from the official filename and, when present, the authoritative content date; filename and content dates must agree.
+8. Reuse the existing durable `MlHistoricalUniverseMembershipService`, snapshot-boundary and backfill-run model rather than inventing parallel lifecycle storage.
+9. Make backfill idempotent and resumable.
+10. Change historical categorical `sector` construction to effective-dated membership `sectorForDate(stock_id, reference_date)`; use `__unknown` when absent.
+11. Reclassify both `sector` and `sector_relative_strength_3m` as challenger/evidence-required and bump the immutable feature-registry version.
+12. Add regression tests for current-sector leakage, ISIN rename mapping, ETF/fund exclusion, legacy/UDiFF parsing, mapping-quality rejection, idempotency, missing-date failure and the prohibition on current-universe fallback.
 
 ## 6. Production acceptance gate
 
