@@ -260,3 +260,7 @@ The following accepted contracts require V1-V7 implementation/runtime verificati
 Early price sync established cached OHLCV. V2/V2.1 added historical repair and gap hardening. V4 added freshness and immutable dataset-version attribution. V5 developed calendar/provider operations. V7 added fundamental and ML analytical inputs.
 
 Current behavior is defined by this document and linked current-domain contracts, not obsolete sync/provider narration.
+
+## Production ML acceptance (2026-09-30)
+
+The [acceptance amendment](./ml-production-acceptance.md) governs immutable private NSE staging, exact reference-date snapshot provenance, independent membership/breadth/sector evidence, and canonical-row FEAT-054 feature coverage. Historical ML TTM requires four quarterly periods; YoY uses a prior-year period with the canonical 20-day tolerance. Missing periods remain unavailable; negative prior-year growth bases retain the canonical absolute-denominator rule. No current-universe or current-sector fallback is permitted.

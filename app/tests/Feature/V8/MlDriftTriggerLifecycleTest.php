@@ -17,6 +17,15 @@ class MlDriftTriggerLifecycleTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // These tests cover behavior after acceptance. Real evidence gates have their own tests.
+        $this->mock(\App\Services\ML\MlAcceptanceCampaignService::class)
+            ->shouldReceive('readiness')->andReturn(['ready' => true]);
+    }
+
+
     public function test_evaluator_detects_material_drift_check(): void
     {
         config(['ml_lifecycle.drift_trigger.enabled' => true]);

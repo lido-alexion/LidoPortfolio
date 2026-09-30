@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../api';
+import MlAcceptancePanel from './MlAcceptancePanel';
 import { appUrl } from '../appBase';
 import { showToast } from '../toast';
 
@@ -210,6 +211,7 @@ export default function MlScoringAdminPage() {
 
     return (
         <div className="container-fluid py-3">
+            <MlAcceptancePanel />
             <div className="d-flex align-items-center justify-content-between mb-3">
                 <div>
                     <h1 className="h3 mb-1">ML Scoring</h1>

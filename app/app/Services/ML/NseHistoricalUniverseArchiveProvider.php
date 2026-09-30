@@ -26,6 +26,21 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
             throw new MlHistoricalUniverseProviderException("NSE historical universe date unavailable: {$date}", true);
         }
 
+        return $this->snapshotFile($file, $date);
+    }
+
+    /** Validated private staging entry point; never accepts an HTTP-supplied path. */
+    public function stagedSnapshot(string $path, string $source, string $date, bool $requireMapping = true): array
+    {
+        $file = $this->findSourceFile($date, $path, $source);
+        if ($file === null) {
+            throw new MlHistoricalUniverseProviderException('Staged source unavailable.');
+        }
+        return $this->snapshotFile($file, $date, $requireMapping);
+    }
+
+    private function snapshotFile(array $file, string $date, bool $requireMapping = true): array
+    {
         $parsed = $this->parseFile($file['path'], $file['source'], $date);
         if ($parsed['members'] === []) {
             throw new MlHistoricalUniverseProviderException(
@@ -72,7 +87,7 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
             'mapping_percentage' => $percentage,
             'parser_version' => self::PARSER_VERSION,
         ];
-        if ($percentage < 90.0) {
+        if ($requireMapping && $percentage < 90.0) {
             throw new MlHistoricalUniverseProviderException(
                 "NSE historical universe mapping below 90% for {$date} ({$percentage}%)",
                 false,
@@ -243,9 +258,17 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
             $columns = str_getcsv($line, $delimiter);
             $value = trim((string) ($columns[$index[$dateKey]] ?? ''));
             $date = $this->parseDateValue($value);
-            if ($date !== null) $dates[] = $date;
+            if ($date === null) throw new MlHistoricalUniverseProviderException('NSE source contains an invalid or missing content date.');
+            $dates[] = $date;
         }
         return array_values(array_unique($dates));
+    }
+
+    public function validateEntryDate(string $filename, string $contents, string $requested): void
+    {
+        foreach ([...$this->datesFromFilename($filename), ...$this->datesFromContents($contents)] as $date) {
+            if ($date !== $requested) throw new MlHistoricalUniverseProviderException('Archive entry date differs from requested date.');
+        }
     }
 
     private function parseDateValue(string $value, ?string $format = null): ?string
@@ -255,7 +278,7 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
         $formats = $format === null ? ['Ymd', 'Y-m-d', 'Y_m_d', 'Y.m.d', 'd-m-Y', 'd/m/Y', 'd_m_Y', 'd.m.Y', 'dMY', 'd-M-Y', 'd/M/Y'] : [$format];
         foreach ($formats as $candidateFormat) {
             $date = \DateTimeImmutable::createFromFormat('!'.$candidateFormat, strtoupper($value));
-            if ($date !== false && $date->format($candidateFormat) === strtoupper($value)) return $date->format('Y-m-d');
+            if ($date !== false && strtoupper($date->format($candidateFormat)) === strtoupper($value)) return $date->format('Y-m-d');
         }
         return null;
     }

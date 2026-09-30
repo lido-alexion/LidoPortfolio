@@ -67,6 +67,12 @@ class MlPythonAdapter
             throw new RuntimeException('ML adapter returned an invalid drift status.');
         }
 
+        if ($operation === 'train') {
+            $result['metadata']['execution'] = [
+                'adapter' => self::class, 'environment' => app()->environment(),
+                'adapter_sha256' => hash_file('sha256', $script), 'observed_at' => now()->toIso8601String(),
+            ];
+        }
         return $result;
     }
 

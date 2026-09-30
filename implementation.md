@@ -3588,3 +3588,31 @@ Document in this section. Authenticator TOTP for broker execution shipped as V4-
 - Remaining: full acceptance audit, i18n key migration if/when app-wide i18n lands.
 
 - **Universe Price Sync fix (2026-07-28):** Restored missing ormatGapRangeList import in UniversePriceSyncPage.jsx to prevent post-load React crash on /settings/universe-price-sync (error: ormatGapRangeList is not defined).
+
+## Production ML acceptance operations — 2026-09-30 (locally verified)
+
+Reviewed the preserved [normative amendment](docs/current/ml-production-acceptance.md) against current market-data §§18–20 and canonical fundamentals calculations. Historical ML TTM now requires four quarterly periods; historical growth compares the same quarter a year earlier, preserving the canonical 20-day tolerance and negative-base convention. Registry identity advances to `v8-registry-12`. Canonical viable reference-date resolution is shared with acceptance preflight. Operations implementation and local verification are complete; this does not establish production acceptance.
+
+Acceptance implementation adds two tables (private source manifests and linked campaigns), acceptance metadata on existing backfill runs, Admin `/api/v1/admin/ml/acceptance` APIs and a browser panel on Settings → ML Scoring. Existing NSE parsing, historical membership service, canonical streamed datasets and manual training remain the execution paths. Jobs require database/Redis queue visibility above 14400 seconds and shared cache locks; one backfill date or preflight horizon is processed per unit. Historical snapshot writers now share one lock. Sources and evidence are retained privately with quotas. Campaign runs pin cutoff, dataset hash, build/registry/config identity and active model IDs; production qualification requires real Python receipts and all three horizons. Lifecycle schedule enablement and ticks fail closed without current production-qualified evidence. Contextual help and current documentation maps are aligned. No environment settings are enabled.
+
+
+Final resumed verification preserved the existing task changes on `master`, starting at `181abc80a0bfa3a2fe8ca7ab45c2aa6ad6054fe9` (also confirmed by `git ls-remote origin refs/heads/master`). No competing checkout worker was found. Review fixed the source panel's missing pagination and added a regression for explicitly resuming queued validation on an older source. Generated journey metadata includes E2E-08. No production runtime, data, configuration, lifecycle setting, training, backfill or deployment was accessed or changed.
+
+Exact local checks (commands below run from `app/` unless stated otherwise):
+
+- Repository root: `php -l <file>` for every `.php` returned by `git ls-files --modified --others --exclude-standard`: **29 passed**.
+- `php -d extension=/tmp/php-sqlite-local/unpacked/usr/lib/php/20240924/pdo_sqlite.so -d extension=/tmp/php-sqlite-local/unpacked/usr/lib/php/20240924/sqlite3.so -d memory_limit=512M vendor/bin/phpunit tests/Feature/V8 --filter 'MlProductionAcceptanceTest|MlTrainingRun.*Test|MlArtifactRetentionTest|MlLifecycleRetentionGateTest'`: **30 passed, 132 assertions**, including isolated acceptance migration rollback/reapply.
+- `php -d extension=/tmp/php-sqlite-local/unpacked/usr/lib/php/20240924/pdo_sqlite.so -d extension=/tmp/php-sqlite-local/unpacked/usr/lib/php/20240924/sqlite3.so -d memory_limit=512M vendor/bin/phpunit tests/Feature/V8 --filter 'Ml|Fundamental|Nse'`: **177 passed, 593 assertions; 1 optional test initially skipped** because its Python environment variable was unset.
+- `STOXLA_ML_TEST_PYTHON=/tmp/feat057-acceptance-python/bin/python php -d extension=/tmp/php-sqlite-local/unpacked/usr/lib/php/20240924/pdo_sqlite.so -d extension=/tmp/php-sqlite-local/unpacked/usr/lib/php/20240924/sqlite3.so -d memory_limit=512M vendor/bin/phpunit tests/Feature/V8/MlBoundedTrainingCampaignTest.php`: **1 passed, 1449 assertions**; resolves the optional skip with local fixtures and real Python execution for all three horizons.
+- `/tmp/feat057-acceptance-python/bin/python -m unittest discover -s scripts/tests -p 'test_ml_adapter.py'`: **11 passed**.
+- `npm run build`: **passed**, with a non-failing Vite large-chunk warning.
+- `npm run typecheck`: **passed**.
+- `npm run test:js:docs`: **5 passed**.
+- `npm run docs:static:check`: **passed, 53 topics**.
+- `npx vitest run tests/js/tos/mlAcceptancePanel.test.jsx`: **3 passed** after pagination correction.
+- `node --test tests/js/journeyMetadata.test.mjs`: **2 passed**.
+- Repository root: `git diff --check`: **passed**.
+
+Production remains unaccepted until separately authorized deployed operations establish archive availability, exact reference-date PIT coverage, historical fundamentals, supported queue/cache configuration and real-adapter campaign evidence. No additional product-owner decision is needed for this implementation. Source inspection confirms the legacy cPanel maintenance script is copied by `deploy/prepare-upload.ps1` and referenced by the schedule diagnostic; a separate cleanup/hardening issue remains warranted.
+
+Publication uses the unchanged `.cursor/skills/commit-push-master/scripts/commit-push-master.ps1` via `/tmp/feat057-powershell/powershell`, with message `feat(ml): add production acceptance workflow [skip ci]`. The deployment workflow triggers only on `push` to master or explicit `workflow_dispatch`; no dispatch is requested. [Official GitHub Actions documentation](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/skip-workflow-runs) confirms `[skip ci]` suppresses push-triggered workflows. The skip does not disable independently scheduled workflows. Local checks supply verification for this intentionally skipped CI push.

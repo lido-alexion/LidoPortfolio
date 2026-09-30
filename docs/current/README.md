@@ -32,6 +32,8 @@ User-facing, task-oriented workflows are documented separately in the [StoX User
 13. [Implementation Alignment And Gaps](./implementation-alignment-and-gaps.md) - Phase 2 audit index and evidence status.
 14. [User Journey Guide](../user-journeys/README.md) - task-oriented screener, strategy, recommendation, review, execution and end-to-end workflows.
 
+15. [Production ML Acceptance](./ml-production-acceptance.md) - Admin source staging, PIT backfill, campaign evidence and lifecycle readiness.
+
 ## 4. How To Use This Corpus
 
 - **Implement:** start with the owning domain, follow cross-links, then use anchors/tests.

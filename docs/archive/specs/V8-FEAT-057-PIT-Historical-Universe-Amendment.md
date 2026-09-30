@@ -120,3 +120,7 @@ The `ml:backfill-nse-universe --from=... --to=...` form resolves dates from StoX
 - Do not infer historical sectors from today's sector classification.
 - Do not lower PIT requirements simply to make production acceptance green.
 - Do not enable automatic model promotion.
+
+## Normative operations amendment — 2026-09-30
+
+[Production ML acceptance](../../current/ml-production-acceptance.md) freezes Admin diagnostics, private source staging, bounded PIT backfill, linked deployed acceptance campaigns and the prerequisite lifecycle evidence gate. It explicitly resolves the FEAT-065 research-location boundary without changing model activation authority.

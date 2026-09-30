@@ -4,7 +4,7 @@
  * FEAT-057 feature registry metadata (V8 foundation). Training code remains in MlTrainingDatasetBuilder.
  */
 return [
-    'registry_version' => 'v8-registry-11',
+    'registry_version' => 'v8-registry-12',
     'preprocessing' => [
         'version' => 'v8-preprocessing-1',
         'missing_values' => 'median_with_missingness_flags',

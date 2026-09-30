@@ -83,7 +83,7 @@ class MlArtifactRetentionService
             ->orderByDesc('version')
             ->get();
 
-        return $retained->slice($max)->values();
+        return $retained->slice($max)->reject(fn (MlModelVersion $model) => isset($model->trainingRun?->configuration['acceptance']['campaign_id']))->values();
     }
 
     /**

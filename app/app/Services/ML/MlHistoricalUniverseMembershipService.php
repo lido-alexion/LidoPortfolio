@@ -21,6 +21,18 @@ class MlHistoricalUniverseMembershipService
     /** @var array<string, string|null> */
     private array $sectorMemo = [];
 
+    private static bool $ownsWriteLock = false;
+
+    /** All snapshot writers share this lock, including legacy command entry points. */
+    public function withWriteLock(callable $work): mixed
+    {
+        if (self::$ownsWriteLock) return $work();
+        return \Illuminate\Support\Facades\Cache::lock('ml-historical-membership-write', 14430)->block(5, function () use ($work) {
+            self::$ownsWriteLock = true;
+            try { return $work(); } finally { self::$ownsWriteLock = false; }
+        });
+    }
+
     public function resetMemo(): void
     {
         $this->idsMemo = [];
@@ -154,6 +166,11 @@ class MlHistoricalUniverseMembershipService
      */
     public function captureCurrentEligibleSnapshot(Carbon $effectiveFrom, string $source, ?string $snapshotKey = null): array
     {
+        return $this->withWriteLock(fn () => $this->captureCurrentEligibleSnapshotLocked($effectiveFrom, $source, $snapshotKey));
+    }
+
+    private function captureCurrentEligibleSnapshotLocked(Carbon $effectiveFrom, string $source, ?string $snapshotKey = null): array
+    {
         $date = $effectiveFrom->toDateString();
         $snapshotKey ??= $source.':'.$date;
         $stocks = Stock::query()
@@ -217,6 +234,11 @@ class MlHistoricalUniverseMembershipService
      * @return array{run_id:int,status:string,requested_dates:list<string>,processed_dates:list<string>,failed_dates:list<string>,skipped_dates:list<string>}
      */
     public function backfillHistoricalSnapshots(array $snapshots, string $source, ?int $runId = null, string $universeKey = self::ACTIVE_ELIGIBLE_NSE): array
+    {
+        return $this->withWriteLock(fn () => $this->backfillHistoricalSnapshotsLocked($snapshots, $source, $runId, $universeKey));
+    }
+
+    private function backfillHistoricalSnapshotsLocked(array $snapshots, string $source, ?int $runId = null, string $universeKey = self::ACTIVE_ELIGIBLE_NSE): array
     {
         $normalized = [];
         foreach ($snapshots as $snapshot) {

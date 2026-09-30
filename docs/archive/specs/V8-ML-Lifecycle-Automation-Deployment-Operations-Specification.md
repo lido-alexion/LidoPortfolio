@@ -728,3 +728,7 @@ rollback = human decision
 ```
 
 This boundary is authoritative for V8.
+
+## Normative operations amendment — 2026-09-30
+
+[Production ML acceptance](../../current/ml-production-acceptance.md) freezes Admin diagnostics, private source staging, bounded PIT backfill, linked deployed acceptance campaigns and the prerequisite lifecycle evidence gate. It explicitly resolves the FEAT-065 research-location boundary without changing model activation authority.

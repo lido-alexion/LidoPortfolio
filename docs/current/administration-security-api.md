@@ -323,3 +323,7 @@ The following accepted contracts require verification under the V1-V7 implementa
 Early JWT intent is superseded by Sanctum session authentication for the SPA and personal tokens for automation. V2 added invite, reset, and session/token capabilities. V5 formalized Admin/Investor separation. V6 added TOTP and trusted-execution hardening.
 
 Current behavior is defined by this document and its linked current-domain contracts.
+
+## Production ML acceptance APIs (2026-09-30)
+
+`/api/v1/admin/ml/acceptance` and its source/backfill/campaign subresources use the existing authenticated StoX Admin group, session CSRF and 60/minute throttling. GET is read-only. The [acceptance amendment](./ml-production-acceptance.md) defines upload bounds, private immutable storage, explicit mutations, locks, durable audit and lifecycle prerequisites. Settings → ML Scoring provides browser upload/resume and explicitly initiated queued work; no token URL or public maintenance script is added.

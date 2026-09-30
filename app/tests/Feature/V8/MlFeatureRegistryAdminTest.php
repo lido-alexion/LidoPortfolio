@@ -24,7 +24,7 @@ class MlFeatureRegistryAdminTest extends TestCase
         $this->actingAs($admin)
             ->getJson('/api/v1/admin/ml/features')
             ->assertOk()
-            ->assertJsonPath('data.registry_version', 'v8-registry-11')
+            ->assertJsonPath('data.registry_version', 'v8-registry-12')
             ->assertJsonPath('data.features.0.feature_id', 'relative_strength_1m')
             ->assertJsonPath('data.features.0.pit_safety', 'point_in_time_safe')
             ->assertJsonPath('data.features.0.formula_version', 'v8-formula-1')

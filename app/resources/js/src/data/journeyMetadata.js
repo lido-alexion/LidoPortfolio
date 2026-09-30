@@ -210,6 +210,33 @@ export const JOURNEY_TOPICS = Object.freeze([
     "warnings": []
   },
   {
+    "id": "E2E-08",
+    "title": "How do I admin production ML acceptance?",
+    "aliases": [
+      "Admin production ML acceptance",
+      "e2e-08"
+    ],
+    "keywords": [
+      "admin",
+      "production",
+      "acceptance"
+    ],
+    "synonyms": [],
+    "category": "End-to-end journeys",
+    "route": "/settings/ml-scoring",
+    "guide": "/docs/journeys/05-end-to-end.html#e2e-08--admin-production-ml-acceptance",
+    "steps": [
+      "As StoX Admin, open Settings → ML Scoring (`/settings/ml-scoring`) and refresh Production ML acceptance. Unknown evidence remains blocking.",
+      "Queue campaign preflight for the desired cutoff; inspect each horizon's exact required source dates and blocking reasons.",
+      "Upload official dated NSE CSV/ZIP sources in the private upload panel. Reselect the identical file to resume an incomplete upload. Refresh to see queued validation results; resume queued validation after interrupted dispatch if needed.",
+      "Select sealed sources, queue a backfill dry-run, and review each date's mapping and provenance. Apply only after preview succeeds. Save the backfill ID to reopen status, resume completed progress, or cancel between dates.",
+      "Create a fresh campaign preflight after resolving blockers. When all three horizons pass, explicitly choose Start 1m/3m/6m training.",
+      "Refresh progress and inspect linked run, feature coverage/exclusion, calibration, fold, baseline and candidate evidence. Cancel requests cancellation through the existing training controls."
+    ],
+    "prerequisites": [],
+    "warnings": []
+  },
+  {
     "id": "EXE-01",
     "title": "How do I execute an approved recommendation manually?",
     "aliases": [

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ML Scoring (admin) — StoX docs</title>
-  <meta name="description" content="Operator console for ML training runs, promotion evidence, lifecycle automation gates, and artifact retention.">
+  <meta name="description" content="Admin console for production acceptance, private NSE uploads, historical backfill, ML training evidence, and lifecycle readiness.">
   <link rel="canonical" href="settings-ml-scoring.html">
   <style>
     :root {
@@ -110,7 +110,7 @@
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">ML Scoring (admin)</h1>
       <p class="muted"><code>settings-ml-scoring</code> · screen: <code>/settings/ml-scoring</code></p>
-      <p>Operator console for ML training runs, promotion evidence, lifecycle automation gates, and artifact retention.</p>
+      <p>Admin console for production acceptance, private NSE uploads, historical backfill, ML training evidence, and lifecycle readiness.</p>
 
       <section class="panel">
         <h2>Overview</h2>
@@ -122,6 +122,18 @@
       <section class="panel">
         <h2>Controls</h2>
         <dl class="doc-list">
+        <dt>Production acceptance report</dt>
+        <dd>Refresh reads recorded evidence only. Unknown worker, Python, source, or feature evidence remains blocking. Expand evidence for per-horizon reference dates, coverage, exclusions and reasons.</dd>
+
+        <dt>Private NSE upload</dt>
+        <dd>Choose the official dated CSV or single-CSV ZIP (up to 16 MiB), source family and date. Upload queues validation. To resume, choose the incomplete upload and reselect the identical file. Files are stored privately; sealed files cannot be replaced.</dd>
+
+        <dt>Backfill dry-run and apply</dt>
+        <dd>Select sealed sources and queue a dry-run. Review mapping/provenance evidence before Apply reviewed backfill. Save the backfill ID to reopen status. Resume preserves completed dates; cancel stops between work units.</dd>
+
+        <dt>Acceptance campaign</dt>
+        <dd>Choose a cutoff and queue preflight. All 1m/3m/6m gates must pass before Start training becomes available. Campaigns retain linked runs and evidence; local runs never qualify as production acceptance. Cancel requests training cancellation.</dd>
+
         <dt>Queue retrain</dt>
         <dd>POST <code>/api/v1/admin/ml/retrain-queue</code> and stream SSE progress for the horizon.</dd>
 
@@ -142,6 +154,9 @@
       <section class="panel">
         <h2>Concepts</h2>
         <dl class="doc-list">
+        <dt>Lifecycle readiness</dt>
+        <dd>Schedule enablement and execution require production-qualified evidence no older than 30 days for the current build, registry and training configuration. Acceptance never enables lifecycle, schedules or drift.</dd>
+
         <dt>No auto-promote</dt>
         <dd>Lifecycle may queue retrains on schedule or drift; humans promote candidates explicitly.</dd>
 

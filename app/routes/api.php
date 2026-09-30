@@ -563,6 +563,21 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
         Route::get('/admin/intraday-platform', [\App\Http\Controllers\Api\V1\IntradayPlatformAdminController::class, 'status']);
         Route::post('/admin/intraday-platform/pause', [\App\Http\Controllers\Api\V1\IntradayPlatformAdminController::class, 'pause']);
         Route::post('/admin/intraday-platform/resume', [\App\Http\Controllers\Api\V1\IntradayPlatformAdminController::class, 'resume']);
+        Route::prefix('/admin/ml/acceptance')->middleware(['throttle:60,1', \App\Http\Middleware\MlAcceptanceRequestLimit::class])->group(function () {
+            $controller = \App\Http\Controllers\Api\V1\MlAcceptanceController::class;
+            Route::get('/', [$controller, 'report']);
+            Route::get('/sources', [$controller, 'sources']);
+            Route::post('/sources', [$controller, 'createSource']);
+            Route::get('/sources/{source}', [$controller, 'source'])->whereUuid('source');
+            Route::put('/sources/{source}/chunks', [$controller, 'chunk'])->whereUuid('source');
+            Route::post('/sources/{source}/{action}', [$controller, 'sourceAction'])->whereUuid('source')->whereIn('action', ['finalize', 'resume', 'cancel']);
+            Route::post('/backfills/preview', [$controller, 'preview']);
+            Route::get('/backfills/{backfill}', [$controller, 'backfill'])->whereNumber('backfill');
+            Route::post('/backfills/{backfill}/{action}', [$controller, 'backfillAction'])->whereNumber('backfill')->whereIn('action', ['apply', 'resume', 'cancel']);
+            Route::post('/campaigns', [$controller, 'createCampaign']);
+            Route::get('/campaigns/{campaign}', [$controller, 'campaign'])->whereUuid('campaign');
+            Route::post('/campaigns/{campaign}/{action}', [$controller, 'campaignAction'])->whereUuid('campaign')->whereIn('action', ['start', 'resume', 'cancel']);
+        });
         Route::get('/admin/ml', [MlScoringController::class, 'adminIndex']);
         Route::put('/admin/ml/schedules/{horizon}', [MlScoringController::class, 'updateSchedule'])->whereIn('horizon', ['1m', '3m', '6m']);
         Route::get('/admin/ml/retention-plan', [MlScoringController::class, 'retentionPlan']);

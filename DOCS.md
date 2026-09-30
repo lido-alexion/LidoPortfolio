@@ -29,6 +29,9 @@ The current docs are feature-oriented rather than version-oriented:
 12. [Implementation Alignment And Gaps](docs/current/implementation-alignment-and-gaps.md)
 13. [StoX Trading Artifacts AI Guide](docs/current/stox-trading-artifacts-ai-guide.md)
 
+14. [Production ML acceptance amendment](docs/current/ml-production-acceptance.md)
+15. [ML lifecycle operations](docs/current/ml-lifecycle-operations.md)
+
 ## StoX V8 implementation
 
 - Frozen V8 register: [docs/archive/specs/LidoPortfolio-V8-Wishlist.md](docs/archive/specs/LidoPortfolio-V8-Wishlist.md)

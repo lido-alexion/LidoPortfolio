@@ -11,6 +11,15 @@ class MlLifecycleRetentionGateTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // These tests cover behavior after acceptance. Real evidence gates have their own tests.
+        $this->mock(\App\Services\ML\MlAcceptanceCampaignService::class)
+            ->shouldReceive('readiness')->andReturn(['ready' => true]);
+    }
+
+
     public function test_lifecycle_tick_skips_retention_when_disabled(): void
     {
         config([

@@ -15,6 +15,15 @@ class MlLifecycleAutomationTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // These tests cover behavior after acceptance. Real evidence gates have their own tests.
+        $this->mock(\App\Services\ML\MlAcceptanceCampaignService::class)
+            ->shouldReceive('readiness')->andReturn(['ready' => true]);
+    }
+
+
     public function test_tick_queues_job_when_schedule_due_and_no_active_run(): void
     {
         config([

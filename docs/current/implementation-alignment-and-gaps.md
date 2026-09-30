@@ -80,3 +80,7 @@ Phase 2 populates an auditable gap register with requirement ID, domain, contrac
 ## 12. Archive Use
 
 Archive is history/source archaeology. Unsuperseded accepted knowledge should already be promoted into current docs. Phase 2 may use archive for detail but must not treat it as automatic current override.
+
+## Production ML operations alignment (2026-09-30)
+
+The [acceptance amendment](./ml-production-acceptance.md) resolves deployed acceptance versus Mac research and makes production evidence a lifecycle prerequisite. New acceptance services reuse the NSE parser, membership/backfill records and canonical manual training. Independent comparison confirmed abbreviated historical TTM and adjacent-quarter growth contradicted canonical fundamentals completeness/comparability; the small historical-builder correction advances registry identity to v8-registry-12. Production data, queue execution, real-adapter campaign completion and NSE archive availability remain unverified by local fixtures.

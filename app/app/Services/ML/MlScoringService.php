@@ -74,13 +74,14 @@ class MlScoringService
         return $this->queueRetrainRun($horizon, $user, 'manual');
     }
 
-    public function queueRetrainRun(string $horizon, ?User $user, string $trigger, ?int $driftCheckId = null): MlTrainingRun
+    public function queueRetrainRun(string $horizon, ?User $user, string $trigger, ?int $driftCheckId = null, ?array $acceptance = null): MlTrainingRun
     {
         $this->assertHorizon($horizon);
         $this->assertTrigger($trigger);
         $this->assertTriggerContext($trigger, $driftCheckId);
 
         $configuration = ['trigger' => $trigger];
+        if ($acceptance !== null) $configuration['acceptance'] = $acceptance;
         if ($driftCheckId !== null) {
             $configuration['drift_check_id'] = $driftCheckId;
         }
@@ -112,7 +113,7 @@ class MlScoringService
         });
         $this->progressService()->record($run, 'queued', 0);
 
-        MlRetrainJob::dispatch($horizon, $user?->id, $trigger, $driftCheckId, $run->id);
+        MlRetrainJob::dispatch($horizon, $user?->id, $trigger, $driftCheckId, $run->id)->afterCommit();
 
         return $run;
     }
@@ -122,7 +123,11 @@ class MlScoringService
         $this->assertHorizon($horizon);
         $cutoff ??= now();
 
-        return Cache::lock('stox-ml-retrain-'.$horizon, (int) config('ml.retrain_lock_seconds', 14400))->block(15, function () use ($horizon, $cutoff, $user, $overrides, $trainingRunId): MlModelVersion {
+        $lockSeconds = (int) config('ml.retrain_lock_seconds', 14400);
+        if ($trainingRunId && isset(MlTrainingRun::query()->find($trainingRunId)?->configuration['acceptance'])) {
+            $lockSeconds = max($lockSeconds, MlAcceptanceRuntime::TIMEOUT + 60);
+        }
+        return Cache::lock('stox-ml-retrain-'.$horizon, $lockSeconds)->block(15, function () use ($horizon, $cutoff, $user, $overrides, $trainingRunId): MlModelVersion {
             return $this->retrainLocked($horizon, $cutoff, $user, $overrides, $trainingRunId);
         });
     }
@@ -143,6 +148,9 @@ class MlScoringService
 
         if ($trainingRunId !== null) {
             $run = MlTrainingRun::query()->findOrFail($trainingRunId);
+            if (isset($run->configuration['acceptance']) && ! in_array($run->status, ['queued', 'cancelling', 'cancelled'], true)) {
+                throw new \App\Exceptions\MlTrainingRunCancelledException($run->id);
+            }
             $config = array_replace_recursive($config, is_array($run->configuration) ? $run->configuration : []);
             $this->trainingCancellation->assertContinueOrAbort($run);
             $run->forceFill([
@@ -169,6 +177,7 @@ class MlScoringService
             $this->progressService()->record($run, 'building_dataset', 15);
             $datasetDirectory = storage_path('framework/cache/ml-datasets/run-'.$run->id);
             $dataset = $this->datasets->buildStreamed($horizon, $cutoff, $datasetDirectory);
+            app(MlAcceptanceCampaignService::class)->assertTraining($run, $dataset);
             $chronoGrid = app(MlChronologicalValidationGridService::class)->summarize($dataset['paths'], $dataset['partitions']);
             $config['chronological_validation_grid'] = $chronoGrid;
             $this->cancellationService()->assertContinueOrAbort($run);

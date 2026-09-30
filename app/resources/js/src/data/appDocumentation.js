@@ -572,15 +572,20 @@ const APP_DOCUMENTATION_BASE = [
         title: 'ML Scoring (admin)',
         routeLabel: '/settings/ml-scoring',
         match: (p) => pathStarts(p, '/settings/ml-scoring'),
-        summary: 'Operator console for ML training runs, promotion evidence, lifecycle automation gates, and artifact retention.',
+        summary: 'Admin console for production acceptance, private NSE uploads, historical backfill, ML training evidence, and lifecycle readiness.',
         overview:
             'Admin-only FEAT-056/057 surface. Horizon cards show active models, drift checks, and candidate promotion review (including HistGradientBoosting challenger sibling and calibration Brier). **Lifecycle automation** reflects `STOXLA_ML_LIFECYCLE_*` schedule/drift/retention env gates (tick via `portfolio:ml-lifecycle-tick`). Retention pruning requires `STOXLA_ML_RETENTION_ENABLED`.',
         controls: [
+            { name: 'Production acceptance report', description: 'Refresh reads recorded evidence only. Unknown worker, Python, source, or feature evidence remains blocking. Expand evidence for per-horizon reference dates, coverage, exclusions and reasons.' },
+            { name: 'Private NSE upload', description: 'Choose the official dated CSV or single-CSV ZIP (up to 16 MiB), source family and date. Upload queues validation. To resume, choose the incomplete upload and reselect the identical file. Files are stored privately; sealed files cannot be replaced.' },
+            { name: 'Backfill dry-run and apply', description: 'Select sealed sources and queue a dry-run. Review mapping/provenance evidence before Apply reviewed backfill. Save the backfill ID to reopen status. Resume preserves completed dates; cancel stops between work units.' },
+            { name: 'Acceptance campaign', description: 'Choose a cutoff and queue preflight. All 1m/3m/6m gates must pass before Start training becomes available. Campaigns retain linked runs and evidence; local runs never qualify as production acceptance. Cancel requests training cancellation.' },
             { name: 'Queue retrain', description: 'POST `/api/v1/admin/ml/retrain-queue` and stream SSE progress for the horizon.' },
             { name: 'Promotion review', description: 'GET `/api/v1/admin/ml/models/{id}/promotion-review` — threshold checks, calibration, challenger promote when eligible.' },
             { name: 'Apply retention prune', description: 'When retention is enabled, GET `/api/v1/admin/ml/retention-plan?apply=1` deletes bounded non-active artifacts.' },
         ],
         concepts: [
+            { name: 'Lifecycle readiness', description: 'Schedule enablement and execution require production-qualified evidence no older than 30 days for the current build, registry and training configuration. Acceptance never enables lifecycle, schedules or drift.' },
             { name: 'No auto-promote', description: 'Lifecycle may queue retrains on schedule or drift; humans promote candidates explicitly.' },
             { name: 'Chrono grid evidence', description: 'Completed runs store monthly validation windows and benchmark-volatility regime slices on the training run configuration.' },
         ],

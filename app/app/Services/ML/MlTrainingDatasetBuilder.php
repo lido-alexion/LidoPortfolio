@@ -104,6 +104,31 @@ class MlTrainingDatasetBuilder
         ];
     }
 
+    /** Canonical viable reference dates and label ends; no dataset or membership writes. */
+    public function requiredReferenceDates(string $horizon, Carbon $cutoff): array
+    {
+        $horizonDays = ['1m' => 21, '3m' => 63, '6m' => 126][$horizon] ?? throw new RuntimeException('Unsupported ML horizon.');
+        $benchmark = Stock::query()->where('symbol', 'NIFTY50')->first();
+        if ($benchmark === null) {
+            return [];
+        }
+        $benchmarkSeries = $this->priceSeries($benchmark, $cutoff);
+        $referenceDates = [];
+        $this->universeQuery()->chunkById(100, function ($stockChunk) use (&$referenceDates, $benchmarkSeries, $horizonDays, $cutoff): void {
+            foreach ($stockChunk as $stock) {
+                $series = $this->priceSeries($stock, $cutoff);
+                foreach ($this->viableObservations($series, $benchmarkSeries, $horizonDays, $cutoff) as $observation) {
+                    $date = $observation['reference_date'];
+                    if (! isset($referenceDates[$date]) || $observation['label_end'] < $referenceDates[$date]) {
+                        $referenceDates[$date] = $observation['label_end'];
+                    }
+                }
+            }
+        }, 'id');
+        ksort($referenceDates);
+        return $referenceDates;
+    }
+
     /**
      * Build a partitioned JSONL dataset without retaining the historical
      * matrix in PHP memory. The first pass establishes date partitions; the
@@ -126,18 +151,7 @@ class MlTrainingDatasetBuilder
         }
 
         $benchmarkSeries = $this->priceSeries($benchmark, $cutoff);
-        $referenceDates = [];
-        $this->universeQuery()->chunkById(100, function ($stockChunk) use (&$referenceDates, $benchmarkSeries, $horizonDays, $cutoff): void {
-            foreach ($stockChunk as $stock) {
-                $series = $this->priceSeries($stock, $cutoff);
-                foreach ($this->viableObservations($series, $benchmarkSeries, $horizonDays, $cutoff) as $observation) {
-                    $date = $observation['reference_date'];
-                    if (! isset($referenceDates[$date]) || $observation['label_end'] < $referenceDates[$date]) {
-                        $referenceDates[$date] = $observation['label_end'];
-                    }
-                }
-            }
-        }, 'id');
+        $referenceDates = $this->requiredReferenceDates($horizon, $cutoff);
         $dates = array_keys($referenceDates);
         sort($dates);
         if (count($dates) < 3) {
@@ -1164,7 +1178,7 @@ class MlTrainingDatasetBuilder
             usort($items, static fn (array $a, array $b): int => strcmp((string) $b['period_end'], (string) $a['period_end']));
         }
         unset($items);
-        $sum = static fn (string $key): ?float => isset($byKey[$key]) && $byKey[$key] !== [] ? array_sum(array_slice(array_map(static fn (array $row): float => (float) ($row['value'] ?? 0), $byKey[$key]), 0, 4)) : null;
+        $sum = fn (string $key): ?float => $this->historicalTtm($byKey[$key] ?? []);
         $netIncome = $sum('net_income');
         $equity = isset($byKey['equity'][0]) ? (float) ($byKey['equity'][0]['value'] ?? 0) : null;
         $debt = isset($byKey['debt'][0]) ? (float) ($byKey['debt'][0]['value'] ?? 0) : null;
@@ -1210,11 +1224,39 @@ class MlTrainingDatasetBuilder
     /** @param list<array<string,mixed>> $series */
     private function yoyGrowthPercent(array $series): ?float
     {
-        if (count($series) < 2 || (float) ($series[1]['value'] ?? 0) === 0.0) {
+        $current = $series[0] ?? null;
+        if ($current === null || ! is_numeric($current['value'] ?? null)) {
             return null;
         }
+        $previous = $this->historicalPeriodNear($series, Carbon::parse($current['period_end'])->subYear());
+        if ($previous === null || ! is_numeric($previous['value'] ?? null) || (float) $previous['value'] === 0.0) {
+            return null;
+        }
+        return (((float) $current['value'] - (float) $previous['value']) / abs((float) $previous['value'])) * 100;
+    }
 
-        return (((float) ($series[0]['value'] ?? 0) - (float) ($series[1]['value'] ?? 0)) / abs((float) $series[1]['value'])) * 100;
+    private function historicalTtm(array $series): ?float
+    {
+        $current = $series[0] ?? null;
+        $sum = 0.0;
+        for ($i = 0; $i < 4; $i++) {
+            if ($current === null || ! is_numeric($current['value'] ?? null)) {
+                return null;
+            }
+            $sum += (float) $current['value'];
+            $current = $this->historicalPeriodNear($series, Carbon::parse($current['period_end'])->subMonths(3));
+        }
+        return $sum;
+    }
+
+    private function historicalPeriodNear(array $series, Carbon $target): ?array
+    {
+        foreach ($series as $fact) {
+            if (abs(Carbon::parse($fact['period_end'])->diffInDays($target)) <= 20) {
+                return $fact;
+            }
+        }
+        return null;
     }
 
     /** @return array{version:string,cadence:string,anchor:string,horizon_days:int} */

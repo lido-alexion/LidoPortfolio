@@ -113,6 +113,9 @@ class MlLifecycleAutomationService
             ]);
         }
 
+        if ($enabled && ! app(MlAcceptanceCampaignService::class)->readiness()['ready']) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['acceptance' => ['Current production acceptance is required before enabling schedules.']]);
+        }
         MlLifecycleSchedule::query()->updateOrCreate(
             ['horizon' => $horizon],
             ['enabled' => $enabled, 'schedule' => $schedule, 'updated_by' => $actor?->id],
@@ -130,6 +133,9 @@ class MlLifecycleAutomationService
             return [];
         }
 
+        if (! app(MlAcceptanceCampaignService::class)->readiness()['ready']) {
+            return [['horizon' => '*', 'action' => 'skipped', 'reason' => 'current_production_acceptance_required']];
+        }
         $out = [];
         foreach ($this->recovery->recover($now) as $action) {
             $out[] = $action + ['reason' => 'worker_or_process_restart'];

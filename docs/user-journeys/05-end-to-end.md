@@ -157,3 +157,20 @@ When reviewing this catalogue, add a new journey whenever a user can reach a mat
 - a workflow that requires the user to cross several pages and is not obvious from a single page.
 
 Simple read-only navigation and ordinary settings belong in a later secondary/trivial-journeys chapter unless they become prerequisites for one of the money-moving flows above.
+
+---
+
+## E2E-08 — Admin production ML acceptance
+
+**Goal:** Record deployed 1m/3m/6m training evidence before lifecycle scheduling is allowed.
+
+1. As StoX Admin, open Settings → ML Scoring (`/settings/ml-scoring`) and refresh Production ML acceptance. Unknown evidence remains blocking.
+2. Queue campaign preflight for the desired cutoff; inspect each horizon's exact required source dates and blocking reasons.
+3. Upload official dated NSE CSV/ZIP sources in the private upload panel. Reselect the identical file to resume an incomplete upload. Refresh to see queued validation results; resume queued validation after interrupted dispatch if needed.
+4. Select sealed sources, queue a backfill dry-run, and review each date's mapping and provenance. Apply only after preview succeeds. Save the backfill ID to reopen status, resume completed progress, or cancel between dates.
+5. Create a fresh campaign preflight after resolving blockers. When all three horizons pass, explicitly choose Start 1m/3m/6m training.
+6. Refresh progress and inspect linked run, feature coverage/exclusion, calibration, fold, baseline and candidate evidence. Cancel requests cancellation through the existing training controls.
+
+**Success condition:** The deployed campaign records production-qualified evidence for the current build/registry/configuration. Active models remain unchanged. Local fixture campaigns cannot qualify. Lifecycle/schedules/drift and model activation remain separate explicit controls.
+
+**Failure path:** Source conflicts or insufficient mapping never overwrite existing snapshots; missing fundamentals or runtime evidence remain blocking. Failed training requires a fresh campaign.

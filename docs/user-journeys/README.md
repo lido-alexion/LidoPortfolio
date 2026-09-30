@@ -153,3 +153,9 @@ This guide is a user-facing companion to the current contracts under `docs/curre
 - `frontend-and-navigation.md`
 
 If this guide conflicts with an implemented/current product contract, correct the guide or product inconsistency explicitly rather than silently inventing behavior.
+
+### Admin ML acceptance
+
+| ID | Scenario | Detail |
+| --- | --- | --- |
+| E2E-08 | Stage sources, preview/apply PIT backfill, and record deployed acceptance | [Admin production ML acceptance](05-end-to-end.md#e2e-08--admin-production-ml-acceptance) |
