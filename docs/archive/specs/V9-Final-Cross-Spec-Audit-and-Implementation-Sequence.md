@@ -7,7 +7,7 @@
 | **Status** | **FROZEN / IMPLEMENTATION-READY** |
 | **Parent register** | `docs/archive/specs/LidoPortfolio-V9-Wishlist.md` |
 | **Original audit date** | 2026-09-28 |
-| **Latest reconciliation** | 2026-09-30 — V9-OPS-002 incorporated |
+| **Latest reconciliation** | 2026-09-30 — V9-OPS-003 incorporated |
 
 ## 1. Purpose
 
@@ -26,16 +26,17 @@ The current registered V9 scope is:
 3. `V9-COMM-001` — StoX Email Notifications & Account Lifecycle Messaging
 4. `V9-OPS-001` — Historical Fundamentals Bootstrap Admin Operations
 5. `V9-OPS-002` — Automated API Failure GitHub Issue Reporting
-6. `V9-DATA-001` — Data Export Framework
-7. `V9-DATA-002` — VPS Historical Data Staging and Delivery
-8. `V9-UX-003` — Customizable Summary Fields & Dashboard Layouts
-9. `V9-VIZ-001` — Combo Chart Support
-10. `V4-FEAT-017` — AI Platform & Governance
-11. `V9-AI-001` — Documentation-Grounded StoX Chatbot
-12. `V9-AI-002` — Agentic StoX Assistant / MCP Action Layer
-13. `V9-AI-003` — Embedded AI Insights & Prompt Execution
+6. `V9-OPS-003` — LLM Log Error Triage & GitHub Issue Reporting
+7. `V9-DATA-001` — Data Export Framework
+8. `V9-DATA-002` — VPS Historical Data Staging and Delivery
+9. `V9-UX-003` — Customizable Summary Fields & Dashboard Layouts
+10. `V9-VIZ-001` — Combo Chart Support
+11. `V4-FEAT-017` — AI Platform & Governance
+12. `V9-AI-001` — Documentation-Grounded StoX Chatbot
+13. `V9-AI-002` — Agentic StoX Assistant / MCP Action Layer
+14. `V9-AI-003` — Embedded AI Insights & Prompt Execution
 
-All registered items have frozen implementation-ready specifications. `V9-DATA-002` additionally depends on compatible implementation of its separately versioned `SKR-001` StoX-Kite-Rain companion protocol.
+All registered items have frozen implementation-ready specifications. `V9-DATA-002` additionally depends on compatible implementation of its separately versioned `SKR-001` StoX-Kite-Rain companion protocol. `V9-OPS-003` is implementation-ready but gated on the required `V4-FEAT-017` shared AI core.
 
 ## 3. Audit result
 
@@ -43,7 +44,7 @@ All registered items have frozen implementation-ready specifications. `V9-DATA-0
 
 No unresolved PO decision is known in the registered V9 backlog.
 
-Implementation must still respect V8 closure state. “Implementation-ready” means the epic contract is frozen; it does not mean every epic should be started before the V8 subsystem it extends has completed production/configuration acceptance.
+Implementation must still respect V8 closure state and explicit V9 dependency gates. “Implementation-ready” means the epic contract is frozen; it does not mean every epic should be started before the subsystem it depends on is stable.
 
 ## 4. Normative cross-epic reconciliations
 
@@ -59,18 +60,13 @@ Implementation must still respect V8 closure state. “Implementation-ready” m
 
 `V9-COMM-001` owns the canonical StoX notification-event model and email/in-app notification framework. Other V9 epics must not create parallel generic notification stacks.
 
-This includes operational notifications from OPS-001/DATA work and AI governance alerts where their specifications require notification behavior.
-
 ### 4.3 V9-OPS-002 is incident automation, not telemetry or notification delivery
 
-`V9-OPS-002` creates durable engineering work items for unexpected API failures. It is deliberately separate from:
-
-- V8 `V4-FEAT-052` OpenTelemetry/LidoTelemetry, which remains the telemetry/observability owner; and
-- `V9-COMM-001`, which remains the user/admin notification framework.
+`V9-OPS-002` creates durable engineering work items for unexpected API failures. It is deliberately separate from V8 `V4-FEAT-052` telemetry and from `V9-COMM-001` notification delivery.
 
 OPS-002 may reuse safe trace/correlation IDs and emit reporter lifecycle telemetry through existing FEAT-052 abstractions, but neither FEAT-052 nor COMM-001 is a hard runtime dependency for issue creation.
 
-OPS-002 must be implemented as an **additive observer/reporting layer** while V8 remains in closure. It must not rewrite provider retry/fallback semantics, domain error behavior, authentication behavior or financial/business workflows merely to centralize reporting.
+OPS-002 must remain an additive observer/reporting layer while V8 remains in closure. It must not rewrite provider retry/fallback semantics, domain error behavior, authentication behavior or financial/business workflows merely to centralize reporting.
 
 ### 4.4 OPS-002 status semantics and duplicate contract
 
@@ -81,7 +77,7 @@ Unexpected failures use deterministic low-cardinality fingerprints. Duplicate pr
 1. local unique fingerprint/upsert; and
 2. GitHub search/reconciliation through the exact marker `<!-- stox-api-failure:<fingerprint> -->`.
 
-Closed issues are not auto-reopened. A recurring fingerprint creates a new incident generation only after the configured cooldown (default 24 hours), referencing the prior issue.
+Closed issues are not auto-reopened. A recurring fingerprint creates a new incident generation only after the configured cooldown, default 24 hours, referencing the prior issue.
 
 ### 4.5 OPS-002 security/failure isolation
 
@@ -91,33 +87,84 @@ The reporter’s own GitHub HTTP client is excluded from failure observation so 
 
 Only allowlisted sanitized diagnostics may enter incident persistence or GitHub. Tokens, authorization headers, cookies, raw bodies, user/account identifiers and secrets must not be included.
 
-### 4.6 Historical fundamentals dependency
+### 4.6 V9-OPS-003 uses shared AI, not a second model path
+
+`V9-OPS-003` performs AI-assisted triage only through a dedicated shared capability, conceptually `ops.log_error_triage`, registered in the `V4-FEAT-017` capability/routing/governance platform.
+
+It must not call model providers directly from Laravel logging code and must reuse V4-FEAT-017 provider adapters, ordered routing, budgets, concurrency, structured outputs, prompt registry/versioning, tracing and failure isolation.
+
+OPS-003 may be implemented once the required V4-FEAT-017 core is stable; it does **not** need to wait for `V9-AI-001`, `V9-AI-002` or `V9-AI-003` user-facing features.
+
+### 4.7 OPS-003 classification and issue-creation gate
+
+An ERROR log does not itself imply a code bug. The structured classifier must distinguish at least:
+
+- `code_bug`;
+- `external_dependency`;
+- `configuration_or_environment`;
+- `expected_operational_condition`;
+- `data_quality_or_input`;
+- `security_or_abuse_signal`;
+- `uncertain`.
+
+Automatic GitHub issue creation requires all frozen gates from the OPS-003 spec, including:
+
+- classification = `code_bug`;
+- confidence >= default `0.85` threshold;
+- actionability = actionable;
+- concrete evidence present;
+- stable bug identity for fingerprinting;
+- no security-sensitive classification;
+- rate/circuit controls permit creation;
+- no matching open GitHub issue.
+
+`uncertain` and insufficient-evidence classifications must not create issues automatically.
+
+### 4.8 OPS-003 sanitization, deduplication and recursion isolation
+
+Sanitization must occur before log context leaves StoX for AI inference. Raw logs, request bodies, credentials, user-private values and secrets must not be sent to the model or GitHub.
+
+OPS-003 uses a deterministic code-bug fingerprint and exact GitHub marker:
+
+`<!-- stox-log-bug:<fingerprint> -->`
+
+High-frequency duplicate log bursts must be debounced/aggregated so they do not produce one LLM call or one GitHub issue per occurrence.
+
+The triage pipeline must exclude its own AI routing, queue, persistence and GitHub reporter failures from recursive automatic triage.
+
+### 4.9 OPS-003 reuses OPS-002 GitHub infrastructure
+
+OPS-003 must reuse or generalize OPS-002's GitHub credential, adapter, asynchronous queue discipline, issue-rate controls, circuit breaker, recurrence handling and exact-marker duplicate reconciliation.
+
+There must not be a second GitHub token/configuration/transport stack for log-triage issues.
+
+### 4.10 Historical fundamentals dependency
 
 `V9-OPS-001` extends the existing V8 `V4-FEAT-054` bootstrap engine and must not create a second ingestion engine. Substantive OPS-001 implementation should wait until FEAT-054 provider/deployed-runtime acceptance is sufficiently stable.
 
-### 4.7 Historical minute-data dependency
+### 4.11 Historical minute-data dependency
 
 `V9-DATA-002` changes the acquisition/staging/delivery topology around V8 `V4-FEAT-065` but does not replace its canonical corpus contract.
 
 FEAT-065 remains authoritative for Parquet/DuckDB/Polars corpus semantics; the Mac remains canonical. DATA-002 should not be mixed into FEAT-065 live-Kite/full-corpus acceptance in a way that obscures whether failures come from V8 corpus acquisition or the new V9 transfer topology.
 
-### 4.8 Data Export vs operational export
+### 4.12 Data Export vs operational export
 
 `V9-DATA-001` is the reusable investor-facing export framework. OPS-specific exports should reuse its primitives where practical rather than creating a second generic export stack.
 
-### 4.9 Combo chart export integration
+### 4.13 Combo chart export integration
 
 `V9-VIZ-001` should expose canonical chart-series data through `V9-DATA-001` when both are present. Export is data-only unless a future frozen epic explicitly adds image export.
 
-### 4.10 AI platform and AI feature sequencing
+### 4.14 AI platform and AI feature sequencing
 
-`V4-FEAT-017` owns shared AI provider/routing/governance infrastructure. `V9-AI-001/002/003` must not bypass it with direct provider integrations.
+`V4-FEAT-017` owns shared AI provider/routing/governance infrastructure. `V9-AI-001/002/003` and operational AI consumers such as OPS-003 must not bypass it with direct provider integrations.
 
 AI-002 extends AI-001 with governed account tools. AI-003 reuses the shared platform and uses AI-002 for Strategy draft mutation rather than adding another mutation framework.
 
 Laravel remains authoritative for auth/domain/business writes; Python owns inference/RAG/orchestration; browser never calls Python directly; Python does not directly access StoX MariaDB.
 
-### 4.11 Deterministic computation remains authoritative
+### 4.15 Deterministic computation remains authoritative
 
 Across AI features, deterministic StoX services remain responsible for calculations that StoX can calculate reliably. LLMs may plan, explain, classify, synthesize and interpret but must not replace deterministic portfolio/strategy/authorization/execution logic.
 
@@ -130,7 +177,8 @@ Across AI features, deterministic StoX services remain responsible for calculati
 - `V9-OPS-001` notifications -> `V9-COMM-001` where notifications are required.
 - `V9-DATA-001` background completion/failure notifications -> `V9-COMM-001` where notification behavior is required.
 - `V9-DATA-002` -> stable V8 FEAT-065 corpus contract + compatible `SKR-001` protocol implementation.
-- `V4-FEAT-017` governance/admin notification acceptance -> `V9-COMM-001` notification framework.
+- `V4-FEAT-017` governance/admin notification acceptance -> `V9-COMM-001` notification framework where required.
+- `V9-OPS-003` -> `V4-FEAT-017` core capability registry/provider routing/structured output/prompt governance/budget/concurrency/failure isolation + shared OPS-002 GitHub reporting infrastructure.
 - `V9-AI-001` -> `V4-FEAT-017` + maintained journey/help corpus.
 - `V9-AI-002` -> `V4-FEAT-017` + `V9-AI-001` assistant foundation.
 - `V9-AI-003` -> `V4-FEAT-017`; Strategy draft creation additionally integrates with `V9-AI-002`.
@@ -139,8 +187,8 @@ Across AI features, deterministic StoX services remain responsible for calculati
 ### Independent/additive dependency characteristics
 
 - `V9-OPS-002` has no hard dependency on COMM-001, AI, FEAT-052 closure or DATA work.
-- OPS-002 may start early provided it preserves existing V8 behavior and does not use GitHub reporting to redefine V8 error semantics.
-- OPS-002 frontend coverage may progressively expand as common frontend request abstractions are consolidated; backend outbound HTTP reporting remains independently valuable.
+- OPS-002 may start early provided it preserves existing V8 behavior.
+- OPS-003 is independent of the user-facing AI epics after the required V4-FEAT-017 core and OPS-002 shared GitHub primitives are available.
 
 ## 6. Recommended implementation sequence
 
@@ -162,8 +210,6 @@ Build canonical notification primitives. While V8 FEAT-055 remains under product
 
 May proceed early and in parallel because it is an additive operational observer. Implement local incident model, classifier/sanitizer/fingerprinting, backend outbound observation, isolated queued GitHub adapter/deduplication, rate/circuit/recurrence rules, frontend ingestion path and minimal Admin visibility.
 
-During V8 closure, do not alter protected V8 provider/domain behavior merely to obtain reporting coverage.
-
 **1C. V9-DATA-001 — Data Export Framework**
 
 Establish reusable export primitives.
@@ -181,31 +227,48 @@ Establish reusable export primitives.
 
 Begin substantive integration after FEAT-065 live-Kite/full-corpus/handoff acceptance is stable enough that V8 corpus behavior can be distinguished from V9 staging/transfer behavior.
 
-### Phase 4 — Shared AI platform
+### Phase 4 — Shared AI platform core
 
 **V4-FEAT-017**
 
-Implement shared provider/routing/governance infrastructure according to the frozen AI architecture. Isolated groundwork may start earlier; acceptance integrations should use stable COMM/telemetry/domain contracts.
+Implement at least the capability registry, provider adapters/routing, structured output validation, prompt registry/versioning, budget/concurrency controls, tracing and failure isolation required by downstream AI consumers.
 
-### Phase 5 — Read-only AI
+### Phase 5 — Operational AI triage
+
+**V9-OPS-003 — LLM Log Error Triage & GitHub Issue Reporting**
+
+Once the V4-FEAT-017 core and OPS-002 GitHub primitives are stable:
+
+- register `ops.log_error_triage`;
+- add centralized ERROR-log observation;
+- sanitize before inference;
+- add deterministic prefiltering, debounce and decision caching;
+- classify through structured AI output;
+- create issues only for high-confidence actionable code bugs;
+- reuse OPS-002 GitHub adapter/deduplication/rate controls;
+- add minimal Admin triage visibility and acceptance tests.
+
+OPS-003 may proceed in parallel with the later user-facing AI phases.
+
+### Phase 6 — Read-only AI
 
 **V9-AI-001**
 
 Documentation-grounded chatbot on the shared AI platform.
 
-### Phase 6 — Governed agentic actions
+### Phase 7 — Governed agentic actions
 
 **V9-AI-002**
 
 Bind governed tools only to stable StoX domain services and authorization contracts.
 
-### Phase 7 — Embedded AI execution
+### Phase 8 — Embedded AI execution
 
 **V9-AI-003**
 
 Use shared inference infrastructure and the AI-002 mutation path for Strategy draft creation. Do not duplicate V8 FEAT-062 fundamental insight logic.
 
-### Phase 8 — Release closure
+### Phase 9 — Release closure
 
 **V9-UX-001 final closure + release audit**
 
@@ -221,7 +284,9 @@ Safe parallelism is encouraged:
 - VIZ renderer/preset infrastructure can progress before final data-provider acceptance.
 - OPS-001 waits for the V8 FEAT-054 engine acceptance boundary.
 - DATA-002 waits for the V8 FEAT-065 live-corpus acceptance boundary.
-- AI platform isolated groundwork may begin before all deterministic epics finish, but feature AI work must use the shared platform and stable domain contracts.
+- AI platform isolated groundwork may begin before all deterministic epics finish.
+- OPS-003 may start as soon as V4-FEAT-017 core + OPS-002 GitHub primitives are stable; it does not wait for AI-001/002/003.
+- user-facing AI features must use the shared platform and stable domain contracts.
 
 ## 8. Implementation-agent rules
 
@@ -230,12 +295,13 @@ The implementation agent should:
 1. treat each frozen epic spec plus this sequence as authoritative;
 2. preserve current working V8 behavior unless a frozen V9 spec explicitly changes it;
 3. reuse existing components/services rather than create parallel frameworks;
-4. keep new operational observers fail-open;
+4. keep new operational observers and AI triage fail-open;
 5. never weaken safety, authorization, financial execution, deterministic-computation, privacy or audit requirements;
-6. add tests alongside each implementation slice;
-7. update journeys/E2E coverage alongside user-visible V9 changes;
-8. use implementation judgment for technical details and escalate only genuine product conflicts;
-9. during V8 closure, avoid changes that make V8 production/configuration verification evidence ambiguous.
+6. sanitize operational context before sending it to any AI provider or GitHub;
+7. add tests alongside each implementation slice;
+8. update journeys/E2E coverage alongside user-visible V9 changes;
+9. use implementation judgment for technical details and escalate only genuine product conflicts;
+10. during V8 closure, avoid changes that make V8 production/configuration verification evidence ambiguous.
 
 ## 9. V9 implementation-ready declaration
 
@@ -244,7 +310,8 @@ The V9 register and linked specifications are frozen and implementation-ready, i
 - `V9-AI-003` — Embedded AI Insights & Prompt Execution;
 - `V9-DATA-002` — VPS Historical Data Staging and Delivery + `SKR-001` companion;
 - `V9-COMM-001` access-request resilience companion;
-- `V9-OPS-002` — Automated API Failure GitHub Issue Reporting.
+- `V9-OPS-002` — Automated API Failure GitHub Issue Reporting;
+- `V9-OPS-003` — LLM Log Error Triage & GitHub Issue Reporting, gated on V4-FEAT-017 core + OPS-002 GitHub primitives.
 
 **StoX V9 remains FROZEN / IMPLEMENTATION-READY.**
 
