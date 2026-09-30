@@ -4,107 +4,138 @@
 |---|---|
 | **Document type** | Canonical V9 planning register |
 | **Created** | 2026-09-09 |
-| **Status** | **EXISTING SCOPE FROZEN / IMPLEMENTATION-READY; V9-DATA-002 IN PO REVIEW** |
-| **Canonical path** | `specs/LidoPortfolio-V9-Wishlist.md` |
-| **Predecessor** | `specs/LidoPortfolio-V8-Wishlist.md` |
+| **Status** | **FROZEN / IMPLEMENTATION-READY** |
+| **Canonical path** | `docs/archive/specs/LidoPortfolio-V9-Wishlist.md` |
+| **Predecessor** | `docs/archive/specs/LidoPortfolio-V8-Wishlist.md` |
 | **Final audit / sequence** | [`V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md`](V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md) |
-| **AI technical architecture** | [`V9-AI-Technical-Architecture-Specification.md`](V9-AI-Technical-Architecture-Specification.md) — normative implementation blueprint for `V4-FEAT-017`, `V9-AI-001`, `V9-AI-002`, and `V9-AI-003` |
+| **AI technical architecture** | [`V9-AI-Technical-Architecture-Specification.md`](V9-AI-Technical-Architecture-Specification.md) |
 
 ## 1. Purpose
 
-V9 contains later StoX product expansion that follows the V7 analytical-data work and the V8 product/platform foundations.
+V9 contains later StoX product expansion following the V7 analytical-data work and V8 product/platform foundations.
 
-StoX telemetry instrumentation and integration with the existing standalone LidoTelemetry product are owned by V8 `V4-FEAT-052`. V9 does not carry a separate StoX telemetry-integration epic; later telemetry-facing UX or analytics capabilities, if ever needed, must be registered explicitly as distinct future work rather than reopening FEAT-052 scope.
+V8 `V4-FEAT-052` remains the owner of StoX OpenTelemetry integration with the independently deployable LidoTelemetry product. V9 does not duplicate that telemetry scope.
 
-The V9 assistance roadmap also builds on the task-oriented user-journey corpus under `docs/user-journeys/`. The human-readable journeys remain useful independently; V9 can progressively expose the same knowledge through deterministic search, conversational assistance, automation-ready UI contracts, governed agentic actions, and contextual embedded AI insights.
+V9 assistance builds progressively from user-journey governance and deterministic help through documentation-grounded AI, governed agentic actions, and contextual embedded AI insights.
 
-The original registered V9 specification set passed the final cross-specification audit in [`V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md`](V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md). `V9-AI-003` was subsequently added as an explicitly frozen extension. Its dependency placement and implementation order are normative in this register and its own frozen specification. The previously frozen V9 scope remains **IMPLEMENTATION-READY**; the V9-DATA-002 extension remains in PO review.
+V9 historical-data delivery extends the frozen V8 `V4-FEAT-065` historical-data platform through `V9-DATA-002`; FEAT-065 remains authoritative for canonical corpus semantics unless V9-DATA-002 explicitly overrides a product choice.
 
-For the AI implementation wave, [`V9-AI-Technical-Architecture-Specification.md`](V9-AI-Technical-Architecture-Specification.md) is a normative companion to all four AI epic specifications. It freezes the preferred PHP/Laravel + Python split, private HTTP/SSE inter-service contract, Laravel security/domain authority, Python inference/RAG/orchestration role, FastMCP/Pydantic choices, non-use of LangChain as the core orchestration framework, internal tool gateway, deployment topology, failure isolation, testing strategy, and prohibited shortcuts. The implementation agent must read this architecture specification together with `V4-FEAT-017`, `V9-AI-001`, `V9-AI-002`, and `V9-AI-003` before implementing AI scope.
+V9 operational reliability includes centralized automatic GitHub issue creation for unexpected API failures through `V9-OPS-002`, with local + GitHub-side deduplication, strict redaction, asynchronous fail-open reporting, and explicit preservation of V8 telemetry/business behavior.
 
 ## 2. Current V9 backlog
 
-The previously registered V9 epics are frozen and implementation-ready. V9-DATA-002 is a new architecture draft and remains in PO review until its companion specifications and open decisions are frozen. The table order remains the planning/register order; the dependency-aware execution sequence is defined in Section 5.
+All registered V9 epics below are **FROZEN / IMPLEMENTATION-READY**.
 
 | ID | Feature | Scope / rationale | Status |
 |---|---|---|---|
-| V9-UX-001 | User Journey Automation Readiness & E2E Automation | Evolve the `docs/user-journeys/` human workflow corpus into an automation-ready contract. Review every in-scope journey against the authoritative golden/user journey, resolve all documented UX/product differences before automation, and implement Chromium E2E coverage with deterministic seeded data, key recovery/error paths, representative mobile coverage, targeted visual regression, lightweight accessibility checks, nightly regression, safe broker simulation, and non-destructive production smoke validation. Canonical frozen specification: [`V9-User-Journey-Automation-E2E-Specification.md`](V9-User-Journey-Automation-E2E-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
-| V9-UX-002 | User Journey Typeahead / “How Do I?” Search | Add deterministic, non-LLM in-product help discovery through a global authenticated search entry and keyboard shortcut. Search authoritative journeys plus selected user-facing help using titles, aliases, keywords and synonyms; present concise complete textual steps directly in the result, material prerequisites/warnings, lightweight match explanations, safe page-navigation actions, alternative matches, deep-linkable/shareable help state, bounded recent history, light help-only personalization, feedback, and privacy-conscious diagnostics. Search discovery ignores permissions but normal StoX authorization still governs target routes/actions. Canonical frozen specification: [`V9-User-Journey-Typeahead-How-Do-I-Search-Specification.md`](V9-User-Journey-Typeahead-How-Do-I-Search-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
-| V9-COMM-001 | StoX Email Notifications & Account Lifecycle Messaging | Add a canonical StoX notification-event model with in-app history and authenticated email delivery. Preserve the existing invitation generation/content behavior while automating delivery; add delivery state, retry/manual fallback, optional-email preferences, quiet hours/digests, critical product notifications, and a notification center. For beta access-request resilience, make email verification advisory for Admin approval, show verified/unverified state, expose unverified requests immediately, expire still-unverified pending requests from the active queue after 7 days, support verification resend, and preserve/reintroduce Copy invitation email using the existing invite as manual fallback. Canonical frozen specification: [`V9-StoX-Email-Notifications-Account-Lifecycle-Messaging-Specification.md`](V9-StoX-Email-Notifications-Account-Lifecycle-Messaging-Specification.md). Normative access-request resilience companion: [`V9-Account-Access-Request-Email-Resilience-Specification.md`](V9-Account-Access-Request-Email-Resilience-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
-| V9-OPS-001 | Historical Fundamentals Bootstrap Admin Operations | Extend the V8 FEAT-054 historical-fundamentals bootstrap engine with Admin-only operational control: full/targeted backfills, graceful cancellation, failed-item retry, forced reruns with preserved provenance, full recurring scheduling, shared presets, run history, coverage/gap management, data-quality warning workflows, targeted gap-driven reruns, operational notifications, and CSV export. Preserve the V8 ingestion engine and deterministic provider/quality rules. Canonical frozen specification: [`V9-Historical-Fundamentals-Bootstrap-Admin-Operations-Specification.md`](V9-Historical-Fundamentals-Bootstrap-Admin-Operations-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
-| V9-DATA-001 | Data Export Framework | Add a reusable investor-facing export framework across StoX. Support CSV/XLSX export of tables, chart data and supported analytical datasets; explicit scope and field selection; raw precision and useful provenance; synchronous small exports and cancellable background large exports; 24-hour temporary artifacts; and a persistent account-private multi-dataset XLSX export basket. Enforce normal StoX authorization and explicit size/safety limits. Canonical frozen specification: [`V9-Data-Export-Framework-Specification.md`](V9-Data-Export-Framework-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
-| V9-DATA-002 | VPS Historical Data Staging and Delivery | Use the whitelisted StoX VPS to fetch historical Kite 1-minute OHLCV, stage immutable verified batches, and expose authenticated Mac-initiated HTTPS discovery/download/acknowledgment. Retain VPS batches until StoX-Kite-Rain verifies and atomically commits the exact batch locally, then acknowledges it; only later make acknowledged batches eligible for deletion. Canonical architecture draft: [`V9-DATA-002-VPS-Historical-Data-Staging-and-Delivery-Specification.md`](V9-DATA-002-VPS-Historical-Data-Staging-and-Delivery-Specification.md). Companion Mac epic/spec: [SKR-001 StoX-Kite-Rain](https://github.com/lido-alexion/StoX-Kite-Rain/issues/1) and [Mac downloader specification](https://github.com/lido-alexion/StoX-Kite-Rain/blob/main/docs/SK-001-MacOS-Downloader-Specification.md). | **PO REVIEW / ARCHITECTURE DRAFT** |
-| V9-UX-003 | Customizable Summary Fields & Dashboard Layouts | Add bounded main-dashboard personalization: configurable summary fields, card visibility/order/size, separate desktop/mobile variants, local unnamed working layouts, server-saved named dashboards, JSON import/export, locking, default dashboards, and forward-compatible migration as cards/features evolve. Canonical frozen specification: [`V9-Customizable-Summary-Fields-Dashboard-Layouts-Specification.md`](V9-Customizable-Summary-Fields-Dashboard-Layouts-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
-| V9-VIZ-001 | Combo Chart Support | Add a curated StoX-defined combo-chart library inside the existing Stock Details chart experience. Show one preset at a time with grouped dropdown selection plus cyclic previous/next arrows; reuse existing Price + Volume and Indices multi-series patterns; support in-chart range/sampling controls, preset-specific renderers/axes, synchronized tooltips, legend show/hide, per-stock availability, and one account-wide user-selected default with Price + Volume fallback. Canonical frozen specification: [`V9-Combo-Chart-Support-Specification.md`](V9-Combo-Chart-Support-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
-| V4-FEAT-017 | AI Platform & Governance | Provide the shared StoX AI infrastructure consumed by focused AI features: code-defined capability registry, capability-specific ordered inference routing, common hosted/self-hosted provider adapters, streaming, structured outputs, failover/circuit breakers, live Admin provider/model configuration, full routing traces, selective prompt/response logging with retention controls, cost accounting and hierarchical budgets, prompt registry/versioning/governance, service classes, and concurrency controls. Preserve deterministic StoX Strategy/execution safeguards. Canonical frozen specification: [`V9-AI-Platform-Governance-Specification.md`](V9-AI-Platform-Governance-Specification.md). Normative technical architecture: [`V9-AI-Technical-Architecture-Specification.md`](V9-AI-Technical-Architecture-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
-| V9-AI-001 | Documentation-Grounded StoX Chatbot | Add a read-only, user-journey-first StoX assistant for product help and explanations of analytics already visible to the user. Require grounded answers with source links/snippets and grounding-quality state; use safe current-page context and session-only conversation memory; provide a global assistant drawer, navigation-only deep links, contextual follow-up prompts, feedback, copy and clear-chat actions; refuse unsupported answers and preserve deterministic help fallback. Canonical frozen specification: [`V9-Documentation-Grounded-StoX-Chatbot-Specification.md`](V9-Documentation-Grounded-StoX-Chatbot-Specification.md). Technical implementation follows [`V9-AI-Technical-Architecture-Specification.md`](V9-AI-Technical-Architecture-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
-| V9-AI-002 | Agentic StoX Assistant / MCP Action Layer | Extend the StoX assistant with governed, tool-augmented account reasoning and explicitly authorized actions. Add typed MCP-style read/mutation tools, deterministic policy mediation, bounded autonomous read-tool investigations, deterministic derived-analysis preference, concise user-visible tool traces, grouped mutation preview/approval, stale-state checks, idempotency, stop-on-partial-failure semantics, destructive-action safeguards, post-action verification, user-visible run history and fresh-plan retry. Keep broker trading, recurring autonomous mutations and external tools out of scope. Canonical frozen specification: [`V9-Agentic-StoX-Assistant-MCP-Action-Layer-Specification.md`](V9-Agentic-StoX-Assistant-MCP-Action-Layer-Specification.md). Technical implementation follows [`V9-AI-Technical-Architecture-Specification.md`](V9-AI-Technical-Architecture-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
-| V9-AI-003 | Embedded AI Insights & Prompt Execution | Replace existing user-facing copy-to-clipboard AI prompt workflows with managed StoX AI execution while preserving Copy AI Prompt as degraded fallback. Add one shared stock-analysis insight capability across the seven audited placements, context-sensitive inline/right-pane/near-full-page-modal presentation, structured enriched stock insight, persistent fingerprint-based global-vs-held cache scoping, provenance, refresh/copy/navigation actions, V8 fundamental-insight reuse, and managed structured Strategy Designer generation with explicit AI-002-governed Create draft strategy. Canonical frozen specification: [`V9-Embedded-AI-Insights-Prompt-Execution-Specification.md`](V9-Embedded-AI-Insights-Prompt-Execution-Specification.md). Technical implementation follows [`V9-AI-Technical-Architecture-Specification.md`](V9-AI-Technical-Architecture-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
+| V9-UX-001 | User Journey Automation Readiness & E2E Automation | Turn `docs/user-journeys/` into an automation-ready contract; reconcile documented/product UX, implement deterministic Chromium E2E coverage, recovery/error paths, representative mobile coverage, targeted visual regression, lightweight accessibility checks, nightly regression, safe broker simulation and non-destructive production smoke validation. Canonical spec: [`V9-User-Journey-Automation-E2E-Specification.md`](V9-User-Journey-Automation-E2E-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
+| V9-UX-002 | User Journey Typeahead / “How Do I?” Search | Deterministic non-LLM authenticated help discovery over authoritative journeys and selected help; concise complete steps, prerequisites/warnings, match explanation, safe navigation, alternatives, deep-linkable state, bounded history and diagnostics. Canonical spec: [`V9-User-Journey-Typeahead-How-Do-I-Search-Specification.md`](V9-User-Journey-Typeahead-How-Do-I-Search-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
+| V9-COMM-001 | StoX Email Notifications & Account Lifecycle Messaging | Canonical notification-event model, in-app history, authenticated email delivery, retry/fallback, preferences, quiet hours/digests, account lifecycle messaging and notification center. Beta access-request resilience makes email verification advisory for Admin approval and preserves manual invitation fallback. Canonical spec: [`V9-StoX-Email-Notifications-Account-Lifecycle-Messaging-Specification.md`](V9-StoX-Email-Notifications-Account-Lifecycle-Messaging-Specification.md). Companion: [`V9-Account-Access-Request-Email-Resilience-Specification.md`](V9-Account-Access-Request-Email-Resilience-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
+| V9-OPS-001 | Historical Fundamentals Bootstrap Admin Operations | Admin control over the V8 FEAT-054 fundamentals bootstrap engine: full/targeted backfills, cancellation, retry, reruns, scheduling, history, coverage/gap operations, data-quality workflows, notifications and export while preserving deterministic provider/quality rules. Canonical spec: [`V9-Historical-Fundamentals-Bootstrap-Admin-Operations-Specification.md`](V9-Historical-Fundamentals-Bootstrap-Admin-Operations-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
+| V9-OPS-002 | Automated API Failure GitHub Issue Reporting | Centralized operational reporting for unexpected backend external-API and supported frontend StoX-API failures. Normalize/classify failures, create deterministic low-cardinality fingerprints, persist local occurrences, reconcile duplicate open GitHub issues through stable fingerprint markers, create new recurrence generations after cooldown, strictly redact secrets/PII, and keep GitHub reporting asynchronous/fail-open. Canonical spec: [`V9-OPS-002-Automated-API-Failure-GitHub-Issue-Reporting-Specification.md`](V9-OPS-002-Automated-API-Failure-GitHub-Issue-Reporting-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
+| V9-DATA-001 | Data Export Framework | Reusable investor-facing CSV/XLSX export for tables, charts and analytical datasets with explicit scope/field selection, provenance, synchronous small exports, cancellable large exports, temporary artifacts and persistent account-private export basket. Canonical spec: [`V9-Data-Export-Framework-Specification.md`](V9-Data-Export-Framework-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
+| V9-DATA-002 | VPS Historical Data Staging and Delivery | Extend V8 FEAT-065 so the whitelisted StoX VPS acquires maximum provider-available Kite 1-minute OHLCV, validates/seals immutable one-trading-day batches, stages them under bounded retention/quota rules, and exposes authenticated Mac-initiated HTTPS discovery/range-download/lease/acknowledgment. Mac remains canonical. Companion StoX-Kite-Rain app handles network-gated automatic transfer and atomic local import. Canonical spec: [`V9-DATA-002-VPS-Historical-Data-Staging-and-Delivery-Specification.md`](V9-DATA-002-VPS-Historical-Data-Staging-and-Delivery-Specification.md). Companion spec: [SKR-001 StoX-Kite-Rain](https://github.com/lido-alexion/StoX-Kite-Rain/blob/main/docs/SK-001-MacOS-Downloader-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
+| V9-UX-003 | Customizable Summary Fields & Dashboard Layouts | Configurable summary fields, card visibility/order/size, desktop/mobile variants, local working layouts, named dashboards, import/export, locking, defaults and forward-compatible migration. Canonical spec: [`V9-Customizable-Summary-Fields-Dashboard-Layouts-Specification.md`](V9-Customizable-Summary-Fields-Dashboard-Layouts-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
+| V9-VIZ-001 | Combo Chart Support | Curated StoX-defined combo-chart library in Stock Details with preset navigation, reusable chart patterns, range/sampling controls, preset axes/renderers, synchronized tooltips, legend controls, per-stock availability and account-wide default/fallback. Canonical spec: [`V9-Combo-Chart-Support-Specification.md`](V9-Combo-Chart-Support-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
+| V4-FEAT-017 | AI Platform & Governance | Shared StoX AI infrastructure: capability registry, ordered inference routing, provider adapters, streaming, structured outputs, failover/circuit breakers, Admin provider/model configuration, traces, prompt/response governance, cost/budgets, prompt registry/versioning and concurrency controls. Canonical spec: [`V9-AI-Platform-Governance-Specification.md`](V9-AI-Platform-Governance-Specification.md). Normative architecture: [`V9-AI-Technical-Architecture-Specification.md`](V9-AI-Technical-Architecture-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
+| V9-AI-001 | Documentation-Grounded StoX Chatbot | Read-only journey-first StoX assistant for product help/explanation with grounded sources, safe page context, session-only memory, navigation links, follow-ups, feedback/copy/clear and deterministic fallback/refusal. Canonical spec: [`V9-Documentation-Grounded-StoX-Chatbot-Specification.md`](V9-Documentation-Grounded-StoX-Chatbot-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
+| V9-AI-002 | Agentic StoX Assistant / MCP Action Layer | Governed typed read/mutation tools, deterministic policy mediation, bounded autonomous read investigations, mutation preview/approval, stale-state checks, idempotency, partial-failure rules, destructive safeguards, post-action verification and run history. Broker trading, recurring autonomous mutations and external tools remain out of scope. Canonical spec: [`V9-Agentic-StoX-Assistant-MCP-Action-Layer-Specification.md`](V9-Agentic-StoX-Assistant-MCP-Action-Layer-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
+| V9-AI-003 | Embedded AI Insights & Prompt Execution | Replace legacy copy-prompt AI affordances with managed embedded AI execution while preserving Copy AI Prompt as degraded fallback. Shared stock insight, context-sensitive presentation, structured enrichment, persistent fingerprint cache, provenance, refresh/copy/navigation, V8 fundamental-insight reuse and structured Strategy Designer with AI-002-governed draft creation. Canonical spec: [`V9-Embedded-AI-Insights-Prompt-Execution-Specification.md`](V9-Embedded-AI-Insights-Prompt-Execution-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
 
-## 3. Email notifications & account lifecycle messaging
+## 3. Key inherited boundaries
 
-Detailed requirements are frozen in [`V9-StoX-Email-Notifications-Account-Lifecycle-Messaging-Specification.md`](V9-StoX-Email-Notifications-Account-Lifecycle-Messaging-Specification.md). The beta access-request/email-delivery resilience rules are additionally frozen in [`V9-Account-Access-Request-Email-Resilience-Specification.md`](V9-Account-Access-Request-Email-Resilience-Specification.md).
+### Historical data
+
+`V9-DATA-002` inherits `V4-FEAT-065` unless explicitly overridden. In particular:
+
+- MacBook remains the canonical historical-data/research machine;
+- Parquet remains canonical storage;
+- current NIFTY 500 + configured broad/sector indices remain the universe;
+- DuckDB + Polars/Python analytical access remains intact;
+- historical collection remains resumable/idempotent and coverage-aware;
+- FEAT-063 prospective microstructure remains separate;
+- no automated backup subsystem is introduced for the Mac corpus.
+
+V9-DATA-002 explicitly overrides/adds:
+
+- maximum provider-available historical depth;
+- VPS-based Kite acquisition using whitelisted egress;
+- temporary bounded VPS staging;
+- one-trading-day immutable delivery batches;
+- secure Mac-initiated outbound HTTPS transfer through the dedicated transfer surface;
+- atomic local import + exact acknowledgment + lifecycle-governed cleanup.
+
+### Telemetry and operational incident reporting
+
+V8 `V4-FEAT-052` owns StoX telemetry instrumentation/export. StoX must not absorb LidoTelemetry storage, analytics, dashboards or platform administration.
+
+`V9-OPS-002` is separate operational work tracking. It may reuse safe trace/correlation IDs and emit reporting telemetry through the existing FEAT-052 abstraction, but it does not replace telemetry and must not require telemetry availability to create/reconcile GitHub incidents.
+
+### AI
+
+AI implementation follows [`V9-AI-Technical-Architecture-Specification.md`](V9-AI-Technical-Architecture-Specification.md): Laravel remains authoritative for auth/domain/business writes; Python owns inference/RAG/orchestration; browser never calls Python directly; Python never directly accesses StoX MariaDB; FastMCP tools route through governed Laravel services; deterministic StoX calculations remain authoritative.
 
 ## 4. Assistance roadmap relationship
 
-The assistance epics are intentionally progressive rather than one monolithic chatbot project:
+1. **V9-UX-001** — automation-ready journey foundation.
+2. **V9-UX-002** — deterministic help discovery.
+3. **V9-AI-001** — documentation-grounded conversational assistance.
+4. **V9-AI-002** — governed account-data reasoning/actions.
+5. **V9-AI-003** — contextual embedded AI in existing product surfaces.
 
-1. **V9-UX-001 — Automation readiness:** turn documented human journeys into stable, testable product workflows and build automated E2E coverage.
-2. **V9-UX-002 — Deterministic discovery:** let users find a known “How do I?” journey quickly through typeahead/text matching and open the exact documentation section.
-3. **V9-AI-001 — Conversational documentation:** let an LLM retrieve, synthesize and explain the same maintained StoX documentation without gaining write authority.
-4. **V9-AI-002 — Tool-augmented reasoning and agentic actions:** allow account-specific read reasoning through governed tools and explicitly authorized StoX mutations, while preserving deterministic computation and execution safeguards.
-5. **V9-AI-003 — Embedded contextual AI:** execute existing product-specific AI prompts through the shared AI platform, render structured insight directly where users already work, cache results safely, and retain copy-prompt fallback when managed AI is unavailable.
-
-Typeahead and chatbot may share the same maintained journey/question metadata, but deterministic typeahead must not depend on an LLM. V9-AI-002 may extend the chatbot UX with governed read and mutation tools, but read-only investigation and write/action authority must remain separable capabilities. V9-AI-003 reuses the same shared inference platform and uses V9-AI-002 rather than creating a second mutation framework for Strategy draft creation.
+Typeahead remains independent of LLM availability. AI-002 extends AI-001 with governed account tools. AI-003 reuses the same AI platform and AI-002 mutation path rather than creating a second action framework.
 
 ## 5. Frozen implementation sequence
 
-The original dependency graph and sequencing rationale remain authoritative for the previously audited epics in [`V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md`](V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md). The subsequently frozen `V9-AI-003` extension is inserted before final V9-UX-001 closure as follows.
+Dependency-aware release sequence:
 
-Recommended release sequence:
+1. **V9-UX-001 foundation slice** — journey governance, conformance workflow, automation harness, deterministic test-data and CI conventions. Keep open until final closure.
+2. **Shared non-AI infrastructure** — `V9-COMM-001` notification framework/account lifecycle messaging and `V9-OPS-002` automated API-failure incident reporting may proceed independently/parallel where safe. OPS-002 remains additive and must not rewrite protected V8 provider/domain semantics during V8 closure.
+3. **Data-platform wave** — `V9-DATA-001` and `V9-DATA-002`, parallelized where dependencies permit. V9-DATA-002 must preserve the FEAT-065 contract and coordinate protocol compatibility with SKR-001.
+4. **Deterministic/user-facing feature wave** — `V9-UX-002`, `V9-OPS-001`, `V9-UX-003`, `V9-VIZ-001`.
+5. **V4-FEAT-017** — shared AI platform/governance under the frozen AI architecture.
+6. **V9-AI-001** — documentation-grounded chatbot.
+7. **V9-AI-002** — governed agentic action layer.
+8. **V9-AI-003** — embedded AI insights and managed Strategy Designer execution.
+9. **V9-UX-001 final closure** — final journey reconciliation/E2E coverage across the completed V9 product, then release audit.
 
-1. **V9-UX-001 foundation slice** — journey governance, conformance workflow, automation harness, deterministic test-data and CI conventions. Keep the epic open.
-2. **V9-COMM-001** — canonical notification framework and account-lifecycle messaging.
-3. **V9-DATA-001** — shared export framework.
-4. **Deterministic/user-facing feature wave** — `V9-UX-002`, `V9-OPS-001`, `V9-UX-003`, and `V9-VIZ-001`, parallelized where dependencies permit.
-5. **V4-FEAT-017** — shared AI platform/governance, implemented according to the frozen [`V9-AI-Technical-Architecture-Specification.md`](V9-AI-Technical-Architecture-Specification.md).
-6. **V9-AI-001** — documentation-grounded chatbot using the shared Python AI runtime/RAG architecture.
-7. **V9-AI-002** — tool-augmented reasoning and governed actions using FastMCP and the private Laravel agent-tool gateway described by the technical architecture.
-8. **V9-AI-003** — embedded stock insights and managed Strategy Designer prompt execution, reusing the shared platform and AI-002 mutation path for Create draft strategy.
-9. **V9-UX-001 final closure** — final journey reconciliation/E2E coverage across the completed V9 product, including V9-AI-003 journeys, followed by release audit.
+Independent implementation may be parallelized, but hard dependencies and cross-repo protocol compatibility must be preserved.
 
-Implementation may parallelize independent AI-003 read-only/cache/UI groundwork after V4-FEAT-017 is stable, but V9-AI-003 is not complete until its Strategy draft-creation path integrates with V9-AI-002 and all acceptance criteria pass.
+## 6. V9-DATA-002 / SKR-001 release gate
 
-## 6. Inherited boundary
+V9-DATA-002 is complete only when both sides of the coupled protocol are compatible and green:
 
-V8 `V4-FEAT-052` owns StoX OpenTelemetry instrumentation and export to the independently deployable LidoTelemetry product. StoX must not absorb LidoTelemetry storage, analytics, dashboards or platform administration into its own codebase.
+- VPS collection/staging/manifest/lease/range-download/ack/retention behavior passes its frozen acceptance criteria;
+- SKR-001 signed/notarized macOS utility passes its frozen network, recovery, disk-safety, integrity and atomic-import acceptance criteria;
+- shared manifest/protocol versions interoperate;
+- existing FEAT-065 corpus remains canonical and DuckDB/Polars-compatible;
+- no Kite credential reaches the Mac;
+- no inbound listener, SSH tunnel or VPN is required on the Mac;
+- cleanup never deletes an unacknowledged/failed payload before a successful local import and matching acknowledgment; acknowledged payloads follow the 7-day grace period.
 
-Telemetry failure must not block StoX business workflows. StoX audit/business evidence remains distinct from telemetry.
+## 7. Implementation-ready declaration
 
-AI/ML additions must preserve inherited deterministic, explainable Strategy behavior unless a later explicit product decision supersedes it.
+The previously audited V9 scope had no unresolved product-level contradiction. Subsequent additions have now been separately product-defined and frozen:
 
-Documentation-grounded AI must distinguish sourced StoX behavior from model-generated explanation. Model-provider configuration must not weaken authorization, privacy, audit or execution safeguards. Agentic capabilities must use explicit governed actions rather than unrestricted database mutation or arbitrary UI control for money-moving workflows.
+- `V9-AI-003` — Embedded AI Insights & Prompt Execution;
+- `V9-COMM-001` beta access-request email resilience companion;
+- `V9-DATA-002` — VPS Historical Data Staging and Delivery, reconciled against V8 FEAT-065;
+- `SKR-001` companion macOS downloader specification;
+- `V9-OPS-002` — Automated API Failure GitHub Issue Reporting.
 
-Embedded AI insights must preserve deterministic StoX facts as authoritative evidence, keep account-specific holding context out of global caches, and preserve existing copy-prompt affordances as degraded recovery when managed AI is unavailable.
-
-## 7. Implementation-ready declaration (existing V9 scope)
-
-The previously audited V9 scope had no unresolved product-level contradiction or PO decision. The subsequently added `V9-AI-003` epic has now been separately product-defined and frozen with its dependencies, cache/privacy boundaries, UX behavior, fallback semantics, testing requirements, and acceptance criteria resolved.
-
-Normative V9 reconciliations include:
+Normative reconciliations include:
 
 - UX-001 starts first as a foundation but closes last as the release-level journey/E2E gate;
-- V9-COMM-001 is the shared notification framework for dependent epics;
-- user-specific AI budget/path exhaustion removes only the affected path for that user while preserving the single canonical capability order;
-- AI-002 intentionally extends AI-001 from visible-page explanation to governed account-data reasoning;
-- AI-003 consumes the same shared platform and reuses AI-002 for Strategy draft mutation rather than creating parallel AI/mutation infrastructure;
-- deterministic calculations remain in StoX services rather than being delegated to the LLM;
-- AI-003 reuses current valid V8 fundamental AI interpretation instead of duplicating the fundamental AI engine;
-- AI-003 global stock caches contain no private holding/watchlist context; held-stock insights are active-portfolio/account scoped;
-- OPS operational export and VIZ chart-data export reuse the shared DATA framework where practical;
-- V8 telemetry and historical-fundamentals ownership boundaries remain intact;
-- the AI implementation uses the frozen Laravel + Python architecture defined in `V9-AI-Technical-Architecture-Specification.md` rather than leaving core technology/service boundaries to implementation inference.
+- COMM-001 remains the shared notification framework;
+- OPS-002 is an additive operational reliability layer, separate from FEAT-052 telemetry and COMM-001 notification delivery;
+- OPS-002 default success semantics are 2xx, with policy-based expected non-2xx exclusion, local + GitHub-marker deduplication, strict redaction and fail-open queued GitHub integration;
+- DATA-002 changes FEAT-065 acquisition/delivery topology but does not replace its canonical research-data contract;
+- the Mac remains the canonical historical corpus; VPS copies are temporary bounded staging;
+- AI-002 extends AI-001 from visible-page explanation to governed account-data reasoning;
+- AI-003 consumes the same shared platform and reuses AI-002 for Strategy draft mutation;
+- deterministic calculations remain in StoX services rather than being delegated to LLMs;
+- V8 telemetry ownership and FEAT-063/FEAT-065 data-domain boundaries remain intact.
 
-**The previously audited V9 scope, including `V9-AI-003`, is FROZEN / IMPLEMENTATION-READY. V9-DATA-002 is explicitly excluded from that declaration until PO freeze.**
+**StoX V9 is hereby declared FROZEN / IMPLEMENTATION-READY, including V9-DATA-002, V9-AI-003 and V9-OPS-002.**
 
-The implementation agent may begin automatically from this register, its linked frozen specifications, the AI technical architecture, and the final audit/sequence document as qualified above. This authorization covers the previously frozen V9 scope only. V9-DATA-002 and its linked SKR-001 companion remain PO REVIEW / ARCHITECTURE DRAFT and are not implementation-ready until the open PO decisions are resolved and both specs are frozen. No additional planning handoff is required for the already-frozen scope unless implementation discovers a genuinely new material product decision or a direct frozen-spec contradiction.
+The implementation agent may begin automatically from this register and its linked frozen specifications. No additional planning handoff is required unless implementation discovers a genuinely new material product decision or a direct frozen-spec contradiction.
