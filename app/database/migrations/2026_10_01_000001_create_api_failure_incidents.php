@@ -36,7 +36,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['environment', 'last_seen_at']);
-            $table->index(['sync_status', 'last_github_checked_at']);
+            $table->index(['sync_status', 'last_github_checked_at'], 'api_failure_sync_checked_idx');
         });
     }
 
