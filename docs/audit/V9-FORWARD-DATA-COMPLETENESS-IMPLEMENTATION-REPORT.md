@@ -16,7 +16,7 @@
 
 ### Official NSE membership provenance
 
-`stox:forward-data` is scheduled independently of campaigns. It derives completed NSE session dates from the trading calendar, persists work obligations, applies publication grace, and delegates to `NseHistoricalUniverseArchiveProvider`. Writes occur only after filename/content date validation, parser validation, symbol mapping, and the existing 90% mapping gate pass. The provider has no current-master fallback. Missing or late files remain in durable forward work and snapshot backfill state with bounded, persisted retry counts.
+`stox:forward-data` is scheduled independently of campaigns. It derives completed NSE session dates from the trading calendar, persists work obligations, applies publication grace, and delegates to `NseHistoricalUniverseArchiveProvider`. When no pre-staged file exists, the provider reuses the existing official NSE archive downloader against the allowlisted `nsearchives.nseindia.com` host, stages the date-specific archive, and then applies the existing safe extraction, filename/content date validation, parser validation, symbol mapping, and 90% mapping gate. The provider has no current-master fallback. Missing or late files remain in durable forward work and snapshot backfill state with bounded, persisted retry counts.
 
 All membership writes continue through `MlHistoricalUniverseMembershipService::withWriteLock()` using the existing `ml-historical-membership-write` lock. Existing source paths, historical runs, snapshot boundaries, SHA/snapshot keys, and the separate download session's artifacts are preserved.
 
@@ -44,6 +44,7 @@ Local runtime evidence from the repository environment:
 - Membership/provider/corporate-action focused suite: **26 passed / 84 assertions**, including dated source validation, mapping failure, durable late-file retry/resume, effective-date coverage and exchange-feed rejection rules.
 - Combined final focused rerun: **34 passed / 110 assertions**; migration portability: **152 migrations passed**.
 - NSE snapshot provenance now records a content SHA-256 in diagnostics and uses it as the snapshot key; it is not derived from a mutable path.
+- Official archive probe: `nsearchives.nseindia.com` returned a valid date-specific ZIP; the public `www.nseindia.com` homepage returned HTTP 403 and is not used by the acquisition path.
 - PHP syntax checks passed for all new/changed services and commands.
 - `git diff --check` passed.
 
@@ -68,25 +69,26 @@ No training campaign, model promotion, lifecycle schedule, drift automation, FEA
 | FDC-09 | Implemented locally | Existing review/evidence/repair flow, bounded HTTP retry, invalid-date rejection and rights exclusion are preserved; overlapping feed checkpoints and payload hashes cover late/corrected polling when provider window support is enabled. Production provider evidence remains required. |
 | FDC-10 | Partial | Completeness reporting distinguishes persisted daily coverage/backlog, but a deployed recovered-session price/index run is still required to close the criterion. |
 | FDC-11 | Implemented locally | Shared completeness output now embeds sanitized FEAT-065 checkpoint/corpus status and FEAT-063 collector/finalization/coverage status without treating either as daily readiness. Production owner evidence remains required. |
-| FDC-12 | Partial | Forward work states and completeness alerts fail closed on missing configuration/incomplete work. Full required-dataset reason-code reconciliation remains open. |
-| FDC-13 | Partial | Admin-only health, paginated work, dispatch, retry, pause and resume API endpoints and the dedicated `/settings/forward-data` Admin page now exist, with plain-language coverage/freshness guidance and separate FEAT-065/FEAT-063 status. Browser accessibility/API authorization and production UI evidence remain required. |
-| FDC-14 | Partial | Existing operational alert primitives are reused for completeness failures; publication-grace aggregation, recovery notifications and transport-failure tests remain open. |
+| FDC-12 | Implemented locally / Partial production | Health now includes required configuration datasets, explicit blocked/unknown/degraded reason codes, publication-grace exclusion, and command-level alerting even when acquisition exits successfully. Production configuration and incomplete-universe evidence remain required. |
+| FDC-13 | Implemented locally / Partial production | Admin-only health, bounded pagination, idempotent retry, dispatch, pause/resume, refresh-error recovery and the dedicated accessible-help `/settings/forward-data` page are covered locally. Production browser/API evidence remains required. |
+| FDC-14 | Implemented locally / Partial production | Publication grace is aggregated separately from due failures; completeness failure and recovery paths call the existing unattended alert/notification primitives; transport-failure reason codes and notification behavior are tested locally. Production incident/transport/recovery evidence remains required. |
 | FDC-15 | Implemented | No training, promotion, lifecycle, drift, portfolio mutation or new feature policy was introduced. |
 | FDC-16 | Partial | Local evidence is recorded below; deployed SHA, source IDs, production counts and an outage/late-publication replay must be attached after deployment. |
 
 ### Current verification evidence
 
 - Focused final suite: **49 passed / 173 assertions** (including forward planner fencing, sector provenance and corporate-action checkpoint coverage).
+- DATA-003 admin/health/alert/provider regression: **76 passed / 261 assertions** when combined with the prior forward-data, provider and alert suites.
 - Node test runner: **198 passed**; TypeScript typecheck: passed. The Vitest phase and Vite production build are blocked by the host's Node **18.20.0**; the repository requires Node **20.19+ or 22.12+**.
 - Forward planner tests cover fail-closed recovery-floor configuration, session obligation persistence, lease expiry reclaim and non-duplicate claiming.
-- Migration portability: **155 migrations passed**.
+- Migration portability: **156 migrations passed**.
 - PHP lint and `git diff --check`: passed.
 - Production evidence is intentionally not fabricated: local CI lacks the required OpenTelemetry extension and local scheduler inspection cannot connect to MySQL.
 - Full application PHPUnit was attempted: 127 tests passed before three pre-existing dirty-worktree unit errors and a PHP 128 MiB route-loading fatal terminated the run. The repository `verify-ci.sh --all` gate stopped earlier because OpenTelemetry is unavailable; `--frontend` requires Node 20 while this host has Node 18.20.0.
 
 ### Production evidence register at release
 
-The push of commit `44c8caf` triggered the repository-owned CI/CD workflow, but this local session has no production SSH credentials or workflow-result channel. Therefore no production counts, scheduler replay, source identifiers, or post-deploy SHA/health response is asserted here. The required evidence state for every criterion is recorded explicitly:
+The `cb80d10` CI/deployment runs were cancelled by the later `5465f83` documentation-only push. The later deployment workflow succeeded with all deployable jobs skipped, so it did not deploy this work. The live `/api/build-info` endpoint still reports deployed SHA `59acd30e5577ce1d71770a425e304034afbb0271` (run `36895836940`), not `cb80d10`. The public homepage returned HTTP 403, while the supported date-specific `nsearchives.nseindia.com` archive returned a valid ZIP; this local probe is not production scheduler evidence. No production sector source path or corporate-action feed URL is configured. Therefore no production source hashes, scheduler replay, coverage counts, batching progression, or recovery evidence is asserted here. The required evidence state for every criterion is recorded explicitly:
 
 | Criterion | Production evidence state at release |
 |---|---|
@@ -101,10 +103,10 @@ The push of commit `44c8caf` triggered the repository-owned CI/CD workflow, but 
 | FDC-09 | Pending late/corrected corporate-action window poll, checkpoint and approval/repair evidence. |
 | FDC-10 | Pending recovered daily equity/index session counts and last-success timestamps. |
 | FDC-11 | Pending FEAT-065 and FEAT-063 health payloads, including zero-row/delivery-loss distinctions. |
-| FDC-12 | Pending successful-exit/incomplete-universe alert and reason-code evidence. |
-| FDC-13 | Pending Admin authorization, pagination, accessibility and retry/pause/resume browser evidence. |
-| FDC-14 | Pending publication-grace, transport-failure, recovery-notification and incident evidence. |
+| FDC-12 | Local reason-code/blocked-state tests pass; pending deployed successful-exit/incomplete-universe alert evidence. |
+| FDC-13 | Local authorization/pagination/idempotent retry/refresh tests pass; pending deployed Admin browser evidence. |
+| FDC-14 | Local grace/alert/recovery tests pass; pending deployed transport-failure, recovery-notification and incident evidence. |
 | FDC-15 | No production enablement evidence is required; scope inspection confirms training, promotion, lifecycle and drift remain disabled. |
 | FDC-16 | Pending deployed SHA, source IDs, counts, provider progression and recovery replay bundle. |
 
-Accordingly, criteria marked Partial above remain Partial until the corresponding production evidence is attached. The active production workflow is the VPS workflow in `.github/workflows/deploy-stoxla-production.yml`; the legacy cPanel packaging path was not used.
+Accordingly, criteria marked Partial above remain Partial until the corresponding production evidence is attached. The active production workflow is the VPS workflow in `.github/workflows/deploy-stoxla-production.yml`; the legacy cPanel packaging path was not used. No training, promotion, lifecycle, drift or ML feature-policy boundary was changed while implementing these health controls.

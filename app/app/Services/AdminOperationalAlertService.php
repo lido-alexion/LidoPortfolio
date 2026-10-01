@@ -38,6 +38,10 @@ class AdminOperationalAlertService
 
     public const KEY_DATA_COMPLETENESS = 'data_completeness_incomplete';
 
+    public const KEY_FORWARD_DATA_CONFIGURATION = 'forward_data_configuration';
+
+    public const KEY_FORWARD_DATA_INCOMPLETE = 'forward_data_incomplete';
+
     public const KEY_MICROSTRUCTURE_COLLECTOR_STALE = MicrostructureCollectorHealthService::ALERT_KEY_STALE;
 
     public const KEY_MICROSTRUCTURE_COLLECTOR_ERROR = MicrostructureCollectorHealthService::ALERT_KEY_ERROR;
@@ -59,6 +63,8 @@ class AdminOperationalAlertService
         self::KEY_AUTOMATIC_SUBMIT_FAILED,
         self::KEY_FUNDAMENTALS_UPDATE_FAILED,
         self::KEY_DATA_COMPLETENESS,
+        self::KEY_FORWARD_DATA_CONFIGURATION,
+        self::KEY_FORWARD_DATA_INCOMPLETE,
     ];
 
     public function __construct(

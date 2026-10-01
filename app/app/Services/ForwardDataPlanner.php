@@ -26,8 +26,7 @@ class ForwardDataPlanner
         if (! is_string($start) || trim($start) === '') {
             return ['status' => 'blocked_configuration', 'created' => 0, 'blocked' => 0, 'reason' => 'forward_start_date_not_configured'];
         }
-        if (trim((string) config('ml.historical_universe.mii_path', '')) === ''
-            && trim((string) config('ml.historical_universe.bhavcopy_path', '')) === '') {
+        if (! $this->officialSourceConfigured()) {
             return ['status' => 'blocked_configuration', 'created' => 0, 'blocked' => 0, 'reason' => 'official_nse_source_not_configured'];
         }
         $asOf ??= now(config('forward_data.timezone', 'Asia/Kolkata'));
@@ -57,6 +56,19 @@ class ForwardDataPlanner
             }
         }
         return ['status' => 'planned', 'created' => $created, 'blocked' => $blocked];
+    }
+
+    public function officialSourceConfigured(): bool
+    {
+        $local = trim((string) config('ml.historical_universe.mii_path', '')) !== ''
+            || trim((string) config('ml.historical_universe.bhavcopy_path', '')) !== '';
+        $base = rtrim((string) config('forward_data.official_source_base_url', ''), '/');
+        $host = strtolower((string) parse_url($base, PHP_URL_HOST));
+        $remote = (bool) config('forward_data.official_source_enabled', false)
+            && $base !== ''
+            && in_array($host, (array) config('forward_data.official_source_allowed_hosts', []), true);
+
+        return $local || $remote;
     }
 
     /** @return list<ForwardCollectionWork> */

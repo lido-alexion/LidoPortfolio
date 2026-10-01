@@ -9,6 +9,7 @@ export default function ForwardDataAdminPage() {
     const [payload, setPayload] = useState(null);
     const [work, setWork] = useState([]);
     const [busy, setBusy] = useState(false);
+    const [loadError, setLoadError] = useState(false);
 
     const load = useCallback(async () => {
         const [health, queue] = await Promise.all([
@@ -17,9 +18,10 @@ export default function ForwardDataAdminPage() {
         ]);
         setPayload(health.data?.data || null);
         setWork(queue.data?.data?.data || queue.data?.data || []);
+        setLoadError(false);
     }, []);
 
-    useEffect(() => { load().catch(() => showToast('Failed to load forward-data health', 'danger')); }, [load]);
+    useEffect(() => { load().catch(() => { setLoadError(true); showToast('Failed to load forward-data health', 'danger'); }); }, [load]);
 
     const control = async (action) => {
         setBusy(true);
@@ -39,11 +41,12 @@ export default function ForwardDataAdminPage() {
                 <Link to="/settings/admin-alerts" className="btn btn-sm btn-outline-secondary">Admin alerts</Link>
             </div>
             <div className="d-flex gap-2 mb-3 flex-wrap">
-                <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => control('dispatch')}>Run due checks</button>
-                <button className="btn btn-outline-warning btn-sm" disabled={busy} onClick={() => control('retry')}>Retry visible failures</button>
-                <button className="btn btn-outline-secondary btn-sm" disabled={busy} onClick={() => control(payload?.paused ? 'resume' : 'pause')}>{payload?.paused ? 'Resume dispatch' : 'Pause dispatch'}</button>
-                <button className="btn btn-link btn-sm" disabled={busy} onClick={load}>Refresh</button>
+                <button aria-label="Run due forward-data checks" className="btn btn-primary btn-sm" disabled={busy} onClick={() => control('dispatch')}>Run due checks</button>
+                <button aria-label="Retry visible forward-data failures" className="btn btn-outline-warning btn-sm" disabled={busy || work.every((row) => row.state === 'succeeded')} onClick={() => control('retry')}>Retry visible failures</button>
+                <button aria-label={payload?.paused ? 'Resume forward-data dispatch' : 'Pause forward-data dispatch'} className="btn btn-outline-secondary btn-sm" disabled={busy} onClick={() => control(payload?.paused ? 'resume' : 'pause')}>{payload?.paused ? 'Resume dispatch' : 'Pause dispatch'}</button>
+                <button aria-label="Refresh forward-data health" className="btn btn-link btn-sm" disabled={busy} onClick={() => load().catch(() => { setLoadError(true); showToast('Failed to refresh forward-data health', 'danger'); })}>Refresh</button>
             </div>
+            {loadError && <div className="alert alert-danger" role="alert">Forward-data health could not be refreshed. Retry after checking the Admin session and scheduler health.</div>}
             <div className="row g-3 mb-3">
                 {Object.entries(payload?.health?.datasets || {}).map(([key, dataset]) => (
                     <div className="col-12 col-md-6 col-xl-4" key={key}><div className="card h-100"><div className="card-body"><div className="text-muted small">{key}</div><div className="h5">{value(dataset.state || dataset.freshness)}</div><div className="small">Coverage: {value(dataset.coverage)} · Backlog: {value(dataset.unresolved ?? dataset.backlog)}</div><div className="small text-muted">Last success: {value(dataset.last_successful_check || dataset.last_successful_ingestion)}</div></div></div></div>

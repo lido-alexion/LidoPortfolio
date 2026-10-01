@@ -28,10 +28,10 @@ class NseAcceptanceSourceBootstrapService
     }
 
     /** @return array{source:string,date:string,filename:string,url:string} */
-    public function descriptor(string $date): array
+    public function descriptor(string $date, ?string $baseUrl = null): array
     {
         $date = CarbonImmutable::parse($date);
-        $base = rtrim((string) config('ml.historical_universe.nse_archives_base_url'), '/');
+        $base = rtrim((string) ($baseUrl ?? config('ml.historical_universe.nse_archives_base_url')), '/');
         if ($date->toDateString() < self::UDIFF_START_DATE) {
             $month = strtoupper($date->format('M'));
             $filename = 'cm'.$date->format('d').$month.$date->format('Y').'bhav.csv.zip';
@@ -62,7 +62,7 @@ class NseAcceptanceSourceBootstrapService
     public function stage(string $date, int $actorId, ?MlAcceptanceSource $existing = null): MlAcceptanceSource
     {
         $descriptor = $this->descriptor($date);
-        $payload = $this->download($descriptor['url']);
+        $payload = $this->downloadOfficial($descriptor);
         $bytes = strlen($payload);
         $sha256 = hash('sha256', $payload);
         if ($bytes < 1 || $bytes > MlAcceptanceSourceService::MAX_BYTES || ! str_starts_with($payload, "PK\x03\x04")) {
@@ -100,6 +100,12 @@ class NseAcceptanceSourceBootstrapService
         }
 
         return $source->refresh();
+    }
+
+    /** Download only from the configured official NSE archive descriptor. */
+    public function downloadOfficial(array $descriptor): string
+    {
+        return $this->download((string) ($descriptor['url'] ?? ''));
     }
 
     private function download(string $url): string

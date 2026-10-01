@@ -6,6 +6,7 @@ use App\Contracts\MlHistoricalUniverseProvider;
 use App\Exceptions\MlHistoricalUniverseProviderException;
 use App\Models\Stock;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\File;
 use ZipArchive;
 
 /**
@@ -22,6 +23,9 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
         $date = Carbon::parse($date)->toDateString();
         $file = $this->findSourceFile($date, (string) config('ml.historical_universe.mii_path', ''), 'nse_mii_security_file')
             ?? $this->findSourceFile($date, (string) config('ml.historical_universe.bhavcopy_path', ''), 'nse_cash_bhavcopy');
+        if ($file === null) {
+            $file = $this->acquireOfficialBhavcopy($date);
+        }
         if ($file === null) {
             throw new MlHistoricalUniverseProviderException("NSE historical universe date unavailable: {$date}", true);
         }
@@ -94,6 +98,11 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
             'mapping_percentage' => $percentage,
             'parser_version' => self::PARSER_VERSION,
         ];
+        foreach (['archive_sha256', 'archive_url'] as $key) {
+            if (isset($file[$key])) {
+                $diagnostics[$key] = $file[$key];
+            }
+        }
         if ($requireMapping && $percentage < 90.0) {
             throw new MlHistoricalUniverseProviderException(
                 "NSE historical universe mapping below 90% for {$date} ({$percentage}%)",
@@ -109,6 +118,65 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
             'response_version' => $parsed['format_version'].';'.self::PARSER_VERSION,
             'diagnostics' => $diagnostics,
             'memberships' => $mapped,
+        ];
+    }
+
+    /**
+     * Use the existing official NSE archive downloader when production has no
+     * pre-staged file. The URL host is allowlisted and the downloaded archive
+     * still passes the existing safe extraction/date/parser/mapping gates.
+     *
+     * @return array{path:string,source:string,validated_date:string,date_basis:string,archive_sha256:string,archive_url:string}|null
+     */
+    private function acquireOfficialBhavcopy(string $date): ?array
+    {
+        if (! config('forward_data.official_source_enabled', false)) {
+            return null;
+        }
+        $base = rtrim((string) config('forward_data.official_source_base_url', ''), '/');
+        $host = strtolower((string) parse_url($base, PHP_URL_HOST));
+        if (! in_array($host, (array) config('forward_data.official_source_allowed_hosts', []), true)) {
+            throw new MlHistoricalUniverseProviderException('Official NSE source host is not allowlisted.', false);
+        }
+
+        $bootstrap = app(NseAcceptanceSourceBootstrapService::class);
+        $descriptor = $bootstrap->descriptor($date, $base);
+        $directory = (string) config('forward_data.official_source_directory', storage_path('app/private/forward-data/nse'));
+        File::ensureDirectoryExists($directory, 0700, true);
+        $archivePath = $directory.'/'.$descriptor['filename'];
+        $csvName = preg_replace('/\.zip$/i', '', $descriptor['filename']) ?: ($descriptor['filename'].'.csv');
+        $csvPath = $directory.'/'.$csvName;
+        $archiveSha = null;
+
+        if (! is_file($csvPath)) {
+            $payload = $bootstrap->downloadOfficial($descriptor);
+            $archiveSha = hash('sha256', $payload);
+            $temporary = $archivePath.'.'.bin2hex(random_bytes(6)).'.tmp';
+            if (file_put_contents($temporary, $payload, LOCK_EX) !== strlen($payload)) {
+                @unlink($temporary);
+                throw new MlHistoricalUniverseProviderException('Official NSE archive could not be staged.', true);
+            }
+            chmod($temporary, 0400);
+            rename($temporary, $archivePath);
+            $contents = app(MlAcceptanceSourceService::class)->safeContents($archivePath, $descriptor['filename'], $date);
+            $csvTemporary = $csvPath.'.'.bin2hex(random_bytes(6)).'.tmp';
+            if (file_put_contents($csvTemporary, $contents, LOCK_EX) !== strlen($contents)) {
+                @unlink($csvTemporary);
+                throw new MlHistoricalUniverseProviderException('Official NSE CSV could not be staged.', true);
+            }
+            chmod($csvTemporary, 0440);
+            rename($csvTemporary, $csvPath);
+        } elseif (is_file($archivePath)) {
+            $archiveSha = hash_file('sha256', $archivePath) ?: null;
+        }
+
+        return [
+            'path' => $csvPath,
+            'source' => 'nse_cash_bhavcopy',
+            'validated_date' => $date,
+            'date_basis' => 'official_archive_filename_and_content',
+            'archive_sha256' => $archiveSha ?: hash('sha256', (string) file_get_contents($csvPath)),
+            'archive_url' => $descriptor['url'],
         ];
     }
 
