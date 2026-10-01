@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\V8;
 
+use App\Jobs\MlAcceptanceJob;
 use App\Models\User;
 use App\Models\V8\MlAcceptanceCampaign;
 use App\Services\ML\MlAcceptanceRuntime;
@@ -91,7 +92,7 @@ class NseAcceptanceSourceBootstrapTest extends TestCase
         $source->refresh();
         $this->assertSame('sealed', $source->status);
         $this->assertSame('2022-08-01', $source->evidence['validated_date']);
-        Bus::assertDispatched(fn ($job) => $job->connection === MlAcceptanceRuntime::CONNECTION
+        Bus::assertDispatched(MlAcceptanceJob::class, fn ($job) => $job->connection === MlAcceptanceRuntime::CONNECTION
             && $job->queue === MlAcceptanceRuntime::QUEUE);
     }
 
