@@ -32,6 +32,16 @@ return new class extends Migration
             // resolve its historical name. Inspect the actual index first and
             // drop it explicitly so the version-aware key is authoritative.
             if (DB::getDriverName() === 'mysql') {
+                $foreignKeySupportIndex = collect(DB::select(
+                    'SHOW INDEX FROM `portfolio_screener_backtest_days` WHERE Key_name = ?',
+                    ['portfolio_screener_backtest_days_screener_idx'],
+                ));
+                if ($foreignKeySupportIndex->isEmpty()) {
+                    DB::statement(
+                        'ALTER TABLE `portfolio_screener_backtest_days` ADD INDEX `portfolio_screener_backtest_days_screener_idx` (`screener_id`)',
+                    );
+                }
+
                 $legacyIndex = collect(DB::select(
                     'SHOW INDEX FROM `portfolio_screener_backtest_days` WHERE Key_name = ?',
                     ['portfolio_screener_backtest_days_unique'],
