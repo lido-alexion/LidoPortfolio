@@ -5,8 +5,8 @@
     "scripts": {
         "docs:static": "node scripts/generate-static-docs.mjs",
         "journeys:metadata": "node scripts/generate-journey-metadata.mjs",
-        "docs:static:check": "node scripts/check-static-docs.mjs",
-        "build": "npm run journeys:metadata && node scripts/generate-static-docs.mjs && vite build",
+        "docs:static:check": "node scripts/check-static-docs.mjs && node scripts/generate-assistant-corpus.mjs --check",
+        "build": "node scripts/generate-static-docs.mjs && vite build",
         "dev": "vite",
         "test:js": "node --test tests/js/*.test.mjs && vitest run",
         "test:js:unit": "node --test tests/js/*.test.mjs",

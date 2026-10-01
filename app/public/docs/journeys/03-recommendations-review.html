@@ -1,0 +1,195 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>StoX user journeys</title><style>body{font:16px system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5}h1,h2{margin-top:2rem}</style></head><body><h1>StoX User Journeys — Recommendations and Review</h1>
+
+<p>[Back to journey index](README.md)</p>
+
+<h2 id="recommendation-lifecycle-in-plain-language">Recommendation lifecycle in plain language</h2>
+
+<p>For an actionable recommendation, the normal user-facing lifecycle is approximately:</p>
+
+<p>**Generated -&gt; Pending Review -&gt; Approve/Reject/Defer -&gt; Pending Execution -&gt; Executed/Cancelled/Expired/Superseded**</p>
+
+<p>`WATCH` and `HOLD_POSITION` are informational. They are not trades to approve.</p>
+
+<p>---</p>
+
+<h2 id="rec-01-generate-recommendations-through-the-decision-pipeline">REC-01 — Generate recommendations through the decision pipeline</h2>
+
+<p>**Goal:** Apply enabled strategies to current eligible evidence and produce current recommendations.</p>
+
+<p>1. Ensure the intended strategy is configured and enabled.</p>
+<p>2. Ensure required market data/discovery/evaluation prerequisites are available and current.</p>
+<p>3. Trigger the supported decision-pipeline flow, or allow its scheduled run to execute.</p>
+<p>4. Wait for completion; do not interpret a failed/incomplete pipeline as a valid “no recommendations” result.</p>
+<p>5. Open `/recommendations`.</p>
+<p>6. Review newly generated records by strategy, stock, action, score/evidence, capital state and status.</p>
+
+<p>**Expected result:** Each recommendation retains the strategy/version and evidence that produced it. Actionable recommendations normally enter `pending_review`; informational WATCH/HOLD results are published without trade approval.</p>
+
+<p>---</p>
+
+<h2 id="rec-02-review-new-recommendations">REC-02 — Review new recommendations</h2>
+
+<p>**Goal:** Decide what to do with current actionable recommendations.</p>
+
+<p>1. Open `/recommendations` or `/review` as appropriate to the current UI flow.</p>
+<p>2. Focus on open/current recommendations before browsing historical records.</p>
+<p>3. Select a recommendation.</p>
+<p>4. Confirm the stock and strategy.</p>
+<p>5. Read the proposed action and quantity/amount.</p>
+<p>6. Review the evidence, failed checks, market-gate result, sizing and capital status.</p>
+<p>7. Choose **Approve**, **Reject** or **Defer** according to your decision.</p>
+<p>8. Add review notes where useful.</p>
+
+<p>**Expected result:** StoX records the user, time, decision and notes as review history. Approval does not itself prove that a broker order has been submitted or filled.</p>
+
+<p>---</p>
+
+<h2 id="rec-03-understand-why-stox-recommended-an-action">REC-03 — Understand why StoX recommended an action</h2>
+
+<p>**Goal:** Explain the recommendation before acting on it.</p>
+
+<p>1. Open the recommendation detail.</p>
+<p>2. Confirm the strategy and strategy version/configuration.</p>
+<p>3. Inspect the discovery/screener evidence that made the stock eligible.</p>
+<p>4. Inspect factor facts and strategy weighting/score.</p>
+<p>5. Inspect threshold/label interpretation.</p>
+<p>6. Check market-gate status.</p>
+<p>7. Check whether the strategy already owns a position in the stock.</p>
+<p>8. Review desired position sizing and whole-share constraints.</p>
+<p>9. Review capital status separately from investment opinion.</p>
+<p>10. For REDUCE/EXIT, inspect the primary exit reason.</p>
+
+<p>**Expected result:** You can explain both **why the strategy wants the action** and **whether/how much can currently be executed**. Those are different questions.</p>
+
+<p>---</p>
+
+<h2 id="rec-04-understand-open-increase-reduce-and-exit">REC-04 — Understand OPEN, INCREASE, REDUCE and EXIT</h2>
+
+<p>- **OPEN_POSITION** — The strategy wants to initiate its own position where it currently owns none.</p>
+<p>- **INCREASE_POSITION** — The strategy already owns a position and policy permits adding to it.</p>
+<p>- **REDUCE_POSITION** — The strategy wants to sell part of its own position.</p>
+<p>- **EXIT_POSITION** — The strategy wants to close its own position.</p>
+
+<p>Before approval, verify that the action matches the current strategy-owned position. With multiple strategies, another strategy owning the same security does not give this strategy authority over that other position.</p>
+
+<p>---</p>
+
+<h2 id="rec-05-understand-watch-and-hold">REC-05 — Understand WATCH and HOLD</h2>
+
+<p>**WATCH** means the security is worth presenting/monitoring under policy but there is no executable trade intent.</p>
+
+<p>**HOLD_POSITION** means retain the strategy-owned position; it is informational rather than an approval/execution request.</p>
+
+<p>Do not look for an Approve-to-trade flow for WATCH/HOLD. If such a legacy/inconsistent record appears as executable, treat it as a lifecycle/data problem rather than normal behavior.</p>
+
+<p>---</p>
+
+<h2 id="rec-06-preview-a-recommendation-for-one-stock">REC-06 — Preview a recommendation for one stock</h2>
+
+<p>**Goal:** Ask what a selected strategy would currently conclude for one stock without creating a live recommendation.</p>
+
+<p>1. Open the UI surface that exposes recommendation preview for the selected stock/strategy.</p>
+<p>2. Select the stock.</p>
+<p>3. Select the strategy.</p>
+<p>4. Run/view the preview.</p>
+<p>5. Read eligibility, evaluation, market-gate and explanation information.</p>
+<p>6. If prerequisites are unavailable, read the reason instead of treating the preview as a valid neutral result.</p>
+
+<p>**Expected result:** Preview is diagnostic only. It does not persist/supersede recommendations, reserve money, approve a trade or submit an order.</p>
+
+<p>---</p>
+
+<h2 id="rec-07-approve-a-recommendation">REC-07 — Approve a recommendation</h2>
+
+<p>**Goal:** Authorize an actionable recommendation to proceed to execution when readiness rules permit.</p>
+
+<p>1. Open the actionable recommendation.</p>
+<p>2. Verify stock, strategy, action and intended quantity/amount.</p>
+<p>3. Review the evidence and capital state.</p>
+<p>4. Select **Approve**.</p>
+<p>5. Complete any confirmation/review-note step presented by the UI.</p>
+<p>6. Confirm the resulting status.</p>
+
+<p>**Expected result:** A capital-ready actionable recommendation moves to `pending_execution` and relevant cash reservation is recorded where applicable.</p>
+
+<p>**Important:** `pending_execution` means **approved and waiting for execution workflow**. It does not mean the broker filled an order.</p>
+
+<p>---</p>
+
+<h2 id="rec-08-reject-a-recommendation">REC-08 — Reject a recommendation</h2>
+
+<p>**Goal:** Record that the current actionable recommendation should not proceed.</p>
+
+<p>1. Open the recommendation.</p>
+<p>2. Review the evidence.</p>
+<p>3. Select **Reject**.</p>
+<p>4. Record a note when the reason will be useful later.</p>
+<p>5. Confirm the recommendation is no longer in the normal approval queue.</p>
+
+<p>**Expected result:** The rejection and review history are preserved. The record is not deleted merely because the user declined the trade.</p>
+
+<p>---</p>
+
+<h2 id="rec-09-defer-and-later-reopen">REC-09 — Defer and later reopen</h2>
+
+<p>**Goal:** Postpone a decision without permanently rejecting it.</p>
+
+<p>1. Open the recommendation and select **Defer**.</p>
+<p>2. Add a note explaining what you are waiting for if useful.</p>
+<p>3. Later locate the deferred recommendation/history.</p>
+<p>4. Confirm it is still eligible to be reopened.</p>
+<p>5. Select the supported **Reopen** action.</p>
+<p>6. Review it again using current context before approving/rejecting.</p>
+
+<p>**Expected result:** StoX retains both the original defer decision and later reopen decision as lifecycle history.</p>
+
+<p>---</p>
+
+<h2 id="rec-10-handle-partial-funding">REC-10 — Handle partial funding</h2>
+
+<p>**Goal:** Understand a recommendation whose desired investment is larger than presently fundable capital.</p>
+
+<p>1. Open the recommendation detail.</p>
+<p>2. Compare the **desired/target amount** with the **currently fundable/actual execution amount**.</p>
+<p>3. Inspect own cash, recall/lending/capital-resolution information where relevant.</p>
+<p>4. Do not interpret partial funding as a weaker investment score unless the strategy evidence separately says so.</p>
+<p>5. Proceed to approval only when the lifecycle says the capital state is eligible.</p>
+<p>6. In Pending Execution, verify the executable amount/quantity again.</p>
+
+<p>**Expected result:** StoX preserves the original desired target and separately shows the amount that can actually be funded/executed.</p>
+
+<p>---</p>
+
+<h2 id="rec-11-handle-an-unfunded-recommendation">REC-11 — Handle an unfunded recommendation</h2>
+
+<p>**Goal:** Preserve valid investment intent while no executable funding is currently available.</p>
+
+<p>1. Open the recommendation.</p>
+<p>2. Confirm that the underlying action is still OPEN/INCREASE rather than assuming “no cash = WATCH”.</p>
+<p>3. Inspect the funding gap and capital-resolution state.</p>
+<p>4. Resolve funding through the supported cash/recall/lending flow if desired.</p>
+<p>5. Return to the recommendation after capital status changes.</p>
+<p>6. Approve only when readiness rules permit movement to pending execution.</p>
+
+<p>**Expected result:** Investment opinion and funding readiness remain separate and auditable.</p>
+
+<p>---</p>
+
+<h2 id="rec-12-handle-a-superseded-recommendation">REC-12 — Handle a superseded recommendation</h2>
+
+<p>**Goal:** Avoid acting on stale intent after a materially changed recommendation replaces it.</p>
+
+<p>1. When a recommendation is marked superseded, do not treat it as the current executable instruction.</p>
+<p>2. Follow the old-to-new relationship to the replacement recommendation.</p>
+<p>3. Compare action, target, quantity, reason and strategy version/evidence.</p>
+<p>4. Review the replacement recommendation normally.</p>
+<p>5. Confirm reservations/readiness associated with the old intent have been reconciled according to lifecycle rules.</p>
+
+<p>**Expected result:** History remains visible, but only the current valid intent proceeds. Re-running the pipeline with an unchanged target should not manufacture a fresh lifetime merely to keep stale intent alive.</p>
+
+<p>---</p>
+
+<h2 id="what-comes-next">What comes next</h2>
+
+<p>After approval, continue with [Execution and Transactions](04-execution-transactions.md).</p>
+</body></html>

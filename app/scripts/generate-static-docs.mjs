@@ -539,6 +539,8 @@ async function main() {
         `Static docs written to ${outDir} (${APP_DOCUMENTATION.length} topics, ${written.size} html files + index + ${AI_GUIDE_BASENAME})`,
     );
     console.log(`AI guide also written to ${repoAiGuidePath}`);
+    await import('./generate-journey-metadata.mjs');
+    await import('./generate-assistant-corpus.mjs');
 }
 
 main().catch((err) => {

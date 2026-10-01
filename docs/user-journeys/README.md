@@ -159,3 +159,5 @@ If this guide conflicts with an implemented/current product contract, correct th
 | ID | Scenario | Detail |
 | --- | --- | --- |
 | E2E-08 | Stage sources, preview/apply PIT backfill, and record deployed acceptance | [Admin production ML acceptance](05-end-to-end.md#e2e-08--admin-production-ml-acceptance) |
+
+- [Documentation assistant](06-assistant.md) — grounded help, follow-up, feedback and degraded recovery.

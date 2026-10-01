@@ -22,3 +22,5 @@ production smoke remains non-destructive and separate from deterministic CI.
 | `03-recommendations-review.md` | `REC-*` | `app/tests/e2e/` |
 | `04-execution-transactions.md` | `EXE-*` | `app/tests/e2e/` |
 | `05-end-to-end.md` | `E2E-*` | `app/tests/e2e/` |
+
+| `06-assistant.md` | `AI-01`, `AI-02`, `AI-03` | `app/tests/e2e/assistant.spec.js` |

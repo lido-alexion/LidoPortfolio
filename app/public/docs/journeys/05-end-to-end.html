@@ -1,0 +1,177 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>StoX user journeys</title><style>body{font:16px system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5}h1,h2{margin-top:2rem}</style></head><body><h1>StoX User Journeys — End to End</h1>
+
+<p>[Back to journey index](README.md)</p>
+
+<p>These journeys connect the smaller task journeys into realistic daily workflows. Follow the linked detailed journey when a step needs field-level explanation.</p>
+
+<p>---</p>
+
+<h2 id="e2e-01-new-idea-to-first-buy">E2E-01 — New idea to first BUY</h2>
+
+<p>**Goal:** Start with an investment rule that does not yet exist in StoX and finish with a correctly recorded BUY.</p>
+
+<p>**Example idea:** “Consider stocks above MA200 with RSI(14) below 70, then apply my momentum strategy rules before buying.”</p>
+
+<p>1. Create and validate the discovery rule using [SCR-02](01-screeners.md#scr-02--create-a-multi-condition-and-screener).</p>
+<p>2. Run it once and inspect representative matches using [SCR-06](01-screeners.md#scr-06--run-a-screener-and-inspect-matches).</p>
+<p>3. Create the strategy and attach the screener using [STR-02](02-strategies.md#str-02--create-a-strategy-when-the-required-screener-does-not-exist).</p>
+<p>4. Configure scoring/thresholds, sizing, exit policy and market gates as required.</p>
+<p>5. Enable the strategy using [STR-13](02-strategies.md#str-13--enable-a-strategy).</p>
+<p>6. Run/wait for the decision pipeline using [REC-01](03-recommendations-review.md#rec-01--generate-recommendations-through-the-decision-pipeline).</p>
+<p>7. Open `/recommendations` and inspect the generated OPEN/INCREASE recommendation and its evidence.</p>
+<p>8. Confirm capital state and actual executable amount.</p>
+<p>9. Approve it using [REC-07](03-recommendations-review.md#rec-07--approve-a-recommendation).</p>
+<p>10. Open `/transactions/pending` and perform the final check using [EXE-05](04-execution-transactions.md#exe-05--review-pending-execution).</p>
+<p>11. Execute manually or through the configured broker-assisted mode.</p>
+<p>12. Verify the resulting transaction and strategy-owned holding using [EXE-15](04-execution-transactions.md#exe-15--verify-transaction-and-holding-after-execution).</p>
+
+<p>**Success condition:** The final holding can be traced backward to the actual transaction, broker/manual fill, approved recommendation, strategy/version and discovery evidence.</p>
+
+<p>---</p>
+
+<h2 id="e2e-02-existing-screener-to-buy">E2E-02 — Existing screener to BUY</h2>
+
+<p>**Goal:** Create a new strategy without duplicating a discovery definition that already exists.</p>
+
+<p>1. Find and inspect the existing screener under `/screeners` or `/screeners/registry`.</p>
+<p>2. Validate/reuse it using [SCR-07](01-screeners.md#scr-07--reuse-or-import-an-existing-screener).</p>
+<p>3. Create the strategy using [STR-01](02-strategies.md#str-01--create-a-strategy-using-an-existing-screener).</p>
+<p>4. Configure and enable it.</p>
+<p>5. Run the decision pipeline.</p>
+<p>6. Review the generated recommendation.</p>
+<p>7. Approve if desired.</p>
+<p>8. Review Pending Execution.</p>
+<p>9. Execute.</p>
+<p>10. Verify the resulting transaction and holding.</p>
+
+<p>**Success condition:** The new strategy reuses the intended screener/version while retaining its own independent policy and ownership.</p>
+
+<p>---</p>
+
+<h2 id="e2e-03-exit-signal-to-closed-transaction">E2E-03 — Exit signal to closed transaction</h2>
+
+<p>**Goal:** Start with an existing strategy-owned holding and finish with a correctly attributed exit.</p>
+
+<p>1. Confirm the holding belongs to the intended strategy.</p>
+<p>2. Ensure the strategy's exit policy is current.</p>
+<p>3. Run/wait for the decision pipeline.</p>
+<p>4. Open `/recommendations` and locate the `EXIT_POSITION` or `REDUCE_POSITION` recommendation.</p>
+<p>5. Inspect the primary exit reason and quantity.</p>
+<p>6. Confirm an entry market gate has not incorrectly suppressed the exit.</p>
+<p>7. Approve the actionable exit recommendation.</p>
+<p>8. Open `/transactions/pending`.</p>
+<p>9. Verify the SELL quantity belongs to this strategy's position.</p>
+<p>10. Submit/record the SELL.</p>
+<p>11. Wait for actual fill/reconciliation.</p>
+<p>12. Inspect `/transactions` and `/transactions/closed`.</p>
+<p>13. Verify the strategy-owned holding is reduced or closed as intended.</p>
+
+<p>**Success condition:** The realized transaction retains enough evidence to explain which strategy exited and why.</p>
+
+<p>---</p>
+
+<h2 id="e2e-04-strategy-change-and-supersession">E2E-04 — Strategy change and supersession</h2>
+
+<p>**Goal:** Change policy and safely replace materially stale live intent.</p>
+
+<p>1. Open the existing strategy and make the intended policy change using [STR-10](02-strategies.md#str-10--edit-an-existing-strategy).</p>
+<p>2. Save the strategy. Confirm that saving alone did not create or cancel recommendations.</p>
+<p>3. Run the decision pipeline separately.</p>
+<p>4. Open `/recommendations`.</p>
+<p>5. If the new decision materially changes the same strategy/security target, inspect the old recommendation's superseded state and its link to the replacement.</p>
+<p>6. Confirm the old recommendation is no longer treated as current executable intent.</p>
+<p>7. Review the new recommendation normally.</p>
+<p>8. Confirm old reservations/readiness were reconciled appropriately.</p>
+
+<p>**Success condition:** Historical intent remains visible, while only the current policy-derived intent can proceed.</p>
+
+<p>---</p>
+
+<h2 id="e2e-05-approve-cancel-and-retry">E2E-05 — Approve, cancel and retry</h2>
+
+<p>**Goal:** Approve a valid recommendation, stop an execution attempt safely, and retry later without duplicating a trade.</p>
+
+<p>1. Approve the recommendation and confirm `pending_execution`.</p>
+<p>2. Start execution.</p>
+<p>3. If no broker submission occurred, cancel using [EXE-08](04-execution-transactions.md#exe-08--cancel-before-broker-submission).</p>
+<p>4. If a broker order was submitted, request cancellation using [EXE-09](04-execution-transactions.md#exe-09--cancel-a-submitted-broker-order).</p>
+<p>5. Wait for final broker confirmation. “Cancellation requested” is not final cancellation.</p>
+<p>6. Confirm whether any quantity filled before cancellation.</p>
+<p>7. Reconcile partial fills exactly once.</p>
+<p>8. Confirm the recommendation remains current/eligible for retry according to lifecycle policy.</p>
+<p>9. Retry using [EXE-14](04-execution-transactions.md#exe-14--retry-without-creating-a-duplicate-order).</p>
+
+<p>**Success condition:** The retry does not duplicate a prior fill and the recommendation/capital reservation remain internally consistent.</p>
+
+<p>---</p>
+
+<h2 id="e2e-06-insufficient-capital-to-execution">E2E-06 — Insufficient capital to execution</h2>
+
+<p>**Goal:** Handle a valid BUY recommendation when available capital is below the desired target.</p>
+
+<p>1. Open the recommendation and confirm the underlying action is OPEN/INCREASE.</p>
+<p>2. Compare desired target with currently fundable amount.</p>
+<p>3. Inspect the capital-resolution path: own capital, recall, lending/bridge or other supported source.</p>
+<p>4. Do not rewrite the investment opinion merely because funding is unavailable.</p>
+<p>5. Complete the supported capital-resolution step if you choose to fund it.</p>
+<p>6. Return to the recommendation and confirm capital state/readiness changed.</p>
+<p>7. Approve when lifecycle rules permit.</p>
+<p>8. In `/transactions/pending`, verify actual executable amount and whole-share quantity.</p>
+<p>9. Execute.</p>
+<p>10. Verify actual transaction, cash and holding state.</p>
+
+<p>**Success condition:** StoX preserves both the desired target and the actual funded/executed amount, with capital evidence explaining the difference.</p>
+
+<p>---</p>
+
+<h2 id="e2e-07-same-stock-in-two-strategies">E2E-07 — Same stock in two strategies</h2>
+
+<p>**Goal:** Exit one strategy's position without damaging another strategy's ownership of the same security.</p>
+
+<p>**Example:** Strategy A owns 10 shares and Strategy B owns 15 shares of the same stock. Strategy A generates EXIT while Strategy B remains HOLD.</p>
+
+<p>1. Open Strategy A's recommendation.</p>
+<p>2. Confirm it is `EXIT_POSITION` and its owned quantity is 10 in this example.</p>
+<p>3. Confirm Strategy B remains a separate 15-share position/context.</p>
+<p>4. Approve Strategy A's exit.</p>
+<p>5. In Pending Execution, verify the SELL quantity is 10, not the portfolio-wide 25.</p>
+<p>6. Execute and reconcile the actual fill.</p>
+<p>7. Verify Strategy A's holding episode closes.</p>
+<p>8. Verify Strategy B still owns its 15 shares and retains its own basis/policy/evidence.</p>
+
+<p>**Success condition:** Same-security positions remain isolated by strategy throughout recommendation, execution and accounting.</p>
+
+<p>---</p>
+
+<h2 id="review-checklist-for-future-expansion">Review checklist for future expansion</h2>
+
+<p>When reviewing this catalogue, add a new journey whenever a user can reach a materially different outcome because of:</p>
+
+<p>- a different lifecycle state;</p>
+<p>- a different execution mode;</p>
+<p>- capital/funding state;</p>
+<p>- partial or uncertain broker outcome;</p>
+<p>- multiple-strategy ownership;</p>
+<p>- stale/superseded/expired intent;</p>
+<p>- a meaningful recovery action; or</p>
+<p>- a workflow that requires the user to cross several pages and is not obvious from a single page.</p>
+
+<p>Simple read-only navigation and ordinary settings belong in a later secondary/trivial-journeys chapter unless they become prerequisites for one of the money-moving flows above.</p>
+
+<p>---</p>
+
+<h2 id="e2e-08-admin-production-ml-acceptance">E2E-08 — Admin production ML acceptance</h2>
+
+<p>**Goal:** Record deployed 1m/3m/6m training evidence before lifecycle scheduling is allowed.</p>
+
+<p>1. As StoX Admin, open Settings → ML Scoring (`/settings/ml-scoring`) and refresh Production ML acceptance. Unknown evidence remains blocking.</p>
+<p>2. Queue campaign preflight for the desired cutoff; inspect each horizon's exact required source dates and blocking reasons.</p>
+<p>3. Upload official dated NSE CSV/ZIP sources in the private upload panel. Reselect the identical file to resume an incomplete upload. Refresh to see queued validation results; resume queued validation after interrupted dispatch if needed.</p>
+<p>4. Select sealed sources, queue a backfill dry-run, and review each date's mapping and provenance. Apply only after preview succeeds. Save the backfill ID to reopen status, resume completed progress, or cancel between dates.</p>
+<p>5. Create a fresh campaign preflight after resolving blockers. When all three horizons pass, explicitly choose Start 1m/3m/6m training.</p>
+<p>6. Refresh progress and inspect linked run, feature coverage/exclusion, calibration, fold, baseline and candidate evidence. Cancel requests cancellation through the existing training controls.</p>
+
+<p>**Success condition:** The deployed campaign records production-qualified evidence for the current build/registry/configuration. Active models remain unchanged. Local fixture campaigns cannot qualify. Lifecycle/schedules/drift and model activation remain separate explicit controls.</p>
+
+<p>**Failure path:** Source conflicts or insufficient mapping never overwrite existing snapshots; missing fundamentals or runtime evidence remain blocking. Failed training requires a fresh campaign.</p>
+</body></html>

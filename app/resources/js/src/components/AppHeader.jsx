@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import AssistantDrawer from './AssistantDrawer';
 import HeaderHelpButton from './HeaderHelpButton';
 import ProfileMenu from './ProfileMenu';
 import PortfolioSwitcher from './PortfolioSwitcher';
@@ -73,6 +74,7 @@ export default function AppHeader({ user, showSidebarToggle = false }) {
                     {user && !user.is_admin && <PortfolioSwitcher />}
                     <ExecutionSafetyControls user={user} />
                     {user && <NotificationBell />}
+                    {user && <AssistantDrawer key={user.id} />}
                     <HeaderHelpButton />
                     {user && <ProfileMenu user={user} />}
                 </div>

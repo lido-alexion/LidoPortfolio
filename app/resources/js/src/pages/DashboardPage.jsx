@@ -888,7 +888,7 @@ export default function DashboardPage() {
                     <div className="card h-100">
                         <div className="card-body">
                             <div className="text-muted small">{title}</div>
-                            <div className={`h5 m-0 ${valueClassName}`.trim()}>{value}</div>
+                            <div data-assistant-label={title} className={`h5 m-0 ${valueClassName}`.trim()}>{value}</div>
                         </div>
                     </div>
                 </div>

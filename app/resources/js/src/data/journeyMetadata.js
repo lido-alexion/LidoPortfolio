@@ -2,6 +2,85 @@
 export const JOURNEY_METADATA_VERSION = 'v9.ux001.generated';
 export const JOURNEY_TOPICS = Object.freeze([
   {
+    "id": "AI-01",
+    "title": "How do I ask a grounded product question?",
+    "aliases": [
+      "Ask a grounded product question",
+      "ai-01"
+    ],
+    "keywords": [
+      "ask",
+      "grounded",
+      "product",
+      "question"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/",
+    "guide": "/docs/journeys/06-assistant.html#ai-01-ask-a-grounded-product-question",
+    "steps": [
+      "Sign in and choose Ask StoX in the global header.",
+      "Ask a product question such as “How do I create a screener?”",
+      "Read the answer and its non-numeric grounding state.",
+      "Expand Sources used for titles, sections, links and supporting snippets.",
+      "Use a source link to navigate to maintained documentation. Existing authorization still applies to application pages."
+    ],
+    "prerequisites": [],
+    "warnings": []
+  },
+  {
+    "id": "AI-02",
+    "title": "How do I follow up, copy and give feedback?",
+    "aliases": [
+      "Follow up, copy and give feedback",
+      "ai-02"
+    ],
+    "keywords": [
+      "follow",
+      "copy",
+      "and",
+      "give",
+      "feedback"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/",
+    "guide": "/docs/journeys/06-assistant.html#ai-02-follow-up-copy-and-give-feedback",
+    "steps": [
+      "Ask a follow-up or select an explanation prompt below an answer.",
+      "Choose Copy response to copy the answer and source links.",
+      "Choose Helpful, or expand Not helpful, optionally enter a comment and send feedback.",
+      "Choose Clear conversation to remove the current conversation and cancel a pending answer."
+    ],
+    "prerequisites": [],
+    "warnings": []
+  },
+  {
+    "id": "AI-03",
+    "title": "How do I recover when AI is unavailable?",
+    "aliases": [
+      "Recover when AI is unavailable",
+      "ai-03"
+    ],
+    "keywords": [
+      "recover",
+      "when",
+      "unavailable"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/",
+    "guide": "/docs/journeys/06-assistant.html#ai-03-recover-when-ai-is-unavailable",
+    "steps": [
+      "Open the assistant while the runtime is unavailable or its budget is exhausted.",
+      "Ask a question and observe the temporary-unavailability message.",
+      "Use How do I? links or Browse documentation.",
+      "Close the drawer with Close assistant or Escape. Focus returns to Ask StoX."
+    ],
+    "prerequisites": [],
+    "warnings": []
+  },
+  {
     "id": "E2E-01",
     "title": "How do I new idea to first BUY?",
     "aliases": [
@@ -17,7 +96,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "End-to-end journeys",
     "route": "/recommendations",
-    "guide": "/docs/journeys/05-end-to-end.html#e2e-01--new-idea-to-first-buy",
+    "guide": "/docs/journeys/05-end-to-end.html#e2e-01-new-idea-to-first-buy",
     "steps": [
       "Create and validate the discovery rule using [SCR-02](01-screeners.md#scr-02--create-a-multi-condition-and-screener).",
       "Run it once and inspect representative matches using [SCR-06](01-screeners.md#scr-06--run-a-screener-and-inspect-matches).",
@@ -46,7 +125,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "End-to-end journeys",
     "route": "/screeners",
-    "guide": "/docs/journeys/05-end-to-end.html#e2e-02--existing-screener-to-buy",
+    "guide": "/docs/journeys/05-end-to-end.html#e2e-02-existing-screener-to-buy",
     "steps": [
       "Find and inspect the existing screener under `/screeners` or `/screeners/registry`.",
       "Validate/reuse it using [SCR-07](01-screeners.md#scr-07--reuse-or-import-an-existing-screener).",
@@ -76,7 +155,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "End-to-end journeys",
     "route": "/recommendations",
-    "guide": "/docs/journeys/05-end-to-end.html#e2e-03--exit-signal-to-closed-transaction",
+    "guide": "/docs/journeys/05-end-to-end.html#e2e-03-exit-signal-to-closed-transaction",
     "steps": [
       "Confirm the holding belongs to the intended strategy.",
       "Ensure the strategy's exit policy is current.",
@@ -106,7 +185,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "End-to-end journeys",
     "route": "/recommendations",
-    "guide": "/docs/journeys/05-end-to-end.html#e2e-04--strategy-change-and-supersession",
+    "guide": "/docs/journeys/05-end-to-end.html#e2e-04-strategy-change-and-supersession",
     "steps": [
       "Open the existing strategy and make the intended policy change using [STR-10](02-strategies.md#str-10--edit-an-existing-strategy).",
       "Save the strategy. Confirm that saving alone did not create or cancel recommendations.",
@@ -136,7 +215,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "End-to-end journeys",
     "route": "/",
-    "guide": "/docs/journeys/05-end-to-end.html#e2e-05--approve-cancel-and-retry",
+    "guide": "/docs/journeys/05-end-to-end.html#e2e-05-approve-cancel-and-retry",
     "steps": [
       "Approve the recommendation and confirm `pending_execution`.",
       "Start execution.",
@@ -165,7 +244,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "End-to-end journeys",
     "route": "/transactions/pending",
-    "guide": "/docs/journeys/05-end-to-end.html#e2e-06--insufficient-capital-to-execution",
+    "guide": "/docs/journeys/05-end-to-end.html#e2e-06-insufficient-capital-to-execution",
     "steps": [
       "Open the recommendation and confirm the underlying action is OPEN/INCREASE.",
       "Compare desired target with currently fundable amount.",
@@ -195,7 +274,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "End-to-end journeys",
     "route": "/",
-    "guide": "/docs/journeys/05-end-to-end.html#e2e-07--same-stock-in-two-strategies",
+    "guide": "/docs/journeys/05-end-to-end.html#e2e-07-same-stock-in-two-strategies",
     "steps": [
       "Open Strategy A's recommendation.",
       "Confirm it is `EXIT_POSITION` and its owned quantity is 10 in this example.",
@@ -224,7 +303,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "End-to-end journeys",
     "route": "/settings/ml-scoring",
-    "guide": "/docs/journeys/05-end-to-end.html#e2e-08--admin-production-ml-acceptance",
+    "guide": "/docs/journeys/05-end-to-end.html#e2e-08-admin-production-ml-acceptance",
     "steps": [
       "As StoX Admin, open Settings → ML Scoring (`/settings/ml-scoring`) and refresh Production ML acceptance. Unknown evidence remains blocking.",
       "Queue campaign preflight for the desired cutoff; inspect each horizon's exact required source dates and blocking reasons.",
@@ -252,7 +331,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Execution",
     "route": "/transactions/pending",
-    "guide": "/docs/journeys/04-execution-transactions.html#exe-01--execute-an-approved-recommendation-manually",
+    "guide": "/docs/journeys/04-execution-transactions.html#exe-01-execute-an-approved-recommendation-manually",
     "steps": [
       "Open `/transactions/pending`.",
       "Select the approved recommendation.",
@@ -282,7 +361,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Execution",
     "route": "/transactions",
-    "guide": "/docs/journeys/04-execution-transactions.html#exe-02--record-a-manually-executed-transaction",
+    "guide": "/docs/journeys/04-execution-transactions.html#exe-02-record-a-manually-executed-transaction",
     "steps": [
       "Open `/transactions`.",
       "Start the supported add/record transaction flow.",
@@ -312,7 +391,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Execution",
     "route": "/transactions/pending",
-    "guide": "/docs/journeys/04-execution-transactions.html#exe-03--execute-in-semi-automatic-mode",
+    "guide": "/docs/journeys/04-execution-transactions.html#exe-03-execute-in-semi-automatic-mode",
     "steps": [
       "Ensure the Zerodha/Kite connection is valid for the day/session.",
       "Open `/transactions/pending`.",
@@ -342,7 +421,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Execution",
     "route": "/transactions/pending",
-    "guide": "/docs/journeys/04-execution-transactions.html#exe-04--authorize-a-semi-automatic-execution",
+    "guide": "/docs/journeys/04-execution-transactions.html#exe-04-authorize-a-semi-automatic-execution",
     "steps": [
       "Kite authentication/session: Used to establish the broker connection. UI text should explicitly identify this as Kite when a Kite-provided code/login is required.",
       "StoX execution authorization: Used to authorize sensitive Semi-Automatic trade submission. Use the authenticator application registered for StoX; the UI should identify the registered authenticator name where available.",
@@ -366,7 +445,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Execution",
     "route": "/transactions/pending",
-    "guide": "/docs/journeys/04-execution-transactions.html#exe-05--review-pending-execution",
+    "guide": "/docs/journeys/04-execution-transactions.html#exe-05-review-pending-execution",
     "steps": [
       "Open `/transactions/pending`.",
       "Locate the approved recommendation.",
@@ -395,7 +474,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Execution",
     "route": "/transactions/pending",
-    "guide": "/docs/journeys/04-execution-transactions.html#exe-06--submit-a-buy-order",
+    "guide": "/docs/journeys/04-execution-transactions.html#exe-06-submit-a-buy-order",
     "steps": [
       "Start from `/transactions/pending`.",
       "Verify recommendation identity and strategy.",
@@ -426,7 +505,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Execution",
     "route": "/transactions/pending",
-    "guide": "/docs/journeys/04-execution-transactions.html#exe-07--submit-a-reduce-or-exit-sell-order",
+    "guide": "/docs/journeys/04-execution-transactions.html#exe-07-submit-a-reduce-or-exit-sell-order",
     "steps": [
       "Open the pending REDUCE/EXIT item.",
       "Verify strategy identity and the holding episode it owns.",
@@ -456,7 +535,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Execution",
     "route": "/transactions/pending",
-    "guide": "/docs/journeys/04-execution-transactions.html#exe-08--cancel-before-broker-submission",
+    "guide": "/docs/journeys/04-execution-transactions.html#exe-08-cancel-before-broker-submission",
     "steps": [
       "Open `/transactions/pending`.",
       "Select the pending item.",
@@ -483,7 +562,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Execution",
     "route": "/transactions/pending",
-    "guide": "/docs/journeys/04-execution-transactions.html#exe-09--cancel-a-submitted-broker-order",
+    "guide": "/docs/journeys/04-execution-transactions.html#exe-09-cancel-a-submitted-broker-order",
     "steps": [
       "Open the submitted order/execution detail.",
       "Verify the broker order is still cancellable.",
@@ -512,7 +591,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Execution",
     "route": "/transactions/pending",
-    "guide": "/docs/journeys/04-execution-transactions.html#exe-10--handle-an-unfilled-or-cancelled-order",
+    "guide": "/docs/journeys/04-execution-transactions.html#exe-10-handle-an-unfilled-or-cancelled-order",
     "steps": [
       "Inspect broker order status and confirm filled quantity is zero.",
       "Confirm the cancellation/rejection is final rather than pending reconciliation.",
@@ -538,7 +617,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Execution",
     "route": "/transactions/pending",
-    "guide": "/docs/journeys/04-execution-transactions.html#exe-11--handle-a-partial-fill",
+    "guide": "/docs/journeys/04-execution-transactions.html#exe-11-handle-a-partial-fill",
     "steps": [
       "Inspect broker-reported ordered quantity and filled quantity.",
       "Confirm StoX records the filled part once and only once.",
@@ -565,7 +644,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Execution",
     "route": "/transactions/pending",
-    "guide": "/docs/journeys/04-execution-transactions.html#exe-12--handle-broker-rejection",
+    "guide": "/docs/journeys/04-execution-transactions.html#exe-12-handle-broker-rejection",
     "steps": [
       "Read the broker rejection reason.",
       "Confirm that no fill occurred.",
@@ -593,7 +672,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Execution",
     "route": "/transactions/pending",
-    "guide": "/docs/journeys/04-execution-transactions.html#exe-13--reconcile-uncertain-broker-state",
+    "guide": "/docs/journeys/04-execution-transactions.html#exe-13-reconcile-uncertain-broker-state",
     "steps": [
       "Do not submit the same trade again immediately.",
       "Keep the StoX execution/order record in its pending/uncertain state.",
@@ -622,7 +701,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Execution",
     "route": "/transactions/pending",
-    "guide": "/docs/journeys/04-execution-transactions.html#exe-14--retry-without-creating-a-duplicate-order",
+    "guide": "/docs/journeys/04-execution-transactions.html#exe-14-retry-without-creating-a-duplicate-order",
     "steps": [
       "First complete EXE-13 when prior broker state was uncertain.",
       "Confirm the previous order is finally cancelled/rejected/unfilled as required by policy.",
@@ -652,7 +731,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Execution",
     "route": "/transactions",
-    "guide": "/docs/journeys/04-execution-transactions.html#exe-15--verify-transaction-and-holding-after-execution",
+    "guide": "/docs/journeys/04-execution-transactions.html#exe-15-verify-transaction-and-holding-after-execution",
     "steps": [
       "Open `/transactions` and locate the resulting transaction.",
       "Confirm stock, side, quantity, actual price and linkage/provenance.",
@@ -684,7 +763,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Recommendations",
     "route": "/recommendations",
-    "guide": "/docs/journeys/03-recommendations-review.html#rec-01--generate-recommendations-through-the-decision-pipeline",
+    "guide": "/docs/journeys/03-recommendations-review.html#rec-01-generate-recommendations-through-the-decision-pipeline",
     "steps": [
       "Ensure the intended strategy is configured and enabled.",
       "Ensure required market data/discovery/evaluation prerequisites are available and current.",
@@ -711,7 +790,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Recommendations",
     "route": "/recommendations",
-    "guide": "/docs/journeys/03-recommendations-review.html#rec-02--review-new-recommendations",
+    "guide": "/docs/journeys/03-recommendations-review.html#rec-02-review-new-recommendations",
     "steps": [
       "Open `/recommendations` or `/review` as appropriate to the current UI flow.",
       "Focus on open/current recommendations before browsing historical records.",
@@ -742,7 +821,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Recommendations",
     "route": "/recommendations",
-    "guide": "/docs/journeys/03-recommendations-review.html#rec-03--understand-why-stox-recommended-an-action",
+    "guide": "/docs/journeys/03-recommendations-review.html#rec-03-understand-why-stox-recommended-an-action",
     "steps": [
       "Open the recommendation detail.",
       "Confirm the strategy and strategy version/configuration.",
@@ -774,7 +853,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Recommendations",
     "route": "/recommendations",
-    "guide": "/docs/journeys/03-recommendations-review.html#rec-04--understand-open-increase-reduce-and-exit",
+    "guide": "/docs/journeys/03-recommendations-review.html#rec-04-understand-open-increase-reduce-and-exit",
     "steps": [
       "Open the relevant StoX page.",
       "Follow the documented workflow.",
@@ -799,7 +878,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Recommendations",
     "route": "/recommendations",
-    "guide": "/docs/journeys/03-recommendations-review.html#rec-05--understand-watch-and-hold",
+    "guide": "/docs/journeys/03-recommendations-review.html#rec-05-understand-watch-and-hold",
     "steps": [
       "Open the relevant StoX page.",
       "Follow the documented workflow.",
@@ -825,7 +904,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Recommendations",
     "route": "/recommendations",
-    "guide": "/docs/journeys/03-recommendations-review.html#rec-06--preview-a-recommendation-for-one-stock",
+    "guide": "/docs/journeys/03-recommendations-review.html#rec-06-preview-a-recommendation-for-one-stock",
     "steps": [
       "Open the UI surface that exposes recommendation preview for the selected stock/strategy.",
       "Select the stock.",
@@ -851,7 +930,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Recommendations",
     "route": "/recommendations",
-    "guide": "/docs/journeys/03-recommendations-review.html#rec-07--approve-a-recommendation",
+    "guide": "/docs/journeys/03-recommendations-review.html#rec-07-approve-a-recommendation",
     "steps": [
       "Open the actionable recommendation.",
       "Verify stock, strategy, action and intended quantity/amount.",
@@ -877,7 +956,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Recommendations",
     "route": "/recommendations",
-    "guide": "/docs/journeys/03-recommendations-review.html#rec-08--reject-a-recommendation",
+    "guide": "/docs/journeys/03-recommendations-review.html#rec-08-reject-a-recommendation",
     "steps": [
       "Open the recommendation.",
       "Review the evidence.",
@@ -904,7 +983,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Recommendations",
     "route": "/recommendations",
-    "guide": "/docs/journeys/03-recommendations-review.html#rec-09--defer-and-later-reopen",
+    "guide": "/docs/journeys/03-recommendations-review.html#rec-09-defer-and-later-reopen",
     "steps": [
       "Open the recommendation and select Defer.",
       "Add a note explaining what you are waiting for if useful.",
@@ -931,7 +1010,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Recommendations",
     "route": "/recommendations",
-    "guide": "/docs/journeys/03-recommendations-review.html#rec-10--handle-partial-funding",
+    "guide": "/docs/journeys/03-recommendations-review.html#rec-10-handle-partial-funding",
     "steps": [
       "Open the recommendation detail.",
       "Compare the desired/target amount with the currently fundable/actual execution amount.",
@@ -958,7 +1037,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Recommendations",
     "route": "/recommendations",
-    "guide": "/docs/journeys/03-recommendations-review.html#rec-11--handle-an-unfunded-recommendation",
+    "guide": "/docs/journeys/03-recommendations-review.html#rec-11-handle-an-unfunded-recommendation",
     "steps": [
       "Open the recommendation.",
       "Confirm that the underlying action is still OPEN/INCREASE rather than assuming “no cash = WATCH”.",
@@ -985,7 +1064,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Recommendations",
     "route": "/recommendations",
-    "guide": "/docs/journeys/03-recommendations-review.html#rec-12--handle-a-superseded-recommendation",
+    "guide": "/docs/journeys/03-recommendations-review.html#rec-12-handle-a-superseded-recommendation",
     "steps": [
       "When a recommendation is marked superseded, do not treat it as the current executable instruction.",
       "Follow the old-to-new relationship to the replacement recommendation.",
@@ -1014,7 +1093,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Screeners",
     "route": "/screeners",
-    "guide": "/docs/journeys/01-screeners.html#scr-01--create-a-screener-from-scratch",
+    "guide": "/docs/journeys/01-screeners.html#scr-01-create-a-screener-from-scratch",
     "steps": [
       "Open Screeners at `/screeners`.",
       "Start creation of a new screener.",
@@ -1047,7 +1126,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Screeners",
     "route": "/screeners",
-    "guide": "/docs/journeys/01-screeners.html#scr-02--create-a-multi-condition-and-screener",
+    "guide": "/docs/journeys/01-screeners.html#scr-02-create-a-multi-condition-and-screener",
     "steps": [
       "Open `/screeners` and create a new screener.",
       "Name it, for example Momentum Entry — MA200 + RSI.",
@@ -1076,7 +1155,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Screeners",
     "route": "/screeners",
-    "guide": "/docs/journeys/01-screeners.html#scr-03--create-nested-and-or-logic",
+    "guide": "/docs/journeys/01-screeners.html#scr-03-create-nested-and-or-logic",
     "steps": [
       "Create or edit the screener at `/screeners`.",
       "Create the outer AND group.",
@@ -1105,7 +1184,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Screeners",
     "route": "/screeners",
-    "guide": "/docs/journeys/01-screeners.html#scr-04--edit-an-existing-screener",
+    "guide": "/docs/journeys/01-screeners.html#scr-04-edit-an-existing-screener",
     "steps": [
       "Open `/screeners`.",
       "Locate the intended screener. Confirm the name/identity before editing, especially when similarly named definitions exist.",
@@ -1132,7 +1211,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Screeners",
     "route": "/screeners",
-    "guide": "/docs/journeys/01-screeners.html#scr-05--validate-a-screener",
+    "guide": "/docs/journeys/01-screeners.html#scr-05-validate-a-screener",
     "steps": [
       "Open the screener in `/screeners`.",
       "Use the available validation/save validation flow.",
@@ -1160,7 +1239,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Screeners",
     "route": "/screeners",
-    "guide": "/docs/journeys/01-screeners.html#scr-06--run-a-screener-and-inspect-matches",
+    "guide": "/docs/journeys/01-screeners.html#scr-06-run-a-screener-and-inspect-matches",
     "steps": [
       "Open `/screeners` and select the screener.",
       "Trigger the supported screener run, or use the normal scheduled pipeline if that is the intended workflow.",
@@ -1187,7 +1266,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Screeners",
     "route": "/screeners",
-    "guide": "/docs/journeys/01-screeners.html#scr-07--reuse-or-import-an-existing-screener",
+    "guide": "/docs/journeys/01-screeners.html#scr-07-reuse-or-import-an-existing-screener",
     "steps": [
       "Check `/screeners` and `/screeners/registry` for the required definition.",
       "Inspect the screener's description, conditions and version rather than selecting it only by name.",
@@ -1213,7 +1292,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Screeners",
     "route": "/screeners",
-    "guide": "/docs/journeys/01-screeners.html#scr-08--retire-or-archive-a-screener",
+    "guide": "/docs/journeys/01-screeners.html#scr-08-retire-or-archive-a-screener",
     "steps": [
       "Open the screener management/registry surface.",
       "Identify where the screener is currently used before retiring it.",
@@ -1239,7 +1318,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Screeners",
     "route": "/screeners",
-    "guide": "/docs/journeys/01-screeners.html#scr-09--diagnose-a-match-or-non-match",
+    "guide": "/docs/journeys/01-screeners.html#scr-09-diagnose-a-match-or-non-match",
     "steps": [
       "Identify the exact screener and run being investigated.",
       "Confirm the screener/version used by that run.",
@@ -1274,7 +1353,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Strategies",
     "route": "/screeners",
-    "guide": "/docs/journeys/02-strategies.html#str-01--create-a-strategy-using-an-existing-screener",
+    "guide": "/docs/journeys/02-strategies.html#str-01-create-a-strategy-using-an-existing-screener",
     "steps": [
       "Confirm the required screener exists and is valid under `/screeners` or `/screeners/registry`.",
       "Open Strategy at `/strategy` or the management surface at `/strategy/registry`.",
@@ -1313,7 +1392,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Strategies",
     "route": "/screeners",
-    "guide": "/docs/journeys/02-strategies.html#str-02--create-a-strategy-when-the-required-screener-does-not-exist",
+    "guide": "/docs/journeys/02-strategies.html#str-02-create-a-strategy-when-the-required-screener-does-not-exist",
     "steps": [
       "Go to `/screeners`.",
       "Create Momentum Entry — MA200 + RSI.",
@@ -1342,7 +1421,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Strategies",
     "route": "/strategy",
-    "guide": "/docs/journeys/02-strategies.html#str-03--configure-entry-criteria",
+    "guide": "/docs/journeys/02-strategies.html#str-03-configure-entry-criteria",
     "steps": [
       "Open the intended strategy at `/strategy`.",
       "Confirm the strategy identity before changing policy.",
@@ -1371,7 +1450,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Strategies",
     "route": "/strategy",
-    "guide": "/docs/journeys/02-strategies.html#str-04--configure-exit-criteria",
+    "guide": "/docs/journeys/02-strategies.html#str-04-configure-exit-criteria",
     "steps": [
       "Open the strategy at `/strategy`.",
       "Locate the exit-policy configuration.",
@@ -1402,7 +1481,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Strategies",
     "route": "/screeners",
-    "guide": "/docs/journeys/02-strategies.html#str-05--use-separate-entry-and-exit-definitions",
+    "guide": "/docs/journeys/02-strategies.html#str-05-use-separate-entry-and-exit-definitions",
     "steps": [
       "Create/validate the entry discovery rule under `/screeners` if required.",
       "Create/validate any separately modeled exit definition required by the supported strategy configuration.",
@@ -1432,7 +1511,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Strategies",
     "route": "/strategy",
-    "guide": "/docs/journeys/02-strategies.html#str-06--configure-factors-weights-and-thresholds",
+    "guide": "/docs/journeys/02-strategies.html#str-06-configure-factors-weights-and-thresholds",
     "steps": [
       "Open the strategy.",
       "Review the supported factor/indicator set.",
@@ -1463,7 +1542,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Strategies",
     "route": "/strategy",
-    "guide": "/docs/journeys/02-strategies.html#str-07--configure-position-sizing-and-portfolio-limits",
+    "guide": "/docs/journeys/02-strategies.html#str-07-configure-position-sizing-and-portfolio-limits",
     "steps": [
       "Open the strategy.",
       "Configure target allocation/sizing policy.",
@@ -1494,7 +1573,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Strategies",
     "route": "/strategy",
-    "guide": "/docs/journeys/02-strategies.html#str-08--configure-stop-loss-trailing-stop-and-exit-policy",
+    "guide": "/docs/journeys/02-strategies.html#str-08-configure-stop-loss-trailing-stop-and-exit-policy",
     "steps": [
       "Open the strategy.",
       "Locate exit/risk controls.",
@@ -1522,7 +1601,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Strategies",
     "route": "/strategy",
-    "guide": "/docs/journeys/02-strategies.html#str-09--configure-market-gates",
+    "guide": "/docs/journeys/02-strategies.html#str-09-configure-market-gates",
     "steps": [
       "Open the strategy.",
       "Locate market-regime/gate configuration.",
@@ -1548,7 +1627,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Strategies",
     "route": "/strategy/registry",
-    "guide": "/docs/journeys/02-strategies.html#str-10--edit-an-existing-strategy",
+    "guide": "/docs/journeys/02-strategies.html#str-10-edit-an-existing-strategy",
     "steps": [
       "Open `/strategy/registry` and select the intended strategy, or open it through `/strategy`.",
       "Confirm its name/status and current configuration/version.",
@@ -1578,7 +1657,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Strategies",
     "route": "/strategy",
-    "guide": "/docs/journeys/02-strategies.html#str-11--change-the-screener-without-rebuilding-the-strategy",
+    "guide": "/docs/journeys/02-strategies.html#str-11-change-the-screener-without-rebuilding-the-strategy",
     "steps": [
       "Validate the replacement screener first.",
       "Open the existing strategy.",
@@ -1608,7 +1687,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Strategies",
     "route": "/strategy",
-    "guide": "/docs/journeys/02-strategies.html#str-12--change-exit-policy-without-changing-entry-policy",
+    "guide": "/docs/journeys/02-strategies.html#str-12-change-exit-policy-without-changing-entry-policy",
     "steps": [
       "Open the strategy.",
       "Record/confirm the current entry screener and entry policy.",
@@ -1634,7 +1713,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Strategies",
     "route": "/strategy/registry",
-    "guide": "/docs/journeys/02-strategies.html#str-13--enable-a-strategy",
+    "guide": "/docs/journeys/02-strategies.html#str-13-enable-a-strategy",
     "steps": [
       "Open `/strategy/registry`.",
       "Select the strategy.",
@@ -1660,7 +1739,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Strategies",
     "route": "/strategy/registry",
-    "guide": "/docs/journeys/02-strategies.html#str-14--archive-or-disable-a-strategy",
+    "guide": "/docs/journeys/02-strategies.html#str-14-archive-or-disable-a-strategy",
     "steps": [
       "Open `/strategy/registry`.",
       "Select the strategy to retire.",
@@ -1687,7 +1766,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Strategies",
     "route": "/strategy/registry",
-    "guide": "/docs/journeys/02-strategies.html#str-15--operate-multiple-strategies-concurrently",
+    "guide": "/docs/journeys/02-strategies.html#str-15-operate-multiple-strategies-concurrently",
     "steps": [
       "Configure and validate each strategy independently.",
       "Enable each required strategy in `/strategy/registry`.",
@@ -1715,7 +1794,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [],
     "category": "Strategies",
     "route": "/strategy",
-    "guide": "/docs/journeys/02-strategies.html#str-16--same-stock-used-by-multiple-strategies",
+    "guide": "/docs/journeys/02-strategies.html#str-16-same-stock-used-by-multiple-strategies",
     "steps": [
       "Open the recommendation for Strategy A and confirm the strategy identity.",
       "Inspect the strategy-owned position/quantity associated with Strategy A.",

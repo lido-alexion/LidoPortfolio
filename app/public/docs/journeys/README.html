@@ -1,0 +1,164 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>StoX user journeys</title><style>body{font:16px system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5}h1,h2{margin-top:2rem}</style></head><body><h1>StoX User Journey Guide</h1>
+
+<h2 id="purpose">Purpose</h2>
+
+<p>This guide documents how a person uses StoX to complete real investment and trading workflows. It is intentionally written from the user's point of view rather than as an API, database, or implementation reference.</p>
+
+<p>The primary focus is the non-trivial daily workflow:</p>
+
+<p>**Screener -&gt; Strategy -&gt; Decision Pipeline -&gt; Recommendation -&gt; Review -&gt; Pending Execution -&gt; Broker/Manual Execution -&gt; Transaction/Holding**</p>
+
+<p>A screener match is candidate evidence, not a trade instruction. A strategy applies policy, position context, market gates, sizing and capital rules before StoX creates an actionable recommendation. Approving a recommendation authorizes the execution workflow; approval itself is not broker submission.</p>
+
+<p>This documentation has three later uses in addition to helping a human user:</p>
+
+<p>1. Review whether important user workflows are missing or unnecessarily difficult.</p>
+<p>2. Define stable UI automation hooks such as `data-testid` attributes where required.</p>
+<p>3. Become the functional basis for future Playwright/Selenium end-to-end tests.</p>
+
+<p>The journeys therefore describe observable user intent, actions and expected results. They deliberately do **not** prescribe test selectors or automation implementation yet.</p>
+
+<h2 id="how-to-use-this-guide">How to use this guide</h2>
+
+<p>Each journey has a stable ID. Use the ID when discussing a workflow, reporting a usability problem, defining an automation case, or linking a future test.</p>
+
+<p>Canonical application paths used by the guide include:</p>
+
+<p>- Screeners: `/screeners`</p>
+<p>- Screener Registry: `/screeners/registry`</p>
+<p>- Strategy: `/strategy`</p>
+<p>- Strategy Registry: `/strategy/registry`</p>
+<p>- Recommendations: `/recommendations`</p>
+<p>- Review: `/review`</p>
+<p>- Pending Execution: `/transactions/pending`</p>
+<p>- Transactions: `/transactions`</p>
+<p>- Closed Transactions: `/transactions/closed`</p>
+<p>- Holdings: `/holdings`</p>
+<p>- Backtests: `/backtests`</p>
+
+<p>UI labels can evolve. The route and user intent are more important than minor wording differences in a button label.</p>
+
+<h2 id="scenario-index">Scenario index</h2>
+
+<p>### A. Screeners</p>
+
+<p>| ID | Scenario | Detail |</p>
+<p>| --- | --- | --- |</p>
+<p>| SCR-01 | Create a screener from scratch | [Screeners](01-screeners.md#scr-01--create-a-screener-from-scratch) |</p>
+<p>| SCR-02 | Create a multi-condition AND screener | [Screeners](01-screeners.md#scr-02--create-a-multi-condition-and-screener) |</p>
+<p>| SCR-03 | Create nested AND/OR logic | [Screeners](01-screeners.md#scr-03--create-nested-andor-logic) |</p>
+<p>| SCR-04 | Edit an existing screener | [Screeners](01-screeners.md#scr-04--edit-an-existing-screener) |</p>
+<p>| SCR-05 | Validate a screener | [Screeners](01-screeners.md#scr-05--validate-a-screener) |</p>
+<p>| SCR-06 | Run a screener and inspect matches | [Screeners](01-screeners.md#scr-06--run-a-screener-and-inspect-matches) |</p>
+<p>| SCR-07 | Reuse/import an existing screener | [Screeners](01-screeners.md#scr-07--reuse-or-import-an-existing-screener) |</p>
+<p>| SCR-08 | Retire/archive a screener | [Screeners](01-screeners.md#scr-08--retire-or-archive-a-screener) |</p>
+<p>| SCR-09 | Diagnose why a stock matched or did not match | [Screeners](01-screeners.md#scr-09--diagnose-a-match-or-non-match) |</p>
+
+<p>### B. Strategy creation and configuration</p>
+
+<p>| ID | Scenario | Detail |</p>
+<p>| --- | --- | --- |</p>
+<p>| STR-01 | Create a strategy using an existing screener | [Strategies](02-strategies.md#str-01--create-a-strategy-using-an-existing-screener) |</p>
+<p>| STR-02 | Create a strategy when the required screener does not exist | [Strategies](02-strategies.md#str-02--create-a-strategy-when-the-required-screener-does-not-exist) |</p>
+<p>| STR-03 | Configure entry criteria | [Strategies](02-strategies.md#str-03--configure-entry-criteria) |</p>
+<p>| STR-04 | Configure exit criteria | [Strategies](02-strategies.md#str-04--configure-exit-criteria) |</p>
+<p>| STR-05 | Use separate entry and exit definitions | [Strategies](02-strategies.md#str-05--use-separate-entry-and-exit-definitions) |</p>
+<p>| STR-06 | Configure factors, weights and thresholds | [Strategies](02-strategies.md#str-06--configure-factors-weights-and-thresholds) |</p>
+<p>| STR-07 | Configure position sizing and portfolio limits | [Strategies](02-strategies.md#str-07--configure-position-sizing-and-portfolio-limits) |</p>
+<p>| STR-08 | Configure stop-loss, trailing stop and exit policy | [Strategies](02-strategies.md#str-08--configure-stop-loss-trailing-stop-and-exit-policy) |</p>
+<p>| STR-09 | Configure market gates | [Strategies](02-strategies.md#str-09--configure-market-gates) |</p>
+<p>| STR-10 | Edit an existing strategy | [Strategies](02-strategies.md#str-10--edit-an-existing-strategy) |</p>
+<p>| STR-11 | Change the screener without rebuilding the strategy | [Strategies](02-strategies.md#str-11--change-the-screener-without-rebuilding-the-strategy) |</p>
+<p>| STR-12 | Change exit policy without changing entry policy | [Strategies](02-strategies.md#str-12--change-exit-policy-without-changing-entry-policy) |</p>
+<p>| STR-13 | Enable a strategy | [Strategies](02-strategies.md#str-13--enable-a-strategy) |</p>
+<p>| STR-14 | Archive/disable a strategy | [Strategies](02-strategies.md#str-14--archive-or-disable-a-strategy) |</p>
+<p>| STR-15 | Operate multiple strategies concurrently | [Strategies](02-strategies.md#str-15--operate-multiple-strategies-concurrently) |</p>
+<p>| STR-16 | Same stock used by multiple strategies | [Strategies](02-strategies.md#str-16--same-stock-used-by-multiple-strategies) |</p>
+
+<p>### C. Recommendations and review</p>
+
+<p>| ID | Scenario | Detail |</p>
+<p>| --- | --- | --- |</p>
+<p>| REC-01 | Generate recommendations through the decision pipeline | [Recommendations](03-recommendations-review.md#rec-01--generate-recommendations-through-the-decision-pipeline) |</p>
+<p>| REC-02 | Review new recommendations | [Recommendations](03-recommendations-review.md#rec-02--review-new-recommendations) |</p>
+<p>| REC-03 | Understand why StoX recommended an action | [Recommendations](03-recommendations-review.md#rec-03--understand-why-stox-recommended-an-action) |</p>
+<p>| REC-04 | Understand OPEN/INCREASE/REDUCE/EXIT | [Recommendations](03-recommendations-review.md#rec-04--understand-open-increase-reduce-and-exit) |</p>
+<p>| REC-05 | Understand WATCH/HOLD | [Recommendations](03-recommendations-review.md#rec-05--understand-watch-and-hold) |</p>
+<p>| REC-06 | Preview a recommendation for one stock | [Recommendations](03-recommendations-review.md#rec-06--preview-a-recommendation-for-one-stock) |</p>
+<p>| REC-07 | Approve a recommendation | [Recommendations](03-recommendations-review.md#rec-07--approve-a-recommendation) |</p>
+<p>| REC-08 | Reject a recommendation | [Recommendations](03-recommendations-review.md#rec-08--reject-a-recommendation) |</p>
+<p>| REC-09 | Defer and later reopen | [Recommendations](03-recommendations-review.md#rec-09--defer-and-later-reopen) |</p>
+<p>| REC-10 | Handle partial funding | [Recommendations](03-recommendations-review.md#rec-10--handle-partial-funding) |</p>
+<p>| REC-11 | Handle an unfunded recommendation | [Recommendations](03-recommendations-review.md#rec-11--handle-an-unfunded-recommendation) |</p>
+<p>| REC-12 | Handle a superseded recommendation | [Recommendations](03-recommendations-review.md#rec-12--handle-a-superseded-recommendation) |</p>
+
+<p>### D. Execution and transaction lifecycle</p>
+
+<p>| ID | Scenario | Detail |</p>
+<p>| --- | --- | --- |</p>
+<p>| EXE-01 | Execute an approved recommendation manually | [Execution](04-execution-transactions.md#exe-01--execute-an-approved-recommendation-manually) |</p>
+<p>| EXE-02 | Record a manually executed transaction | [Execution](04-execution-transactions.md#exe-02--record-a-manually-executed-transaction) |</p>
+<p>| EXE-03 | Execute in Semi-Automatic mode | [Execution](04-execution-transactions.md#exe-03--execute-in-semi-automatic-mode) |</p>
+<p>| EXE-04 | Authorize a Semi-Automatic execution | [Execution](04-execution-transactions.md#exe-04--authorize-a-semi-automatic-execution) |</p>
+<p>| EXE-05 | Review Pending Execution | [Execution](04-execution-transactions.md#exe-05--review-pending-execution) |</p>
+<p>| EXE-06 | Submit a BUY order | [Execution](04-execution-transactions.md#exe-06--submit-a-buy-order) |</p>
+<p>| EXE-07 | Submit REDUCE/EXIT SELL order | [Execution](04-execution-transactions.md#exe-07--submit-a-reduce-or-exit-sell-order) |</p>
+<p>| EXE-08 | Cancel before broker submission | [Execution](04-execution-transactions.md#exe-08--cancel-before-broker-submission) |</p>
+<p>| EXE-09 | Cancel a submitted broker order | [Execution](04-execution-transactions.md#exe-09--cancel-a-submitted-broker-order) |</p>
+<p>| EXE-10 | Handle unfilled/cancelled order | [Execution](04-execution-transactions.md#exe-10--handle-an-unfilled-or-cancelled-order) |</p>
+<p>| EXE-11 | Handle partial fill | [Execution](04-execution-transactions.md#exe-11--handle-a-partial-fill) |</p>
+<p>| EXE-12 | Handle broker rejection | [Execution](04-execution-transactions.md#exe-12--handle-broker-rejection) |</p>
+<p>| EXE-13 | Reconcile uncertain broker state | [Execution](04-execution-transactions.md#exe-13--reconcile-uncertain-broker-state) |</p>
+<p>| EXE-14 | Retry without creating a duplicate order | [Execution](04-execution-transactions.md#exe-14--retry-without-creating-a-duplicate-order) |</p>
+<p>| EXE-15 | Verify transaction and holding after execution | [Execution](04-execution-transactions.md#exe-15--verify-transaction-and-holding-after-execution) |</p>
+
+<p>### E. End-to-end journeys</p>
+
+<p>| ID | Scenario | Detail |</p>
+<p>| --- | --- | --- |</p>
+<p>| E2E-01 | New idea -&gt; new screener -&gt; new strategy -&gt; recommendation -&gt; BUY | [End to end](05-end-to-end.md#e2e-01--new-idea-to-first-buy) |</p>
+<p>| E2E-02 | Existing screener -&gt; new strategy -&gt; BUY | [End to end](05-end-to-end.md#e2e-02--existing-screener-to-buy) |</p>
+<p>| E2E-03 | Existing holding -&gt; exit signal -&gt; SELL -&gt; closed transaction | [End to end](05-end-to-end.md#e2e-03--exit-signal-to-closed-transaction) |</p>
+<p>| E2E-04 | Modify strategy -&gt; regenerate -&gt; supersede old recommendation | [End to end](05-end-to-end.md#e2e-04--strategy-change-and-supersession) |</p>
+<p>| E2E-05 | Approve -&gt; cancel -&gt; retry later | [End to end](05-end-to-end.md#e2e-05--approve-cancel-and-retry) |</p>
+<p>| E2E-06 | Insufficient capital -&gt; resolve funding -&gt; execute | [End to end](05-end-to-end.md#e2e-06--insufficient-capital-to-execution) |</p>
+<p>| E2E-07 | Same stock in two strategies -&gt; one strategy exits | [End to end](05-end-to-end.md#e2e-07--same-stock-in-two-strategies) |</p>
+
+<h2 id="deferred-simple-journey-chapter">Deferred/simple journey chapter</h2>
+
+<p>The first version intentionally prioritizes workflows that change investment policy, recommendation state, money, orders or holdings. A later chapter should cover simpler navigation and maintenance journeys such as Dashboard reading, Stock Explorer, Watchlist, alerts, notification history, ordinary settings, profile and portfolio switching.</p>
+
+<h2 id="documentation-rules">Documentation rules</h2>
+
+<p>When adding or changing a journey:</p>
+
+<p>- Describe what the user is trying to achieve before describing controls.</p>
+<p>- Prefer a realistic example over abstract placeholders.</p>
+<p>- Explain the meaning of fields that affect investment or execution behavior.</p>
+<p>- State the expected observable result after important actions.</p>
+<p>- Keep screener selection, strategy policy, recommendation approval and broker execution conceptually separate.</p>
+<p>- Never imply that saving a strategy automatically generates a recommendation.</p>
+<p>- Never imply that approving a recommendation automatically means the broker accepted an order.</p>
+<p>- Preserve strategy ownership when the same security appears under more than one strategy.</p>
+<p>- Document failure/recovery paths when money, broker state or recommendation lifecycle can be affected.</p>
+
+<h2 id="source-of-truth-references">Source-of-truth references</h2>
+
+<p>This guide is a user-facing companion to the current contracts under `docs/current/`, especially:</p>
+
+<p>- `discovery-screeners-registries.md`</p>
+<p>- `strategy-and-recommendations.md`</p>
+<p>- `execution-broker-safety.md`</p>
+<p>- `portfolio-cash-accounting.md`</p>
+<p>- `frontend-and-navigation.md`</p>
+
+<p>If this guide conflicts with an implemented/current product contract, correct the guide or product inconsistency explicitly rather than silently inventing behavior.</p>
+
+<p>### Admin ML acceptance</p>
+
+<p>| ID | Scenario | Detail |</p>
+<p>| --- | --- | --- |</p>
+<p>| E2E-08 | Stage sources, preview/apply PIT backfill, and record deployed acceptance | [Admin production ML acceptance](05-end-to-end.md#e2e-08--admin-production-ml-acceptance) |</p>
+
+<p>- [Documentation assistant](06-assistant.md) — grounded help, follow-up, feedback and degraded recovery.</p>
+</body></html>

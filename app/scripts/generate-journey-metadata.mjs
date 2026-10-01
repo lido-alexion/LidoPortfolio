@@ -10,13 +10,13 @@ const categories = {
   '05-end-to-end.md': 'End-to-end journeys',
 };
 const routeByCategory = { Screeners: '/screeners', Strategies: '/strategy', Recommendations: '/recommendations', Execution: '/transactions/pending', 'End-to-end journeys': '/' };
-const files = (await readdir(root)).filter((file) => file.endsWith('.md')).sort();
+const files = (await readdir(root)).filter((file) => /^\d{2}-.*\.md$/.test(file) || file === 'README.md').sort();
 await mkdir(publicJourneyRoot, { recursive: true });
 const topics = [];
 for (const file of files) {
   const source = await readFile(new URL(file, root), 'utf8');
   const category = categories[file] || 'StoX';
-  const headings = [...source.matchAll(/^##\s+((?:SCR|STR|REC|EXE|E2E)-\d+)\s+—\s+(.+)$/gm)];
+  const headings = [...source.matchAll(/^##\s+((?:SCR|STR|REC|EXE|E2E|AI)-\d+)\s+—\s+(.+)$/gm)];
   headings.forEach((heading, index) => {
     const id = heading[1]; const titleText = heading[2].trim();
     const body = source.slice(heading.index + heading[0].length, headings[index + 1]?.index || source.length);
@@ -28,7 +28,7 @@ for (const file of files) {
     if (/screener/i.test(titleText) && /create/i.test(titleText)) aliases.push('new screener', 'create screener');
     if (/strategy/i.test(titleText) && /create/i.test(titleText)) aliases.push('new strategy', 'create strategy');
     const keywords = [...new Set(titleText.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((word) => word.length > 2))];
-    topics.push({ id, title, aliases, keywords, synonyms: [], category, route, guide: `/docs/journeys/${basename(file, '.md')}.html#${id.toLowerCase()}--${slug}`, steps: steps.length ? steps : ['Open the relevant StoX page.', 'Follow the documented workflow.', 'Confirm the expected result.'], prerequisites: [], warnings: [] });
+    topics.push({ id, title, aliases, keywords, synonyms: [], category, route, guide: `/docs/journeys/${basename(file, '.md')}.html#${id.toLowerCase()}-${slug}`, steps: steps.length ? steps : ['Open the relevant StoX page.', 'Follow the documented workflow.', 'Confirm the expected result.'], prerequisites: [], warnings: [] });
   });
 }
 for (const file of files) {

@@ -67,3 +67,10 @@ for (const file of generatedHtml) {
     if (!expectedHtml.has(file)) throw new Error(`Orphan generated documentation topic: ${file}`);
 }
 console.log(`Static documentation contract is current (${APP_DOCUMENTATION.length} topics).`);
+
+const { JOURNEY_TOPICS } = await import('../resources/js/src/data/journeyMetadata.js');
+for (const topic of JOURNEY_TOPICS) {
+    const [url, anchor] = topic.guide.split('#');
+    const html = fs.readFileSync(path.join(appRoot, 'public', url), 'utf8');
+    if (!html.includes(`id="${anchor}"`)) throw new Error(`Journey anchor missing: ${topic.guide}`);
+}
