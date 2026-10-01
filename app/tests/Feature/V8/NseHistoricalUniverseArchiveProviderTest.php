@@ -205,7 +205,13 @@ class NseHistoricalUniverseArchiveProviderTest extends TestCase
     public function test_missing_date_does_not_fallback_to_current_stock_master(): void
     {
         Stock::query()->create(['symbol' => 'CURRENT', 'exchange' => 'NSE', 'name' => 'Current', 'is_active' => true]);
-        config(['ml.historical_universe.bhavcopy_path' => storage_path('framework/testing/does-not-exist')]);
+        config([
+            'ml.historical_universe.bhavcopy_path' => storage_path('framework/testing/does-not-exist'),
+            // This test exercises the no-fallback contract. Keep the optional
+            // official downloader out of the fixture even when CI enables it
+            // globally for the deployment verification environment.
+            'forward_data.official_source_enabled' => false,
+        ]);
         $result = app(MlHistoricalUniverseMembershipService::class)->backfillFromProvider(
             ['2020-01-01'], app(NseHistoricalUniverseArchiveProvider::class), 'nse-test', 1,
         );

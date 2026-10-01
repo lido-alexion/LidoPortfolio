@@ -167,7 +167,13 @@ class StrategyConfigurationService
     public function getActiveStrategy(PortfolioProfile $profile, ?int $strategyId = null): array
     {
         $version = $this->resolveEditorVersion($profile, $strategyId);
-        $strategy = $version->strategy ?? TradingStrategy::query()->findOrFail($version->strategy_id);
+        // Resolve the owning strategy from the immutable FK and active
+        // portfolio, rather than relying on a possibly stale relationship
+        // instance returned by the selected version.
+        $strategy = TradingStrategy::query()
+            ->where('profile_id', $profile->id)
+            ->whereKey($version->strategy_id)
+            ->firstOrFail();
 
         return $this->serializeStrategy($strategy, $version);
     }
