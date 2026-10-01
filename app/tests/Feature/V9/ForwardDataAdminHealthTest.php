@@ -96,14 +96,16 @@ class ForwardDataAdminHealthTest extends TestCase
     public function test_data003_admin_endpoints_reject_missing_and_invalid_bearer_credentials(): void
     {
         foreach (['/api/forward-data/health', '/api/forward-data/work', '/api/operational-alerts'] as $path) {
-            $this->getJson($path)
+            $this->get($path)
                 ->assertUnauthorized()
-                ->assertJsonPath('message', 'Unauthenticated.');
+                ->assertJsonPath('message', 'Unauthenticated.')
+                ->assertHeader('X-Request-ID');
 
             $this->withHeader('Authorization', 'Bearer invalid-data003-regression-token')
-                ->getJson($path)
+                ->get($path)
                 ->assertUnauthorized()
-                ->assertJsonPath('message', 'Unauthenticated.');
+                ->assertJsonPath('message', 'Unauthenticated.')
+                ->assertHeader('X-Request-ID');
         }
     }
 

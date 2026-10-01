@@ -37,6 +37,15 @@ $application = Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // API authentication failures must never enter Laravel's browser
+        // redirect path, even when a client omits an Accept header.
+        $middleware->redirectGuestsTo(function (Request $request): ?string {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return null;
+            }
+
+            return route('login');
+        });
         $middleware->statefulApi();
         $middleware->prependToGroup('api', DebugAgentToken::class);
         $middleware->appendToGroup('api', AssignRequestId::class);
