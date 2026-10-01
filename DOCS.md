@@ -31,6 +31,7 @@ The current docs are feature-oriented rather than version-oriented:
 
 14. [Production ML acceptance amendment](docs/current/ml-production-acceptance.md)
 15. [ML lifecycle operations](docs/current/ml-lifecycle-operations.md)
+16. [CI/CD governance](docs/current/ci-cd-governance.md)
 
 ## StoX V8 implementation
 
