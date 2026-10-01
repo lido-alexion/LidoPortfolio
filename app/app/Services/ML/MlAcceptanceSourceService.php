@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Services\ML;
 
 use App\Jobs\MlAcceptanceJob;
@@ -12,6 +13,7 @@ use ZipArchive;
 class MlAcceptanceSourceService
 {
     public const MAX_BYTES = 16777216;
+
     public const MAX_EXPANDED = 33554432;
 
     public function create(array $manifest, int $actor): MlAcceptanceSource
@@ -31,6 +33,7 @@ class MlAcceptanceSourceService
             ? '/\A(?:cm\d{2}[A-Za-z]{3}\d{4}bhav\.csv(?:\.zip)?|BhavCopy_NSE_CM_0_0_0_\d{8}_F_0000\.csv(?:\.zip)?)\z/i'
             : '/\A(?:NSE|MII)[A-Za-z0-9_.-]*\d{8}[A-Za-z0-9_.-]*\.(csv|zip)\z/i';
         $this->require(preg_match($pattern, $manifest['filename']) === 1, 'Unsupported official source filename.');
+
         return Cache::lock('ml-acceptance-source-quota', 30)->block(5, function () use ($manifest, $actor) {
             $this->require(MlAcceptanceSource::query()->where('actor_id', $actor)->whereIn('status', ['uploading', 'queued'])->count() < 4, 'Incomplete upload quota exceeded.');
             $reserved = 0;
@@ -43,6 +46,7 @@ class MlAcceptanceSourceService
                 'history' => app(MlAcceptanceRuntime::class)->history([], 'created', $actor),
             ]);
             File::ensureDirectoryExists($this->directory($source), 0700, true);
+
             return $source;
         });
     }
@@ -62,13 +66,18 @@ class MlAcceptanceSourceService
                 fseek($handle, $offset);
                 if ($offset < $size) {
                     $this->require($offset + strlen($bytes) <= $size && fread($handle, strlen($bytes)) === $bytes, 'Duplicate chunk differs.');
-                    if ($source->received === $size) return $source;
+                    if ($source->received === $size) {
+                        return $source;
+                    }
                 } else {
                     $this->require(fwrite($handle, $bytes) === strlen($bytes), 'Chunk could not be stored.');
                     fflush($handle);
                 }
                 $source->forceFill(['received' => max($size, $offset + strlen($bytes)), 'history' => app(MlAcceptanceRuntime::class)->history($source->history, 'chunk:'.$offset.':'.strlen($bytes), $actor)])->save();
-            } finally { fclose($handle); }
+            } finally {
+                fclose($handle);
+            }
+
             return $source;
         });
     }
@@ -76,11 +85,13 @@ class MlAcceptanceSourceService
     public function finalize(MlAcceptanceSource $source, int $actor): MlAcceptanceSource
     {
         app(MlAcceptanceRuntime::class)->assertQueue();
+
         return Cache::lock('ml-source-'.$source->id, 60)->block(5, function () use ($source, $actor) {
             $source->refresh();
             $this->require($source->status === 'uploading' && $source->received === (int) $source->manifest['bytes'], 'Upload is incomplete or already finalized.');
             $source->forceFill(['status' => 'queued', 'history' => app(MlAcceptanceRuntime::class)->history($source->history, 'finalize', $actor)])->save();
             MlAcceptanceJob::dispatch('source', $source->id);
+
             return $source;
         });
     }
@@ -88,27 +99,33 @@ class MlAcceptanceSourceService
     public function resume(MlAcceptanceSource $source, int $actor): MlAcceptanceSource
     {
         app(MlAcceptanceRuntime::class)->assertQueue();
+
         return Cache::lock('ml-source-'.$source->id, 60)->block(5, function () use ($source, $actor) {
             $source->refresh();
             $this->require($source->status === 'queued', 'Only queued validation can resume.');
             $source->forceFill(['history' => app(MlAcceptanceRuntime::class)->history($source->history, 'validation_resumed', $actor)])->save();
             MlAcceptanceJob::dispatch('source', $source->id);
+
             return $source;
         });
     }
 
     public function validateQueued(string $id): void
     {
-        Cache::lock('ml-source-'.$id, 300)->block(5, function () use ($id) {
+        Cache::lock('ml-source-'.$id, MlAcceptanceRuntime::LOCK_SECONDS)->block(5, function () use ($id) {
             $source = MlAcceptanceSource::query()->findOrFail($id);
-            if ($source->status !== 'queued') return;
+            if ($source->status !== 'queued') {
+                return;
+            }
             try {
                 $manifest = $source->manifest;
                 $payload = $this->directory($source).'/payload';
                 $this->require(is_file($payload) && filesize($payload) === (int) $manifest['bytes'] && hash_equals($manifest['sha256'], hash_file('sha256', $payload)), 'Source size or SHA-256 mismatch.');
                 $contents = $this->safeContents($payload, $manifest['filename'], $manifest['date']);
                 $filename = preg_replace('/\.zip$/i', '', $manifest['filename']);
-                if (! str_ends_with(strtolower($filename), '.csv')) $filename .= '.csv';
+                if (! str_ends_with(strtolower($filename), '.csv')) {
+                    $filename .= '.csv';
+                }
                 $path = $this->directory($source).'/'.$filename;
                 $this->require(file_put_contents($path, $contents) === strlen($contents), 'Source could not be stored.');
                 $snapshot = app(NseHistoricalUniverseArchiveProvider::class)->stagedSnapshot($path, $manifest['source'], $manifest['date'], false);
@@ -129,8 +146,10 @@ class MlAcceptanceSourceService
 
     public function safeContents(string $path, string $filename, ?string $date = null): string
     {
-        if (! str_ends_with(strtolower($filename), '.zip')) return (string) file_get_contents($path);
-        $zip = new ZipArchive();
+        if (! str_ends_with(strtolower($filename), '.zip')) {
+            return (string) file_get_contents($path);
+        }
+        $zip = new ZipArchive;
         $this->require($zip->open($path, ZipArchive::CHECKCONS) === true, 'Invalid archive.');
         try {
             $this->require($zip->numFiles === 1, 'Archive must contain one flat CSV.');
@@ -145,9 +164,14 @@ class MlAcceptanceSourceService
             $this->require($stat['size'] > 0 && $stat['size'] <= self::MAX_EXPANDED && $stat['size'] <= max(1, $stat['comp_size']) * 100, 'Archive expansion limit exceeded.');
             $contents = $zip->getFromIndex(0, self::MAX_EXPANDED + 1);
             $this->require(is_string($contents) && strlen($contents) === $stat['size'] && sprintf('%u', crc32($contents)) === sprintf('%u', $stat['crc']), 'Archive checksum failed.');
-            if ($date !== null) app(NseHistoricalUniverseArchiveProvider::class)->validateEntryDate($name, $contents, $date);
+            if ($date !== null) {
+                app(NseHistoricalUniverseArchiveProvider::class)->validateEntryDate($name, $contents, $date);
+            }
+
             return $contents;
-        } finally { $zip->close(); }
+        } finally {
+            $zip->close();
+        }
     }
 
     public function snapshot(MlAcceptanceSource $source): array
@@ -161,6 +185,7 @@ class MlAcceptanceSourceService
         $snapshot['diagnostics']['source_id'] = $source->id;
         $snapshot['diagnostics']['source_sha256'] = $source->manifest['sha256'];
         $snapshot['diagnostics']['membership_sha256'] = hash('sha256', json_encode($snapshot['memberships'], JSON_THROW_ON_ERROR));
+
         return $snapshot;
     }
 
@@ -170,6 +195,7 @@ class MlAcceptanceSourceService
             $source->refresh();
             $this->require(in_array($source->status, ['uploading', 'queued'], true), 'Source cannot be cancelled.');
             $source->forceFill(['status' => 'cancelled', 'history' => app(MlAcceptanceRuntime::class)->history($source->history, 'cancelled', $actor)])->save();
+
             return $source;
         });
     }
@@ -181,6 +207,8 @@ class MlAcceptanceSourceService
 
     private function require(bool $condition, string $message): void
     {
-        if (! $condition) throw ValidationException::withMessages(['source' => [$message]]);
+        if (! $condition) {
+            throw ValidationException::withMessages(['source' => [$message]]);
+        }
     }
 }

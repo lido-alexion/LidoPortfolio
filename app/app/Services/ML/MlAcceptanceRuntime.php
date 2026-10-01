@@ -1,12 +1,21 @@
 <?php
+
 namespace App\Services\ML;
 
 use App\Models\V7\MlModelVersion;
+use Carbon\Carbon;
+use Illuminate\Contracts\Queue\Job;
 use Illuminate\Validation\ValidationException;
 
 class MlAcceptanceRuntime
 {
     public const TIMEOUT = 14400;
+
+    public const CONNECTION = 'ml-acceptance';
+
+    public const QUEUE = 'ml-acceptance';
+
+    public const LOCK_SECONDS = 14460;
 
     public function identity(): array
     {
@@ -16,6 +25,7 @@ class MlAcceptanceRuntime
         foreach (MlScoringService::HORIZONS as $horizon) {
             $profiles[$horizon] = app(MlFeatureRegistryService::class)->featureSetForHorizon($horizon);
         }
+
         return [
             'build_id' => is_string($build['build_id'] ?? null) ? $build['build_id'] : null,
             'commit_sha' => is_string($build['commit_sha'] ?? null) ? $build['commit_sha'] : null,
@@ -28,16 +38,45 @@ class MlAcceptanceRuntime
 
     public function queueReady(): bool
     {
-        $connection = config('queue.connections.'.config('queue.default'), []);
+        $connection = config('queue.connections.'.self::CONNECTION, []);
+
         return in_array($connection['driver'] ?? null, ['database', 'redis'], true)
-            && ($connection['retry_after'] ?? 0) > self::TIMEOUT
-            && (app()->environment('testing') || in_array(config('cache.default'), ['database', 'redis'], true));
+            && is_int($connection['retry_after'] ?? null)
+            && $connection['retry_after'] > self::TIMEOUT
+            && ($connection['queue'] ?? null) === self::QUEUE
+            && config('queue.default') !== self::CONNECTION
+            && in_array(config('cache.stores.'.config('cache.default').'.driver'), ['database', 'redis'], true);
     }
 
     public function assertQueue(): void
     {
         if (! $this->queueReady()) {
-            throw ValidationException::withMessages(['queue' => ['Acceptance requires a database/Redis queue, visibility timeout above 14400 seconds and distributed cache locks.']]);
+            throw ValidationException::withMessages(['queue' => ['Acceptance requires the dedicated ml-acceptance database/Redis connection and queue, visibility timeout above 14400 seconds and distributed cache locks.']]);
+        }
+    }
+
+    /** Only an actual queue reservation can attest worker execution. */
+    public function workerEvidence(?Job $job): ?array
+    {
+        if (! $job || ! $job->getJobId()
+            || $job->getConnectionName() !== self::CONNECTION || $job->getQueue() !== self::QUEUE) {
+            return null;
+        }
+
+        return ['connection' => self::CONNECTION, 'queue' => self::QUEUE,
+            'observed_at' => now()->toIso8601String(), 'identity' => $this->identity()];
+    }
+
+    public function validWorkerEvidence(array $evidence): bool
+    {
+        try {
+            return ($evidence['connection'] ?? null) === self::CONNECTION
+                && ($evidence['queue'] ?? null) === self::QUEUE
+                && ($evidence['identity'] ?? null) == $this->identity()
+                && ! empty($evidence['observed_at'])
+                && Carbon::parse($evidence['observed_at'])->between(now()->subDays(30), now());
+        } catch (\Throwable) {
+            return false;
         }
     }
 
@@ -49,6 +88,7 @@ class MlAcceptanceRuntime
     public function history(array $history, string $action, ?int $actor): array
     {
         $history[] = ['action' => $action, 'actor_id' => $actor, 'at' => now()->toIso8601String()];
+
         return $history;
     }
 }

@@ -1,12 +1,14 @@
 <?php
+
 namespace App\Services\ML;
 
 use App\Jobs\MlAcceptanceJob;
 use App\Jobs\MlRetrainJob;
 use App\Models\User;
-use App\Models\V7\MlTrainingRun;
 use App\Models\V7\MlModelVersion;
+use App\Models\V7\MlTrainingRun;
 use App\Models\V8\MlAcceptanceCampaign;
+use App\Models\V8\MlUniverseSnapshotBoundary;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -19,10 +21,15 @@ class MlAcceptanceCampaignService
     {
         app(MlAcceptanceRuntime::class)->assertQueue();
         validator(['cutoff' => $cutoff], ['cutoff' => 'required|date_format:Y-m-d|before_or_equal:today'])->validate();
+
         return Cache::lock('ml-acceptance-campaign-create', 30)->block(5, function () use ($cutoff, $actor) {
-            if (MlAcceptanceCampaign::query()->whereIn('status', ['preflight', 'ready', 'training'])->exists()) $this->fail('An acceptance campaign is already active.');
+            if (MlAcceptanceCampaign::query()->whereIn('status', ['preflight', 'ready', 'training'])->exists()) {
+                $this->fail('An acceptance campaign is already active.');
+            }
             // Retain immutable evidence rather than silently pruning it to free space.
-            if (MlAcceptanceCampaign::query()->count() >= 100) $this->fail('Acceptance evidence retention quota reached.');
+            if (MlAcceptanceCampaign::query()->count() >= 100) {
+                $this->fail('Acceptance evidence retention quota reached.');
+            }
             $runtime = app(MlAcceptanceRuntime::class);
             $campaign = MlAcceptanceCampaign::query()->create([
                 'id' => (string) Str::uuid(), 'actor_id' => $actor, 'cutoff_date' => $cutoff, 'status' => 'preflight',
@@ -30,21 +37,29 @@ class MlAcceptanceCampaignService
                 'history' => $runtime->history([], 'preflight_requested', $actor),
             ]);
             MlAcceptanceJob::dispatch('campaign', $campaign->id);
+
             return $campaign;
         });
     }
 
     public function action(MlAcceptanceCampaign $campaign, string $action, int $actor): MlAcceptanceCampaign
     {
-        if ($action !== 'cancel') app(MlAcceptanceRuntime::class)->assertQueue();
-        return Cache::lock('ml-campaign-'.$campaign->id, MlAcceptanceRuntime::TIMEOUT + 30)->block(5, function () use ($campaign, $action, $actor) {
+        if ($action !== 'cancel') {
+            app(MlAcceptanceRuntime::class)->assertQueue();
+        }
+
+        return Cache::lock('ml-campaign-'.$campaign->id, MlAcceptanceRuntime::LOCK_SECONDS)->block(5, function () use ($campaign, $action, $actor) {
             $campaign->refresh();
             if ($action === 'start') {
-                if ($campaign->status !== 'ready' || ! $this->identityMatches($campaign)) $this->fail('Successful current preflight is required.');
+                if ($campaign->status !== 'ready' || ! $this->identityMatches($campaign)) {
+                    $this->fail('Successful current preflight is required.');
+                }
                 DB::transaction(function () use ($campaign, $actor) {
                     $horizons = $campaign->horizons;
                     foreach (MlScoringService::HORIZONS as $horizon) {
-                        if (! isset($horizons[$horizon]) || $horizons[$horizon]['blocking_reasons'] !== []) $this->fail('All horizons must pass preflight.');
+                        if (! isset($horizons[$horizon]) || $horizons[$horizon]['blocking_reasons'] !== []) {
+                            $this->fail('All horizons must pass preflight.');
+                        }
                         $run = app(MlScoringService::class)->queueRetrainRun($horizon, User::query()->findOrFail($actor), 'manual', null, [
                             'campaign_id' => $campaign->id, 'cutoff_date' => $campaign->cutoff_date->toDateString(),
                             'dataset_sha256' => $horizons[$horizon]['dataset_sha256'], 'identity' => $campaign->identity,
@@ -54,46 +69,73 @@ class MlAcceptanceCampaignService
                     $campaign->forceFill(['status' => 'training', 'horizons' => $horizons])->save();
                 });
             } elseif ($action === 'cancel') {
-                if (! in_array($campaign->status, ['preflight', 'ready', 'training'], true)) $this->fail('Campaign has finished.');
+                if (! in_array($campaign->status, ['preflight', 'ready', 'training'], true)) {
+                    $this->fail('Campaign has finished.');
+                }
                 foreach ($campaign->horizons as $evidence) {
                     $run = isset($evidence['run_id']) ? MlTrainingRun::query()->find($evidence['run_id']) : null;
-                    if ($run && in_array($run->status, ['queued', 'running', 'cancelling'], true)) app(MlTrainingRunCancellationService::class)->request($run, User::query()->find($actor), 'Acceptance campaign cancelled');
+                    if ($run && in_array($run->status, ['queued', 'running', 'cancelling'], true)) {
+                        app(MlTrainingRunCancellationService::class)->request($run, User::query()->find($actor), 'Acceptance campaign cancelled');
+                    }
                 }
                 $campaign->status = 'cancelled';
             } elseif ($action === 'resume') {
-                if (! in_array($campaign->status, ['preflight', 'training', 'cancelled'], true)) $this->fail('Failed training requires a fresh campaign.');
-                if (! $this->identityMatches($campaign)) $this->fail('Campaign identity changed.');
+                if (! in_array($campaign->status, ['preflight', 'training', 'cancelled'], true)) {
+                    $this->fail('Failed training requires a fresh campaign.');
+                }
+                if (! $this->identityMatches($campaign)) {
+                    $this->fail('Campaign identity changed.');
+                }
                 $runIds = array_values(array_filter(array_column($campaign->horizons, 'run_id')));
                 app(MlTrainingRunRecoveryService::class)->recover(null, $runIds);
                 foreach ($campaign->horizons as $horizon => $evidence) {
                     $run = isset($evidence['run_id']) ? MlTrainingRun::query()->find($evidence['run_id']) : null;
-                    if ($run?->status === 'queued') MlRetrainJob::dispatch($horizon, $run->requested_by, 'manual', null, $run->id);
+                    if ($run?->status === 'queued') {
+                        MlRetrainJob::dispatch($horizon, $run->requested_by, 'manual', null, $run->id);
+                    }
                 }
                 MlAcceptanceJob::dispatch('campaign', $campaign->id);
-            } else $this->fail('Unsupported action.');
+            } else {
+                $this->fail('Unsupported action.');
+            }
             $campaign->history = app(MlAcceptanceRuntime::class)->history($campaign->history, $action, $actor);
             $campaign->save();
+
             return $campaign;
         });
     }
 
-    public function step(string $id): void
+    public function step(string $id, ?array $workerEvidence = null): void
     {
-        Cache::lock('ml-campaign-'.$id, MlAcceptanceRuntime::TIMEOUT + 30)->block(5, function () use ($id) {
+        Cache::lock('ml-campaign-'.$id, MlAcceptanceRuntime::LOCK_SECONDS)->block(5, function () use ($id, $workerEvidence) {
             $campaign = MlAcceptanceCampaign::query()->findOrFail($id);
-            if (! in_array($campaign->status, ['preflight', 'training'], true)) return;
-            if (! $this->identityMatches($campaign)) {
-                $campaign->forceFill(['status' => 'failed', 'history' => app(MlAcceptanceRuntime::class)->history($campaign->history, 'identity_changed', null)])->save();
+            if (! in_array($campaign->status, ['preflight', 'training'], true)) {
                 return;
             }
-            if ($campaign->status === 'training') { $this->finish($campaign); return; }
+            if (! $this->identityMatches($campaign)) {
+                $campaign->forceFill(['status' => 'failed', 'history' => app(MlAcceptanceRuntime::class)->history($campaign->history, 'identity_changed', null)])->save();
+
+                return;
+            }
+            if ($campaign->status === 'training') {
+                $this->finish($campaign);
+
+                return;
+            }
             $horizons = $campaign->horizons;
             foreach (MlScoringService::HORIZONS as $horizon) {
-                if (isset($horizons[$horizon])) continue;
+                if (isset($horizons[$horizon])) {
+                    continue;
+                }
                 $horizons[$horizon] = app(MlAcceptanceEvidenceService::class)->preflight($campaign->id, $horizon, $campaign->cutoff_date);
-                $horizons[$horizon]['worker_observed_at'] = now()->toIso8601String();
+                $horizons[$horizon]['worker_evidence'] = $workerEvidence;
+                $horizons[$horizon]['worker_observed_at'] = $workerEvidence['observed_at'] ?? null;
                 $campaign->forceFill(['horizons' => $horizons])->save();
-                if (count($horizons) < 3) { MlAcceptanceJob::dispatch('campaign', $id); return; }
+                if (count($horizons) < 3) {
+                    MlAcceptanceJob::dispatch('campaign', $id);
+
+                    return;
+                }
                 break;
             }
             $passed = count($horizons) === 3 && collect($horizons)->every(fn ($e) => $e['blocking_reasons'] === []);
@@ -104,14 +146,20 @@ class MlAcceptanceCampaignService
     public function assertTraining(MlTrainingRun $run, array $dataset): void
     {
         $acceptance = $run->configuration['acceptance'] ?? null;
-        if ($acceptance === null) return;
+        if ($acceptance === null) {
+            return;
+        }
         $campaign = MlAcceptanceCampaign::query()->findOrFail($acceptance['campaign_id']);
         foreach ($campaign->horizons[$run->horizon]['snapshots'] ?? [] as $date => $snapshot) {
-            $boundary = \App\Models\V8\MlUniverseSnapshotBoundary::query()
+            $boundary = MlUniverseSnapshotBoundary::query()
                 ->where('universe_key', MlHistoricalUniverseMembershipService::ACTIVE_ELIGIBLE_NSE)->whereDate('effective_from', $date)->first();
-            if (! $boundary || $boundary->snapshot_key !== $snapshot['snapshot_key']) $this->fail('Acceptance snapshot identity changed.');
+            if (! $boundary || $boundary->snapshot_key !== $snapshot['snapshot_key']) {
+                $this->fail('Acceptance snapshot identity changed.');
+            }
             foreach ($snapshot['diagnostics'] as $key => $value) {
-                if (($boundary->quality_diagnostics[$key] ?? null) != $value) $this->fail('Acceptance snapshot provenance changed.');
+                if (($boundary->quality_diagnostics[$key] ?? null) != $value) {
+                    $this->fail('Acceptance snapshot provenance changed.');
+                }
             }
         }
         if ($campaign->status !== 'training' || ! $this->identityMatches($campaign)
@@ -124,14 +172,19 @@ class MlAcceptanceCampaignService
     private function finish(MlAcceptanceCampaign $campaign): void
     {
         $horizons = $campaign->horizons;
-        $complete = true; $valid = true;
+        $complete = true;
+        $valid = true;
         foreach (MlScoringService::HORIZONS as $horizon) {
             $run = MlTrainingRun::query()->find($horizons[$horizon]['run_id'] ?? 0);
-            if ($run && in_array($run->status, ['queued', 'running', 'cancelling'], true)) { $complete = false; continue; }
+            if ($run && in_array($run->status, ['queued', 'running', 'cancelling'], true)) {
+                $complete = false;
+
+                continue;
+            }
             $model = $run ? MlModelVersion::query()->where('training_run_id', $run->id)->orderBy('id')->first() : null;
             $configuration = $run?->configuration ?? [];
             $metadata = $model?->audit_metadata['adapter_metadata'] ?? [];
-            $passed = $run && in_array($run->status, ['completed_eligible', 'completed_rejected'], true)
+            $passed = app(MlAcceptanceRuntime::class)->validWorkerEvidence($horizons[$horizon]['worker_evidence'] ?? []) && $run && in_array($run->status, ['completed_eligible', 'completed_rejected'], true)
                 && $model && is_file((string) $model->artifact_path) && hash_equals((string) $model->artifact_sha256, hash_file('sha256', $model->artifact_path))
                 && ! empty($configuration['chronological_validation_grid'])
                 && ! empty($configuration['feature_selection']['partition_coverage'])
@@ -160,17 +213,31 @@ class MlAcceptanceCampaignService
 
     public function readiness(): array
     {
-        if (! Schema::hasTable('stox_ml_acceptance_campaigns')) return ['ready' => false, 'reason' => 'acceptance_migration_missing'];
+        if (! Schema::hasTable('stox_ml_acceptance_campaigns')) {
+            return ['ready' => false, 'reason' => 'acceptance_migration_missing'];
+        }
         $campaign = MlAcceptanceCampaign::query()->where('status', 'qualified')->where('qualified_at', '>=', now()->subDays(30))->latest('qualified_at')->first();
-        $ready = $campaign && $this->identityMatches($campaign, false);
+        $runtime = app(MlAcceptanceRuntime::class);
+        $ready = $campaign && $this->identityMatches($campaign, false) && $runtime->queueReady();
+        foreach (MlScoringService::HORIZONS as $horizon) {
+            $evidence = $campaign?->horizons[$horizon] ?? [];
+            $ready = $ready && $runtime->validWorkerEvidence($evidence['worker_evidence'] ?? [])
+                && ($evidence['training']['evidence_complete'] ?? false)
+                && ($evidence['training']['adapter_execution']['adapter'] ?? null) === MlPythonAdapter::class;
+        }
+
         return ['ready' => (bool) $ready, 'reason' => $ready ? null : 'current_production_acceptance_required', 'campaign_id' => $ready ? $campaign->id : null, 'qualified_at' => $ready ? $campaign->qualified_at->toIso8601String() : null];
     }
 
     public function identityMatches(MlAcceptanceCampaign $campaign, bool $checkActive = true): bool
     {
         $runtime = app(MlAcceptanceRuntime::class);
+
         return $campaign->identity == $runtime->identity() && (! $checkActive || $campaign->active_models == $runtime->activeModels());
     }
 
-    private function fail(string $message): never { throw ValidationException::withMessages(['campaign' => [$message]]); }
+    private function fail(string $message): never
+    {
+        throw ValidationException::withMessages(['campaign' => [$message]]);
+    }
 }

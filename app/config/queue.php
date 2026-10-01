@@ -31,6 +31,16 @@ return [
 
     'connections' => [
 
+        // Isolated from notifications/default; never change their visibility window.
+        'ml-acceptance' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'portfolio_jobs'),
+            'queue' => 'ml-acceptance',
+            'retry_after' => 15000,
+            'after_commit' => true,
+        ],
+
         'sync' => [
             'driver' => 'sync',
         ],

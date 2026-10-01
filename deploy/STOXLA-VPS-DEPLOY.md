@@ -1083,3 +1083,27 @@ After conversion to private, verify:
 - The deployment secrets remain present.
 - Any required production environment approvals are still configured as
   intended.
+
+## Dedicated ML acceptance worker
+
+After the application deployment succeeds, a privileged operator must review and install `deploy/systemd/stoxla-ml-acceptance.service` from the deployed commit. Deployment does not install or enable it. Leave `stoxla-queue.service`, `QUEUE_CONNECTION`, `DB_QUEUE_RETRY_AFTER`, lifecycle, horizon schedules, drift and retention settings unchanged. The dedicated connection is shipped in Laravel config; no new secret or environment override is required. It uses the existing database queue table and connection and the existing shared database/Redis cache locks.
+
+Before starting, verify the deployed commit/build, cached `queue.connections.ml-acceptance` values (driver database, queue ml-acceptance, retry_after 15000, after_commit true), and default cache driver's distributed lock configuration. Verify queue/cache/lock tables exist and the worker's `nitty:www-data` identity can access them. Use allowlisted config fields only; do not print `.env` or whole cached config. Check PHP CLI has `pcntl` for enforced worker timeouts, and verify the configured Python executable and adapter dependencies using the existing runtime health checks. These checks establish configuration/installation observations only, not acceptance evidence.
+
+Run as a privileged operator, after reviewing the exact deployed unit:
+
+```bash
+sudo install -o root -g root -m 0644 /var/www/stoxla/current/deploy/systemd/stoxla-ml-acceptance.service /etc/systemd/system/stoxla-ml-acceptance.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now stoxla-ml-acceptance.service
+sudo systemctl show stoxla-ml-acceptance.service --property=ActiveState,SubState,ExecStart,User,Group,TimeoutStopUSec,KillMode
+sudo systemctl status stoxla-ml-acceptance.service --no-pager
+```
+
+The command must consume only `ml-acceptance` on connection `ml-acceptance`, with `--timeout=14400`. Stop grace is 14,520 seconds, below visibility 15,000 seconds; `KillMode=mixed` allows Laravel to finish the current job before systemd kills remaining subprocesses at the grace deadline. Do not restart the notification/default worker as part of this installation. Inspect service logs locally for startup failures without publishing credentials or subprocess payloads.
+
+Read the Admin acceptance report after installation: queue configuration may now be ready, but worker/Python evidence and production acceptance must remain unknown/blocking until a separately authorized queued preflight and real three-horizon campaign record valid evidence. Do not run those operations merely to test installation. Existing timestamp-only evidence cannot prove this dedicated worker ran.
+
+### Later releases and rollback
+
+Release/rollback refuses to proceed while the dedicated service is active, activating or draining; the guard only inspects service state and never stops it. The existing release/rollback scripts broadcast Laravel `queue:restart`; the dedicated service's `Restart=always` starts the new process from `/var/www/stoxla/current` after it finishes its current job. They do not synchronously restart or health-gate this optional service. Without draining, a long job would retain the old release while deployment switches paths, updates the shared Python environment and prunes releases. **Before any later deployment or rollback with this worker installed, stop the dedicated service gracefully and wait for it to be inactive, up to 14,520 seconds; do not deploy while it is draining.** This is a separate planned operator action; leave regular workers to the existing deployment workflow. Prevent new acceptance requests during that maintenance window. Verify no acceptance job remains running before updating shared dependencies or pruning releases. After successful deployment/rollback, start the dedicated service and verify its command/build again. Changed build/configuration identities invalidate old acceptance evidence and campaigns; review before requesting fresh work. Never force-kill or clear locks to accelerate deployment.
