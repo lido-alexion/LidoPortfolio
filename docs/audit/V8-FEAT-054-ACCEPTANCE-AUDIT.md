@@ -37,3 +37,16 @@ Authoritative contract: `docs/archive/specs/V8-Historical-Fundamentals-Bootstrap
 ## Status decision
 
 FEAT-054 is **REVIEW** rather than COMPLETE because the repository evidence and focused desktop/mobile Chromium journeys are complete for the deterministic implementation, but real provider and deployed bootstrap runtime validation remain external.
+
+
+## Closure continuation — 2026-10-01 (production build `ef66133c`)
+
+Operator: Codex via connected `stoxla-prod`; UTC times below. **This entry does not mark the epic COMPLETE.** Prior local checks remain separate from production acceptance.
+
+| Acceptance check | State | Evidence / next exact check |
+|---|---|---|
+| Bounded production bootstrap, TCS/SBIN/LAURUSLABS | PASS (runtime/fallback slice) | Build `ef66133c`, VPS, 2026-10-01 18:20–18:23 UTC. Dry run resolved 3 active symbols. Run #1 TCS: 207 inserted, quarterly 107/107, annual 100/100, no rejected; run #2 LAURUSLABS 171 and SBIN 152 inserted, all three jobs `complete_good`, no failures. Seven distinct periods per job, earliest 2023-03-31, latest 2026-06-30. All 530 facts are Yahoo. |
+| Official NSE/BSE acquisition, source priority and official metadata replacement | BLOCKED | Production has `nse_official_enabled=false`, `bse_official_enabled=false`, and neither feed URL configured. The repository adapters require an operator-configured canonical JSON feed. No official fact was fetched, so official precedence/revision upgrade is unproven. |
+| Targeted-scope safety | FAILED (source defect) | `stockIdsFromSymbols` returns [] for an unknown symbol; `resolveStocks` treats [] as unrestricted, so `--stock=UNKNOWN` could run all active equities. Branch `audit/v8-closure-20261001` adds a guard and tests; not deployed. |
+| Full active-equity coverage/source exhaustion and quality | NOT YET RUN | Before slice: 2,530 Yahoo facts on 19 stocks out of 5,140 effectively active non-benchmark equities; after slice, 530 additional facts on three stocks. Full campaign must be planned after provider remediation and queue/load review. |
+| PIT fact dates, four-quarter TTM, YoY, deployed Basic/Advanced and history | NOT YET RUN | Inspect actual stored availability metadata/period continuity and authenticated deployed investor UI; successful job status alone does not establish these outcomes. |
