@@ -177,6 +177,15 @@ Download and seal the official files through the existing immutable acceptance
 source pipeline. The command is resumable: already sealed dates are skipped,
 and a queued or partial current source is continued.
 
+An NSE 404 is recorded per date and does not stop the remaining downloads.
+Do not fabricate a same-date source for a trading holiday or blindly skip a
+genuine trading date. ML dataset sampling accepts a dated price observation
+only when the NIFTY50 history has that session date or a sealed official NSE
+source validates it (including unusual weekend trading sessions). If a stale
+campaign still lists unsupported holiday dates, create a fresh preflight after
+the sources have sealed; the old campaign evidence remains immutable. Any date
+still required by the fresh campaign without a sealed source remains blocked.
+
 ```bash
 cd /var/www/stoxla/current
 php artisan ml:download-nse-acceptance-sources \

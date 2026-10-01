@@ -5,6 +5,7 @@ namespace App\Services\ML;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\V7\FundamentalFact;
+use App\Models\V8\MlAcceptanceSource;
 use App\Services\Fundamentals\FundamentalBankMetricsService;
 use App\Services\Fundamentals\FundamentalDataService;
 use Carbon\Carbon;
@@ -105,7 +106,7 @@ class MlTrainingDatasetBuilder
     }
 
     /** Canonical viable reference dates and label ends; no dataset or membership writes. */
-    public function requiredReferenceDates(string $horizon, Carbon $cutoff): array
+    public function requiredReferenceDates(string $horizon, Carbon $cutoff, ?array $sessionDates = null): array
     {
         $horizonDays = ['1m' => 21, '3m' => 63, '6m' => 126][$horizon] ?? throw new RuntimeException('Unsupported ML horizon.');
         $benchmark = Stock::query()->where('symbol', 'NIFTY50')->first();
@@ -113,10 +114,11 @@ class MlTrainingDatasetBuilder
             return [];
         }
         $benchmarkSeries = $this->priceSeries($benchmark, $cutoff);
+        $sessionDates ??= $this->verifiedSessionDates($benchmarkSeries, $cutoff);
         $referenceDates = [];
-        $this->universeQuery()->chunkById(100, function ($stockChunk) use (&$referenceDates, $benchmarkSeries, $horizonDays, $cutoff): void {
+        $this->universeQuery()->chunkById(100, function ($stockChunk) use (&$referenceDates, $benchmarkSeries, $sessionDates, $horizonDays, $cutoff): void {
             foreach ($stockChunk as $stock) {
-                $series = $this->priceSeries($stock, $cutoff);
+                $series = $this->priceSeries($stock, $cutoff, $sessionDates);
                 foreach ($this->viableObservations($series, $benchmarkSeries, $horizonDays, $cutoff) as $observation) {
                     $date = $observation['reference_date'];
                     if (! isset($referenceDates[$date]) || $observation['label_end'] < $referenceDates[$date]) {
@@ -151,7 +153,8 @@ class MlTrainingDatasetBuilder
         }
 
         $benchmarkSeries = $this->priceSeries($benchmark, $cutoff);
-        $referenceDates = $this->requiredReferenceDates($horizon, $cutoff);
+        $sessionDates = $this->verifiedSessionDates($benchmarkSeries, $cutoff);
+        $referenceDates = $this->requiredReferenceDates($horizon, $cutoff, $sessionDates);
         $dates = array_keys($referenceDates);
         sort($dates);
         if (count($dates) < 3) {
@@ -178,10 +181,10 @@ class MlTrainingDatasetBuilder
             'sector_relative_missing' => 0,
         ];
         try {
-            $this->universeQuery()->chunkById(100, function ($stockChunk) use (&$handles, &$rowCounts, &$purgedRows, &$peakBufferedRows, &$stocksProcessed, &$contextCoverage, $benchmarkSeries, $horizonDays, $cutoff, $partitions): void {
+            $this->universeQuery()->chunkById(100, function ($stockChunk) use (&$handles, &$rowCounts, &$purgedRows, &$peakBufferedRows, &$stocksProcessed, &$contextCoverage, $benchmarkSeries, $sessionDates, $horizonDays, $cutoff, $partitions): void {
                 foreach ($stockChunk as $stock) {
                     $stocksProcessed++;
-                    $series = $this->priceSeries($stock, $cutoff);
+                    $series = $this->priceSeries($stock, $cutoff, $sessionDates);
                     if ($series['dates'] === []) {
                         continue;
                     }
@@ -820,7 +823,7 @@ class MlTrainingDatasetBuilder
     }
 
     /** @return array{features:array<string,float>,labels:array<string,float>,dates:list<string>,index:array<string,int>} */
-    private function priceSeries(Stock $stock, Carbon $to): array
+    private function priceSeries(Stock $stock, Carbon $to, ?array $sessionDates = null): array
     {
         $features = [];
         $labels = [];
@@ -828,11 +831,14 @@ class MlTrainingDatasetBuilder
         $dates = [];
         $highs = [];
         $lows = [];
-        StockPrice::query()->where('stock_id', $stock->id)->whereDate('price_date', '<=', $to->toDateString())->orderBy('price_date')->get(['price_date', 'close_price', 'adjusted_close_price', 'high_price', 'low_price', 'volume'])->each(function (StockPrice $price) use (&$features, &$labels, &$volumes, &$dates, &$highs, &$lows): void {
+        StockPrice::query()->where('stock_id', $stock->id)->whereDate('price_date', '<=', $to->toDateString())->orderBy('price_date')->get(['price_date', 'close_price', 'adjusted_close_price', 'high_price', 'low_price', 'volume'])->each(function (StockPrice $price) use (&$features, &$labels, &$volumes, &$dates, &$highs, &$lows, $sessionDates): void {
             if ($price->close_price === null) {
                 return;
             }
             $date = $price->price_date->toDateString();
+            if ($sessionDates !== null && ! isset($sessionDates[$date])) {
+                return;
+            }
             $dates[] = $date;
             $close = (float) $price->close_price;
             $features[$date] = $close;
@@ -843,6 +849,25 @@ class MlTrainingDatasetBuilder
         });
 
         return ['features' => $features, 'labels' => $labels, 'volumes' => $volumes, 'highs' => $highs, 'lows' => $lows, 'dates' => $dates, 'index' => array_flip($dates)];
+    }
+
+    /** @return array<string, true> */
+    private function verifiedSessionDates(array $benchmarkSeries, Carbon $cutoff): array
+    {
+        $dates = array_fill_keys($benchmarkSeries['dates'], true);
+        // A special exchange session can have an official cash-market file even
+        // when the separately ingested NIFTY50 series has no bar for that date.
+        foreach (MlAcceptanceSource::query()->where('status', 'sealed')->get(['manifest', 'evidence']) as $source) {
+            $manifest = $source->manifest ?? [];
+            $date = $manifest['date'] ?? null;
+            if (in_array($manifest['source'] ?? null, ['nse_cash_bhavcopy', 'nse_mii_security_file'], true)
+                && is_string($date) && $date <= $cutoff->toDateString()
+                && ($source->evidence['validated_date'] ?? null) === $date) {
+                $dates[$date] = true;
+            }
+        }
+
+        return $dates;
     }
 
     /** @return array<string,int> */

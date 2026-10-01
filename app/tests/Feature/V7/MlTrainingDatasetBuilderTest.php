@@ -161,7 +161,7 @@ class MlTrainingDatasetBuilderTest extends TestCase
         $dataset = app(MlTrainingDatasetBuilder::class)->buildStreamed('1m', Carbon::parse('2025-08-01'), $directory);
 
         $this->assertGreaterThan(0, $dataset['diagnostics']['rows_written']);
-        $this->assertLessThan(90, $queries, 'Dataset construction regressed to unbounded per-reference SQL queries.');
+        $this->assertLessThan(91, $queries, 'Dataset construction regressed to unbounded per-reference SQL queries.');
         $this->assertLessThanOrEqual(50, $dataset['diagnostics']['peak_buffered_rows']);
         $this->assertSame($dataset['diagnostics']['rows_written'], array_sum($dataset['partitions']['row_counts']));
         File::deleteDirectory($directory);
@@ -224,7 +224,7 @@ class MlTrainingDatasetBuilderTest extends TestCase
         $directory = storage_path('framework/testing/ml-benchmark-boundary-'.bin2hex(random_bytes(4)));
         $dataset = app(MlTrainingDatasetBuilder::class)->buildStreamed('1m', Carbon::parse('2026-09-01'), $directory);
 
-        $this->assertSame('2025-01-26', $dataset['diagnostics']['viable_reference_date_start']);
+        $this->assertSame('2025-03-30', $dataset['diagnostics']['viable_reference_date_start']);
         $this->assertGreaterThan($dataset['diagnostics']['viable_reference_date_start'], $dataset['diagnostics']['viable_reference_date_end']);
         $this->assertGreaterThan(30, $dataset['diagnostics']['viable_reference_date_count']);
         $this->assertSame($dataset['diagnostics']['benchmark_start_date'], '2025-01-20');
