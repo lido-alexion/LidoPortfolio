@@ -49,6 +49,7 @@ class StrategyConfigurationService
         $strategy = TradingStrategy::query()
             ->where('profile_id', $profile->id)
             ->where('status', TradingStrategy::STATUS_ACTIVE)
+            ->orderBy('id')
             ->with('activeVersion')
             ->first();
 
@@ -60,6 +61,7 @@ class StrategyConfigurationService
             $existing = TradingStrategy::query()
                 ->where('profile_id', $profile->id)
                 ->where('status', TradingStrategy::STATUS_ACTIVE)
+                ->orderBy('id')
                 ->lockForUpdate()
                 ->first();
 

@@ -28,12 +28,27 @@ return new class extends Migration
                 }
             });
 
-            try {
-                Schema::table('portfolio_screener_backtest_days', function (Blueprint $table) {
-                    $table->dropUnique('portfolio_screener_backtest_days_unique');
-                });
-            } catch (Throwable) {
-                // already migrated
+            // MySQL can retain the legacy index when the schema builder cannot
+            // resolve its historical name. Inspect the actual index first and
+            // drop it explicitly so the version-aware key is authoritative.
+            if (DB::getDriverName() === 'mysql') {
+                $legacyIndex = collect(DB::select(
+                    'SHOW INDEX FROM `portfolio_screener_backtest_days` WHERE Key_name = ?',
+                    ['portfolio_screener_backtest_days_unique'],
+                ));
+                if ($legacyIndex->isNotEmpty()) {
+                    DB::statement(
+                        'ALTER TABLE `portfolio_screener_backtest_days` DROP INDEX `portfolio_screener_backtest_days_unique`',
+                    );
+                }
+            } else {
+                try {
+                    Schema::table('portfolio_screener_backtest_days', function (Blueprint $table) {
+                        $table->dropUnique('portfolio_screener_backtest_days_unique');
+                    });
+                } catch (Throwable) {
+                    // The legacy index was already removed on this driver.
+                }
             }
 
             Schema::table('portfolio_screener_backtest_days', function (Blueprint $table) {
