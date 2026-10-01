@@ -26,3 +26,14 @@ Status: **REVIEW — local producer implementation is verified; PHP SDK, Collect
 ## Status decision
 
 FEAT-052 remains **REVIEW**. The browser SDK path now covers fetches, uncaught exceptions and unhandled promise rejections locally without enabling an endpoint by default. PHP automatic SDK instrumentation, Collector receipt, CORS and deployed runtime validation remain bounded follow-up work; no production success is claimed.
+
+
+## Closure continuation — 2026-10-01 (production build `ef66133c`)
+
+Operator: Codex via connected `stoxla-prod`; UTC times below. **This entry does not mark the epic COMPLETE.** Prior local checks remain separate from production acceptance.
+
+| Acceptance check | State | Evidence / next exact check |
+|---|---|---|
+| Collector and PHP producer configuration | PASS (configuration only) | Build `ef66133c`, VPS, 2026-10-01 18:25 UTC: `stoxla-queue` and `otelcol-contrib` active; `lido_telemetry.enabled=true`, traces/metrics endpoints configured, PHP `opentelemetry` extension loaded. No trace receipt was inferred. |
+| Correlated browser → HTTP → queue and scheduler trace, LidoTelemetry visibility and bounded attributes | NOT YET RUN | Capture trace IDs privately; inspect Collector receipt and destination, latency/events and privacy. |
+| Browser OTLP/CORS and exporter/Collector outage fail-open | NOT YET RUN | Controlled provider/outage exercise without affecting investor action. |
