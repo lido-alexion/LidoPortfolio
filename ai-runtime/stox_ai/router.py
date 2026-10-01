@@ -9,7 +9,7 @@ from pydantic import TypeAdapter, ValidationError
 from .budgets import BudgetLedger
 from .circuit_breaker import CircuitBreaker
 from .registry import CapabilityRegistry
-from .schemas import InferenceRequest, InferenceResult, RoutingEvent, Usage
+from .schemas import InferenceRequest, InferenceResult, NormalizedError, RoutingEvent, Usage
 from .providers import ProviderFailure
 
 
@@ -21,7 +21,10 @@ class InferenceRouter:
         self.semaphores: dict[str, asyncio.Semaphore] = defaultdict(lambda: asyncio.Semaphore(4))
 
     async def infer(self, request: InferenceRequest) -> InferenceResult:
-        capability = self.registry.get(request.capability_id)
+        try:
+            capability = self.registry.get(request.capability_id)
+        except KeyError:
+            return InferenceResult(request_id=request.request_id, capability_id=request.capability_id, degraded=True, status="failure", error_code=NormalizedError.CAPABILITY_DISABLED, error_message="Capability is unavailable")
         semaphore = self.semaphores[capability.capability_id]
         if semaphore._value > capability.max_concurrency:
             self.semaphores[capability.capability_id] = semaphore = asyncio.Semaphore(capability.max_concurrency)
@@ -54,4 +57,5 @@ class InferenceRouter:
                     self.breakers.failure(path_id)
                     category = getattr(error, "category", "malformed_output")
                     trace[-1] = RoutingEvent(path_id=path_id, provider=path.provider, model=path.model, state="failed", reason=str(category), duration_ms=(time.perf_counter() - started) * 1000)
-            return InferenceResult(request_id=request.request_id, capability_id=request.capability_id, routing_trace=trace, degraded=True, error_code="AI_RUNTIME_UNAVAILABLE", error_message="No eligible inference path succeeded")
+            error = NormalizedError.BUDGET_EXHAUSTED if trace and all(event.reason == "budget_exhausted" for event in trace) else NormalizedError.PROVIDER_UNAVAILABLE
+            return InferenceResult(request_id=request.request_id, capability_id=request.capability_id, routing_trace=trace, degraded=True, status="failure", error_code=error, error_message="No eligible inference path succeeded")

@@ -6,6 +6,7 @@ from stox_ai.providers import DeterministicAdapter, ProviderFailure
 from stox_ai.registry import Capability, CapabilityRegistry, ProviderPath
 from stox_ai.router import InferenceRouter
 from stox_ai.schemas import FailureCategory, InferenceRequest, ProviderResponse, Usage
+from stox_ai.retrieval import DocumentationRetriever
 
 
 def request() -> InferenceRequest:
@@ -46,3 +47,11 @@ async def test_circuit_breaker_skips_repeatedly_failing_path():
     await router.infer(request())
     result = await router.infer(request())
     assert result.routing_trace[0].reason == "circuit_open"
+
+
+def test_documentation_retrieval_has_stable_citations():
+    results = DocumentationRetriever().search("How do I export portfolio data?")
+    assert results
+    assert results[0]["source_id"].startswith("journey:")
+    assert results[0]["path"].startswith("docs/user-journeys/")
+    assert results[0]["snippet"]

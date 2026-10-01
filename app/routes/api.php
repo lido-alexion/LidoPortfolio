@@ -5,6 +5,8 @@ use App\Http\Controllers\Api\ApiFailureReportController;
 use App\Http\Controllers\Api\AdminAuditExplorerController;
 use App\Http\Controllers\Api\AdminStockController;
 use App\Http\Controllers\Api\AiPlatformAdminController;
+use App\Http\Controllers\Api\AiRuntimeInternalController;
+use App\Http\Controllers\Api\AiAssistantStreamController;
 use App\Http\Controllers\Api\AlertController;
 use App\Http\Controllers\Api\AlertPolicyController;
 use App\Http\Controllers\Api\AnalysisEvidenceController;
@@ -151,6 +153,13 @@ Route::prefix('internal/intraday-backfill')
         Route::post('/checkpoints', [\App\Http\Controllers\Api\IntradayBackfillInternalController::class, 'upsertCheckpoint']);
         Route::get('/control', [\App\Http\Controllers\Api\IntradayBackfillInternalController::class, 'control']);
     });
+
+// Private runtime projection/audit boundary.  This is deliberately not exposed
+// through Sanctum or a browser route; the Python runtime has no database access.
+Route::prefix('internal/v1/ai-runtime')->middleware('ai.runtime.internal')->group(function () {
+    Route::get('/configuration', [AiRuntimeInternalController::class, 'configuration']);
+    Route::post('/inference-events', [AiRuntimeInternalController::class, 'event']);
+});
 Route::get('/wiki/shared/{token}', [WikiShareController::class, 'show'])->where('token', '[A-Za-z0-9]{64}');
 Route::get('/wiki/shared/{token}/images/{image}', [WikiShareController::class, 'image'])
     ->where('token', '[A-Za-z0-9]{64}')->whereUuid('image');
@@ -184,6 +193,7 @@ Route::get('/notification-settings/email-destinations/{destination}/verify', [No
     ->name('notification.email.verify');
 
 Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
+    Route::post('/ai/assistant/stream', [AiAssistantStreamController::class, 'stream'])->middleware('throttle:api');
     Route::post('/logs/frontend', [FrontendLogController::class, 'store']);
     Route::post('/ops/api-failures', [ApiFailureReportController::class, 'store'])->middleware('throttle:api');
     Route::post('/telemetry/route-view', [\App\Http\Controllers\Api\LidoTelemetryController::class, 'routeView']);

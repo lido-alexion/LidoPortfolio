@@ -1,0 +1,41 @@
+<?php
+
+namespace App\Services\AI;
+
+use App\Models\AiBudgetLimit;
+use App\Models\AiCapability;
+use App\Models\AiPrompt;
+use App\Models\AiProviderPath;
+use Carbon\CarbonImmutable;
+
+class AiPlatformConfigurationService
+{
+    /** Projection only: the Python runtime never receives database access. */
+    public function projection(): array
+    {
+        $month = CarbonImmutable::now('UTC')->startOfMonth();
+        AiBudgetLimit::query()->where('period', 'monthly')->where(fn ($q) => $q->whereNull('period_started_at')->orWhere('period_started_at', '<', $month))->update(['spent' => 0, 'period_started_at' => $month]);
+
+        $paths = AiProviderPath::query()->orderBy('priority')->orderBy('path_id')->get()->map(fn ($path) => [
+            'path_id' => $path->path_id, 'provider' => $path->provider, 'model' => $path->model,
+            'priority' => $path->priority, 'enabled' => $path->enabled, 'config' => $path->config ?: [],
+        ])->all();
+        $prompts = AiPrompt::query()->where('active', true)->get()->mapWithKeys(fn ($prompt) => [$prompt->prompt_id => [
+            'id' => $prompt->prompt_id, 'version' => $prompt->version, 'template' => $prompt->template,
+            'input_schema' => $prompt->input_schema, 'output_schema' => $prompt->output_schema,
+        ]])->all();
+
+        return [
+            'version' => (string) now('UTC')->timestamp,
+            'capabilities' => AiCapability::query()->orderBy('capability_id')->get()->map(fn ($capability) => [
+                'capability_id' => $capability->capability_id, 'owner' => $capability->owner,
+                'enabled' => $capability->enabled, 'path_order' => $capability->path_order ?: [],
+                'output_schema' => $capability->output_schema, 'prompt_id' => $capability->capability_id,
+                'streaming' => $capability->capability_id === 'documentation_chat',
+                'max_concurrency' => 4,
+            ])->all(),
+            'provider_paths' => $paths, 'prompts' => $prompts,
+            'budgets' => AiBudgetLimit::query()->get()->map(fn ($budget) => ['scope' => $budget->scope, 'hard_limit' => (float) $budget->hard_limit, 'spent' => (float) $budget->spent])->all(),
+        ];
+    }
+}

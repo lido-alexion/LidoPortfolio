@@ -16,7 +16,7 @@ class AiPlatformAdminController extends Controller
         return response()->json([
             'enabled' => (bool) config('ai_runtime.enabled', false),
             'capabilities' => AiCapability::query()->orderBy('capability_id')->get(),
-            'provider_paths' => AiProviderPath::query()->orderBy('priority')->orderBy('path_id')->get(),
+            'provider_paths' => AiProviderPath::query()->orderBy('priority')->orderBy('path_id')->get()->map(fn (AiProviderPath $path) => $this->safePath($path)),
             'prompts' => AiPrompt::query()->orderBy('prompt_id')->orderByDesc('version')->get(),
         ]);
     }
@@ -43,7 +43,7 @@ class AiPlatformAdminController extends Controller
             'enabled' => ['sometimes', 'boolean'],
         ]);
         $record = AiProviderPath::query()->updateOrCreate(['path_id' => $path], $data);
-        return response()->json($record);
+        return response()->json($this->safePath($record));
     }
 
     public function publishPrompt(Request $request, string $prompt): JsonResponse
@@ -63,5 +63,16 @@ class AiPlatformAdminController extends Controller
             $data + ['prompt_id' => $prompt],
         );
         return response()->json($record);
+    }
+
+    private function safePath(AiProviderPath $path): AiProviderPath
+    {
+        $safe = clone $path;
+        $config = $safe->config ?: [];
+        foreach (['api_key', 'token', 'secret', 'password'] as $key) {
+            if (array_key_exists($key, $config)) { $config[$key] = '********'; }
+        }
+        $safe->setAttribute('config', $config);
+        return $safe;
     }
 }

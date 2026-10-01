@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import os
+from typing import Any
 
 from .budgets import BudgetLedger
 from .circuit_breaker import CircuitBreaker
-from .providers import DeterministicAdapter
+from .providers import DeterministicAdapter, OpenAICompatibleAdapter
 from .prompts import PromptRegistry
 from .registry import Capability, CapabilityRegistry, ProviderPath
 from .router import InferenceRouter
@@ -20,9 +21,21 @@ class Runtime:
             cooldown_seconds=max(1, int(os.getenv("STOX_AI_CIRCUIT_COOLDOWN_SECONDS", "60"))),
         )
         self.prompts = PromptRegistry()
-        if os.getenv("STOX_AI_ENABLE_LOCAL_ADAPTER", "false").lower() == "true":
-            self.registry.register_path(ProviderPath("local-default", "local", "deterministic", DeterministicAdapter("local", "deterministic", ProviderResponse(text="Local development adapter")), budget_scopes=("overall",)))
-            self.registry.register(Capability("runtime.healthcheck", "platform", ("local-default",), streaming=True))
+        self.router = InferenceRouter(self.registry, self.budgets, self.breakers)
+
+    def apply_projection(self, projection: dict[str, Any]) -> None:
+        """Replace the ephemeral execution projection. Laravel remains authoritative."""
+        registry = CapabilityRegistry()
+        for item in projection.get("provider_paths", []):
+            config = item.get("config") or {}
+            # Deterministic is deliberately explicit and supports CI without external AI access.
+            adapter = (DeterministicAdapter(item["provider"], item["model"], ProviderResponse(text=str(config.get("deterministic_response", "Configured deterministic response"))))
+                       if item["provider"] == "deterministic" else OpenAICompatibleAdapter(item["provider"], item["model"], config=config))
+            registry.register_path(ProviderPath(item["path_id"], item["provider"], item["model"], adapter, bool(item.get("enabled", True)), tuple(config.get("budget_scopes", ["overall", f"path:{item['path_id']}"]))))
+        for item in projection.get("capabilities", []):
+            if item.get("enabled") and item.get("path_order"):
+                registry.register(Capability(item["capability_id"], item["owner"], tuple(item["path_order"]), bool(item.get("output_schema")), bool(item.get("streaming")), max_concurrency=int(item.get("max_concurrency", 4)), prompt_id=item.get("prompt_id")))
+        self.registry = registry
         self.router = InferenceRouter(self.registry, self.budgets, self.breakers)
 
     def capability_catalog(self) -> list[dict]:
