@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AccountPerformanceController;
 use App\Http\Controllers\Api\ApiFailureReportController;
 use App\Http\Controllers\Api\AdminAuditExplorerController;
 use App\Http\Controllers\Api\AdminStockController;
+use App\Http\Controllers\Api\AiPlatformAdminController;
 use App\Http\Controllers\Api\AlertController;
 use App\Http\Controllers\Api\AlertPolicyController;
 use App\Http\Controllers\Api\AnalysisEvidenceController;
@@ -396,6 +397,10 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/settings/test-telegram', [SettingsController::class, 'testTelegram']);
 
     Route::middleware('admin')->group(function () {
+        Route::get('/admin/ai-platform', [AiPlatformAdminController::class, 'index']);
+        Route::put('/admin/ai-platform/capabilities/{capability}', [AiPlatformAdminController::class, 'upsertCapability']);
+        Route::put('/admin/ai-platform/provider-paths/{path}', [AiPlatformAdminController::class, 'upsertProviderPath']);
+        Route::put('/admin/ai-platform/prompts/{prompt}', [AiPlatformAdminController::class, 'publishPrompt']);
         Route::get('/admin/tax-rule-versions', [TaxRuleVersionController::class, 'index']);
         Route::post('/admin/tax-rule-versions', [TaxRuleVersionController::class, 'store']);
         Route::get('/admin/stocks', [AdminStockController::class, 'index']);
