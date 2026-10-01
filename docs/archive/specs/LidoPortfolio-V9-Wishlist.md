@@ -154,4 +154,4 @@ Normative reconciliations include:
 
 **StoX V9 remains FROZEN / IMPLEMENTATION-READY except V9-DATA-002, which is in PO REVIEW for the Windows receiver/archive revision, V9-AI-003, V9-OPS-002, V9-OPS-003 subject to its V4-FEAT-017 core dependency gate, and V9-UX-004 subject to the implemented V8 production-acceptance domain.**
 
-The implementation agent may begin automatically from this register and its linked frozen specifications. No additional planning handoff is required unless implementation discovers a genuinely new material product decision or a direct frozen-spec contradiction.
+The implementation agent may begin automatically from this register and its linked frozen specifications, subject to any row explicitly marked PO REVIEW and its listed dependency gates. V9-DATA-002/SKR-001 must not be treated as fully frozen until their Windows signing/distribution decision is resolved. No additional planning handoff is required for the other frozen work unless implementation discovers a genuinely new material product decision or a direct frozen-spec contradiction.
