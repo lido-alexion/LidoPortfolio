@@ -53,5 +53,30 @@ class ScreenerBacktestVersionTest extends TestCase
             'screener_version_id' => $v1->id,
             'as_of_date' => '2026-01-02',
         ]);
+
+        $v2 = ScreenerVersion::query()->where('screener_id', $screenerId)->where('version', 2)->firstOrFail();
+        ScreenerBacktestDay::query()->create([
+            'screener_id' => $screenerId,
+            'screener_version_id' => $v2->id,
+            'as_of_date' => '2026-01-02',
+            'scanned' => 20,
+            'matched' => 4,
+        ]);
+
+        $this->assertSame(2, ScreenerBacktestDay::query()->where('screener_id', $screenerId)->count());
+        $this->assertDatabaseHas('portfolio_screener_backtest_days', [
+            'screener_id' => $screenerId,
+            'screener_version_id' => $v1->id,
+            'as_of_date' => '2026-01-02',
+            'scanned' => 10,
+            'matched' => 2,
+        ]);
+        $this->assertDatabaseHas('portfolio_screener_backtest_days', [
+            'screener_id' => $screenerId,
+            'screener_version_id' => $v2->id,
+            'as_of_date' => '2026-01-02',
+            'scanned' => 20,
+            'matched' => 4,
+        ]);
     }
 }
