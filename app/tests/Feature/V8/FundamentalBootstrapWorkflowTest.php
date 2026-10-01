@@ -47,7 +47,7 @@ class FundamentalBootstrapWorkflowTest extends TestCase
         try {
             app(FundamentalBootstrapService::class)->createRun('stock', [], dryRun: false);
             $this->fail('Expected an unknown targeted symbol to be rejected.');
-        } catch (\\InvalidArgumentException $error) {
+        } catch (\InvalidArgumentException $error) {
             $this->assertStringContainsString('No stock matched', $error->getMessage());
         }
 
@@ -57,7 +57,7 @@ class FundamentalBootstrapWorkflowTest extends TestCase
 
     public function test_inactive_explicit_stock_does_not_create_run(): void
     {
-        $this->expectException(\\InvalidArgumentException::class);
+        $this->expectException(\InvalidArgumentException::class);
         app(FundamentalBootstrapService::class)->createRun('stocks', [999999], dryRun: true);
     }
 
