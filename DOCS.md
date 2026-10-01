@@ -40,6 +40,12 @@ The current docs are feature-oriented rather than version-oriented:
 - V8 acceptance audit (living): [docs/V8-ACCEPTANCE-AUDIT.md](docs/V8-ACCEPTANCE-AUDIT.md)
 - V8 gap audit (requirement-level, not complete): [docs/V8-GAP-AUDIT.md](docs/V8-GAP-AUDIT.md)
 
+## StoX V9 planning
+
+- Canonical V9 register: [docs/archive/specs/LidoPortfolio-V9-Wishlist.md](docs/archive/specs/LidoPortfolio-V9-Wishlist.md)
+- Cross-spec audit and implementation sequence: [docs/archive/specs/V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md](docs/archive/specs/V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md)
+- Guided Production ML Acceptance Wizard: [docs/archive/specs/V9-UX-004-ML-Acceptance-Guided-Wizard-Specification.md](docs/archive/specs/V9-UX-004-ML-Acceptance-Guided-Wizard-Specification.md)
+
 ## Archive
 
 The old chronological/versioned specs and audits were retired to [docs/archive/](docs/archive/). They remain useful for historical context but are no longer the first source of truth for current product behaviour.
