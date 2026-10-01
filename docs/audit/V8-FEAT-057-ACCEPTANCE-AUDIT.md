@@ -55,3 +55,7 @@ Operator: Codex via connected `stoxla-prod`; UTC times below. **This entry does 
 | Dated membership preview | IN PROGRESS | Build `ef66133c`, VPS: governed run #1 had 332/360 processed, zero failed, one queued acceptance job and zero boundaries at 2026-10-01 18:31:37 UTC. One-shot worker was present; no duplicate run/worker/apply/training started here. |
 | Apply, provenance/mapping per date, build identity and 1m/3m/6m preflight | NOT YET RUN | Existing continuation owns preview/apply. Recheck 360 digests and each >=90% map, 360 immutable boundaries and current-build campaign before qualification. |
 | Production adapter/training, archive, pairing, investor browser ML | BLOCKED (upstream data/runtime) | Campaign `996fa344-2533-4bf0-a555-9b052de2c8cb` blocked; FEAT-054 bootstrap only began with 3 Yahoo-only stocks. Never train until explicit preflight success. |
+
+### Preview completion verification — 2026-10-01 18:36 UTC
+
+Read-only DB aggregation on deployed build `ef66133c`: run #1 status `completed`, preview cursor 360, exactly 360 result entries and 360 source entries, 360 processed/360 requested, 0 failed, 0 membership boundaries and 0 queued acceptance jobs. Minimum per-date canonical mapping was **94.2266%**, with **zero** dates below 90%. Every result had snapshot and source SHA-256 and matching requested/validated date (zero mismatches by the checked fields). **PASS for preview diagnostics only.** The existing continuation owns apply; apply and campaign/training remain NOT YET RUN here.
