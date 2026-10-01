@@ -55,3 +55,7 @@ Operator: Codex via connected `stoxla-prod`; UTC times below. **This entry does 
 | Provider setup | PASS (configuration only) | Build `ef66133c`, VPS, 2026-10-01 18:26 UTC: Turnstile driver and site/secret configured, SMTP transport selected; three existing request rows. No token or mail-provider result inferred. |
 | Valid/invalid/expired CAPTCHA, email delivery/single use, Admin Create/Ignore/Reject and notifications | NOT YET RUN | Requires controlled test addresses and Admin session; record provider IDs privately. |
 | Enumeration-neutral response, mail failure isolation and concurrent duplicate submissions across workers/cache | NOT YET RUN | Perform bounded deployed test with cleanup. |
+
+### Public deployed UI inspection — 2026-10-01 about 18:40 UTC
+
+Cloud Chrome at `https://stoxla.in/request-account` rendered the invite-only description, Full name and Email fields, Cloudflare Turnstile "Verify you are human" widget, and Send verification email action. **PASS for page/widget rendering only.** No CAPTCHA was solved, no address submitted, and no provider token/mail delivery or enumeration/concurrency outcome was inferred. Authenticated Admin/Investor UX remains unrun because the browser session is at public login.
