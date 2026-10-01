@@ -14,6 +14,7 @@ use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\ResolveActivePortfolio;
 use App\Services\PortfolioLoggerService;
 use App\Services\Operations\ApiFailureReporter;
+use App\Services\Operations\LogErrorTriageService;
 use App\Support\ApiErrorMessage;
 use App\Support\ProductionEnvironment;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -66,6 +67,9 @@ $application = Application::configure(basePath: dirname(__DIR__))
                     'file' => $e->getFile(),
                     'line' => $e->getLine(),
                 ]);
+            }
+            if (! $e instanceof \Illuminate\Validation\ValidationException) {
+                app(LogErrorTriageService::class)->observe($e);
             }
         });
 
