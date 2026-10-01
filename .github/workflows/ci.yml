@@ -62,7 +62,7 @@ jobs:
             esac
 
             case "$file" in
-              app/resources/*|app/resources/**/*|app/tests/js/*|app/tests/js/**/*|app/package.json|app/package-lock.json|app/scripts/write-build-info.mjs|app/tsconfig.json|app/vite.config.js|app/vitest.config.js)
+              app/resources/*|app/resources/**/*|app/tests/js/*|app/tests/js/**/*|app/package.json|app/package-lock.json|app/scripts/write-build-info.mjs|app/tsconfig.json|app/vite.config.js|app/vitest.config.js|.github/workflows/*.yml|.github/workflows/*.yaml)
                 frontend=true
                 ;;
             esac
@@ -162,5 +162,7 @@ jobs:
         env:
           VITE_APP_BASE: /portfolio/build/
         run: npm run build
+      - name: Install Chromium for browser journeys
+        run: npx playwright install --with-deps chromium
       - name: Run blocking Chromium journey checks
         run: npm run test:e2e:journeys
