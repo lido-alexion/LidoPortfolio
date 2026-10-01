@@ -23,3 +23,14 @@ Evidence is mapped to `docs/archive/specs/V8-ML-Lifecycle-Automation-Deployment-
 | Production queue/scheduler deployment | EXTERNAL VALIDATION PENDING | Operator runbook is now documented in `docs/current/ml-lifecycle-operations.md`; VPS worker, scheduler, queue restart and notification-provider runtime have not been claimed |
 
 The epic is **REVIEW**. Local lifecycle implementation, recovery, retention, promotion/rollback boundaries, authorization, notifications, operator runbook and the broad Feature suite are green. Remaining evidence is limited to deployed worker/scheduler/queue restart, live cancellation/progress/SSE, notification-channel and production archive/runtime acceptance. No deployed worker/runtime success is claimed.
+
+
+## Closure continuation — 2026-10-01 (production build `ef66133c`)
+
+Operator: Codex via connected `stoxla-prod`; UTC times below. **This entry does not mark the epic COMPLETE.** Prior local checks remain separate from production acceptance.
+
+| Acceptance check | State | Evidence / next exact check |
+|---|---|---|
+| Runtime gate | BLOCKED (qualification) | Build `ef66133c`, VPS, 2026-10-01 18:25 UTC: lifecycle flag false; campaign `996fa344-2533-4bf0-a555-9b052de2c8cb` currently blocked; dedicated acceptance service inactive although a one-shot worker handles NSE preview. Qualification requires current build/registry/config and complete 1m/3m/6m real-adapter evidence. |
+| Scheduler/queue tick, locks, SSE reconnect, cancellation/restart/retry and notifications | NOT YET RUN | Controlled deployed lifecycle exercise only after FEAT-057 qualification; do not interrupt NSE worker. |
+| Retention/archive and explicit promotion/rollback single-active invariant | NOT YET RUN | Use safe candidate/control path; separate Admin decisions remain required. |
