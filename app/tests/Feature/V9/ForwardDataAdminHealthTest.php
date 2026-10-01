@@ -93,6 +93,20 @@ class ForwardDataAdminHealthTest extends TestCase
             ->assertJsonPath('data.idempotent', true);
     }
 
+    public function test_data003_admin_endpoints_reject_missing_and_invalid_bearer_credentials(): void
+    {
+        foreach (['/api/forward-data/health', '/api/forward-data/work', '/api/operational-alerts'] as $path) {
+            $this->getJson($path)
+                ->assertUnauthorized()
+                ->assertJsonPath('message', 'Unauthenticated.');
+
+            $this->withHeader('Authorization', 'Bearer invalid-data003-regression-token')
+                ->getJson($path)
+                ->assertUnauthorized()
+                ->assertJsonPath('message', 'Unauthenticated.');
+        }
+    }
+
     public function test_completeness_command_aggregates_failure_and_notifies_on_recovery(): void
     {
         $completeness = $this->mock(DataCompletenessService::class);
