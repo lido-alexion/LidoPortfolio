@@ -26,7 +26,7 @@ V9 also adds `V9-UX-004`, a guided, educational wizard over the existing V8 prod
 
 ## 2. Current V9 backlog
 
-All registered V9 epics below are **FROZEN / IMPLEMENTATION-READY** subject to their explicit dependency gates.
+V9 epics are frozen for implementation unless a row is explicitly marked **PO REVIEW** or lists a dependency gate.
 
 | ID | Feature | Scope / rationale | Status |
 |---|---|---|---|
@@ -152,6 +152,6 @@ Normative reconciliations include:
 - deterministic calculations remain in StoX services rather than being delegated to LLMs;
 - V8 telemetry ownership and FEAT-063/FEAT-065 data-domain boundaries remain intact.
 
-**StoX V9 is hereby declared FROZEN / IMPLEMENTATION-READY, with V9-DATA-002 temporarily in PO REVIEW for the Windows receiver/archive revision, V9-AI-003, V9-OPS-002, V9-OPS-003 subject to its V4-FEAT-017 core dependency gate, and V9-UX-004 subject to the implemented V8 production-acceptance domain.**
+**StoX V9 remains FROZEN / IMPLEMENTATION-READY except V9-DATA-002, which is in PO REVIEW for the Windows receiver/archive revision, V9-AI-003, V9-OPS-002, V9-OPS-003 subject to its V4-FEAT-017 core dependency gate, and V9-UX-004 subject to the implemented V8 production-acceptance domain.**
 
 The implementation agent may begin automatically from this register and its linked frozen specifications. No additional planning handoff is required unless implementation discovers a genuinely new material product decision or a direct frozen-spec contradiction.
