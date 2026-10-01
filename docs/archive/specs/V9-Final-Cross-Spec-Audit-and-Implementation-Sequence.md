@@ -36,6 +36,7 @@ The current registered V9 scope is:
 13. `V9-AI-001` — Documentation-Grounded StoX Chatbot
 14. `V9-AI-002` — Agentic StoX Assistant / MCP Action Layer
 15. `V9-AI-003` — Embedded AI Insights & Prompt Execution
+16. `V9-DATA-003` — Forward Data Collection, Recovery & Readiness
 
 All registered items except `V9-DATA-002` retain their prior frozen implementation-ready status. `V9-DATA-002` is in PO review for the Windows receiver/archive revision and requires compatible implementation of the revised `SKR-001` protocol. `V9-OPS-003` remains gated on the required `V4-FEAT-017` shared AI core.
 
@@ -175,11 +176,16 @@ Across AI features, deterministic StoX services remain responsible for calculati
 
 The wizard may add an aggregate read-only state endpoint, reason-code presentation registry and polling/recovery behavior. It must not duplicate or weaken source validation, point-in-time coverage, backfill safety, dataset preparation, training, qualification, promotion or lifecycle gates. Preflight remains a non-training readiness operation; candidate training, model promotion and lifecycle automation remain separate explicit Admin decisions.
 
+### 4.17 Forward data collection ownership
+
+`V9-DATA-003` owns ongoing acquisition obligations, bounded recovery and shared freshness/coverage evidence. It reuses FEAT-054 fundamentals, FEAT-057 PIT membership, daily market-data/data-quality services and the existing corporate-action approval path. OPS-001 adds Admin backfill operations over the same fundamentals engine. FEAT-065/DATA-002 retain minute-corpus ownership; FEAT-063 retains live microstructure ownership. Their optional research health cannot silently become a daily 1m/3m/6m readiness gate. Forward collection does not enable model training, promotion, lifecycle or drift. Existing remediation is reconciled, not implemented twice.
+
 ## 5. Dependency graph
 
 ### Hard/strong dependencies
 
 - `V9-UX-002` -> `V9-UX-001` foundation metadata/governance.
+- `V9-DATA-003` -> existing owner ingestion/provenance engines; notifications integrate COMM-001; minute/live monitoring integrates their owner evidence. Daily adapters do not depend on Windows delivery or AI.
 - `V9-OPS-001` -> V8 `V4-FEAT-054` engine.
 - `V9-OPS-001` notifications -> `V9-COMM-001` where notifications are required.
 - `V9-DATA-001` background completion/failure notifications -> `V9-COMM-001` where notification behavior is required.
@@ -221,6 +227,10 @@ May proceed early and in parallel because it is an additive operational observer
 **1C. V9-DATA-001 — Data Export Framework**
 
 Establish reusable export primitives.
+
+**1D. V9-DATA-003 — Forward Data Collection, Recovery & Readiness**
+
+Prioritize durable planning and daily production-data adapters, including fair fundamentals refresh and official NSE provenance. Reconcile already-started remediation. Sector/corporate-action integrations must demonstrate real source operation. Reuse COMM notification primitives and owner coverage; complete minute/live monitoring when its owner evidence is available. Keep DATA-002 PO-review restrictions intact.
 
 ### Phase 2 — Deterministic/user-facing features safe after prerequisites
 

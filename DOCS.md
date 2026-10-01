@@ -46,6 +46,8 @@ The current docs are feature-oriented rather than version-oriented:
 - Cross-spec audit and implementation sequence: [docs/archive/specs/V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md](docs/archive/specs/V9-Final-Cross-Spec-Audit-and-Implementation-Sequence.md)
 - Guided Production ML Acceptance Wizard: [docs/archive/specs/V9-UX-004-ML-Acceptance-Guided-Wizard-Specification.md](docs/archive/specs/V9-UX-004-ML-Acceptance-Guided-Wizard-Specification.md)
 
+- Forward Data Collection, Recovery & Readiness: [docs/archive/specs/V9-DATA-003-Forward-Data-Collection-Recovery-Readiness-Specification.md](docs/archive/specs/V9-DATA-003-Forward-Data-Collection-Recovery-Readiness-Specification.md)
+
 ## Archive
 
 The old chronological/versioned specs and audits were retired to [docs/archive/](docs/archive/). They remain useful for historical context but are no longer the first source of truth for current product behaviour.
