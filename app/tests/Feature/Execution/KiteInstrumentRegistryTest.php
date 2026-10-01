@@ -232,7 +232,7 @@ class KiteInstrumentRegistryTest extends TestCase
         BrokerInstrument::query()->where('stock_id', $stock->id)->update(['trading_symbol' => 'STALE']);
 
         try {
-            app(KiteBrokerGateway::class)->placeOrder(new BrokerOrderRequest(1, 1, 1, $stock->id, 'SITINET', 'NSE', 'buy', 1, 'ambiguous-submission'));
+            app(KiteBrokerGateway::class)->placeOrder(new BrokerOrderRequest($user->id, 1, 1, $stock->id, 'SITINET', 'NSE', 'buy', 1, 'ambiguous-submission'));
             $this->fail('Expected ambiguous mapping to block.');
         } catch (DomainException $exception) {
             $this->assertSame('BROKER_INSTRUMENT_MAPPING_AMBIGUOUS', $exception->errorCode());
