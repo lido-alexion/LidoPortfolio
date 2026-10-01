@@ -36,6 +36,8 @@ class AdminOperationalAlertService
 
     public const KEY_FUNDAMENTALS_UPDATE_FAILED = 'fundamentals_update_failed';
 
+    public const KEY_DATA_COMPLETENESS = 'data_completeness_incomplete';
+
     public const KEY_MICROSTRUCTURE_COLLECTOR_STALE = MicrostructureCollectorHealthService::ALERT_KEY_STALE;
 
     public const KEY_MICROSTRUCTURE_COLLECTOR_ERROR = MicrostructureCollectorHealthService::ALERT_KEY_ERROR;
@@ -56,6 +58,7 @@ class AdminOperationalAlertService
         self::KEY_BROKER_RECONCILE_FAILED,
         self::KEY_AUTOMATIC_SUBMIT_FAILED,
         self::KEY_FUNDAMENTALS_UPDATE_FAILED,
+        self::KEY_DATA_COMPLETENESS,
     ];
 
     public function __construct(

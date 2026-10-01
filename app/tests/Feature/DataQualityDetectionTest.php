@@ -40,6 +40,10 @@ class DataQualityDetectionTest extends TestCase
         $this->assertSame(DataQualityIssue::DETECTION_METHOD_EXCHANGE_FEED, $issue->detection_method);
         $this->assertNotEmpty($result['detection_run_id'] ?? null);
         $this->assertSame($result['detection_run_id'], $issue->evidences->first()->evidence_payload['detection_run_id'] ?? null);
+        $checkpoint = \App\Models\CorporateActionFeedCheckpoint::query()->first();
+        $this->assertNotNull($checkpoint);
+        $this->assertSame(1, $checkpoint->rows_seen);
+        $this->assertNotNull($checkpoint->last_successful_at);
     }
 
     public function test_exchange_feed_skips_rights_issues(): void

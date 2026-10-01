@@ -1,0 +1,85 @@
+# StoX forward-data completeness — implementation report
+
+**Audit baseline:** 2026-10-01
+**Scope:** forward daily data readiness, not training, promotion, lifecycle or drift automation.
+
+## Ownership and overlap resolution
+
+| Concern | Owning contract | Reconciliation |
+|---|---|---|
+| Ongoing fundamentals acquisition, freshness and revisions | V8 FEAT-054 beneath V9-OPS-001 | Reuses the existing `FundamentalDataService`/`FundamentalUpdateService` engine. No second fundamentals ingestion path was introduced. |
+| Historical minute corpus, sealing, repair and delivery | FEAT-065 / V9-DATA-002 | No minute-corpus collector, staging, source, run, seal, or repair contract was changed. The Mac remains canonical and V9-DATA-002 remains the delivery topology around FEAT-065. |
+| Live microstructure | FEAT-063 | Remains a separate prospective collector and is not used as a daily ML readiness gate. |
+| Daily ML readiness | StoX daily price/PIT membership/fundamental checks | Minute-corpus coverage is explicitly reported as optional/diagnostic and cannot make daily coverage complete. |
+
+## Implemented closure items
+
+### Official NSE membership provenance
+
+`stox:forward-data` is scheduled independently of campaigns. It derives completed NSE session dates from the trading calendar, persists work obligations, applies publication grace, and delegates to `NseHistoricalUniverseArchiveProvider`. Writes occur only after filename/content date validation, parser validation, symbol mapping, and the existing 90% mapping gate pass. The provider has no current-master fallback. Missing or late files remain in durable forward work and snapshot backfill state with bounded, persisted retry counts.
+
+All membership writes continue through `MlHistoricalUniverseMembershipService::withWriteLock()` using the existing `ml-historical-membership-write` lock. Existing source paths, historical runs, snapshot boundaries, SHA/snapshot keys, and the separate download session's artifacts are preserved.
+
+### Effective-dated sectors
+
+Sector values are stored on each dated membership row as `sector_snapshot`; missing values remain `NULL` and are surfaced as unknown. Historical lookups use the effective-dated row only. Current `portfolio_stocks.sector` is not consulted by dated historical ingestion.
+
+### Fundamentals under FEAT-054 / V9-OPS-001
+
+Scheduled selection is fair across the eligible universe, ordered by oldest successful provider check rather than stock ID. Provider checks are durable per stock/cadence, including successful empty and unchanged responses. `first_fetched_at` remains immutable; `last_provider_checked_at` and the provider-check ledger track later checks. Availability dates and revision rows remain unchanged by refreshes. Signed elapsed-time comparison prevents future timestamps from being treated as overdue.
+
+### Corporate actions
+
+The established exchange-feed-to-pending-review path remains the only ingestion path. Feed requests now retry bounded transient failures, invalid dates are rejected instead of becoming `1970-01-01`, rights issues remain excluded, and the existing evidence/run/approval/repair workflow is preserved. Durable checkpoints record overlapping windows and payload hashes; production can enable provider window parameters without changing the event model.
+
+### Daily-price recovery and optional intraday data
+
+`stox:check-data-completeness` reports freshness, coverage, backlog and last successful ingestion for NSE membership, daily prices, fundamentals, corporate-action observations, FEAT-065 corpus owner status, and FEAT-063 live collector status. It alerts on missing sessions and incomplete eligible-universe coverage even when the acquisition process itself exits successfully. Intraday/microstructure is reported separately and never gates daily ML readiness.
+
+## Verified runtime evidence
+
+Local runtime evidence from the repository environment:
+
+- `FundamentalUpdateLifecycleTest`: **19 passed**, including fair/durable provider-check behavior, unchanged responses, empty successful responses, bounded retry and terminal-run behavior.
+- Membership/provider/corporate-action focused suite: **26 passed / 84 assertions**, including dated source validation, mapping failure, durable late-file retry/resume, effective-date coverage and exchange-feed rejection rules.
+- Combined final focused rerun: **34 passed / 110 assertions**; migration portability: **152 migrations passed**.
+- NSE snapshot provenance now records a content SHA-256 in diagnostics and uses it as the snapshot key; it is not derived from a mutable path.
+- PHP syntax checks passed for all new/changed services and commands.
+- `git diff --check` passed.
+
+Production VPS acquisition, official NSE publication availability, corporate-action endpoint reachability, and live daily-price recovery still require the deployed scheduler/health evidence to be attached at release time; local tests do not substitute for that external evidence.
+
+## Explicit non-scope
+
+No training campaign, model promotion, lifecycle schedule, drift automation, FEAT-065 minute-corpus implementation, V9-DATA-002 transfer protocol, or FEAT-063 live collector behavior was enabled or repurposed by this change.
+
+## V9-DATA-003 acceptance matrix
+
+| Criterion | Status | Implementation / evidence |
+|---|---|---|
+| FDC-01 | Partial | `ForwardDataPlanner` persists campaign-independent session obligations and uses the exchange calendar. Special-session and unknown-calendar production evidence remain required. |
+| FDC-02 | Implemented locally | Durable identity, claim lease, expiry reclaim and owner commit/failure updates fenced by lease token and unexpired lease; stale-worker regression test passes. Production crash/reclaim evidence remains required. |
+| FDC-03 | Implemented locally | Persisted waiting-publication/retry/exhausted states and bounded backoff; late-file/provider tests pass. Production outage replay remains external evidence. |
+| FDC-04 | Implemented | Existing NSE parser/date/mapping gates plus SHA-256 snapshot identity reject invalid sources; archive/provider focused tests pass. |
+| FDC-05 | Partial | Historical and forward membership paths share the existing write lock. Changed overlapping evidence still requires the acceptance preview/review/apply path rather than automatic replacement. |
+| FDC-06 | Implemented locally | Fair oldest-check selection, durable provider-check state and bounded retries are covered by the fundamentals lifecycle suite. |
+| FDC-07 | Implemented locally | Unchanged/empty successful responses advance provider-check state without changing first fetch, availability or revisions; 19 lifecycle tests pass. |
+| FDC-08 | Partial | Effective-dated sectors retain configured `nse_mii_security_file` source, taxonomy/revision provenance and explicit unknowns. Production source schema/access and historical availability evidence remain required. |
+| FDC-09 | Implemented locally | Existing review/evidence/repair flow, bounded HTTP retry, invalid-date rejection and rights exclusion are preserved; overlapping feed checkpoints and payload hashes cover late/corrected polling when provider window support is enabled. Production provider evidence remains required. |
+| FDC-10 | Partial | Completeness reporting distinguishes persisted daily coverage/backlog, but a deployed recovered-session price/index run is still required to close the criterion. |
+| FDC-11 | Implemented locally | Shared completeness output now embeds sanitized FEAT-065 checkpoint/corpus status and FEAT-063 collector/finalization/coverage status without treating either as daily readiness. Production owner evidence remains required. |
+| FDC-12 | Partial | Forward work states and completeness alerts fail closed on missing configuration/incomplete work. Full required-dataset reason-code reconciliation remains open. |
+| FDC-13 | Partial | Admin-only health, paginated work, dispatch, retry, pause and resume API endpoints and the dedicated `/settings/forward-data` Admin page now exist, with plain-language coverage/freshness guidance and separate FEAT-065/FEAT-063 status. Browser accessibility/API authorization and production UI evidence remain required. |
+| FDC-14 | Partial | Existing operational alert primitives are reused for completeness failures; publication-grace aggregation, recovery notifications and transport-failure tests remain open. |
+| FDC-15 | Implemented | No training, promotion, lifecycle, drift, portfolio mutation or new feature policy was introduced. |
+| FDC-16 | Partial | Local evidence is recorded below; deployed SHA, source IDs, production counts and an outage/late-publication replay must be attached after deployment. |
+
+### Current verification evidence
+
+- Focused final suite: **49 passed / 173 assertions** (including forward planner fencing, sector provenance and corporate-action checkpoint coverage).
+- Node test runner: **198 passed**; TypeScript typecheck: passed. The Vitest phase and Vite production build are blocked by the host's Node **18.20.0**; the repository requires Node **20.19+ or 22.12+**.
+- Forward planner tests cover fail-closed recovery-floor configuration, session obligation persistence, lease expiry reclaim and non-duplicate claiming.
+- Migration portability: **155 migrations passed**.
+- PHP lint and `git diff --check`: passed.
+- Production evidence is intentionally not fabricated: local CI lacks the required OpenTelemetry extension and local scheduler inspection cannot connect to MySQL.
+- Full application PHPUnit was attempted: 127 tests passed before three pre-existing dirty-worktree unit errors and a PHP 128 MiB route-loading fatal terminated the run. The repository `verify-ci.sh --all` gate stopped earlier because OpenTelemetry is unavailable; `--frontend` requires Node 20 while this host has Node 18.20.0.

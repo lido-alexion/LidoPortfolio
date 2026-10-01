@@ -207,6 +207,40 @@ class FundamentalUpdateLifecycleTest extends TestCase
         $this->assertSame('yfinance returned no fundamental statements', $job->fresh()->last_error);
     }
 
+    public function test_unchanged_provider_response_updates_check_time_but_preserves_first_fetch_and_revision(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'UNCH', 'exchange' => 'NSE', 'name' => 'Unchanged']);
+        $service = app(FundamentalDataService::class);
+        $first = Carbon::parse('2026-01-01 10:00:00');
+        $second = Carbon::parse('2026-02-01 10:00:00');
+        $row = [
+            'provider' => 'yahoo', 'statement_type' => 'income', 'cadence' => 'quarterly',
+            'fact_key' => 'revenue', 'period_end' => '2025-12-31', 'availability_date' => '2026-01-01', 'value' => 100,
+        ];
+
+        $service->storeFacts($stock, [$row], $first);
+        $service->storeFacts($stock, [$row], $second);
+        $fact = \App\Models\V7\FundamentalFact::query()->firstOrFail();
+
+        $this->assertSame($first->toDateTimeString(), $fact->first_fetched_at->toDateTimeString());
+        $this->assertSame($second->toDateTimeString(), $fact->last_provider_checked_at->toDateTimeString());
+        $this->assertSame(1, $fact->revision_number);
+        $this->assertSame(1, \App\Models\V7\FundamentalFact::query()->count());
+    }
+
+    public function test_empty_successful_response_is_recorded_as_a_provider_check(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'EMPTY', 'exchange' => 'NSE', 'name' => 'Empty']);
+        $checkedAt = Carbon::parse('2026-02-01 10:00:00');
+        app(FundamentalDataService::class)->recordSuccessfulProviderCheck($stock, 'annual', $checkedAt);
+
+        $this->assertDatabaseHas('stox_fundamental_provider_checks', [
+            'stock_id' => $stock->id,
+            'cadence' => 'annual',
+            'last_successful_check_at' => $checkedAt->toDateTimeString(),
+        ]);
+    }
+
     public function test_duplicate_incremental_jobs_retain_newest_viable_job_and_preserve_evidence(): void
     {
         $stock = Stock::query()->create(['symbol' => 'DUP', 'exchange' => 'NSE', 'name' => 'Duplicate']);

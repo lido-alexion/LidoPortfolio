@@ -16,6 +16,9 @@ class MlUniverseMembership extends Model
         'effective_from',
         'effective_to',
         'sector_snapshot',
+        'taxonomy_version',
+        'classification_available_at',
+        'classification_revision_hash',
         'source',
         'snapshot_key',
         'provider_symbol',
@@ -28,6 +31,7 @@ class MlUniverseMembership extends Model
         return [
             'effective_from' => 'date',
             'effective_to' => 'date',
+            'classification_available_at' => 'datetime',
         ];
     }
 

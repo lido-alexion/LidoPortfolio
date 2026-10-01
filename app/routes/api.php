@@ -486,6 +486,14 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
 
         Route::get('/microstructure-collector/status', [MicrostructureCollectorAdminController::class, 'status']);
         Route::post('/microstructure-collector/command', [MicrostructureCollectorAdminController::class, 'command']);
+        Route::prefix('/forward-data')->group(function () {
+            Route::get('/health', [\App\Http\Controllers\Api\ForwardDataAdminController::class, 'health']);
+            Route::get('/work', [\App\Http\Controllers\Api\ForwardDataAdminController::class, 'work']);
+            Route::post('/dispatch', [\App\Http\Controllers\Api\ForwardDataAdminController::class, 'dispatch']);
+            Route::post('/retry', [\App\Http\Controllers\Api\ForwardDataAdminController::class, 'retry']);
+            Route::post('/pause', [\App\Http\Controllers\Api\ForwardDataAdminController::class, 'pause']);
+            Route::post('/resume', [\App\Http\Controllers\Api\ForwardDataAdminController::class, 'resume']);
+        });
 
         Route::get('/password-reset-links', [PasswordResetLinkController::class, 'index']);
         Route::post('/password-reset-links', [PasswordResetLinkController::class, 'store']);

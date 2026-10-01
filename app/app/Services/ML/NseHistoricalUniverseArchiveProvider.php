@@ -42,6 +42,10 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
     private function snapshotFile(array $file, string $date, bool $requireMapping = true): array
     {
         $parsed = $this->parseFile($file['path'], $file['source'], $date);
+        $sourceSha256 = hash_file('sha256', $file['path']);
+        if ($sourceSha256 === false) {
+            throw new MlHistoricalUniverseProviderException('Unable to hash NSE source file.', true);
+        }
         if ($parsed['members'] === []) {
             throw new MlHistoricalUniverseProviderException(
                 "NSE historical universe source contains no eligible company-equity members: {$date}",
@@ -64,6 +68,8 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
             $mapped[] = [
                 'stock_id' => (int) $stock->id,
                 'sector_snapshot' => $member['sector'] ?? null,
+                'taxonomy_version' => $parsed['format_version'].';'.self::PARSER_VERSION,
+                'classification_revision_hash' => hash('sha256', (string) ($member['sector'] ?? 'unknown')),
                 'provider_symbol' => $member['symbol'],
                 'exchange' => 'NSE',
             ];
@@ -78,6 +84,7 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
             'source_validated_date' => $file['validated_date'],
             'source_date_basis' => $file['date_basis'],
             'nse_source_file' => $file['path'],
+            'source_sha256' => $sourceSha256,
             'source' => $file['source'],
             'format_version' => $parsed['format_version'],
             'source_company_equity_member_count' => $sourceCount,
@@ -98,7 +105,7 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
         return [
             'effective_from' => $date,
             'source' => $file['source'],
-            'snapshot_key' => $file['source'].':'.$date.':'.sha1($file['path']),
+            'snapshot_key' => 'sha256:'.$sourceSha256,
             'response_version' => $parsed['format_version'].';'.self::PARSER_VERSION,
             'diagnostics' => $diagnostics,
             'memberships' => $mapped,

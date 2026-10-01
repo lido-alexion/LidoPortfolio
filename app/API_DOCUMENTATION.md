@@ -67,6 +67,8 @@ Stock master sync (CLI): `php artisan stocks:sync` (weekly scheduled)
 
 Universe OHLCV sync (CLI): `php artisan portfolio:sync-universe-prices` — `--mode=backfill|daily`, `--scope=all_equities|nifty500` (`all_nse` deprecated alias), `--all` for full-universe backfill.
 
+Forward data operations (admin): `GET /forward-data/health` reports DATA-003 freshness, coverage, backlog and owner status; `GET /forward-data/work` provides paginated obligations with `dataset`/`state` filters; `POST /forward-data/dispatch`, `/retry`, `/pause`, and `/resume` provide bounded controls without starting training, promotion, lifecycle, or drift work.
+
 ## Transactions
 
 - `GET /transactions` (auth) — paginated ledger; sell rows may include persisted `exit_reason` (`strategy_exit` | `stop_loss` | `trailing_stop` | `horizon_expiry`) copied from the recommendation primary attribution on fill; rows may include `owner_key` (`unmanaged` | `strategy:{id}`) when attribution is stored (V4-SPEC-005)

@@ -149,6 +149,22 @@ export const NAVIGATION_CATALOG = [
         permission: 'admin',
         match: (p) => pathStartsWith(p, ROUTES.SETTINGS_ML_SCORING),
     },
+    {
+        id: 'forward-data',
+        title: 'Forward Data',
+        icon: 'Activity',
+        route: ROUTES.SETTINGS_FORWARD_DATA,
+        group: 'group-administration',
+        order: 64,
+        parent: 'group-administration',
+        children: null,
+        badge: null,
+        showInSidebar: true,
+        favouriteEligible: false,
+        kind: 'page',
+        permission: 'admin',
+        match: (p) => pathStartsWith(p, ROUTES.SETTINGS_FORWARD_DATA),
+    },
 
     // ── Portfolio pages ─────────────────────────────────────
     {

@@ -40,6 +40,7 @@ import AdminAlertsPage from './pages/AdminAlertsPage';
 import AdminAuditExplorerPage from './pages/AdminAuditExplorerPage';
 import FundamentalDataAdminPage from './pages/FundamentalDataAdminPage';
 import MlScoringAdminPage from './pages/MlScoringAdminPage';
+import ForwardDataAdminPage from './pages/ForwardDataAdminPage';
 import AdminRoute from './components/AdminRoute';
 import StockExplorerPage from './pages/StockExplorerPage';
 import IndicesPage from './pages/IndicesPage';
@@ -206,6 +207,11 @@ function AppRoutes() {
             <Route path="/settings/ml-scoring" element={(
                 <AdminRoute>
                     <MlScoringAdminPage />
+                </AdminRoute>
+            )} />
+            <Route path="/settings/forward-data" element={(
+                <AdminRoute>
+                    <ForwardDataAdminPage />
                 </AdminRoute>
             )} />
             <Route path="/settings/universe-price-sync/gap-failures" element={(

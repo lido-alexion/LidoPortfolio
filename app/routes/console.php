@@ -424,6 +424,20 @@ Schedule::command('stox:fundamentals-update --batch=20')
     ->withoutOverlapping(30)
     ->name('stox-fundamentals-incremental');
 
+Schedule::command('stox:check-data-completeness')
+    ->hourly()
+    ->timezone($timezone)
+    ->withoutOverlapping(10)
+    ->name('stox-data-completeness');
+
+// Independent of campaigns: the planner persists every completed-session
+// obligation and delegates validated writes to the existing NSE owner engine.
+Schedule::command('stox:forward-data')
+    ->everyFifteenMinutes()
+    ->timezone('Asia/Kolkata')
+    ->withoutOverlapping(30)
+    ->name('stox-nse-universe-session-sync');
+
 Schedule::command('portfolio:expire-alerts')
     ->hourly()
     ->timezone($timezone)

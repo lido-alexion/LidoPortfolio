@@ -208,6 +208,9 @@ class MlHistoricalUniverseMembershipService
                 $membership->fill([
                     'effective_to' => null,
                     'sector_snapshot' => $stock->sector,
+                    'taxonomy_version' => 'portfolio_stocks.current',
+                    'classification_available_at' => now(),
+                    'classification_revision_hash' => hash('sha256', (string) ($stock->sector ?? 'unknown')),
                     'source' => $source,
                     'snapshot_key' => $snapshotKey,
                 ])->save();
@@ -317,6 +320,9 @@ class MlHistoricalUniverseMembershipService
                         $existing->forceFill([
                             'effective_to' => null,
                             'sector_snapshot' => $entry['sector_snapshot'] ?? null,
+                            'taxonomy_version' => $entry['taxonomy_version'] ?? ($snapshot['response_version'] ?? null),
+                            'classification_available_at' => $entry['classification_available_at'] ?? null,
+                            'classification_revision_hash' => $entry['classification_revision_hash'] ?? null,
                             'source' => $source,
                             'snapshot_key' => $entry['snapshot_key'] ?? $source.':'.$date,
                             'provider_symbol' => $entry['provider_symbol'] ?? null,
@@ -369,6 +375,11 @@ class MlHistoricalUniverseMembershipService
      */
     public function backfillFromProvider(array $dates, MlHistoricalUniverseProvider $provider, string $source, int $maxAttempts = 3, string $universeKey = self::ACTIVE_ELIGIBLE_NSE, ?int $runId = null): array
     {
+        return $this->withWriteLock(fn () => $this->backfillFromProviderLocked($dates, $provider, $source, $maxAttempts, $universeKey, $runId));
+    }
+
+    private function backfillFromProviderLocked(array $dates, MlHistoricalUniverseProvider $provider, string $source, int $maxAttempts = 3, string $universeKey = self::ACTIVE_ELIGIBLE_NSE, ?int $runId = null): array
+    {
         $requested = array_values(array_unique(array_map(fn (string $date): string => Carbon::parse($date)->toDateString(), $dates)));
         sort($requested);
         $run = $runId !== null ? MlUniverseSnapshotBackfillRun::query()->findOrFail($runId) : MlUniverseSnapshotBackfillRun::query()->create([
@@ -386,9 +397,12 @@ class MlHistoricalUniverseMembershipService
             sort($requested);
         }
         $failed = [];
-        $retryCounts = [];
+        $retryCounts = is_array($run->retry_counts ?? null) ? $run->retry_counts : [];
         foreach ($requested as $date) {
-            $attempt = 0;
+            if (in_array($date, $run->processed_dates ?? [], true)) {
+                continue;
+            }
+            $attempt = (int) ($retryCounts[$date] ?? 0);
             while (true) {
                 $attempt++;
                 $retryCounts[$date] = $attempt;
@@ -408,6 +422,7 @@ class MlHistoricalUniverseMembershipService
                     }
                 }
             }
+            $run->forceFill(['retry_counts' => $retryCounts])->save();
         }
         $processed = array_values(array_diff($requested, array_keys($failed)));
         $run->forceFill([

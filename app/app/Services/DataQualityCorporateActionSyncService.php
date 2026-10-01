@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\DataQualityIssue;
 use App\Models\Stock;
+use App\Models\CorporateActionFeedCheckpoint;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
 
 class DataQualityCorporateActionSyncService
@@ -28,8 +30,16 @@ class DataQualityCorporateActionSyncService
             ];
         }
 
-        $response = Http::timeout(45)->get($url);
+        $checkpoint = CorporateActionFeedCheckpoint::query()->firstOrCreate(['feed_key' => hash('sha256', $url)]);
+        $windowTo = now()->toDateString();
+        $windowFrom = Carbon::parse($checkpoint->last_successful_at ?? now()->subDays(30))->subDays((int) config('services.data_quality.corporate_actions_overlap_days', 7))->toDateString();
+        $checkpoint->forceFill(['last_attempted_at' => now(), 'window_from' => $windowFrom, 'window_to' => $windowTo])->save();
+        $query = (bool) config('services.data_quality.corporate_actions_feed_supports_window', false)
+            ? ['from_date' => $windowFrom, 'to_date' => $windowTo]
+            : [];
+        $response = Http::retry(3, 1000)->timeout(45)->get($url, $query);
         if (! $response->ok()) {
+            $checkpoint->forceFill(['last_error' => 'HTTP '.$response->status()])->save();
             return [
                 'synced' => 0,
                 'created' => 0,
@@ -40,6 +50,7 @@ class DataQualityCorporateActionSyncService
 
         $rows = $response->json();
         if (! is_array($rows)) {
+            $checkpoint->forceFill(['last_error' => 'payload_not_array'])->save();
             return [
                 'synced' => 0,
                 'created' => 0,
@@ -106,6 +117,8 @@ class DataQualityCorporateActionSyncService
             $created++;
         }
 
+        $checkpoint->forceFill(['last_successful_at' => now(), 'payload_hash' => hash('sha256', $response->body()), 'rows_seen' => count($rows), 'last_error' => null])->save();
+
         return [
             'synced' => count($rows),
             'created' => $created,
@@ -132,6 +145,12 @@ class DataQualityCorporateActionSyncService
             return null;
         }
 
+        $exDate = $this->parseDate($exDate);
+        $recordDate = $recordDate ? $this->parseDate($recordDate) : null;
+        if ($exDate === null || (($payload['record_date'] ?? null) !== null && $recordDate === null)) {
+            return null;
+        }
+
         $normalizedType = match (true) {
             // V4-SPEC-002: rights are not a corporate-action type and must not
             // enter the data-quality CA queue as split/bonus.
@@ -155,8 +174,8 @@ class DataQualityCorporateActionSyncService
             'action_type' => $normalizedType,
             'suggested_ratio' => round($to / $from, 6),
             'ratio_label' => "{$from}:{$to}",
-            'ex_date' => date('Y-m-d', strtotime((string) $exDate)),
-            'record_date' => $recordDate ? date('Y-m-d', strtotime((string) $recordDate)) : null,
+            'ex_date' => $exDate,
+            'record_date' => $recordDate,
             'source' => $source,
         ];
     }
@@ -173,5 +192,14 @@ class DataQualityCorporateActionSyncService
         }
 
         return [(float) $parts[0], (float) $parts[1]];
+    }
+
+    protected function parseDate(mixed $value): ?string
+    {
+        if (! is_string($value) && ! is_int($value)) return null;
+        $timestamp = strtotime((string) $value);
+        if ($timestamp === false) return null;
+        $date = date('Y-m-d', $timestamp);
+        return $date === '1970-01-01' && trim((string) $value) !== '1970-01-01' ? null : $date;
     }
 }

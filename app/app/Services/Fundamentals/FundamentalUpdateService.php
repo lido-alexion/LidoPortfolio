@@ -54,12 +54,25 @@ class FundamentalUpdateService
 
     public function createRun(string $trigger = 'manual', string $scope = 'incremental', ?int $stockId = null, int $limit = 25): FundamentalUpdateRun
     {
+        $settings = $this->fundamentals->settings();
+        $quarterlyCutoff = now()->subMonths((int) $settings->quarterly_freshness_months);
+        $annualCutoff = now()->subMonths((int) $settings->annual_freshness_months);
         $query = Stock::query()
             ->effectivelyActive()
             ->where(function ($stockQuery): void {
                 $stockQuery->where('is_benchmark', false)->orWhereNull('is_benchmark');
-            })
-            ->orderBy('id');
+            });
+        if ($stockId === null) {
+            // Oldest successful provider check first prevents low-id stocks from
+            // starving the tail of the eligible universe across scheduled runs.
+            $query->where(function ($due) use ($quarterlyCutoff, $annualCutoff): void {
+                $due->whereNotExists(function ($sub): void {
+                    $sub->selectRaw('1')->from('stox_fundamental_provider_checks as pc')
+                        ->whereColumn('pc.stock_id', 'portfolio_stocks.id');
+                })->orWhereRaw("EXISTS (SELECT 1 FROM stox_fundamental_provider_checks pc WHERE pc.stock_id = portfolio_stocks.id AND ((pc.cadence = 'quarterly' AND pc.last_successful_check_at <= ?) OR (pc.cadence = 'annual' AND pc.last_successful_check_at <= ?)))", [$quarterlyCutoff, $annualCutoff]);
+            })->orderByRaw("COALESCE((SELECT MIN(pc.last_successful_check_at) FROM stox_fundamental_provider_checks pc WHERE pc.stock_id = portfolio_stocks.id), '1970-01-01') ASC");
+        }
+        $query->orderBy('id');
         if ($stockId !== null) {
             $query->whereKey($stockId);
         } else {
@@ -353,8 +366,12 @@ class FundamentalUpdateService
                     continue;
                 }
 
+                $checkedAt = now();
                 $rows = $this->provider->fetch($stock, $job->cadence);
-                $stats = $this->fundamentals->storeFacts($stock, $rows);
+                $stats = $this->fundamentals->storeFacts($stock, $rows, $checkedAt);
+                // Empty/unchanged responses are successful checks too. This is
+                // separate from fact first_fetched_at and prevents starvation.
+                $this->fundamentals->recordSuccessfulProviderCheck($stock, $job->cadence, $checkedAt, (string) $settings->provider);
                 $job->forceFill(['status' => 'completed', 'last_error' => null])->save();
                 $run->forceFill(['stats_json' => $this->mergeStats($run->stats_json ?? [], $stats)])->save();
             } catch (Throwable $error) {
@@ -419,10 +436,14 @@ class FundamentalUpdateService
 
     private function needsFetch(Stock $stock, string $cadence): bool
     {
-        $latest = DB::table('stox_fundamental_facts')
+        $latest = DB::table('stox_fundamental_provider_checks')
             ->where('stock_id', $stock->id)
             ->where('cadence', $cadence)
-            ->max('first_fetched_at');
+            ->max('last_successful_check_at');
+        $latest ??= DB::table('stox_fundamental_facts')
+            ->where('stock_id', $stock->id)
+            ->where('cadence', $cadence)
+            ->max(DB::raw('COALESCE(last_provider_checked_at, first_fetched_at)'));
 
         if ($latest === null) {
             return true;
@@ -430,7 +451,7 @@ class FundamentalUpdateService
 
         $hours = $cadence === FundamentalDataService::CADENCE_ANNUAL ? 24 * 14 : 24 * 3;
 
-        return now()->diffInHours(\Carbon\Carbon::parse($latest)) >= $hours;
+        return now()->diffInHours(\Carbon\Carbon::parse($latest), false) >= $hours;
     }
 
     /** @param array<string,mixed> $current @param array<string,int> $stats */

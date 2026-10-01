@@ -67,6 +67,9 @@ class FundamentalDataService
                     ->lockForUpdate()
                     ->first();
                 if ($current !== null && $this->canonicalDecimal($current->value) === $this->canonicalDecimal($row['value'] ?? null)) {
+                    // A successful unchanged response is still a provider check. Do
+                    // not mutate first_fetched_at: it is immutable provenance.
+                    $current->forceFill(['last_provider_checked_at' => $fetchedAt])->save();
                     $stats['deduped']++;
                     continue;
                 }
@@ -88,6 +91,7 @@ class FundamentalDataService
                     'currency' => $row['currency'] ?? null,
                     'availability_date' => $availabilityDate,
                     'first_fetched_at' => $fetchedAt,
+                    'last_provider_checked_at' => $fetchedAt,
                     'revision_hash' => $hash,
                     'revision_number' => $revision + 1,
                     'is_current' => true,
@@ -97,6 +101,19 @@ class FundamentalDataService
         });
 
         return $stats;
+    }
+
+    public function recordSuccessfulProviderCheck(Stock $stock, string $cadence, Carbon $checkedAt, string $provider = 'yahoo', ?string $responseHash = null): void
+    {
+        DB::table('stox_fundamental_provider_checks')->upsert([[
+            'stock_id' => $stock->id,
+            'cadence' => $cadence,
+            'last_successful_check_at' => $checkedAt,
+            'provider' => $provider,
+            'response_hash' => $responseHash,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]], ['stock_id', 'cadence'], ['last_successful_check_at', 'provider', 'response_hash', 'updated_at']);
     }
 
     public function latestFact(Stock $stock, string $factKey, string $cadence, ?Carbon $asOf = null): ?FundamentalFact

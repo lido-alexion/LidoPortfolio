@@ -51,6 +51,7 @@ export const ROUTES = Object.freeze({
     SETTINGS_UNIVERSE_PRICE_SYNC: '/settings/universe-price-sync',
     SETTINGS_FUNDAMENTALS: '/settings/fundamentals',
     SETTINGS_ML_SCORING: '/settings/ml-scoring',
+    SETTINGS_FORWARD_DATA: '/settings/forward-data',
     SETTINGS_SCREENER_REGISTRY: '/settings/screener-registry',
     SETTINGS_STRATEGY_REGISTRY: '/settings/strategy-registry',
     NOTIFICATION_HISTORY: '/notification-history',
