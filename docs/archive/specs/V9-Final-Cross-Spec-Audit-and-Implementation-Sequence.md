@@ -4,10 +4,10 @@
 |---|---|
 | **Version** | V9 |
 | **Document type** | Final architecture/specification audit and implementation sequencing contract |
-| **Status** | **FROZEN / IMPLEMENTATION-READY** |
+| **Status** | **PO REVIEW — V9-DATA-002 WINDOWS RECEIVER REVISION** |
 | **Parent register** | `docs/archive/specs/LidoPortfolio-V9-Wishlist.md` |
 | **Original audit date** | 2026-09-28 |
-| **Latest reconciliation** | 2026-10-01 — V9-UX-004 incorporated |
+| **Latest reconciliation** | 2026-10-01 — Windows receiver, NTFS archive and indefinite delivery catalog recorded for V9-DATA-002 |
 
 ## 1. Purpose
 
@@ -37,13 +37,13 @@ The current registered V9 scope is:
 14. `V9-AI-002` — Agentic StoX Assistant / MCP Action Layer
 15. `V9-AI-003` — Embedded AI Insights & Prompt Execution
 
-All registered items have frozen implementation-ready specifications. `V9-DATA-002` additionally depends on compatible implementation of its separately versioned `SKR-001` StoX-Kite-Rain companion protocol. `V9-OPS-003` is implementation-ready but gated on the required `V4-FEAT-017` shared AI core.
+All registered items except `V9-DATA-002` retain their prior frozen implementation-ready status. `V9-DATA-002` is in PO review for the Windows receiver/archive revision and requires compatible implementation of the revised `SKR-001` protocol. `V9-OPS-003` remains gated on the required `V4-FEAT-017` shared AI core.
 
 ## 3. Audit result
 
-**Result: PASS — the registered V9 specification set is implementation-ready.**
+**Result: PARTIAL — V9-DATA-002 and SKR-001 are under PO review for the Windows receiver/archive revision.**
 
-No unresolved PO decision is known in the registered V9 backlog.
+All other V9 items retain their prior status. Authenticode signing/SmartScreen policy remains to be decided for the private Windows app.
 
 Implementation must still respect V8 closure state and explicit V9 dependency gates. “Implementation-ready” means the epic contract is frozen; it does not mean every epic should be started before the subsystem it depends on is stable.
 
@@ -147,7 +147,7 @@ There must not be a second GitHub token/configuration/transport stack for log-tr
 
 `V9-DATA-002` changes the acquisition/staging/delivery topology around V8 `V4-FEAT-065` but does not replace its canonical corpus contract.
 
-FEAT-065 remains authoritative for Parquet/DuckDB/Polars corpus semantics; the Mac remains canonical. DATA-002 should not be mixed into FEAT-065 live-Kite/full-corpus acceptance in a way that obscures whether failures come from V8 corpus acquisition or the new V9 transfer topology.
+FEAT-065 remains authoritative for Parquet/DuckDB/Polars corpus semantics; the Mac remains the eventual canonical research home. The Windows laptop is the first receiving/holding machine, with manual NTFS archiving and later verified handoff to Mac. V9-DATA-002 implements the delivery path needed to populate the corpus; it must preserve FEAT-065 semantics rather than waiting for the live-Kite/full-corpus acceptance that this delivery path enables.
 
 ### 4.12 Data Export vs operational export
 
@@ -234,7 +234,7 @@ Establish reusable export primitives.
 
 **V9-DATA-002 + SKR-001**
 
-Begin substantive integration after FEAT-065 live-Kite/full-corpus/handoff acceptance is stable enough that V8 corpus behavior can be distinguished from V9 staging/transfer behavior.
+Begin against the frozen FEAT-065 corpus contract and the revised Windows receiver specification. V9-DATA-002 is an enabling path for the live corpus/handoff acceptance; do not gate its implementation on that future acceptance. Keep corpus semantics and V9 delivery behavior testable as separate boundaries.
 
 ### Phase 4 — Shared AI platform core
 
@@ -293,7 +293,7 @@ Safe parallelism is encouraged:
 - UX-004 depends on the existing V8 production-acceptance workflow and can proceed independently of AI epics.
 - VIZ renderer/preset infrastructure can progress before final data-provider acceptance.
 - OPS-001 waits for the V8 FEAT-054 engine acceptance boundary.
-- DATA-002 waits for the V8 FEAT-065 live-corpus acceptance boundary.
+- DATA-002 can implement against the frozen FEAT-065 contract and is required to enable the planned live-corpus and handoff acceptance.
 - AI platform isolated groundwork may begin before all deterministic epics finish.
 - OPS-003 may start as soon as V4-FEAT-017 core + OPS-002 GitHub primitives are stable; it does not wait for AI-001/002/003.
 - user-facing AI features must use the shared platform and stable domain contracts.
@@ -315,15 +315,15 @@ The implementation agent should:
 
 ## 9. V9 implementation-ready declaration
 
-The V9 register and linked specifications are frozen and implementation-ready, including the later additions:
+The V9 register and linked specifications retain their per-epic statuses; V9-DATA-002/SKR-001 are currently under PO review for the Windows receiver/archive revision. Other frozen additions include:
 
 - `V9-AI-003` — Embedded AI Insights & Prompt Execution;
-- `V9-DATA-002` — VPS Historical Data Staging and Delivery + `SKR-001` companion;
+- `V9-DATA-002` — VPS Historical Data Staging and Windows Delivery + revised `SKR-001` companion;
 - `V9-COMM-001` access-request resilience companion;
 - `V9-OPS-002` — Automated API Failure GitHub Issue Reporting;
 - `V9-OPS-003` — LLM Log Error Triage & GitHub Issue Reporting, gated on V4-FEAT-017 core + OPS-002 GitHub primitives.
 - `V9-UX-004` — Guided Production ML Acceptance Wizard, gated on the implemented V8 production-acceptance domain.
 
-**StoX V9 remains FROZEN / IMPLEMENTATION-READY.**
+**StoX V9 remains FROZEN / IMPLEMENTATION-READY except V9-DATA-002, which is in PO REVIEW pending the Windows distribution/signing decision and final protocol acceptance.**
 
 Implementation order must follow dependency and V8-closure gates rather than interpreting “implementation-ready” as permission to overlap unfinished V8 acceptance indiscriminately.
