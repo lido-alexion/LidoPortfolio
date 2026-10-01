@@ -311,7 +311,7 @@ class V5PortfolioReplayFoundationTest extends TestCase
         ]);
         $result = app(PortfolioReplayProcessor::class)->process($run, 5);
         $this->assertSame('completed', $result['status']);
-        $this->assertSame($before['holdings'], $run->fresh()->starting_state['holdings']);
+        $this->assertEqualsCanonicalizing($before['holdings'], $run->fresh()->starting_state['holdings']);
         $this->assertCount(1, $run->fresh()->starting_state['holdings']);
     }
 

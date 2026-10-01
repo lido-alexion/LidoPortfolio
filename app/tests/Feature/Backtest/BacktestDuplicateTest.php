@@ -193,7 +193,7 @@ class BacktestDuplicateTest extends TestCase
         $this->assertSame('Original Frozen Run', $original->name);
         $this->assertSame($stale->id, $original->strategy_version_id);
         $this->assertSame('Stale Snapshot Strategy', $original->strategy_name);
-        $this->assertSame($originalStats, $original->statistics_json);
+        $this->assertEqualsCanonicalizing($originalStats, $original->statistics_json);
         $this->assertEquals(
             $originalTradeIds,
             BacktestTrade::query()->where('backtest_run_id', $original->id)->pluck('id')->all()

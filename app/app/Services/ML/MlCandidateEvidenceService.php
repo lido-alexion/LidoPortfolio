@@ -136,6 +136,9 @@ class MlCandidateEvidenceService
 
     private function sameEvaluationWindow(MlModelVersion $candidate, MlModelVersion $active): bool
     {
-        return data_get($candidate->audit_metadata, 'chronological_split') === data_get($active->audit_metadata, 'chronological_split');
+        // JSON object key order is not semantic and differs between SQLite and
+        // MySQL round-trips. Compare the decoded structures by value so the
+        // same validation window remains comparable across CI databases.
+        return data_get($candidate->audit_metadata, 'chronological_split') == data_get($active->audit_metadata, 'chronological_split');
     }
 }

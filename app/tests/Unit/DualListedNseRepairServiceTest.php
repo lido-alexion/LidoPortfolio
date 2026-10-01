@@ -212,8 +212,9 @@ class DualListedNseRepairServiceTest extends TestCase
         ]);
 
         Holding::query()->create([
-            'user_id' => $user->id,
+            'profile_id' => $this->defaultPortfolioFor($user)->id,
             'stock_id' => $bse->id,
+            'owner_key' => Holding::OWNER_UNMANAGED,
             'quantity' => 10,
             'avg_buy_price' => 100,
             'invested_amount' => 1000,

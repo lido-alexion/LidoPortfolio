@@ -26,7 +26,7 @@ class KiteInstrumentRegistryTest extends TestCase
             'user_id' => $user->id,
             'provider' => 'kite',
             'connected_at' => now(),
-            'expires_at' => now()->addDay(),
+            'expires_at' => null,
         ])->forceFill(['access_token' => 'token'])->save();
         $stock = Stock::query()->create(['symbol' => 'SITINET', 'exchange' => 'NSE', 'name' => 'SITI NETWORKS']);
         Http::fake(['https://api.kite.trade/instruments/NSE' => Http::response($this->csv([
@@ -46,7 +46,7 @@ class KiteInstrumentRegistryTest extends TestCase
     public function test_cancel_connection_failure_fetches_open_state_without_claiming_terminal_cancellation(): void
     {
         $user = User::factory()->create();
-        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => now()->addDay()])->forceFill(['access_token' => 'test-token'])->save();
+        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => null])->forceFill(['access_token' => 'test-token'])->save();
         $deleteAttempts = 0;
         $getAttempts = 0;
         Http::fake(function ($request) use (&$deleteAttempts, &$getAttempts) {
@@ -75,7 +75,7 @@ class KiteInstrumentRegistryTest extends TestCase
     public function test_ambiguous_series_candidates_block_without_guessing(): void
     {
         $user = User::factory()->create();
-        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => now()->addDay()])->forceFill(['access_token' => 'token'])->save();
+        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => null])->forceFill(['access_token' => 'token'])->save();
         $stock = Stock::query()->create(['symbol' => 'SITINET', 'exchange' => 'NSE', 'name' => 'SITI NETWORKS']);
         Http::fake(['https://api.kite.trade/instruments/NSE' => Http::response($this->csv([
             ['1', '2', 'SITINET-BZ', 'SITI NETWORKS', 'NSE'],
@@ -92,7 +92,7 @@ class KiteInstrumentRegistryTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-09-22 10:00:00', 'Asia/Kolkata'));
         $user = User::factory()->create();
-        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => now()->addDay()])->forceFill(['access_token' => 'token'])->save();
+        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => null])->forceFill(['access_token' => 'token'])->save();
         $stock = Stock::query()->create(['symbol' => 'SITINET', 'exchange' => 'NSE', 'name' => 'SITI NETWORKS']);
         BrokerInstrument::query()->create(['provider' => 'kite', 'stock_id' => $stock->id, 'exchange' => 'NSE', 'trading_symbol' => 'SITINET-BZ', 'is_active' => true]);
         Http::fake(['https://api.kite.trade/orders/regular' => Http::response(['status' => 'success', 'data' => ['order_id' => 'order-1']])]);
@@ -112,7 +112,7 @@ class KiteInstrumentRegistryTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-09-22 10:00:00', 'Asia/Kolkata'));
         $user = User::factory()->create();
-        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => now()->addDay()])->forceFill(['access_token' => 'token'])->save();
+        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => null])->forceFill(['access_token' => 'token'])->save();
         $stock = Stock::query()->create(['symbol' => 'SITINET', 'exchange' => 'NSE', 'name' => 'SITI NETWORKS']);
         BrokerInstrument::query()->create(['provider' => 'kite', 'stock_id' => $stock->id, 'exchange' => 'NSE', 'trading_symbol' => 'SITINET', 'is_active' => true]);
         $orders = 0;
@@ -138,7 +138,7 @@ class KiteInstrumentRegistryTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-09-22 18:00:00', 'Asia/Kolkata'));
         $user = User::factory()->create();
-        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => now()->addDay()])->forceFill(['access_token' => 'token'])->save();
+        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => null])->forceFill(['access_token' => 'token'])->save();
         $stock = Stock::query()->create(['symbol' => 'SITINET', 'exchange' => 'NSE', 'name' => 'SITI NETWORKS']);
         BrokerInstrument::query()->create(['provider' => 'kite', 'stock_id' => $stock->id, 'exchange' => 'NSE', 'trading_symbol' => 'SITINET-BZ', 'is_active' => true]);
         Http::fake(['https://api.kite.trade/orders/amo' => Http::response(['status' => 'success', 'data' => ['order_id' => 'amo-order-1']])]);
@@ -153,7 +153,7 @@ class KiteInstrumentRegistryTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-09-22 10:00:00', 'Asia/Kolkata'));
         $user = User::factory()->create();
-        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => now()->addDay()])->forceFill(['access_token' => 'token'])->save();
+        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => null])->forceFill(['access_token' => 'token'])->save();
         $stock = Stock::query()->create(['symbol' => 'UNKNOWN', 'exchange' => 'NSE', 'name' => 'Unknown']);
         Http::fake(['https://api.kite.trade/instruments/NSE' => Http::response($this->csv([]))]);
 
@@ -171,7 +171,7 @@ class KiteInstrumentRegistryTest extends TestCase
     public function test_live_quote_uses_the_registered_broker_symbol(): void
     {
         $user = User::factory()->create();
-        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => now()->addDay()])->forceFill(['access_token' => 'token'])->save();
+        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => null])->forceFill(['access_token' => 'token'])->save();
         $stock = Stock::query()->create(['symbol' => 'SITINET', 'exchange' => 'NSE', 'name' => 'SITI NETWORKS']);
         BrokerInstrument::query()->create(['provider' => 'kite', 'stock_id' => $stock->id, 'exchange' => 'NSE', 'trading_symbol' => 'SITINET-BZ', 'is_active' => true]);
         Http::fake(fn ($request) => str_starts_with($request->url(), 'https://api.kite.trade/quote/ltp')
@@ -189,7 +189,7 @@ class KiteInstrumentRegistryTest extends TestCase
     public function test_targeted_refresh_deactivates_stale_mapping_when_master_has_no_match(): void
     {
         $user = User::factory()->create();
-        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => now()->addDay()])->forceFill(['access_token' => 'token'])->save();
+        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => null])->forceFill(['access_token' => 'token'])->save();
         $stock = Stock::query()->create(['symbol' => 'SITINET', 'exchange' => 'NSE', 'name' => 'SITI NETWORKS']);
         $old = BrokerInstrument::query()->create(['provider' => 'kite', 'stock_id' => $stock->id, 'exchange' => 'NSE', 'trading_symbol' => 'SITINET-BZ', 'is_active' => true]);
         Http::fake(['https://api.kite.trade/instruments/NSE' => Http::response($this->csv([]))]);
@@ -208,7 +208,7 @@ class KiteInstrumentRegistryTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-09-22 10:00:00', 'Asia/Kolkata'));
         $user = User::factory()->create();
-        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => now()->addDay()])->forceFill(['access_token' => 'token'])->save();
+        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => null])->forceFill(['access_token' => 'token'])->save();
         $stock = Stock::query()->create(['symbol' => 'SITINET', 'exchange' => 'NSE', 'name' => 'SITI NETWORKS']);
         BrokerInstrument::query()->create(['provider' => 'kite', 'stock_id' => $stock->id, 'exchange' => 'NSE', 'trading_symbol' => 'SITINET', 'is_active' => true]);
         $orderCalls = 0;
@@ -245,7 +245,7 @@ class KiteInstrumentRegistryTest extends TestCase
     public function test_amo_cancellation_uses_the_persisted_variety_endpoint(): void
     {
         $user = User::factory()->create();
-        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => now()->addDay()])->forceFill(['access_token' => 'token'])->save();
+        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => null])->forceFill(['access_token' => 'token'])->save();
         Http::fake([
             'https://api.kite.trade/orders/amo/order-amo' => Http::response(['status' => 'success']),
             'https://api.kite.trade/orders/order-amo' => Http::response(['status' => 'success', 'data' => [['status' => 'CANCELLED', 'quantity' => 1, 'filled_quantity' => 0]]]),
@@ -259,7 +259,7 @@ class KiteInstrumentRegistryTest extends TestCase
     public function test_regular_cancellation_uses_the_regular_endpoint(): void
     {
         $user = User::factory()->create();
-        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => now()->addDay()])->forceFill(['access_token' => 'token'])->save();
+        BrokerConnection::query()->create(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => null])->forceFill(['access_token' => 'token'])->save();
         Http::fake([
             'https://api.kite.trade/orders/regular/order-regular' => Http::response(['status' => 'success']),
             'https://api.kite.trade/orders/order-regular' => Http::response(['status' => 'success', 'data' => [['status' => 'CANCELLED', 'quantity' => 1, 'filled_quantity' => 0]]]),

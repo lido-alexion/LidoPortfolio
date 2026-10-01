@@ -213,9 +213,10 @@ class MlScoringLifecycleTest extends TestCase
             ->assertCreated()
             ->json('data.model.id');
         $model = MlModelVersion::query()->findOrFail($modelId);
+        $benchmark = Stock::query()->where('symbol', 'NIFTY50')->firstOrFail();
         for ($i = 0; $i < 30; $i++) {
             MlPrediction::query()->create([
-                'stock_id' => 1,
+                'stock_id' => $benchmark->id,
                 'model_version_id' => $model->id,
                 'horizon' => '1m',
                 'as_of' => now()->subDays($i),

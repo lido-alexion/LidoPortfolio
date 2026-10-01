@@ -6,6 +6,7 @@ use App\Models\Holding;
 use App\Models\Screener;
 use App\Models\ScreenerBacktestDay;
 use App\Models\ScreenerBacktestHit;
+use App\Models\ScreenerVersion;
 use App\Models\ScreenerRun;
 use App\Models\ScreenerRunHit;
 use App\Models\Setting;
@@ -1239,6 +1240,7 @@ class ScreenerTest extends TestCase
         $this->assertGreaterThan(0, $dayTotal);
         $this->assertSame(0, (int) $first['stats']['days_reused']);
         $this->assertSame($dayTotal, ScreenerBacktestDay::query()->where('screener_id', $id)->count());
+        $firstVersionId = (int) ScreenerBacktestDay::query()->where('screener_id', $id)->value('screener_version_id');
 
         // Second run: every date already saved → fully reused, zero scanning.
         // Deleting the price history proves results come from the DB, not recomputation.
@@ -1273,8 +1275,13 @@ class ScreenerTest extends TestCase
             ],
         ])->assertOk();
         $this->assertSame($dayTotal, ScreenerBacktestDay::query()->where('screener_id', $id)->count());
-        $this->assertSame($dayTotal, ScreenerBacktestDay::query()->where('screener_id', $id)->where('screener_version_id', 1)->count());
-        $this->assertSame(0, ScreenerBacktestDay::query()->where('screener_id', $id)->where('screener_version_id', 2)->count());
+        $this->assertSame($dayTotal, ScreenerBacktestDay::query()->where('screener_id', $id)->where('screener_version_id', $firstVersionId)->count());
+        $secondVersionId = (int) ScreenerVersion::query()
+            ->where('screener_id', $id)
+            ->where('version', (int) Screener::query()->findOrFail($id)->artifact_version)
+            ->value('id');
+        $this->assertNotSame($firstVersionId, $secondVersionId);
+        $this->assertSame(0, ScreenerBacktestDay::query()->where('screener_id', $id)->where('screener_version_id', $secondVersionId)->count());
         $this->assertSame(0, $this->getJson("/api/screeners/{$id}/backtest/matrix")->assertOk()->json('data.run_count'));
 
         // Rebuild results, then Clear history wipes them too.

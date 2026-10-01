@@ -112,26 +112,7 @@ jobs:
           coverage: none
           tools: composer
 
-      - name: Cache Composer packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.composer/cache/files
-          key: composer-${{ runner.os }}-${{ hashFiles('app/composer.lock') }}
-          restore-keys: composer-${{ runner.os }}-
-
-      - name: Install Composer dependencies
-        run: composer install --no-interaction --prefer-dist --no-progress
-
-      - name: Prepare Laravel test environment
-        run: |
-          cp .env.example .env
-          php artisan key:generate
-          php artisan config:clear
-
-      - name: Run Python adapter tests
-        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
-
-      - name: Validate full MySQL migration and seed chain
+      - name: Run canonical MySQL backend verification
         env:
           DB_CONNECTION: mysql
           DB_HOST: 127.0.0.1
@@ -139,13 +120,7 @@ jobs:
           DB_DATABASE: lidoportfolio_ci
           DB_USERNAME: root
           DB_PASSWORD: root
-        run: php artisan migrate:fresh --seed --force
-
-      - name: Run backend test suite
-        run: php -d memory_limit=512M artisan test
-
-      - name: Verify OpenAPI contract
-        run: php artisan openapi:v1 --check
+        run: ../scripts/verify-ci.sh --backend
 
   frontend:
     name: Frontend verification
