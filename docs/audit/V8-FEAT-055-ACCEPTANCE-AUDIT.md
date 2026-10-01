@@ -44,3 +44,14 @@ Authoritative contract: `docs/archive/specs/V8-Account-Access-Request-Admin-Appr
 3. Multi-worker/database concurrency proof under the deployed cache/queue configuration.
 
 FEAT-055 should remain **REVIEW**, not COMPLETE, until those provider/runtime checks are verified. No PO decision is required.
+
+
+## Closure continuation — 2026-10-01 (production build `ef66133c`)
+
+Operator: Codex via connected `stoxla-prod`; UTC times below. **This entry does not mark the epic COMPLETE.** Prior local checks remain separate from production acceptance.
+
+| Acceptance check | State | Evidence / next exact check |
+|---|---|---|
+| Provider setup | PASS (configuration only) | Build `ef66133c`, VPS, 2026-10-01 18:26 UTC: Turnstile driver and site/secret configured, SMTP transport selected; three existing request rows. No token or mail-provider result inferred. |
+| Valid/invalid/expired CAPTCHA, email delivery/single use, Admin Create/Ignore/Reject and notifications | NOT YET RUN | Requires controlled test addresses and Admin session; record provider IDs privately. |
+| Enumeration-neutral response, mail failure isolation and concurrent duplicate submissions across workers/cache | NOT YET RUN | Perform bounded deployed test with cleanup. |
