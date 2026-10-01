@@ -106,7 +106,7 @@ class MlTrainingDatasetBuilder
     }
 
     /** Canonical viable reference dates and label ends; no dataset or membership writes. */
-    public function requiredReferenceDates(string $horizon, Carbon $cutoff): array
+    public function requiredReferenceDates(string $horizon, Carbon $cutoff, ?array $sessionDates = null): array
     {
         $horizonDays = ['1m' => 21, '3m' => 63, '6m' => 126][$horizon] ?? throw new RuntimeException('Unsupported ML horizon.');
         $benchmark = Stock::query()->where('symbol', 'NIFTY50')->first();
@@ -114,7 +114,7 @@ class MlTrainingDatasetBuilder
             return [];
         }
         $benchmarkSeries = $this->priceSeries($benchmark, $cutoff);
-        $sessionDates = $this->verifiedSessionDates($benchmarkSeries, $cutoff);
+        $sessionDates ??= $this->verifiedSessionDates($benchmarkSeries, $cutoff);
         $referenceDates = [];
         $this->universeQuery()->chunkById(100, function ($stockChunk) use (&$referenceDates, $benchmarkSeries, $sessionDates, $horizonDays, $cutoff): void {
             foreach ($stockChunk as $stock) {
@@ -154,7 +154,7 @@ class MlTrainingDatasetBuilder
 
         $benchmarkSeries = $this->priceSeries($benchmark, $cutoff);
         $sessionDates = $this->verifiedSessionDates($benchmarkSeries, $cutoff);
-        $referenceDates = $this->requiredReferenceDates($horizon, $cutoff);
+        $referenceDates = $this->requiredReferenceDates($horizon, $cutoff, $sessionDates);
         $dates = array_keys($referenceDates);
         sort($dates);
         if (count($dates) < 3) {
