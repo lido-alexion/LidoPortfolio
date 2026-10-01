@@ -1229,7 +1229,10 @@ class ScreenerTest extends TestCase
                 $completed = (bool) $cont->json('completed');
                 $data = $cont->json('data');
             }
-            $this->assertTrue($completed);
+            $this->assertTrue(
+                $completed,
+                'Backtest did not complete: '.json_encode($data, JSON_THROW_ON_ERROR),
+            );
 
             return $data;
         };
