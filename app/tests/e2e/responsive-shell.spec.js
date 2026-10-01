@@ -25,15 +25,6 @@ async function assertNoDocumentOverflow(page) {
     expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 2);
 }
 
-async function assertRouteArchetypes(page) {
-    for (const route of REPRESENTATIVE_ROUTES) {
-        await page.goto(route.path);
-        await expect(page.locator('.lido-page-title')).toBeVisible();
-        await expect(page.locator('.lido-page-title')).toContainText(route.label);
-        await assertNoDocumentOverflow(page);
-    }
-}
-
 test.describe('responsive shell and representative page archetypes', () => {
     test('mobile shell keeps navigation, utilities, search, help and profile reachable', async ({ page }) => {
         test.skip((page.viewportSize()?.width || 0) >= 768, 'mobile-only shell assertions');
@@ -76,12 +67,18 @@ test.describe('responsive shell and representative page archetypes', () => {
         await assertNoDocumentOverflow(page);
     });
 
-    test('mobile representative routes preserve page access and dense-content containment', async ({ page }) => {
-        test.skip((page.viewportSize()?.width || 0) >= 768, 'mobile-only route assertions');
-        await installAndOpen(page, '/');
-        await assertRouteArchetypes(page);
+    for (const route of REPRESENTATIVE_ROUTES) {
+        test(`mobile representative route ${route.label} preserves page access and containment`, async ({ page }) => {
+            test.skip((page.viewportSize()?.width || 0) >= 768, 'mobile-only route assertions');
+            await installAndOpen(page, route.path);
+            await expect(page.locator('.lido-page-title')).toContainText(route.label);
+            await assertNoDocumentOverflow(page);
+        });
+    }
 
-        await page.goto('/holdings');
+    test('mobile Holdings preserves dense-content containment', async ({ page }) => {
+        test.skip((page.viewportSize()?.width || 0) >= 768, 'mobile-only route assertions');
+        await installAndOpen(page, '/holdings');
         const tableContainers = page.locator('.table-responsive, [role="table"]');
         if (await tableContainers.count()) {
             await expect(tableContainers.first()).toBeVisible();
