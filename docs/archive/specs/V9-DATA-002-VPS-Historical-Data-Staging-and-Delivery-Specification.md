@@ -1,13 +1,15 @@
-# V9-DATA-002 — VPS Historical Data Staging and Delivery
+# V9-DATA-002 — VPS Historical Data Staging and Delivery (Superseded Mac-Receiver Revision)
 
 | Field | Value |
 |---|---|
 | **Epic** | V9-DATA-002 |
-| **Status** | **FROZEN / IMPLEMENTATION-READY** |
+| **Status** | **SUPERSEDED — see Windows receiver revision** |
 | **Issue** | [V9-DATA-002](https://github.com/lido-alexion/LidoPortfolio/issues/16) |
-| **Related Mac app** | [SKR-001 — StoX-Kite-Rain](https://github.com/lido-alexion/StoX-Kite-Rain/issues/1) |
-| **Companion spec** | [Mac downloader specification](https://github.com/lido-alexion/StoX-Kite-Rain/blob/main/docs/SK-001-MacOS-Downloader-Specification.md) |
+| **Superseded by** | [V9-DATA-002 Windows receiver revision](V9-DATA-002-Windows-Receiver-Revision.md) |
+| **Current companion spec** | [Windows downloader specification](https://github.com/lido-alexion/StoX-Kite-Rain/blob/main/docs/SK-001-Windows-Downloader-Specification.md) |
 | **Inherited V8 specification** | [`V8-Intraday-ML-Historical-Data-Platform-Specification.md`](V8-Intraday-ML-Historical-Data-Platform-Specification.md) — V4-FEAT-065 |
+
+> **Historical record only.** This document describes the retired Mac-as-transfer-client design. The current receiver, archive workflow, and indefinite delivery-catalog retention are defined in [V9-DATA-002-Windows-Receiver-Revision.md](V9-DATA-002-Windows-Receiver-Revision.md). V8 FEAT-065 remains unchanged.
 
 ## 1. Goal
 
