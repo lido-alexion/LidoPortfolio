@@ -262,4 +262,4 @@ V9-DATA-002 is complete only when:
 15. Existing FEAT-065 Parquet corpus remains canonical, readable and compatible with DuckDB/Polars.
 16. Tests cover checksum mismatch, schema rejection, incomplete day, stale lease, duplicate ack, crash between import and ack, low quota, unacknowledged-batch retention beyond 30 days, superseded-batch deletion only after successful replacement acknowledgment, supplemental repair and blocking oldest-batch behavior.
 
-**Document state: FROZEN / IMPLEMENTATION-READY.** No remaining PO decision is required unless implementation discovers a direct contradiction with FEAT-065 or a materially new product behavior.
+**Document state: SUPERSEDED — HISTORICAL RECORD ONLY.** The Mac-receiver implementation design is retired. Use [V9-DATA-002-Windows-Receiver-Revision.md](V9-DATA-002-Windows-Receiver-Revision.md) for the current receiver/archive architecture and indefinite catalog retention.
