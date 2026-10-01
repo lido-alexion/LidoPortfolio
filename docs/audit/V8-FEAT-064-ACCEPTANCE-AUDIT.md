@@ -55,3 +55,7 @@ Operator: Codex via connected `stoxla-prod`; UTC times below. **This entry does 
 |---|---|---|
 | Deployed private Screener, definition-copy sharing, multiple Strategies and immutable pins | NOT YET RUN | Controlled two-account browser path and provenance check required. |
 | Real membership change, historical transaction/recommendation provenance and responsive/screen-reader | NOT YET RUN | Coordinate membership drift after NSE apply, with explicit before/after IDs and no production portfolio disruption. |
+
+### Authenticated workflow inspection — 2026-10-01 about 19:05 UTC
+
+Cloud Chrome showed seven existing rows under `My screens`, a separate `Shared screens` tab (empty for this portfolio), and a Strategies selector with multiple concurrent enabled strategies (Ts2, Test swing, Swing SmallCap, Momentum Strategy Copy). The selected published Artifact Library binding displayed a read-only notice and disabled Save. **PASS for UI presence and multiple-enabled display only**; no cross-account copy, new version, membership drift or historical provenance mutation was tested.
