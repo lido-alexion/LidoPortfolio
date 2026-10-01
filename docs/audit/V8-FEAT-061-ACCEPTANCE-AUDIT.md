@@ -41,3 +41,7 @@ Operator: Codex via connected `stoxla-prod`; UTC times below. **This entry does 
 |---|---|---|
 | Deployed eight-step Investor journey, persistence across logout/expiry/refresh, missing targets, Admin exclusion | NOT YET RUN | Needs authenticated controlled Investor/Admin accounts on production; record browser, viewport and route/step evidence. |
 | Keyboard, real screen reader and another real device/browser | NOT YET RUN | Local Playwright/axe evidence remains implementation evidence. |
+
+### Authenticated tour resume slice — 2026-10-01 about 19:06 UTC
+
+Cloud Chrome Profile exposed Launch tour and Restart from beginning. Launch resumed the persisted Investor tour at step 7/8 (`Help & documentation`) on Dashboard with labelled dialog and Back/Next/Close controls. Refresh closed that manually launched overlay; this account did not show an automatic welcome prompt after reload. Source inspection shows the local refresh test expects a welcome prompt when `show_welcome_prompt=true`, whereas this user's prior prompt history may suppress it. **PASS for persisted manual resume at step 7 only**; full eight-step deployed journey, fresh-user refresh/expiry, Admin exclusion, keyboard/screen-reader and another device remain NOT YET RUN.
