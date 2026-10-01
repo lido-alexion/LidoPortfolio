@@ -123,3 +123,21 @@ test('microstructure collector unit matches the provisioned runtime layout', asy
     assert.match(runbook, /stoxla-microstructure-collector\.service/);
     assert.match(runbook, /systemctl enable stoxla-microstructure-collector/);
 });
+
+test('acceptance worker must drain before shared Python changes or rollback activation', async () => {
+    const [deploy, rollback, unit] = await Promise.all([
+        source('deploy/scripts/stoxla-deploy-release.sh'),
+        source('deploy/scripts/stoxla-rollback-release.sh'),
+        source('deploy/systemd/stoxla-ml-acceptance.service'),
+    ]);
+    const guard = 'is-active stoxla-ml-acceptance.service';
+    assert.ok(deploy.indexOf(guard) < deploy.indexOf('prepare_ml_python "$RELEASE_DIR/'));
+    assert.ok(rollback.indexOf(guard) < rollback.indexOf('log "switching current symlink'));
+    for (const script of [deploy, rollback]) {
+        assert.match(script, /inactive\|failed\|unknown\) ;;/);
+        assert.match(script, /drain and stop stoxla-ml-acceptance.service/);
+        assert.doesNotMatch(script, /(?:stop|restart|enable) stoxla-ml-acceptance\.service\s*$/m);
+    }
+    assert.match(unit, /queue:work ml-acceptance --queue=ml-acceptance .*--timeout=14400/);
+    assert.match(unit, /KillMode=mixed/);
+});

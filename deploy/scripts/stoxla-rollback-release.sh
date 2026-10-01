@@ -70,6 +70,14 @@ TARGET_COMMIT="$("$PHP_BIN" -r '
 ' "$RELEASES_DIR/$TARGET_RELEASE/bootstrap/build-info.json")"
 [[ -n "$TARGET_COMMIT" ]] || fail "rollback release build metadata is missing commit_sha"
 
+# Long acceptance jobs retain release files and the shared Python environment.
+# Operators must drain this optional worker before changing either.
+acceptance_state="$("$SYSTEMCTL_BIN" is-active stoxla-ml-acceptance.service || true)"
+case "$acceptance_state" in
+  inactive|failed|unknown) ;;
+  *) fail "drain and stop stoxla-ml-acceptance.service before deployment or rollback (state: $acceptance_state)" ;;
+esac
+
 log "switching current symlink to $TARGET_RELEASE"
 ln -sfn "releases/$TARGET_RELEASE" "$APP_ROOT/current.new"
 mv -Tf "$APP_ROOT/current.new" "$APP_ROOT/current"

@@ -160,6 +160,14 @@ log "checking required runtime-service privileges"
 "$SUDO_BIN" -n "$SYSTEMCTL_BIN" show "$QUEUE_SERVICE" --property=Id >/dev/null \
   || fail "deployment user needs passwordless permission to inspect/restart $QUEUE_SERVICE"
 
+# Long acceptance jobs retain release files and the shared Python environment.
+# Operators must drain this optional worker before changing either.
+acceptance_state="$("$SYSTEMCTL_BIN" is-active stoxla-ml-acceptance.service || true)"
+case "$acceptance_state" in
+  inactive|failed|unknown) ;;
+  *) fail "drain and stop stoxla-ml-acceptance.service before deployment or rollback (state: $acceptance_state)" ;;
+esac
+
 LOCK_DIR="$APP_ROOT/.deploy-lock"
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
   fail "another deployment appears to be running; lock exists at $LOCK_DIR"

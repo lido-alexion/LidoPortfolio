@@ -5,7 +5,10 @@ namespace App\Jobs;
 use App\Exceptions\MlTrainingRetryScheduledException;
 use App\Exceptions\MlTrainingRunCancelledException;
 use App\Models\User;
+use App\Models\V7\MlTrainingRun;
+use App\Services\ML\MlAcceptanceRuntime;
 use App\Services\ML\MlScoringService;
+use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
@@ -20,8 +23,10 @@ class MlRetrainJob implements ShouldQueue
         public ?int $driftCheckId = null,
         public ?int $trainingRunId = null,
     ) {
-        if ($trainingRunId && isset(\App\Models\V7\MlTrainingRun::query()->find($trainingRunId)?->configuration['acceptance'])) {
-            $this->timeout = \App\Services\ML\MlAcceptanceRuntime::TIMEOUT;
+        if ($trainingRunId && isset(MlTrainingRun::query()->find($trainingRunId)?->configuration['acceptance'])) {
+            $this->timeout = MlAcceptanceRuntime::TIMEOUT;
+            $this->onConnection(MlAcceptanceRuntime::CONNECTION)
+                ->onQueue(MlAcceptanceRuntime::QUEUE);
         }
     }
 
@@ -29,10 +34,16 @@ class MlRetrainJob implements ShouldQueue
 
     public function handle(MlScoringService $scoring): void
     {
-        $run = $this->trainingRunId ? \App\Models\V7\MlTrainingRun::query()->find($this->trainingRunId) : null;
+        $run = $this->trainingRunId ? MlTrainingRun::query()->find($this->trainingRunId) : null;
         $acceptance = $run?->configuration['acceptance'] ?? null;
+        if ($acceptance !== null) {
+            app(MlAcceptanceRuntime::class)->assertQueue();
+        }
         if ($acceptance !== null && $run->status !== 'queued') {
-            if (! in_array($run->status, ['running', 'cancelling'], true)) MlAcceptanceJob::dispatch('campaign', $acceptance['campaign_id']);
+            if (! in_array($run->status, ['running', 'cancelling'], true)) {
+                MlAcceptanceJob::dispatch('campaign', $acceptance['campaign_id']);
+            }
+
             return;
         }
         $user = $this->requestedByUserId ? User::query()->find($this->requestedByUserId) : null;
@@ -42,11 +53,13 @@ class MlRetrainJob implements ShouldQueue
         }
 
         try {
-            $scoring->retrain($this->horizon, $acceptance ? \Carbon\Carbon::parse($acceptance['cutoff_date']) : null, $user, $overrides, $this->trainingRunId);
+            $scoring->retrain($this->horizon, $acceptance ? Carbon::parse($acceptance['cutoff_date']) : null, $user, $overrides, $this->trainingRunId);
         } catch (MlTrainingRunCancelledException|MlTrainingRetryScheduledException) {
             // Run row already updated (cancelled or queued for retry).
         } finally {
-            if ($acceptance !== null) MlAcceptanceJob::dispatch('campaign', $acceptance['campaign_id']);
+            if ($acceptance !== null) {
+                MlAcceptanceJob::dispatch('campaign', $acceptance['campaign_id']);
+            }
         }
     }
 }

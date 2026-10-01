@@ -1,0 +1,20 @@
+[Unit]
+Description=StoX dedicated ML acceptance queue worker
+After=network.target mariadb.service
+
+[Service]
+User=nitty
+Group=www-data
+WorkingDirectory=/var/www/stoxla/current
+ExecStart=/usr/bin/php /var/www/stoxla/current/artisan queue:work ml-acceptance --queue=ml-acceptance --sleep=3 --tries=3 --timeout=14400
+Restart=always
+RestartSec=5
+# Allow an in-flight job to finish before terminating its Python process group.
+TimeoutStopSec=14520
+KillSignal=SIGTERM
+KillMode=mixed
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
