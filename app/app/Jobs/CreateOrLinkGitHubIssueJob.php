@@ -28,6 +28,19 @@ class CreateOrLinkGitHubIssueJob implements ShouldQueue
         try {
             $incident->update(['sync_status' => 'syncing', 'last_github_checked_at' => now(), 'sync_error' => null]);
             $existing = $github->searchOpen($marker);
+            if (! $existing) {
+                $historical = $github->searchAny($marker);
+                $quietSince = $incident->last_reported_at?->addHours((int) config('api_failure_reporting.recurrence_cooldown_hours', 24));
+                if ($historical && $quietSince && now()->lt($quietSince)) {
+                    $incident->update(['github_issue_number' => $historical['number'] ?? null, 'github_issue_url' => $historical['html_url'] ?? null, 'github_issue_state' => $historical['state'] ?? 'closed', 'sync_status' => 'linked']);
+                    return;
+                }
+                $newIssues = ApiFailureIncident::query()->whereNotNull('github_issue_number')->where('last_reported_at', '>=', now()->subHour())->count();
+                if ($newIssues >= (int) config('api_failure_reporting.max_new_per_hour', 10)) {
+                    $incident->update(['sync_status' => 'rate_limited']);
+                    return;
+                }
+            }
             $issue = $existing ?: $github->create(
                 '[Auto][API] '.($incident->component ?: 'StoX').' '.($incident->http_status ?: $incident->failure_class ?: 'failure'),
                 $this->body($incident, $marker),

@@ -2,6 +2,7 @@
 
 use App\Jobs\DailyMarketDataJob;
 use App\Models\ExportArtifact;
+use App\Models\ApiFailureIncident;
 use App\Services\AlertExpirationService;
 use App\Services\AlertNotificationService;
 use App\Services\BenchmarkPriceSyncService;
@@ -45,6 +46,12 @@ Artisan::command('portfolio:purge-export-artifacts', function () {
     });
     $this->info("Purged {$removed} expired export artifact(s).");
 })->purpose('Delete expired V9 export artifacts');
+
+Artisan::command('portfolio:purge-api-failure-incidents', function () {
+    $cutoff = now()->subDays((int) config('api_failure_reporting.retention_days', 90));
+    $removed = ApiFailureIncident::query()->where('last_seen_at', '<', $cutoff)->delete();
+    $this->info("Purged {$removed} expired API failure incident(s).");
+})->purpose('Delete expired API failure observer state');
 
 Artisan::command('portfolio:sync-nse-holidays', function () {
     try {
@@ -560,3 +567,9 @@ Schedule::command('tos:finalize-internal-transfer-valuations')
     ->timezone($timezone)
     ->withoutOverlapping(5)
     ->name('tos-internal-transfer-valuations');
+
+Schedule::command('portfolio:purge-api-failure-incidents')
+    ->dailyAt('03:20')
+    ->timezone($timezone)
+    ->withoutOverlapping(10)
+    ->name('api-failure-incident-retention');

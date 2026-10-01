@@ -8,8 +8,18 @@ class GitHubIssueClient
 {
     public function searchOpen(string $marker): ?array
     {
+        return $this->search($marker, 'is:open');
+    }
+
+    public function searchAny(string $marker): ?array
+    {
+        return $this->search($marker, '');
+    }
+
+    private function search(string $marker, string $state): ?array
+    {
         $response = $this->request()->get('https://api.github.com/search/issues', [
-            'q' => 'repo:'.config('api_failure_reporting.repository').' is:issue is:open "'.$marker.'"',
+            'q' => trim('repo:'.config('api_failure_reporting.repository').' is:issue '.$state.' "'.$marker.'"'),
             'per_page' => 5,
         ]);
         if (! $response->successful()) throw new \RuntimeException('GitHub issue search failed.');
