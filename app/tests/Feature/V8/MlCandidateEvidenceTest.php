@@ -56,7 +56,7 @@ class MlCandidateEvidenceTest extends TestCase
         $this->assertSame(0.11, $evidence['deterministic_baseline']['delta']['roc_auc']);
         $this->assertSame(120, $evidence['sample_count']);
         $this->assertSame('dataset-3m-v1', $evidence['dataset_version']);
-        $this->assertSame($evidence, $candidate->fresh()->audit_metadata['candidate_evidence']);
+        $this->assertEqualsCanonicalizing($evidence, $candidate->fresh()->audit_metadata['candidate_evidence']);
     }
 
     public function test_no_active_model_is_unavailable_not_candidate_superiority(): void

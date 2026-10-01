@@ -1285,6 +1285,24 @@ class ScreenerTest extends TestCase
         $this->assertSame(0, $this->getJson("/api/screeners/{$id}/backtest/matrix")->assertOk()->json('data.run_count'));
 
         // Rebuild results, then Clear history wipes them too.
+        // Restore the fixture bars after the cache-reuse proof; the rebuild is
+        // expected to exercise evaluation for the new semantic version.
+        for ($i = 0; $i < 45; $i++) {
+            $c = 100 + $i;
+            StockPrice::query()->create([
+                'stock_id' => $stock->id,
+                'price_date' => $base->copy()->addDays($i)->toDateString(),
+                'open_price' => $c,
+                'high_price' => $c + 1,
+                'low_price' => $c - 1,
+                'close_price' => $c,
+                'adjusted_close_price' => $c,
+                'volume' => 10000,
+                'provider_source' => 'test',
+                'data_source' => 'test',
+                'created_at' => now(),
+            ]);
+        }
         $third = $runBacktest($token.'-3');
         $this->assertSame(0, (int) $third['stats']['days_reused']);
         $this->assertSame($dayTotal * 2, ScreenerBacktestDay::query()->where('screener_id', $id)->count());

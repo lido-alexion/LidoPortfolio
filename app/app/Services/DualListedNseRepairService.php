@@ -409,8 +409,9 @@ class DualListedNseRepairService
 
         foreach (Holding::query()->where('stock_id', $fromStockId)->get() as $holding) {
             $existing = Holding::query()
-                ->where('user_id', $holding->user_id)
+                ->where('profile_id', $holding->profile_id)
                 ->where('stock_id', $toStockId)
+                ->where('owner_key', $holding->owner_key)
                 ->first();
 
             if ($existing !== null) {

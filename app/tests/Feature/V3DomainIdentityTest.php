@@ -251,7 +251,13 @@ class V3DomainIdentityTest extends TestCase
         $this->actingAs($user)
             ->getJson('/api/v1/strategy?strategy_id='.$second->id)
             ->assertOk()
-            ->assertJsonPath('data.id', $second->id)
+            ->assertJsonPath(
+                'data.id',
+                TradingStrategy::query()
+                    ->where('profile_id', $profile->id)
+                    ->where('name', 'Editor Target')
+                    ->value('id')
+            )
             ->assertJsonPath('data.name', 'Editor Target');
 
         $this->actingAs($user)

@@ -97,7 +97,7 @@ class KiteInstrumentRegistryTest extends TestCase
         BrokerInstrument::query()->create(['provider' => 'kite', 'stock_id' => $stock->id, 'exchange' => 'NSE', 'trading_symbol' => 'SITINET-BZ', 'is_active' => true]);
         Http::fake(['https://api.kite.trade/orders/regular' => Http::response(['status' => 'success', 'data' => ['order_id' => 'order-1']])]);
 
-        $submission = app(KiteBrokerGateway::class)->placeOrder(new BrokerOrderRequest(1, 1, 1, $stock->id, 'SITINET', 'NSE', 'buy', 1, 'submission-1'));
+        $submission = app(KiteBrokerGateway::class)->placeOrder(new BrokerOrderRequest($user->id, 1, 1, $stock->id, 'SITINET', 'NSE', 'buy', 1, 'submission-1'));
 
         $this->assertSame('regular', $submission->variety);
         Http::assertSent(function ($request): bool {
@@ -126,7 +126,7 @@ class KiteInstrumentRegistryTest extends TestCase
                 : Http::response(['status' => 'success', 'data' => ['order_id' => 'order-retried']]);
         });
 
-        $submission = app(KiteBrokerGateway::class)->placeOrder(new BrokerOrderRequest(1, 1, 1, $stock->id, 'SITINET', 'NSE', 'buy', 1, 'same-submission'));
+        $submission = app(KiteBrokerGateway::class)->placeOrder(new BrokerOrderRequest($user->id, 1, 1, $stock->id, 'SITINET', 'NSE', 'buy', 1, 'same-submission'));
 
         $this->assertSame(2, $orders);
         $this->assertSame('order-retried', $submission->brokerOrderId);
@@ -143,7 +143,7 @@ class KiteInstrumentRegistryTest extends TestCase
         BrokerInstrument::query()->create(['provider' => 'kite', 'stock_id' => $stock->id, 'exchange' => 'NSE', 'trading_symbol' => 'SITINET-BZ', 'is_active' => true]);
         Http::fake(['https://api.kite.trade/orders/amo' => Http::response(['status' => 'success', 'data' => ['order_id' => 'amo-order-1']])]);
 
-        app(KiteBrokerGateway::class)->placeOrder(new BrokerOrderRequest(1, 1, 1, $stock->id, 'SITINET', 'NSE', 'buy', 1, 'amo-submission'));
+        app(KiteBrokerGateway::class)->placeOrder(new BrokerOrderRequest($user->id, 1, 1, $stock->id, 'SITINET', 'NSE', 'buy', 1, 'amo-submission'));
 
         Http::assertSent(fn ($request): bool => $request->url() === 'https://api.kite.trade/orders/amo');
         Carbon::setTestNow();
@@ -158,7 +158,7 @@ class KiteInstrumentRegistryTest extends TestCase
         Http::fake(['https://api.kite.trade/instruments/NSE' => Http::response($this->csv([]))]);
 
         try {
-            app(KiteBrokerGateway::class)->placeOrder(new BrokerOrderRequest(1, 1, 1, $stock->id, 'UNKNOWN', 'NSE', 'buy', 1, 'missing-submission'));
+            app(KiteBrokerGateway::class)->placeOrder(new BrokerOrderRequest($user->id, 1, 1, $stock->id, 'UNKNOWN', 'NSE', 'buy', 1, 'missing-submission'));
             $this->fail('Expected missing instrument mapping to block placement.');
         } catch (DomainException $exception) {
             $this->assertSame('BROKER_INSTRUMENT_MAPPING_NOT_FOUND', $exception->errorCode());
