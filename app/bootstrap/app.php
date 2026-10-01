@@ -13,6 +13,7 @@ use App\Http\Middleware\EnsureMicrostructureCollectorInternalToken;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\ResolveActivePortfolio;
 use App\Services\PortfolioLoggerService;
+use App\Services\Operations\ApiFailureReporter;
 use App\Support\ApiErrorMessage;
 use App\Support\ProductionEnvironment;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -97,6 +98,16 @@ $application = Application::configure(basePath: dirname(__DIR__))
             $requestId = $request->headers->get('X-Request-ID');
             $status = $e instanceof HttpExceptionInterface ? $e->getStatusCode() : 500;
             $message = ApiErrorMessage::for($e);
+
+            if ($status >= 500 && ! $request->headers->has('X-StoX-Skip-Api-Failure-Reporting')) {
+                app(ApiFailureReporter::class)->observeApiFailure(
+                    $request->method(),
+                    '/'.$request->path(),
+                    $status,
+                    $message,
+                    ['trace_id' => $requestId],
+                );
+            }
 
             return response()->json([
                 'message' => $message,

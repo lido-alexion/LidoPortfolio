@@ -158,6 +158,25 @@ api.interceptors.response.use(
         const requestId = error?.config?.metadata?.requestId;
         const status = error?.response?.status;
         const url = error?.config?.url || '';
+        const shouldReportFailure = (status >= 500 || !error?.response)
+            && !url.includes('/ops/api-failures')
+            && !url.includes('/auth/')
+            && !error?.config?._apiFailureReported;
+
+        if (shouldReportFailure) {
+            const reportConfig = {
+                _apiFailureReported: true,
+                skipErrorToast: true,
+                headers: { 'X-StoX-Skip-Api-Failure-Reporting': '1' },
+            };
+            void api.post('/ops/api-failures', {
+                method: error?.config?.method || 'GET',
+                endpoint: url.split('?')[0],
+                status: status || null,
+                message: typeof error?.message === 'string' ? error.message.slice(0, 500) : null,
+                request_id: requestId || null,
+            }, reportConfig).catch(() => {});
+        }
         const isPublicAuthRoute = url.includes('/auth/login')
             || url.includes('/auth/me')
             || url.includes('/invites/')

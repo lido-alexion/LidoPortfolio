@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AccountPerformanceController;
+use App\Http\Controllers\Api\ApiFailureReportController;
 use App\Http\Controllers\Api\AdminAuditExplorerController;
 use App\Http\Controllers\Api\AdminStockController;
 use App\Http\Controllers\Api\AlertController;
@@ -183,6 +184,7 @@ Route::get('/notification-settings/email-destinations/{destination}/verify', [No
 
 Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/logs/frontend', [FrontendLogController::class, 'store']);
+    Route::post('/ops/api-failures', [ApiFailureReportController::class, 'store'])->middleware('throttle:api');
     Route::post('/telemetry/route-view', [\App\Http\Controllers\Api\LidoTelemetryController::class, 'routeView']);
 
     Route::get('/portfolios', [PortfolioController::class, 'index'])->middleware('token.scope:portfolio:read');
