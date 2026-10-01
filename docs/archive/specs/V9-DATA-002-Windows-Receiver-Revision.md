@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Epic** | V9-DATA-002 |
-| **Status** | **FROZEN / IMPLEMENTATION-READY** |
+| **Status** | **PO REVIEW — WINDOWS DELIVERY / ARCHIVE REVISION** |
 | **Issue** | [V9-DATA-002](https://github.com/lido-alexion/LidoPortfolio/issues/16) |
 | **Related Windows app** | [SKR-001 — StoX-Kite-Rain](https://github.com/lido-alexion/StoX-Kite-Rain/issues/1) |
 | **Companion spec** | [Windows downloader specification](https://github.com/lido-alexion/StoX-Kite-Rain/blob/main/docs/SK-001-Windows-Downloader-Specification.md) |
@@ -36,7 +36,7 @@ The following V8 decisions remain normative and SHALL NOT be reopened by impleme
 
 1. **History depth:** initial bootstrap attempts the maximum provider-available 1-minute OHLCV for every in-scope instrument instead of FEAT-065's earlier arbitrary eight-year ceiling.
 2. **Acquisition topology:** provider acquisition runs from the whitelisted StoX VPS.
-3. **Temporary staging:** the VPS may temporarily hold historical payloads solely for reliable delivery to the Mac.
+3. **Temporary staging:** the VPS may temporarily hold historical payloads solely for reliable delivery to the Windows holding machine.
 4. **Delivery unit:** one sealed base batch represents exactly one trading day; a day-batch may contain multiple Parquet files.
 5. **Supplemental repair batches:** a later repair for an already-imported day is a separate immutable supplemental batch containing only previously missing logical rows. It never overwrites accepted candles.
 6. **Accepted-data immutability:** once a day-batch is successfully imported and acknowledged, later provider corrections are ignored. Accepted candles are not silently refreshed or mutated.
@@ -166,7 +166,7 @@ Provide a minimal Admin operations surface showing:
 - latest complete trading day;
 - unresolved gaps;
 - READY / leased / acknowledged / failed batch states;
-- current enrolled Mac/device;
+- current enrolled Windows device;
 - revoke/replace enrollment;
 - recent operational errors;
 - deleted-batch metadata history.
@@ -208,7 +208,7 @@ The following new V9/SKR decisions are frozen:
 - failed/rejected/unacknowledged payloads are retained until exact successful replacement acknowledgment; no automatic deletion without verified local import;
 - no retention hold;
 - automatic deletion according to lifecycle rules;
-- one enrolled Mac/device only;
+- one enrolled Windows device only;
 - one-time Admin enrollment code + long-lived revocable device credential;
 - dedicated public HTTPS transfer subdomain;
 - normal public TLS validation, no certificate pinning;
@@ -259,4 +259,4 @@ V9-DATA-002 is complete only when:
 15. Existing FEAT-065 Parquet corpus remains canonical, readable and compatible with DuckDB/Polars.
 16. Tests cover checksum mismatch, schema rejection, incomplete day, stale lease, duplicate ack, crash between import and ack, low quota, unacknowledged-batch retention beyond 30 days, superseded-batch deletion only after successful replacement acknowledgment, supplemental repair and blocking oldest-batch behavior.
 
-**Document state: PO REVIEW — WINDOWS DELIVERY / ARCHIVE REVISION.** The Windows receiver, NTFS archive/handoff, and indefinite catalog decisions are recorded. Authenticode signing policy for the private Windows executable remains to be confirmed in SKR-001.
+**Document state: PO REVIEW — WINDOWS DELIVERY / ARCHIVE REVISION.** The Windows receiver and indefinite delivery catalog are documented. Authenticode signing policy for the private executable remains to be confirmed in SKR-001. The Windows receiver, NTFS archive/handoff, and indefinite catalog decisions are recorded. Authenticode signing policy for the private Windows executable remains to be confirmed in SKR-001.
