@@ -7,7 +7,7 @@
 | **Status** | **FROZEN / IMPLEMENTATION-READY** |
 | **Parent register** | `docs/archive/specs/LidoPortfolio-V9-Wishlist.md` |
 | **Original audit date** | 2026-09-28 |
-| **Latest reconciliation** | 2026-09-30 — V9-OPS-003 incorporated |
+| **Latest reconciliation** | 2026-10-01 — V9-UX-004 incorporated |
 
 ## 1. Purpose
 
@@ -30,11 +30,12 @@ The current registered V9 scope is:
 7. `V9-DATA-001` — Data Export Framework
 8. `V9-DATA-002` — VPS Historical Data Staging and Delivery
 9. `V9-UX-003` — Customizable Summary Fields & Dashboard Layouts
-10. `V9-VIZ-001` — Combo Chart Support
-11. `V4-FEAT-017` — AI Platform & Governance
-12. `V9-AI-001` — Documentation-Grounded StoX Chatbot
-13. `V9-AI-002` — Agentic StoX Assistant / MCP Action Layer
-14. `V9-AI-003` — Embedded AI Insights & Prompt Execution
+10. `V9-UX-004` — Guided Production ML Acceptance Wizard
+11. `V9-VIZ-001` — Combo Chart Support
+12. `V4-FEAT-017` — AI Platform & Governance
+13. `V9-AI-001` — Documentation-Grounded StoX Chatbot
+14. `V9-AI-002` — Agentic StoX Assistant / MCP Action Layer
+15. `V9-AI-003` — Embedded AI Insights & Prompt Execution
 
 All registered items have frozen implementation-ready specifications. `V9-DATA-002` additionally depends on compatible implementation of its separately versioned `SKR-001` StoX-Kite-Rain companion protocol. `V9-OPS-003` is implementation-ready but gated on the required `V4-FEAT-017` shared AI core.
 
@@ -168,6 +169,12 @@ Laravel remains authoritative for auth/domain/business writes; Python owns infer
 
 Across AI features, deterministic StoX services remain responsible for calculations that StoX can calculate reliably. LLMs may plan, explain, classify, synthesize and interpret but must not replace deterministic portfolio/strategy/authorization/execution logic.
 
+### 4.16 V9-UX-004 explains and sequences V8 production acceptance
+
+`V9-UX-004` replaces the technical all-in-one acceptance panel with a deterministic seven-step wizard. It is a presentation, education and recovery layer over the implemented V8 production-acceptance services.
+
+The wizard may add an aggregate read-only state endpoint, reason-code presentation registry and polling/recovery behavior. It must not duplicate or weaken source validation, point-in-time coverage, backfill safety, dataset preparation, training, qualification, promotion or lifecycle gates. Preflight remains a non-training readiness operation; candidate training, model promotion and lifecycle automation remain separate explicit Admin decisions.
+
 ## 5. Dependency graph
 
 ### Hard/strong dependencies
@@ -177,6 +184,7 @@ Across AI features, deterministic StoX services remain responsible for calculati
 - `V9-OPS-001` notifications -> `V9-COMM-001` where notifications are required.
 - `V9-DATA-001` background completion/failure notifications -> `V9-COMM-001` where notification behavior is required.
 - `V9-DATA-002` -> stable V8 FEAT-065 corpus contract + compatible `SKR-001` protocol implementation.
+- `V9-UX-004` -> implemented V8 production acceptance endpoints/domain + V9-UX-001 journey/E2E conventions.
 - `V4-FEAT-017` governance/admin notification acceptance -> `V9-COMM-001` notification framework where required.
 - `V9-OPS-003` -> `V4-FEAT-017` core capability registry/provider routing/structured output/prompt governance/budget/concurrency/failure isolation + shared OPS-002 GitHub reporting infrastructure.
 - `V9-AI-001` -> `V4-FEAT-017` + maintained journey/help corpus.
@@ -218,6 +226,7 @@ Establish reusable export primitives.
 
 - `V9-UX-002` after UX-001 metadata foundation.
 - `V9-UX-003` largely independent.
+- `V9-UX-004` after the V8 production-acceptance domain is stable; it may proceed independently of AI and historical minute-data transfer work.
 - `V9-VIZ-001` renderer/UI groundwork can proceed; final data integrations must respect unfinished V8 provider/data acceptance.
 - `V9-OPS-001` after FEAT-054 provider/deployed-runtime behavior is sufficiently verified.
 
@@ -281,6 +290,7 @@ Safe parallelism is encouraged:
 - UX-001 foundation, OPS-002 and generic COMM infrastructure may run concurrently.
 - DATA-001 and UX-003 are largely independent of V8 production provider verification.
 - UX-002 follows only the UX-001 metadata foundation.
+- UX-004 depends on the existing V8 production-acceptance workflow and can proceed independently of AI epics.
 - VIZ renderer/preset infrastructure can progress before final data-provider acceptance.
 - OPS-001 waits for the V8 FEAT-054 engine acceptance boundary.
 - DATA-002 waits for the V8 FEAT-065 live-corpus acceptance boundary.
@@ -312,6 +322,7 @@ The V9 register and linked specifications are frozen and implementation-ready, i
 - `V9-COMM-001` access-request resilience companion;
 - `V9-OPS-002` — Automated API Failure GitHub Issue Reporting;
 - `V9-OPS-003` — LLM Log Error Triage & GitHub Issue Reporting, gated on V4-FEAT-017 core + OPS-002 GitHub primitives.
+- `V9-UX-004` — Guided Production ML Acceptance Wizard, gated on the implemented V8 production-acceptance domain.
 
 **StoX V9 remains FROZEN / IMPLEMENTATION-READY.**
 
