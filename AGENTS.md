@@ -34,4 +34,3 @@ The backend mode intentionally requires MySQL and the PHP extensions declared by
 2. Before each push: fetch `origin`, inspect `HEAD...origin/master`, reconcile normally, run the relevant verifier mode, and run `git diff --check`.
 3. Never push a change that skips required CI unless the Product Owner explicitly authorizes the exception and the commit records why.
 4. Do not deploy manually to bypass GitHub Actions. Production releases must remain tied to the exact verified commit SHA and pass the post-deploy SHA health check.
-5. `master` should be protected in GitHub: required PRs, required current CI checks, and required review for workflow, deployment, migration, and dependency-lockfile changes.
