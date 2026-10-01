@@ -29,3 +29,13 @@ Evidence is mapped to `docs/archive/specs/V8-Intraday-ML-Historical-Data-Platfor
 - No live Kite credentials or full NIFTY 500 corpus population was available for runtime validation.
 
 The epic is **REVIEW**. The implementation and isolated project-compatible verification are complete locally; a bounded real Kite POC, populated-corpus performance/coverage run, and live corpus handoff acceptance remain external because no Kite credentials or target corpus runtime are available here.
+
+
+## Closure continuation — 2026-10-01 (production build `ef66133c`)
+
+Operator: Codex via connected `stoxla-prod`; UTC times below. **This entry does not mark the epic COMPLETE.** Prior local checks remain separate from production acceptance.
+
+| Acceptance check | State | Evidence / next exact check |
+|---|---|---|
+| Real Kite minute-data bounded POC and retries/checkpoint resume | BLOCKED (research machine) | Designated Mac device was offline in connected-device inventory at 2026-10-01 18:17 UTC. No real corpus run started on VPS; daily NSE sources are not minute-bar evidence. |
+| Fixed current-NIFTY-500 plus selected-index corpus, coverage/quality/performance and PIT handoff | NOT YET RUN | Plan token/index mapping, windows, Kite limits, storage/time and manual external-disk backup on research machine. |
