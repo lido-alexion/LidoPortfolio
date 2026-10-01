@@ -110,3 +110,15 @@ Latest recorded: **1,346 passed / 1,347 total** Feature tests under `tests/Featu
 FEAT-063 production checks confirmed the VPS collector was enabled and active; paid Kite Connect delivered real FULL-mode ticks for 499 mapped instruments; and minute Parquet output was produced. Post-market finalization recorded 15,213 rows in identical primary and backup `_FINALIZED.json` markers. Recursive comparison of the day partitions found no differences, and the raw-tick spool contained no files after finalization. The backup directory is under the same VPS shared-storage tree, so this proves a consistent local copy, not an independent secondary backup. The journal recorded a WebSocket close code `1006` at 15:30 IST; finalization completed despite that close.
 
 FEAT-063 remains **REVIEW**. Independent secondary-storage backup, deployed Admin controls, persistent manual hold, restart/reconnect/resubscription, retry flows, and normal market-close handling of the WebSocket close still need acceptance evidence.
+
+
+## 2026-10-01 closure continuation checkpoint
+
+Deployed build `ef66133c05cb84d9760f95026ffe6d08fcc44cde` (run `36899469783`), distinct from current repository master at the start of this checkpoint (`3cba7f9`). The ten per-epic audits now hold criterion-level PASS, FAILED, BLOCKED and NOT YET RUN rows; none is declared COMPLETE.
+
+- FEAT-054: production runs #1–2 completed three representative stocks with 530 Yahoo facts, no rejected rows. Official NSE/BSE feeds are disabled/unconfigured. Active-equity universe is 5,140 while only 19 stocks had facts before the slice. A targeted unknown symbol could accidentally expand to the entire universe; a guarded fix and focused tests are on branch `audit/v8-closure-20261001`, pending CI and a safely sequenced deployment.
+- FEAT-057: preview run #1 was 332/360, zero failed and zero boundaries at 18:31:37 UTC; existing worker and continuation own the NSE lane. No duplicate preview/apply, worker, training, deployment or service restart was initiated in this checkpoint.
+- FEAT-052/055: configuration and service presence verified only; end-to-end provider/runtime results remain open. FEAT-062 real-provider test is blocked by disabled AI and absent configured keys. FEAT-056 qualification is blocked while its production campaign remains blocked; lifecycle remains disabled.
+- FEAT-061/064 deployed authenticated UX paths, FEAT-063 independent backup/recovery, and FEAT-065 research-machine Kite corpus remain open. The Mac research device was offline.
+
+Release and production acceptance gates remain unsatisfied. After the NSE preview/apply stabilizes, reconcile the deployed SHA with master, pass CI and deploy without interrupting a worker, then rerun release gates and update each criterion from actual evidence.

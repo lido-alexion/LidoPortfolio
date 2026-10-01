@@ -45,3 +45,17 @@ Authoritative contract: `docs/archive/specs/V8-Core-Investor-Workflow-UX-Simplif
 2. Broader deployed-device and assistive-technology acceptance beyond the local Chromium matrix.
 
 No readiness gate was weakened: persistence as `Setup Required` remains distinct from activation/execution eligibility.
+
+
+## Closure continuation — 2026-10-01 (production build `ef66133c`)
+
+Operator: Codex via connected `stoxla-prod`; UTC times below. **This entry does not mark the epic COMPLETE.** Prior local checks remain separate from production acceptance.
+
+| Acceptance check | State | Evidence / next exact check |
+|---|---|---|
+| Deployed private Screener, definition-copy sharing, multiple Strategies and immutable pins | NOT YET RUN | Controlled two-account browser path and provenance check required. |
+| Real membership change, historical transaction/recommendation provenance and responsive/screen-reader | NOT YET RUN | Coordinate membership drift after NSE apply, with explicit before/after IDs and no production portfolio disruption. |
+
+### Authenticated workflow inspection — 2026-10-01 about 19:05 UTC
+
+Cloud Chrome showed seven existing rows under `My screens`, a separate `Shared screens` tab (empty for this portfolio), and a Strategies selector with multiple concurrent enabled strategies (Ts2, Test swing, Swing SmallCap, Momentum Strategy Copy). The selected published Artifact Library binding displayed a read-only notice and disabled Save. **PASS for UI presence and multiple-enabled display only**; no cross-account copy, new version, membership drift or historical provenance mutation was tested.

@@ -39,3 +39,17 @@ This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-
 ## Next implementation slice
 
 The deterministic catalogue matrix is complete for all frozen rows where structured source data is available; absent data produces no invented signal. Desktop and narrow-mobile browser acceptance now cover deterministic evidence and provider failure degradation. Screen-reader/accessibility review and real-provider validation remain external, so the epic is REVIEW, not COMPLETE.
+
+
+## Closure continuation — 2026-10-01 (production build `ef66133c`)
+
+Operator: Codex via connected `stoxla-prod`; UTC times below. **This entry does not mark the epic COMPLETE.** Prior local checks remain separate from production acceptance.
+
+| Acceptance check | State | Evidence / next exact check |
+|---|---|---|
+| Real provider acceptance | BLOCKED (provider configuration) | Build `ef66133c`, VPS, 2026-10-01 18:26 UTC: `fundamentals_ai.enabled=false`, primary provider `gemini`, no configured Gemini or Codex API key; database override null. No real call issued. |
+| Factual inputs, validation/investor-safe phrasing, caps/audit, failover and deterministic fallback | NOT YET RUN | Use representative FEAT-054 facts and controlled provider test after credential/configuration; verify deployed mobile/screen reader. |
+
+### Authenticated deployed disabled-provider behavior — 2026-10-01 about 19:04 UTC
+
+Cloud Chrome → Fundamental insights → SBIN displayed deterministic evidence (2 risk, 1 positive, 3 watch items), medium data sufficiency with missing cash-flow history, factual YoY delta and follow-up checks. The page explicitly said `AI insights: disabled` and preserved the deterministic results. **PASS for disabled-provider degradation/read-only display**; real-provider response validation, limits, failover and screen-reader remain blocked/not run.
