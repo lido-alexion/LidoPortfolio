@@ -31,3 +31,13 @@ Authoritative contract: `docs/archive/specs/V8-Guided-Tour-Welcome-Onboarding-Sp
 - Playwright journeys pass for the investor welcome modal → Begin → first guided-tour step, persisted-step resume, in-progress `page.reload()` recovery, scrim interception of highlighted navigation, and all 8 configured route steps on desktop Chromium/1024×768 tablet/390×844 mobile. Fixed viewport-positioning tests cover placement flips/clamping; welcome/resume/step focus containment, labelled descriptions and Escape behavior are covered, and the journeys exposed and fixed a real modal-backdrop stacking defect. Screen-reader tooling, production session interruption, and broader device acceptance remain pending.
 
 FEAT-061 remains **REVIEW**. Keyed i18n plus viewport-safe desktop/mobile journeys, persisted-step resume, in-progress refresh recovery, full configured-route traversal, manual-launch focus return and Tab containment are verified locally. Remaining evidence is screen-reader review, production session interruption, and broader live browser acceptance.
+
+
+## Closure continuation — 2026-10-01 (production build `ef66133c`)
+
+Operator: Codex via connected `stoxla-prod`; UTC times below. **This entry does not mark the epic COMPLETE.** Prior local checks remain separate from production acceptance.
+
+| Acceptance check | State | Evidence / next exact check |
+|---|---|---|
+| Deployed eight-step Investor journey, persistence across logout/expiry/refresh, missing targets, Admin exclusion | NOT YET RUN | Needs authenticated controlled Investor/Admin accounts on production; record browser, viewport and route/step evidence. |
+| Keyboard, real screen reader and another real device/browser | NOT YET RUN | Local Playwright/axe evidence remains implementation evidence. |
