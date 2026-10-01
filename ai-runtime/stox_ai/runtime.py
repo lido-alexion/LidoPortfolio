@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from .budgets import BudgetLedger
+from .budgets import BudgetProjection, BudgetLimit
 from .circuit_breaker import CircuitBreaker
 from .providers import DeterministicAdapter, OpenAICompatibleAdapter
 from .prompts import PromptRegistry
@@ -15,7 +15,7 @@ from .schemas import ProviderResponse
 class Runtime:
     def __init__(self) -> None:
         self.registry = CapabilityRegistry()
-        self.budgets = BudgetLedger()
+        self.budgets = BudgetProjection()
         self.breakers = CircuitBreaker(
             failure_threshold=max(1, int(os.getenv("STOX_AI_CIRCUIT_FAILURE_THRESHOLD", "3"))),
             cooldown_seconds=max(1, int(os.getenv("STOX_AI_CIRCUIT_COOLDOWN_SECONDS", "60"))),
@@ -25,6 +25,7 @@ class Runtime:
 
     def apply_projection(self, projection: dict[str, Any]) -> None:
         """Replace the ephemeral execution projection. Laravel remains authoritative."""
+        self.budgets = BudgetProjection({item["scope"]: BudgetLimit(hard=float(item["hard_limit"]), spent=float(item["spent"])) for item in projection.get("budgets", [])})
         registry = CapabilityRegistry()
         for item in projection.get("provider_paths", []):
             config = item.get("config") or {}

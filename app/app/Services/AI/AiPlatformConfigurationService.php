@@ -35,7 +35,7 @@ class AiPlatformConfigurationService
                 'max_concurrency' => 4,
             ])->all(),
             'provider_paths' => $paths, 'prompts' => $prompts,
-            'budgets' => AiBudgetLimit::query()->get()->map(fn ($budget) => ['scope' => $budget->scope, 'hard_limit' => (float) $budget->hard_limit, 'spent' => (float) $budget->spent])->all(),
+            'budgets' => AiBudgetLimit::query()->whereNotNull('hard_limit')->get()->map(fn ($budget) => ['scope' => $budget->scope, 'hard_limit' => (float) $budget->hard_limit, 'spent' => (float) $budget->spent])->all(),
         ];
     }
 }

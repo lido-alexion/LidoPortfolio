@@ -193,7 +193,8 @@ Route::get('/notification-settings/email-destinations/{destination}/verify', [No
     ->name('notification.email.verify');
 
 Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
-    Route::post('/ai/assistant/stream', [AiAssistantStreamController::class, 'stream'])->middleware('throttle:api');
+    Route::post('/ai/assistant/feedback', [AiAssistantStreamController::class, 'feedback'])->middleware('throttle:20,1');
+    Route::post('/ai/assistant/stream', [AiAssistantStreamController::class, 'stream'])->middleware('throttle:20,1');
     Route::post('/logs/frontend', [FrontendLogController::class, 'store']);
     Route::post('/ops/api-failures', [ApiFailureReportController::class, 'store'])->middleware('throttle:api');
     Route::post('/telemetry/route-view', [\App\Http\Controllers\Api\LidoTelemetryController::class, 'routeView']);

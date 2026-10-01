@@ -1,6 +1,6 @@
 import pytest
 
-from stox_ai.budgets import BudgetLedger, BudgetLimit
+from stox_ai.budgets import BudgetProjection, BudgetLimit
 from stox_ai.circuit_breaker import CircuitBreaker
 from stox_ai.providers import DeterministicAdapter, ProviderFailure
 from stox_ai.registry import Capability, CapabilityRegistry, ProviderPath
@@ -27,13 +27,13 @@ async def test_router_fails_over_in_canonical_order_and_records_trace():
 @pytest.mark.asyncio
 async def test_hard_budget_skips_a_path_without_reordering_the_definition():
     registry = CapabilityRegistry()
-    registry.register_path(ProviderPath("first", "one", "m1", DeterministicAdapter("one", "m1", ProviderResponse(text="wrong")), budget_scopes=("overall",)))
+    registry.register_path(ProviderPath("first", "one", "m1", DeterministicAdapter("one", "m1", ProviderResponse(text="wrong")), budget_scopes=("path:first",)))
     registry.register_path(ProviderPath("second", "two", "m2", DeterministicAdapter("two", "m2", ProviderResponse(text="ok"))))
     registry.register(Capability("test.capability", "test", ("first", "second")))
-    budgets = BudgetLedger({"overall": BudgetLimit(hard=1, spent=1)})
+    budgets = BudgetProjection({"path:first": BudgetLimit(hard=1, spent=1)})
     result = await InferenceRouter(registry, budgets).infer(request())
     assert result.provider == "two"
-    assert result.routing_trace[0].reason == "hard_budget_exhausted:overall"
+    assert result.routing_trace[0].reason == "hard_budget_exhausted:path:first"
 
 
 @pytest.mark.asyncio

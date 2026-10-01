@@ -260,3 +260,14 @@ Request body:
 Run via:
 
 `PowerShell -ExecutionPolicy Bypass -File tests/Feature/api_smoke.ps1`
+
+
+## Documentation assistant (V9-AI-001)
+
+Both endpoints use the authenticated Laravel session and CSRF boundary; neither exposes the private AI runtime.
+
+- `POST /api/ai/assistant/stream` accepts `question` (required string, max 4000), optional `conversation` (up to six `{question, answer}` entries), and optional `page_context` with `route`, `topic`, `section` and up to 20 visible `{label, value}` pairs. Unknown page-context keys are rejected. User identity is resolved by Laravel, never from the input.
+- The response is `text/event-stream`: `message.start`, `message.delta` (`text`), and `message.completed` or `error`. Terminal events carry safe request/grounding/status/source metadata. Errors normalize to `grounding_insufficient`, `read_only_scope`, `assistant_unavailable`, or transport-level `runtime_unavailable`. Source entries contain only ID, title, section, snippet and local documentation URL.
+- `POST /api/ai/assistant/feedback` accepts `request_id` (UUID), `helpful` (boolean), and optional `comment` (max 500). It returns `{ "success": true }`. A request must identify the current user's `documentation_chat` inference record; otherwise Laravel returns 404. Feedback is upserted per user/answer and retains its link to private inference evidence.
+
+The assistant has no mutation or independent account-read tools. Conversation memory is browser-session-only. Maintained journey help remains available during AI failures. See `docs/architecture/ai-runtime-private-contract.md` for the internal contract and deterministic evidence validation.

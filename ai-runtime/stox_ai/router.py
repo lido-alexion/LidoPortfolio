@@ -6,7 +6,7 @@ from collections import defaultdict
 
 from pydantic import TypeAdapter, ValidationError
 
-from .budgets import BudgetLedger
+from .budgets import BudgetProjection
 from .circuit_breaker import CircuitBreaker
 from .registry import CapabilityRegistry
 from .schemas import InferenceRequest, InferenceResult, NormalizedError, RoutingEvent, Usage
@@ -14,9 +14,9 @@ from .providers import ProviderFailure
 
 
 class InferenceRouter:
-    def __init__(self, registry: CapabilityRegistry, budgets: BudgetLedger | None = None, breakers: CircuitBreaker | None = None):
+    def __init__(self, registry: CapabilityRegistry, budgets: BudgetProjection | None = None, breakers: CircuitBreaker | None = None):
         self.registry = registry
-        self.budgets = budgets or BudgetLedger()
+        self.budgets = budgets or BudgetProjection()
         self.breakers = breakers or CircuitBreaker()
         self.semaphores: dict[str, asyncio.Semaphore] = defaultdict(lambda: asyncio.Semaphore(4))
 
@@ -39,7 +39,8 @@ class InferenceRouter:
                 if not eligible:
                     trace.append(RoutingEvent(path_id=path_id, provider=path.provider, model=path.model, state="skipped", reason=reason))
                     continue
-                eligible, reason = self.budgets.eligible(list(path.budget_scopes))
+                scopes = list(dict.fromkeys(["overall", f"capability:{request.capability_id}", f"path:{path_id}", *path.budget_scopes, *([f"user:{request.context['user_id']}"] if request.context.get("user_id") is not None else [])]))
+                eligible, reason = self.budgets.eligible(scopes)
                 if not eligible:
                     trace.append(RoutingEvent(path_id=path_id, provider=path.provider, model=path.model, state="skipped", reason=reason))
                     continue
@@ -50,12 +51,11 @@ class InferenceRouter:
                     if capability.structured_output and request.output_schema:
                         result.structured = TypeAdapter(dict).validate_python(result.structured or {})
                     self.breakers.success(path_id)
-                    self.budgets.record(list(path.budget_scopes), result.usage.estimated_cost)
                     trace[-1] = RoutingEvent(path_id=path_id, provider=path.provider, model=path.model, state="selected", duration_ms=(time.perf_counter() - started) * 1000)
                     return InferenceResult(request_id=request.request_id, capability_id=request.capability_id, text=result.text, structured=result.structured, provider=path.provider, model=path.model, usage=result.usage, routing_trace=trace)
                 except (ProviderFailure, ValidationError) as error:
                     self.breakers.failure(path_id)
                     category = getattr(error, "category", "malformed_output")
                     trace[-1] = RoutingEvent(path_id=path_id, provider=path.provider, model=path.model, state="failed", reason=str(category), duration_ms=(time.perf_counter() - started) * 1000)
-            error = NormalizedError.BUDGET_EXHAUSTED if trace and all(event.reason == "budget_exhausted" for event in trace) else NormalizedError.PROVIDER_UNAVAILABLE
+            error = NormalizedError.BUDGET_EXHAUSTED if trace and all((event.reason or "").startswith("hard_budget_exhausted:") for event in trace) else NormalizedError.PROVIDER_UNAVAILABLE
             return InferenceResult(request_id=request.request_id, capability_id=request.capability_id, routing_trace=trace, degraded=True, status="failure", error_code=error, error_message="No eligible inference path succeeded")

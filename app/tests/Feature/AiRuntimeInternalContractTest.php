@@ -26,6 +26,23 @@ class AiRuntimeInternalContractTest extends TestCase
             ->assertJsonPath('data.prompts.documentation_chat.version', 2);
     }
 
+    public function test_projection_distinguishes_unlimited_and_exhausted_budgets(): void
+    {
+        \App\Models\AiBudgetLimit::query()->create(['scope' => 'overall', 'hard_limit' => 1, 'spent' => 1, 'period' => 'monthly', 'period_started_at' => now()->startOfMonth()]);
+        \App\Models\AiBudgetLimit::query()->create(['scope' => 'path:unlimited', 'hard_limit' => null]);
+        $budgets = app(\App\Services\AI\AiPlatformConfigurationService::class)->projection()['budgets'];
+        self::assertCount(1, $budgets);
+        self::assertSame('overall', $budgets[0]['scope']);
+        self::assertSame(1.0, $budgets[0]['spent']);
+    }
+
+    public function test_authoritative_ledger_records_cost_crossing_a_hard_limit(): void
+    {
+        $budget = \App\Models\AiBudgetLimit::query()->create(['scope' => 'overall', 'hard_limit' => 1, 'spent' => 0.9, 'period' => 'monthly', 'period_started_at' => now()->startOfMonth()]);
+        app(\App\Services\AI\AiInferenceAuditService::class)->record(['request_id' => (string) str()->uuid(), 'capability' => 'documentation_chat', 'status' => 'success', 'usage' => ['estimated_cost' => 0.2], 'budget_scopes' => ['overall']]);
+        self::assertEqualsWithDelta(1.1, (float) $budget->fresh()->spent, 0.000001);
+    }
+
     public function test_runtime_client_uses_canonical_private_path_header_and_envelope(): void
     {
         config(['ai_runtime.enabled' => true, 'ai_runtime.shared_secret' => 'test-runtime-key', 'ai_runtime.base_url' => 'http://ai.private']);

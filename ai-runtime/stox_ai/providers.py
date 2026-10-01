@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from typing import Any
@@ -66,6 +68,36 @@ class OpenAICompatibleAdapter(ProviderAdapter):
                 raise ProviderFailure(FailureCategory.AUTHENTICATION, "Provider path is not configured")
             payload = {"model": self.model, "messages": [{"role": "system", "content": request.system_prompt}, {"role": "user", "content": request.user_prompt or str(request.input)}], "stream": False}
             async with httpx.AsyncClient(timeout=float(self.config.get("timeout_seconds", 20))) as client:
+                if request.stream and self.config.get("streaming", False):
+                    payload["stream"] = True
+                    payload["stream_options"] = {"include_usage": True}
+                    text = ""
+                    usage = {}
+                    async with client.stream("POST", f"{endpoint}/chat/completions", headers={"Authorization": f"Bearer {api_key}"}, json=payload) as streamed:
+                        if streamed.status_code == 429:
+                            raise ProviderFailure(FailureCategory.RATE_LIMIT, "Provider rate limit")
+                        streamed.raise_for_status()
+                        finished = False
+                        async for line in streamed.aiter_lines():
+                            if not line.startswith("data:"):
+                                continue
+                            data = line[5:].strip()
+                            if data == "[DONE]":
+                                finished = True
+                                break
+                            event = json.loads(data)
+                            choices = event.get("choices") or []
+                            if choices:
+                                text += (choices[0].get("delta") or {}).get("content") or ""
+                            if event.get("usage"):
+                                usage = event["usage"]
+                            if len(text) > 100_000:
+                                raise ProviderFailure(FailureCategory.MALFORMED_OUTPUT, "Response too large")
+                        if not finished:
+                            raise ProviderFailure(FailureCategory.TRANSIENT, "Provider stream interrupted")
+                    # Buffer until the documentation contract validates; unvalidated
+                    # model tokens must never escape as browser answer deltas.
+                    return ProviderResponse(text=text, usage=Usage(input_tokens=int(usage.get("prompt_tokens", 0)), output_tokens=int(usage.get("completion_tokens", 0)), estimated_cost=float(usage.get("estimated_cost", 0))))
                 response = await client.post(f"{endpoint}/chat/completions", headers={"Authorization": f"Bearer {api_key}"}, json=payload)
                 if response.status_code == 429:
                     raise ProviderFailure(FailureCategory.RATE_LIMIT, "Provider rate limit")

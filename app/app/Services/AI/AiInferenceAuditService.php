@@ -17,7 +17,6 @@ class AiInferenceAuditService
             foreach ((array) data_get($event, 'budget_scopes', []) as $scope) {
                 $budget = AiBudgetLimit::query()->lockForUpdate()->firstOrCreate(['scope' => $scope], ['period' => 'monthly', 'period_started_at' => $month]);
                 if ($budget->period === 'monthly' && (! $budget->period_started_at || $budget->period_started_at->lt($month))) { $budget->update(['spent' => 0, 'period_started_at' => $month]); }
-                if ($budget->hard_limit !== null && ((float) $budget->spent + $cost) > (float) $budget->hard_limit) { continue; }
                 $budget->increment('spent', $cost);
             }
             return AiInferenceEvent::query()->create([
