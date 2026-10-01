@@ -83,3 +83,28 @@ No training campaign, model promotion, lifecycle schedule, drift automation, FEA
 - PHP lint and `git diff --check`: passed.
 - Production evidence is intentionally not fabricated: local CI lacks the required OpenTelemetry extension and local scheduler inspection cannot connect to MySQL.
 - Full application PHPUnit was attempted: 127 tests passed before three pre-existing dirty-worktree unit errors and a PHP 128 MiB route-loading fatal terminated the run. The repository `verify-ci.sh --all` gate stopped earlier because OpenTelemetry is unavailable; `--frontend` requires Node 20 while this host has Node 18.20.0.
+
+### Production evidence register at release
+
+The push of commit `44c8caf` triggered the repository-owned CI/CD workflow, but this local session has no production SSH credentials or workflow-result channel. Therefore no production counts, scheduler replay, source identifiers, or post-deploy SHA/health response is asserted here. The required evidence state for every criterion is recorded explicitly:
+
+| Criterion | Production evidence state at release |
+|---|---|
+| FDC-01 | Pending deployed scheduler observation of completed, special and unknown-calendar sessions. |
+| FDC-02 | Pending crash/lease-reclaim observation with stale-worker rejection. |
+| FDC-03 | Pending outage catch-up and late-publication replay. |
+| FDC-04 | Pending deployed official-source ID/hash/parser/mapping evidence. |
+| FDC-05 | Pending concurrent historical-download lock evidence and review-gated changed-source evidence. |
+| FDC-06 | Pending production multi-batch fairness/progress and bounded-retry evidence. |
+| FDC-07 | Pending provider-check ledger evidence for stale, unchanged and empty responses. |
+| FDC-08 | Pending production sector source schema/access, effective-date and unknown-row evidence. |
+| FDC-09 | Pending late/corrected corporate-action window poll, checkpoint and approval/repair evidence. |
+| FDC-10 | Pending recovered daily equity/index session counts and last-success timestamps. |
+| FDC-11 | Pending FEAT-065 and FEAT-063 health payloads, including zero-row/delivery-loss distinctions. |
+| FDC-12 | Pending successful-exit/incomplete-universe alert and reason-code evidence. |
+| FDC-13 | Pending Admin authorization, pagination, accessibility and retry/pause/resume browser evidence. |
+| FDC-14 | Pending publication-grace, transport-failure, recovery-notification and incident evidence. |
+| FDC-15 | No production enablement evidence is required; scope inspection confirms training, promotion, lifecycle and drift remain disabled. |
+| FDC-16 | Pending deployed SHA, source IDs, counts, provider progression and recovery replay bundle. |
+
+Accordingly, criteria marked Partial above remain Partial until the corresponding production evidence is attached. The active production workflow is the VPS workflow in `.github/workflows/deploy-stoxla-production.yml`; the legacy cPanel packaging path was not used.
