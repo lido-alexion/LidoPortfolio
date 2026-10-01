@@ -165,6 +165,48 @@ php artisan schedule:run
 The cPanel upload package and `cpanel-*.php` helper flow are legacy-only unless
 the new VPS panel unexpectedly requires that compatibility route.
 
+### 4.2 NSE ML acceptance source bootstrap
+
+Production ML acceptance uses the exact union of reference dates already
+persisted by the blocked campaign; it does not download every trading day and
+does not treat NIFTY 500 reconstitution dates as the `active_eligible_nse`
+universe. Legacy bhavcopy is used before 2024-07-08 and UDiFF bhavcopy from
+2024-07-08 onward.
+
+Download and seal the official files through the existing immutable acceptance
+source pipeline. The command is resumable: already sealed dates are skipped,
+and a queued or partial current source is continued.
+
+```bash
+cd /var/www/stoxla/current
+php artisan ml:download-nse-acceptance-sources \
+  --campaign-id=<campaign-uuid> \
+  --actor-id=<admin-user-id>
+```
+
+Then run the governed dry-run preview. This does not write membership rows.
+
+```bash
+php artisan ml:acceptance-backfill-nse-sources \
+  --campaign-id=<campaign-uuid> \
+  --actor-id=<admin-user-id>
+```
+
+Review the completed preview and explicitly apply that run in a separate
+command. Do not combine preview and apply or bypass the sealed-source hashes.
+
+```bash
+php artisan ml:acceptance-backfill-nse-sources \
+  --campaign-id=<campaign-uuid> \
+  --actor-id=<admin-user-id> \
+  --apply-run-id=<completed-preview-run-id>
+```
+
+The commands reuse `stox_ml_acceptance_sources`,
+`stox_ml_universe_snapshot_backfill_runs`,
+`stox_ml_universe_snapshot_boundaries`, and
+`stox_ml_universe_memberships`. No additional table is required.
+
 Recommended PHP packages:
 
 ```bash

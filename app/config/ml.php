@@ -5,6 +5,7 @@ return [
         'archive_path' => env('STOXLA_ML_HISTORICAL_UNIVERSE_ARCHIVE', ''),
         'mii_path' => env('STOXLA_ML_NSE_MII_PATH', ''),
         'bhavcopy_path' => env('STOXLA_ML_NSE_BHAVCOPY_PATH', ''),
+        'nse_archives_base_url' => env('STOXLA_ML_NSE_ARCHIVES_BASE_URL', 'https://nsearchives.nseindia.com'),
         'source' => env('STOXLA_ML_HISTORICAL_UNIVERSE_SOURCE', 'configured_authoritative_archive'),
     ],
     'python' => env('STOXLA_ML_PYTHON', '/var/www/stoxla/shared/python/ml/bin/python'),
