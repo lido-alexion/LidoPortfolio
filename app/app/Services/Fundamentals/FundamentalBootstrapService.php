@@ -54,7 +54,14 @@ class FundamentalBootstrapService
         ?int $createdByUserId = null,
         bool $dryRun = false,
     ): array|FundamentalBootstrapRun {
+        if (in_array($scope, ['stock', 'stocks'], true) && ($stockIds === null || $stockIds === [])) {
+            throw new \InvalidArgumentException('No stock matched the requested symbol scope.');
+        }
+
         $stocks = $this->resolveStocks($scope, $stockIds);
+        if (in_array($scope, ['stock', 'stocks'], true) && $stocks->isEmpty()) {
+            throw new \InvalidArgumentException('No active equity matched the requested stock scope.');
+        }
 
         if ($dryRun) {
             return [
