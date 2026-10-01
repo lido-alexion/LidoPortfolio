@@ -73,3 +73,7 @@ Operator: Codex via connected `stoxla-prod`; UTC times below. **This entry does 
 | Service continuity | PASS (read-only status only) | Build `ef66133c`, VPS, 2026-10-01 18:25 UTC: microstructure collector service active. Prior 2026-09-29 paid 499-instrument/15,213-minute-row evidence remains as recorded; no new trading-day result claimed. |
 | Admin controls, hold/reconnect/universe refresh, independent backup/restore and capacity alerts | NOT YET RUN | Schedule controls outside live collection; backup target must be outside primary VPS failure domain and validated by restore. |
 | Market-close code 1006 and another trading day | NOT YET RUN | Compare post-close disconnect/retry journal with completed partition marker on next session. |
+
+### Backup location assessment — 2026-10-01 18:34 UTC
+
+Read-only `findmnt` on `stoxla-prod` showed root/boot filesystems and ephemeral virtual mounts, with no independent backup filesystem mounted. This does not rule out remote object storage, but no external destination or restore validation has been established. Secondary backup/restore remains **BLOCKED pending a configured independent destination**. Do not treat the matching same-VPS partition copy as disaster recovery.
