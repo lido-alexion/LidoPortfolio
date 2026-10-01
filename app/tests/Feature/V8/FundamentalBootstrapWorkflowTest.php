@@ -40,6 +40,27 @@ class FundamentalBootstrapWorkflowTest extends TestCase
         $this->assertSame(2, $preview['stock_count']);
     }
 
+    public function test_unknown_explicit_symbol_does_not_create_universe_run(): void
+    {
+        Stock::query()->create(['symbol' => 'TCS', 'exchange' => 'NSE', 'name' => 'TCS']);
+
+        try {
+            app(FundamentalBootstrapService::class)->createRun('stock', [], dryRun: false);
+            $this->fail('Expected an unknown targeted symbol to be rejected.');
+        } catch (\\InvalidArgumentException $error) {
+            $this->assertStringContainsString('No stock matched', $error->getMessage());
+        }
+
+        $this->assertDatabaseCount('stox_fundamental_bootstrap_runs', 0);
+        $this->assertDatabaseCount('stox_fundamental_bootstrap_jobs', 0);
+    }
+
+    public function test_inactive_explicit_stock_does_not_create_run(): void
+    {
+        $this->expectException(\\InvalidArgumentException::class);
+        app(FundamentalBootstrapService::class)->createRun('stocks', [999999], dryRun: true);
+    }
+
     public function test_bootstrap_run_persists_facts_and_completes_job(): void
     {
         $stock = Stock::query()->create(['symbol' => 'TCS', 'exchange' => 'NSE', 'name' => 'TCS']);
