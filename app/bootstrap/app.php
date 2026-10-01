@@ -80,6 +80,8 @@ $application = Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
+            $requestId = $request->headers->get('X-Request-ID');
+
             if ($e instanceof ValidationException) {
                 return null;
             }
@@ -89,11 +91,20 @@ $application = Application::configure(basePath: dirname(__DIR__))
                 return ApiEnvelope::error($e->errorCode(), $e->getMessage(), $e->httpStatus());
             }
 
-            // Let the framework render 401/403 (AuthenticationException and
-            // AuthorizationException are not HttpExceptionInterface, so the
-            // generic branch below would wrongly report them as 500).
-            if ($e instanceof AuthenticationException
-                || $e instanceof AuthorizationException) {
+            // API guests must receive JSON. Laravel's default guest
+            // redirect attempts to generate the conventional `login` route,
+            // which this SPA/API application intentionally does not define
+            // and would otherwise turn a 401 into a misleading 500.
+            if ($e instanceof AuthenticationException) {
+                return response()->json([
+                    'message' => 'Unauthenticated.',
+                    'request_id' => $requestId,
+                ], 401)->header('X-Request-ID', (string) $requestId);
+            }
+
+            // AuthorizationException is rendered as the framework's normal
+            // JSON 403 response; keep its existing contract unchanged.
+            if ($e instanceof AuthorizationException) {
                 return null;
             }
 
@@ -101,7 +112,6 @@ $application = Application::configure(basePath: dirname(__DIR__))
                 return $e->getResponse();
             }
 
-            $requestId = $request->headers->get('X-Request-ID');
             $status = $e instanceof HttpExceptionInterface ? $e->getStatusCode() : 500;
             $message = ApiErrorMessage::for($e);
 
