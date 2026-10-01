@@ -259,4 +259,4 @@ V9-DATA-002 is complete only when:
 15. Existing FEAT-065 Parquet corpus remains canonical, readable and compatible with DuckDB/Polars.
 16. Tests cover checksum mismatch, schema rejection, incomplete day, stale lease, duplicate ack, crash between import and ack, low quota, unacknowledged-batch retention beyond 30 days, superseded-batch deletion only after successful replacement acknowledgment, supplemental repair and blocking oldest-batch behavior.
 
-**Document state: PO REVIEW — WINDOWS DELIVERY / ARCHIVE REVISION.** The Windows receiver and indefinite delivery catalog are documented. Authenticode signing policy for the private executable remains to be confirmed in SKR-001. The Windows receiver, NTFS archive/handoff, and indefinite catalog decisions are recorded. Authenticode signing policy for the private Windows executable remains to be confirmed in SKR-001.
+**Document state: PO REVIEW — WINDOWS DELIVERY / ARCHIVE REVISION.** The Windows receiver, NTFS archive/handoff, and indefinite catalog are recorded. Authenticode signing policy for the private Windows executable remains open in SKR-001.
