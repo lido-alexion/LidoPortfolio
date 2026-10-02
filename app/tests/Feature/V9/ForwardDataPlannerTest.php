@@ -2,9 +2,12 @@
 
 namespace Tests\Feature\V9;
 
+use App\Exceptions\MlHistoricalUniverseProviderException;
 use App\Models\ForwardCollectionWork;
 use App\Models\Stock;
 use App\Services\ForwardDataPlanner;
+use App\Services\ForwardDataHealthService;
+use App\Services\ML\NseHistoricalUniverseArchiveProvider;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -114,6 +117,34 @@ class ForwardDataPlannerTest extends TestCase
         $this->assertSame(1, ForwardCollectionWork::query()->whereDate('session_date', '2026-10-01')->firstOrFail()->attempts);
 
         File::delete($path);
+        Carbon::setTestNow();
+    }
+
+    public function test_unavailable_source_remains_retryable_without_an_early_alert(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-02 04:30:00', 'UTC'));
+        config([
+            'forward_data.start_date' => '2026-10-01',
+            'forward_data.official_source_enabled' => false,
+            'ml.historical_universe.mii_path' => '/tmp/stox-mii',
+            'ml.historical_universe.bhavcopy_path' => '',
+        ]);
+        $provider = $this->mock(NseHistoricalUniverseArchiveProvider::class);
+        $provider->shouldReceive('snapshotForDate')
+            ->once()
+            ->andThrow(new MlHistoricalUniverseProviderException('official publication not available', true));
+
+        Artisan::call('stox:forward-data', ['--batch' => 1]);
+        $work = ForwardCollectionWork::query()->whereDate('session_date', '2026-10-01')->firstOrFail();
+        $this->assertSame(ForwardDataPlanner::STATE_WAITING_PUBLICATION, $work->state);
+        $this->assertSame('missing_publication', $work->last_error_code);
+        $this->assertSame(1, $work->attempts);
+        $this->assertTrue($work->next_attempt_at->isFuture());
+        $this->assertTrue($work->publication_grace_until->isFuture());
+
+        $report = app(ForwardDataHealthService::class)->report();
+        $this->assertSame('grace', $report['datasets']['official_nse_membership']['state']);
+        $this->assertFalse(collect($report['alerts'])->contains(fn (array $alert) => ($alert['context']['dataset'] ?? null) === 'official_nse_membership'));
         Carbon::setTestNow();
     }
 
