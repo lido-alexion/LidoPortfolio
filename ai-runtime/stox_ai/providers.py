@@ -66,7 +66,7 @@ class OpenAICompatibleAdapter(ProviderAdapter):
             api_key = str(self.config.get("api_key", ""))
             if not endpoint or not api_key:
                 raise ProviderFailure(FailureCategory.AUTHENTICATION, "Provider path is not configured")
-            payload = {"model": self.model, "messages": [{"role": "system", "content": request.system_prompt}, {"role": "user", "content": request.user_prompt or str(request.input)}], "stream": False}
+            payload = {"model": self.model, "messages": [{"role": "system", "content": request.system_prompt}, {"role": "user", "content": request.user_prompt or str(request.input)}], "stream": False, "max_tokens": request.max_output_tokens}
             async with httpx.AsyncClient(timeout=float(self.config.get("timeout_seconds", 20))) as client:
                 if request.stream and self.config.get("streaming", False):
                     payload["stream"] = True
@@ -97,14 +97,14 @@ class OpenAICompatibleAdapter(ProviderAdapter):
                             raise ProviderFailure(FailureCategory.TRANSIENT, "Provider stream interrupted")
                     # Buffer until the documentation contract validates; unvalidated
                     # model tokens must never escape as browser answer deltas.
-                    return ProviderResponse(text=text, usage=Usage(input_tokens=int(usage.get("prompt_tokens", 0)), output_tokens=int(usage.get("completion_tokens", 0)), estimated_cost=float(usage.get("estimated_cost", 0))))
+                    return ProviderResponse(text=text, usage=Usage(metadata_available="prompt_tokens" in usage and "completion_tokens" in usage, input_tokens=int(usage.get("prompt_tokens", 0)), output_tokens=int(usage.get("completion_tokens", 0)), estimated_cost=float(usage.get("estimated_cost", 0))))
                 response = await client.post(f"{endpoint}/chat/completions", headers={"Authorization": f"Bearer {api_key}"}, json=payload)
                 if response.status_code == 429:
                     raise ProviderFailure(FailureCategory.RATE_LIMIT, "Provider rate limit")
                 response.raise_for_status()
                 body = response.json()
             usage = body.get("usage", {})
-            return ProviderResponse(text=str(((body.get("choices") or [{}])[0].get("message") or {}).get("content", "")), usage=Usage(input_tokens=int(usage.get("prompt_tokens", 0)), output_tokens=int(usage.get("completion_tokens", 0)), estimated_cost=float(usage.get("estimated_cost", 0))))
+            return ProviderResponse(text=str(((body.get("choices") or [{}])[0].get("message") or {}).get("content", "")), usage=Usage(metadata_available="prompt_tokens" in usage and "completion_tokens" in usage, input_tokens=int(usage.get("prompt_tokens", 0)), output_tokens=int(usage.get("completion_tokens", 0)), estimated_cost=float(usage.get("estimated_cost", 0))))
         except ProviderFailure:
             raise
         except TimeoutError as error:

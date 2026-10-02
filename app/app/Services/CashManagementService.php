@@ -27,6 +27,40 @@ class CashManagementService
         );
     }
 
+    /** Real-account projection; paper cash is never mixed into physical cash. */
+    public function readAccountSummary(User $user): array
+    {
+        $profiles = PortfolioProfile::query()->where('user_id', $user->id)
+            ->where('portfolio_type', PortfolioProfile::TYPE_LIVE)->orderBy('id')->get();
+        if ($profiles->isEmpty()) {
+            return ['availability' => 'not_initialized', 'data' => null];
+        }
+        $rows = $profiles->map(fn (PortfolioProfile $profile) => [
+            'profile_id' => $profile->id, 'name' => $profile->name,
+            ...$this->readSummary($profile),
+        ])->all();
+        $complete = collect($rows)->every(fn ($row) => $row['availability'] === 'available');
+        return ['availability' => $complete ? 'available' : 'incomplete', 'data' => [
+            'profiles' => $rows,
+            'cash_balance' => $complete ? round(array_sum(array_map(fn ($row) => $row['data']['cash_balance'], $rows)), 4) : null,
+        ]];
+    }
+
+    public function readSummary(PortfolioProfile $profile): array
+    {
+        $account = CashAccount::query()->where('profile_id', $profile->id)->first();
+        if (! $account) {
+            return ['availability' => 'not_initialized', 'data' => null];
+        }
+        $reserved = $this->reservedCash($profile);
+        $balance = (float) $account->balance;
+        return ['availability' => 'available', 'data' => [
+            'cash_balance' => $balance, 'reserved_cash' => $reserved,
+            'available_investable_cash' => round(max(0.0, $balance - $reserved), 4),
+            'available_physical_cash' => round(max(0.0, $balance - $reserved), 4),
+        ]];
+    }
+
     public function balance(PortfolioProfile $profile): float
     {
         return (float) $this->ensureAccount($profile)->balance;

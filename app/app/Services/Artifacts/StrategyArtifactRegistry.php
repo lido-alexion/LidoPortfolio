@@ -62,6 +62,24 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
         return $out;
     }
 
+    /** Non-initializing projection; never seeds, activates or repairs registry state. */
+    public function readForProfile(PortfolioProfile $profile): array
+    {
+        $rows = TradingStrategy::query()->where('profile_id', $profile->id)
+            ->with(['activeVersion', 'reusableArtifact'])->orderBy('id')->get();
+        if ($rows->isEmpty()) {
+            return ['availability' => 'not_initialized', 'data' => []];
+        }
+        $data = [];
+        foreach ($rows as $strategy) {
+            $version = $strategy->activeVersion;
+            $data[] = $version && (int) $version->strategy_id === (int) $strategy->id
+                ? ['availability' => 'available', 'data' => $this->project($strategy, $version)]
+                : ['availability' => 'unavailable', 'id' => $strategy->id, 'reason' => 'No valid selected version'];
+        }
+        return ['availability' => 'available', 'data' => $data];
+    }
+
     public function get(string $idOrSlug, ?PortfolioProfile $profile = null): ?array
     {
         if ($profile === null) {
@@ -158,6 +176,7 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
                 (string) ($envelope['name'] ?? $strategy->name),
                 (string) ($meta['description'] ?? $strategy->description),
                 'Updated via Strategy Registry',
+                (int) $strategy->id,
             );
             $strategy = $strategy->fresh(['activeVersion']);
             $strategy->forceFill([

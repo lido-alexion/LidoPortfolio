@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+from contextlib import asynccontextmanager, suppress
 import hmac
 import json
 import os
@@ -12,12 +14,27 @@ from fastapi.responses import StreamingResponse
 from .configuration import ConfigurationUnavailable, LaravelConfigurationClient
 from .retrieval import DocumentationRetriever
 from .runtime import Runtime
-from .schemas import InferenceRequest, InferenceResult
+from .schemas import InferenceRequest, InferenceResult, NormalizedError
 
 runtime = Runtime()
 configuration = LaravelConfigurationClient()
 retriever = DocumentationRetriever(os.getenv("STOX_DOCUMENTATION_ROOT") or None)
-app = FastAPI(title="StoX AI Runtime", version="0.1.0", docs_url=None, redoc_url=None)
+@asynccontextmanager
+async def lifespan(app):
+    async def deliver():
+        while True:
+            await configuration.outbox.drain(configuration.send)
+            await asyncio.sleep(1)
+    worker = asyncio.create_task(deliver())
+    try:
+        yield
+    finally:
+        worker.cancel()
+        with suppress(asyncio.CancelledError):
+            await worker
+
+
+app = FastAPI(lifespan=lifespan, title="StoX AI Runtime", version="0.1.0", docs_url=None, redoc_url=None)
 
 
 def require_service_key(key: str | None = Header(default=None, alias="X-StoX-AI-Service-Key")) -> None:
@@ -28,7 +45,7 @@ def require_service_key(key: str | None = Header(default=None, alias="X-StoX-AI-
 
 @app.get("/health")
 async def health() -> dict:
-    return {"status": "ok", "service": "stox-ai-runtime", "configuration_version": os.getenv("STOX_AI_CONFIG_VERSION", "0")}
+    return {"status": "ok", "service": "stox-ai-runtime", "configuration_version": os.getenv("STOX_AI_CONFIG_VERSION", "0"), "delivery": configuration.outbox.status()}
 
 
 @app.get("/internal/v1/capabilities", dependencies=[Depends(require_service_key)])
@@ -58,15 +75,14 @@ async def execute(request: InferenceRequest):
         execution = Runtime()
         execution.breakers = runtime.breakers
         execution.apply_projection(projection)
+        execution.router.ledger = configuration
         runtime.registry = execution.registry  # Catalog only; request execution stays isolated.
     except ConfigurationUnavailable:
-        from .schemas import InferenceResult, NormalizedError
         return await record_result(request, InferenceResult(request_id=request.request_id, capability_id=request.capability_id, degraded=True, status="failure", error_code=NormalizedError.CONFIGURATION_INVALID, error_message="AI configuration is unavailable"))
     provenance = []
     if request.capability_id == "documentation_chat":
         question = str(request.input.get("question", ""))
         if re.search(r"^(?:please\s+)?(?:approve|reject|place|execute|cancel|buy|sell)\b|\b(?:guaranteed? profit|investment advice)\b", question.strip(), re.I):
-            from .schemas import InferenceResult
             return await record_result(request, InferenceResult(request_id=request.request_id, capability_id=request.capability_id, degraded=True, status="failure", error_code="read_only_scope", error_message="The assistant provides read-only StoX documentation help"))
         history = request.input.get("conversation", [])[-6:]
         query = question
@@ -76,16 +92,16 @@ async def execute(request: InferenceRequest):
         query += " " + str(page.get("topic", ""))
         provenance = retriever.search(query)
         if not provenance:
-            from .schemas import InferenceResult, NormalizedError
             return await record_result(request, InferenceResult(request_id=request.request_id, capability_id=request.capability_id, degraded=True, status="failure", error_code=NormalizedError.GROUNDING_INSUFFICIENT, error_message="No maintained StoX documentation supports this answer"))
         request.input["grounding"] = provenance
     prompt = projection.get("prompts", {}).get(request.capability_id)
+    if request.capability_id in {"agent_planning", "agent_synthesis"} and not prompt:
+        return await record_result(request, InferenceResult(request_id=request.request_id, capability_id=request.capability_id, degraded=True, status="failure", error_code=NormalizedError.CONFIGURATION_INVALID))
     if prompt:
         request.system_prompt = str(prompt.get("template", ""))
         request.user_prompt = str(request.input.get("question", request.user_prompt))
     if request.capability_id == "documentation_chat":
         if not prompt:
-            from .schemas import InferenceResult, NormalizedError
             return await record_result(request, InferenceResult(request_id=request.request_id, capability_id=request.capability_id, degraded=True, status="failure", error_code=NormalizedError.CONFIGURATION_INVALID))
         # A deterministic extractive contract prevents unsupported prose from being
         # accepted merely because a model supplied a valid citation identifier.
@@ -132,3 +148,16 @@ async def event_stream(request: InferenceRequest) -> AsyncIterator[str]:
 @app.post("/internal/v1/inference/stream", dependencies=[Depends(require_service_key)])
 async def inference_stream(request: InferenceRequest):
     return StreamingResponse(event_stream(request), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+from .agent_contracts import InvestigationRequest
+from .agent import investigate
+
+
+@app.post("/internal/v1/agent/investigate", dependencies=[Depends(require_service_key)])
+async def agent_investigate(request: InvestigationRequest):
+    try:
+        return {"success": True, "data": await investigate(request, execute)}
+    except Exception:
+        # Laravel records failed/interrupted run state; no raw model output crosses this boundary.
+        raise HTTPException(status_code=503, detail="agent_run_unavailable")

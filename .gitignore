@@ -62,3 +62,8 @@ sync_config.jsonc
 
 # Nested Playwright journey artifacts
 app/tests/e2e/test-results/
+
+# Local private runtime transport/dependency artifacts
+ai-runtime/*.egg-info/
+/var/
+/ai-runtime/var/

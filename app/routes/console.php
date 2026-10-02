@@ -587,3 +587,9 @@ Schedule::command('portfolio:purge-api-failure-incidents')
     ->timezone($timezone)
     ->withoutOverlapping(10)
     ->name('api-failure-incident-retention');
+
+// Operational spend reconciliation, never an autonomous agent action.
+Artisan::command('ai:reconcile-reservations', function () {
+    app(\App\Services\AI\AiBudgetReservationService::class)->reconcile();
+})->purpose('Conservatively settle expired AI provider reservations');
+Schedule::command('ai:reconcile-reservations')->everyMinute()->withoutOverlapping();

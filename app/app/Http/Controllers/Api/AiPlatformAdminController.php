@@ -14,6 +14,7 @@ class AiPlatformAdminController extends Controller
     public function index(): JsonResponse
     {
         return response()->json([
+            'global_max_concurrency' => (int) (\App\Models\Setting::query()->where('setting_key', 'ai_global_max_concurrency')->value('setting_value') ?? config('ai_runtime.global_max_concurrency', 16)),
             'enabled' => (bool) config('ai_runtime.enabled', false),
             'capabilities' => AiCapability::query()->orderBy('capability_id')->get(),
             'provider_paths' => AiProviderPath::query()->orderBy('priority')->orderBy('path_id')->get()->map(fn (AiProviderPath $path) => $this->safePath($path)),
@@ -21,9 +22,17 @@ class AiPlatformAdminController extends Controller
         ]);
     }
 
+    public function concurrency(Request $request): JsonResponse
+    {
+        $data = $request->validate(['global_max_concurrency' => ['required', 'integer', 'min:1', 'max:1000']]);
+        \App\Models\Setting::setValue('ai_global_max_concurrency', (string) $data['global_max_concurrency']);
+        return response()->json($data);
+    }
+
     public function upsertCapability(Request $request, string $capability): JsonResponse
     {
         $data = $request->validate([
+            'max_concurrency' => ['sometimes', 'integer', 'min:1', 'max:1000'],
             'owner' => ['required', 'string', 'max:120'],
             'path_order' => ['nullable', 'array'],
             'output_schema' => ['nullable', 'array'],

@@ -2,23 +2,28 @@
 
 namespace App\Services\AI;
 
-use App\Models\AiBudgetLimit;
 use App\Models\AiInferenceEvent;
-use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 class AiInferenceAuditService
 {
     public function record(array $event): AiInferenceEvent
     {
-        return DB::transaction(function () use ($event) {
-            $cost = (float) data_get($event, 'usage.estimated_cost', 0);
-            $month = CarbonImmutable::now('UTC')->startOfMonth();
-            foreach ((array) data_get($event, 'budget_scopes', []) as $scope) {
-                $budget = AiBudgetLimit::query()->lockForUpdate()->firstOrCreate(['scope' => $scope], ['period' => 'monthly', 'period_started_at' => $month]);
-                if ($budget->period === 'monthly' && (! $budget->period_started_at || $budget->period_started_at->lt($month))) { $budget->update(['spent' => 0, 'period_started_at' => $month]); }
-                $budget->increment('spent', $cost);
+        return app(AiBudgetReservationService::class)->locked(function () use ($event) {
+            $existing = AiInferenceEvent::query()->where('request_id', $event['request_id'])->first();
+            if ($existing) {
+                return $existing;
             }
+            $reservations = DB::table('stox_ai_budget_reservations')->where('request_id', $event['request_id'])->get();
+            if ($reservations->isEmpty() && $event['status'] === 'success') {
+                throw \Illuminate\Validation\ValidationException::withMessages(['reservation' => 'reservation_required']);
+            }
+            if ($reservations->contains(fn ($row) => $row->state === 'reserved')) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['settlement' => 'settlement_pending']);
+            }
+            $cost = (float) $reservations->sum('settled_cost');
+            // Legacy callers may submit diagnostic cost, but cannot mutate spend.
+            // Every charge is admitted and settled through the authoritative ledger.
             return AiInferenceEvent::query()->create([
                 'request_id' => $event['request_id'], 'capability_id' => $event['capability'], 'provider' => data_get($event, 'selected_path.provider'),
                 'model' => data_get($event, 'selected_path.model'), 'outcome' => $event['status'], 'error_code' => data_get($event, 'error.code'),

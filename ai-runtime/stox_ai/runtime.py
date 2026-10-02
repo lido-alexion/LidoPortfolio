@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from .admission import admission
 from .budgets import BudgetProjection, BudgetLimit
 from .circuit_breaker import CircuitBreaker
 from .providers import DeterministicAdapter, OpenAICompatibleAdapter
@@ -35,7 +36,8 @@ class Runtime:
             registry.register_path(ProviderPath(item["path_id"], item["provider"], item["model"], adapter, bool(item.get("enabled", True)), tuple(config.get("budget_scopes", ["overall", f"path:{item['path_id']}"]))))
         for item in projection.get("capabilities", []):
             if item.get("enabled") and item.get("path_order"):
-                registry.register(Capability(item["capability_id"], item["owner"], tuple(item["path_order"]), bool(item.get("output_schema")), bool(item.get("streaming")), max_concurrency=int(item.get("max_concurrency", 4)), prompt_id=item.get("prompt_id")))
+                registry.register(Capability(item["capability_id"], item["owner"], tuple(item["path_order"]), bool(item.get("output_schema")), bool(item.get("streaming")), max_concurrency=int(item.get("max_concurrency", 4)), prompt_id=item.get("prompt_id"), output_schema=item.get("output_schema")))
+        admission.configure(int(projection.get("version", 0)), int(projection.get("global_max_concurrency", 16)), {c.capability_id: c.max_concurrency for c in registry.capabilities.values()})
         self.registry = registry
         self.router = InferenceRouter(self.registry, self.budgets, self.breakers)
 

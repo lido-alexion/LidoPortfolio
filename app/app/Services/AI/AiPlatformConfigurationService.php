@@ -6,15 +6,13 @@ use App\Models\AiBudgetLimit;
 use App\Models\AiCapability;
 use App\Models\AiPrompt;
 use App\Models\AiProviderPath;
-use Carbon\CarbonImmutable;
 
 class AiPlatformConfigurationService
 {
     /** Projection only: the Python runtime never receives database access. */
     public function projection(): array
     {
-        $month = CarbonImmutable::now('UTC')->startOfMonth();
-        AiBudgetLimit::query()->where('period', 'monthly')->where(fn ($q) => $q->whereNull('period_started_at')->orWhere('period_started_at', '<', $month))->update(['spent' => 0, 'period_started_at' => $month]);
+        app(AiBudgetReservationService::class)->refreshProjection();
 
         $paths = AiProviderPath::query()->orderBy('priority')->orderBy('path_id')->get()->map(fn ($path) => [
             'path_id' => $path->path_id, 'provider' => $path->provider, 'model' => $path->model,
@@ -26,13 +24,14 @@ class AiPlatformConfigurationService
         ]])->all();
 
         return [
-            'version' => (string) now('UTC')->timestamp,
+            'version' => (string) now('UTC')->format('Uu'),
+            'global_max_concurrency' => max(1, (int) (\App\Models\Setting::query()->where('setting_key', 'ai_global_max_concurrency')->value('setting_value') ?? config('ai_runtime.global_max_concurrency', 16))),
             'capabilities' => AiCapability::query()->orderBy('capability_id')->get()->map(fn ($capability) => [
                 'capability_id' => $capability->capability_id, 'owner' => $capability->owner,
                 'enabled' => $capability->enabled, 'path_order' => $capability->path_order ?: [],
                 'output_schema' => $capability->output_schema, 'prompt_id' => $capability->capability_id,
                 'streaming' => $capability->capability_id === 'documentation_chat',
-                'max_concurrency' => 4,
+                'max_concurrency' => max(1, (int) $capability->max_concurrency),
             ])->all(),
             'provider_paths' => $paths, 'prompts' => $prompts,
             'budgets' => AiBudgetLimit::query()->whereNotNull('hard_limit')->get()->map(fn ($budget) => ['scope' => $budget->scope, 'hard_limit' => (float) $budget->hard_limit, 'spent' => (float) $budget->spent])->all(),
