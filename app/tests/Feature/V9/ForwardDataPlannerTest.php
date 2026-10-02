@@ -107,7 +107,7 @@ class ForwardDataPlannerTest extends TestCase
             \DB::table('stox_ml_universe_memberships')
                 ->where('stock_id', $stock->id)
                 ->whereDate('effective_from', '2026-10-01')
-                ->where('source', 'forward_official_nse')
+                ->where('source', 'nse_cash_bhavcopy')
                 ->exists()
         );
 
