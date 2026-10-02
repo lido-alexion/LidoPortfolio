@@ -29,11 +29,12 @@ class ForwardDataPlanner
         if (! $this->officialSourceConfigured()) {
             return ['status' => 'blocked_configuration', 'created' => 0, 'blocked' => 0, 'reason' => 'official_nse_source_not_configured'];
         }
-        $asOf ??= now(config('forward_data.timezone', 'Asia/Kolkata'));
-        $last = TradingCalendar::lastRequiredPriceSession($asOf);
+        $timezone = (string) config('forward_data.timezone', 'Asia/Kolkata');
+        $asOf ??= now($timezone);
+        $last = TradingCalendar::lastRequiredPriceSession($asOf)->timezone($timezone)->startOfDay();
         $created = 0;
         $blocked = 0;
-        for ($date = Carbon::parse($start); $date->lte($last); $date->addDay()) {
+        for ($date = Carbon::parse($start, $timezone)->startOfDay(); $date->lte($last); $date->addDay()) {
             if (! TradingCalendar::isEquitySessionDate($date)) continue;
             $boundary = MlUniverseSnapshotBoundary::query()->where('universe_key', MlHistoricalUniverseMembershipService::ACTIVE_ELIGIBLE_NSE)->whereDate('effective_from', $date)->exists();
             $publicationReadyAt = $this->publicationReadyAt($date);

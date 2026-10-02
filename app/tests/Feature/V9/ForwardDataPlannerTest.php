@@ -48,6 +48,21 @@ class ForwardDataPlannerTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_same_calendar_session_is_planned_when_timezone_offsets_differ(): void
+    {
+        config(['forward_data.timezone' => 'Asia/Kolkata']);
+        config(['forward_data.start_date' => '2026-10-01']);
+        config(['ml.historical_universe.mii_path' => '/tmp/stox-mii', 'ml.historical_universe.bhavcopy_path' => '/tmp/stox-bhavcopy']);
+
+        $result = app(ForwardDataPlanner::class)->plan(Carbon::parse('2026-10-02 10:00:00', 'Asia/Kolkata'));
+
+        $this->assertSame(1, $result['created']);
+        $this->assertTrue(ForwardCollectionWork::query()
+            ->whereDate('session_date', '2026-10-01')
+            ->where('state', 'waiting_publication')
+            ->exists());
+    }
+
     public function test_expired_claim_is_recoverable_and_new_claim_has_a_lease_token(): void
     {
         $work = ForwardCollectionWork::query()->create([
