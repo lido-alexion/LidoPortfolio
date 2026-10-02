@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import StockClassificationAdminPage from '../../resources/js/src/pages/StockClassificationAdminPage.jsx';
 import { apiMock, axiosError } from './tos/helpers/mockApi.js';
 
@@ -19,7 +20,7 @@ function renderPage(rows = [tcs, infy]) {
     apiMock.get.mockImplementation((url) => String(url).includes('/options')
         ? Promise.resolve({ data: { data: taxonomy } })
         : Promise.resolve({ data: { data: rows } }));
-    return render(<StockClassificationAdminPage />);
+    return render(<MemoryRouter><StockClassificationAdminPage /></MemoryRouter>);
 }
 
 describe('StockClassificationAdminPage', () => {
@@ -85,7 +86,7 @@ describe('StockClassificationAdminPage', () => {
             return { data: { data: saved } };
         });
 
-        const first = render(<StockClassificationAdminPage />);
+        const first = render(<MemoryRouter><StockClassificationAdminPage /></MemoryRouter>);
         fireEvent.click(await screen.findByRole('button', { name: /TCS · TCS Limited/ }));
         fireEvent.change(screen.getByLabelText('Sector'), { target: { value: 'Information Technology' } });
         fireEvent.change(screen.getByLabelText('Industry'), { target: { value: 'IT Services' } });
@@ -93,7 +94,7 @@ describe('StockClassificationAdminPage', () => {
         await waitFor(() => expect(screen.getByText('Current source: admin')).toBeInTheDocument());
 
         first.unmount();
-        render(<StockClassificationAdminPage />);
+        render(<MemoryRouter><StockClassificationAdminPage /></MemoryRouter>);
         fireEvent.click(await screen.findByRole('button', { name: /TCS · TCS Limited/ }));
         expect(screen.getByText('Information Technology / IT Services')).toBeInTheDocument();
         expect(screen.getByLabelText('Sector')).toHaveValue('Information Technology');
