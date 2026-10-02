@@ -3,9 +3,12 @@
 namespace Tests\Feature\V9;
 
 use App\Models\ForwardCollectionWork;
+use App\Models\Stock;
 use App\Services\ForwardDataPlanner;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 class ForwardDataPlannerTest extends TestCase
@@ -44,7 +47,73 @@ class ForwardDataPlannerTest extends TestCase
         app(ForwardDataPlanner::class)->plan();
 
         $work = ForwardCollectionWork::query()->whereDate('session_date', '2026-09-29')->firstOrFail();
-        $this->assertSame('2026-09-30 06:30:00', $work->next_attempt_at?->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-09-29 12:30:00', $work->next_attempt_at?->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-09-30 06:30:00', $work->publication_grace_until?->format('Y-m-d H:i:s'));
+        Carbon::setTestNow();
+    }
+
+    public function test_validated_source_is_claimable_after_close_before_publication_grace(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-01 10:00:00', 'Asia/Kolkata'));
+        config(['forward_data.start_date' => '2026-09-30']);
+        config(['ml.historical_universe.mii_path' => '/tmp/stox-mii', 'ml.historical_universe.bhavcopy_path' => '/tmp/stox-bhavcopy']);
+
+        app(ForwardDataPlanner::class)->plan();
+        $work = ForwardCollectionWork::query()->whereDate('session_date', '2026-09-30')->firstOrFail();
+
+        $this->assertSame('2026-09-30', $work->session_date->toDateString());
+
+        $this->assertSame('2026-09-30', $work->acquisition_eligible_at->format('Y-m-d'));
+        $this->assertSame('2026-10-01', $work->publication_grace_until->format('Y-m-d'));
+        $claimed = app(ForwardDataPlanner::class)->claim(1);
+
+        $this->assertCount(1, $claimed);
+        $this->assertSame('running', $claimed[0]->state);
+        $this->assertSame(1, $claimed[0]->attempts);
+        Carbon::setTestNow();
+    }
+
+    public function test_forward_command_ingests_valid_source_before_grace_and_is_idempotent(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-02 10:00:00', 'Asia/Kolkata'));
+        $stock = Stock::query()->create([
+            'symbol' => 'OCTOBER',
+            'exchange' => 'NSE',
+            'isin' => 'INE000000001',
+            'name' => 'October Source Fixture',
+            'is_active' => true,
+        ]);
+        $path = storage_path('framework/testing/nse-20261001.csv');
+        File::put($path, "TradDt,FinInstrmId,TckrSymb,SctySrs,ISIN\n20261001,1,OCTOBER,EQ,{$stock->isin}\n");
+        config([
+            'forward_data.start_date' => '2026-10-01',
+            'forward_data.official_source_enabled' => false,
+            'ml.historical_universe.mii_path' => '',
+            'ml.historical_universe.bhavcopy_path' => $path,
+        ]);
+        $firstStatus = Artisan::call('stox:forward-data', ['--batch' => 1]);
+        $this->assertSame(0, $firstStatus, Artisan::output());
+        $work = ForwardCollectionWork::query()->whereDate('session_date', '2026-10-01')->first();
+        $this->assertNotNull($work);
+        $work = $work->fresh();
+        $this->assertSame('succeeded', $work->state);
+        $this->assertSame(1, $work->attempts);
+        $this->assertSame(1, (int) $work->owner_evidence['mapped_count']);
+        $this->assertDatabaseCount('stox_ml_universe_snapshot_boundaries', 1);
+        $this->assertTrue(
+            \DB::table('stox_ml_universe_memberships')
+                ->where('stock_id', $stock->id)
+                ->whereDate('effective_from', '2026-10-01')
+                ->where('source', 'forward_official_nse')
+                ->exists()
+        );
+
+        $secondStatus = Artisan::call('stox:forward-data', ['--batch' => 1]);
+        $this->assertSame(0, $secondStatus, Artisan::output());
+        $this->assertDatabaseCount('stox_ml_universe_snapshot_boundaries', 1);
+        $this->assertSame(1, ForwardCollectionWork::query()->whereDate('session_date', '2026-10-01')->firstOrFail()->attempts);
+
+        File::delete($path);
         Carbon::setTestNow();
     }
 

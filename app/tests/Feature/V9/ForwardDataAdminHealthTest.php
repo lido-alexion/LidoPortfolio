@@ -46,7 +46,9 @@ class ForwardDataAdminHealthTest extends TestCase
             'session_date' => '2026-09-30',
             'scope_key' => 'active_eligible_nse',
             'state' => 'waiting_publication',
-            'next_attempt_at' => now()->addHour(),
+            'next_attempt_at' => now()->subHour(),
+            'acquisition_eligible_at' => now()->subHour(),
+            'publication_grace_until' => now()->addHour(),
         ]);
 
         $report = app(ForwardDataHealthService::class)->report();

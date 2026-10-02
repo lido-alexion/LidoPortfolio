@@ -7,6 +7,8 @@ return [
     // audited handoff/recovery floor, never infer it from today's coverage.
     'start_date' => env('STOX_FORWARD_DATA_START_DATE'),
     'publication_grace_hours' => (int) env('STOX_FORWARD_DATA_PUBLICATION_GRACE_HOURS', 21),
+    'acquisition_eligible_hour' => (int) env('STOX_FORWARD_DATA_ACQUISITION_ELIGIBLE_HOUR', 18),
+    'acquisition_eligible_minute' => (int) env('STOX_FORWARD_DATA_ACQUISITION_ELIGIBLE_MINUTE', 0),
     'max_attempts' => (int) env('STOX_FORWARD_DATA_MAX_ATTEMPTS', 8),
     'lease_minutes' => (int) env('STOX_FORWARD_DATA_LEASE_MINUTES', 20),
     'batch' => (int) env('STOX_FORWARD_DATA_BATCH', 20),

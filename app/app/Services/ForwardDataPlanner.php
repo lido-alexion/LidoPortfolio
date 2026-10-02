@@ -37,22 +37,36 @@ class ForwardDataPlanner
         for ($date = Carbon::parse($start, $timezone)->startOfDay(); $date->lte($last); $date->addDay()) {
             if (! TradingCalendar::isEquitySessionDate($date)) continue;
             $boundary = MlUniverseSnapshotBoundary::query()->where('universe_key', MlHistoricalUniverseMembershipService::ACTIVE_ELIGIBLE_NSE)->whereDate('effective_from', $date)->exists();
+            $acquisitionEligibleAt = $this->acquisitionEligibleAt($date);
             $publicationReadyAt = $this->publicationReadyAt($date);
-            $work = ForwardCollectionWork::query()->firstOrCreate([
+            $identity = [
                 'dataset_key' => self::DATASET_NSE_MEMBERSHIP,
                 'exchange' => 'NSE',
-                'session_date' => $date->toDateString(),
                 'scope_key' => MlHistoricalUniverseMembershipService::ACTIVE_ELIGIBLE_NSE,
-            ], [
-                'state' => $boundary ? 'succeeded' : self::STATE_WAITING_PUBLICATION,
-                'next_attempt_at' => $boundary ? null : $publicationReadyAt,
-                'last_successful_at' => $boundary ? now() : null,
-            ]);
+            ];
+            $work = ForwardCollectionWork::query()
+                ->where($identity)
+                ->whereDate('session_date', $date->toDateString())
+                ->first();
+            if ($work === null) {
+                $work = ForwardCollectionWork::query()->create(array_merge($identity, [
+                    'session_date' => $date->toDateString(),
+                    'state' => $boundary ? 'succeeded' : self::STATE_WAITING_PUBLICATION,
+                    'next_attempt_at' => $boundary ? null : $acquisitionEligibleAt,
+                    'acquisition_eligible_at' => $boundary ? null : $acquisitionEligibleAt,
+                    'publication_grace_until' => $boundary ? null : $publicationReadyAt,
+                    'last_successful_at' => $boundary ? now() : null,
+                ]));
+            }
             if (! $boundary
                 && $work->state === self::STATE_WAITING_PUBLICATION
                 && $work->last_attempted_at === null
-                && $work->next_attempt_at?->ne($publicationReadyAt)) {
-                $work->forceFill(['next_attempt_at' => $publicationReadyAt])->save();
+                && $work->next_attempt_at?->ne($acquisitionEligibleAt)) {
+                $work->forceFill([
+                    'next_attempt_at' => $acquisitionEligibleAt,
+                    'acquisition_eligible_at' => $acquisitionEligibleAt,
+                    'publication_grace_until' => $publicationReadyAt,
+                ])->save();
             }
             if ($work->wasRecentlyCreated) $created++;
             if ($boundary && $work->state !== 'succeeded') {
@@ -64,6 +78,16 @@ class ForwardDataPlanner
             }
         }
         return ['status' => 'planned', 'created' => $created, 'blocked' => $blocked];
+    }
+
+    protected function acquisitionEligibleAt(Carbon $sessionDate): Carbon
+    {
+        $timezone = (string) config('forward_data.timezone', 'Asia/Kolkata');
+
+        return $sessionDate->copy()->timezone($timezone)->setTime(
+            (int) config('forward_data.acquisition_eligible_hour', 18),
+            (int) config('forward_data.acquisition_eligible_minute', 0),
+        )->utc();
     }
 
     protected function publicationReadyAt(Carbon $sessionDate): Carbon

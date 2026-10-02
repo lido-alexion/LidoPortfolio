@@ -14,6 +14,8 @@ class ForwardCollectionWork extends Model
     {
         return [
             'session_date' => 'date',
+            'acquisition_eligible_at' => 'datetime',
+            'publication_grace_until' => 'datetime',
             'next_attempt_at' => 'datetime',
             'lease_expires_at' => 'datetime',
             'last_attempted_at' => 'datetime',

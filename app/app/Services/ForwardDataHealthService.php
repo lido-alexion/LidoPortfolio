@@ -14,8 +14,8 @@ class ForwardDataHealthService
         $datasets = [];
         foreach ($grouped as $key => $items) {
             $grace = $items->filter(fn ($row) => $row->state === ForwardDataPlanner::STATE_WAITING_PUBLICATION
-                && $row->next_attempt_at !== null
-                && $row->next_attempt_at->isFuture());
+                && $row->publication_grace_until !== null
+                && $row->publication_grace_until->isFuture());
             $unresolved = $items->where('state', '!=', 'succeeded');
             $alertable = $unresolved->reject(fn ($row) => $grace->contains('id', $row->id));
             $state = $items->contains(fn ($row) => in_array($row->state, ['blocked_configuration', 'blocked_quality', 'exhausted'], true))
