@@ -32,6 +32,10 @@ class YahooFundamentalDataProviderTest extends TestCase
         $this->assertSame('revenue', $rows[0]['fact_key']);
         $this->assertSame(100.0, $rows[0]['value']);
         $this->assertSame('yfinance', $rows[0]['source_meta']['transport']);
+        $this->assertSame('TCS.NS', $rows[0]['source_meta']['requested_symbol']);
+        $this->assertSame('TCS.NS', $rows[0]['source_meta']['provider_symbol']);
+        $this->assertSame(64, strlen((string) $provider->lastResponseHash()));
+        $this->assertSame('TCS.NS', $provider->lastResponseMetadata()['requested_symbol']);
     }
 
     public function test_non_zero_adapter_exit_is_explicit(): void

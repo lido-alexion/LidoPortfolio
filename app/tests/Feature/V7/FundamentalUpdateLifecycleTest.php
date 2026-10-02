@@ -147,6 +147,53 @@ class FundamentalUpdateLifecycleTest extends TestCase
         $this->assertSame([], array_values(array_intersect($firstIds, $secondIds)));
     }
 
+    public function test_missing_annual_check_is_not_hidden_by_a_fresh_quarterly_check(): void
+    {
+        $stock = Stock::query()->create([
+            'symbol' => 'HALF',
+            'exchange' => 'NSE',
+            'name' => 'Half Checked',
+            'is_benchmark' => false,
+        ]);
+        app(FundamentalDataService::class)->recordSuccessfulProviderCheck(
+            $stock,
+            FundamentalDataService::CADENCE_QUARTERLY,
+            now(),
+        );
+
+        $run = app(FundamentalUpdateService::class)->createRun('scheduled', 'incremental', null, 10);
+
+        $this->assertTrue(FundamentalUpdateJob::query()
+            ->where('run_id', $run->id)
+            ->where('stock_id', $stock->id)
+            ->where('cadence', FundamentalDataService::CADENCE_ANNUAL)
+            ->exists());
+    }
+
+    public function test_future_provider_check_is_not_due_from_signed_elapsed_time(): void
+    {
+        $stock = Stock::query()->create([
+            'symbol' => 'FUTURE',
+            'exchange' => 'NSE',
+            'name' => 'Future Check',
+            'is_benchmark' => false,
+        ]);
+        app(FundamentalDataService::class)->recordSuccessfulProviderCheck(
+            $stock,
+            FundamentalDataService::CADENCE_QUARTERLY,
+            now()->addDay(),
+        );
+        app(FundamentalDataService::class)->recordSuccessfulProviderCheck(
+            $stock,
+            FundamentalDataService::CADENCE_ANNUAL,
+            now()->addDay(),
+        );
+
+        $run = app(FundamentalUpdateService::class)->createRun('scheduled', 'incremental', null, 10);
+
+        $this->assertFalse(FundamentalUpdateJob::query()->where('run_id', $run->id)->where('stock_id', $stock->id)->exists());
+    }
+
     public function test_provider_failure_retries_without_writing_zero_valued_facts(): void
     {
         $stock = Stock::query()->create(['symbol' => 'SBIN', 'exchange' => 'NSE', 'name' => 'State Bank']);

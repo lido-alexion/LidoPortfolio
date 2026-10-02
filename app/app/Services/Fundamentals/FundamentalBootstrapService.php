@@ -127,6 +127,9 @@ class FundamentalBootstrapService
         $jobs = FundamentalBootstrapJob::query()
             ->where('run_id', $run->id)
             ->whereIn('status', [FundamentalBootstrapJob::STATUS_QUEUED, FundamentalBootstrapJob::STATUS_RETRY])
+            ->where(function ($query): void {
+                $query->whereNull('next_attempt_at')->orWhere('next_attempt_at', '<=', now());
+            })
             ->orderBy('id')
             ->limit(max(1, min($batch, 100)))
             ->get();
@@ -146,6 +149,7 @@ class FundamentalBootstrapService
                 $job->forceFill([
                     'status' => $willRetry ? FundamentalBootstrapJob::STATUS_RETRY : FundamentalBootstrapJob::STATUS_FAILED,
                     'completed_at' => $willRetry ? null : now(),
+                    'next_attempt_at' => $willRetry ? now()->addMinutes(min(60, 2 ** max(0, $job->attempts - 1))) : null,
                     'last_error' => $error->getMessage(),
                 ])->save();
                 $run->forceFill(['last_error' => $error->getMessage()])->save();
@@ -184,6 +188,7 @@ class FundamentalBootstrapService
             $job->forceFill([
                 'status' => FundamentalBootstrapJob::STATUS_COMPLETE_NO_DATA,
                 'completed_at' => now(),
+                'next_attempt_at' => null,
                 'last_error' => 'benchmark instruments are excluded from bootstrap',
             ])->save();
 
@@ -217,6 +222,26 @@ class FundamentalBootstrapService
                 ? ['inserted' => 0, 'deduped' => 0, 'restated' => 0]
                 : $this->fundamentals->storeFacts($stock, $accepted);
 
+            if ($accepted !== []) {
+                $providers = collect($accepted)->pluck('provider')->filter()->unique()->values()->all();
+                $provider = count($providers) === 1 ? (string) $providers[0] : 'hybrid';
+                $responseHash = hash('sha256', json_encode($rows, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+                $this->fundamentals->recordSuccessfulProviderCheck(
+                    $stock,
+                    $cadence,
+                    now(),
+                    $provider,
+                    $responseHash,
+                    null,
+                    [
+                        'transport' => 'historical_ingest',
+                        'check_kind' => 'merged_source_rows',
+                        'providers' => $providers,
+                        'row_count' => count($rows),
+                    ],
+                );
+            }
+
             $totals['inserted'] += (int) ($storeStats['inserted'] ?? 0);
             $totals['restated'] += (int) ($storeStats['restated'] ?? 0);
             $totals['deduped'] += (int) ($storeStats['deduped'] ?? 0);
@@ -245,6 +270,7 @@ class FundamentalBootstrapService
         $job->forceFill([
             'status' => $status,
             'completed_at' => now(),
+            'next_attempt_at' => null,
             'last_error' => null,
             'quarterly_status' => $this->cadenceQuality($cadenceStats[FundamentalDataService::CADENCE_QUARTERLY] ?? []),
             'annual_status' => $this->cadenceQuality($cadenceStats[FundamentalDataService::CADENCE_ANNUAL] ?? []),

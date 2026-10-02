@@ -55,21 +55,31 @@ class FundamentalUpdateService
     public function createRun(string $trigger = 'manual', string $scope = 'incremental', ?int $stockId = null, int $limit = 25): FundamentalUpdateRun
     {
         $settings = $this->fundamentals->settings();
-        $quarterlyCutoff = now()->subMonths((int) $settings->quarterly_freshness_months);
-        $annualCutoff = now()->subMonths((int) $settings->annual_freshness_months);
         $query = Stock::query()
             ->effectivelyActive()
             ->where(function ($stockQuery): void {
                 $stockQuery->where('is_benchmark', false)->orWhereNull('is_benchmark');
             });
         if ($stockId === null) {
-            // Oldest successful provider check first prevents low-id stocks from
-            // starving the tail of the eligible universe across scheduled runs.
-            $query->where(function ($due) use ($quarterlyCutoff, $annualCutoff): void {
-                $due->whereNotExists(function ($sub): void {
-                    $sub->selectRaw('1')->from('stox_fundamental_provider_checks as pc')
-                        ->whereColumn('pc.stock_id', 'portfolio_stocks.id');
-                })->orWhereRaw("EXISTS (SELECT 1 FROM stox_fundamental_provider_checks pc WHERE pc.stock_id = portfolio_stocks.id AND ((pc.cadence = 'quarterly' AND pc.last_successful_check_at <= ?) OR (pc.cadence = 'annual' AND pc.last_successful_check_at <= ?)))", [$quarterlyCutoff, $annualCutoff]);
+            // Due-ness is cadence-specific. A quarterly check must never hide a
+            // missing annual check (or the reverse), otherwise the tail of the
+            // universe permanently disappears from scheduled work.
+            $query->where(function ($due): void {
+                foreach ([FundamentalDataService::CADENCE_QUARTERLY, FundamentalDataService::CADENCE_ANNUAL] as $cadence) {
+                    $cutoff = now()->subHours($this->checkIntervalHours($cadence));
+                    $due->orWhere(function ($cadenceDue) use ($cadence, $cutoff): void {
+                        $cadenceDue->whereNotExists(function ($sub) use ($cadence): void {
+                            $sub->selectRaw('1')->from('stox_fundamental_provider_checks as pc')
+                                ->whereColumn('pc.stock_id', 'portfolio_stocks.id')
+                                ->where('pc.cadence', $cadence);
+                        })->orWhereExists(function ($sub) use ($cadence, $cutoff): void {
+                            $sub->selectRaw('1')->from('stox_fundamental_provider_checks as pc')
+                                ->whereColumn('pc.stock_id', 'portfolio_stocks.id')
+                                ->where('pc.cadence', $cadence)
+                                ->where('pc.last_successful_check_at', '<=', $cutoff);
+                        });
+                    });
+                }
             })->orderByRaw("COALESCE((SELECT MIN(pc.last_successful_check_at) FROM stox_fundamental_provider_checks pc WHERE pc.stock_id = portfolio_stocks.id), '1970-01-01') ASC");
         }
         $query->orderBy('id');
@@ -371,7 +381,21 @@ class FundamentalUpdateService
                 $stats = $this->fundamentals->storeFacts($stock, $rows, $checkedAt);
                 // Empty/unchanged responses are successful checks too. This is
                 // separate from fact first_fetched_at and prevents starvation.
-                $this->fundamentals->recordSuccessfulProviderCheck($stock, $job->cadence, $checkedAt, (string) $settings->provider);
+                $responseHash = method_exists($this->provider, 'lastResponseHash')
+                    ? $this->provider->lastResponseHash()
+                    : null;
+                $responseMetadata = method_exists($this->provider, 'lastResponseMetadata')
+                    ? $this->provider->lastResponseMetadata()
+                    : [];
+                $this->fundamentals->recordSuccessfulProviderCheck(
+                    $stock,
+                    $job->cadence,
+                    $checkedAt,
+                    (string) $settings->provider,
+                    $responseHash,
+                    isset($responseMetadata['provider_symbol']) ? (string) $responseMetadata['provider_symbol'] : null,
+                    $responseMetadata,
+                );
                 $job->forceFill(['status' => 'completed', 'last_error' => null])->save();
                 $run->forceFill(['stats_json' => $this->mergeStats($run->stats_json ?? [], $stats)])->save();
             } catch (Throwable $error) {
@@ -440,18 +464,22 @@ class FundamentalUpdateService
             ->where('stock_id', $stock->id)
             ->where('cadence', $cadence)
             ->max('last_successful_check_at');
-        $latest ??= DB::table('stox_fundamental_facts')
-            ->where('stock_id', $stock->id)
-            ->where('cadence', $cadence)
-            ->max(DB::raw('COALESCE(last_provider_checked_at, first_fetched_at)'));
 
+        // Facts alone do not prove that this cadence has received a successful
+        // provider check. Preserve the durable ledger as the source of truth so
+        // migrated/historical facts cannot starve a cadence forever.
         if ($latest === null) {
             return true;
         }
 
-        $hours = $cadence === FundamentalDataService::CADENCE_ANNUAL ? 24 * 14 : 24 * 3;
+        $hours = $this->checkIntervalHours($cadence);
 
-        return now()->diffInHours(\Carbon\Carbon::parse($latest), false) >= $hours;
+        return \Carbon\Carbon::parse($latest)->addHours($hours)->lte(now());
+    }
+
+    private function checkIntervalHours(string $cadence): int
+    {
+        return $cadence === FundamentalDataService::CADENCE_ANNUAL ? 24 * 14 : 24 * 3;
     }
 
     /** @param array<string,mixed> $current @param array<string,int> $stats */

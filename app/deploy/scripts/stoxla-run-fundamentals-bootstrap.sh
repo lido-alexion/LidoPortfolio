@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_ROOT="${STOXLA_APP_ROOT:-/var/www/stoxla}"
+PHP_BIN="${STOXLA_PHP_BIN:-/usr/bin/php}"
+CANARY_SYMBOL="${STOXLA_FUNDAMENTALS_CANARY_SYMBOL:-TCS}"
+BATCH="${STOXLA_FUNDAMENTALS_BOOTSTRAP_BATCH:-10}"
+LOCK_PATH="$APP_ROOT/.fundamentals-bootstrap.lock"
+
+[[ "$APP_ROOT" == /var/www/stoxla ]] || { echo "refusing unexpected app root" >&2; exit 1; }
+[[ -x "$PHP_BIN" ]] || { echo "PHP binary not found: $PHP_BIN" >&2; exit 1; }
+
+exec 9>"$LOCK_PATH"
+flock -n 9 || { echo "another fundamentals bootstrap is already running" >&2; exit 20; }
+cd "$APP_ROOT/current"
+
+acceptance_state="$(/usr/bin/systemctl is-active stoxla-ml-acceptance.service 2>/dev/null || true)"
+case "$acceptance_state" in
+  inactive|failed|unknown) ;;
+  *) echo "refusing to run while stoxla-ml-acceptance.service is active: $acceptance_state" >&2; exit 21;;
+esac
+
+run_output="$($PHP_BIN artisan stox:fundamentals-bootstrap --stock="$CANARY_SYMBOL" --batch=1 --no-interaction)"
+printf '%s\n' "$run_output"
+canary_run_id="$(printf '%s\n' "$run_output" | sed -n 's/.*Bootstrap run #\([0-9][0-9]*\).*/\1/p' | tail -n 1)"
+[[ -n "$canary_run_id" ]] || { echo "could not determine canary run id" >&2; exit 22; }
+
+canary_evidence="$($PHP_BIN artisan tinker --no-interaction --execute="\$run=\App\Models\V7\FundamentalBootstrapRun::findOrFail($canary_run_id); \$job=\$run->jobs()->with('stock')->first(); \$checks=\Illuminate\Support\Facades\DB::table('stox_fundamental_provider_checks')->where('stock_id',\$job->stock_id)->get(['cadence','provider','response_hash','requested_symbol','provider_symbol']); echo json_encode(['run_id'=>\$run->id,'status'=>\$run->status,'job_status'=>\$job->status,'symbol'=>\$job->stock->symbol,'facts_inserted'=>\$job->facts_inserted,'facts_upgraded'=>\$job->facts_upgraded,'quarterly_status'=>\$job->quarterly_status,'annual_status'=>\$job->annual_status,'earliest_period'=>\$job->earliest_period?->toDateString(),'latest_period'=>\$job->latest_period?->toDateString(),'checks'=>\$checks]);")"
+printf 'CANARY_EVIDENCE %s\n' "$canary_evidence"
+
+CANARY_EVIDENCE="$canary_evidence" "$PHP_BIN" -r '
+$e = json_decode(getenv("CANARY_EVIDENCE"), true);
+$checks = is_array($e["checks"] ?? null) ? $e["checks"] : [];
+$hashes = array_filter($checks, fn ($row) => is_string($row["response_hash"] ?? null) && strlen($row["response_hash"]) === 64);
+if (($e["job_status"] ?? null) === "failed" || (($e["facts_inserted"] ?? 0) + ($e["facts_upgraded"] ?? 0) <= 0) || count($hashes) === 0) {
+    fwrite(STDERR, "canary did not prove persisted facts and response hashes\n");
+    exit(23);
+}
+'
+
+full_output="$($PHP_BIN artisan stox:fundamentals-bootstrap --all --batch="$BATCH" --no-interaction)"
+printf '%s\n' "$full_output"
+full_run_id="$(printf '%s\n' "$full_output" | sed -n 's/.*Bootstrap run #\([0-9][0-9]*\).*/\1/p' | tail -n 1)"
+[[ -n "$full_run_id" ]] || { echo "could not determine full run id" >&2; exit 24; }
+
+while :; do
+    summary="$($PHP_BIN artisan tinker --no-interaction --execute="\$run=\App\Models\V7\FundamentalBootstrapRun::findOrFail($full_run_id); echo implode('|',[\$run->status,\$run->requested,\$run->queued,\$run->running,\$run->completed,\$run->failed]);")"
+    printf 'FULL_PROGRESS run=%s %s\n' "$full_run_id" "$summary"
+    IFS='|' read -r status requested queued running completed failed <<< "$summary"
+    if [[ "$queued" == "0" && "$running" == "0" ]]; then
+        [[ "$failed" == "0" ]] || { echo "full fundamentals run completed with failed jobs" >&2; exit 25; }
+        break
+    fi
+    $PHP_BIN artisan stox:fundamentals-bootstrap --run="$full_run_id" --batch="$BATCH" --no-interaction || true
+    sleep 5
+done
+
+$PHP_BIN artisan tinker --no-interaction --execute="\$run=\App\Models\V7\FundamentalBootstrapRun::findOrFail($full_run_id); \$jobs=\App\Models\V7\FundamentalBootstrapJob::where('run_id',\$run->id)->selectRaw('status,COUNT(*) as count')->groupBy('status')->pluck('count','status'); echo json_encode(['run_id'=>\$run->id,'status'=>\$run->status,'requested'=>\$run->requested,'completed'=>\$run->completed,'failed'=>\$run->failed,'summary'=>\$jobs]);"

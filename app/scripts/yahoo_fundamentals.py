@@ -11,6 +11,7 @@ import datetime as dt
 import json
 import math
 import sys
+import re
 from typing import Any, Callable
 
 
@@ -78,10 +79,35 @@ def candidate_symbols(symbol: str) -> list[str]:
     return [symbol]
 
 
+def identity_info(ticker: Any) -> dict[str, Any]:
+    """Read identity through yfinance's normal session, never a direct URL."""
+    info = ticker.get_info()
+    if not isinstance(info, dict):
+        raise RuntimeError("Yahoo identity response was not an object")
+    return {
+        "symbol": info.get("symbol"),
+        "longName": info.get("longName"),
+        "shortName": info.get("shortName"),
+        "exchange": info.get("exchange"),
+        "quoteType": info.get("quoteType"),
+    }
+
+
+def identity_matches(expected_name: str, identity: dict[str, Any]) -> bool:
+    """Require a conservative issuer-name overlap before accepting .BO fallback."""
+    if not expected_name.strip():
+        return False
+    ignored = {"limited", "ltd", "india", "inc", "incorporated", "company", "co", "pvt", "private"}
+    expected = {token for token in re.findall(r"[a-z0-9]+", expected_name.lower()) if token not in ignored and len(token) >= 3}
+    actual_text = " ".join(str(identity.get(key) or "") for key in ("longName", "shortName")).lower()
+    actual = {token for token in re.findall(r"[a-z0-9]+", actual_text) if token not in ignored and len(token) >= 3}
+    return bool(expected and actual and expected.intersection(actual))
+
+
 def main(argv: list[str] | None = None, ticker_factory: Callable[[str], Any] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    if len(args) != 2 or args[1] not in {"quarterly", "annual"}:
-        print("usage: yahoo_fundamentals.py SYMBOL quarterly|annual", file=sys.stderr)
+    if len(args) not in {2, 3} or args[1] not in {"quarterly", "annual"}:
+        print("usage: yahoo_fundamentals.py SYMBOL quarterly|annual [EXPECTED_ISSUER_NAME]", file=sys.stderr)
         return 2
 
     try:
@@ -90,14 +116,22 @@ def main(argv: list[str] | None = None, ticker_factory: Callable[[str], Any] | N
 
             ticker_factory = yf.Ticker
         requested_symbol = args[0]
+        expected_name = args[2] if len(args) == 3 else ""
         last_error: Exception | None = None
         for provider_symbol in candidate_symbols(requested_symbol):
             try:
-                payload = fetch_statements(provider_symbol, args[1], ticker_factory)
+                ticker = ticker_factory(provider_symbol)
+                payload = fetch_statements(provider_symbol, args[1], lambda _: ticker)
+                identity = None
+                if provider_symbol != requested_symbol:
+                    identity = identity_info(ticker)
+                    if not identity_matches(expected_name, identity):
+                        raise RuntimeError("Yahoo fallback identity did not match the requested issuer")
                 # Keep the requested security identity stable for the PHP
                 # contract while retaining the symbol that supplied the data.
                 payload["symbol"] = requested_symbol
                 payload["provider_symbol"] = provider_symbol
+                payload["identity"] = identity
                 print(json.dumps(payload, ensure_ascii=True, allow_nan=False, separators=(",", ":")))
                 return 0
             except RuntimeError as error:

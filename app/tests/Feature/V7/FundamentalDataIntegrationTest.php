@@ -146,6 +146,35 @@ class FundamentalDataIntegrationTest extends TestCase
         $this->assertSame(2.0, $metric['value']);
     }
 
+    public function test_yfinance_required_fields_are_mapped_without_inventing_values_or_basis(): void
+    {
+        $rows = (new YahooFundamentalNormalizer)->normalizeYfinance([
+            'symbol' => 'BANK.NS',
+            'provider_symbol' => 'BANK.NS',
+            'statements' => [
+                'income_statement' => [[
+                    'period_end' => '2026-06-30',
+                    'facts' => [
+                        'Pretax Income' => 120,
+                        'Tax Provision' => 20,
+                        'Interest Expense Non Operating' => 10,
+                        'Net Income' => 100,
+                    ],
+                ]],
+                'balance_sheet' => [],
+                'cash_flow' => [],
+            ],
+        ], FundamentalDataService::CADENCE_QUARTERLY);
+
+        $mapped = collect($rows)->keyBy('fact_key');
+        $this->assertSame(120.0, $mapped['profit_before_tax']['value']);
+        $this->assertSame(20.0, $mapped['tax_expense']['value']);
+        $this->assertSame(10.0, $mapped['finance_cost']['value']);
+        $this->assertSame('unknown', $mapped['net_income']['statement_basis']);
+        $this->assertSame('BANK.NS', $mapped['net_income']['source_meta']['provider_symbol']);
+        $this->assertArrayNotHasKey('missing_provider_field', $mapped->all());
+    }
+
     public function test_admin_fundamental_routes_are_admin_only_and_expose_defaults(): void
     {
         $member = User::factory()->create(['is_admin' => false]);
