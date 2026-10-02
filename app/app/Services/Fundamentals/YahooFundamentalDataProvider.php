@@ -9,6 +9,11 @@ use RuntimeException;
 
 class YahooFundamentalDataProvider implements FundamentalDataProvider
 {
+    private ?string $lastResponseHash = null;
+
+    /** @var array<string,mixed> */
+    private array $lastResponseMetadata = [];
+
     public function __construct(
         private readonly ?string $pythonBinary = null,
         private readonly ?string $adapterScript = null,
@@ -18,6 +23,8 @@ class YahooFundamentalDataProvider implements FundamentalDataProvider
 
     public function fetch(Stock $stock, string $cadence): array
     {
+        $this->lastResponseHash = null;
+        $this->lastResponseMetadata = [];
         if (! in_array($cadence, [FundamentalDataService::CADENCE_QUARTERLY, FundamentalDataService::CADENCE_ANNUAL], true)) {
             throw new RuntimeException('Yahoo fundamentals adapter received an unsupported cadence.');
         }
@@ -35,7 +42,7 @@ class YahooFundamentalDataProvider implements FundamentalDataProvider
             throw new RuntimeException('Yahoo fundamentals adapter script is unavailable.');
         }
 
-        $process = new Process([$python, $script, $symbol, $cadence], base_path());
+        $process = new Process([$python, $script, $symbol, $cadence, (string) ($stock->name ?? '')], base_path());
         $process->setTimeout($timeout);
         try {
             $process->run();
@@ -67,7 +74,26 @@ class YahooFundamentalDataProvider implements FundamentalDataProvider
             throw new RuntimeException('Yahoo fundamentals adapter returned an invalid response schema.');
         }
 
+        $this->lastResponseHash = hash('sha256', $stdout);
+        $this->lastResponseMetadata = [
+            'transport' => 'yfinance',
+            'requested_symbol' => $payload['symbol'],
+            'provider_symbol' => $payload['provider_symbol'] ?? $payload['symbol'],
+            'identity' => is_array($payload['identity'] ?? null) ? $payload['identity'] : null,
+        ];
+
         return (new YahooFundamentalNormalizer)->normalizeYfinance($payload, $cadence);
+    }
+
+    public function lastResponseHash(): ?string
+    {
+        return $this->lastResponseHash;
+    }
+
+    /** @return array<string,mixed> */
+    public function lastResponseMetadata(): array
+    {
+        return $this->lastResponseMetadata;
     }
 
     private function safeError(string $error): string

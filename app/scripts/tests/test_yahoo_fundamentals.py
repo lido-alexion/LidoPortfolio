@@ -68,7 +68,13 @@ class YahooFundamentalsAdapterTest(unittest.TestCase):
             quarterly_financials = quarterly_balance_sheet = quarterly_cashflow = None
 
         class BseTicker(Ticker):
-            pass
+            def get_info(self):
+                return {
+                    "symbol": "AARNAV.BO",
+                    "longName": "Aarnav Fashions Limited",
+                    "exchange": "BSE",
+                    "quoteType": "EQUITY",
+                }
 
         def factory(symbol):
             calls.append(symbol)
@@ -76,11 +82,32 @@ class YahooFundamentalsAdapterTest(unittest.TestCase):
 
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            self.assertEqual(MODULE.main(["AARNAV.NS", "quarterly"], factory), 0)
+            self.assertEqual(MODULE.main(["AARNAV.NS", "quarterly", "Aarnav Fashions"], factory), 0)
         payload = __import__("json").loads(output.getvalue())
         self.assertEqual(calls, ["AARNAV.NS", "AARNAV.BO"])
         self.assertEqual(payload["symbol"], "AARNAV.NS")
         self.assertEqual(payload["provider_symbol"], "AARNAV.BO")
+
+    def test_nse_to_bse_fallback_rejects_mismatched_issuer(self):
+        class EmptyTicker:
+            quarterly_financials = quarterly_balance_sheet = quarterly_cashflow = None
+
+        class WrongIssuerTicker(Ticker):
+            def get_info(self):
+                return {
+                    "symbol": "AARNAV.BO",
+                    "longName": "Another Issuer Limited",
+                    "exchange": "BSE",
+                    "quoteType": "EQUITY",
+                }
+
+        def factory(symbol):
+            return EmptyTicker() if symbol == "AARNAV.NS" else WrongIssuerTicker()
+
+        errors = io.StringIO()
+        with contextlib.redirect_stderr(errors):
+            self.assertNotEqual(MODULE.main(["AARNAV.NS", "quarterly", "Aarnav Fashions"], factory), 0)
+        self.assertIn("fallback identity did not match", errors.getvalue())
 
     def test_invalid_arguments_fail_without_stdout_noise(self):
         output = io.StringIO()

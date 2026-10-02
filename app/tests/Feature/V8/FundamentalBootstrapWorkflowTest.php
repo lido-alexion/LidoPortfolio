@@ -145,4 +145,23 @@ class FundamentalBootstrapWorkflowTest extends TestCase
         $this->assertSame(1, $preview['stock_count']);
         $this->assertContains('HDFC', $preview['symbols']);
     }
+
+    public function test_bootstrap_retry_backoff_keeps_unavailable_job_durable_and_not_due(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'BLOCKED', 'exchange' => 'NSE', 'name' => 'Blocked']);
+        $provider = Mockery::mock(FundamentalDataProvider::class);
+        $provider->shouldReceive('fetch')->once()->andThrow(new \RuntimeException('Yahoo unavailable'));
+        $this->app->instance(FundamentalDataProvider::class, $provider);
+
+        $service = app(FundamentalBootstrapService::class);
+        $run = $service->createRun('stock', [$stock->id]);
+        $service->process($run, 1);
+
+        $job = FundamentalBootstrapJob::query()->where('run_id', $run->id)->firstOrFail();
+        $this->assertSame(FundamentalBootstrapJob::STATUS_RETRY, $job->status);
+        $this->assertNotNull($job->next_attempt_at);
+
+        $service->process($run, 1);
+        $this->assertSame(1, $job->fresh()->attempts);
+    }
 }

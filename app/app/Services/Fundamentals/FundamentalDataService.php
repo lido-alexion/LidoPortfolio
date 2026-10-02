@@ -103,7 +103,16 @@ class FundamentalDataService
         return $stats;
     }
 
-    public function recordSuccessfulProviderCheck(Stock $stock, string $cadence, Carbon $checkedAt, string $provider = 'yahoo', ?string $responseHash = null): void
+    /** @param array<string,mixed> $sourceMeta */
+    public function recordSuccessfulProviderCheck(
+        Stock $stock,
+        string $cadence,
+        Carbon $checkedAt,
+        string $provider = 'yahoo',
+        ?string $responseHash = null,
+        ?string $providerSymbol = null,
+        array $sourceMeta = [],
+    ): void
     {
         DB::table('stox_fundamental_provider_checks')->upsert([[
             'stock_id' => $stock->id,
@@ -111,9 +120,12 @@ class FundamentalDataService
             'last_successful_check_at' => $checkedAt,
             'provider' => $provider,
             'response_hash' => $responseHash,
+            'requested_symbol' => $stock->symbol,
+            'provider_symbol' => $providerSymbol,
+            'source_meta' => $sourceMeta === [] ? null : json_encode($sourceMeta, JSON_THROW_ON_ERROR),
             'created_at' => now(),
             'updated_at' => now(),
-        ]], ['stock_id', 'cadence'], ['last_successful_check_at', 'provider', 'response_hash', 'updated_at']);
+        ]], ['stock_id', 'cadence'], ['last_successful_check_at', 'provider', 'response_hash', 'requested_symbol', 'provider_symbol', 'source_meta', 'updated_at']);
     }
 
     public function latestFact(Stock $stock, string $factKey, string $cadence, ?Carbon $asOf = null): ?FundamentalFact

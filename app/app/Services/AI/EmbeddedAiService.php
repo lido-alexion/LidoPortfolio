@@ -44,6 +44,11 @@ class EmbeddedAiService
                 $response['data_limitations'] .= "\n".implode('; ', $context['input']['data_limitations']);
                 $response = EmbeddedAiContract::validate($capability, $response);
             }
+            // JSON object key order is not stable across supported databases.
+            // Canonicalize the validated contract so a fresh response and its
+            // cached form are identical on SQLite and MySQL alike.
+            /** @var array<string,mixed> $response */
+            $response = EmbeddedAiContract::normalize($response);
             $cached = AiInsightCache::query()->updateOrCreate(['fingerprint' => $fingerprint], ['capability_id' => $capability, 'scope' => $context['scope'], 'stock_id' => $identity['stock_id'], 'user_id' => $identity['user_id'], 'profile_id' => $identity['profile_id'], 'capability_version' => 1, 'prompt_version' => $prompt->version, 'schema_version' => 1, 'response' => $response, 'data_as_of' => $context['data_as_of'] ?? [], 'request_id' => $requestId, 'generated_at' => now(), 'refresh_failed_at' => null]);
 
             return $this->project($cached, false, $fingerprint);
@@ -69,6 +74,12 @@ class EmbeddedAiService
 
     private function project(?AiInsightCache $cache, bool $degraded, string $fingerprint): array
     {
-        return ['fingerprint' => $fingerprint, 'response' => $cache?->response, 'data_as_of' => $cache?->data_as_of, 'generated_at' => $cache?->generated_at?->toIso8601String(), 'degraded' => $degraded, 'status' => $degraded ? ($cache ? 'cached_degraded' : 'unavailable') : ($cache ? 'ready' : 'missing')];
+        $response = $cache?->response;
+        if (is_array($response)) {
+            /** @var array<string,mixed> $response */
+            $response = EmbeddedAiContract::normalize($response);
+        }
+
+        return ['fingerprint' => $fingerprint, 'response' => $response, 'data_as_of' => $cache?->data_as_of, 'generated_at' => $cache?->generated_at?->toIso8601String(), 'degraded' => $degraded, 'status' => $degraded ? ($cache ? 'cached_degraded' : 'unavailable') : ($cache ? 'ready' : 'missing')];
     }
 }

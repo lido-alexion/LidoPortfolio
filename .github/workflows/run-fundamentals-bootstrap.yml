@@ -1,0 +1,50 @@
+name: Run StoX Fundamentals Bootstrap
+
+on:
+  workflow_dispatch:
+    inputs:
+      canary_symbol:
+        description: Known-good canary symbol
+        required: true
+        default: TCS
+      batch:
+        description: Stocks per durable production slice
+        required: true
+        default: "10"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stoxla-fundamentals-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  run:
+    name: Controlled production fundamentals bootstrap
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: production
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Run guarded canary and full durable snapshot
+        env:
+          STOXLA_HOST: ${{ secrets.STOXLA_HOST }}
+          STOXLA_SSH_PRIVATE_KEY: ${{ secrets.STOXLA_SSH_PRIVATE_KEY }}
+          STOXLA_SSH_USER: ${{ secrets.STOXLA_SSH_USER }}
+          STOXLA_FUNDAMENTALS_CANARY_SYMBOL: ${{ inputs.canary_symbol }}
+          STOXLA_FUNDAMENTALS_BOOTSTRAP_BATCH: ${{ inputs.batch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$STOXLA_SSH_PRIVATE_KEY" > ~/.ssh/stoxla_deploy_key
+          chmod 600 ~/.ssh/stoxla_deploy_key
+          ssh-keyscan -H "$STOXLA_HOST" >> ~/.ssh/known_hosts
+          ssh_opts=(-i ~/.ssh/stoxla_deploy_key -o IdentitiesOnly=yes -o BatchMode=yes)
+          ssh "${ssh_opts[@]}" "${STOXLA_SSH_USER}@${STOXLA_HOST}" \
+            "STOXLA_FUNDAMENTALS_CANARY_SYMBOL='$STOXLA_FUNDAMENTALS_CANARY_SYMBOL' STOXLA_FUNDAMENTALS_BOOTSTRAP_BATCH='$STOXLA_FUNDAMENTALS_BOOTSTRAP_BATCH' bash /var/www/stoxla/current/deploy/scripts/stoxla-run-fundamentals-bootstrap.sh"
