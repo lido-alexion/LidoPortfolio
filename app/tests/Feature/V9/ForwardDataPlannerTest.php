@@ -35,6 +35,19 @@ class ForwardDataPlannerTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_publication_grace_uses_next_session_noon_not_planning_time(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-01 10:00:00', 'Asia/Kolkata'));
+        config(['forward_data.start_date' => '2026-09-29']);
+        config(['ml.historical_universe.mii_path' => '/tmp/stox-mii', 'ml.historical_universe.bhavcopy_path' => '/tmp/stox-bhavcopy']);
+
+        app(ForwardDataPlanner::class)->plan();
+
+        $work = ForwardCollectionWork::query()->whereDate('session_date', '2026-09-29')->firstOrFail();
+        $this->assertSame('2026-09-30 12:00:00', $work->next_attempt_at?->timezone('Asia/Kolkata')->format('Y-m-d H:i:s'));
+        Carbon::setTestNow();
+    }
+
     public function test_expired_claim_is_recoverable_and_new_claim_has_a_lease_token(): void
     {
         $work = ForwardCollectionWork::query()->create([

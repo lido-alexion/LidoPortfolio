@@ -36,6 +36,7 @@ class ForwardDataPlanner
         for ($date = Carbon::parse($start); $date->lte($last); $date->addDay()) {
             if (! TradingCalendar::isEquitySessionDate($date)) continue;
             $boundary = MlUniverseSnapshotBoundary::query()->where('universe_key', MlHistoricalUniverseMembershipService::ACTIVE_ELIGIBLE_NSE)->whereDate('effective_from', $date)->exists();
+            $publicationReadyAt = $this->publicationReadyAt($date);
             $work = ForwardCollectionWork::query()->firstOrCreate([
                 'dataset_key' => self::DATASET_NSE_MEMBERSHIP,
                 'exchange' => 'NSE',
@@ -43,9 +44,15 @@ class ForwardDataPlanner
                 'scope_key' => MlHistoricalUniverseMembershipService::ACTIVE_ELIGIBLE_NSE,
             ], [
                 'state' => $boundary ? 'succeeded' : self::STATE_WAITING_PUBLICATION,
-                'next_attempt_at' => $boundary ? null : now()->addHours((int) config('forward_data.publication_grace_hours', 21)),
+                'next_attempt_at' => $boundary ? null : $publicationReadyAt,
                 'last_successful_at' => $boundary ? now() : null,
             ]);
+            if (! $boundary
+                && $work->state === self::STATE_WAITING_PUBLICATION
+                && $work->last_attempted_at === null
+                && $work->next_attempt_at?->ne($publicationReadyAt)) {
+                $work->forceFill(['next_attempt_at' => $publicationReadyAt])->save();
+            }
             if ($work->wasRecentlyCreated) $created++;
             if ($boundary && $work->state !== 'succeeded') {
                 $work->forceFill(['state' => 'succeeded', 'next_attempt_at' => null, 'last_successful_at' => now(), 'last_error' => null, 'last_error_code' => null])->save();
@@ -56,6 +63,18 @@ class ForwardDataPlanner
             }
         }
         return ['status' => 'planned', 'created' => $created, 'blocked' => $blocked];
+    }
+
+    protected function publicationReadyAt(Carbon $sessionDate): Carbon
+    {
+        $timezone = (string) config('forward_data.timezone', 'Asia/Kolkata');
+        $nextSession = $sessionDate->copy()->timezone($timezone)->startOfDay()->addDay();
+
+        while (! TradingCalendar::isEquitySessionDate($nextSession)) {
+            $nextSession->addDay();
+        }
+
+        return $nextSession->setTime(12, 0);
     }
 
     public function officialSourceConfigured(): bool

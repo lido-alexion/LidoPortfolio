@@ -120,6 +120,33 @@ class FundamentalUpdateLifecycleTest extends TestCase
         $this->assertSame('running', $result['status']);
     }
 
+    public function test_successive_due_batches_advance_to_different_stocks(): void
+    {
+        $stocks = collect(['AAA', 'BBB', 'CCC', 'DDD'])->map(fn (string $symbol) => Stock::query()->create([
+            'symbol' => $symbol,
+            'exchange' => 'NSE',
+            'name' => $symbol,
+            'is_benchmark' => false,
+        ]));
+
+        $service = app(FundamentalUpdateService::class);
+        $first = $service->createRun('scheduled', 'incremental', null, 2);
+        $firstIds = FundamentalUpdateJob::query()->where('run_id', $first->id)->pluck('stock_id')->unique()->sort()->values()->all();
+
+        foreach ($stocks->whereIn('id', $firstIds) as $stock) {
+            foreach ([FundamentalDataService::CADENCE_QUARTERLY, FundamentalDataService::CADENCE_ANNUAL] as $cadence) {
+                app(FundamentalDataService::class)->recordSuccessfulProviderCheck($stock, $cadence, now());
+            }
+        }
+
+        $second = $service->createRun('scheduled', 'incremental', null, 2);
+        $secondIds = FundamentalUpdateJob::query()->where('run_id', $second->id)->pluck('stock_id')->unique()->sort()->values()->all();
+
+        $this->assertCount(2, $firstIds);
+        $this->assertCount(2, $secondIds);
+        $this->assertSame([], array_values(array_intersect($firstIds, $secondIds)));
+    }
+
     public function test_provider_failure_retries_without_writing_zero_valued_facts(): void
     {
         $stock = Stock::query()->create(['symbol' => 'SBIN', 'exchange' => 'NSE', 'name' => 'State Bank']);
