@@ -3,7 +3,16 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import StockClassificationAdminPage from '../../resources/js/src/pages/StockClassificationAdminPage.jsx';
-import { apiMock, axiosError } from './tos/helpers/mockApi.js';
+import { axiosError } from './tos/helpers/mockApi.js';
+
+const apiMock = vi.hoisted(() => ({
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+}));
+
+vi.mock('../../resources/js/src/api.js', () => ({ default: apiMock }));
 
 vi.mock('../../resources/js/src/toast.js', () => ({ showToast: vi.fn() }));
 
