@@ -139,3 +139,24 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - name: Run canonical frontend verification
         run: ../scripts/verify-ci.sh --frontend
+
+
+  ai-runtime:
+    name: Python AI and FastMCP contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: ai-runtime/requirements.lock
+      - name: Install locked runtime and test contracts
+        run: python -m pip install -r ai-runtime/requirements.lock -e ./ai-runtime
+      - name: Verify private AI runtime and FastMCP
+        run: python -m pytest ai-runtime/tests -q

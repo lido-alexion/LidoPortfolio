@@ -81,6 +81,84 @@ export const JOURNEY_TOPICS = Object.freeze([
     "warnings": []
   },
   {
+    "id": "AI-04",
+    "title": "How do I investigate account evidence?",
+    "aliases": [
+      "Investigate account evidence",
+      "ai-04"
+    ],
+    "keywords": [
+      "investigate",
+      "account",
+      "evidence"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/",
+    "guide": "/docs/journeys/06-assistant.html#ai-04-investigate-account-evidence",
+    "steps": [
+      "Open Ask StoX and select Account investigation and actions.",
+      "Ask an account question, such as “How concentrated are my holdings?”",
+      "Read the answer and any missing-evidence disclosure.",
+      "Expand Investigation trace to see which tools supplied evidence."
+    ],
+    "prerequisites": [],
+    "warnings": []
+  },
+  {
+    "id": "AI-05",
+    "title": "How do I preview and approve changes?",
+    "aliases": [
+      "Preview and approve changes",
+      "ai-05"
+    ],
+    "keywords": [
+      "preview",
+      "and",
+      "approve",
+      "changes"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/",
+    "guide": "/docs/journeys/06-assistant.html#ai-05-preview-and-approve-changes",
+    "steps": [
+      "In account mode, request a supported change, such as creating a watchlist.",
+      "Review Proposed changes, affected objects, warnings and Review field changes.",
+      "Choose Approve changes or Reject plan. Deletions also require the explicit deletion checkbox.",
+      "Read the verified action results. If state changed or approval expired, choose Build a fresh plan and review the new preview."
+    ],
+    "prerequisites": [],
+    "warnings": []
+  },
+  {
+    "id": "AI-06",
+    "title": "How do I inspect action history and recover?",
+    "aliases": [
+      "Inspect action history and recover",
+      "ai-06"
+    ],
+    "keywords": [
+      "inspect",
+      "action",
+      "history",
+      "and",
+      "recover"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/",
+    "guide": "/docs/journeys/06-assistant.html#ai-06-inspect-action-history-and-recover",
+    "steps": [
+      "Open Run history in the existing assistant drawer.",
+      "Review a run's original objective, portfolio, preview, trace and action results.",
+      "For a failed, partial, expired or stale run, choose Build a fresh plan.",
+      "Review and approve any new mutations separately."
+    ],
+    "prerequisites": [],
+    "warnings": []
+  },
+  {
     "id": "E2E-01",
     "title": "How do I new idea to first BUY?",
     "aliases": [

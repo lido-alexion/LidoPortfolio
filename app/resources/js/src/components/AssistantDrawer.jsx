@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, Link } from 'react-router-dom';
 import api from '../api';
+import AssistantRun from './AssistantRun';
 import { resolveDocKeywordFromPath } from '../utils/documentationLinks';
 import { streamAssistant, safeSourceUrl } from '../utils/assistantStream';
 import { searchJourneyTopics } from '../data/journeyMetadata';
@@ -11,9 +12,10 @@ export default function AssistantDrawer() {
     const [open, setOpen] = useState(false), [question, setQuestion] = useState('');
     const [turns, setTurns] = useState([]), [busy, setBusy] = useState(false);
     const [notice, setNotice] = useState('');
+    const [mode, setMode] = useState('documentation'), [runs, setRuns] = useState([]);
     const dialog = useRef(null), trigger = useRef(null), controller = useRef(null);
     const generation = useRef(0);
-    const clear = () => { generation.current++; controller.current?.abort(); setBusy(false); setTurns([]); setNotice('Conversation cleared.'); };
+    const clear = () => { generation.current++; controller.current?.abort(); setBusy(false); setTurns([]); setRuns([]); setNotice('Conversation cleared.'); };
     useEffect(() => () => controller.current?.abort(), []);
     useEffect(() => {
         if (open) dialog.current?.showModal?.();
@@ -24,6 +26,7 @@ export default function AssistantDrawer() {
         event?.preventDefault();
         const text = (suggested || question).trim();
         if (!text || busy) return;
+        if (mode === 'account') { await investigate(text); return; }
         const index = turns.length, version = generation.current;
         const update = patch => { if (generation.current === version) setTurns(items => items.map((item, i) => i === index ? { ...item, ...patch } : item)); };
         setTurns(items => [...items, { question: text, answer: '', sources: [], grounding: 'pending' }]);
@@ -43,6 +46,21 @@ export default function AssistantDrawer() {
             if (error.name !== 'AbortError') update({ answer: 'The assistant is temporarily unavailable. You can still use How do I? help.', grounding: 'insufficient', sources: [] });
         } finally { if (generation.current === version) setBusy(false); }
     }
+    async function investigate(objective, retryRunId) {
+        const version = generation.current;
+        setBusy(true); setNotice('Investigating account evidence…'); setQuestion('');
+        controller.current = new AbortController();
+        try {
+            const response = await api.post('/ai/assistant/runs', { objective, ...(retryRunId ? { retry_run_id: retryRunId } : {}) }, { signal: controller.current.signal });
+            if (generation.current === version) { setRuns(items => [response.data.data, ...items]); setNotice(''); }
+        } catch { if (generation.current === version) setNotice('The investigation could not finish. Check run history for its current state.'); }
+        finally { if (generation.current === version) setBusy(false); }
+    }
+    async function history() {
+        const version = generation.current;
+        try { const response = await api.get('/ai/assistant/runs'); if (generation.current === version) setRuns(response.data.data); }
+        catch { setNotice('Run history is temporarily unavailable.'); }
+    }
     async function feedback(turn, helpful, comment = '') {
         try { await api.post('/ai/assistant/feedback', { request_id: turn.requestId, helpful, comment }); setNotice('Feedback saved.'); }
         catch { setNotice('Feedback could not be saved. Please try again.'); }
@@ -51,7 +69,9 @@ export default function AssistantDrawer() {
         <button ref={trigger} className="btn border text-body btn-sm" onClick={() => setOpen(true)} aria-label="Open StoX assistant">Ask StoX</button>
         {createPortal(<dialog ref={dialog} aria-labelledby="assistant-title" onCancel={() => { setOpen(false); trigger.current?.focus(); }} style={{ margin: '0 0 0 auto', height: '100dvh', maxHeight: '100dvh', width: 'min(480px, 100vw)', maxWidth: '100vw', padding: '1rem', border: '1px solid var(--bs-border-color)', background: 'var(--bs-body-bg)', color: 'var(--bs-body-color)' }}>
             <div className="d-flex justify-content-between align-items-center"><h2 id="assistant-title" className="h5">StoX assistant</h2><button className="btn btn-sm border text-body" onClick={() => setOpen(false)}>Close assistant</button></div>
-            <p className="small text-muted">Read-only help from StoX documentation. I cannot change data, execute trades, or provide investment advice.</p>
+            <p className="small text-muted">Documentation help and governed account investigations. Changes require your explicit approval. Broker trading is unavailable.</p>
+            <label className="d-block mb-2">Assistant mode<select className="form-select" value={mode} onChange={event => setMode(event.target.value)} disabled={busy}><option value="documentation">Documentation help</option><option value="account">Account investigation and actions</option></select></label>
+            <button className="btn btn-sm border text-body mb-3 ms-2" onClick={history}>Run history</button>
             <button className="btn btn-sm border text-body mb-3" onClick={clear}>Clear conversation</button>
             <div aria-live="polite" aria-busy={busy}>
                 {turns.map((turn, index) => <article key={index} className="border rounded p-3 mb-3">
@@ -63,6 +83,7 @@ export default function AssistantDrawer() {
                     {turn.sources.slice(0, 2).map(source => <button key={source.source_id} disabled={busy} className="btn btn-link text-start" onClick={event => send(event, `Explain ${source.section} in StoX`)}>Explain {source.section}</button>)}
                 </article>)}
             </div>
+            {runs.map(run => <AssistantRun key={run.id} run={run} onChange={updated => setRuns(items => items.map(item => item.id === updated.id ? updated : item))} onRetry={previous => investigate(previous.objective, previous.id)} />)}
             <form onSubmit={send}><label htmlFor="assistant-question">Ask about StoX</label><textarea id="assistant-question" className="form-control" maxLength={4000} value={question} onChange={event => setQuestion(event.target.value)} required /><button className="btn btn-primary my-2" disabled={busy || !question.trim()}>Ask</button></form>
             <nav aria-label="How do I? deterministic help"><strong>How do I? help</strong><p className="small">Documentation search works independently of AI.</p>{help.map(topic => <Link className="d-block mb-2" key={topic.id} to={`/documentation?journey=${encodeURIComponent(topic.id)}`} onClick={() => setOpen(false)}>{topic.title}</Link>)}<Link to="/documentation?q=help" onClick={() => setOpen(false)}>Browse documentation</Link></nav>
             <p role="status">{notice}</p>

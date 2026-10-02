@@ -23,6 +23,31 @@ class PortfolioAnalyticsService
         protected MarketAnalyticsService $marketAnalytics,
     ) {}
 
+    /** Pure projection for governed reads; UI lazy initialization remains separate. */
+    public function readForProfile(PortfolioProfile $profile): array
+    {
+        $cash = $this->cash->readSummary($profile);
+        if ($cash['availability'] !== 'available') {
+            return ['availability' => 'not_initialized', 'data' => null];
+        }
+        $summary = $this->portfolio->calculateForProfile($profile);
+        foreach ($summary['holdings'] as $holding) {
+            if ($holding['latest_close'] <= 0) {
+                return ['availability' => 'incomplete', 'reason' => 'Holding price evidence is unavailable', 'data' => null];
+            }
+        }
+        $allocations = array_column($summary['holdings'], 'allocation_market_percent');
+        $hhi = array_sum(array_map(fn ($weight) => ($weight / 100) ** 2, $allocations));
+        return ['availability' => 'available', 'data' => [
+            'summary' => $summary, 'cash' => $cash['data'],
+            'largest_position_pct' => $allocations === [] ? null : max($allocations),
+            'diversification_score' => $allocations === [] ? null : round(max(0, 100 - 100 * $hhi), 2),
+            'sector_allocation' => ['availability' => 'incomplete', 'value' => null],
+            'portfolio_beta' => ['availability' => 'not_supported', 'value' => null],
+            'portfolio_correlation' => ['availability' => 'not_supported', 'value' => null],
+        ]];
+    }
+
     /**
      * @return array<string, mixed>
      */

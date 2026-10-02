@@ -48,11 +48,14 @@ class InferenceRequest(BaseModel):
     user_prompt: str = Field(default="", max_length=100_000)
     input: dict[str, Any] = Field(default_factory=dict)
     output_schema: dict[str, Any] | None = None
+    max_output_tokens: int = Field(default=4096, ge=1, le=100000)
     stream: bool = False
     idempotency_key: str | None = Field(default=None, max_length=160)
 
 
 class Usage(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+    metadata_available: bool = False
     input_tokens: int = Field(default=0, ge=0)
     output_tokens: int = Field(default=0, ge=0)
     estimated_cost: float = Field(default=0.0, ge=0)

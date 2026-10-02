@@ -59,6 +59,14 @@ class WatchlistService
             ->map(fn (Watchlist $watchlist) => $this->formatWatchlist($watchlist));
     }
 
+    public function readWatchlistsForProfile(PortfolioProfile $profile): array
+    {
+        $rows = Watchlist::query()->where('profile_id', $profile->id)->withCount('items')
+            ->orderBy('sort_order')->orderBy('id')->get();
+        return ['availability' => $rows->isEmpty() ? 'not_initialized' : 'available',
+            'data' => $rows->map(fn (Watchlist $row) => $this->formatWatchlist($row))->all()];
+    }
+
     public function createWatchlist(PortfolioProfile $profile, string $name): array
     {
         $normalized = $this->normalizeWatchlistName($name);
@@ -258,7 +266,7 @@ class WatchlistService
         }
     }
 
-    protected function normalizeWatchlistName(string $name): string
+    public function normalizeWatchlistName(string $name): string
     {
         $trimmed = trim($name);
 
@@ -283,7 +291,7 @@ class WatchlistService
         return $trimmed;
     }
 
-    protected function normalizeNote(?string $note): ?string
+    public function normalizeNote(?string $note): ?string
     {
         if ($note === null) {
             return null;

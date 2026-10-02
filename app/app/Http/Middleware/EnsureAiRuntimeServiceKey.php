@@ -14,7 +14,7 @@ class EnsureAiRuntimeServiceKey
         $provided = (string) $request->header('X-StoX-AI-Service-Key', '');
 
         if ($expected === '' || $provided === '' || ! hash_equals($expected, $provided)) {
-            abort(401, 'AI runtime service authentication failed.');
+            return response()->json(['success' => false, 'error' => ['code' => 'unauthenticated']], 401);
         }
 
         return $next($request);

@@ -6,6 +6,13 @@ from stox_ai.runtime import Runtime
 from stox_ai.schemas import InferenceRequest, ProviderResponse
 
 
+@pytest.fixture(autouse=True)
+def ledger_transport(monkeypatch, tmp_path):
+    from stox_ai.outbox import DeliveryOutbox
+    monkeypatch.setattr(service.configuration, 'outbox', DeliveryOutbox(tmp_path / 'deliveries.sqlite3'))
+    monkeypatch.setattr(service.configuration, 'reserve', AsyncMock(return_value={'max_output_tokens': 4096}))
+
+
 def projection(budgets=None):
     return {'provider_paths': [{'path_id': name, 'provider': 'deterministic', 'model': name} for name in ['first', 'second']],
             'capabilities': [{'capability_id': 'documentation_chat', 'owner': 'V9-AI-001', 'enabled': True, 'path_order': ['first', 'second']}],

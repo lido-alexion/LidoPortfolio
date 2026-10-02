@@ -158,7 +158,19 @@ Route::prefix('internal/intraday-backfill')
 // through Sanctum or a browser route; the Python runtime has no database access.
 Route::prefix('internal/v1/ai-runtime')->middleware('ai.runtime.internal')->group(function () {
     Route::get('/configuration', [AiRuntimeInternalController::class, 'configuration']);
+    Route::post('/reservations', [AiRuntimeInternalController::class, 'reserve']);
+    Route::post('/settlements', [AiRuntimeInternalController::class, 'settle']);
     Route::post('/inference-events', [AiRuntimeInternalController::class, 'event']);
+});
+// AI-002 private gateway and authenticated run controls deliberately avoid lazy profile initialization.
+Route::post('/internal/v1/ai-tools/call', [\App\Http\Controllers\Api\AiAgentController::class, 'gateway'])->middleware('ai.runtime.internal')->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class);
+Route::prefix('ai/assistant/runs')->middleware(['auth:sanctum', 'token.scope:portfolio:read'])->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class)->group(function () {
+    $controller = \App\Http\Controllers\Api\AiAgentController::class;
+    Route::get('/', [$controller, 'index']);
+    Route::post('/', [$controller, 'store']);
+    Route::get('/{run}', [$controller, 'show']);
+    Route::post('/{run}/approve', [$controller, 'approve'])->middleware('token.scope:portfolio:write');
+    Route::post('/{run}/reject', [$controller, 'reject']);
 });
 Route::get('/wiki/shared/{token}', [WikiShareController::class, 'show'])->where('token', '[A-Za-z0-9]{64}');
 Route::get('/wiki/shared/{token}/images/{image}', [WikiShareController::class, 'image'])
@@ -408,6 +420,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/settings/test-telegram', [SettingsController::class, 'testTelegram']);
 
     Route::middleware('admin')->group(function () {
+        Route::put('/admin/ai-platform/concurrency', [AiPlatformAdminController::class, 'concurrency']);
         Route::get('/admin/ai-platform', [AiPlatformAdminController::class, 'index']);
         Route::put('/admin/ai-platform/capabilities/{capability}', [AiPlatformAdminController::class, 'upsertCapability']);
         Route::put('/admin/ai-platform/provider-paths/{path}', [AiPlatformAdminController::class, 'upsertProviderPath']);

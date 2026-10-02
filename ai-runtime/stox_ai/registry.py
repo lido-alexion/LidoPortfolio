@@ -25,6 +25,7 @@ class Capability:
     service_class: str = "interactive"
     prompt_id: str | None = None
     max_concurrency: int = 4
+    output_schema: dict | None = None
 
 
 @dataclass
