@@ -91,7 +91,7 @@ class MlArtifactRetentionService
      */
     protected function pruneModel(MlModelVersion $model, bool $dryRun): array
     {
-        $path = $model->artifact_path;
+        $path = app(MlArtifactPaths::class)->resolve($model->artifact_path);
         $entry = [
             'model_id' => $model->id,
             'horizon' => $model->horizon,

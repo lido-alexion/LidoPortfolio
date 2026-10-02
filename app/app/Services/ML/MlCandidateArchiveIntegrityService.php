@@ -18,9 +18,9 @@ class MlCandidateArchiveIntegrityService
 
         $artifactStatus = 'unavailable';
         if ($archive->artifact_path !== null && $archive->artifact_sha256 !== null) {
-            if (! is_file($archive->artifact_path)) {
+            if (! is_file((string) app(MlArtifactPaths::class)->resolve($archive->artifact_path))) {
                 $artifactStatus = 'missing';
-            } elseif (! hash_equals($archive->artifact_sha256, (string) hash_file('sha256', $archive->artifact_path))) {
+            } elseif (! hash_equals($archive->artifact_sha256, (string) hash_file('sha256', (string) app(MlArtifactPaths::class)->resolve($archive->artifact_path)))) {
                 $artifactStatus = 'mismatch';
             } else {
                 $artifactStatus = 'verified';

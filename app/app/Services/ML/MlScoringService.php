@@ -60,8 +60,8 @@ class MlScoringService
                         'promoted_at' => $model->promoted_at?->toIso8601String(),
                         'artifact_ready' => $model->artifact_path !== null
                             && $model->artifact_sha256 !== null
-                            && is_file((string) $model->artifact_path)
-                            && hash_equals((string) $model->artifact_sha256, (string) hash_file('sha256', (string) $model->artifact_path)),
+                            && is_file((string) app(MlArtifactPaths::class)->resolve($model->artifact_path))
+                            && hash_equals((string) $model->artifact_sha256, (string) hash_file('sha256', (string) app(MlArtifactPaths::class)->resolve($model->artifact_path))),
                     ])->values()->all(),
             ])->values()->all(),
             'promotion_threshold_defaults' => $this->promotionThresholds(),
@@ -366,7 +366,8 @@ class MlScoringService
 
         $artifactReady = $model->artifact_path !== null
             && $model->artifact_sha256 !== null
-            && is_file((string) $model->artifact_path);
+            && is_file((string) app(MlArtifactPaths::class)->resolve($model->artifact_path))
+            && hash_equals((string) $model->artifact_sha256, (string) hash_file('sha256', (string) app(MlArtifactPaths::class)->resolve($model->artifact_path)));
 
         $active = MlModelVersion::query()
             ->where('horizon', $model->horizon)
@@ -494,7 +495,7 @@ class MlScoringService
         $this->assertArtifact($model);
         $features = $this->datasets->featuresFor($stock, $asOf);
         $result = $this->adapter->run('predict', [
-            'artifact_path' => $model->artifact_path,
+            'artifact_path' => app(MlArtifactPaths::class)->resolve($model->artifact_path),
             'artifact_sha256' => $model->artifact_sha256,
             'features' => $features,
         ]);
@@ -834,10 +835,7 @@ class MlScoringService
 
     private function artifactPath(string $horizon, int $version, ?string $suffix = null): string
     {
-        $directory = (string) config('ml.model_directory', storage_path('app/ml-models'));
-        if (! is_dir($directory) && ! mkdir($directory, 0775, true) && ! is_dir($directory)) {
-            throw new \RuntimeException('ML model artifact directory is unavailable.');
-        }
+        $directory = app(MlArtifactPaths::class)->directory(true);
         return $suffix !== null
             ? $directory.'/model-'.$horizon.'-'.$suffix.'.joblib'
             : $directory.'/model-'.$horizon.'-v'.$version.'.joblib';
@@ -845,10 +843,10 @@ class MlScoringService
 
     private function assertArtifact(MlModelVersion $model): void
     {
-        if ($model->artifact_path === null || $model->artifact_sha256 === null || ! is_file($model->artifact_path)) {
+        if ($model->artifact_path === null || $model->artifact_sha256 === null || ! is_file((string) app(MlArtifactPaths::class)->resolve($model->artifact_path))) {
             throw ValidationException::withMessages(['model' => ['The model artifact is missing.']]);
         }
-        if (! hash_equals($model->artifact_sha256, (string) hash_file('sha256', $model->artifact_path))) {
+        if (! hash_equals($model->artifact_sha256, (string) hash_file('sha256', (string) app(MlArtifactPaths::class)->resolve($model->artifact_path)))) {
             throw ValidationException::withMessages(['model' => ['The model artifact integrity check failed.']]);
         }
     }

@@ -92,3 +92,63 @@ Never auto-promote, auto-rollback, disable the active model because a training
 run failed, or treat an external notification as authoritative lifecycle
 state. If the worker is unavailable, preserve the current active model and
 repair the queue/runtime before retrying.
+
+## Canonical model storage and legacy path repair (GitHub #19)
+
+Set the persistent production environment to:
+
+```dotenv
+STOXLA_ML_MODEL_DIRECTORY=/var/www/stoxla/shared/ml/models
+```
+
+The application resolves the directory before writing artifacts. Without an override,
+release layouts use the deployment root's `shared/ml/models`; local/test installs
+use `storage/app/ml-models`. Release directories are rejected as storage destinations.
+Promotion review, inference, retained rollback, retention and archive integrity share
+the canonical resolver. Historical release-relative archive references resolve to
+this directory without rewriting immutable evidence or its digest. FEAT-056 remains
+REVIEW; this fix does not supply deployed acceptance evidence.
+
+Production procedure (operator action after the fix passes CI and is released through
+the normal verified-SHA GitHub Actions process):
+
+1. Back up `stox_ml_model_versions` and artifact storage. Pause training admission,
+   training workers, retention and manual promotion/rollback for the repair window.
+   Preserve old release/shared directories until repair verification is complete.
+2. Set the environment variable above in the persistent production environment.
+   Ensure the application account can read/write that directory and sufficient disk
+   space exists for copies. Run as the application account from the directory
+   containing the deployed `artisan` file:
+
+   ```bash
+   php artisan config:cache
+   php artisan portfolio:ml-artifacts-repair --dry-run
+   ```
+
+3. Review every row's report. A missing artifact, missing digest or SHA-256 mismatch
+   exits nonzero and leaves that row unchanged. Restore missing artifacts from a
+   trusted backup matching the persisted digest; investigate mismatches rather than
+   replacing stored hashes. Dry-run makes no filesystem or database writes.
+4. Once the dry-run succeeds, run:
+
+   ```bash
+   php artisan portfolio:ml-artifacts-repair
+   php artisan portfolio:ml-artifacts-repair --dry-run
+   ```
+
+   The command checks every model row, including active and retained models. It
+   verifies all available original, lexically normalized legacy and destination
+   files against the persisted SHA-256. If needed it copies through a verified
+   temporary file and publishes atomically without overwriting an existing file.
+   It locks each row and updates only `artifact_path` after destination verification.
+   Source files are preserved; rerunning is safe. Failures are isolated per row,
+   reported with nonzero exit status; earlier successful rows remain repaired.
+   Null paths (including pruned records) are skipped. No model is promoted.
+5. Check Admin candidate review, active scoring, retained rollback readiness and
+   archive integrity. Restart long-lived workers through normal operations so they
+   load the refreshed config, then resume paused lifecycle work. Do not perform a
+   real rollback merely to validate path readiness. Retain backups for recovery.
+
+No migration is required. The repair never changes status, evaluation evidence,
+artifact digests or promotion metadata. A digest mismatch cannot be repaired by
+path canonicalization alone.

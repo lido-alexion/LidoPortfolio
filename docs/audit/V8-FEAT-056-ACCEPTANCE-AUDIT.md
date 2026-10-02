@@ -34,3 +34,22 @@ Operator: Codex via connected `stoxla-prod`; UTC times below. **This entry does 
 | Runtime gate | BLOCKED (qualification) | Build `ef66133c`, VPS, 2026-10-01 18:25 UTC: lifecycle flag false; campaign `996fa344-2533-4bf0-a555-9b052de2c8cb` currently blocked; dedicated acceptance service inactive although a one-shot worker handles NSE preview. Qualification requires current build/registry/config and complete 1m/3m/6m real-adapter evidence. |
 | Scheduler/queue tick, locks, SSE reconnect, cancellation/restart/retry and notifications | NOT YET RUN | Controlled deployed lifecycle exercise only after FEAT-057 qualification; do not interrupt NSE worker. |
 | Retention/archive and explicit promotion/rollback single-active invariant | NOT YET RUN | Use safe candidate/control path; separate Admin decisions remain required. |
+
+### GitHub #19 — persistent artifact paths
+
+Artifact writes and lifecycle readers now share canonical persistent path resolution.
+Production must set `STOXLA_ML_MODEL_DIRECTORY=/var/www/stoxla/shared/ml/models`.
+`php artisan portfolio:ml-artifacts-repair --dry-run` inventories and verifies existing
+rows; omit `--dry-run` only after reviewing the report. Repair preserves model state,
+checks persisted SHA-256 before path mutation, preserves source files and never
+promotes models. See [the operations procedure](../current/ml-lifecycle-operations.md#canonical-model-storage-and-legacy-path-repair-github-19).
+Release-pruning, repair conflict/no-mutation, idempotence, active scoring, retained
+rollback and immutable archive reference regressions are covered locally. No
+production repair or deployment was performed; FEAT-056 remains REVIEW.
+
+Local verification for this fix: 18 focused lifecycle/path tests passed (91 assertions),
+then the final expanded artifact-path suite passed 11 tests (39 assertions) against
+an isolated MariaDB instance. Changed PHP syntax checks, Pint on new PHP files and
+`git diff --check` passed. The shared `./scripts/verify-ci.sh --backend` gate was
+attempted but stopped at its PHP platform preflight: `pdo_sqlite` is unavailable.
+These focused results do not replace that CI-parity gate. No migrations changed.

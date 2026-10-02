@@ -185,7 +185,7 @@ class MlAcceptanceCampaignService
             $configuration = $run?->configuration ?? [];
             $metadata = $model?->audit_metadata['adapter_metadata'] ?? [];
             $passed = app(MlAcceptanceRuntime::class)->validWorkerEvidence($horizons[$horizon]['worker_evidence'] ?? []) && $run && in_array($run->status, ['completed_eligible', 'completed_rejected'], true)
-                && $model && is_file((string) $model->artifact_path) && hash_equals((string) $model->artifact_sha256, hash_file('sha256', $model->artifact_path))
+                && $model && is_file((string) app(MlArtifactPaths::class)->resolve($model->artifact_path)) && hash_equals((string) $model->artifact_sha256, hash_file('sha256', (string) app(MlArtifactPaths::class)->resolve($model->artifact_path)))
                 && ! empty($configuration['chronological_validation_grid'])
                 && ! empty($configuration['feature_selection']['partition_coverage'])
                 && ! empty($metadata['calibration']) && ! empty($metadata['challenger']) && ! empty($run->baselines)
