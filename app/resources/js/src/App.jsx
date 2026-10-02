@@ -36,6 +36,7 @@ import IgnoredPriceGapsPage from './pages/IgnoredPriceGapsPage';
 import CorporateActionHistoryPage from './pages/CorporateActionHistoryPage';
 import UserManagementPage from './pages/UserManagementPage';
 import StocksAdminPage from './pages/StocksAdminPage';
+import StockClassificationAdminPage from './pages/StockClassificationAdminPage';
 import AdminAlertsPage from './pages/AdminAlertsPage';
 import AdminAuditExplorerPage from './pages/AdminAuditExplorerPage';
 import FundamentalDataAdminPage from './pages/FundamentalDataAdminPage';
@@ -230,6 +231,11 @@ function AppRoutes() {
                     <StocksAdminPage />
                 </AdminRoute>
             )} />
+            <Route path="/settings/stock-classifications" element={(
+                <AdminRoute>
+                    <StockClassificationAdminPage />
+                </AdminRoute>
+            )} />
             <Route
                 path="/settings/users"
                 element={(
@@ -252,6 +258,7 @@ function AdminAppRoutes() {
             <Route path="/settings/notifications" element={<NotificationSettingsPage />} />
             <Route path="/settings/users" element={<UserManagementPage />} />
             <Route path="/settings/stocks" element={<StocksAdminPage />} />
+            <Route path="/settings/stock-classifications" element={<StockClassificationAdminPage />} />
             <Route path="/settings/sync-logs" element={<SyncLogsPage />} />
             <Route path="/settings/admin-alerts" element={<AdminAlertsPage />} />
             <Route path="/settings/audit" element={<AdminAuditExplorerPage />} />

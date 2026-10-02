@@ -424,6 +424,12 @@ Schedule::command('stox:fundamentals-update --batch=20')
     ->withoutOverlapping(30)
     ->name('stox-fundamentals-incremental');
 
+Schedule::command('stox:refresh-stock-classifications --batch=50')
+    ->dailyAt('08:45')
+    ->withoutOverlapping(30)
+    ->onOneServer()
+    ->name('stox-stock-classifications-refresh');
+
 Schedule::command('stox:check-data-completeness')
     ->hourly()
     ->timezone($timezone)

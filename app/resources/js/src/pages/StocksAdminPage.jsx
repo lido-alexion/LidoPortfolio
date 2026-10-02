@@ -205,6 +205,9 @@ export default function StocksAdminPage() {
                     <Link to="/settings/global" className="btn btn-sm btn-outline-secondary">
                         Back to Settings
                     </Link>
+                    <Link to="/settings/stock-classifications" className="btn btn-sm btn-outline-primary">
+                        Classifications
+                    </Link>
                 </div>
             </div>
             <div className="col-12">

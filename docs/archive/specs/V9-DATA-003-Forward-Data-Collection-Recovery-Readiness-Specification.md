@@ -179,6 +179,27 @@ Additive migrations use explicit short MySQL index names and portability checks.
 
 ## 15. Acceptance and meaningful tests
 
+### Sector/industry collection and Admin fallback extension
+
+The PO-approved free-source path is the NSE quote-equity `industryInfo` response,
+stored as forward observations under the explicit `nse-indices-4-tier-v1` taxonomy.
+Provider labels are mapped into the validated sector/industry relationship for
+that taxonomy; labels from another taxonomy must not be mixed into the same
+selector or observation. Each observation retains provider, source URL, raw
+evidence, SHA-256 hash, first-observed timestamp and subsequent observation
+timestamps. Observation time is provenance, not an official historical effective
+date, and the collector must never mutate an earlier membership snapshot.
+
+The scheduled refresh prioritizes unknown and newly listed NSE stocks, then the
+oldest successful observation, with bounded retries. A free-source outage leaves
+the stock unknown and retryable. Admin-only controls reuse the stock search
+patterns and provide dependent Sector/Industry selectors, Save, source/time
+display and Return to automatic. The selected relationship must be validated
+against observed taxonomy pairs. Manual overrides take precedence only for the
+current classification; automatic observations remain immutable history. Every
+create, update and removal writes an audited revision, and removing an override
+reveals the latest automatic observation without rewriting historical membership.
+
 | ID | Required evidence |
 |---|---|
 | FDC-01 | Completed trading sessions automatically create campaign-independent obligations; special sessions/holidays and unknown calendar tested |
@@ -188,7 +209,7 @@ Additive migrations use explicit short MySQL index names and portability checks.
 | FDC-05 | Forward membership and concurrent historical backfill share locks; changed historical evidence follows review |
 | FDC-06 | More than two fundamentals batches progress through the due universe, include new stocks and remain fair with failures |
 | FDC-07 | Old successful checks become due; unchanged valid response advances check time while facts/availability/revisions stay intact |
-| FDC-08 | Sector classification has source/version/availability evidence; no future or current-only classification leaks backward |
+| FDC-08 | Sector/industry observations use the approved free-source taxonomy and retain source/hash/observation evidence; Admin fallback validates relationships, audits revisions and never backfills historical membership; no future or current-only classification leaks backward |
 | FDC-09 | Corporate-action feed works end to end, captures late/corrected events and deduplicates without automatic accounting repair |
 | FDC-10 | Daily equity/index coverage reconciles persisted expected sessions; known gap failures have reproduced cause and verified recovery |
 | FDC-11 | Minute/live health reports evidence, detects zero rows and distinguishes delivery backlog from collection loss |
