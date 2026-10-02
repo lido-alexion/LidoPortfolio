@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class AccessRequestVerification extends Model
 {
-    protected $table = 'portfolio_access_request_verifications';
+    protected $table = 'stox_access_request_verifications';
 
     protected $fillable = [
         'full_name',

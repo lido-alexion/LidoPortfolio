@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class UserOnboardingState extends Model
 {
-    protected $table = 'portfolio_user_onboarding_state';
+    protected $table = 'stox_user_onboarding_state';
 
     protected $fillable = [
         'user_id',

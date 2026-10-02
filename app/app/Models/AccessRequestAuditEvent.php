@@ -9,7 +9,7 @@ class AccessRequestAuditEvent extends Model
 {
     public $timestamps = false;
 
-    protected $table = 'portfolio_access_request_audit_events';
+    protected $table = 'stox_access_request_audit_events';
 
     protected $fillable = [
         'event_type',

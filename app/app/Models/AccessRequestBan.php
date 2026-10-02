@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AccessRequestBan extends Model
 {
-    protected $table = 'portfolio_access_request_bans';
+    protected $table = 'stox_access_request_bans';
 
     protected $fillable = [
         'email_normalized',

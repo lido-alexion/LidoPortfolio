@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MicrostructureCollectorState extends Model
 {
-    protected $table = 'portfolio_microstructure_collector_state';
+    protected $table = 'stox_microstructure_collector_state';
 
     protected $fillable = [
         'manual_hold',
