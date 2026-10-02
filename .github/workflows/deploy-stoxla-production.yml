@@ -157,7 +157,7 @@ jobs:
         env:
           VITE_APP_BASE: /build/
           VITE_LIDO_TELEMETRY_ENABLED: 'true'
-          VITE_LIDO_TELEMETRY_OTLP_TRACES_ENDPOINT: /otel/v1/traces
+          VITE_LIDO_TELEMETRY_OTLP_TRACES_ENDPOINT: /api/telemetry/otlp/v1/traces
           VITE_LIDO_TELEMETRY_SERVICE_NAME: stox
           VITE_LIDO_TELEMETRY_SERVICE_VERSION: v8
           VITE_LIDO_TELEMETRY_ENVIRONMENT: production
@@ -215,7 +215,7 @@ jobs:
         env:
           VITE_APP_BASE: /build/
           VITE_LIDO_TELEMETRY_ENABLED: 'true'
-          VITE_LIDO_TELEMETRY_OTLP_TRACES_ENDPOINT: /otel/v1/traces
+          VITE_LIDO_TELEMETRY_OTLP_TRACES_ENDPOINT: /api/telemetry/otlp/v1/traces
           VITE_LIDO_TELEMETRY_SERVICE_NAME: stox
           VITE_LIDO_TELEMETRY_SERVICE_VERSION: v8
           VITE_LIDO_TELEMETRY_ENVIRONMENT: production
