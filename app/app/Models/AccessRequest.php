@@ -15,7 +15,7 @@ class AccessRequest extends Model
 
     public const STATUS_REJECTED = 'rejected';
 
-    protected $table = 'stox_access_requests';
+    protected $table = 'portfolio_access_requests';
 
     protected $fillable = [
         'full_name',

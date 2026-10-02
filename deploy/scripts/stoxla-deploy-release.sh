@@ -112,19 +112,6 @@ prepare_microstructure_python() {
   [[ -x "$venv_python" ]] || fail "microstructure Python virtualenv is not executable"
 }
 
-normalize_official_otel_config() {
-  local env_file="$1"
-
-  if grep -Eq '^LIDO_TELEMETRY_OFFICIAL_SDK_ENABLED=true([[:space:]]|$)' "$env_file"; then
-    if grep -q '^OTEL_SDK_DISABLED=' "$env_file"; then
-      sed -i -E 's/^OTEL_SDK_DISABLED=.*/OTEL_SDK_DISABLED=false/' "$env_file"
-    else
-      printf '\nOTEL_SDK_DISABLED=false\n' >> "$env_file"
-    fi
-    log "normalized OTEL_SDK_DISABLED=false for enabled official OpenTelemetry SDK"
-  fi
-}
-
 validate_cached_app_config() {
   local release_dir="$1"
   local app_state
@@ -212,8 +199,6 @@ if [[ ! -e "$SHARED_DIR/.env" ]]; then
     fail "missing shared .env; create $SHARED_DIR/.env from the current production environment before deploying"
   fi
 fi
-
-normalize_official_otel_config "$SHARED_DIR/.env"
 
 grep -Eq '^LIDO_AGENT_DEBUG_ENABLED=false([[:space:]]*#.*)?$' "$SHARED_DIR/.env" \
   || fail "production shared .env must explicitly set LIDO_AGENT_DEBUG_ENABLED=false"

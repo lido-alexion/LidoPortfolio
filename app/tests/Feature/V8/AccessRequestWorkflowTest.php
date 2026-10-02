@@ -80,11 +80,11 @@ class AccessRequestWorkflowTest extends TestCase
             'captcha_token' => 'ok',
         ])->assertOk();
 
-        $this->assertDatabaseCount('stox_access_requests', 0);
+        $this->assertDatabaseCount('portfolio_access_requests', 0);
         $raw = $this->verificationTokenFromMail();
         $this->postJson('/api/auth/access-requests/verify/'.$raw)->assertOk();
 
-        $this->assertDatabaseHas('stox_access_requests', [
+        $this->assertDatabaseHas('portfolio_access_requests', [
             'email_normalized' => Str::lower($email),
             'status' => AccessRequest::STATUS_PENDING,
         ]);
@@ -116,7 +116,7 @@ class AccessRequestWorkflowTest extends TestCase
             'captcha_token' => '',
         ])->assertStatus(422);
 
-        $this->assertDatabaseCount('stox_access_request_verifications', 0);
+        $this->assertDatabaseCount('portfolio_access_request_verifications', 0);
     }
 
     public function test_non_admin_cannot_list_access_requests(): void
@@ -181,7 +181,7 @@ class AccessRequestWorkflowTest extends TestCase
             ->postJson('/api/access-requests/'.$request->id.'/reject', ['reason' => 'internal'])
             ->assertOk();
 
-        $this->assertDatabaseHas('stox_access_request_audit_events', [
+        $this->assertDatabaseHas('portfolio_access_request_audit_events', [
             'access_request_id' => $request->id,
             'event_type' => 'admin_reject',
         ]);
@@ -196,7 +196,7 @@ class AccessRequestWorkflowTest extends TestCase
             'email' => $email,
             'captcha_token' => 'ok',
         ])->assertOk();
-        $this->assertDatabaseCount('stox_access_request_verifications', 1);
+        $this->assertDatabaseCount('portfolio_access_request_verifications', 1);
 
         $this->actingAsUser($admin)
             ->postJson('/api/access-request-bans/'.$ban->id.'/clear')
@@ -209,7 +209,7 @@ class AccessRequestWorkflowTest extends TestCase
             'email' => $email,
             'captcha_token' => 'ok',
         ])->assertOk();
-        $this->assertDatabaseCount('stox_access_request_verifications', 2);
+        $this->assertDatabaseCount('portfolio_access_request_verifications', 2);
     }
 
     public function test_existing_user_does_not_create_verification(): void
@@ -223,7 +223,7 @@ class AccessRequestWorkflowTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('message', 'If this email is eligible for an access request, a verification email will be sent shortly. If you already have an account, use the login page.');
 
-        $this->assertDatabaseCount('stox_access_request_verifications', 0);
+        $this->assertDatabaseCount('portfolio_access_request_verifications', 0);
     }
 
     public function test_concurrent_create_invite_only_one_succeeds(): void
@@ -265,7 +265,7 @@ class AccessRequestWorkflowTest extends TestCase
             'captcha_token' => 'ok',
         ])->assertOk();
 
-        $this->assertDatabaseCount('stox_access_request_verifications', 1);
+        $this->assertDatabaseCount('portfolio_access_request_verifications', 1);
 
         $request->refresh();
         $this->assertNotNull($request->resubmit_allowed_after);
@@ -276,7 +276,7 @@ class AccessRequestWorkflowTest extends TestCase
             'email' => $email,
             'captcha_token' => 'ok',
         ])->assertOk();
-        $this->assertDatabaseCount('stox_access_request_verifications', 2);
+        $this->assertDatabaseCount('portfolio_access_request_verifications', 2);
     }
 
     public function test_pending_invite_blocks_new_verification(): void
@@ -291,7 +291,7 @@ class AccessRequestWorkflowTest extends TestCase
             'captcha_token' => 'ok',
         ])->assertOk();
 
-        $this->assertDatabaseCount('stox_access_request_verifications', 0);
+        $this->assertDatabaseCount('portfolio_access_request_verifications', 0);
     }
 
     protected function submitAndVerify(string $email): void

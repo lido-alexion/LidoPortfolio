@@ -8,7 +8,7 @@ use App\Services\Artifacts\ArtifactValidationService;
 use App\Services\Artifacts\DefinitionHasher;
 use App\Services\Artifacts\IndicatorArtifactRegistry;
 use App\Services\Indicators\IndicatorRegistryFactory;
-use Tests\TestCase;
+use PHPUnit\Framework\TestCase;
 
 class ArtifactFrameworkTest extends TestCase
 {

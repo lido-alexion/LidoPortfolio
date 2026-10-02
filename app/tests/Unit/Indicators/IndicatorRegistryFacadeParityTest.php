@@ -10,7 +10,7 @@ use App\Services\Indicators\ScreenerMinBars;
 use App\Services\Indicators\ScreenerPrimarySeed;
 use App\Services\Indicators\StrategyCompositeSeed;
 use App\Services\Screener\ScreenerCatalog;
-use Tests\TestCase;
+use PHPUnit\Framework\TestCase;
 
 /**
  * Epic 2: catalogues project from Registry without behaviour drift.
@@ -28,8 +28,7 @@ class IndicatorRegistryFacadeParityTest extends TestCase
     {
         $seedIds = ScreenerPrimarySeed::ids();
         $catalogIds = ScreenerCatalog::indicatorIds();
-        $this->assertSame([], array_diff($seedIds, $catalogIds));
-        $this->assertSame(count($catalogIds), count(array_unique($catalogIds)));
+        $this->assertSame($seedIds, $catalogIds);
     }
 
     public function test_screener_meta_shape_preserved(): void
@@ -37,7 +36,7 @@ class IndicatorRegistryFacadeParityTest extends TestCase
         $meta = ScreenerCatalog::meta();
         $this->assertArrayHasKey('indicators', $meta);
         $this->assertArrayHasKey('operators', $meta);
-        $this->assertGreaterThanOrEqual(count(ScreenerPrimarySeed::ids()), count($meta['indicators']));
+        $this->assertCount(count(ScreenerPrimarySeed::ids()), $meta['indicators']);
 
         $rsi = null;
         foreach ($meta['indicators'] as $row) {

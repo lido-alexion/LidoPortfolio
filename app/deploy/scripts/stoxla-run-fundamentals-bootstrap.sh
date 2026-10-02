@@ -32,8 +32,8 @@ CANARY_EVIDENCE="$canary_evidence" "$PHP_BIN" -r '
 $e = json_decode(getenv("CANARY_EVIDENCE"), true);
 $checks = is_array($e["checks"] ?? null) ? $e["checks"] : [];
 $hashes = array_filter($checks, fn ($row) => is_string($row["response_hash"] ?? null) && strlen($row["response_hash"]) === 64);
-if (($e["job_status"] ?? null) === "failed" || (($e["facts_inserted"] ?? 0) + ($e["facts_upgraded"] ?? 0) <= 0) || count($hashes) === 0) {
-    fwrite(STDERR, "canary did not prove persisted facts and response hashes\n");
+if (($e["job_status"] ?? null) === "failed" || (($e["facts_inserted"] ?? 0) + ($e["facts_upgraded"] ?? 0) + ($e["facts_deduped"] ?? 0) <= 0) || count($hashes) === 0) {
+    fwrite(STDERR, "canary did not prove persisted or unchanged facts and response hashes\n");
     exit(23);
 }
 '

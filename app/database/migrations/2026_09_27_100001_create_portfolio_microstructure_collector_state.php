@@ -9,7 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('stox_microstructure_collector_state', function (Blueprint $table) {
+        Schema::create('portfolio_microstructure_collector_state', function (Blueprint $table) {
             $table->id();
             $table->boolean('manual_hold')->default(false);
             $table->unsignedBigInteger('manual_hold_by_user_id')->nullable();
@@ -24,7 +24,7 @@ return new class extends Migration
             $table->foreign('last_command_by_user_id', 'ms_collector_cmd_user_fk')->references('id')->on('portfolio_users')->nullOnDelete();
         });
 
-        DB::table('stox_microstructure_collector_state')->insert([
+        DB::table('portfolio_microstructure_collector_state')->insert([
             'manual_hold' => false,
             'created_at' => now(),
             'updated_at' => now(),
@@ -33,6 +33,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('stox_microstructure_collector_state');
+        Schema::dropIfExists('portfolio_microstructure_collector_state');
     }
 };

@@ -14,7 +14,6 @@ return [
     // The official PHP SDK/auto-instrumentation is opt-in and requires the
     // opentelemetry PHP extension plus standard OTEL_* exporter settings.
     'official_sdk_enabled' => (bool) env('LIDO_TELEMETRY_OFFICIAL_SDK_ENABLED', false),
-    'otel_sdk_disabled' => (bool) env('OTEL_SDK_DISABLED', false),
     'export_timeout_seconds' => (float) env('LIDO_TELEMETRY_EXPORT_TIMEOUT', 0.15),
     'pseudonymous_user_salt' => env('LIDO_TELEMETRY_USER_SALT', env('APP_KEY', 'stox')),
 ];

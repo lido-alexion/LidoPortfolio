@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('stox_access_request_verifications', function (Blueprint $table) {
+        Schema::create('portfolio_access_request_verifications', function (Blueprint $table) {
             $table->id();
             $table->string('full_name', 255);
             $table->string('email_normalized', 255)->index();
@@ -18,7 +18,7 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::create('stox_access_requests', function (Blueprint $table) {
+        Schema::create('portfolio_access_requests', function (Blueprint $table) {
             $table->id();
             $table->string('full_name', 255);
             $table->string('email_normalized', 255)->index();
@@ -35,7 +35,7 @@ return new class extends Migration
             $table->foreign('user_invite_id')->references('id')->on('portfolio_user_invites')->nullOnDelete();
         });
 
-        Schema::create('stox_access_request_bans', function (Blueprint $table) {
+        Schema::create('portfolio_access_request_bans', function (Blueprint $table) {
             $table->id();
             $table->string('email_normalized', 255)->index();
             $table->unsignedBigInteger('access_request_id')->nullable();
@@ -46,12 +46,12 @@ return new class extends Migration
             $table->timestamp('cleared_at')->nullable();
             $table->timestamps();
 
-            $table->foreign('access_request_id')->references('id')->on('stox_access_requests')->nullOnDelete();
+            $table->foreign('access_request_id')->references('id')->on('portfolio_access_requests')->nullOnDelete();
             $table->foreign('rejected_by_user_id')->references('id')->on('portfolio_users')->nullOnDelete();
             $table->foreign('cleared_by_user_id')->references('id')->on('portfolio_users')->nullOnDelete();
         });
 
-        Schema::create('stox_access_request_audit_events', function (Blueprint $table) {
+        Schema::create('portfolio_access_request_audit_events', function (Blueprint $table) {
             $table->id();
             $table->string('event_type', 64)->index();
             $table->string('email_normalized', 255)->nullable()->index();
@@ -60,16 +60,16 @@ return new class extends Migration
             $table->json('context')->nullable();
             $table->timestamp('created_at');
 
-            $table->foreign('access_request_id')->references('id')->on('stox_access_requests')->nullOnDelete();
+            $table->foreign('access_request_id')->references('id')->on('portfolio_access_requests')->nullOnDelete();
             $table->foreign('actor_user_id')->references('id')->on('portfolio_users')->nullOnDelete();
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('stox_access_request_audit_events');
-        Schema::dropIfExists('stox_access_request_bans');
-        Schema::dropIfExists('stox_access_requests');
-        Schema::dropIfExists('stox_access_request_verifications');
+        Schema::dropIfExists('portfolio_access_request_audit_events');
+        Schema::dropIfExists('portfolio_access_request_bans');
+        Schema::dropIfExists('portfolio_access_requests');
+        Schema::dropIfExists('portfolio_access_request_verifications');
     }
 };

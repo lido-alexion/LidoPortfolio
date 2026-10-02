@@ -98,7 +98,7 @@ class GuidedTourTest extends TestCase
             ->assertJsonPath('data.completed', true)
             ->assertJsonPath('data.show_welcome_prompt', false);
 
-        $this->assertDatabaseHas('stox_user_onboarding_state', [
+        $this->assertDatabaseHas('portfolio_user_onboarding_state', [
             'user_id' => $user->id,
             'tour_in_progress' => false,
         ]);
