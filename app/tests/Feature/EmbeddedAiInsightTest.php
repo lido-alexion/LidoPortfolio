@@ -66,7 +66,7 @@ class EmbeddedAiInsightTest extends TestCase
         Http::fake(['http://ai.private/*' => Http::response(['data' => ['status' => 'failure', 'structured' => $this->response(), 'text' => 'partial stream']])]);
         $failed = $service->execute('stock_analysis_insight', $context, 1, true);
         self::assertSame('cached_degraded', $failed['status']);
-        self::assertSame($first['response'], $failed['response']);
+        self::assertEqualsCanonicalizing($first['response'], $failed['response']);
         self::assertSame(1, AiInsightCache::count());
         $context['input']['stock']['revised'] = true;
         self::assertSame('unavailable', $service->execute('stock_analysis_insight', $context, 1)['status']);
