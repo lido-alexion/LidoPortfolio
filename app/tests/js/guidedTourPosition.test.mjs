@@ -15,7 +15,6 @@ test('guided tour panel flips above a low target and stays inside a narrow viewp
     assert.equal(style.left, 16);
     assert.equal(style['--guided-tour-placement'], 'top');
     assert.match(style['--guided-tour-caret-position'], /px$/);
-    assert.equal(Object.hasOwn(style, 'overflowY'), false);
     assert.ok(style.top >= 16);
     assert.ok(style.top + 280 <= viewport.height - 16);
 });

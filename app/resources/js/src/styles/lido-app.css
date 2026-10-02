@@ -6227,14 +6227,8 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
 .lido-guided-tour-popover {
     /* The 8px tip leaves the 4px Carbon-style separation from the target. */
     --guided-tour-caret-size: 8px;
-    --guided-tour-caret-color: var(--lido-bg-surface, var(--bs-card-bg, #fff));
+    --guided-tour-caret-color: var(--bs-card-bg, #fff);
     position: fixed;
-    overflow: visible !important;
-}
-
-.lido-guided-tour-popover > .card-body {
-    max-height: calc(100vh - 2rem);
-    overflow-y: auto;
 }
 
 .lido-guided-tour-popover::before,

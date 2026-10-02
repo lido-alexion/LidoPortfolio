@@ -26,6 +26,7 @@ export function guidedTourTooltipStyle(targetRect, placement = 'bottom', viewpor
         width: 'min(420px, calc(100vw - 2rem))',
         maxWidth: 'min(420px, calc(100vw - 2rem))',
         maxHeight: 'calc(100vh - 2rem)',
+        overflowY: 'auto',
     };
 
     if (!targetRect) {
