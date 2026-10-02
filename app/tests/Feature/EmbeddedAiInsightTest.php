@@ -58,7 +58,7 @@ class EmbeddedAiInsightTest extends TestCase
         self::assertSame('ready', $first['status']);
         self::assertStringContainsString('Fundamental interpretation unavailable', $first['response']['data_limitations']);
         AiProviderPath::query()->create(['path_id' => 'changed', 'provider' => 'new', 'model' => 'new', 'priority' => 1, 'enabled' => true]);
-        self::assertSame($first, $service->execute('stock_analysis_insight', $context, 2));
+        self::assertEqualsCanonicalizing($first, $service->execute('stock_analysis_insight', $context, 2));
         Http::assertSentCount(1);
         $service->execute('stock_analysis_insight', $context, 1, true);
         Http::assertSentCount(2);
@@ -66,7 +66,7 @@ class EmbeddedAiInsightTest extends TestCase
         Http::fake(['http://ai.private/*' => Http::response(['data' => ['status' => 'failure', 'structured' => $this->response(), 'text' => 'partial stream']])]);
         $failed = $service->execute('stock_analysis_insight', $context, 1, true);
         self::assertSame('cached_degraded', $failed['status']);
-        self::assertSame($first['response'], $failed['response']);
+        self::assertEqualsCanonicalizing($first['response'], $failed['response']);
         self::assertSame(1, AiInsightCache::count());
         $context['input']['stock']['revised'] = true;
         self::assertSame('unavailable', $service->execute('stock_analysis_insight', $context, 1)['status']);

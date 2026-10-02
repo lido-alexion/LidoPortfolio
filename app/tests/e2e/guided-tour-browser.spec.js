@@ -44,6 +44,15 @@ test.describe('FEAT-061 guided tour mobile browser acceptance', () => {
         const stepBox = await firstStep.boundingBox();
         expect(stepBox).not.toBeNull();
         expect(stepBox.width).toBeLessThanOrEqual(390);
+        await expect(firstStep).toHaveAttribute('data-placement', 'right');
+        await expect.poll(() => firstStep.evaluate((element) => {
+            const caret = getComputedStyle(element, '::before');
+            return {
+                content: caret.content,
+                display: caret.display,
+                overflow: getComputedStyle(element).overflow,
+            };
+        })).toEqual({ content: '""', display: 'block', overflow: 'visible' });
 
         for (let index = 0; index < 6; index += 1) {
             await page.keyboard.press('Tab');
