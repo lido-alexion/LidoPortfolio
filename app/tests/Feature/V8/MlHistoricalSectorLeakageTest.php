@@ -71,7 +71,8 @@ class MlHistoricalSectorLeakageTest extends TestCase
             $this->assertNull($public['sector_relative_strength_3m']);
         }
         // Same date and prices, with only dated sector evidence supplied, must produce a value.
-        MlUniverseMembership::query()->where('effective_from', '2021-01-01')->update(['sector_snapshot' => 'Dated']);
+        MlUniverseMembership::query()->whereDate('effective_from', '2021-01-01')->update(['sector_snapshot' => 'Dated']);
+        app(MlSectorRelativeStrengthService::class)->resetMemo();
         $control = $features('2021-01-04');
         $this->assertSame('Dated', $control['sector']);
         $this->assertEqualsWithDelta(126 / 164 * 100 - 63 / 132 * 100, $control['sector_relative_strength_3m'], 0.000001);
