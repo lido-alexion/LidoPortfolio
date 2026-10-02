@@ -9,6 +9,7 @@ export default defineConfig({
         include: [
             'tests/js/tos/**/*.test.{js,jsx}',
             'tests/js/stocksAdmin.test.jsx',
+            'tests/js/developerOptions.test.jsx',
         ],
         css: false,
         restoreMocks: false,

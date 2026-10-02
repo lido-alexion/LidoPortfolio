@@ -438,3 +438,29 @@ Progress = backend persisted
 Navigation = multi-route
 Recovery = resume/restart + skip missing target
 ```
+
+---
+
+## Temporary Developer options — FEAT-061 testing
+
+**TEMPORARY TEST/DEVELOPMENT INFRASTRUCTURE.** Disable/remove this facility when developer testing is no longer needed and before final public hardening. Additional temporary developer actions may be placed in this modal while it exists. This extension does not change the frozen Investor tour or manual Help/Profile relaunch contract; FEAT-061 remains REVIEW.
+
+In the browser console, enable with:
+
+```js
+localStorage.setItem('devOptions', 'true'); location.reload();
+```
+
+Disable with:
+
+```js
+localStorage.removeItem('devOptions'); location.reload();
+```
+
+Only the exact string `"true"` at the exact key `devOptions` renders the transparent 12×12 pixel, fixed top-left hotspot. Other values or an absent key render no entry point. Hover uses the pointer cursor; the accessible label is **Open developer options**. Click to open **Developer options**, then **Reset guided tour**. The action disables while pending, reports success or an inline failure, and asks the tester to reload after success. Close any active tour before resetting so it cannot save additional progress afterward.
+
+`devOptions` is a UI discoverability gate only. It does not grant server privileges and is never checked for server authorization. Removing the key hides the UI; removing/disabling the server route is necessary to retire the API itself.
+
+`POST /api/developer-options/guided-tour/reset` requires normal Sanctum authentication (including normal session CSRF handling), takes no target user/account ID, and uses only `request->user()`. All body/query fields, including any target identity, are rejected with HTTP 422 before mutation. The dedicated DeveloperOptions controller calls `GuidedTourService::resetFor`, which atomically deletes only that user's `stox_user_onboarding_state` row and recreates it through the normal service defaults. No migration is needed. It clears welcome prompt count, permanent dismissal, completion, current step and tour-in-progress, and restores the configured tour version. Response: HTTP 200 with `{ data: <default guided-tour payload> }`, identical to the next normal state read. Eligible Investors see the welcome prompt after reload; unauthenticated requests receive 401 and Admin requests receive 403 without mutating state. There are no elevated/admin actions.
+
+Removal points: the developer-options route group/controller, `GuidedTourService::resetFor`, the shell's `DeveloperOptions` component/import, its CSS, and focused tests. Existing guided-tour APIs and manual relaunch remain unchanged.

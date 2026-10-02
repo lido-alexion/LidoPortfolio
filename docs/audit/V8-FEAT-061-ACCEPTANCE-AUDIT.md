@@ -51,3 +51,54 @@ Cloud Chrome Profile exposed Launch tour and Restart from beginning. Launch resu
 In the signed-in production Investor session, Profile → Launch tour resumed at step 7/8, Help & documentation. Next displayed step 8/8, Profile & tour, with an explicit Finish control; Back returned to step 7 and the Profile route. Escape closed the overlay without pressing Finish. This is a **PASS** for the bounded deployed resume, forward/back navigation and Escape slice, not evidence for first-run, all eight steps, completion persistence, session expiry, Admin exclusion, screen-reader behavior or another device/browser.
 
 The cloud browser automatic approval review rejected Restart from beginning because it would reset this account's saved tour progress. No reset was performed. **FEAT-061 remains REVIEW** until the remaining production and assistive-technology checks are completed.
+
+## Temporary Developer options — FEAT-061 testing
+
+**TEMPORARY TEST/DEVELOPMENT INFRASTRUCTURE.** Disable/remove this facility when developer testing is no longer needed and before final public hardening. Additional temporary developer actions may be placed in this modal while it exists. This extension does not change the frozen Investor tour or manual Help/Profile relaunch contract; FEAT-061 remains REVIEW.
+
+In the browser console, enable with:
+
+```js
+localStorage.setItem('devOptions', 'true'); location.reload();
+```
+
+Disable with:
+
+```js
+localStorage.removeItem('devOptions'); location.reload();
+```
+
+Only the exact string `"true"` at the exact key `devOptions` renders the transparent 12×12 pixel, fixed top-left hotspot. Other values or an absent key render no entry point. Hover uses the pointer cursor; the accessible label is **Open developer options**. Click to open **Developer options**, then **Reset guided tour**. The action disables while pending, reports success or an inline failure, and asks the tester to reload after success. Close any active tour before resetting so it cannot save additional progress afterward.
+
+`devOptions` is a UI discoverability gate only. It does not grant server privileges and is never checked for server authorization. Removing the key hides the UI; removing/disabling the server route is necessary to retire the API itself.
+
+`POST /api/developer-options/guided-tour/reset` requires normal Sanctum authentication (including normal session CSRF handling), takes no target user/account ID, and uses only `request->user()`. All body/query fields, including any target identity, are rejected with HTTP 422 before mutation. The dedicated DeveloperOptions controller calls `GuidedTourService::resetFor`, which atomically deletes only that user's `stox_user_onboarding_state` row and recreates it through the normal service defaults. No migration is needed. It clears welcome prompt count, permanent dismissal, completion, current step and tour-in-progress, and restores the configured tour version. Response: HTTP 200 with `{ data: <default guided-tour payload> }`, identical to the next normal state read. Eligible Investors see the welcome prompt after reload; unauthenticated requests receive 401 and Admin requests receive 403 without mutating state. There are no elevated/admin actions.
+
+Removal points: the developer-options route group/controller, `GuidedTourService::resetFor`, the shell's `DeveloperOptions` component/import, its CSS, and focused tests. Existing guided-tour APIs and manual relaunch remain unchanged.
+
+Focused evidence: `tests/Feature/V8/DeveloperOptionsTest.php` covers authentication, fresh/repeated reset, clearing every state field, rejected body/query target identities, other-user isolation and Admin rejection. `tests/js/developerOptions.test.jsx` covers exact-value rendering, opening/closing, removal, unavailable storage, loading/success, and inline API/network errors. Local verification results are recorded below. No production data was changed and no deployment was performed.
+
+### Local developer-options verification — 2026-10-02
+
+- Focused backend: `php vendor/bin/phpunit --filter 'DeveloperOptionsTest|GuidedTourTest'` — **11 passed, 108 assertions**, both with in-memory SQLite and an isolated local database via `DB_CONNECTION=mysql`. Existing local PHP SQLite extensions were loaded through `PHP_INI_SCAN_DIR`; no sudo was used.
+- Shared backend verifier: `./scripts/verify-ci.sh --backend`, using existing local PHP extensions and isolated MariaDB 10.11 via the MySQL driver — **2,066 tests total: 2,065 passed, 1 skipped, 13,197 assertions**; Python checks **7 passed, 8 skipped**; platform requirements, portability checks for **161 existing migrations**, fresh migration/seeding, and OpenAPI check all passed. No migration was added.
+- Temporary Docker MySQL 8.4: `migrate:fresh` plus seeding completed successfully. The duplicate full PHPUnit run was intentionally stopped; **no local full MySQL 8.4 suite pass is claimed**. GitHub CI on master remains authoritative for exact MySQL 8.4 verification after a future push. The temporary `stox-feat061-verifier-mysql` container was removed during finalization.
+- Focused frontend: `npx vitest run tests/js/developerOptions.test.jsx` — **15 passed**. The explicit Vitest include keeps this test in the normal regression suite.
+- `npm run test:js` — **199 Node tests passed; 128 Vitest tests passed across 32 files**.
+- `npm run typecheck` and `VITE_APP_BASE=/portfolio/build/ npm run build` — **PASS**. Build emitted a non-blocking bundle-size warning.
+- Static documentation was regenerated by the build; `npm run docs:static:check` — **PASS, 53 topics**. Generated timestamp-only changes were excluded from this feature.
+- `php artisan openapi:v1` and `php artisan openapi:v1 --check` — **PASS, 219 operations**; the canonical `/api/v1` document is unchanged because this temporary API uses `/api/developer-options`.
+- `npx playwright install chromium chromium-headless-shell`, executable existence verification, and `npm run test:e2e:journeys` — **43 passed, 50 skipped, no failures**. The existing viewport-specific skips were preserved. The frontend wrapper's OS-dependency installation requires sudo, so application checks and browser installation ran directly using the existing system libraries.
+
+### Post-reconciliation verification — 2026-10-02
+
+Reconciled `feat061-dev-options` by fast-forwarding to `origin/master` at `7e0e34ebfc6332b5b8c64ae4ecd1f686beffcfb4`, then restoring all 11 feature files without conflicts. At the Product Owner's explicit direction, the previously passed broad checks above were retained as evidence and were not rerun.
+
+- Focused backend `DeveloperOptionsTest|GuidedTourTest`, using in-memory SQLite with existing local PHP extensions — **11 passed, 108 assertions**.
+- `npx vitest run tests/js/developerOptions.test.jsx` — **15 passed**.
+- `npm run typecheck` — **PASS**.
+- Working-tree and staged `git diff --check` — **PASS**.
+
+Finalization is a local commit only; no push or deployment is authorized. Prompt files and generated timestamp-only documentation are excluded.
+
+These local checks do not close the outstanding production/assistive-technology acceptance items above. **FEAT-061 remains REVIEW.**

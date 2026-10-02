@@ -4,6 +4,7 @@ namespace App\Services\GuidedTour;
 
 use App\Models\User;
 use App\Models\UserOnboardingState;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class GuidedTourService
@@ -79,6 +80,25 @@ class GuidedTourService
         };
 
         return $this->toPayload($user);
+    }
+
+    /**
+     * Temporary developer testing action; always scoped to the authenticated user.
+     *
+     * @return array<string, mixed>
+     */
+    public function resetFor(User $user): array
+    {
+        abort_unless($this->isEligible($user), 403, 'Guided tour is not available for this account.');
+
+        return DB::transaction(function () use ($user): array {
+            UserOnboardingState::query()->where('user_id', $user->id)->delete();
+
+            // Reload database defaults before serializing the newly created state.
+            $this->stateFor($user);
+
+            return $this->toPayload($user);
+        });
     }
 
     protected function recordWelcomeShown(UserOnboardingState $state): void

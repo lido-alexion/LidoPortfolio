@@ -6113,3 +6113,20 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     pointer-events: auto;
     min-width: min(320px, calc(100vw - 2rem));
 }
+
+/* Temporary developer testing entry point; no visible icon or layout footprint. */
+.lido-developer-options-hotspot {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 12px;
+    height: 12px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    z-index: 2300;
+}
+
+.lido-developer-options-backdrop { z-index: 2301; }
+.lido-developer-options-modal { z-index: 2302; }

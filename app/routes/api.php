@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\DataQualityController;
 use App\Http\Controllers\Api\ExplorerAnalyticsController;
 use App\Http\Controllers\Api\FrontendLogController;
 use App\Http\Controllers\Api\GuidedTourController;
+use App\Http\Controllers\Api\DeveloperOptionsController;
 use App\Http\Controllers\Api\HelpFeedbackController;
 use App\Http\Controllers\Api\HistoricalHoldingsController;
 use App\Http\Controllers\Api\HoldingController;
@@ -203,6 +204,12 @@ Route::middleware('auth:sanctum')->prefix('notification-settings')->group(functi
 Route::get('/notification-settings/email-destinations/{destination}/verify', [NotificationSettingsController::class, 'verifyEmailDestination'])
     ->middleware('signed')
     ->name('notification.email.verify');
+
+// Temporary own-user testing actions; no portfolio or elevated capabilities.
+Route::prefix('developer-options')->middleware('auth:sanctum')
+    ->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class)->group(function () {
+        Route::post('/guided-tour/reset', [DeveloperOptionsController::class, 'resetGuidedTour']);
+    });
 
 Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/ai/assistant/feedback', [AiAssistantStreamController::class, 'feedback'])->middleware('throttle:20,1');
