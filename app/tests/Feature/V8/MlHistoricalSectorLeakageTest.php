@@ -43,7 +43,10 @@ class MlHistoricalSectorLeakageTest extends TestCase
             $builder = app(MlTrainingDatasetBuilder::class);
             $prices = StockPrice::query()->where('stock_id', $stock->id)
                 ->whereDate('price_date', '<=', $date)->orderBy('price_date')
-                ->pluck('close_price', 'price_date')->map(fn ($price): float => (float) $price)->all();
+                ->get(['close_price', 'price_date'])
+                ->mapWithKeys(fn (StockPrice $row): array => [
+                    Carbon::parse($row->price_date)->toDateString() => (float) $row->close_price,
+                ])->all();
 
             return (new \ReflectionMethod($builder, 'featuresForPrices'))->invoke(
                 $builder, $stock->fresh(), $date, $prices, [], [], array_flip(array_keys($prices)), [],
