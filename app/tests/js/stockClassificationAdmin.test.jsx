@@ -32,6 +32,10 @@ function renderPage(rows = [tcs, infy]) {
     return render(<MemoryRouter><StockClassificationAdminPage /></MemoryRouter>);
 }
 
+function expectCurrentSource(source) {
+    expect(screen.getByText((_, element) => element?.tagName === 'P' && element.textContent.includes(`Current source: ${source}`))).toBeInTheDocument();
+}
+
 describe('StockClassificationAdminPage', () => {
     it('synchronizes search row, selected details and form after Save', async () => {
         apiMock.put.mockResolvedValue({ data: { data: { source_type: 'manual_override', source: 'admin', sector: 'Information Technology', industry: 'IT Services', observed_at: '2026-10-02T12:00:00Z' } } });
@@ -43,7 +47,7 @@ describe('StockClassificationAdminPage', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
         await waitFor(() => expect(screen.getByText('Information Technology / IT Services')).toBeInTheDocument());
-        expect(screen.getByText('Current source: admin')).toBeInTheDocument();
+        expectCurrentSource('admin');
         expect(screen.getByLabelText('Sector')).toHaveValue('Information Technology');
         expect(screen.getByLabelText('Industry')).toHaveValue('IT Services');
     });
@@ -56,7 +60,7 @@ describe('StockClassificationAdminPage', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Return to automatic' }));
 
         await waitFor(() => expect(screen.getByText('Unknown / Unknown')).toBeInTheDocument());
-        expect(screen.getByText('Current source: unknown')).toBeInTheDocument();
+        expectCurrentSource('unknown');
         expect(screen.getByLabelText('Sector')).toHaveValue('');
         expect(screen.getByLabelText('Industry')).toHaveValue('');
     });
@@ -100,7 +104,7 @@ describe('StockClassificationAdminPage', () => {
         fireEvent.change(screen.getByLabelText('Sector'), { target: { value: 'Information Technology' } });
         fireEvent.change(screen.getByLabelText('Industry'), { target: { value: 'IT Services' } });
         fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-        await waitFor(() => expect(screen.getByText('Current source: admin')).toBeInTheDocument());
+        await waitFor(() => expectCurrentSource('admin'));
 
         first.unmount();
         render(<MemoryRouter><StockClassificationAdminPage /></MemoryRouter>);
