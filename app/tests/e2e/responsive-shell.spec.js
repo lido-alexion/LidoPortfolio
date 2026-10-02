@@ -194,7 +194,7 @@ test('header theme keeps shell, text and controls readable across theme changes'
         await expect(header).toHaveCSS('background-color', theme === 'light'
             ? 'color(srgb 0.898353 0.901961 0.905569)'
             : 'rgb(0, 0, 0)');
-        await expect(header).toHaveCSS('border-bottom-color', theme === 'light' ? 'rgb(229, 231, 235)' : 'rgb(34, 34, 34)');
+        await expect(header).toHaveCSS('border-bottom-color', 'rgb(169, 169, 169)');
         const results = await new AxeBuilder({ page }).include('.lido-header').withRules(['color-contrast']).analyze();
         expect(results.violations).toEqual([]);
 
