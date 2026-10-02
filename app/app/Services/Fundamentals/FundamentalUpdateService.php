@@ -410,7 +410,7 @@ class FundamentalUpdateService
                 ['run_id' => $run->id, 'status' => $run->status],
             );
             $this->opsAlerts->syncAndNotify();
-        } elseif ($run->fresh()->status === 'completed') {
+        } elseif ($run->fresh()->status === 'completed' && (int) $run->succeeded > 0) {
             if ($this->opsAlerts->clearUnattendedFailure(AdminOperationalAlertService::KEY_FUNDAMENTALS_UPDATE_FAILED)) {
                 $this->opsAlerts->syncAndNotify();
             }

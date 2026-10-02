@@ -199,7 +199,7 @@ class FundamentalUpdateLifecycleTest extends TestCase
         $provider->shouldReceive('fetch')->never();
         $this->app->instance(FundamentalDataProvider::class, $provider);
         $alerts = Mockery::mock(AdminOperationalAlertService::class);
-        $alerts->shouldReceive('clearUnattendedFailure')->once()->with(AdminOperationalAlertService::KEY_FUNDAMENTALS_UPDATE_FAILED)->andReturn(false);
+        $alerts->shouldNotReceive('clearUnattendedFailure');
         $this->app->instance(AdminOperationalAlertService::class, $alerts);
 
         $result = app(FundamentalUpdateService::class)->process($run, 1);
