@@ -48,6 +48,17 @@ All other V9 items retain their prior status. Authenticode signing/SmartScreen p
 
 Implementation must still respect V8 closure state and explicit V9 dependency gates. “Implementation-ready” means the epic contract is frozen; it does not mean every epic should be started before the subsystem it depends on is stable.
 
+### 3.1 Current implementation progress
+
+As of 2026-10-03, Phases 4, 6, 7 and 8 of the AI sequence are implemented and verified on `master`:
+
+- `V4-FEAT-017` shared AI platform/governance;
+- `V9-AI-001` documentation-grounded chatbot;
+- `V9-AI-002` governed agentic action layer;
+- `V9-AI-003` embedded AI insights and managed Strategy Designer.
+
+AI-003 landed at `40d89d3b`. The remaining V9 sequence should now prioritize unfinished non-AI epics and final `V9-UX-001` closure according to their existing dependency gates; `V9-DATA-002` remains under PO review.
+
 ## 4. Normative cross-epic reconciliations
 
 ### 4.1 V9-UX-001 starts first but closes last
