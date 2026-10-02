@@ -36,7 +36,10 @@ return [
     ],
 
     'data_quality' => [
-        'corporate_actions_feed_url' => env('CORPORATE_ACTIONS_FEED_URL'),
+        // Official NSE public schema: symbol, subject, exDate, recDate, isin.
+        // The adapter validates and normalizes this response before queuing
+        // any reviewable data-quality issue; it never repairs accounting data.
+        'corporate_actions_feed_url' => env('CORPORATE_ACTIONS_FEED_URL', 'https://www.nseindia.com/api/corporates-corporateActions?index=equities'),
         'corporate_actions_feed_supports_window' => (bool) env('CORPORATE_ACTIONS_FEED_SUPPORTS_WINDOW', false),
         'corporate_actions_overlap_days' => (int) env('CORPORATE_ACTIONS_OVERLAP_DAYS', 7),
         'auto_accept_days' => (int) env('DATA_QUALITY_AUTO_ACCEPT_DAYS', 15),

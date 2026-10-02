@@ -37,7 +37,11 @@ class DataQualityCorporateActionSyncService
         $query = (bool) config('services.data_quality.corporate_actions_feed_supports_window', false)
             ? ['from_date' => $windowFrom, 'to_date' => $windowTo]
             : [];
-        $response = Http::retry(3, 1000)->timeout(45)->get($url, $query);
+        $response = Http::withHeaders([
+            'Accept' => 'application/json',
+            'Referer' => 'https://www.nseindia.com/',
+            'User-Agent' => 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/152 Safari/537.36 StoX/1.0',
+        ])->retry(3, 1000)->timeout(45)->get($url, $query);
         if (! $response->ok()) {
             $checkpoint->forceFill(['last_error' => 'HTTP '.$response->status()])->save();
             return [
@@ -135,11 +139,12 @@ class DataQualityCorporateActionSyncService
     protected function mapPayload(array $payload): ?array
     {
         $symbol = strtoupper(trim((string) ($payload['symbol'] ?? $payload['security'] ?? '')));
-        $typeRaw = strtolower(trim((string) ($payload['action_type'] ?? $payload['type'] ?? '')));
-        $ratioLabel = trim((string) ($payload['ratio'] ?? $payload['ratio_label'] ?? ''));
-        $source = (string) ($payload['source'] ?? 'exchange_feed');
-        $exDate = $payload['ex_date'] ?? $payload['effective_date'] ?? null;
-        $recordDate = $payload['record_date'] ?? null;
+        $subject = trim((string) ($payload['subject'] ?? ''));
+        $typeRaw = strtolower(trim((string) ($payload['action_type'] ?? $payload['type'] ?? $subject)));
+        $ratioLabel = trim((string) ($payload['ratio'] ?? $payload['ratio_label'] ?? $this->ratioFromSubject($subject)));
+        $source = (string) ($payload['source'] ?? ($subject !== '' ? 'nse_corporate_actions_api' : 'exchange_feed'));
+        $exDate = $payload['ex_date'] ?? $payload['effective_date'] ?? $payload['exDate'] ?? null;
+        $recordDate = $payload['record_date'] ?? $payload['recDate'] ?? null;
 
         if ($symbol === '' || $typeRaw === '' || $ratioLabel === '' || ! $exDate) {
             return null;
@@ -147,7 +152,7 @@ class DataQualityCorporateActionSyncService
 
         $exDate = $this->parseDate($exDate);
         $recordDate = $recordDate ? $this->parseDate($recordDate) : null;
-        if ($exDate === null || (($payload['record_date'] ?? null) !== null && $recordDate === null)) {
+        if ($exDate === null || (($payload['record_date'] ?? $payload['recDate'] ?? null) !== null && $recordDate === null)) {
             return null;
         }
 
@@ -192,6 +197,19 @@ class DataQualityCorporateActionSyncService
         }
 
         return [(float) $parts[0], (float) $parts[1]];
+    }
+
+    protected function ratioFromSubject(string $subject): string
+    {
+        if ($subject === '') {
+            return '';
+        }
+
+        if (preg_match('/\b(\d+(?:\.\d+)?)\s*[:\/]\s*(\d+(?:\.\d+)?)/', $subject, $matches) !== 1) {
+            return '';
+        }
+
+        return $matches[1].':'.$matches[2];
     }
 
     protected function parseDate(mixed $value): ?string

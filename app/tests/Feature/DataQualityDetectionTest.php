@@ -76,6 +76,35 @@ class DataQualityDetectionTest extends TestCase
         $this->assertSame('RELIANCE', $stock->symbol);
     }
 
+    public function test_official_nse_corporate_actions_schema_preserves_source_and_dates(): void
+    {
+        $this->createDataQualityStock('SBC');
+        config(['services.data_quality.corporate_actions_feed_url' => 'https://www.nseindia.com/api/corporates-corporateActions?index=equities']);
+        Http::fake([
+            'https://www.nseindia.com/api/corporates-corporateActions*' => Http::response([
+                [
+                    'symbol' => 'SBC',
+                    'isin' => 'INE04AK01010',
+                    'subject' => 'Bonus 1:2',
+                    'exDate' => '10-Mar-2025',
+                    'recDate' => '10-Mar-2025',
+                ],
+            ], 200),
+        ]);
+
+        $result = app(DataQualityCorporateActionSyncService::class)->syncFromExchangeFeed();
+
+        $this->assertSame(1, $result['created']);
+        $issue = DataQualityIssue::query()->firstOrFail();
+        $this->assertSame('nse_corporate_actions_api', $issue->detection_source);
+        $this->assertSame('bonus', $issue->corporate_action_type);
+        $this->assertSame('2025-03-10', $issue->ex_date->toDateString());
+        $this->assertSame('2025-03-10', $issue->record_date->toDateString());
+        $this->assertSame('Bonus 1:2', $issue->raw_payload['subject']);
+        $this->assertSame('1:2', $issue->evidences->first()->evidence_value);
+        $this->assertSame('INE04AK01010', $issue->evidences->first()->evidence_payload['isin']);
+    }
+
     public function test_heuristic_detection_creates_pending_issue_with_run_id(): void
     {
         $stock = $this->createDataQualityStock('GAP');

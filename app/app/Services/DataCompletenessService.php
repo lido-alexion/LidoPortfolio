@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\DataQualityIssue;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Support\TradingCalendar;
@@ -32,7 +33,7 @@ class DataCompletenessService
         $eligible = Stock::query()->effectivelyActive()->where('exchange', 'NSE')->where('is_benchmark', false)->count();
         $priceCount = StockPrice::query()->whereDate('price_date', $lastSession->toDateString())->whereHas('stock', fn ($q) => $q->where('exchange', 'NSE')->where('is_benchmark', false))->distinct('stock_id')->count('stock_id');
         $fundamentalChecks = DB::table('stox_fundamental_provider_checks')->where('last_successful_check_at', '>=', $asOf->copy()->subMonths(15))->distinct('stock_id')->count('stock_id');
-        $latestCorporate = DB::table('data_quality_issues')->where('issue_type', 'corporate_action')->max('detected_at');
+        $latestCorporate = DataQualityIssue::query()->where('issue_type', 'corporate_action')->max('detected_at');
         $intraday = $this->intraday->status();
         $microstructure = $this->microstructure->operationalStatus();
 
