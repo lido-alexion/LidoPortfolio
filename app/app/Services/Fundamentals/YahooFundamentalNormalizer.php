@@ -165,6 +165,7 @@ class YahooFundamentalNormalizer
                         'source_meta' => [
                             'provider_key' => (string) $sourceName,
                             'transport' => 'yfinance',
+                            'provider_symbol' => $payload['provider_symbol'] ?? $payload['symbol'] ?? null,
                             'availability_source' => 'first_fetch_fallback',
                         ],
                     ];

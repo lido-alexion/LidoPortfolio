@@ -61,6 +61,27 @@ class YahooFundamentalsAdapterTest(unittest.TestCase):
             self.assertNotEqual(MODULE.main(["TCS.NS", "annual"], lambda _: EmptyTicker()), 0)
         self.assertIn("no fundamental statements", errors.getvalue())
 
+    def test_nse_symbol_falls_back_to_bse_when_nse_has_no_statements(self):
+        calls = []
+
+        class EmptyTicker:
+            quarterly_financials = quarterly_balance_sheet = quarterly_cashflow = None
+
+        class BseTicker(Ticker):
+            pass
+
+        def factory(symbol):
+            calls.append(symbol)
+            return EmptyTicker() if symbol == "AARNAV.NS" else BseTicker()
+
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertEqual(MODULE.main(["AARNAV.NS", "quarterly"], factory), 0)
+        payload = __import__("json").loads(output.getvalue())
+        self.assertEqual(calls, ["AARNAV.NS", "AARNAV.BO"])
+        self.assertEqual(payload["symbol"], "AARNAV.NS")
+        self.assertEqual(payload["provider_symbol"], "AARNAV.BO")
+
     def test_invalid_arguments_fail_without_stdout_noise(self):
         output = io.StringIO()
         with contextlib.redirect_stdout(output):

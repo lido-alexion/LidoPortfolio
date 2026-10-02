@@ -71,6 +71,13 @@ def fetch_statements(symbol: str, cadence: str, ticker_factory: Callable[[str], 
     }
 
 
+def candidate_symbols(symbol: str) -> list[str]:
+    """Return the primary listing, plus the dual-listed BSE fallback."""
+    if symbol.endswith(".NS"):
+        return [symbol, f"{symbol[:-3]}.BO"]
+    return [symbol]
+
+
 def main(argv: list[str] | None = None, ticker_factory: Callable[[str], Any] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     if len(args) != 2 or args[1] not in {"quarterly", "annual"}:
@@ -82,9 +89,22 @@ def main(argv: list[str] | None = None, ticker_factory: Callable[[str], Any] | N
             import yfinance as yf
 
             ticker_factory = yf.Ticker
-        payload = fetch_statements(args[0], args[1], ticker_factory)
-        print(json.dumps(payload, ensure_ascii=True, allow_nan=False, separators=(",", ":")))
-        return 0
+        requested_symbol = args[0]
+        last_error: Exception | None = None
+        for provider_symbol in candidate_symbols(requested_symbol):
+            try:
+                payload = fetch_statements(provider_symbol, args[1], ticker_factory)
+                # Keep the requested security identity stable for the PHP
+                # contract while retaining the symbol that supplied the data.
+                payload["symbol"] = requested_symbol
+                payload["provider_symbol"] = provider_symbol
+                print(json.dumps(payload, ensure_ascii=True, allow_nan=False, separators=(",", ":")))
+                return 0
+            except RuntimeError as error:
+                last_error = error
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("no Yahoo symbols were available")
     except Exception as error:
         print(f"yahoo fundamentals adapter failed: {error}", file=sys.stderr)
         return 1
