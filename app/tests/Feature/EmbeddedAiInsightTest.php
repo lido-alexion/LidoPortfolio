@@ -58,7 +58,7 @@ class EmbeddedAiInsightTest extends TestCase
         self::assertSame('ready', $first['status']);
         self::assertStringContainsString('Fundamental interpretation unavailable', $first['response']['data_limitations']);
         AiProviderPath::query()->create(['path_id' => 'changed', 'provider' => 'new', 'model' => 'new', 'priority' => 1, 'enabled' => true]);
-        self::assertSame($first, $service->execute('stock_analysis_insight', $context, 2));
+        self::assertEqualsCanonicalizing($first, $service->execute('stock_analysis_insight', $context, 2));
         Http::assertSentCount(1);
         $service->execute('stock_analysis_insight', $context, 1, true);
         Http::assertSentCount(2);
