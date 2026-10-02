@@ -75,7 +75,7 @@ class ForwardDataPlanner
             $nextSession->addDay();
         }
 
-        return $nextSession->setTime(12, 0);
+        return $nextSession->setTime(12, 0)->utc();
     }
 
     public function officialSourceConfigured(): bool

@@ -44,7 +44,7 @@ class ForwardDataPlannerTest extends TestCase
         app(ForwardDataPlanner::class)->plan();
 
         $work = ForwardCollectionWork::query()->whereDate('session_date', '2026-09-29')->firstOrFail();
-        $this->assertSame('2026-09-30 12:00:00', $work->next_attempt_at?->timezone('Asia/Kolkata')->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-09-30 06:30:00', $work->next_attempt_at?->format('Y-m-d H:i:s'));
         Carbon::setTestNow();
     }
 
