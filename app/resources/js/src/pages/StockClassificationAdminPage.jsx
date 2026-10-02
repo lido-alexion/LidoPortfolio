@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import { showToast } from '../toast';
@@ -12,6 +12,8 @@ export default function StockClassificationAdminPage() {
     const [industry, setIndustry] = useState('');
     const [reason, setReason] = useState('');
     const [busy, setBusy] = useState(false);
+    const [mutationError, setMutationError] = useState('');
+    const selectedIdRef = useRef(null);
 
     useEffect(() => {
         const timer = window.setTimeout(async () => {
@@ -26,40 +28,68 @@ export default function StockClassificationAdminPage() {
     }, []);
 
     const choose = (stock) => {
+        selectedIdRef.current = stock.id;
         setSelected(stock);
-        setSector(stock.classification?.sector || '');
-        setIndustry(stock.classification?.industry || '');
+        const classification = stock.classification;
+        setSector(classification?.source_type === 'unknown' ? '' : (classification?.sector || ''));
+        setIndustry(classification?.source_type === 'unknown' ? '' : (classification?.industry || ''));
         setReason('');
+        setMutationError('');
     };
+
+    const applyClassification = (stockId, classification) => {
+        const isUnknown = classification?.source_type === 'unknown' || !classification?.sector || !classification?.industry;
+        setStocks((current) => current.map((stock) => stock.id === stockId ? { ...stock, classification } : stock));
+        setSelected((current) => current?.id === stockId ? { ...current, classification } : current);
+        if (selectedIdRef.current === stockId) {
+            setSector(isUnknown ? '' : classification.sector);
+            setIndustry(isUnknown ? '' : classification.industry);
+            setReason('');
+            setMutationError('');
+        }
+    };
+
+    const requestError = (error, fallback) => error?.response?.data?.message || error?.response?.data?.errors?.classification?.[0] || fallback;
 
     const save = async () => {
         setBusy(true);
+        setMutationError('');
         try {
             const response = await api.put(`/admin/stocks/${selected.id}/classification/override`, { sector, industry, reason: reason || undefined });
-            setSelected({ ...selected, classification: response.data.data });
+            applyClassification(selected.id, response.data.data);
             showToast('Manual classification saved', 'success');
         } catch (error) {
-            showToast(error?.response?.data?.message || 'Classification save failed', 'danger');
+            const message = requestError(error, 'Classification save failed');
+            setMutationError(message);
+            showToast(message, 'danger');
         } finally { setBusy(false); }
     };
 
     const remove = async () => {
         setBusy(true);
+        setMutationError('');
         try {
             const response = await api.delete(`/admin/stocks/${selected.id}/classification/override`);
-            setSelected({ ...selected, classification: response.data.data });
+            applyClassification(selected.id, response.data.data);
             showToast('Returned to automatic classification', 'success');
+        } catch (error) {
+            const message = requestError(error, 'Returning to automatic classification failed');
+            setMutationError(message);
+            showToast(message, 'danger');
         } finally { setBusy(false); }
     };
 
     const refresh = async () => {
         setBusy(true);
+        setMutationError('');
         try {
             const response = await api.post(`/admin/stocks/${selected.id}/classification/refresh`);
-            setSelected({ ...selected, classification: response.data.data });
+            applyClassification(selected.id, response.data.data);
             showToast('Automatic observation refreshed', 'success');
         } catch (error) {
-            showToast(error?.response?.data?.message || 'Classification refresh failed', 'danger');
+            const message = requestError(error, 'Classification refresh failed');
+            setMutationError(message);
+            showToast(message, 'danger');
         } finally { setBusy(false); }
     };
 
@@ -80,10 +110,11 @@ export default function StockClassificationAdminPage() {
                     <div className="card"><div className="card-body">
                         <h2 className="h6">{selected.symbol} · {selected.name}</h2>
                         <p className="small text-muted mb-3">Current source: {selected.classification?.source || 'unknown'} · observed {selected.classification?.observed_at || 'never'}</p>
-                        <label className="form-label">Sector</label>
-                        <select className="form-select mb-2" value={sector} onChange={(event) => { setSector(event.target.value); setIndustry(''); }}><option value="">Select sector</option>{options.sectors.map((item) => <option key={item} value={item}>{item}</option>)}</select>
-                        <label className="form-label">Industry</label>
-                        <select className="form-select mb-3" value={industry} onChange={(event) => setIndustry(event.target.value)}><option value="">Select industry</option>{(options.industries[sector] || []).map((item) => <option key={item} value={item}>{item}</option>)}</select>
+                        {mutationError && <div className="alert alert-danger" role="alert">{mutationError}</div>}
+                        <label className="form-label" htmlFor="stock-classification-sector">Sector</label>
+                        <select id="stock-classification-sector" className="form-select mb-2" value={sector} onChange={(event) => { setSector(event.target.value); setIndustry(''); }}><option value="">Select sector</option>{options.sectors.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+                        <label className="form-label" htmlFor="stock-classification-industry">Industry</label>
+                        <select id="stock-classification-industry" className="form-select mb-3" value={industry} onChange={(event) => setIndustry(event.target.value)}><option value="">Select industry</option>{(options.industries[sector] || []).map((item) => <option key={item} value={item}>{item}</option>)}</select>
                         <label className="form-label">Audit reason</label><textarea className="form-control mb-3" value={reason} onChange={(event) => setReason(event.target.value)} />
                         <div className="d-flex gap-2 flex-wrap"><button type="button" className="btn btn-primary" disabled={busy || !sector || !industry} onClick={save}>Save</button><button type="button" className="btn btn-outline-primary" disabled={busy} onClick={refresh}>Refresh automatic</button>{selected.classification?.source_type === 'manual_override' && <button type="button" className="btn btn-outline-warning" disabled={busy} onClick={remove}>Return to automatic</button>}</div>
                     </div></div>

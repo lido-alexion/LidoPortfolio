@@ -10,6 +10,7 @@ export default defineConfig({
             'tests/js/tos/**/*.test.{js,jsx}',
             'tests/js/stocksAdmin.test.jsx',
             'tests/js/developerOptions.test.jsx',
+            'tests/js/stockClassificationAdmin.test.jsx',
         ],
         css: false,
         restoreMocks: false,
