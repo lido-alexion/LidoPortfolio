@@ -44,3 +44,24 @@ Operator: Codex via connected `stoxla-prod`; UTC times below. **This entry does 
 Deployed build `ac6602ae2db35b52b68a7183c50f987a1b4d615f` had `lido_telemetry.enabled=true`, the official PHP SDK enabled, OTLP traces/metrics endpoints configured, and the Collector active. LidoTelemetry `/up` returned HTTP 200. A bounded public `GET /api/build-info` request with a synthetic W3C `traceparent` returned HTTP 200; indexed lookup in LidoTelemetry found a `GET /api/build-info` server span under the supplied parent and a child HTTP span, both received in the production environment. **PASS for this HTTP → Collector → LidoTelemetry receipt and parentage slice only.** Browser → HTTP, queue/scheduler propagation, metric receipt, failure isolation and UI visibility remain NOT YET RUN.
 
 **FAILED privacy gate:** a second controlled request used a synthetic, non-secret `token` query marker. LidoTelemetry stored that marker in both `url.full` and `url.query` attributes of the server span. No real credential was used or printed. The installed `open-telemetry/opentelemetry-auto-laravel` 1.9.1 `Kernel` hook populates both attributes from the full request URL/query; its outbound `ClientRequestWatcher` also constructs `url.full` with the query. This conflicts with FEAT-052 §§12–13 and the privacy-safe export contract. Sanitize or omit query values for all server/outbound spans before export, verify with a synthetic marker, and then inspect captured attributes without exposing values. Do not mark FEAT-052 COMPLETE while this finding remains. Collector configuration is root-owned, so an infrastructure-side transform/restart is a separate privileged operation; code remediation can be developed and reviewed through CI first.
+
+### 2026-10-02 Collector privacy remediation candidate (validated, not deployed)
+
+A temporary mode-0600 copy of the running Collector configuration was parsed and amended only in memory/on disk for validation, then removed. On the installed `otelcol-contrib` 0.161.0, `validate --config <temporary-copy>` exited 0 with this processor inserted between `memory_limiter` and `batch` in the **traces** pipeline:
+
+```yaml
+processors:
+  transform/privacy:
+    error_mode: ignore
+    trace_statements:
+      - 'delete_key(span.attributes, "url.query")'
+      - 'delete_key(span.attributes, "url.full")'
+      - 'delete_key(span.attributes, "http.url")'
+      - 'delete_key(span.attributes, "http.target")'
+service:
+  pipelines:
+    traces:
+      processors: [memory_limiter, transform/privacy, batch]
+```
+
+This candidate strips the observed server-span keys and corresponding outbound URL attributes before export. It has **not** been applied to the root-owned `/etc/otelcol-contrib/config.yaml`, and the service was not restarted. Validation proves config parsing only; it does not prove sanitized production receipt, prevent leakage through other attributes/events/logs, or erase previously ingested data. A privileged, coordinated rollout must preserve the existing receiver/exporter config, validate the resulting file, restart the Collector, and compare an indexed synthetic-marker trace in LidoTelemetry. Inspect attribute *keys* and marker-presence booleans without printing values, including server and outbound spans. Keep FEAT-052 **REVIEW with FAILED privacy gate** until that probe and broader browser/queue/scheduler/fail-open acceptance pass.
