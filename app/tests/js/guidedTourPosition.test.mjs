@@ -13,6 +13,8 @@ test('guided tour panel flips above a low target and stays inside a narrow viewp
 
     assert.equal(style.transform, 'none');
     assert.equal(style.left, 16);
+    assert.equal(style['--guided-tour-placement'], 'top');
+    assert.match(style['--guided-tour-caret-position'], /px$/);
     assert.ok(style.top >= 16);
     assert.ok(style.top + 280 <= viewport.height - 16);
 });
@@ -26,6 +28,8 @@ test('guided tour panel flips horizontally when the preferred side has no room',
 
     assert.equal(style.transform, 'none');
     assert.equal(style.left, 16);
+    assert.equal(style['--guided-tour-placement'], 'right');
+    assert.match(style['--guided-tour-caret-position'], /px$/);
     assert.ok(style.top >= 16);
     assert.ok(style.top + 280 <= viewport.height - 16);
 });
@@ -36,4 +40,5 @@ test('guided tour panel remains centered when the target is temporarily unavaila
     assert.equal(style.top, '50%');
     assert.equal(style.left, '50%');
     assert.equal(style.transform, 'translate(-50%, -50%)');
+    assert.equal(style['--guided-tour-caret-position'], '50%');
 });

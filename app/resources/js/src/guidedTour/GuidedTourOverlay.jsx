@@ -92,12 +92,15 @@ export default function GuidedTourOverlay({
                 role="presentation"
             />
             {holeStyle && (
-                <div className="lido-guided-tour-spotlight" style={holeStyle} aria-hidden="true" />
+                <div className="lido-guided-tour-spotlight" style={holeStyle} aria-hidden="true">
+                    <span className="lido-guided-tour-spotlight-pulse" />
+                </div>
             )}
             <div
                 ref={panelRef}
-                className="lido-guided-tour-panel card shadow"
+                className="lido-guided-tour-panel card shadow lido-guided-tour-popover"
                 style={tooltipPosition}
+                data-placement={tooltipPosition['--guided-tour-placement'] || undefined}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="lido-guided-tour-title"

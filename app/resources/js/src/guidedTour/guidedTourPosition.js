@@ -32,6 +32,7 @@ export function guidedTourTooltipStyle(targetRect, placement = 'bottom', viewpor
     if (!targetRect) {
         return {
             ...base,
+            '--guided-tour-caret-position': '50%',
             top: '50%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
@@ -75,10 +76,18 @@ export function guidedTourTooltipStyle(targetRect, placement = 'bottom', viewpor
         left = targetRect.left + targetRect.width / 2 - panelWidth / 2;
     }
 
+    const clampedTop = clamp(top, PANEL_MARGIN, viewport.height - PANEL_MARGIN - panelHeight);
+    const clampedLeft = clamp(left, PANEL_MARGIN, viewport.width - PANEL_MARGIN - panelWidth);
+    const caretPosition = resolvedPlacement === 'left' || resolvedPlacement === 'right'
+        ? clamp(targetRect.top + targetRect.height / 2 - clampedTop, 18, panelHeight - 18)
+        : clamp(targetRect.left + targetRect.width / 2 - clampedLeft, 18, panelWidth - 18);
+
     return {
         ...base,
-        top: clamp(top, PANEL_MARGIN, viewport.height - PANEL_MARGIN - panelHeight),
-        left: clamp(left, PANEL_MARGIN, viewport.width - PANEL_MARGIN - panelWidth),
+        '--guided-tour-caret-position': `${caretPosition}px`,
+        '--guided-tour-placement': resolvedPlacement,
+        top: clampedTop,
+        left: clampedLeft,
         transform: 'none',
     };
 }
