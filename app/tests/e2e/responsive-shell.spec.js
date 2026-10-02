@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import { TEST_PORTFOLIO } from '../js/tos/fixtures/tosApi.js';
 import { installTosApiMocks } from './tosApiMocks.js';
 
 const REPRESENTATIVE_ROUTES = [
@@ -145,4 +147,73 @@ test.describe('responsive shell and representative page archetypes', () => {
         await expect(page.getByRole('button', { name: 'Open documentation for this page' })).toBeVisible();
         await assertNoDocumentOverflow(page);
     });
+});
+
+// Resolve translucent control backgrounds against their ancestors before checking contrast.
+async function contrastRatio(locator) {
+    return locator.evaluate((element) => {
+        const rgba = (value) => value.match(/[\d.]+/g).map(Number);
+        const blend = (foreground, background) => foreground.slice(0, 3).map(
+            (channel, index) => channel * (foreground[3] ?? 1) + background[index] * (1 - (foreground[3] ?? 1)),
+        );
+        const ancestors = [];
+        for (let node = element; node; node = node.parentElement) ancestors.unshift(node);
+        const background = ancestors.reduce(
+            (color, node) => blend(rgba(getComputedStyle(node).backgroundColor), color), [255, 255, 255],
+        );
+        const foreground = blend(rgba(getComputedStyle(element).color), background);
+        const luminance = (color) => color.map((channel) => {
+            const value = channel / 255;
+            return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+        }).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
+        const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+        return (values[0] + 0.05) / (values[1] + 0.05);
+    });
+}
+
+test('header theme keeps shell, text and controls readable across theme changes', async ({ page, isMobile }) => {
+    test.setTimeout(60_000);
+    await page.addInitScript(() => localStorage.setItem('lido-theme', 'system'));
+    await page.emulateMedia({ colorScheme: 'light' });
+    await installTosApiMocks(page);
+    await page.route('**/api/portfolios', (route) => route.fulfill({ json: {
+        data: [TEST_PORTFOLIO, { ...TEST_PORTFOLIO, id: 2, name: 'Second portfolio' }],
+    } }));
+    await page.goto('/recommendations');
+    const header = page.locator('.lido-header');
+    await expect(header.locator('.lido-portfolio-switcher')).toBeVisible();
+    await expect(header.locator('.lido-execution-safety-state')).toBeVisible();
+
+    for (const theme of ['light', 'dark']) {
+        await page.emulateMedia({ colorScheme: theme });
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+        await expect(header).toHaveCSS('background-color', theme === 'light' ? 'rgb(243, 244, 246)' : 'rgb(0, 0, 0)');
+        await expect(header).toHaveCSS('border-bottom-color', theme === 'light' ? 'rgb(229, 231, 235)' : 'rgb(34, 34, 34)');
+        const results = await new AxeBuilder({ page }).include('.lido-header').withRules(['color-contrast']).analyze();
+        expect(results.violations).toEqual([]);
+
+        // Axe checks text; explicitly cover icon-only buttons as well.
+        const controls = header.locator('button, .lido-header-help');
+        for (const control of await controls.all()) {
+            if (await control.isVisible()) {
+                await expect.poll(() => contrastRatio(control)).toBeGreaterThanOrEqual(3);
+            }
+        }
+        for (const selector of ['.lido-profile-toggle', '.lido-header-help', '.lido-sidebar-toggle', '.lido-portfolio-switcher']) {
+            const control = header.locator(selector);
+            if (!await control.count()) continue;
+            if (!isMobile) {
+                await control.hover();
+                await expect.poll(() => contrastRatio(control)).toBeGreaterThanOrEqual(4.5);
+                await page.mouse.move(0, 0);
+            }
+            await page.keyboard.press('Tab');
+            await control.focus();
+            await expect.poll(() => contrastRatio(control)).toBeGreaterThanOrEqual(4.5);
+            if (theme === 'light') {
+                await expect.poll(() => contrastRatio(header.locator('.lido-profile-avatar'))).toBeGreaterThanOrEqual(4.5);
+            }
+            await control.evaluate((element) => element.blur());
+        }
+    }
 });

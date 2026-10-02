@@ -73,17 +73,17 @@
     --lido-border-strong: #d1d5db;
     --lido-brand: #1565c0;
     --lido-brand-hover: #1e88e5;
-    --lido-header-bg: #000;
-    --lido-header-border: #222;
+    --lido-header-bg: var(--lido-bg-page);
+    --lido-header-border: var(--lido-border);
     --lido-footer-bg: rgba(255, 255, 255, 0.95);
     --lido-footer-border: #e5e7eb;
     --lido-footer-link: rgba(17, 24, 39, 0.55);
     --lido-footer-link-hover: #111827;
-    --lido-profile-text: #7ec8ff;
-    --lido-profile-hover-bg: rgba(255, 255, 255, 0.12);
-    --lido-profile-hover-text: #fff;
-    --lido-profile-avatar-bg: rgba(30, 144, 255, 0.35);
-    --lido-profile-avatar-bg-hover: rgba(30, 144, 255, 0.55);
+    --lido-profile-text: var(--lido-brand);
+    --lido-profile-hover-bg: var(--lido-hover-overlay);
+    --lido-profile-hover-text: var(--lido-text);
+    --lido-profile-avatar-bg: var(--lido-brand);
+    --lido-profile-avatar-bg-hover: var(--lido-a11y-brand-bg);
     --lido-profile-menu-avatar-bg: #b8e4ff;
     --lido-profile-menu-avatar-text: #0c3d66;
     --lido-menu-bg: #ffffff;
@@ -185,6 +185,22 @@ body {
     transition: height 0.2s ease, padding 0.2s ease, opacity 0.2s ease;
     box-sizing: border-box;
     position: relative;
+}
+
+[data-theme='light'] .lido-header .btn-outline-light {
+    --bs-btn-color: var(--lido-text);
+    --bs-btn-border-color: var(--lido-text-muted);
+    --bs-btn-hover-color: var(--lido-text);
+    --bs-btn-hover-bg: var(--lido-hover-overlay);
+    --bs-btn-hover-border-color: var(--lido-text-muted);
+    --bs-btn-active-color: var(--lido-text);
+    --bs-btn-active-bg: var(--lido-hover-overlay);
+    --bs-btn-active-border-color: var(--lido-text-muted);
+}
+
+[data-theme='light'] .lido-sidebar-toggle:focus-visible,
+[data-theme='light'] .lido-header-help:focus-visible {
+    outline-color: var(--lido-brand);
 }
 
 .lido-header.covered {
