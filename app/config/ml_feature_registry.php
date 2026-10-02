@@ -4,7 +4,7 @@
  * FEAT-057 feature registry metadata (V8 foundation). Training code remains in MlTrainingDatasetBuilder.
  */
 return [
-    'registry_version' => 'v8-registry-12',
+    'registry_version' => 'v8-registry-13',
     'preprocessing' => [
         'version' => 'v8-preprocessing-1',
         'missing_values' => 'median_with_missingness_flags',
@@ -362,7 +362,9 @@ return [
             'group' => 'sector_context',
             'pit_safe' => true,
             'horizons' => ['1m', '3m', '6m'],
-            'description' => 'Stock 3m return minus sector-peer median 3m return (%).',
+            'description' => 'Stock 3m return minus dated sector-peer median; null without dated sector evidence.',
+            'formula_version' => 'v8-pit-sector-relative-2',
+            'data_source' => 'stox_ml_universe_memberships.sector_snapshot_and_dated_prices',
             'tier' => 'challenger',
             'coverage_class' => 'evidence_required',
             'evidence_required' => true,
@@ -379,7 +381,9 @@ return [
             'group' => 'identity',
             'pit_safe' => true,
             'horizons' => ['1m', '3m', '6m'],
-            'description' => 'Sector classification bucket.',
+            'description' => 'Effective-dated membership sector; __unknown without dated evidence.',
+            'formula_version' => 'v8-pit-sector-2',
+            'data_source' => 'stox_ml_universe_memberships.sector_snapshot',
             'tier' => 'challenger',
             'coverage_class' => 'evidence_required',
             'evidence_required' => true,

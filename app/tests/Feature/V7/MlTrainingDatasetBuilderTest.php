@@ -19,7 +19,7 @@ class MlTrainingDatasetBuilderTest extends TestCase
     public function test_dataset_is_chronological_and_does_not_label_past_the_cutoff(): void
     {
         $benchmark = Stock::query()->create(['symbol' => 'NIFTY50', 'exchange' => 'NSE', 'name' => 'NIFTY 50', 'is_benchmark' => true]);
-        $stock = Stock::query()->create(['symbol' => 'TCS', 'exchange' => 'NSE', 'name' => 'TCS']);
+        $stock = Stock::query()->create(['symbol' => 'TCS', 'exchange' => 'NSE', 'name' => 'TCS', 'sector' => 'Current master sector']);
         $inactive = Stock::query()->create(['symbol' => 'OLDCO', 'exchange' => 'NSE', 'name' => 'Old Co', 'is_active' => false]);
         $inactiveTwo = Stock::query()->create(['symbol' => 'OLDCO2', 'exchange' => 'NSE', 'name' => 'Old Co 2', 'is_active' => false]);
 
@@ -77,6 +77,9 @@ class MlTrainingDatasetBuilderTest extends TestCase
         $this->assertTrue($rows->every(fn (array $row): bool => $row['reference_date'] <= '2025-08-01'));
         $this->assertTrue($rows->every(fn (array $row): bool => $row['label_end'] <= '2025-08-01'));
         $stockRows = $rows->filter(fn (array $row): bool => $row['stock_id'] === $stock->id);
+        $this->assertNotEmpty($stockRows);
+        $this->assertTrue($stockRows->every(fn (array $row): bool => $row['features']['sector'] === '__unknown'));
+        $this->assertTrue($stockRows->every(fn (array $row): bool => $row['features']['sector_relative_strength_3m'] === null));
         $this->assertTrue($stockRows->filter(fn (array $row): bool => $row['reference_date'] < '2025-06-01')->every(fn (array $row): bool => $row['features']['roe'] === null));
         $this->assertEquals([10.0], $stockRows->filter(fn (array $row): bool => $row['reference_date'] >= '2025-06-01')->pluck('features.roe')->unique()->values()->all());
         $juneRow = $stockRows->first(fn (array $row): bool => $row['reference_date'] >= '2025-06-01');

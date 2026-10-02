@@ -73,3 +73,24 @@ Readiness checks the dedicated connection's supported database/Redis driver, exa
 A queued preflight records dedicated worker evidence only from an actual reservation on that connection and queue, with observation time and build/configuration identity. Direct service invocations and older timestamp-only evidence do not establish dedicated worker execution. Missing, older-than-30-days, future-dated or identity-mismatched worker evidence is unknown in the runtime report and cannot qualify a campaign. Python evidence still requires the real canonical adapter execution; starting systemd is not acceptance and GET remains read-only.
 
 Install and operate the dedicated worker using [the VPS runbook](../../deploy/STOXLA-VPS-DEPLOY.md#dedicated-ml-acceptance-worker). Installation/start is a separate operator step after successful application deployment. No upload, preflight, backfill or training is implied by installing the service. Lifecycle, schedules, drift and retention remain disabled until separately authorized under the existing acceptance gates.
+
+
+## Issue #18 historical-universe operations
+
+Apply the `2026_10_02_000001_add_source_diagnostics_to_ml_universe_backfill_runs` migration through the verified release workflow before using registry `v8-registry-13` / parser `nse-pit-universe-parser-3`. Keep `STOXLA_ML_LIFECYCLE_ENABLED=false`, `STOXLA_ML_SCHEDULE_1M_ENABLED=false`, `STOXLA_ML_SCHEDULE_3M_ENABLED=false`, `STOXLA_ML_SCHEDULE_6M_ENABLED=false`, and `STOXLA_ML_DRIFT_TRIGGER_ENABLED=false`. Acceptance does not authorize promotion.
+
+Use original dated NSE files, not hand-built JSON. Configure `STOXLA_ML_NSE_MII_PATH` with a private directory of actually available dated MII exports and `STOXLA_ML_NSE_BHAVCOPY_PATH` with original historical cash-market exports. An absent MII date falls back to cash bhavcopy; an invalid/misdated supplied file fails closed. Missing local cash files can be acquired with `STOX_FORWARD_DATA_OFFICIAL_SOURCE_ENABLED=true`, `STOX_FORWARD_DATA_OFFICIAL_SOURCE_BASE_URL=https://nsearchives.nseindia.com`, and `STOX_FORWARD_DATA_OFFICIAL_SOURCE_DIRECTORY` pointing to a private writable archive directory. The existing downloader chooses legacy archives before 2024-07-08 and UDiFF thereafter. MII remote availability is not inferred: obtaining authoritative dated MII exports remains an operator prerequisite when using that source. No source yields a current-universe substitute.
+
+After approved release, from `app/`, the CLI backfill path for an exact reference-date set is:
+
+```bash
+php artisan ml:backfill-nse-universe --dates="$REFERENCE_DATES" --mii-path="$MII_DIRECTORY" --bhavcopy-path="$BHAVCOPY_DIRECTORY" --attempts=3
+```
+
+`REFERENCE_DATES` must be the comma-separated union of the fresh 1m/3m/6m campaign's required reference dates; the directory variables must point to private original NSE archives. Resume a failed run with the same command plus `--run-id=RUN_ID` after correcting its source/mapping problem. Completed dates are skipped. Alternatively `--from=YYYY-MM-DD --to=YYYY-MM-DD` selects dates present in StoX market history, excluding weekends/trade holidays; it does not manufacture sessions. For governed deployed acceptance use the existing Admin source staging/preview/apply flow and its digest checks; do not use CLI to bypass a failed or cancelled governed apply.
+
+Audit `stox_ml_universe_snapshot_backfill_runs.source_diagnostics[date]` for source/date/version, source/mapped/unknown counts, unknown identifiers and mapping percentage, including rejected dates. Successful boundaries retain `quality_diagnostics`; membership source and snapshot hash match their boundary. Each snapshot must map at least 90%; empty/excluded-only responses fail. Existing immutable boundaries are not rewritten by reruns.
+
+Production acceptance remains open until a fresh current-build campaign has 100% requested membership-date coverage, >=90% mapping on every date, nonzero historical breadth coverage, unknown/null sector values wherever dated classification is absent, and real Python adapter completion for 1m/3m/6m with persisted feature coverage/exclusions. Reconcile any prior cancelled governed run before starting new work. Local fixture tests establish correctness, not NSE historical availability or production coverage.
+
+The legacy `ml:capture-universe-membership` command is restricted to today’s date. Past/future `--effective-from` values fail before membership or boundary writes; historical population must use dated-source backfill.

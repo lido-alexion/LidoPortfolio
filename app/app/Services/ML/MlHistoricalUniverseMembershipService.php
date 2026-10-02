@@ -172,6 +172,9 @@ class MlHistoricalUniverseMembershipService
     private function captureCurrentEligibleSnapshotLocked(Carbon $effectiveFrom, string $source, ?string $snapshotKey = null): array
     {
         $date = $effectiveFrom->toDateString();
+        if ($date !== now()->toDateString()) {
+            throw new \InvalidArgumentException('Current-universe capture must use today; historical dates require dated NSE evidence.');
+        }
         $snapshotKey ??= $source.':'.$date;
         $stocks = Stock::query()
             ->where('is_active', true)
@@ -251,6 +254,7 @@ class MlHistoricalUniverseMembershipService
             }
             $normalized[$date] = [
                 'effective_from' => $date,
+                'source' => $snapshot['source'] ?? $source,
                 'memberships' => array_values($snapshot['memberships'] ?? []),
                 'snapshot_key' => $snapshot['snapshot_key'] ?? null,
                 'response_version' => $snapshot['response_version'] ?? null,
@@ -286,6 +290,7 @@ class MlHistoricalUniverseMembershipService
                     continue;
                 }
                 DB::transaction(function () use ($date, $snapshot, $source, $universeKey): void {
+                    $source = $snapshot['source'];
                     $memberships = collect($snapshot['memberships']);
                     $stockIds = $memberships->pluck('stock_id')->map(fn ($id): int => (int) $id)->values()->all();
                     if (count($stockIds) !== count(array_unique($stockIds))) {
@@ -324,7 +329,7 @@ class MlHistoricalUniverseMembershipService
                             'classification_available_at' => $entry['classification_available_at'] ?? null,
                             'classification_revision_hash' => $entry['classification_revision_hash'] ?? null,
                             'source' => $source,
-                            'snapshot_key' => $entry['snapshot_key'] ?? $source.':'.$date,
+                            'snapshot_key' => $entry['snapshot_key'] ?? $snapshot['snapshot_key'] ?? $source.':'.$date,
                             'provider_symbol' => $entry['provider_symbol'] ?? null,
                             'provider_token' => $entry['provider_token'] ?? null,
                             'exchange' => $entry['exchange'] ?? 'NSE',
@@ -397,6 +402,7 @@ class MlHistoricalUniverseMembershipService
             sort($requested);
         }
         $failed = [];
+        $diagnostics = $run->source_diagnostics ?? [];
         $retryCounts = is_array($run->retry_counts ?? null) ? $run->retry_counts : [];
         foreach ($requested as $date) {
             if (in_array($date, $run->processed_dates ?? [], true)) {
@@ -408,9 +414,13 @@ class MlHistoricalUniverseMembershipService
                 $retryCounts[$date] = $attempt;
                 try {
                     $snapshot = $provider->snapshotForDate($date);
+                    $diagnostics[$date] = $snapshot['diagnostics'] ?? [];
+                    $run->forceFill(['source_diagnostics' => $diagnostics])->save();
                     $this->backfillHistoricalSnapshots([$snapshot], $source, (int) $run->id, $universeKey);
                     break;
                 } catch (MlHistoricalUniverseProviderException $exception) {
+                    $diagnostics[$date] = $exception->diagnostics;
+                    $run->forceFill(['source_diagnostics' => $diagnostics])->save();
                     if (! $exception->retryable || $attempt >= max(1, $maxAttempts)) {
                         $failed[$date] = $exception->getMessage();
                         $run->forceFill([

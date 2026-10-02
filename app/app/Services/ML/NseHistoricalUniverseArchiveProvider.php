@@ -15,7 +15,7 @@ use ZipArchive;
  */
 class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvider
 {
-    public const PARSER_VERSION = 'nse-pit-universe-parser-2';
+    public const PARSER_VERSION = 'nse-pit-universe-parser-3';
     private const ALLOWED_SERIES = ['EQ', 'BE', 'BZ'];
 
     public function snapshotForDate(string $date): array
@@ -66,6 +66,7 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
                 continue;
             }
             if (isset($seen[$stock->id])) {
+                $unknown[] = $member['isin'] ?: $member['symbol'];
                 continue;
             }
             $seen[$stock->id] = true;
@@ -103,7 +104,7 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
                 $diagnostics[$key] = $file[$key];
             }
         }
-        if ($requireMapping && $percentage < 90.0) {
+        if ($requireMapping && $mappedCount * 10 < $sourceCount * 9) {
             throw new MlHistoricalUniverseProviderException(
                 "NSE historical universe mapping below 90% for {$date} ({$percentage}%)",
                 false,
@@ -170,11 +171,11 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
             $archiveSha = hash_file('sha256', $archivePath) ?: null;
         }
 
+        // Cached CSVs must pass the same date checks as newly staged evidence.
+        $validated = $this->findSourceFile($date, $csvPath, 'nse_cash_bhavcopy');
+
         return [
-            'path' => $csvPath,
-            'source' => 'nse_cash_bhavcopy',
-            'validated_date' => $date,
-            'date_basis' => 'official_archive_filename_and_content',
+            ...$validated,
             'archive_sha256' => $archiveSha ?: hash('sha256', (string) file_get_contents($csvPath)),
             'archive_url' => $descriptor['url'],
         ];
@@ -415,6 +416,12 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
             $stock = (clone $query)->whereRaw('UPPER(isin) = ?', [$member['isin']])->first();
             if ($stock) return $stock;
         }
-        return $query->whereRaw('UPPER(symbol) = ?', [$member['symbol']])->first();
+        $stock = $query->whereRaw('UPPER(symbol) = ?', [$member['symbol']])->first();
+        // A reused symbol cannot override a conflicting stable identity.
+        if ($stock !== null && $member['isin'] && trim((string) $stock->isin) !== ''
+            && strtoupper(trim($stock->isin)) !== $member['isin']) {
+            return null;
+        }
+        return $stock;
     }
 }

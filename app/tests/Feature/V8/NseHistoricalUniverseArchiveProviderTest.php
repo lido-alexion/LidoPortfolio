@@ -18,6 +18,123 @@ class NseHistoricalUniverseArchiveProviderTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Http::preventStrayRequests();
+        config([
+            'forward_data.official_source_enabled' => false,
+            'ml.historical_universe.mii_path' => '',
+            'ml.historical_universe.bhavcopy_path' => '',
+        ]);
+    }
+
+    public function test_conflicting_isin_is_not_mapped_by_reused_symbol_and_failure_is_audited(): void
+    {
+        Stock::query()->create(['symbol' => 'REUSED', 'exchange' => 'NSE', 'isin' => 'INE000000002', 'name' => 'Current company']);
+        $path = storage_path('framework/testing/conflict-20240830.csv');
+        File::put($path, "SYMBOL,SERIES,ISIN\nREUSED,EQ,INE000000001\n");
+        config(['ml.historical_universe.bhavcopy_path' => $path]);
+        try {
+            $result = app(MlHistoricalUniverseMembershipService::class)->backfillFromProvider(
+                ['2024-08-30'], app(NseHistoricalUniverseArchiveProvider::class), 'nse-test', 1,
+            );
+            $this->assertSame('failed', $result['status']);
+            $audit = MlUniverseSnapshotBackfillRun::findOrFail($result['run_id'])->source_diagnostics['2024-08-30'];
+            $this->assertSame(1, $audit['source_company_equity_member_count']);
+            $this->assertSame(0, $audit['mapped_count']);
+            $this->assertSame(['INE000000001'], $audit['unmapped_identifiers']);
+            $this->assertEquals(0, $audit['mapping_percentage']);
+            $this->assertDatabaseCount('stox_ml_universe_snapshot_boundaries', 0);
+            $this->assertDatabaseCount('stox_ml_universe_memberships', 0);
+
+            Stock::query()->where('symbol', 'REUSED')->update(['isin' => 'INE000000001']);
+            $resumed = app(MlHistoricalUniverseMembershipService::class)->backfillFromProvider(
+                ['2024-08-30'], app(NseHistoricalUniverseArchiveProvider::class), 'nse-test', 1,
+                MlHistoricalUniverseMembershipService::ACTIVE_ELIGIBLE_NSE, $result['run_id'],
+            );
+            $this->assertSame('completed', $resumed['status']);
+            $this->assertSame([], $resumed['failed_dates']);
+            $this->assertEquals(100, $resumed['source_diagnostics']['2024-08-30']['mapping_percentage']);
+            $this->assertDatabaseCount('stox_ml_universe_snapshot_boundaries', 1);
+            $this->assertDatabaseCount('stox_ml_universe_snapshot_backfill_runs', 1);
+        } finally {
+            File::delete($path);
+        }
+    }
+
+    public function test_exactly_ninety_percent_mapping_materializes_with_unknown_identifiers(): void
+    {
+        $contents = "SYMBOL,SERIES,ISIN\n";
+        foreach (range(1, 10) as $number) {
+            $isin = sprintf('INE%09d', $number);
+            $contents .= "MEMBER{$number},EQ,{$isin}\n";
+            if ($number < 10) {
+                Stock::query()->create(['symbol' => 'MEMBER'.$number, 'exchange' => 'NSE', 'isin' => $isin, 'name' => 'Member']);
+            }
+        }
+        $path = storage_path('framework/testing/floor-20240830.csv');
+        File::put($path, $contents);
+        config(['ml.historical_universe.bhavcopy_path' => $path]);
+        try {
+            $result = app(MlHistoricalUniverseMembershipService::class)->backfillFromProvider(
+                ['2024-08-30'], app(NseHistoricalUniverseArchiveProvider::class), 'nse-test', 1,
+            );
+            $this->assertSame('completed', $result['status']);
+            $boundary = MlUniverseSnapshotBoundary::firstOrFail();
+            $this->assertEquals(90, $boundary->quality_diagnostics['mapping_percentage']);
+            $this->assertSame(['INE000000010'], $boundary->quality_diagnostics['unmapped_identifiers']);
+            $this->assertSame(9, $boundary->member_count);
+        } finally {
+            File::delete($path);
+        }
+    }
+
+    public function test_cached_official_source_cannot_bypass_content_date_validation(): void
+    {
+        $directory = storage_path('framework/testing/cached-nse-'.bin2hex(random_bytes(4)));
+        File::makeDirectory($directory);
+        File::put($directory.'/BhavCopy_NSE_CM_0_0_0_20240830_F_0000.csv', "TradDt,TckrSymb,SctySrs,ISIN\n20240829,WRONG,EQ,INE000000001\n");
+        config(['forward_data.official_source_enabled' => true, 'forward_data.official_source_directory' => $directory]);
+        try {
+            $this->expectException(MlHistoricalUniverseProviderException::class);
+            $this->expectExceptionMessage('content date does not match');
+            app(NseHistoricalUniverseArchiveProvider::class)->snapshotForDate('2024-08-30');
+        } finally {
+            Http::assertNothingSent();
+            File::deleteDirectory($directory);
+        }
+    }
+
+    public function test_missing_mii_date_falls_back_to_bhavcopy_and_persists_actual_source(): void
+    {
+        Stock::query()->create(['symbol' => 'FALLBACK', 'exchange' => 'NSE', 'isin' => 'INE000000001', 'name' => 'Fallback']);
+        $directory = storage_path('framework/testing/fallback-nse-'.bin2hex(random_bytes(4)));
+        File::makeDirectory($directory);
+        File::put($directory.'/mii-20240829.csv', "SYMBOL,SERIES,ISIN\nFALLBACK,EQ,INE000000001\n");
+        $path = $directory.'/bhav-20240830.csv';
+        File::put($path, "TradDt,TckrSymb,SctySrs,ISIN\n20240830,FALLBACK,BZ,INE000000001\n");
+        config(['ml.historical_universe.mii_path' => $directory, 'ml.historical_universe.bhavcopy_path' => $path]);
+        // Keep the MII directory separate from the cash-market file.
+        File::makeDirectory($directory.'/mii');
+        File::move($directory.'/mii-20240829.csv', $directory.'/mii/mii-20240829.csv');
+        config(['ml.historical_universe.mii_path' => $directory.'/mii']);
+        try {
+            $result = app(MlHistoricalUniverseMembershipService::class)->backfillFromProvider(
+                ['2024-08-30'], app(NseHistoricalUniverseArchiveProvider::class), 'nse-test', 1,
+            );
+            $this->assertSame('completed', $result['status']);
+            $boundary = MlUniverseSnapshotBoundary::firstOrFail();
+            $this->assertSame('nse_cash_bhavcopy', $boundary->source);
+            $this->assertStringStartsWith('udiff;', $boundary->provider_response_version);
+            $this->assertDatabaseHas('stox_ml_universe_memberships', [
+                'source' => 'nse_cash_bhavcopy', 'snapshot_key' => $boundary->snapshot_key, 'sector_snapshot' => null,
+            ]);
+        } finally {
+            File::deleteDirectory($directory);
+        }
+    }
+
     public function test_legacy_bhavcopy_parser_filters_series_and_funds(): void
     {
         $result = app(NseHistoricalUniverseArchiveProvider::class)->parseLegacyBhavcopy("SYMBOL,SERIES,ISIN\nRENAME,EQ,INE000000001\nETF,EQ,INF000000002\nFUT,XX,INE000000003\nBOND,BE,INE000000004\n");

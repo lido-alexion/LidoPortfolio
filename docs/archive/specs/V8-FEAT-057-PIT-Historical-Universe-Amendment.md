@@ -124,3 +124,10 @@ The `ml:backfill-nse-universe --from=... --to=...` form resolves dates from StoX
 ## Normative operations amendment — 2026-09-30
 
 [Production ML acceptance](../../current/ml-production-acceptance.md) freezes Admin diagnostics, private source staging, bounded PIT backfill, linked deployed acceptance campaigns and the prerequisite lifecycle evidence gate. It explicitly resolves the FEAT-065 research-location boundary without changing model activation authority.
+
+
+## Issue #18 audit clarification — 2026-10-02
+
+ISIN-first resolution must not map an unmatched historical ISIN onto a different nonempty current ISIN merely because the symbol was reused. Such identifiers count as unknown and remain subject to the 90% floor. Cached official downloads require the same filename/content date checks as staged files. Source provenance must be retained on both boundaries and membership rows; failed quality gates retain their per-date diagnostics on the durable backfill run without creating a boundary. Registry `v8-registry-13` explicitly identifies the dated membership source and sector formula versions; both sector features remain challenger/evidence-required.
+
+The legacy `ml:capture-universe-membership` command is restricted to today’s date. Past/future `--effective-from` values fail before membership or boundary writes; historical population must use dated-source backfill.

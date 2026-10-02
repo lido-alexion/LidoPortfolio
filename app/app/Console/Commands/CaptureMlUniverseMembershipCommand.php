@@ -9,7 +9,7 @@ use Illuminate\Console\Command;
 class CaptureMlUniverseMembershipCommand extends Command
 {
     protected $signature = 'ml:capture-universe-membership
-        {--effective-from= : ISO date for the snapshot effective boundary}
+        {--effective-from= : ISO date for the snapshot boundary; must be today}
         {--source=admin_snapshot : auditable source label}
         {--snapshot-key= : optional stable source snapshot identifier}';
 
