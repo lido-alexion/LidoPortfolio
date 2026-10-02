@@ -83,7 +83,14 @@ export default function GuidedTourOverlay({
             <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
                 {t('guidedTour.step.progress', { current: stepIndex + 1, total: stepCount })}. {t(step.titleKey)}. {t(step.bodyKey)}
             </div>
-            <div className="lido-guided-tour-scrim" onClick={onClose} role="presentation" />
+            <div
+                className="lido-guided-tour-scrim"
+                onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }}
+                role="presentation"
+            />
             {holeStyle && (
                 <div className="lido-guided-tour-spotlight" style={holeStyle} aria-hidden="true" />
             )}
