@@ -103,6 +103,7 @@ class DataQualityDetectionTest extends TestCase
         $this->assertSame('Bonus 1:2', $issue->raw_payload['subject']);
         $this->assertSame('1:2', $issue->evidences->first()->evidence_value);
         $this->assertSame('INE04AK01010', $issue->evidences->first()->evidence_payload['isin']);
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'index=equities'));
     }
 
     public function test_heuristic_detection_creates_pending_issue_with_run_id(): void

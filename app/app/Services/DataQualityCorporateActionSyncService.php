@@ -37,11 +37,12 @@ class DataQualityCorporateActionSyncService
         $query = (bool) config('services.data_quality.corporate_actions_feed_supports_window', false)
             ? ['from_date' => $windowFrom, 'to_date' => $windowTo]
             : [];
-        $response = Http::withHeaders([
+        $client = Http::withHeaders([
             'Accept' => 'application/json',
             'Referer' => 'https://www.nseindia.com/',
             'User-Agent' => 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/152 Safari/537.36 StoX/1.0',
-        ])->retry(3, 1000)->timeout(45)->get($url, $query);
+        ])->retry(3, 1000)->timeout(45);
+        $response = $query === [] ? $client->get($url) : $client->get($url, $query);
         if (! $response->ok()) {
             $checkpoint->forceFill(['last_error' => 'HTTP '.$response->status()])->save();
             return [
