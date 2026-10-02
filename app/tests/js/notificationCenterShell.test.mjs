@@ -24,6 +24,14 @@ test('bell shows unread count without marking items merely by opening the panel'
     assert.match(bell, /notification-center\/\$\{id\}\/read/);
 });
 
+test('notification pane stays bounded and exposes full title text on hover', () => {
+    assert.match(bell, /lido-notification-menu/);
+    assert.match(bell, /notificationPreview/);
+    assert.match(bell, /title=\{item\.title\}/);
+    assert.match(bell, /lido-notification-item-title/);
+    assert.doesNotMatch(bell, /item\.attention_state === 'unread' \? ' fw-semibold'/);
+});
+
 test('critical presentation depends on active condition count and has no dismiss control', () => {
     assert.match(banner, /meta\?\.active_critical_count/);
     assert.match(banner, /count === null \|\| count === undefined/);
@@ -54,6 +62,7 @@ test('Notification Center exposes per-channel delivery state and current-model r
 });
 
 test('Notification History renders only safe local primary actions and labels reminder generations', () => {
+    assert.match(center, /import \{ Link, useSearchParams \} from 'react-router-dom'/);
     assert.match(center, /function safePrimaryAction/);
     assert.match(center, /route\.startsWith\('\/'\)/);
     assert.match(center, /route\.startsWith\('\/\/'\)/);

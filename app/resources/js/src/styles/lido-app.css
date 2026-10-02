@@ -269,6 +269,55 @@ body {
     box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.2);
 }
 
+@media (min-width: 1200px) {
+    .lido-global-search {
+        flex: 1 1 32rem;
+        width: min(32rem, 34vw);
+        max-width: 32rem;
+    }
+}
+
+.lido-global-search-surface--inline {
+    position: relative;
+    width: 100%;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}
+
+.lido-global-search-field {
+    position: relative;
+}
+
+.lido-global-search-field > svg {
+    position: absolute;
+    top: 50%;
+    left: 0.75rem;
+    z-index: 1;
+    color: var(--lido-text-muted);
+    pointer-events: none;
+    transform: translateY(-50%);
+}
+
+.lido-global-search-field .lido-global-search-input {
+    padding-left: 2.35rem;
+}
+
+.lido-global-search-inline-results {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    left: 0;
+    z-index: 1042;
+    padding: 0.75rem;
+    color: var(--lido-text);
+    background: var(--lido-bg-surface);
+    border: 1px solid var(--lido-border);
+    border-radius: 8px;
+    box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.2);
+}
+
 .lido-global-search-surface--desktop {
     position: absolute;
     top: calc(100% + 0.5rem);
@@ -4599,6 +4648,33 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     display: flex;
     align-items: flex-start;
     gap: 0.5rem;
+}
+
+.lido-notification-menu {
+    position: fixed;
+    top: 4.5rem;
+    right: 1rem;
+    width: min(24rem, calc(100vw - 2rem));
+    max-width: calc(100vw - 2rem);
+    max-height: min(70vh, 32rem);
+    overflow-y: auto;
+    z-index: 1050;
+    font-size: 0.7rem;
+    font-weight: 400;
+}
+
+.lido-notification-item-title {
+    display: inline;
+    font-weight: 400;
+}
+
+@media (max-width: 575.98px) {
+    .lido-notification-menu {
+        top: 4rem;
+        right: 0.5rem;
+        width: calc(100vw - 1rem);
+        max-width: calc(100vw - 1rem);
+    }
 }
 
 .lido-knowledge-tag-row-label {

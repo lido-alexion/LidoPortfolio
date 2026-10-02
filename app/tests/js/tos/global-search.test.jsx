@@ -43,8 +43,7 @@ describe('Global Search', () => {
         const user = userEvent.setup();
         renderSearch();
 
-        await user.click(screen.getByRole('button', { name: 'Open global search' }));
-        const input = screen.getByRole('searchbox', { name: 'Search pages or stocks' });
+        const input = screen.getByRole('searchbox', { name: 'Search pages, stocks, or help' });
         await user.type(input, 'hold');
 
         expect(await screen.findByRole('link', { name: 'Holdings, Portfolio' })).toBeInTheDocument();
@@ -63,8 +62,7 @@ describe('Global Search', () => {
         apiMock.get.mockResolvedValue({ data: { data: [{ id: 7, symbol: 'INFY', name: 'Infosys Limited', exchange: 'NSE' }] } });
         renderSearch();
 
-        await user.click(screen.getByRole('button', { name: 'Open global search' }));
-        const input = screen.getByRole('searchbox', { name: 'Search pages or stocks' });
+        const input = screen.getByRole('searchbox', { name: 'Search pages, stocks, or help' });
         await user.type(input, 'I');
         await new Promise((resolve) => setTimeout(resolve, 350));
         expect(apiMock.get).not.toHaveBeenCalled();
@@ -89,8 +87,7 @@ describe('Global Search', () => {
             .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve; }));
         renderSearch();
 
-        await user.click(screen.getByRole('button', { name: 'Open global search' }));
-        const input = screen.getByRole('searchbox', { name: 'Search pages or stocks' });
+        const input = screen.getByRole('searchbox', { name: 'Search pages, stocks, or help' });
         await user.type(input, 'INF');
         await waitFor(() => expect(apiMock.get).toHaveBeenCalledTimes(1));
         await user.type(input, 'Y');
@@ -110,8 +107,7 @@ describe('Global Search', () => {
         apiMock.get.mockRejectedValue(new Error('provider unavailable'));
         renderSearch();
 
-        await user.click(screen.getByRole('button', { name: 'Open global search' }));
-        await user.type(screen.getByRole('searchbox', { name: 'Search pages or stocks' }), 'hold');
+        await user.type(screen.getByRole('searchbox', { name: 'Search pages, stocks, or help' }), 'hold');
 
         expect(await screen.findByRole('link', { name: 'Holdings, Portfolio' })).toBeInTheDocument();
         await waitFor(() => expect(screen.getByText(/Stock search is temporarily unavailable/i)).toBeInTheDocument());
@@ -122,20 +118,16 @@ describe('Global Search', () => {
         const user = userEvent.setup();
         renderSearch();
 
-        const trigger = screen.getByRole('button', { name: 'Open global search' });
-        await user.click(trigger);
-        const input = screen.getByRole('searchbox', { name: 'Search pages or stocks' });
+        const input = screen.getByRole('searchbox', { name: 'Search pages, stocks, or help' });
+        await user.click(input);
         expect(input).toHaveFocus();
         await user.type(input, 'hold');
         await screen.findByRole('link', { name: 'Holdings, Portfolio' });
         await user.keyboard('{ArrowDown}{Enter}');
         expect(screen.getByTestId('location')).toHaveTextContent('/holdings');
 
-        await user.click(trigger);
-        expect(screen.getByRole('searchbox', { name: 'Search pages or stocks' })).toHaveFocus();
         await user.keyboard('{Escape}');
-        expect(trigger).toHaveFocus();
-        expect(screen.queryByRole('searchbox', { name: 'Search pages or stocks' })).not.toBeInTheDocument();
+        expect(screen.getByRole('searchbox', { name: 'Search pages, stocks, or help' })).toBeInTheDocument();
     });
 
     it('uses a modal mobile surface with focus containment and restoration', async () => {
@@ -146,7 +138,7 @@ describe('Global Search', () => {
         const trigger = screen.getByRole('button', { name: 'Open global search' });
         await user.click(trigger);
         const dialog = screen.getByRole('dialog', { name: 'Search StoX' });
-        const input = screen.getByRole('searchbox', { name: 'Search pages or stocks' });
+        const input = screen.getByRole('searchbox', { name: 'Search pages, stocks, or help' });
         expect(dialog).toBeInTheDocument();
         expect(input).toHaveFocus();
 

@@ -3,6 +3,11 @@ import { Link } from 'react-router-dom';
 import api from '../api';
 import { useNotifications } from '../context/NotificationContext';
 
+function notificationPreview(title, maxLength = 140) {
+    const value = String(title || '');
+    return value.length > maxLength ? `${value.slice(0, maxLength - 3)}...` : value;
+}
+
 export default function NotificationBell() {
     const { items, meta, loading, error, refresh } = useNotifications();
     const [open, setOpen] = useState(false);
@@ -49,7 +54,7 @@ export default function NotificationBell() {
                 )}
             </button>
             {open && (
-                <div className="dropdown-menu dropdown-menu-end show p-0 shadow" style={{ width: 'min(24rem, calc(100vw - 2rem))' }}>
+                <div className="dropdown-menu show p-0 shadow lido-notification-menu">
                     <div className="px-3 py-2 border-bottom fw-semibold">Notifications</div>
                     {items.length === 0 ? (
                         <div className="px-3 py-4 text-muted small">No notifications yet.</div>
@@ -57,13 +62,14 @@ export default function NotificationBell() {
                         <Link
                             key={item.id}
                             to={`/notification-history?notification=${item.id}`}
-                            className={`dropdown-item text-wrap py-2 border-bottom${item.attention_state === 'unread' ? ' fw-semibold' : ''}`}
+                            className="dropdown-item text-wrap py-2 border-bottom lido-notification-item"
                             onClick={() => openNotification(item.id)}
+                            title={item.title}
                         >
                             <span className={`badge me-2 ${item.severity === 'critical' ? 'text-bg-danger' : item.severity === 'action_required' ? 'text-bg-warning' : 'text-bg-secondary'}`}>
                                 {item.severity.replace('_', ' ')}
                             </span>
-                            {item.title}
+                            <span className="lido-notification-item-title">{notificationPreview(item.title)}</span>
                         </Link>
                     ))}
                     <Link to="/notification-history" className="dropdown-item text-center py-2" onClick={() => setOpen(false)}>

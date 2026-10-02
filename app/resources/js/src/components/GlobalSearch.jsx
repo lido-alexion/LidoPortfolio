@@ -97,7 +97,7 @@ function SearchResults({ results, activeIndex, onHover, onSelect }) {
     );
 }
 
-function SearchSurface({ mobile, inputRef, surfaceRef, query, setQuery, results, activeIndex, onKeyDown, onHover, onSelect, onClose, onClearHistory, hasHistory, stockLoading, stockError }) {
+function SearchSurface({ mobile, inline = false, open = false, inputRef, surfaceRef, query, setQuery, results, activeIndex, onKeyDown, onHover, onSelect, onClose, onClearHistory, hasHistory, stockLoading, stockError, onFocus }) {
     const hasQuery = Boolean(normalizeGlobalSearchQuery(query));
     const hasResults = results.length > 0;
     const status = stockLoading
@@ -111,7 +111,7 @@ function SearchSurface({ mobile, inputRef, surfaceRef, query, setQuery, results,
     return (
         <div
             ref={surfaceRef}
-            className={`lido-global-search-surface${mobile ? ' lido-global-search-surface--mobile' : ' lido-global-search-surface--desktop'}`}
+            className={`lido-global-search-surface${inline ? ' lido-global-search-surface--inline' : mobile ? ' lido-global-search-surface--mobile' : ' lido-global-search-surface--desktop'}`}
             {...(mobile ? {
                 role: 'dialog',
                 'aria-modal': 'true',
@@ -126,31 +126,39 @@ function SearchSurface({ mobile, inputRef, surfaceRef, query, setQuery, results,
                     </button>
                 </header>
             )}
-            <label className="visually-hidden" htmlFor="lido-global-search-input">Search pages or stocks</label>
-            <input
-                ref={inputRef}
-                id="lido-global-search-input"
-                type="search"
-                className="form-control lido-global-search-input"
-                placeholder="Search pages or stocks"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                onKeyDown={onKeyDown}
-                autoComplete="off"
-                aria-describedby="lido-global-search-status"
-            />
-            <div id="lido-global-search-status" className="lido-global-search-status" aria-live="polite">
-                {hasQuery && stockLoading ? 'Searching stocks…' : null}
-                {hasQuery && !stockLoading && stockError ? 'Stock search is temporarily unavailable.' : null}
-                {hasQuery && !stockLoading && !stockError && !hasResults ? 'No matches' : null}
-                {!hasQuery ? 'Search pages, stocks, or How do I? help' : null}
+            <label className="visually-hidden" htmlFor="lido-global-search-input">Search pages, stocks, or help</label>
+            <div className="lido-global-search-field">
+                <Search size={17} aria-hidden="true" />
+                <input
+                    ref={inputRef}
+                    id="lido-global-search-input"
+                    type="search"
+                    className="form-control lido-global-search-input"
+                    placeholder="Search pages, stocks, or help"
+                    value={query}
+                    onFocus={onFocus}
+                    onChange={(event) => setQuery(event.target.value)}
+                    onKeyDown={onKeyDown}
+                    autoComplete="off"
+                    aria-describedby="lido-global-search-status"
+                />
             </div>
-            {!hasQuery && hasHistory ? <button type="button" className="btn btn-sm btn-link px-0" onClick={onClearHistory}>Clear recent help searches</button> : null}
-            {hasResults ? (
-                <SearchResults results={results} activeIndex={activeIndex} onHover={onHover} onSelect={onSelect} />
-            ) : (
-                <div className="lido-global-search-empty">{status || 'Search pages or stocks'}</div>
-            )}
+            {(!inline || open) && <>
+                <div id="lido-global-search-status" className="lido-global-search-status" aria-live="polite">
+                    {hasQuery && stockLoading ? 'Searching stocks…' : null}
+                    {hasQuery && !stockLoading && stockError ? 'Stock search is temporarily unavailable.' : null}
+                    {hasQuery && !stockLoading && !stockError && !hasResults ? 'No matches' : null}
+                    {!hasQuery ? 'Search pages, stocks, or How do I? help' : null}
+                </div>
+                {!hasQuery && hasHistory ? <button type="button" className="btn btn-sm btn-link px-0" onClick={onClearHistory}>Clear recent help searches</button> : null}
+                <div className={inline ? 'lido-global-search-inline-results' : undefined}>
+                    {hasResults ? (
+                        <SearchResults results={results} activeIndex={activeIndex} onHover={onHover} onSelect={onSelect} />
+                    ) : (
+                        <div className="lido-global-search-empty">{status || 'Search pages or stocks'}</div>
+                    )}
+                </div>
+            </>}
         </div>
     );
 }
@@ -352,23 +360,24 @@ function GlobalSearchFeature({ user }) {
 
     return (
         <div className="lido-global-search">
-            <button
-                ref={triggerRef}
-                type="button"
-                className="lido-global-search-trigger lido-icon-action"
-                aria-label="Open global search"
-                title="Search pages, stocks, or How do I? help (Ctrl/Cmd+K)"
-                aria-expanded={open}
-                aria-haspopup={isConstrained ? 'dialog' : undefined}
-                onClick={open ? () => closeSearch(true) : openSearch}
-            >
-                <Search size={18} aria-hidden="true" />
-            </button>
-            {open && (
-                <>
-                    {isConstrained && <div className="lido-global-search-backdrop" onMouseDown={() => closeSearch(true)} aria-hidden="true" />}
+            {isConstrained ? <>
+                <button
+                    ref={triggerRef}
+                    type="button"
+                    className="lido-global-search-trigger lido-icon-action"
+                    aria-label="Open global search"
+                    title="Search pages, stocks, or How do I? help (Ctrl/Cmd+K)"
+                    aria-expanded={open}
+                    aria-haspopup="dialog"
+                    onClick={open ? () => closeSearch(true) : openSearch}
+                >
+                    <Search size={18} aria-hidden="true" />
+                </button>
+                {open && <>
+                    <div className="lido-global-search-backdrop" onMouseDown={() => closeSearch(true)} aria-hidden="true" />
                     <SearchSurface
-                        mobile={isConstrained}
+                        mobile
+                        open={open}
                         inputRef={inputRef}
                         surfaceRef={surfaceRef}
                         query={query}
@@ -384,8 +393,26 @@ function GlobalSearchFeature({ user }) {
                         stockLoading={stockLoading}
                         stockError={stockError}
                     />
-                </>
-            )}
+                </>}
+            </> : <SearchSurface
+                inline
+                open={open}
+                inputRef={inputRef}
+                surfaceRef={surfaceRef}
+                query={query}
+                setQuery={setQuery}
+                results={results}
+                activeIndex={activeIndex}
+                onKeyDown={onKeyDown}
+                onHover={setActiveIndex}
+                onSelect={selectResult}
+                onClose={() => closeSearch(true)}
+                onClearHistory={clearHelpHistory}
+                hasHistory={helpHistory.length > 0}
+                stockLoading={stockLoading}
+                stockError={stockError}
+                onFocus={openSearch}
+            />}
         </div>
     );
 }

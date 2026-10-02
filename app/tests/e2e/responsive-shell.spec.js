@@ -110,7 +110,7 @@ test.describe('responsive shell and representative page archetypes', () => {
         await expect(page.locator('#lido-primary-sidebar')).not.toHaveAttribute('aria-hidden', 'true');
         await expect(page.getByRole('navigation', { name: 'Page visit history' })).toBeVisible();
         await expect(page.getByRole('button', { name: 'Open contextual notes' })).toBeVisible();
-        await expect(page.getByRole('button', { name: 'Open global search' })).toBeVisible();
+        await expect(page.getByRole('searchbox', { name: 'Search pages, stocks, or help' })).toBeVisible();
         await expect(page.getByRole('button', { name: 'Collapse sidebar' })).toBeVisible();
         await page.getByRole('button', { name: 'Collapse sidebar' }).click();
         await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeVisible();
@@ -126,7 +126,7 @@ test.describe('responsive shell and representative page archetypes', () => {
         });
         expect(geometry.width).toBeGreaterThan(900);
         expect(geometry.width).toBeLessThanOrEqual(geometry.viewport);
-        await expect(page.getByRole('button', { name: 'Open global search' })).toBeVisible();
+        await expect(page.getByRole('searchbox', { name: 'Search pages, stocks, or help' })).toBeVisible();
         await expect(page.getByRole('button', { name: 'Open documentation for this page' })).toBeVisible();
         await assertNoDocumentOverflow(page);
     });
