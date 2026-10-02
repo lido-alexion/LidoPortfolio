@@ -187,6 +187,14 @@ body {
     position: relative;
 }
 
+[data-theme='light'] .lido-header {
+    background: color-mix(in srgb, var(--lido-bg-elevated, var(--lido-bg-surface)) 92%, #000 8%);
+}
+
+[data-theme='light'] .lido-header-title {
+    color: var(--lido-a11y-brand-bg);
+}
+
 [data-theme='light'] .lido-header .btn-outline-light {
     --bs-btn-color: var(--lido-text);
     --bs-btn-border-color: var(--lido-text-muted);

@@ -152,7 +152,11 @@ test.describe('responsive shell and representative page archetypes', () => {
 // Resolve translucent control backgrounds against their ancestors before checking contrast.
 async function contrastRatio(locator) {
     return locator.evaluate((element) => {
-        const rgba = (value) => value.match(/[\d.]+/g).map(Number);
+        const rgba = (value) => {
+            const srgb = value.match(/^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\)$/);
+            if (srgb) return [Number(srgb[1]) * 255, Number(srgb[2]) * 255, Number(srgb[3]) * 255, srgb[4] === undefined ? 1 : Number(srgb[4])];
+            return value.match(/[\d.]+/g).map(Number);
+        };
         const blend = (foreground, background) => foreground.slice(0, 3).map(
             (channel, index) => channel * (foreground[3] ?? 1) + background[index] * (1 - (foreground[3] ?? 1)),
         );
@@ -187,7 +191,9 @@ test('header theme keeps shell, text and controls readable across theme changes'
     for (const theme of ['light', 'dark']) {
         await page.emulateMedia({ colorScheme: theme });
         await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-        await expect(header).toHaveCSS('background-color', theme === 'light' ? 'rgb(243, 244, 246)' : 'rgb(0, 0, 0)');
+        await expect(header).toHaveCSS('background-color', theme === 'light'
+            ? 'color(srgb 0.898353 0.901961 0.905569)'
+            : 'rgb(0, 0, 0)');
         await expect(header).toHaveCSS('border-bottom-color', theme === 'light' ? 'rgb(229, 231, 235)' : 'rgb(34, 34, 34)');
         const results = await new AxeBuilder({ page }).include('.lido-header').withRules(['color-contrast']).analyze();
         expect(results.violations).toEqual([]);
