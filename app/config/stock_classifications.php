@@ -1,0 +1,62 @@
+<?php
+
+return [
+    'taxonomies' => [
+        'nse-indices-4-tier-v1' => [
+            'source' => 'nse_indices_classification_structure_2022_11',
+            'source_url' => 'https://nsearchives.nseindia.com/s3fs-public/inline-files/nse-indices_industry-classification-structure-2022-11.pdf',
+            'industries' => [
+                'Automobile & Auto Components' => ['Auto Components & Equipment', 'Passenger Cars & Utility Vehicles', 'Two Wheelers', 'Commercial Vehicles'],
+                'Consumer Discretionary' => ['Consumer Durables', 'Textiles', 'Retailing'],
+                'Consumer Services' => ['Hotels, Resorts & Cruise Lines', 'Other Consumer Services'],
+                'Energy' => ['Oil & Gas', 'Power'],
+                'Financial Services' => ['Banks', 'Capital Markets', 'Finance', 'Insurance'],
+                'Fast Moving Consumer Goods' => ['Food Products', 'Beverages', 'Personal Products'],
+                'Healthcare' => ['Pharmaceuticals', 'Healthcare Services', 'Medical Equipment & Supplies'],
+                'Industrials' => ['Construction', 'Electrical Equipment', 'Industrial Products'],
+                'Information Technology' => ['IT Services', 'Software Products'],
+                'Metals & Mining' => ['Ferrous Metals', 'Non-Ferrous Metals', 'Minerals & Mining'],
+                'Telecommunication' => ['Telecom Services', 'Telecom Equipment'],
+                'Utilities' => ['Gas Utilities', 'Water Utilities', 'Electric Utilities'],
+            ],
+            'providers' => [
+                'nse_quote_equity_free' => [
+                    'sectors' => [
+                        'Automobile and Auto Components' => 'Automobile & Auto Components',
+                        'Consumer Discretionary' => 'Consumer Discretionary',
+                        'Consumer Services' => 'Consumer Services',
+                        'Energy' => 'Energy',
+                        'Financials' => 'Financial Services',
+                        'Financial Services' => 'Financial Services',
+                        'Fast Moving Consumer Goods' => 'Fast Moving Consumer Goods',
+                        'Healthcare' => 'Healthcare',
+                        'Industrials' => 'Industrials',
+                        'Information Technology' => 'Information Technology',
+                        'Technology' => 'Information Technology',
+                        'Metals & Mining' => 'Metals & Mining',
+                        'Telecommunication' => 'Telecommunication',
+                        'Utilities' => 'Utilities',
+                    ],
+                    'industries' => [
+                        'Auto Components & Equipment' => 'Auto Components & Equipment',
+                        'Banks' => 'Banks',
+                        'Capital Markets' => 'Capital Markets',
+                        'Finance' => 'Finance',
+                        'Insurance' => 'Insurance',
+                        'IT Services' => 'IT Services',
+                        'Software' => 'IT Services',
+                        'Software Products' => 'Software Products',
+                        'Pharmaceuticals' => 'Pharmaceuticals',
+                        'Healthcare Services' => 'Healthcare Services',
+                        'Power' => 'Power',
+                        'Oil & Gas' => 'Oil & Gas',
+                        'Telecom Services' => 'Telecom Services',
+                        'Telecom Equipment' => 'Telecom Equipment',
+                        'Ferrous Metals' => 'Ferrous Metals',
+                        'Non-Ferrous Metals' => 'Non-Ferrous Metals',
+                    ],
+                ],
+            ],
+        ],
+    ],
+];

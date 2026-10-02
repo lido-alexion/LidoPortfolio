@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Stock;
 use App\Models\StockClassificationObservation;
 use App\Models\StockClassificationOverrideRevision;
+use App\Models\StockClassificationRefreshState;
 use App\Models\User;
 use App\Models\V8\MlUniverseMembership;
 use App\Services\StockClassificationService;
@@ -39,6 +40,8 @@ class StockClassificationAdminTest extends TestCase
         $this->assertSame(StockClassificationService::TAXONOMY, $observation->taxonomy_version);
         $this->assertSame('Technology', $observation->provider_sector);
         $this->assertSame('Software', $observation->provider_industry);
+        $this->assertSame('Information Technology', $observation->sector);
+        $this->assertSame('IT Services', $observation->industry);
         $this->assertSame(hash('sha256', json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)), $observation->raw_evidence_sha256);
         $this->assertSame($observedAt->utc()->toIso8601String(), $observation->first_observed_at->utc()->toIso8601String());
 
@@ -59,17 +62,17 @@ class StockClassificationAdminTest extends TestCase
         $service->recordObservation($peer, $this->payload('Financials', 'Banks'));
 
         $this->actingAs($admin)->putJson('/api/admin/stocks/'.$stock->id.'/classification/override', [
-            'sector' => 'Technology', 'industry' => 'Banks', 'reason' => 'invalid pair',
+            'sector' => 'Information Technology', 'industry' => 'Banks', 'reason' => 'invalid pair',
         ])->assertUnprocessable();
 
         $this->actingAs($admin)->putJson('/api/admin/stocks/'.$stock->id.'/classification/override', [
-            'sector' => 'Financials', 'industry' => 'Banks', 'reason' => 'PO-approved fallback',
+            'sector' => 'Financial Services', 'industry' => 'Banks', 'reason' => 'PO-approved fallback',
         ])->assertOk()->assertJsonPath('data.source_type', 'manual_override');
 
         $this->assertDatabaseHas('stox_stock_classification_override_revisions', ['action' => 'created', 'actor_id' => $admin->id]);
         $this->actingAs($admin)->deleteJson('/api/admin/stocks/'.$stock->id.'/classification/override')
             ->assertOk()->assertJsonPath('data.source_type', 'automatic_observation')
-            ->assertJsonPath('data.sector', 'Technology');
+            ->assertJsonPath('data.sector', 'Information Technology');
         $this->assertDatabaseHas('stox_stock_classification_override_revisions', ['action' => 'removed', 'actor_id' => $admin->id]);
     }
 
@@ -83,10 +86,45 @@ class StockClassificationAdminTest extends TestCase
         ]);
         $service = app(StockClassificationService::class);
         $service->recordObservation($stock, $this->payload('Technology', 'Software'));
-        $service->saveOverride($stock, $admin->id, 'Technology', 'Software', 'manual');
+        $service->saveOverride($stock, $admin->id, 'Information Technology', 'IT Services', 'manual');
 
         $this->assertDatabaseHas('stox_ml_universe_memberships', ['id' => $membership->id, 'sector_snapshot' => null]);
         $this->assertNull($stock->fresh()->sector);
+    }
+
+    public function test_approved_taxonomy_is_available_without_provider_observations(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $stock = $this->stock('OUTAGE');
+
+        $this->actingAs($admin)->getJson('/api/admin/stock-classifications/options')
+            ->assertOk()
+            ->assertJsonPath('data.taxonomy_version', StockClassificationService::TAXONOMY)
+            ->assertJsonFragment(['Information Technology'])
+            ->assertJsonFragment(['IT Services']);
+
+        $this->actingAs($admin)->putJson('/api/admin/stocks/'.$stock->id.'/classification/override', [
+            'sector' => 'Information Technology', 'industry' => 'IT Services', 'reason' => 'provider outage fallback',
+        ])->assertOk()->assertJsonPath('data.source_type', 'manual_override');
+    }
+
+    public function test_provider_403_is_a_bounded_retry_and_does_not_create_an_observation(): void
+    {
+        $stock = $this->stock('TCS');
+        Http::fake(fn ($request) => str_contains($request->url(), 'quote-equity')
+            ? Http::response('<html>Access Denied</html>', 403)
+            : Http::response([], 200));
+
+        $this->expectException(\RuntimeException::class);
+        try {
+            app(StockClassificationService::class)->refresh($stock);
+        } finally {
+            $this->assertDatabaseCount('stox_stock_classification_observations', 0);
+            $this->assertDatabaseHas('stox_stock_classification_refresh_states', [
+                'stock_id' => $stock->id, 'attempts' => 1,
+            ]);
+            $this->assertNotNull(StockClassificationRefreshState::query()->firstOrFail()->next_attempt_at);
+        }
     }
 
     public function test_refresh_command_retries_unknown_ipo_and_refreshes_old_observations(): void

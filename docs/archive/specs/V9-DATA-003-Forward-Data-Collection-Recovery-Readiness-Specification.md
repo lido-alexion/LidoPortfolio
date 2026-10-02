@@ -183,12 +183,16 @@ Additive migrations use explicit short MySQL index names and portability checks.
 
 The PO-approved free-source path is the NSE quote-equity `industryInfo` response,
 stored as forward observations under the explicit `nse-indices-4-tier-v1` taxonomy.
-Provider labels are mapped into the validated sector/industry relationship for
-that taxonomy; labels from another taxonomy must not be mixed into the same
-selector or observation. Each observation retains provider, source URL, raw
-evidence, SHA-256 hash, first-observed timestamp and subsequent observation
-timestamps. Observation time is provenance, not an official historical effective
-date, and the collector must never mutate an earlier membership snapshot.
+The versioned taxonomy and validated sector/industry relationships are shipped
+independently of provider observations so Admin fallback remains usable during a
+provider outage. Provider labels are explicitly mapped into that taxonomy; labels
+from another taxonomy must not be mixed into the same selector or observation.
+Each observation retains provider, source URL, raw evidence, SHA-256 hash,
+first-observed timestamp and subsequent observation timestamps. Observation time
+is provenance, not an official historical effective date, and the collector must
+never mutate an earlier membership snapshot. HTTP 403, authentication and other
+source-access failures remain bounded retry blockers; controls must not bypass
+provider access restrictions or silently substitute an unverified source.
 
 The scheduled refresh prioritizes unknown and newly listed NSE stocks, then the
 oldest successful observation, with bounded retries. A free-source outage leaves

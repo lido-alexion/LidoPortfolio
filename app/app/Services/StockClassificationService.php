@@ -21,6 +21,10 @@ class StockClassificationService
     /** @return array{sectors:list<string>,industries:array<string,list<string>>,taxonomy_version:string} */
     public function options(?string $sector = null): array
     {
+        $taxonomy = $this->taxonomyDefinition();
+        $industries = collect($taxonomy['industries'] ?? [])
+            ->map(fn (array $values): array => array_values(array_unique($values)))
+            ->sortKeys();
         $pairs = StockClassificationObservation::query()
             ->where('provider', self::PROVIDER)
             ->where('taxonomy_version', self::TAXONOMY)
@@ -29,10 +33,14 @@ class StockClassificationService
             ->get(['sector', 'industry'])
             ->groupBy('sector');
 
-        $industries = $pairs
-            ->map(fn ($rows): array => $rows->pluck('industry')->filter()->unique()->sort()->values()->all())
-            ->sortKeys()
-            ->all();
+        $observedIndustries = $pairs
+            ->map(fn ($rows): array => $rows->pluck('industry')->filter()->unique()->sort()->values()->all());
+        $observedIndustries->each(function (array $values, string $sector) use (&$industries): void {
+            $merged = array_values(array_unique(array_merge($industries->get($sector, []), $values)));
+            sort($merged);
+            $industries = $industries->put($sector, $merged);
+        });
+        $industries = $industries->sortKeys()->all();
         $sectors = array_keys($industries);
 
         return [
@@ -88,6 +96,7 @@ class StockClassificationService
         $industry = $this->label($info['industry'] ?? null);
         $providerSector = $sector;
         $providerIndustry = $industry;
+        [$sector, $industry] = $this->mapProviderLabels($providerSector, $providerIndustry);
         $observedAt ??= now();
         $canonical = json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $hash = hash('sha256', $canonical);
@@ -200,5 +209,29 @@ class StockClassificationService
     {
         $value = trim((string) $value);
         return $value !== '' ? $value : null;
+    }
+
+    /** @return array<string,mixed> */
+    private function taxonomyDefinition(): array
+    {
+        return (array) config('stock_classifications.taxonomies.'.self::TAXONOMY, []);
+    }
+
+    /** @return array{0:?string,1:?string} */
+    private function mapProviderLabels(?string $providerSector, ?string $providerIndustry): array
+    {
+        if ($providerSector === null && $providerIndustry === null) {
+            return [null, null];
+        }
+
+        $provider = $this->taxonomyDefinition()['providers'][self::PROVIDER] ?? [];
+        $sector = $provider['sectors'][$providerSector] ?? null;
+        $industry = $provider['industries'][$providerIndustry] ?? null;
+        $allowed = $this->taxonomyDefinition()['industries'][$sector] ?? [];
+        if ($sector === null || $industry === null || ! in_array($industry, $allowed, true)) {
+            throw new \RuntimeException('NSE classification labels are not mapped to the approved taxonomy.');
+        }
+
+        return [$sector, $industry];
     }
 }
