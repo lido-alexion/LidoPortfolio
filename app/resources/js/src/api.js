@@ -6,6 +6,7 @@ import {
     recoverStaleActivePortfolio,
 } from './portfolio/portfolioRecovery';
 import logger, { createRequestId } from './services/logger';
+import { isBrowserOpenTelemetryRegistered } from './telemetry/otelBrowser';
 import { getTraceparent } from './telemetry/lidoTelemetry';
 import { showToast } from './toast';
 import { appUrl } from './appBase';
@@ -48,9 +49,14 @@ api.interceptors.request.use((config) => {
 
     const requestId = createRequestId();
     config.headers['X-Request-ID'] = requestId;
-    const traceparent = getTraceparent();
-    if (traceparent) {
-        config.headers.traceparent = traceparent;
+    if (isBrowserOpenTelemetryRegistered()) {
+        // XHR setRequestHeader appends: let the SDK inject the actual client
+        // span once, including on Axios retries or caller-supplied headers.
+        config.headers.delete('traceparent');
+        config.headers.delete('tracestate');
+    } else {
+        const traceparent = getTraceparent();
+        if (traceparent) config.headers.traceparent = traceparent;
     }
     config.metadata = { requestId };
 

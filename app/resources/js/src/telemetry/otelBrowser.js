@@ -1,5 +1,6 @@
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { SpanStatusCode } from '@opentelemetry/api';
+import { XMLHttpRequestInstrumentation } from '@opentelemetry/instrumentation-xml-http-request';
 import { FetchInstrumentation } from '@opentelemetry/instrumentation-fetch';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
@@ -42,10 +43,33 @@ function recordBrowserFailure(tracer, kind, reason) {
     }
 }
 
+// Sanitize at the exporter boundary: instrumentation can add attributes after
+// its custom-attributes hook (including full URLs and error descriptions).
+export function privacySafeBrowserSpan(span) {
+    const attributes = {};
+    for (const key of [
+        'http.request.method', 'http.method', 'http.response.status_code', 'http.status_code',
+        'stox.browser.failure_kind', 'stox.browser.reason_present', 'error.type',
+    ]) {
+        if (span.attributes[key] !== undefined) attributes[key] = span.attributes[key];
+    }
+    // Omit URL paths too: invite and reset routes can carry secret tokens.
+    // Preserve SDK getters and identifiers without mutating the ended span.
+    return Object.create(span, {
+        attributes: { value: attributes },
+        events: { value: [] },
+        links: { value: [] },
+        status: { value: { code: span.status.code } },
+    });
+}
+
+export function isBrowserOpenTelemetryRegistered() {
+    return registered;
+}
+
 /**
- * Enable standard browser fetch instrumentation only with an explicit OTLP
- * endpoint. Manual route/business telemetry remains the privacy-filtered
- * event path; this adds automatic network spans without tracing telemetry.
+ * Export standard fetch/XHR spans via the configured JSON OTLP relay.
+ * Manual route/business telemetry retains its existing independent lifecycle.
  */
 export function registerBrowserOpenTelemetry() {
     if (registered || typeof window === 'undefined' || typeof document === 'undefined') {
@@ -59,9 +83,15 @@ export function registerBrowserOpenTelemetry() {
         return false;
     }
 
+    const instrumentations = [];
+    let provider;
     try {
         const exporter = new OTLPTraceExporter({ url: endpoint });
-        const provider = new WebTracerProvider({
+        const safeExporter = {
+            export: (spans, callback) => exporter.export(spans.map(privacySafeBrowserSpan), callback),
+            shutdown: () => exporter.shutdown(),
+        };
+        provider = new WebTracerProvider({
             resource: resourceFromAttributes({
                 'service.name': import.meta.env.VITE_LIDO_TELEMETRY_SERVICE_NAME || 'stox',
                 'service.version': import.meta.env.VITE_LIDO_TELEMETRY_SERVICE_VERSION
@@ -69,20 +99,28 @@ export function registerBrowserOpenTelemetry() {
                     || 'local',
                 'deployment.environment.name': import.meta.env.VITE_LIDO_TELEMETRY_ENVIRONMENT || 'production',
             }),
-            spanProcessors: [new BatchSpanProcessor(exporter)],
+            spanProcessors: [new BatchSpanProcessor(safeExporter)],
         });
 
         provider.register();
-        const instrumentation = new FetchInstrumentation({
+        const config = {
+            enabled: false,
             ignoreUrls: [
-                /\/api\/telemetry(?:\/|$)/,
-                /\/api\/logs\/frontend(?:\/|$)/,
+                /\/api\/telemetry(?:[/?#]|$)/,
+                /\/api\/logs\/frontend(?:[/?#]|$)/,
+                endpoint,
             ],
-            propagateTraceHeaderCorsUrls: [/^\//, window.location.origin],
+            // Same-origin propagation is automatic; never opt third parties in.
+            propagateTraceHeaderCorsUrls: [],
             clearTimingResources: true,
             ignoreNetworkEvents: true,
-        });
-        instrumentation.enable();
+        };
+        instrumentations.push(new FetchInstrumentation(config));
+        instrumentations.push(new XMLHttpRequestInstrumentation(config));
+        for (const instrumentation of instrumentations) {
+            instrumentation.setTracerProvider(provider);
+            instrumentation.enable();
+        }
         const tracer = provider.getTracer('stox.browser', 'v8');
         window.addEventListener('error', (event) => {
             recordBrowserFailure(tracer, 'uncaught_exception', event?.error || event?.message);
@@ -93,6 +131,10 @@ export function registerBrowserOpenTelemetry() {
         registered = true;
         return true;
     } catch {
+        for (const instrumentation of instrumentations) {
+            try { instrumentation.disable(); } catch { /* Fail open. */ }
+        }
+        try { void provider?.shutdown()?.catch(() => {}); } catch { /* Fail open. */ }
         // Telemetry must never prevent the StoX application from starting.
         return false;
     }
