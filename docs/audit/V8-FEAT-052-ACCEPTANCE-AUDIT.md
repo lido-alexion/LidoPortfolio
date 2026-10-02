@@ -1,6 +1,6 @@
 # FEAT-052 OpenTelemetry / LidoTelemetry — acceptance audit
 
-Status: **REVIEW — local producer implementation is verified; PHP SDK, Collector and deployed runtime evidence remain pending**
+Status: **REVIEW — observed production query-attribute leak mitigated at Collector export; broader runtime and privacy acceptance pending**
 
 | Requirement | Status | Evidence / remaining work |
 |---|---|---|
@@ -45,7 +45,7 @@ Deployed build `ac6602ae2db35b52b68a7183c50f987a1b4d615f` had `lido_telemetry.en
 
 **FAILED privacy gate:** a second controlled request used a synthetic, non-secret `token` query marker. LidoTelemetry stored that marker in both `url.full` and `url.query` attributes of the server span. No real credential was used or printed. The installed `open-telemetry/opentelemetry-auto-laravel` 1.9.1 `Kernel` hook populates both attributes from the full request URL/query; its outbound `ClientRequestWatcher` also constructs `url.full` with the query. This conflicts with FEAT-052 §§12–13 and the privacy-safe export contract. Sanitize or omit query values for all server/outbound spans before export, verify with a synthetic marker, and then inspect captured attributes without exposing values. Do not mark FEAT-052 COMPLETE while this finding remains. Collector configuration is root-owned, so an infrastructure-side transform/restart is a separate privileged operation; code remediation can be developed and reviewed through CI first.
 
-### 2026-10-02 Collector privacy remediation candidate (validated, not deployed)
+### 2026-10-02 Collector privacy remediation candidate (pre-rollout checkpoint)
 
 A temporary mode-0600 copy of the running Collector configuration was parsed and amended only in memory/on disk for validation, then removed. On the installed `otelcol-contrib` 0.161.0, `validate --config <temporary-copy>` exited 0 with this processor inserted between `memory_limiter` and `batch` in the **traces** pipeline:
 
@@ -65,3 +65,11 @@ service:
 ```
 
 This candidate strips the observed server-span keys and corresponding outbound URL attributes before export. It has **not** been applied to the root-owned `/etc/otelcol-contrib/config.yaml`, and the service was not restarted. Validation proves config parsing only; it does not prove sanitized production receipt, prevent leakage through other attributes/events/logs, or erase previously ingested data. A privileged, coordinated rollout must preserve the existing receiver/exporter config, validate the resulting file, restart the Collector, and compare an indexed synthetic-marker trace in LidoTelemetry. Inspect attribute *keys* and marker-presence booleans without printing values, including server and outbound spans. Keep FEAT-052 **REVIEW with FAILED privacy gate** until that probe and broader browser/queue/scheduler/fail-open acceptance pass.
+
+### 2026-10-02 privileged Collector rollout and sink probe (07:57 UTC)
+
+After the account owner unlocked sudo in a shared VPS terminal, the operator applied the previously validated candidate to the root-owned Collector config. A root-owned mode-0600 backup was retained at `/var/backups/otelcol-contrib/config.yaml.feat052.20261002T075715Z` (SHA-256 `ef841331cfd2702fae81ec08a95bddd56a4da6fdf265b6759e4be714c338d39a`). The candidate and installed config each passed `otelcol-contrib validate` (exit 0). The Collector restart and active check exited 0; subsequent read-only checks showed `active` and `enabled`, root:root mode 0644 config, traces processors `[memory_limiter, transform/privacy, batch]`, metrics unchanged at `[memory_limiter, batch]`, and LidoTelemetry `/up` HTTP 200. Rollback remains the pre-change backup; it was not needed.
+
+A fresh non-secret synthetic `token` query marker and W3C parent span were sent to `GET /api/build-info` (HTTP 200; trace ID `1aa0e0422dd2d3557bdb93e6e5e40803`). An indexed, bounded lookup on the StoX product, production environment and exact trace ID returned **two spans**. The server `GET /api/build-info` span had the supplied parent; the child `POST` span was also received. For both spans, the marker-presence boolean was **false**, and none of `url.query`, `url.full`, `http.url`, or `http.target` was present in attribute keys. No attribute values, real credentials, or raw query data were printed in the inspection. **PASS for the observed HTTP sink-leak mitigation and parentage slice.**
+
+The earlier FAILED finding and candidate-not-deployed wording above are historical checkpoints. Previously ingested spans are not erased. This Collector-side proof does not establish producer-side redaction before Collector ingress, other potentially sensitive attributes/events/logs, browser-to-HTTP/queue/scheduler propagation, metric receipt, CORS, or outage fail-open. FEAT-052 remains **REVIEW**, with those gates open; do not mark COMPLETE based on this bounded probe.

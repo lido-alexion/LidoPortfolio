@@ -6,7 +6,7 @@ Status key: **COMPLETE** | **REVIEW** | **IN PROGRESS** | **NOT STARTED** | **N/
 
 | Epic | Status | Evidence |
 |------|--------|----------|
-| FEAT-052 OpenTelemetry / LidoTelemetry | REVIEW (privacy FAILED) | Synthetic traceparent reached the production Collector/LidoTelemetry with correct HTTP parentage; a synthetic query marker leaked through `url.full` and `url.query`. Collector privacy transform validated but not deployed; broader propagation and fail-open acceptance remain open |
+| FEAT-052 OpenTelemetry / LidoTelemetry | REVIEW | Production Collector transform now strips the observed URL/query attributes; a fresh synthetic trace reached LidoTelemetry with correct parentage and no marker in either received span. Broader privacy, propagation, metrics and fail-open acceptance remain open |
 | FEAT-054 Historical fundamentals | REVIEW | Three-stock production bootstrap stored 530 Yahoo facts without rejected rows; deployed SBIN Basic/Advanced/history slice verified. Targeted-scope guard passed CI and reached production at `ac6602ae`; official NSE/BSE feeds, broad coverage, and remaining provider/UI acceptance remain open |
 | FEAT-055 Access requests | REVIEW | Local §FEAT-055 checklist (055-01–055-10) + `AccessRequestWorkflowTest`; real Turnstile/mail/deployed multi-worker validation remains external |
 | FEAT-056 ML lifecycle | REVIEW | Drift trigger, promotion review, SSE, cancel, retries, notifications, retention API + lifecycle tick gate, and stale-run recovery; deployed lifecycle worker/runtime remains external |
@@ -132,3 +132,8 @@ Release and production acceptance gates remain unsatisfied. After the NSE previe
 - **Other gates remain REVIEW:** production telemetry propagation, real access-request provider/mail/concurrency, deployed lifecycle qualification, full guided-tour and accessibility, real AI-provider validation, independent FEAT-063 backup/restore and controls, FEAT-064 live provenance, and FEAT-065 real Kite minute corpus. No epic is promoted to COMPLETE or N/A by this reconciliation.
 
 The CI and production deployment gates for the FEAT-054 guard are now satisfied. **Overall V8 release acceptance remains open** until every active epic has production-backed COMPLETE or justified N/A evidence.
+
+
+### FEAT-052 Collector reconciliation — 2026-10-02
+
+The root-owned Collector privacy transform was deployed and validated after the historical FAILED query-attribute finding. A fresh synthetic HTTP trace produced two received spans without the marker or four URL/query keys; the per-epic audit holds the backup, processor order, trace ID and bounded proof. This clears the **observed LidoTelemetry sink leak for the tested HTTP path**. FEAT-052 stays **REVIEW**, and the V8 release gate remains open for broader privacy and propagation/fail-open evidence.
