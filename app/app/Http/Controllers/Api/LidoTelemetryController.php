@@ -61,15 +61,31 @@ class LidoTelemetryController extends Controller
             return response('', 422);
         }
 
+        // This dedicated telemetry request can wait longer than business exporters.
+        $timeout = max(0.1, min(5.0, (float) config('lido_telemetry.browser_relay_timeout_seconds', 2.0)));
+
         try {
-            Http::timeout((float) config('lido_telemetry.export_timeout_seconds', 0.15))
+            $upstream = Http::timeout($timeout)
+                ->connectTimeout($timeout)
+                ->withoutRedirecting()
                 ->withHeaders(['Content-Type' => 'application/json'])
                 ->withBody($raw, 'application/json')
                 ->post((string) config('lido_telemetry.browser_relay_upstream'));
         } catch (Throwable) {
-            // The relay is deliberately fail-open and never exposes upstream state.
+            // Let the browser exporter retry without exposing transport details.
+            return response('', 503);
         }
 
-        return response('', 202);
+        if ($upstream->successful()) {
+            return response('', 202);
+        }
+
+        // Retrying the same invalid payload cannot help. Other failures may be
+        // temporary infrastructure/configuration issues, not browser input errors.
+        if (in_array($upstream->status(), [400, 413, 415, 422], true)) {
+            return response('', 400);
+        }
+
+        return response('', 503);
     }
 }
