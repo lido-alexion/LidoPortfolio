@@ -6,7 +6,7 @@ Status key: **COMPLETE** | **REVIEW** | **IN PROGRESS** | **NOT STARTED** | **N/
 
 | Epic | Status | Evidence |
 |------|--------|----------|
-| FEAT-052 OpenTelemetry / LidoTelemetry | REVIEW | Fail-open HTTP OTLP traces/events + focused HTTP duration metrics; traceparent; route-view duration; queue/scheduler spans; business catalogue; optional official browser/PHP SDK instrumentation; Collector receipt and deployed runtime remain external |
+| FEAT-052 OpenTelemetry / LidoTelemetry | REVIEW (privacy FAILED) | Synthetic traceparent reached the production Collector/LidoTelemetry with correct HTTP parentage; a synthetic query marker leaked through `url.full` and `url.query`. Collector privacy transform validated but not deployed; broader propagation and fail-open acceptance remain open |
 | FEAT-054 Historical fundamentals | REVIEW | Three-stock production bootstrap stored 530 Yahoo facts without rejected rows; deployed SBIN Basic/Advanced/history slice verified. Targeted-scope guard passed CI and reached production at `ac6602ae`; official NSE/BSE feeds, broad coverage, and remaining provider/UI acceptance remain open |
 | FEAT-055 Access requests | REVIEW | Local §FEAT-055 checklist (055-01–055-10) + `AccessRequestWorkflowTest`; real Turnstile/mail/deployed multi-worker validation remains external |
 | FEAT-056 ML lifecycle | REVIEW | Drift trigger, promotion review, SSE, cancel, retries, notifications, retention API + lifecycle tick gate, and stale-run recovery; deployed lifecycle worker/runtime remains external |
