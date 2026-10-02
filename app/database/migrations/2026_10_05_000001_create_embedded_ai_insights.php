@@ -38,7 +38,9 @@ return new class extends Migration
             });
         }
         foreach (['stock_analysis_insight', 'strategy_designer'] as $id) {
-            $schema = file_get_contents(base_path('../docs/architecture/ai-schemas/'.$id.'.v1.json'));
+            $runtimeSchemaPath = resource_path('ai-schemas/'.$id.'.v1.json');
+            $documentationSchemaPath = base_path('../docs/architecture/ai-schemas/'.$id.'.v1.json');
+            $schema = file_get_contents(is_file($runtimeSchemaPath) ? $runtimeSchemaPath : $documentationSchemaPath);
             DB::table('stox_ai_capabilities')->updateOrInsert(['capability_id' => $id], ['owner' => 'V9-AI-003', 'path_order' => '[]', 'output_schema' => $schema, 'enabled' => true, 'created_at' => now(), 'updated_at' => now()]);
             $template = $id === 'stock_analysis_insight'
                 ? 'Interpret only supplied authoritative StoX evidence. Do not calculate missing metrics or invent evidence. Reuse supplied fundamental interpretation. Disclose missing evidence. Analytical only: never give Buy/Sell/Hold recommendations, target prices, price forecasts, or personalized add/reduce/exit instructions. Return only JSON satisfying response_schema.'
