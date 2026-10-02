@@ -45,3 +45,9 @@ Operator: Codex via connected `stoxla-prod`; UTC times below. **This entry does 
 ### Authenticated tour resume slice — 2026-10-01 about 19:06 UTC
 
 Cloud Chrome Profile exposed Launch tour and Restart from beginning. Launch resumed the persisted Investor tour at step 7/8 (`Help & documentation`) on Dashboard with labelled dialog and Back/Next/Close controls. Refresh closed that manually launched overlay; this account did not show an automatic welcome prompt after reload. Source inspection shows the local refresh test expects a welcome prompt when `show_welcome_prompt=true`, whereas this user's prior prompt history may suppress it. **PASS for persisted manual resume at step 7 only**; full eight-step deployed journey, fresh-user refresh/expiry, Admin exclusion, keyboard/screen-reader and another device remain NOT YET RUN.
+
+### 2026-10-02 deployed continuation
+
+In the signed-in production Investor session, Profile → Launch tour resumed at step 7/8, Help & documentation. Next displayed step 8/8, Profile & tour, with an explicit Finish control; Back returned to step 7 and the Profile route. Escape closed the overlay without pressing Finish. This is a **PASS** for the bounded deployed resume, forward/back navigation and Escape slice, not evidence for first-run, all eight steps, completion persistence, session expiry, Admin exclusion, screen-reader behavior or another device/browser.
+
+The cloud browser automatic approval review rejected Restart from beginning because it would reset this account's saved tour progress. No reset was performed. **FEAT-061 remains REVIEW** until the remaining production and assistive-technology checks are completed.
