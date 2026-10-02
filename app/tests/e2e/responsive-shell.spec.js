@@ -195,6 +195,10 @@ test('header theme keeps shell, text and controls readable across theme changes'
             ? 'color(srgb 0.898353 0.901961 0.905569)'
             : 'rgb(0, 0, 0)');
         await expect(header).toHaveCSS('border-bottom-color', 'rgb(169, 169, 169)');
+        // Theme attributes/background update before Bootstrap text-color transitions finish.
+        // Wait for the same settled state that the contrast assertions below measure.
+        await expect.poll(() => header.evaluate(element => element.getAnimations({ subtree: true })
+            .filter(animation => 'transitionProperty' in animation && animation.playState === 'running').length)).toBe(0);
         const results = await new AxeBuilder({ page }).include('.lido-header').withRules(['color-contrast']).analyze();
         expect(results.violations).toEqual([]);
 

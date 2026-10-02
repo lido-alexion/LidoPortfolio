@@ -59,3 +59,36 @@ The planner uses at most three planning iterations and eight distinct read calls
 Plans contain at most five mutations. Laravel validates each action and captures deterministic field changes and target-state fingerprints. Approval lasts five minutes and binds run/user/profile, exact ordered actions/parameters, preview and state. Execution locks the run/profile/target state, checks the hash and expiry, immediately re-reads all material snapshots, and rejects stale plans. The UI offers a fresh investigation/preview; approval never carries forward. Duplicate execution returns the stored outcome. Domain-service mutations use savepoints: an unexpected failed step rolls back that step, preserves earlier successful steps, marks remaining steps unattempted and stops. Each successful step is independently read back; verification failure stops execution and cannot be presented as success. An interrupted read run becomes recoverable failed history once delegation expires.
 
 Validation commands: install `ai-runtime/requirements.lock` plus the editable runtime, run `python -m pytest ai-runtime/tests`, focused `AiAgentGatewayTest` / readiness tests, then `./scripts/verify-ci.sh --backend` and `--frontend`. The frontend gate includes AI-001/AI-002 Chromium journeys. Python contract tests require no paid provider or externally running MCP server.
+
+## Embedded insights (AI-003)
+
+Authenticated Laravel POST routes (portfolio:read) are `/api/ai/insights/stocks/{stock}`
+and `/api/ai/insights/strategy`. Stock accepts optional `refresh` and `lookup_only`
+booleans; strategy additionally requires structured `inputs`. Lookup never generates.
+Identity and owned active portfolio come from authentication and X-Profile-Id, without
+lazy business initialization. Watchlist state is never an evidence input.
+
+Capabilities `stock_analysis_insight` and `strategy_designer` have versioned JSON
+schemas in `docs/architecture/ai-schemas`. Admin configures ordered provider paths
+through the existing platform; registration does not select an unapproved provider.
+Provider streaming is requested and buffered by the shared adapter until final schema
+validation. The runtime bounds embedded route execution to 45 seconds; Laravel waits
+55 seconds and the browser 60 seconds. No business background job is created.
+
+`stox_ai_insight_cache` stores successful final responses, provenance, versions,
+fingerprint, generation/refresh-failure timestamps and the inference request ID audit
+reference. Identity hashes normalized evidence and context, prompt content/version,
+capability/schema versions and schema content. It excludes provider/model settings.
+Global entries have null account/profile IDs; held-stock entries include account and
+active portfolio; strategy entries are account-only. Failed refreshes preserve matching
+cache. The public response excludes routing, model, provider and prompt metadata.
+
+FEAT-062 retains successful interpretations in `stox_fundamental_ai_reuse`, keyed to
+deterministic evidence. AI-003 reads only matching interpretations and never invokes
+FEAT-062 generation. Missing evidence is disclosed in the stock response.
+
+`POST /api/ai/insights/strategy/draft` additionally requires portfolio:write and an
+owned strategy-result `fingerprint`. It creates an AI-002 run and stages exactly one
+`strategy.create` preview. Existing `/api/ai/assistant/runs/{id}/approve` owns all
+approval, stale-state, idempotency, mutation and verification behavior. Generation
+itself never invokes the mutation service.

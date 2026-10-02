@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stox:strategy_designer:1",
+  "type": "object",
+  "required": [
+    "strategy_summary",
+    "target_market_universe",
+    "entry_logic",
+    "exit_logic",
+    "allocation_position_sizing",
+    "risk_controls",
+    "assumptions",
+    "caveats",
+    "rationale",
+    "artifact_compatibility_notes",
+    "draft_envelope"
+  ],
+  "properties": {
+    "strategy_summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 6000
+    },
+    "target_market_universe": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 6000
+    },
+    "entry_logic": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 6000
+    },
+    "exit_logic": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 6000
+    },
+    "allocation_position_sizing": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 6000
+    },
+    "risk_controls": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 6000
+    },
+    "assumptions": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 6000
+    },
+    "caveats": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 6000
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 6000
+    },
+    "artifact_compatibility_notes": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 6000
+    },
+    "draft_envelope": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "artifact_type",
+        "slug",
+        "name",
+        "metadata",
+        "definition"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "artifact_type": {
+          "const": "strategy"
+        },
+        "slug": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "metadata": {
+          "type": "object"
+        },
+        "definition": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

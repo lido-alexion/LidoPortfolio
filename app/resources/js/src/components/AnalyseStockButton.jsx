@@ -1,7 +1,5 @@
-import React, { useState } from 'react';
-import api from '../api';
-import { showToast } from '../toast';
-import { buildStockAnalysisPrompt } from '../utils/stockAnalysisPrompt';
+import React, { useEffect, useRef, useState } from 'react';
+import StockInsightSurface from './StockInsightSurface';
 
 function PuzzlePieceIcon({ size = 14 }) {
     return (
@@ -18,74 +16,33 @@ function PuzzlePieceIcon({ size = 14 }) {
     );
 }
 
-/**
- * Icon button that builds an AI analysis prompt (with 7-day OHLCV) and copies it.
- */
-export default function AnalyseStockButton({
-    stockId,
-    symbol = '',
-    name = '',
-    className = '',
-    size = 14,
-    stopPropagation = false,
-}) {
-    const [busy, setBusy] = useState(false);
-    const disabled = !stockId || busy;
-
-    const handleClick = async (event) => {
-        if (stopPropagation) {
-            event.preventDefault();
-            event.stopPropagation();
-        }
-        if (disabled) {
-            return;
-        }
-
-        setBusy(true);
-        try {
-            const res = await api.get(`/stocks/${stockId}/market-prices`, {
-                skipErrorToast: true,
-            });
-            const payload = res.data || {};
-            const rows = Array.isArray(payload.data) ? payload.data : [];
-            const stock = payload.stock || {};
-            const prompt = buildStockAnalysisPrompt({
-                symbol: symbol || stock.symbol,
-                name: name || stock.name,
-                ohlcvRows: rows,
-            });
-
-            if (!navigator.clipboard?.writeText) {
-                throw new Error('Clipboard unavailable');
-            }
-            await navigator.clipboard.writeText(prompt);
-            showToast('AI analysis prompt copied to clipboard.');
-        } catch {
-            showToast('Could not copy AI analysis prompt.', 'danger');
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    return (
-        <button
-            type="button"
-            className={['btn btn-link p-0 lido-analyse-stock-btn', className].filter(Boolean).join(' ')}
-            title="Generates a prompt for analysing this stock with AI"
-            aria-label="Generate AI analysis prompt"
-            disabled={disabled}
-            onClick={handleClick}
-            onMouseDown={stopPropagation ? ((event) => event.stopPropagation()) : undefined}
-        >
-            {busy ? (
-                <span
-                    className="spinner-border spinner-border-sm"
-                    role="status"
-                    aria-label="Building analysis prompt"
-                />
-            ) : (
-                <PuzzlePieceIcon size={size} />
-            )}
-        </button>
-    );
+/** All seven stock placements invoke one managed capability. */
+export default function AnalyseStockButton({ stockId, symbol = '', name = '', className = '', size = 14, stopPropagation = false, presentation = 'dense' }) {
+    const [open, setOpen] = useState(false);
+    const [host, setHost] = useState(null);
+    const button = useRef(null);
+    useEffect(() => {
+        const close = event => { if (event.detail !== button.current) setOpen(false); };
+        window.addEventListener('stox:open-insight', close);
+        window.addEventListener('portfolio-changed', close);
+        return () => { window.removeEventListener('stox:open-insight', close); window.removeEventListener('portfolio-changed', close); };
+    }, []);
+    useEffect(() => { setOpen(false); }, [stockId]);
+    useEffect(() => {
+        if (!open || presentation !== 'inline') return undefined;
+        const element = document.createElement('div');
+        const card = button.current.closest('.card-body');
+        const resultRow = button.current.closest('[data-ai-insight-context]') ? card?.closest('.row') : null;
+        if (resultRow) resultRow.after(element);
+        else (card || button.current.parentElement.parentElement).appendChild(element);
+        setHost(element);
+        return () => { element.remove(); setHost(null); };
+    }, [open, presentation]);
+    return <>
+        <button ref={button} type="button" className={['btn btn-link p-0 lido-analyse-stock-btn', className].filter(Boolean).join(' ')}
+            title="Open AI Insights" aria-label="Open AI Insights" aria-expanded={open} disabled={!stockId}
+            onClick={event => { if (stopPropagation) { event.preventDefault(); event.stopPropagation(); } window.dispatchEvent(new CustomEvent('stox:open-insight', { detail: button.current })); setOpen(value => !value); }}
+            onMouseDown={stopPropagation ? event => event.stopPropagation() : undefined}><PuzzlePieceIcon size={size} /></button>
+        {open && (presentation !== 'inline' || host) && <StockInsightSurface key={stockId} stockId={stockId} symbol={symbol} name={name} inlineHost={presentation === 'inline' ? host : null} onClose={() => setOpen(false)} />}
+    </>;
 }

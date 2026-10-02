@@ -33,14 +33,14 @@ class AiRuntimeClient
             throw new RuntimeException('AI runtime is disabled.');
         }
 
-        $response = $this->client()->post('/internal/v1/inference', [
+        $response = $this->client()->timeout((float) ($options['timeout_seconds'] ?? config('ai_runtime.timeout_seconds', 20)))->post('/internal/v1/inference', [
             'request_id' => $options['request_id'] ?? (string) str()->uuid(),
             'capability_id' => $capability,
             'trace_id' => $options['trace_id'] ?? request()?->header('X-Request-ID'),
             'context' => ['user_id' => $options['user_id'] ?? null, 'account_id' => $options['account_id'] ?? null],
             'input' => $input,
             'output_schema' => $options['output_schema'] ?? null,
-            'stream' => false,
+            'stream' => (bool) ($options['stream'] ?? false),
         ]);
         if ($response->failed()) {
             throw new RuntimeException('AI runtime inference failed.');

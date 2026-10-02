@@ -166,6 +166,12 @@ Route::prefix('internal/v1/ai-runtime')->middleware('ai.runtime.internal')->grou
 });
 // AI-002 private gateway and authenticated run controls deliberately avoid lazy profile initialization.
 Route::post('/internal/v1/ai-tools/call', [\App\Http\Controllers\Api\AiAgentController::class, 'gateway'])->middleware('ai.runtime.internal')->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class);
+Route::prefix('ai/insights')->middleware(['auth:sanctum', 'token.scope:portfolio:read', 'throttle:20,1'])->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class)->group(function () {
+    Route::post('/stocks/{stock}', [\App\Http\Controllers\Api\EmbeddedAiController::class, 'stock']);
+    Route::post('/strategy', [\App\Http\Controllers\Api\EmbeddedAiController::class, 'strategy']);
+    Route::post('/strategy/draft', [\App\Http\Controllers\Api\EmbeddedAiController::class, 'draft'])->middleware('token.scope:portfolio:write');
+});
+
 Route::prefix('ai/assistant/runs')->middleware(['auth:sanctum', 'token.scope:portfolio:read'])->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class)->group(function () {
     $controller = \App\Http\Controllers\Api\AiAgentController::class;
     Route::get('/', [$controller, 'index']);

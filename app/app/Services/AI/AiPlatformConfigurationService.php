@@ -30,7 +30,7 @@ class AiPlatformConfigurationService
                 'capability_id' => $capability->capability_id, 'owner' => $capability->owner,
                 'enabled' => $capability->enabled, 'path_order' => $capability->path_order ?: [],
                 'output_schema' => $capability->output_schema, 'prompt_id' => $capability->capability_id,
-                'streaming' => $capability->capability_id === 'documentation_chat',
+                'streaming' => in_array($capability->capability_id, ['documentation_chat', ...EmbeddedAiContract::CAPABILITIES], true),
                 'max_concurrency' => max(1, (int) $capability->max_concurrency),
             ])->all(),
             'provider_paths' => $paths, 'prompts' => $prompts,

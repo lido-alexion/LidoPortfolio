@@ -3068,7 +3068,7 @@
     "title": "Strategy",
     "path": "app/resources/js/src/data/appDocumentation.js",
     "section": "Overview",
-    "snippet": "A portfolio may enable multiple strategies; mapped runtime rows are inspected here and versioned in the Artifact Library. Strategy is your decision policy. A portfolio may have **multiple enabled strategies** at the same time. After V5 migration, this page displays a read-only runtime projection of the exact immutable artifact bound to the Portfolio. Use the **Artifact Library** to create/edit a Draft, publish it, bind it, and explicitly upgrade an existing binding.\n\nThe Strategy selector / `?strategy_id=` chooses which compatibility projection to inspect — not a database rule that only one strategy can be enabled. Unmapped legacy rows remain editable only until the V5 backfill maps them. Strategies reference Screeners by slug / factory key — they never duplicate Screener condition trees.\n\n**AI Strategy Designer** (collapsible panel on this page) does **not** call an LLM. It builds a pas",
+    "snippet": "A portfolio may enable multiple strategies; mapped runtime rows are inspected here and versioned in the Artifact Library. Strategy is your decision policy. A portfolio may have **multiple enabled strategies** at the same time. After V5 migration, this page displays a read-only runtime projection of the exact immutable artifact bound to the Portfolio. Use the **Artifact Library** to create/edit a Draft, publish it, bind it, and explicitly upgrade an existing binding.\n\nThe Strategy selector / `?strategy_id=` chooses which compatibility projection to inspect — not a database rule that only one strategy can be enabled. Unmapped legacy rows remain editable only until the V5 backfill maps them. Strategies reference Screeners by slug / factory key — they never duplicate Screener condition trees.\n\n**AI Strategy Designer** generates a managed advisory design from your structured choices. Matching",
     "url": "/docs/strategy.html"
   },
   {
@@ -3100,7 +3100,7 @@
     "title": "Strategy",
     "path": "app/resources/js/src/data/appDocumentation.js",
     "section": "AI Strategy Designer",
-    "snippet": "Prompt builder only — no in-app LLM. Generated text instructs an external assistant to obey the StoX AI Authoring Guide / Contract. You still Validate and Import JSON via Screener Registry and Strategy Registry.",
+    "snippet": "Managed advisory strategy generation follows the StoX authoring contract. Create draft strategy uses a separate governed preview and approval. Drafts remain unpublished and inactive. Copy AI Prompt remains available if managed AI is unavailable.",
     "url": "/docs/strategy.html"
   },
   {
@@ -3204,7 +3204,7 @@
     "title": "Strategy",
     "path": "app/resources/js/src/data/appDocumentation.js",
     "section": "AI Strategy Designer",
-    "snippet": "Collapsible panel on /strategy. Fill Investment Style, Risk, Holding Period, Market, Universe, Max Positions, Capital Allocation, Exit Style, Market Preferences, Optimization Priorities, Complexity, Explainability, and optional Additional Constraints. Generate Prompt builds a client-side template (StoX Default Prompt; more templates can be added later), shows it in a read-only textarea, and auto-copies to the clipboard (toast: “AI prompt copied to clipboard.”). Copy Again / Select All / Clear / Reset Defaults are available. Form values persist in browser localStorage. Attach /docs/stox-trading-artifacts-ai-guide.md when pasting into an external AI. No backend LLM call.",
+    "snippet": "Collapsible panel on /strategy. Fill Investment Style, Risk, Holding Period, Market, Universe, Max Positions, Capital Allocation, Exit Style, Market Preferences, Optimization Priorities, Complexity, Explainability, and optional Additional Constraints. Generate strategy returns a structured advisory result. Matching inputs restore the saved account result; changed choices do not show an old design as current. Use Regenerate, Copy result, or Reset Defaults. Create draft strategy requires a separate preview and approval; it never publishes or activates automatically. Copy AI Prompt is available when managed generation fails. Form choices persist in this browser.",
     "url": "/docs/strategy.html"
   },
   {

@@ -159,6 +159,87 @@ export const JOURNEY_TOPICS = Object.freeze([
     "warnings": []
   },
   {
+    "id": "AI-07",
+    "title": "How do I open a stock insight?",
+    "aliases": [
+      "Open a stock insight",
+      "ai-07"
+    ],
+    "keywords": [
+      "open",
+      "stock",
+      "insight"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/",
+    "guide": "/docs/journeys/06-assistant.html#ai-07-open-a-stock-insight",
+    "steps": [
+      "Choose the AI puzzle icon beside a stock in Holdings, either Dashboard stock context, Watchlist rows, the selected Watchlist stock, or either Stock Explorer result card.",
+      "Read the structured AI Insights and Based on / Data used dates. Missing evidence is disclosed.",
+      "Held stocks show Personalized with your active portfolio holding. Other portfolios and private watchlist notes are excluded.",
+      "Choose Copy insight, Refresh insight, or Open stock details.",
+      "Close the section, pane or modal to continue using the page."
+    ],
+    "prerequisites": [],
+    "warnings": []
+  },
+  {
+    "id": "AI-08",
+    "title": "How do I recover an embedded insight?",
+    "aliases": [
+      "Recover an embedded insight",
+      "ai-08"
+    ],
+    "keywords": [
+      "recover",
+      "embedded",
+      "insight"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/",
+    "guide": "/docs/journeys/06-assistant.html#ai-08-recover-an-embedded-insight",
+    "steps": [
+      "Open an insight or choose Refresh insight while managed AI is unavailable.",
+      "If a matching saved result exists, continue reading it with the degraded status.",
+      "Choose Copy AI Prompt to use the existing manual prompt workflow."
+    ],
+    "prerequisites": [],
+    "warnings": []
+  },
+  {
+    "id": "AI-09",
+    "title": "How do I design and explicitly create a draft strategy?",
+    "aliases": [
+      "Design and explicitly create a draft strategy",
+      "ai-09",
+      "new strategy",
+      "create strategy"
+    ],
+    "keywords": [
+      "design",
+      "and",
+      "explicitly",
+      "create",
+      "draft",
+      "strategy"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/",
+    "guide": "/docs/journeys/06-assistant.html#ai-09-design-and-explicitly-create-a-draft-strategy",
+    "steps": [
+      "Open AI Strategy Designer on Strategy and choose the structured design inputs.",
+      "Choose Generate strategy. Read the summary, entry/exit logic, sizing, risk controls, assumptions, caveats and artifact compatibility notes.",
+      "Use Copy result or Regenerate as needed. Returning to matching inputs restores the account's saved result; changed inputs hide mismatched results.",
+      "Optionally choose Create draft strategy. Review the proposed changes and choose Approve changes or Reject plan.",
+      "Read the verified result and inspect the run in assistant history. Stale or expired plans require a fresh preview and approval."
+    ],
+    "prerequisites": [],
+    "warnings": []
+  },
+  {
     "id": "E2E-01",
     "title": "How do I new idea to first BUY?",
     "aliases": [

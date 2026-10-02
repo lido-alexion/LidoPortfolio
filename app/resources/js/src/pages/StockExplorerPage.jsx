@@ -699,7 +699,7 @@ export default function StockExplorerPage() {
                     </div>
                 </div>
             </div>
-            <div className="col-12 col-lg-8">
+            <div className="col-12 col-lg-8" data-ai-insight-context>
                 {loading && (
                     <div className="text-muted">Running analysis…</div>
                 )}
@@ -715,6 +715,7 @@ export default function StockExplorerPage() {
                                         <div className="small text-muted lido-stock-symbol-with-analyse justify-content-center">
                                             <span>{stockSymbol}</span>
                                             <AnalyseStockButton
+                                                presentation="inline"
                                                 stockId={result.stock?.id}
                                                 symbol={result.stock?.symbol || stockSymbol}
                                                 name={result.stock?.name}
@@ -877,6 +878,7 @@ export default function StockExplorerPage() {
                                                 <div className="small text-muted lido-stock-symbol-with-analyse justify-content-center">
                                                     <span>{stockSymbol}</span>
                                                     <AnalyseStockButton
+                                                        presentation="inline"
                                                         stockId={selectedStock?.id || result?.stock?.id}
                                                         symbol={selectedStock?.symbol || stockSymbol}
                                                         name={selectedStock?.name || result?.stock?.name}

@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { showToast } from '../../toast';
-import { appUrl } from '../../appBase';
+import ManagedStrategyDesigner from './ManagedStrategyDesigner';
 import {
     CAPITAL_ALLOCATIONS,
     DEFAULT_STRATEGY_PROMPT_INPUTS,
@@ -55,27 +55,8 @@ function mergeInputs(saved) {
     };
 }
 
-async function copyText(text) {
-    if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-        return true;
-    }
-    // Fallback for older browsers
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.setAttribute('readonly', '');
-    ta.style.position = 'fixed';
-    ta.style.left = '-9999px';
-    document.body.appendChild(ta);
-    ta.select();
-    const ok = document.execCommand('copy');
-    document.body.removeChild(ta);
-    return ok;
-}
-
 /**
- * Client-side utility: builds an external-AI prompt from structured inputs.
- * Does not call any LLM API.
+ * Structured inputs for managed Strategy Designer; original builder remains recovery-only.
  */
 export default function AIStrategyPromptBuilder() {
     const persisted = useMemo(() => loadPersisted(), []);
@@ -84,8 +65,6 @@ export default function AIStrategyPromptBuilder() {
         () => persisted?.templateId || DEFAULT_PROMPT_TEMPLATE_ID,
     );
     const [inputs, setInputs] = useState(() => mergeInputs(persisted?.inputs));
-    const [prompt, setPrompt] = useState('');
-    const promptRef = useRef(null);
     const templates = useMemo(() => listAvailablePromptTemplates(), []);
 
     useEffect(() => {
@@ -128,60 +107,11 @@ export default function AIStrategyPromptBuilder() {
         });
     };
 
-    const handleGenerate = async () => {
-        const text = generatePrompt(inputs, templateId);
-        setPrompt(text);
-        try {
-            const ok = await copyText(text);
-            if (ok) {
-                showToast('AI prompt copied to clipboard.', 'success');
-            } else {
-                showToast('Prompt generated, but clipboard copy failed. Use Copy Again.', 'warning');
-            }
-        } catch {
-            showToast('Prompt generated, but clipboard copy failed. Use Copy Again.', 'warning');
-        }
-        // Focus textarea after paint so Select All works immediately.
-        requestAnimationFrame(() => {
-            promptRef.current?.focus?.();
-        });
-    };
-
-    const handleCopyAgain = async () => {
-        if (!prompt.trim()) {
-            showToast('Generate a prompt first.', 'warning');
-            return;
-        }
-        try {
-            const ok = await copyText(prompt);
-            showToast(
-                ok ? 'AI prompt copied to clipboard.' : 'Clipboard copy failed. Select All and copy manually.',
-                ok ? 'success' : 'warning',
-            );
-        } catch {
-            showToast('Clipboard copy failed. Select All and copy manually.', 'warning');
-        }
-    };
-
-    const handleSelectAll = () => {
-        const el = promptRef.current;
-        if (!el) return;
-        el.focus();
-        el.select();
-    };
-
-    const handleClear = () => {
-        setPrompt('');
-    };
-
     const handleResetDefaults = () => {
         setInputs({ ...DEFAULT_STRATEGY_PROMPT_INPUTS });
         setTemplateId(DEFAULT_PROMPT_TEMPLATE_ID);
-        setPrompt('');
         showToast('AI Strategy Designer defaults restored.', 'info');
     };
-
-    const guideHref = appUrl('/docs/stox-trading-artifacts-ai-guide.md');
 
     const renderCustomField = (show, id, label, value, onChange) => {
         if (!show) return null;
@@ -225,12 +155,8 @@ export default function AIStrategyPromptBuilder() {
             {open ? (
                 <div id="ai-strategy-designer-panel" className="card-body">
                     <p className="text-muted small mb-3">
-                        Builds a high-quality prompt for ChatGPT, Gemini, Claude, or similar assistants.
-                        StoX does <strong>not</strong> call an LLM — copy the prompt and attach the{' '}
-                        <a href={guideHref} download="stox-trading-artifacts-ai-guide.md">
-                            StoX Trading Artifacts AI Authoring Guide
-                        </a>
-                        .
+                        Generate an advisory strategy from your choices. Review the design before choosing
+                        Create draft strategy; creating a draft requires a separate preview and approval.
                     </p>
 
                     <div className="row g-3">
@@ -512,37 +438,8 @@ export default function AIStrategyPromptBuilder() {
                         </div>
                     </div>
 
-                    <div className="d-flex flex-wrap gap-2 mt-3">
-                        <button type="button" className="btn btn-primary btn-sm" onClick={handleGenerate}>
-                            Generate Prompt
-                        </button>
-                        <button type="button" className="btn btn-outline-secondary btn-sm" onClick={handleCopyAgain} disabled={!prompt}>
-                            Copy Again
-                        </button>
-                        <button type="button" className="btn btn-outline-secondary btn-sm" onClick={handleSelectAll} disabled={!prompt}>
-                            Select All
-                        </button>
-                        <button type="button" className="btn btn-outline-secondary btn-sm" onClick={handleClear} disabled={!prompt}>
-                            Clear
-                        </button>
-                        <button type="button" className="btn btn-outline-secondary btn-sm" onClick={handleResetDefaults}>
-                            Reset Defaults
-                        </button>
-                    </div>
-
-                    <div className="mt-3">
-                        <label className="form-label" htmlFor="ai-generated-prompt">Generated prompt</label>
-                        <textarea
-                            id="ai-generated-prompt"
-                            ref={promptRef}
-                            className="form-control font-monospace"
-                            rows={18}
-                            readOnly
-                            value={prompt}
-                            placeholder="Click Generate Prompt to build a paste-ready AI prompt…"
-                            aria-label="Generated AI prompt"
-                        />
-                    </div>
+                    <ManagedStrategyDesigner inputs={inputs} fallback={() => generatePrompt(inputs, templateId)} />
+                    <button type="button" className="btn btn-outline-secondary btn-sm mt-3" onClick={handleResetDefaults}>Reset Defaults</button>
                 </div>
             ) : null}
         </div>

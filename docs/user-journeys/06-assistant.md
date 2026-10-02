@@ -55,3 +55,31 @@ Expected result: no business change occurs before explicit approval. A plan expi
 4. Review and approve any new mutations separately.
 
 Expected result: history persists safe action records. Retrying never replays an old approval. **Clear conversation** clears the current drawer session; it does not delete action history.
+
+## AI-07 — Open a stock insight
+
+1. Choose the AI puzzle icon beside a stock in Holdings, either Dashboard stock context, Watchlist rows, the selected Watchlist stock, or either Stock Explorer result card.
+2. Read the structured AI Insights and **Based on / Data used** dates. Missing evidence is disclosed.
+3. Held stocks show **Personalized with your active portfolio holding**. Other portfolios and private watchlist notes are excluded.
+4. Choose **Copy insight**, **Refresh insight**, or **Open stock details**.
+5. Close the section, pane or modal to continue using the page.
+
+Expected result: single-stock contexts expand inline. Dense contexts use a right pane on extra-large screens and a near-full-page modal otherwise. Generation starts only when requested. A matching saved insight is reused; changing providers alone does not invalidate it. Stock insights are analytical, without trading recommendations or target prices.
+
+## AI-08 — Recover an embedded insight
+
+1. Open an insight or choose **Refresh insight** while managed AI is unavailable.
+2. If a matching saved result exists, continue reading it with the degraded status.
+3. Choose **Copy AI Prompt** to use the existing manual prompt workflow.
+
+Expected result: failed refreshes never replace a valid saved result with partial output. With no valid saved result, the section explains unavailability. Normal non-AI pages remain usable.
+
+## AI-09 — Design and explicitly create a draft strategy
+
+1. Open **AI Strategy Designer** on Strategy and choose the structured design inputs.
+2. Choose **Generate strategy**. Read the summary, entry/exit logic, sizing, risk controls, assumptions, caveats and artifact compatibility notes.
+3. Use **Copy result** or **Regenerate** as needed. Returning to matching inputs restores the account's saved result; changed inputs hide mismatched results.
+4. Optionally choose **Create draft strategy**. Review the proposed changes and choose **Approve changes** or **Reject plan**.
+5. Read the verified result and inspect the run in assistant history. Stale or expired plans require a fresh preview and approval.
+
+Expected result: generation is advisory and never mutates a strategy. Creation uses the existing governed action lifecycle and creates only a Library draft. Invalid artifact envelopes cannot be created. Managed failure exposes **Copy AI Prompt**; prompts and provider identities are hidden during normal success.

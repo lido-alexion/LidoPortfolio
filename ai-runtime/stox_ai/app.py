@@ -95,7 +95,7 @@ async def execute(request: InferenceRequest):
             return await record_result(request, InferenceResult(request_id=request.request_id, capability_id=request.capability_id, degraded=True, status="failure", error_code=NormalizedError.GROUNDING_INSUFFICIENT, error_message="No maintained StoX documentation supports this answer"))
         request.input["grounding"] = provenance
     prompt = projection.get("prompts", {}).get(request.capability_id)
-    if request.capability_id in {"agent_planning", "agent_synthesis"} and not prompt:
+    if request.capability_id in {"agent_planning", "agent_synthesis", "stock_analysis_insight", "strategy_designer"} and not prompt:
         return await record_result(request, InferenceResult(request_id=request.request_id, capability_id=request.capability_id, degraded=True, status="failure", error_code=NormalizedError.CONFIGURATION_INVALID))
     if prompt:
         request.system_prompt = str(prompt.get("template", ""))
@@ -109,7 +109,17 @@ async def execute(request: InferenceRequest):
             "page_context": request.input.get("page_context", {}),
             "conversation": request.input.get("conversation", []),
             "response_contract": "Return JSON with an extracts array. Each entry must contain source_id and quote, an exact nonempty excerpt from that source snippet. No other answer text is accepted. Return an empty extracts array if evidence is insufficient."})
-    result = await execution.router.infer(request)
+    if request.capability_id in {"stock_analysis_insight", "strategy_designer"}:
+        request.user_prompt = json.dumps(request.input, ensure_ascii=False)
+        # Bound the entire interactive route, including admission, retries and failover.
+        try:
+            async with asyncio.timeout(45):
+                result = await execution.router.infer(request)
+        except TimeoutError:
+            result = InferenceResult(request_id=request.request_id, capability_id=request.capability_id,
+                degraded=True, status="failure", error_code=NormalizedError.PROVIDER_TIMEOUT)
+    else:
+        result = await execution.router.infer(request)
     if request.capability_id == "documentation_chat" and result.status == "success":
         try:
             extracts = json.loads(result.text)["extracts"]

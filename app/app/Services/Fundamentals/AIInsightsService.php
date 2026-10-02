@@ -53,6 +53,12 @@ class AIInsightsService
         }
         $this->usage->record($user, $stock->id, $result, $latencyMs, $telemetry);
 
+        try {
+            app(\App\Services\Fundamentals\AI\FundamentalInsightReuse::class)->remember((int) $stock->id, $deterministic, $result);
+        } catch (\Throwable $error) {
+            report($error);
+        }
+
         return $result;
     }
 

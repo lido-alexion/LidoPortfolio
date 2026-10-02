@@ -116,7 +116,7 @@
         <h2>Overview</h2>
         <p>Strategy is your decision policy. A portfolio may have <strong>multiple enabled strategies</strong> at the same time. After V5 migration, this page displays a read-only runtime projection of the exact immutable artifact bound to the Portfolio. Use the <strong>Artifact Library</strong> to create/edit a Draft, publish it, bind it, and explicitly upgrade an existing binding.</p>
 <p>The Strategy selector / <code>?strategy_id=</code> chooses which compatibility projection to inspect — not a database rule that only one strategy can be enabled. Unmapped legacy rows remain editable only until the V5 backfill maps them. Strategies reference Screeners by slug / factory key — they never duplicate Screener condition trees.</p>
-<p><strong>AI Strategy Designer</strong> (collapsible panel on this page) does <strong>not</strong> call an LLM. It builds a paste-ready prompt from your style/risk/complexity choices, copies it to the clipboard, and expects you to attach the StoX Trading Artifacts AI Authoring Guide in ChatGPT/Gemini/Claude/etc. Import the resulting Screener/Strategy JSON via the registries after Validate.</p>
+<p><strong>AI Strategy Designer</strong> generates a managed advisory design from your structured choices. Matching inputs restore your saved result. Regenerate explicitly refreshes it. Create draft strategy opens a governed preview and requires approval before creating a Library draft.</p>
 <p>Strategy does not invent stocks and does not rewrite Screener conditions. Screeners admit candidates; Strategy scores them, labels an action, applies portfolio/cash/market limits, and watches holdings for exits.</p>
 <p>Where do finished ideas appear?</p>
 <p>After you save Strategy and run the decision pipeline (Recommendations page → “Run decision pipeline”, or the scheduled daily pipeline), surviving trade ideas land on Recommendations (/recommendations). Approve a buy/sell there → it moves to Pending Execution (/transactions/pending). After you record the broker fill, it becomes a ledger transaction and shows on Holdings / Review. Insights (HOLD / WATCH) also appear on Recommendations but are view-only and are not sent to Telegram.</p>
@@ -147,7 +147,7 @@ flowchart TD
         <h2>Controls</h2>
         <dl class="doc-list">
         <dt>AI Strategy Designer</dt>
-        <dd>Collapsible panel on /strategy. Fill Investment Style, Risk, Holding Period, Market, Universe, Max Positions, Capital Allocation, Exit Style, Market Preferences, Optimization Priorities, Complexity, Explainability, and optional Additional Constraints. Generate Prompt builds a client-side template (StoX Default Prompt; more templates can be added later), shows it in a read-only textarea, and auto-copies to the clipboard (toast: “AI prompt copied to clipboard.”). Copy Again / Select All / Clear / Reset Defaults are available. Form values persist in browser localStorage. Attach /docs/stox-trading-artifacts-ai-guide.md when pasting into an external AI. No backend LLM call.</dd>
+        <dd>Collapsible panel on /strategy. Fill Investment Style, Risk, Holding Period, Market, Universe, Max Positions, Capital Allocation, Exit Style, Market Preferences, Optimization Priorities, Complexity, Explainability, and optional Additional Constraints. Generate strategy returns a structured advisory result. Matching inputs restore the saved account result; changed choices do not show an old design as current. Use Regenerate, Copy result, or Reset Defaults. Create draft strategy requires a separate preview and approval; it never publishes or activates automatically. Copy AI Prompt is available when managed generation fails. Form choices persist in this browser.</dd>
 
         <dt>Strategy selector</dt>
         <dd>Editing strategy dropdown lists strategies for this portfolio (enabled, draft, archived). Choosing one loads it via <code>?strategy_id=</code> — UI selection only; enabling a strategy does not disable others.</dd>
@@ -272,7 +272,7 @@ Save — writes the current config in place. After Save, run the pipeline from R
         <dd>The Artifact Library is the authoritative lifecycle/deployment surface. New Registry/editor authoring creates Library Drafts and no runnable legacy row. The legacy Registry remains a compatibility and portable-JSON inspection surface; mapped rows are read-only. Export never includes portfolio-local Screener ids — only slug / factory_key refs.</dd>
 
         <dt>AI Strategy Designer</dt>
-        <dd>Prompt builder only — no in-app LLM. Generated text instructs an external assistant to obey the StoX AI Authoring Guide / Contract. You still Validate and Import JSON via Screener Registry and Strategy Registry.</dd>
+        <dd>Managed advisory strategy generation follows the StoX authoring contract. Create draft strategy uses a separate governed preview and approval. Drafts remain unpublished and inactive. Copy AI Prompt remains available if managed AI is unavailable.</dd>
 
         <dt>Worked example — scoring four screener hits</dt>
         <dd>Assume factory-like weights: RS 35, Trend 20, Momentum 15, Breakout 10, Volume 8, Market Regime 5, Sector 4, Risk 3 (total 100).

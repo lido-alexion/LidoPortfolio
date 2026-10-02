@@ -216,6 +216,7 @@ function WatchlistStockPanel({
                             <div className="h5 mb-1 lido-stock-symbol-with-analyse">
                                 <span>{stock.symbol}</span>
                                 <AnalyseStockButton
+                                    presentation="inline"
                                     stockId={stock.id}
                                     symbol={stock.symbol}
                                     name={stock.name}

@@ -1050,7 +1050,7 @@ const APP_DOCUMENTATION_BASE = [
         overview:
             'Strategy is your decision policy. A portfolio may have **multiple enabled strategies** at the same time. After V5 migration, this page displays a read-only runtime projection of the exact immutable artifact bound to the Portfolio. Use the **Artifact Library** to create/edit a Draft, publish it, bind it, and explicitly upgrade an existing binding.\n\n'
             + 'The Strategy selector / `?strategy_id=` chooses which compatibility projection to inspect — not a database rule that only one strategy can be enabled. Unmapped legacy rows remain editable only until the V5 backfill maps them. Strategies reference Screeners by slug / factory key — they never duplicate Screener condition trees.\n\n'
-            + '**AI Strategy Designer** (collapsible panel on this page) does **not** call an LLM. It builds a paste-ready prompt from your style/risk/complexity choices, copies it to the clipboard, and expects you to attach the StoX Trading Artifacts AI Authoring Guide in ChatGPT/Gemini/Claude/etc. Import the resulting Screener/Strategy JSON via the registries after Validate.\n\n'
+            + '**AI Strategy Designer** generates a managed advisory design from your structured choices. Matching inputs restore your saved result. Regenerate explicitly refreshes it. Create draft strategy opens a governed preview and requires approval before creating a Library draft.\n\n'
             + 'Strategy does not invent stocks and does not rewrite Screener conditions. Screeners admit candidates; Strategy scores them, labels an action, applies portfolio/cash/market limits, and watches holdings for exits.\n\n'
             + 'Where do finished ideas appear?\n\n'
             + 'After you save Strategy and run the decision pipeline (Recommendations page → “Run decision pipeline”, or the scheduled daily pipeline), surviving trade ideas land on Recommendations (/recommendations). Approve a buy/sell there → it moves to Pending Execution (/transactions/pending). After you record the broker fill, it becomes a ledger transaction and shows on Holdings / Review. Insights (HOLD / WATCH) also appear on Recommendations but are view-only and are not sent to Telegram.\n\n'
@@ -1077,8 +1077,8 @@ const APP_DOCUMENTATION_BASE = [
                 name: 'AI Strategy Designer',
                 description:
                     'Collapsible panel on /strategy. Fill Investment Style, Risk, Holding Period, Market, Universe, Max Positions, Capital Allocation, Exit Style, Market Preferences, Optimization Priorities, Complexity, Explainability, and optional Additional Constraints. '
-                    + 'Generate Prompt builds a client-side template (StoX Default Prompt; more templates can be added later), shows it in a read-only textarea, and auto-copies to the clipboard (toast: “AI prompt copied to clipboard.”). '
-                    + 'Copy Again / Select All / Clear / Reset Defaults are available. Form values persist in browser localStorage. Attach /docs/stox-trading-artifacts-ai-guide.md when pasting into an external AI. No backend LLM call.',
+                    + 'Generate strategy returns a structured advisory result. Matching inputs restore the saved account result; changed choices do not show an old design as current. '
+                    + 'Use Regenerate, Copy result, or Reset Defaults. Create draft strategy requires a separate preview and approval; it never publishes or activates automatically. Copy AI Prompt is available when managed generation fails. Form choices persist in this browser.',
             },
             {
                 name: 'Strategy selector',
@@ -1228,7 +1228,7 @@ const APP_DOCUMENTATION_BASE = [
             {
                 name: 'AI Strategy Designer',
                 description:
-                    'Prompt builder only — no in-app LLM. Generated text instructs an external assistant to obey the StoX AI Authoring Guide / Contract. You still Validate and Import JSON via Screener Registry and Strategy Registry.',
+                    'Managed advisory strategy generation follows the StoX authoring contract. Create draft strategy uses a separate governed preview and approval. Drafts remain unpublished and inactive. Copy AI Prompt remains available if managed AI is unavailable.',
             },
             {
                 name: 'Worked example — scoring four screener hits',

@@ -1,0 +1,334 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "StoX embedded AI insights",
+    "version": "1.0.0",
+    "description": "Laravel Sanctum session authentication and CSRF apply. X-Profile-Id selects an owned active portfolio. portfolio:read is required; draft preview additionally requires portfolio:write. Managed failures return degraded status with a matching cached response where available. Approval uses existing AI-002 run endpoints."
+  },
+  "paths": {
+    "/api/ai/insights/stocks/{stock}": {
+      "post": {
+        "summary": "Read or explicitly generate stock insight",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "refresh": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "lookup_only": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Safe result in data; draft returns the existing AI-002 run projection."
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Scope denied"
+          },
+          "404": {
+            "description": "Owned portfolio, stock or result not found"
+          },
+          "422": {
+            "description": "Invalid input or artifact"
+          }
+        },
+        "parameters": [
+          {
+            "name": "stock",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ]
+      }
+    },
+    "/api/ai/insights/strategy": {
+      "post": {
+        "summary": "Restore or explicitly generate advisory strategy",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "refresh": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "lookup_only": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "inputs": {
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "inputs"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Safe result in data; draft returns the existing AI-002 run projection."
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Scope denied"
+          },
+          "404": {
+            "description": "Owned portfolio, stock or result not found"
+          },
+          "422": {
+            "description": "Invalid input or artifact"
+          }
+        }
+      }
+    },
+    "/api/ai/insights/strategy/draft": {
+      "post": {
+        "summary": "Stage AI-002 strategy.create preview; never execute",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fingerprint": {
+                    "type": "string",
+                    "minLength": 64,
+                    "maxLength": 64
+                  }
+                },
+                "required": [
+                  "fingerprint"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Safe result in data; draft returns the existing AI-002 run projection."
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Scope denied"
+          },
+          "404": {
+            "description": "Owned portfolio, stock or result not found"
+          },
+          "422": {
+            "description": "Invalid input or artifact"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "laravel_session"
+      }
+    },
+    "schemas": {
+      "stock_analysis_insight": {
+        "type": "object",
+        "required": [
+          "summary",
+          "technical_price_context",
+          "fundamental_context",
+          "positive_signals",
+          "risks_watch_items",
+          "what_to_check_next",
+          "data_limitations"
+        ],
+        "properties": {
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 6000
+          },
+          "technical_price_context": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 6000
+          },
+          "fundamental_context": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 6000
+          },
+          "positive_signals": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 6000
+          },
+          "risks_watch_items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 6000
+          },
+          "what_to_check_next": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 6000
+          },
+          "data_limitations": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 6000
+          }
+        },
+        "additionalProperties": false
+      },
+      "strategy_designer": {
+        "type": "object",
+        "required": [
+          "strategy_summary",
+          "target_market_universe",
+          "entry_logic",
+          "exit_logic",
+          "allocation_position_sizing",
+          "risk_controls",
+          "assumptions",
+          "caveats",
+          "rationale",
+          "artifact_compatibility_notes",
+          "draft_envelope"
+        ],
+        "properties": {
+          "strategy_summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 6000
+          },
+          "target_market_universe": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 6000
+          },
+          "entry_logic": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 6000
+          },
+          "exit_logic": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 6000
+          },
+          "allocation_position_sizing": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 6000
+          },
+          "risk_controls": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 6000
+          },
+          "assumptions": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 6000
+          },
+          "caveats": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 6000
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 6000
+          },
+          "artifact_compatibility_notes": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 6000
+          },
+          "draft_envelope": {
+            "type": "object",
+            "required": [
+              "schema_version",
+              "artifact_type",
+              "slug",
+              "name",
+              "metadata",
+              "definition"
+            ],
+            "properties": {
+              "schema_version": {
+                "const": "1.0"
+              },
+              "artifact_type": {
+                "const": "strategy"
+              },
+              "slug": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "metadata": {
+                "type": "object"
+              },
+              "definition": {
+                "type": "object"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}
