@@ -106,6 +106,27 @@ class DataQualityDetectionTest extends TestCase
         Http::assertSent(fn ($request) => str_contains($request->url(), 'index=equities'));
     }
 
+    public function test_provider_error_payload_does_not_advance_checkpoint(): void
+    {
+        $this->createDataQualityStock('SBC');
+        config(['services.data_quality.corporate_actions_feed_url' => 'https://www.nseindia.com/api/corporates-corporateActions?index=equities']);
+        Http::fake([
+            'https://www.nseindia.com/api/corporates-corporateActions*' => Http::response([
+                'error' => 'Missing index',
+            ], 200),
+        ]);
+
+        $result = app(DataQualityCorporateActionSyncService::class)->syncFromExchangeFeed();
+
+        $this->assertSame(0, $result['synced']);
+        $this->assertSame(0, $result['created']);
+        $this->assertNotEmpty($result['errors']);
+        $checkpoint = \App\Models\CorporateActionFeedCheckpoint::query()->firstOrFail();
+        $this->assertSame('payload_not_event_list', $checkpoint->last_error);
+        $this->assertNull($checkpoint->last_successful_at);
+        $this->assertNull($checkpoint->payload_hash);
+    }
+
     public function test_heuristic_detection_creates_pending_issue_with_run_id(): void
     {
         $stock = $this->createDataQualityStock('GAP');

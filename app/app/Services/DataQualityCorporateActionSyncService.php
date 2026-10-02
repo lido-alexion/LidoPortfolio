@@ -54,13 +54,13 @@ class DataQualityCorporateActionSyncService
         }
 
         $rows = $response->json();
-        if (! is_array($rows)) {
-            $checkpoint->forceFill(['last_error' => 'payload_not_array'])->save();
+        if (! is_array($rows) || ! array_is_list($rows) || $this->containsProviderErrorPayload($rows)) {
+            $checkpoint->forceFill(['last_error' => 'payload_not_event_list'])->save();
             return [
                 'synced' => 0,
                 'created' => 0,
                 'skipped' => 0,
-                'errors' => ['Corporate actions feed payload is not a JSON array.'],
+                'errors' => ['Corporate actions feed returned an invalid or provider-error payload.'],
             ];
         }
 
@@ -211,6 +211,37 @@ class DataQualityCorporateActionSyncService
         }
 
         return $matches[1].':'.$matches[2];
+    }
+
+    /**
+     * A 2xx response can still be an exchange/provider error envelope.
+     * Treat it as a failed check so it cannot advance the checkpoint.
+     *
+     * @param  array<mixed>  $payload
+     */
+    protected function containsProviderErrorPayload(array $payload): bool
+    {
+        $errorKeys = ['error', 'errors', 'message', 'statusCode', 'status_code'];
+
+        foreach ($payload as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            foreach ($errorKeys as $key) {
+                if (array_key_exists($key, $row) && ! array_key_exists('symbol', $row)) {
+                    return true;
+                }
+            }
+        }
+
+        foreach ($errorKeys as $key) {
+            if (array_key_exists($key, $payload)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected function parseDate(mixed $value): ?string
