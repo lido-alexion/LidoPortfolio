@@ -74,6 +74,12 @@ class EmbeddedAiService
 
     private function project(?AiInsightCache $cache, bool $degraded, string $fingerprint): array
     {
-        return ['fingerprint' => $fingerprint, 'response' => $cache?->response, 'data_as_of' => $cache?->data_as_of, 'generated_at' => $cache?->generated_at?->toIso8601String(), 'degraded' => $degraded, 'status' => $degraded ? ($cache ? 'cached_degraded' : 'unavailable') : ($cache ? 'ready' : 'missing')];
+        $response = $cache?->response;
+        if (is_array($response)) {
+            /** @var array<string,mixed> $response */
+            $response = EmbeddedAiContract::normalize($response);
+        }
+
+        return ['fingerprint' => $fingerprint, 'response' => $response, 'data_as_of' => $cache?->data_as_of, 'generated_at' => $cache?->generated_at?->toIso8601String(), 'degraded' => $degraded, 'status' => $degraded ? ($cache ? 'cached_degraded' : 'unavailable') : ($cache ? 'ready' : 'missing')];
     }
 }
