@@ -17,7 +17,11 @@ class EmbeddedAiContract
             throw new \InvalidArgumentException('Unknown embedded capability');
         }
 
-        return json_decode(file_get_contents(base_path('../docs/architecture/ai-schemas/'.$capability.'.v1.json')), true, 512, JSON_THROW_ON_ERROR);
+        $runtimePath = resource_path('ai-schemas/'.$capability.'.v1.json');
+        $documentationPath = base_path('../docs/architecture/ai-schemas/'.$capability.'.v1.json');
+        $schemaPath = is_file($runtimePath) ? $runtimePath : $documentationPath;
+
+        return json_decode(file_get_contents($schemaPath), true, 512, JSON_THROW_ON_ERROR);
     }
 
     public static function normalize(mixed $value): mixed

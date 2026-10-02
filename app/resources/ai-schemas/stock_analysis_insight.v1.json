@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stox:stock_analysis_insight:1",
+  "type": "object",
+  "required": ["summary", "technical_price_context", "fundamental_context", "positive_signals", "risks_watch_items", "what_to_check_next", "data_limitations"],
+  "properties": {
+    "summary": {"type": "string", "minLength": 1, "maxLength": 6000},
+    "technical_price_context": {"type": "string", "minLength": 1, "maxLength": 6000},
+    "fundamental_context": {"type": "string", "minLength": 1, "maxLength": 6000},
+    "positive_signals": {"type": "string", "minLength": 1, "maxLength": 6000},
+    "risks_watch_items": {"type": "string", "minLength": 1, "maxLength": 6000},
+    "what_to_check_next": {"type": "string", "minLength": 1, "maxLength": 6000},
+    "data_limitations": {"type": "string", "minLength": 1, "maxLength": 6000}
+  },
+  "additionalProperties": false
+}
