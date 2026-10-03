@@ -2,6 +2,7 @@
 namespace App\Services\ML;
 
 use App\Exceptions\MlAcceptanceEvidenceQuotaExceeded;
+use App\Exceptions\MlAcceptanceEvidenceIoFailed;
 use App\Models\V7\FundamentalFact;
 use App\Models\V8\MlUniverseSnapshotBoundary;
 use Carbon\Carbon;
@@ -60,6 +61,8 @@ class MlAcceptanceEvidenceService
             if (($result['feature_coverage']['train']['market_breadth_nifty']['present'] ?? 0) === 0) $result['blocking_reasons'][] = 'historical_breadth_unavailable';
         } catch (MlAcceptanceEvidenceQuotaExceeded) {
             $result['blocking_reasons'][] = 'pit_evidence_quota_exceeded';
+        } catch (MlAcceptanceEvidenceIoFailed) {
+            $result['blocking_reasons'][] = 'pit_evidence_io_failed';
         } catch (\Throwable $e) {
             $result['blocking_reasons'][] = 'canonical_dataset_or_coverage_unavailable';
         } finally { File::deleteDirectory($directory.'/dataset'); }

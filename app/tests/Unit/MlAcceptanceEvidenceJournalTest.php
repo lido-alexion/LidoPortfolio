@@ -95,4 +95,143 @@ class MlAcceptanceEvidenceJournalTest extends TestCase
             $this->assertFileDoesNotExist($path);
         }
     }
+    public function test_exact_stored_boundary_and_one_byte_less_for_inventory_and_row(): void
+    {
+        foreach (['fact_inventory', 'fundamentals'] as $key) {
+            $record = ['stock_id' => 1, $key => ['private_fact' => 'value']];
+            $line = json_encode($record, JSON_THROW_ON_ERROR)."\n";
+            $compression = deflate_init(ZLIB_ENCODING_GZIP);
+            $expected = deflate_add($compression, $line, ZLIB_NO_FLUSH).deflate_add($compression, '', ZLIB_FINISH);
+            $path = $this->directory.'/'.$key;
+            $journal = new MlAcceptanceEvidenceJournal($path, strlen($expected));
+            $journal->append($record);
+            $metadata = $journal->finish();
+            $this->assertSame($expected, file_get_contents($path));
+            $this->assertSame(hash('sha256', $expected), $metadata['pit_evidence_sha256']);
+            $this->assertSame(hash('sha256', $line), $metadata['pit_evidence_content_sha256']);
+
+            $partial = $path.'-partial';
+            $journal = new MlAcceptanceEvidenceJournal($partial, strlen($expected) - 1);
+            $journal->append($record);
+            $before = file_get_contents($partial);
+            try {
+                $journal->finish();
+                $this->fail('Footer exceeded the stored-byte boundary.');
+            } catch (MlAcceptanceEvidenceQuotaExceeded) {
+                $this->assertSame($before, file_get_contents($partial));
+            }
+            $this->assertCannotFinish($journal);
+            $journal->close();
+            $this->assertFileExists($partial);
+        }
+    }
+
+    public function test_partial_writes_are_completed_without_changing_the_artifact(): void
+    {
+        $path = $this->directory.'/short';
+        $journal = new FaultingEvidenceJournal($path);
+        $journal->fault = 'short';
+        $record = ['fact_inventory' => ['private_fact' => 123]];
+        $journal->append($record);
+        $metadata = $journal->finish();
+        $line = json_encode($record, JSON_THROW_ON_ERROR)."\n";
+        $this->assertSame($line, gzdecode(file_get_contents($path)));
+        $this->assertSame(hash('sha256', $line), $metadata['pit_evidence_content_sha256']);
+        $this->assertSame(hash_file('sha256', $path), $metadata['pit_evidence_sha256']);
+        $this->assertSame(filesize($path), $metadata['pit_evidence_bytes']);
+    }
+
+    public function test_io_failures_are_safe_terminal_and_retain_partial_evidence(): void
+    {
+        foreach (['write', 'zero', 'warning', 'throw', 'flush', 'close', 'compress'] as $fault) {
+            $path = $this->directory.'/'.$fault;
+            $journal = new FaultingEvidenceJournal($path);
+            $journal->append(['stock_id' => 1]);
+            $journal->fault = $fault;
+            try {
+                $journal->finish();
+                $this->fail('Failed I/O produced completion metadata: '.$fault);
+            } catch (\App\Exceptions\MlAcceptanceEvidenceIoFailed $error) {
+                $this->assertSame('PIT evidence journal I/O failed.', $error->getMessage());
+                $this->assertNull($error->getPrevious());
+            }
+            $journal->fault = '';
+            $this->assertCannotFinish($journal);
+            $journal->close();
+            $this->assertFileExists($path);
+        }
+    }
+
+    public function test_failed_serialization_cannot_be_skipped_and_then_completed(): void
+    {
+        $journal = new MlAcceptanceEvidenceJournal($this->directory.'/serialization');
+        $journal->append(['stock_id' => 1]);
+        $payload = new class implements \JsonSerializable {
+            public function jsonSerialize(): mixed
+            {
+                throw new \RuntimeException('/private/path secret raw fact');
+            }
+        };
+        try {
+            $journal->append(['fact_inventory' => $payload]);
+            $this->fail('Invalid serialization accepted.');
+        } catch (\RuntimeException $error) {
+            $this->assertSame('PIT evidence serialization failed.', $error->getMessage());
+            $this->assertNull($error->getPrevious());
+        }
+        $this->assertCannotFinish($journal);
+        $journal->close();
+    }
+
+    public function test_open_failure_does_not_emit_path_bearing_warnings(): void
+    {
+        $this->expectException(\App\Exceptions\MlAcceptanceEvidenceIoFailed::class);
+        $this->expectExceptionMessage('PIT evidence journal I/O failed.');
+        new MlAcceptanceEvidenceJournal($this->directory.'/private-secret/missing');
+    }
+
+    private function assertCannotFinish(MlAcceptanceEvidenceJournal $journal): void
+    {
+        foreach (['append', 'finish'] as $action) {
+            try {
+                $action === 'append' ? $journal->append(['stock_id' => 2]) : $journal->finish();
+                $this->fail('Incomplete journal accepted '.$action);
+            } catch (\LogicException $error) {
+                $this->assertSame('PIT evidence journal is closed or incomplete.', $error->getMessage());
+            }
+        }
+    }
+
+}
+
+
+/** Faults occur at the native I/O boundary; all production bookkeeping still runs. */
+class FaultingEvidenceJournal extends MlAcceptanceEvidenceJournal
+{
+    public string $fault = '';
+
+    protected function writeChunk(mixed $stream, string $data): int|false
+    {
+        if ($this->fault === 'write') return false;
+        if ($this->fault === 'zero') return 0;
+        if ($this->fault === 'warning') trigger_error('/private/path secret raw fact', E_USER_WARNING);
+        if ($this->fault === 'throw') throw new \RuntimeException('/private/path secret raw fact');
+        return parent::writeChunk($stream, $this->fault === 'short' ? substr($data, 0, 3) : $data);
+    }
+
+    protected function flushStream(mixed $stream): bool
+    {
+        return $this->fault === 'flush' ? false : parent::flushStream($stream);
+    }
+
+    protected function closeStream(mixed $stream): bool
+    {
+        $closed = parent::closeStream($stream);
+        return $this->fault === 'close' ? false : $closed;
+    }
+
+    protected function compress(string $data, int $mode): string|false
+    {
+        return $this->fault === 'compress' ? false : parent::compress($data, $mode);
+    }
 }

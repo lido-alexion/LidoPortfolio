@@ -311,6 +311,36 @@ class MlProductionAcceptanceTest extends TestCase
         }
     }
 
+    public function test_preflight_reports_journal_io_failure_without_completion_or_sensitive_details(): void
+    {
+        Stock::query()->create(['symbol' => 'TEST', 'name' => 'Test', 'exchange' => 'NSE', 'isin' => 'INE123']);
+        $source = $this->source();
+        $backfills = app(MlAcceptanceBackfillService::class);
+        $run = $backfills->preview([$source->id], 1);
+        $backfills->step($run->id);
+        $backfills->action($run, 'apply', 1);
+        $backfills->step($run->id);
+        $this->mock(MlTrainingDatasetBuilder::class, function ($mock) {
+            $mock->shouldReceive('requiredReferenceDates')->once()->andReturn(['2026-09-30' => true]);
+            $mock->shouldReceive('buildStreamed')->once()->andReturn(['paths' => []]);
+        });
+        $evidence = \Mockery::mock(MlAcceptanceEvidenceService::class)->makePartial();
+        $evidence->shouldReceive('coverage')->once()->andThrow(new \App\Exceptions\MlAcceptanceEvidenceIoFailed);
+        $campaign = (string) Str::uuid();
+        try {
+            $result = $evidence->preflight($campaign, '1m', Carbon::parse('2026-09-30'));
+            $this->assertSame(['pit_evidence_io_failed'], $result['blocking_reasons']);
+            $this->assertArrayNotHasKey('pit_evidence_sha256', $result);
+            $this->assertArrayNotHasKey('pit_evidence_content_sha256', $result);
+            $this->assertNull($result['coverage']);
+            $this->assertNull($result['dataset_sha256']);
+            $this->assertDirectoryDoesNotExist(storage_path('app/private/ml-acceptance/campaigns/'.$campaign.'/1m/dataset'));
+            Bus::assertNotDispatched(MlRetrainJob::class);
+        } finally {
+            File::deleteDirectory(storage_path('app/private/ml-acceptance/campaigns/'.$campaign));
+        }
+    }
+
     public function test_upload_duplicate_chunk_hash_mismatch_and_quota(): void
     {
         $service = app(MlAcceptanceSourceService::class);
