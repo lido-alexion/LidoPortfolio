@@ -1,7 +1,9 @@
 <?php
 
 // Reviewed evidence only. Changes require identity regression tests and a fresh preview.
-return [
+$chains = json_decode(file_get_contents(__DIR__.'/nse_historical_identity_chains.json'), true, 512, JSON_THROW_ON_ERROR);
+
+$legacy = [
     'version' => 'nse-historical-identities-1',
     'identities' => [
         0 => [
@@ -34,4 +36,10 @@ return [
             ],
         ],
     ],
+];
+
+return [
+    'version' => 'nse-historical-identities-2',
+    'transitions' => $chains['transitions'],
+    'identities' => array_merge($legacy['identities'], $chains['identities']),
 ];

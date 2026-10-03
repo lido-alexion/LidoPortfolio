@@ -211,3 +211,163 @@ no automatic promotion or lifecycle enablement is authorized.
    job, use a fresh governed preview on the reviewed build, prove each of all
    **360** dates reaches 90%, and follow explicit apply/preflight/1m–3m–6m training
    gates. Do not resume cancelled run 3 or reuse v2/v3 digests with parser v4.
+
+## 2026-10-03 — official evidence acquisition and offline 360-date checkpoint
+
+**FEAT-057 remains REVIEW.** This section supersedes the first-stage unresolved
+counts above; it does not replace the recorded production failure or claim a
+production acceptance pass.
+
+### Published baseline and production identity
+
+The supervisor published the exact tested first-stage tree
+`0fadb4169141376c826fa84e31fc285980dc2b50` as commit
+`9203632fd7daaa3b247160c32a8073b67ac5700c`, draft
+[PR46](https://github.com/lido-alexion/LidoPortfolio/pull/46). The full backend gate
+reported above **passed** on that tree. CI run `37090544041` was queued at the
+supervisor update; its eventual GitHub result is not asserted here. Original local
+commit `58a173358b5b124d2a6f8fc85bfec66cb60498f5` remains preserved. This stage uses
+`feat057-evidence-stage` based on the published commit. No second publication or
+PR was attempted; the supervisor owns publication of the next reviewed change.
+
+The independently read production build was
+`2f89e574f65342f037b8d84ae50b7ccbdf606160`, campaign
+`996fa344-2533-4bf0-a555-9b052de2c8cb`, cutoff **2026-10-01**, cancelled preview
+**run 3**, cursor **0**, **zero dates committed**. Source IDs were resolved from
+run 3 rather than the transcribed prompt. First source:
+`f85aabce-a346-41e8-bd60-643d3d7ee628`, **2022-11-04**, archive SHA256
+`df02c39caf5bb6ffb97f43b6f76d67d4486d4483d38969d16e9b519483104d66`.
+Production is locally readable on `stoxla-prod`; SSH and production credentials
+were not needed. The earlier SSH blocker is invalid. CLI SQLite support was
+supplied from scratch for isolated checks; it is not a remaining test blocker.
+
+All **360** sealed source files were copied once into scratch and content hashes
+verified. Their dates exactly match run 3 and the campaign horizon-date union.
+One read-only stock query copied **2,637** NSE master rows for indexed offline
+lookups. No repeated per-row production lookups, production writes, queue changes,
+service changes, workers, previews, applies, training or deployment occurred.
+The unrelated **2026-10-01 `forward_official_nse`** boundary remains separate.
+The cancelled-run retry job was neither consumed nor removed.
+
+### Evidence acquired and reviewed
+
+The first requested checkpoint covered **10 identities**, **11 transitions** and
+**23 circulars**, including the two VBL subdivisions. Its historical checkpoint is
+[data/FEAT-057-evidence-batch01.json](data/FEAT-057-evidence-batch01.json).
+Subsequent batches used six bulk NSE circular indexes (October 2022 through the
+campaign cutoff) and the official corporate-action report. The latter is discovery
+only: several retrospective rows retain an earlier ISIN and cannot prove the
+ISIN immediately before a later split.
+
+The final acquisition manifest records **357 URLs: 354 acquired, 3 failed URL
+attempts retained visibly**. Two failed archive-mirror URLs were recovered at their
+original indexed `nsearchives.nseindia.com` URLs (CMPT57871, CML61690); the third
+was an unused incorrect CMPT58618 lead (404), replaced by the correct HAL notice
+CMPT58637. No required active-registry proof depends on a failed download.
+[Acquisition manifest](data/FEAT-057-evidence-acquisition.json) retains URLs,
+SHA256, attempt status and ZIP-member hashes. Original bytes and extracted pages
+remain in the scratch acquisition corpus; no giant raw source/master snapshots
+are committed.
+
+The reviewed registry adds **140 bounded historical intervals** for **135 issuers**
+using **140 explicit subdivision transitions**. Together with the published
+Nestlé interval, there are **141 active intervals for 136 issuers**. DEVIT,
+GEEKAYWIRE, SERVOTECH, SHRADHA and VBL require two connected, strictly dated links.
+Both historical legs are represented where observed. Each interval begins at its
+first sealed historical observation and ends before the documented trading change.
+The registry includes official old/new event evidence, document dates, pages,
+short excerpts, hashes and explicit amendment references. Runtime validation
+rejects incomplete/reversed chains, invalid dates, wrong endpoints and missing
+old/new evidence. Exact historical symbol and ISIN remain mandatory; canonical
+stock lookup remains unique-ISIN-only. Parser identity is now
+`nse-pit-universe-parser-5`, with the complete registry hash still bound into
+snapshot diagnostics/digests. The current registry digest is
+`51681c4b952c2347bc10c0abd3acdf7cb574b0b2815dbd9f7b3edfd3ab7ca43c`.
+
+**HAL date reconciled:** CML58633 explicitly modifies CML58539 from September 29
+to **September 28, 2023**. Clearing circular CMPT58637 independently states that
+ex-date. The old HAL interval ends **2023-09-27**. RPPL similarly retains CML63920's
+original September 18 date and CML63980's explicit correction to **2024-09-17**.
+Neither correction silently overwrites the original document date.
+
+The existing portfolio corporate-action model/sync and frozen F020/F042/F043
+facilities were inspected. They govern portfolio events, quality issues and price
+repair; they do not authorize historical security-master continuity by symbol.
+This change does not call them, add a schema, alter prices or reinterpret mergers.
+
+### Exact classification and remaining remediation
+
+[Per-row classification and next actions](data/FEAT-057-evidence-classification.csv)
+accounts for all **253 original v3 rejections** without denominator changes:
+
+| Classification | Count | Disposition |
+|---|---:|---|
+| Fully proven subdivision aliases | 136 | Nestlé plus 135 newly evidenced issuers; active bounded registry intervals |
+| Absent current identity; official disposition unresolved | 105 | Acquire historical listing/rename/delisting and complete ISIN chain; propose distinct historical master identities with downstream-reference review |
+| Absent HDFC historical identity | 1 | Official amalgamation suspension already acquired; distinct historical-master remediation, never alias to HDFCBANK |
+| Proven subdivision with duplicate current target | 1 | HEG: target INE545A01024 exists as HEG **781** and HEGAM **7712**; no active alias or arbitrary survivor |
+| Trading-date reconciliation still required | 3 | EASEMYTRIP, FILATEX, SSWL: new-ISIN notices state different w.e.f. and trade ex-dates; acquire clarification and adjacent dated identity files before registering |
+| Contradictory official old ISIN | 1 | LIKHITHA: CMPT54656 prints INE060X01018, while sealed LIKHITHA is INE060901019; require corrected notice or issuer filing explicitly connecting the correct endpoints |
+| Capital reduction / insolvency restructuring | 4 | BURNPUR, EASTSILK, MBECL, SUMEETINDS: official recommencement ZIPs acquired; require full cancellation/reissue terms and a reviewed canonical-security decision |
+| Consolidation chain incomplete | 2 | KAUSHALYA, VERTOZ: suspension/resumption and new ISIN acquired, but explicit old/new consolidation link and interval semantics remain outside this subdivision-only registry |
+
+**True symbol reuse: 0 proven; incorrect canonical survivor: 0 proven.** These are
+not claims that reuse or incorrect identities are absent. Search collisions were
+explicitly rejected, including FILATEX/FILATFASH, GLOBAL/VGL and
+KAMDHENU/KAMOPAINTS. Same issuer prefix, name, symbol, split headline or current
+identity alone never authorized an alias.
+
+The **four original duplicate pairs**, outside the 253 rejected rows, remain
+GUJGASLTD/GUJENERGY (**744/7148**), LYPSAGEMS/AURUS (**1126/7354**),
+SANGINITA/AGASTYAEN (**7252/7710**) and SILLYMONKS/CRESTO (**1728/7693**).
+HEG adds a **fifth duplicate pair** discovered through the new canonical target.
+All need separately reviewed authoritative rename/listing evidence and downstream
+reference analysis before master remediation. No row was merged/deleted, no target
+was selected by order, and no current price series was changed.
+
+[Reviewed but inactive transitions](data/FEAT-057-reviewed-inactive-transitions.json)
+retain HEG's proven split, VERTOZ's first split, and SUMEETINDS's later split without
+pretending their incomplete/ambiguous paths reach a usable canonical target.
+An automatic approval review rejected a draft generation step that would admit
+non-unique targets into the active registry. The safer final generator retained
+the unique-target requirement; no duplicate override was performed.
+
+### Offline checkpoints and verification
+
+| Check | State | Evidence |
+|---|---|---|
+| Published PR46 full backend gate | PASSED | 2,143 tests, 2,141 passed, 2 skipped, 13,709 assertions; isolated MySQL |
+| PR46 full 360-date mapping replay | FAILED mapping coverage on 72 dates | 288 pass; first date 1,580/1,836 = 86.0566%; worst additional need 73. [Baseline ledger](data/FEAT-057-PR46-360-date-replay.csv) |
+| New reviewed evidence full 360-date replay | PASSED offline mapping floor | **360/360** dates; minimum **93.4096%**; largest remaining gap to 90% **0**. [New ledger](data/FEAT-057-evidence-360-date-replay.csv) |
+| Actual PHP provider replay parity | PASSED | Eight dates: first two, indices71/72/100/200/300 and final date; mapped, unmatched, source denominator and alias counts equal the offline ledger |
+| Focused PHP regressions | PASSED | **29 tests, 706 assertions**; all registry interval boundaries, multistep chains, missing links/proof, reversed order, invalid date, explicit HAL amendment, existing reuse/duplicate/reason sanitization checks |
+| Python contracts | PASSED | **22 tests, 8 existing skips**, from app working directory; includes cache-integrity retry, HTML failure and public-URL acquisition checks |
+| New-stage full backend CI parity | PASSED | Canonical repository verifier: **2,146 tests, 2,144 passed, 2 skipped, 14,309 assertions**, PHPUnit **2,066.304 seconds**; migration portability **168 migrations**; Python **22 tests / 8 existing skips**; OpenAPI **219 operations** current. Isolated MySQL8.4 `feat057_identity_ci` on loopback33357; scratch PHP INI only. Remote CI remains to be run on the supervisor-published commit |
+| Production preview/apply and 1m/3m/6m training | NOT RUN | Explicitly prohibited for this investigation |
+| Production acceptance / promotion | BLOCKED pending governed runtime evidence | Offline mapping success does not establish production acceptance |
+
+On **2022-11-04**, the final offline resolver maps **1,715/1,836 (93.4096%)**,
+with **136** dated-identity mappings and **121** rejected members: **106** absent
+current candidates, **11** unresolved/conflicting candidates (including HEG's
+blocked target), and **4** ambiguous current ISINs. The floor still requires
+**1,653**, so the scratch result is **62** above it. No member was dropped from
+the denominator to obtain that result. Across the corpus: **751,359** eligible
+date-memberships, **729,735** mapped, **21,624** unmatched, including **20,733**
+dated-alias mappings. Rejections total **14,218** absent candidates, **5,654**
+conflicting identities and **1,752** ambiguous current ISINs. Per-date unmatched
+counts range from **10 to 121**. BDL and SDBL retain old ISIN observations on
+**2024-05-24**, their documented change date; those two observations remain
+rejected outside the proven intervals. No interval was stretched to absorb them.
+
+The resumable workbench is documented in
+[app/scripts/nse_identity/README.md](../../app/scripts/nse_identity/README.md).
+It only downloads public sources and replays scratch copies. Its PHP export calls
+the actual evidence validator without bootstrapping Laravel or opening a DB.
+Acquisition outputs never write the reviewed registry automatically.
+
+After supervisor publication and verified CI, a separately authorized production
+sequence must reconcile the queued cancelled-run job, deploy the exact verified
+SHA through the existing release process, create a **fresh governed preview** on
+all 360 campaign dates with parser5/evidence digest, review each date's diagnostics,
+and satisfy apply/preflight and all horizon training/acceptance gates. Run3 stays
+cancelled; earlier parser/preview digests must not be reused. FEAT-057 stays REVIEW.

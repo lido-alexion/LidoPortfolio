@@ -15,7 +15,7 @@ use ZipArchive;
  */
 class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvider
 {
-    public const PARSER_VERSION = 'nse-pit-universe-parser-4';
+    public const PARSER_VERSION = 'nse-pit-universe-parser-5';
     private const ALLOWED_SERIES = ['EQ', 'BE', 'BZ'];
 
     public function snapshotForDate(string $date): array
