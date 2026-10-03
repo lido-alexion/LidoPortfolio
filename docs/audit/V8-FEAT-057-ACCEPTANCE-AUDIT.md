@@ -72,3 +72,142 @@ Latest master already provided PIT sector lookup, challenger classification and 
 Production data/source acquisition and acceptance were not performed in this task. Existing boundaries are immutable: upgrading does not rewrite them. Operators must review earlier evidence under its recorded parser/registry identity; fresh acceptance must use the new identity and the [production procedure](../current/ml-production-acceptance.md#issue-18-historical-universe-operations).
 
 The legacy `ml:capture-universe-membership` command is restricted to today’s date. Past/future `--effective-from` values fail before membership or boundary writes; historical population must use dated-source backfill.
+
+
+## Historical identity investigation — 2026-10-03
+
+Status remains **REVIEW**. Correction to the initial investigation: this checkout
+runs as `nitty` on `stoxla-prod`; production is locally readable. The failed
+attempt to SSH to the same host was an investigator error, **not an access
+blocker**. The initial SSH-blocked classification has been replaced by the
+independently verified findings below. Production bootstrap reads used a MySQL
+**read-only transaction**; source/stock diagnostic copies and evidence downloads
+were written only to scratch. No production worker, preview, apply, training,
+data mutation or service change was performed.
+
+### Verified production identities and state
+
+| Check | State | Evidence |
+|---|---|---|
+| Build | PASS, read-only verification | `2f89e574f65342f037b8d84ae50b7ccbdf606160`, build `build-391-attempt-1-2f89e574f65342f037b8d84ae50b7ccbdf606160`. Checkout fetched and matched `origin/master` at investigation start. |
+| Campaign | BLOCKED in production | `996fa344-2533-4bf0-a555-9b052de2c8cb`, cutoff `2026-10-01`. Its 1m/3m/6m union contains exactly **360** reference dates. |
+| Governed run | CANCELLED | Run **3**, mode `preview`, cursor **0**, processed **0**, failed date `2022-11-04`. All **360** source IDs resolve to sealed objects; unique source dates equal both requested dates and campaign reference-date union. |
+| First source | PASS, resolved from run 3 | `f85aabce-a346-41e8-bd60-643d3d7ee628`, `cm04NOV2022bhav.csv.zip`, date `2022-11-04`, **86,543** archive bytes. Original archive size/hash independently matched manifest SHA-256 `df02c39caf5bb6ffb97f43b6f76d67d4486d4483d38969d16e9b519483104d66`; extracted CSV SHA-256 independently matched `483beea8f0ea3ea980e4a183b1457d6f86644767343181babcc0617ce5895001`. |
+| Parser v3 mapping | FAILED quality gate; independently reproduced | **1,583 / 1,836 = 86.2200%**, **253** unmatched, exactly matching run diagnostics. Earlier v2 **1,730 / 1,836 = 94.2266%** remains historical evidence; the **147** row difference is now traced to conflicting-symbol ISIN fallback. |
+| Membership boundaries | PASS, safety preserved | Exactly **1** boundary: `2026-10-01`, `forward_official_nse`, **2,576** members; unrelated to cancelled run 3. No historical dates committed by run 3. |
+| Acceptance runtime | PASS, read-only state check | `stoxla-ml-acceptance.service` inactive; **0** acceptance workers; **1** queued acceptance job, **0** reserved jobs. Job was not consumed or removed; reconcile before a future authorized worker start. |
+
+### Exact classification of the 253 rejected source rows
+
+The [253-row ledger](data/FEAT-057-run3-identity-classification.csv) records every
+historical symbol/ISIN, factual v3 rejection, candidate stock ID/ISIN and evidence
+disposition. It contains security identifiers only, not user data or private paths.
+Classification distinguishes a query result from proof of a corporate action.
+
+| Disjoint disposition | Count | Finding |
+|---|---:|---|
+| No current NSE identity candidate, no authoritative disposition acquired | **105** | No eligible current NSE non-benchmark row matched historical ISIN or symbol. These are unknown to this master, not proven nonexistent companies. Listing, rename, delisting and restructuring evidence remains required. |
+| No current NSE candidate; amalgamation suspension verified | **1** | `HDFC / INE001A01036`. NSE/CML/57423, published 2023-07-04, suspends HDFC equity trading effective 2023-07-13 for amalgamation. Retain a separate historical security identity; do not alias it onto HDFC Bank solely because of the merger. |
+| Valid dated ISIN subdivision; historical alias absent | **1** | `NESTLEIND`, `INE239A01016` → `INE239A01024`, canonical production stock **1295**; evidence and bounded correction below. |
+| Subdivision lead with revised-date evidence requiring reconciliation | **1** | `HAL`, `INE066F01012` → candidate `INE066F01020`. Initial NSE/CML/58539 says 2023-09-29; MSE/LIST/14216/2023 revises to 2023-09-28. No HAL alias is added pending the revised NSE effective-date evidence. |
+| Same-symbol/nonempty-ISIN conflict, continuity or reuse unproven | **145** | Candidate identity is not sufficient proof. No aliases inferred from names, symbols or shared ISIN prefixes. |
+| **Total** | **253** | Factual resolver split: **106** no candidate + **147** conflicting symbol/ISIN. |
+
+**Reused symbols: 0 proven among these 253; actual count unresolved.** A conflict
+is not automatically a reused symbol. **Incorrect master identity: 0 proven**;
+master repair requires authoritative evidence and downstream-reference review.
+**Missing historical aliases: 1 proven** (Nestlé), already counted above; this is
+not an additional row. The other **252** rejected rows remain unmapped by the
+draft, with different acquisition/remediation needs recorded in the ledger.
+
+Separately, **4 v3-mapped source rows** each have **2 current NSE non-benchmark
+master records with the same ISIN**. These are outside the 253 rejected rows:
+
+| Historical symbol / ISIN | Candidate stock IDs / symbols |
+|---|---|
+| GUJGASLTD / INE844O01030 | 744 / GUJGASLTD; 7148 / GUJENERGY |
+| LYPSAGEMS / INE142K01011 | 1126 / LYPSAGEMS; 7354 / AURUS |
+| SANGINITA / INE753W01010 | 7252 / SANGINITA; 7710 / AGASTYAEN |
+| SILLYMONKS / INE203Y01012 | 1728 / SILLYMONKS; 7693 / CRESTO |
+
+Duplicate identity candidates are proven; which canonical ID to retain is not.
+Do not choose `first()`, merge price histories, or delete stock rows automatically.
+The draft rejects these ambiguous identities until separately reviewed remediation.
+
+### Authoritative evidence and smallest correction
+
+The reviewed evidence registry is
+`app/config/ml_nse_historical_identities.php`, version
+`nse-historical-identities-1`. It currently contains **only Nestlé**:
+
+- The sealed 2022-11-04 NSE bhavcopy proves the historical symbol and old ISIN.
+- [NSE/CML/60084](https://archives.nseindia.com/content/circulars/CML60084.pdf),
+  published 2024-01-02, establishes a share subdivision and new ISIN effective
+  **2024-01-05**. Downloaded SHA-256:
+  `4dda660aea17bdedd1e429b23c0d775a55ee5ee6f38a649904faabc37ef1ad0e`.
+- [Nestlé 2023–24 annual report filed with NSE](https://archives.nseindia.com/annual_reports/AR_24138_NESTLEIND_2023_2024_15062024233329.pdf)
+  explicitly connects the old and new ISINs to the subdivision. Downloaded SHA-256:
+  `a2bd86b483d58de5cb6fac36113ff1851d39d14d666c33f24c8cac382f180dfa`.
+
+The correction is deliberately bounded to **2022-11-04 through 2024-01-04**, not
+the security's inferred entire lifetime. The annual report confirms security
+continuity retrospectively; it does not supply a historical financial feature,
+sector, price or membership. Every membership still needs contemporaneous source
+evidence on its own date. Only a unique NSE non-benchmark canonical ISIN candidate
+may resolve. Missing evidence, overlapping evidence intervals, wrong historical
+symbol, out-of-range dates and missing/duplicate canonical targets fail closed.
+The existing conflicting-ISIN symbol guard remains in place. No merger chaining,
+name similarity, partial-ISIN matching or raw-price changes are introduced.
+
+Parser identity becomes `nse-pit-universe-parser-4`; snapshots include the reviewed
+identity-registry digest, historical identity mapping count and bounded structured
+unmapped-reason counts. These bind evidence changes into existing preview/apply
+snapshot digests. Duplicate ISIN matches now fail closed. Explicit CSV escape
+arguments preserve existing backslash semantics while suppressing PHP 8.4 CSV
+deprecations. Public diagnostics strip `nse_source_file` as well as existing
+private identifiers/paths; durable reason counts remain available on failures.
+
+Additional authoritative classification references:
+[HDFC suspension, NSE/CML/57423](https://archives.nseindia.com/content/circulars/CML57423.pdf);
+[initial HAL circular, NSE/CML/58539](https://archives.nseindia.com/content/circulars/CML58539.pdf);
+[HAL revised date, MSE/LIST/14216/2023](https://www.msei.in/SX-Content/Circulars/2023/September/Circular-14216.pdf).
+The HAL documents are a reason to acquire the revised primary-exchange circular,
+not permission to use the superseded date.
+
+### Verification and acceptance limits
+
+| Check | State | Result |
+|---|---|---|
+| Focused provider/identity regressions | PASS on final draft | **26 tests, 107 assertions**, isolated in-memory DB. Covers valid dated subdivision, interval edges, reused symbol, absent evidence, overlapping aliases, duplicate current/target ISINs, unchanged quality gate and sanitized diagnostics. |
+| Draft replay using scratch source/master copies | PASS, rejection expected | **1,580 / 1,836 = 86.0566%**, **256** rejected: **106** absent current candidates, **146** conflicting ISINs without applicable evidence, **4** ambiguous current ISINs. One Nestlé mapping recovered; four unsafe duplicate matches removed. Replay uses an isolated in-memory database, not a production preview. |
+| Backend CI parity | PASS | Initial prerequisite failure (`pdo_sqlite` absent) was resolved for CLI tests by extracting the matching extension into scratch and using a process-local PHP INI scan directory. Full PHPUnit: **2,143 tests, 2,141 passed, 2 skipped, 13,709 assertions** (about 24 minutes). OpenAPI is current for **219 operations**. No system PHP package or service was changed. Migration portability passed for **168** migrations; Python contracts reported **20** tests with **8** existing skips. Canonical verifier uses a separate MySQL **8.4** container and database `feat057_identity_ci`, loopback port **33357**, never the production DB. |
+| Production preview/apply/training/deployment | NOT RUN | Explicitly outside this investigation's permitted production actions. |
+
+The unchanged 90% floor requires **1,653** mapped members. The draft still needs
+**73** additional proven mappings on this first date. Passing this date would not
+establish the other 359 dates or production acceptance. FEAT-057 stays REVIEW;
+no automatic promotion or lifecycle enablement is authorized.
+
+### Remaining acquisition and remediation
+
+1. For the **145** unresolved same-symbol conflicts, acquire dated NSE ISIN-change
+   and corporate-action circulars with old/new ISIN, effective date, document ID,
+   URL and hash. Reconcile amendments against adjacent dated security files or
+   bhavcopies. Differentiate subdivisions from restructuring, merger/demerger,
+   cancellation/reissue and true symbol reuse. Each unsupported row stays unknown.
+2. For **HAL**, acquire the revised NSE ex-date notice and corroborating source
+   dates before adding an interval. For **105** no-candidate identities, acquire
+   historical listing/rename/delisting notices and locate or propose a distinct
+   historical canonical security. **HDFC** needs a historical-master remediation,
+   not an alias to its acquirer. No production master changes are made here.
+3. Review all **4 duplicate ISIN pairs** against dated official rename/listing
+   evidence and downstream stock references. Prepare a separate reviewed canonical
+   identity repair; preserve raw prices and frozen provenance.
+4. Extend the reviewed identity registry only with proven continuity, conservative
+   date bounds and evidence hashes; add interval/reuse/absence regressions per
+   supported action type. Re-run backend CI parity, fetch/reconcile and diff checks
+   before pushing the branch and draft PR. Do not bypass a failing gate.
+5. Later authorized production acceptance must reconcile the queued cancelled-run
+   job, use a fresh governed preview on the reviewed build, prove each of all
+   **360** dates reaches 90%, and follow explicit apply/preflight/1m–3m–6m training
+   gates. Do not resume cancelled run 3 or reuse v2/v3 digests with parser v4.
