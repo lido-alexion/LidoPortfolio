@@ -265,9 +265,49 @@ class MlProductionAcceptanceTest extends TestCase
             $this->assertSame(1, $result['feature_date_coverage']['2026-03-31']['test']['market_breadth_nifty']['present']);
             $this->assertSame('no_training_values', $result['exclusions']['sector']);
             $this->assertNotEmpty($result['pit_evidence_sha256']);
+            $this->assertSame('jsonl-gzip-v1', $result['pit_evidence_format']);
+            $journal = $directory.'/pit-evidence.jsonl.gz';
+            $content = gzdecode(File::get($journal));
+            $this->assertSame(hash_file('sha256', $journal), $result['pit_evidence_sha256']);
+            $this->assertSame(hash('sha256', $content), $result['pit_evidence_content_sha256']);
+            $rows = array_map(fn ($line) => json_decode($line, true, 64, JSON_THROW_ON_ERROR),
+                explode("\n", trim($content)));
+            $canonicalRows = array_values(array_filter($rows, fn ($row) => isset($row['reference_date'])));
+            $this->assertCount(3, $canonicalRows);
+            foreach ($canonicalRows as $row) {
+                $this->assertSame(['value_available' => false, 'available_pit_fact_ids' => []], $row['fundamentals']['roe']);
+            }
             $this->assertSame([], $result['feature_date_coverage']['2026-03-31']['train']['roe']['fact_periods']);
         } finally {
             File::deleteDirectory($directory);
+        }
+    }
+
+    public function test_preflight_reports_the_journal_quota_as_a_specific_safe_blocker(): void
+    {
+        Stock::query()->create(['symbol' => 'TEST', 'name' => 'Test', 'exchange' => 'NSE', 'isin' => 'INE123']);
+        $source = $this->source();
+        $backfills = app(MlAcceptanceBackfillService::class);
+        $run = $backfills->preview([$source->id], 1);
+        $backfills->step($run->id);
+        $backfills->action($run, 'apply', 1);
+        $backfills->step($run->id);
+        $this->mock(MlTrainingDatasetBuilder::class, function ($mock) {
+            $mock->shouldReceive('requiredReferenceDates')->once()->andReturn(['2026-09-30' => true]);
+            $mock->shouldReceive('buildStreamed')->once()->andReturn(['paths' => []]);
+        });
+        $evidence = \Mockery::mock(MlAcceptanceEvidenceService::class)->makePartial();
+        $evidence->shouldReceive('coverage')->once()->andThrow(new \App\Exceptions\MlAcceptanceEvidenceQuotaExceeded);
+        $campaign = (string) Str::uuid();
+        try {
+            $result = $evidence->preflight($campaign, '1m', Carbon::parse('2026-09-30'));
+            $this->assertSame(['pit_evidence_quota_exceeded'], $result['blocking_reasons']);
+            $this->assertNull($result['coverage']);
+            $this->assertNull($result['dataset_sha256']);
+            $this->assertDirectoryDoesNotExist(storage_path('app/private/ml-acceptance/campaigns/'.$campaign.'/1m/dataset'));
+            Bus::assertNotDispatched(MlRetrainJob::class);
+        } finally {
+            File::deleteDirectory(storage_path('app/private/ml-acceptance/campaigns/'.$campaign));
         }
     }
 

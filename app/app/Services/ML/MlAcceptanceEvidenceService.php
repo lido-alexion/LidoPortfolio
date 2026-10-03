@@ -1,6 +1,7 @@
 <?php
 namespace App\Services\ML;
 
+use App\Exceptions\MlAcceptanceEvidenceQuotaExceeded;
 use App\Models\V7\FundamentalFact;
 use App\Models\V8\MlUniverseSnapshotBoundary;
 use Carbon\Carbon;
@@ -57,6 +58,8 @@ class MlAcceptanceEvidenceService
                 if (($meta['tier'] ?? '') === 'core' && isset(self::FACTS[$key]) && ($result['feature_coverage']['train'][$key]['present'] ?? 0) === 0) $result['blocking_reasons'][] = 'core_fundamentals_unavailable:'.$key;
             }
             if (($result['feature_coverage']['train']['market_breadth_nifty']['present'] ?? 0) === 0) $result['blocking_reasons'][] = 'historical_breadth_unavailable';
+        } catch (MlAcceptanceEvidenceQuotaExceeded) {
+            $result['blocking_reasons'][] = 'pit_evidence_quota_exceeded';
         } catch (\Throwable $e) {
             $result['blocking_reasons'][] = 'canonical_dataset_or_coverage_unavailable';
         } finally { File::deleteDirectory($directory.'/dataset'); }
@@ -75,7 +78,7 @@ class MlAcceptanceEvidenceService
     {
         $profile = app(MlFeatureRegistryService::class)->featureSetForHorizon($horizon);
         $coverage = $byDate = $excluded = [];
-        $journal = fopen($directory.'/pit-evidence.jsonl', 'wb');
+        $journal = new MlAcceptanceEvidenceJournal($directory.'/pit-evidence.jsonl.gz');
         $lastStock = null;
         $facts = [];
         try {
@@ -87,7 +90,7 @@ class MlAcceptanceEvidenceService
                         $stock = $row['stock_id']; $date = $row['reference_date'];
                         if ($lastStock !== $stock) {
                             $facts = FundamentalFact::query()->where('stock_id', $stock)->where('cadence', 'quarterly')->orderBy('period_end')->get(['id', 'fact_key', 'period_end', 'availability_date', 'revision_number', 'provider', 'value'])->toArray();
-                            fwrite($journal, json_encode(['stock_id' => $stock, 'partition' => $partition, 'fact_inventory' => $facts], JSON_THROW_ON_ERROR)."\n");
+                            $journal->append(['stock_id' => $stock, 'partition' => $partition, 'fact_inventory' => $facts]);
                             $lastStock = $stock;
                         }
                         $pitFacts = array_values(array_filter($facts, fn ($fact) => $fact['availability_date'] !== null && substr($fact['availability_date'], 0, 10) <= $date));
@@ -109,15 +112,15 @@ class MlAcceptanceEvidenceService
                                 }
                             }
                         }
-                        fwrite($journal, json_encode(['stock_id' => $stock, 'reference_date' => $date, 'partition' => $partition, 'fundamentals' => $used], JSON_THROW_ON_ERROR)."\n");
-                        if (ftell($journal) > 536870912) throw new \RuntimeException('PIT evidence quota exceeded.');
+                        $journal->append(['stock_id' => $stock, 'reference_date' => $date, 'partition' => $partition, 'fundamentals' => $used]);
                     }
                 } finally { fclose($handle); }
             }
-        } finally { fclose($journal); }
+            $journalEvidence = $journal->finish();
+        } finally { $journal->close(); }
         foreach ($coverage['train'] ?? [] as $key => $counts) if ($counts['present'] === 0) $excluded[$key] = 'no_training_values';
         return ['profile' => $profile, 'feature_coverage' => $coverage, 'feature_date_coverage' => $byDate,
-            'exclusions' => $excluded, 'pit_evidence_sha256' => hash_file('sha256', $directory.'/pit-evidence.jsonl'),
+            'exclusions' => $excluded] + $journalEvidence + [
             'pit_evidence_scope' => 'canonical_rows; available PIT facts are provenance, not proof of formula completeness'];
     }
 }
