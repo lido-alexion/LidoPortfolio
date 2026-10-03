@@ -57,6 +57,8 @@ class FundamentalHistoricalIngestService
         return implode('|', [
             (string) ($row['statement_type'] ?? ''),
             (string) ($row['cadence'] ?? ''),
+            // Match persistence's legacy fallback; official adapters supply unknown.
+            (string) ($row['statement_basis'] ?? 'consolidated'),
             (string) ($row['fact_key'] ?? ''),
             (string) ($row['period_end'] ?? ''),
         ]);

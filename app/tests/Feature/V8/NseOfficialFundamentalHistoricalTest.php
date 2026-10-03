@@ -3,8 +3,8 @@
 namespace Tests\Feature\V8;
 
 use App\Models\Stock;
-use App\Services\Fundamentals\FundamentalHistoricalIngestService;
 use App\Services\Fundamentals\FundamentalDataProvider;
+use App\Services\Fundamentals\FundamentalHistoricalIngestService;
 use App\Services\Fundamentals\Historical\BseOfficialFundamentalHistoricalSource;
 use App\Services\Fundamentals\Historical\NseOfficialFundamentalHistoricalSource;
 use App\Services\Fundamentals\Historical\YahooFundamentalHistoricalSource;
@@ -35,6 +35,7 @@ class NseOfficialFundamentalHistoricalTest extends TestCase
                 'facts' => [[
                     'statement_type' => 'income_statement',
                     'cadence' => 'quarterly',
+                    'statement_basis' => 'consolidated',
                     'fact_key' => 'revenue',
                     'period_end' => '2024-03-31',
                     'value' => 500,
@@ -48,6 +49,7 @@ class NseOfficialFundamentalHistoricalTest extends TestCase
             [
                 'statement_type' => 'income_statement',
                 'cadence' => 'quarterly',
+                'statement_basis' => 'consolidated',
                 'fact_key' => 'revenue',
                 'period_end' => '2024-03-31',
                 'value' => 100,

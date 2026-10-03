@@ -47,10 +47,9 @@ class BseOfficialFundamentalHistoricalSource implements FundamentalHistoricalSou
                     'cadence' => $cadence,
                     'exchange' => 'BSE',
                 ]);
-        } catch (\Throwable $e) {
+        } catch (\Throwable) {
             Log::warning('fundamentals.bse_official_fetch_failed', [
                 'stock_id' => $stock->id,
-                'message' => $e->getMessage(),
             ]);
 
             return [];
@@ -82,15 +81,27 @@ class BseOfficialFundamentalHistoricalSource implements FundamentalHistoricalSou
             if ($factKey === '' || $periodEnd === '') {
                 continue;
             }
-            $out[] = [
+            $normalized = [
                 'statement_type' => (string) ($row['statement_type'] ?? 'income_statement'),
                 'cadence' => (string) ($row['cadence'] ?? $cadence),
+                // An official feed must establish basis; absence is not consolidated.
+                'statement_basis' => in_array($row['statement_basis'] ?? null, ['standalone', 'consolidated', 'unknown'], true)
+                    ? $row['statement_basis'] : 'unknown',
                 'fact_key' => $factKey,
                 'period_end' => $periodEnd,
                 'value' => $row['value'] ?? null,
                 'availability_date' => $row['availability_date'] ?? null,
                 'currency' => $row['currency'] ?? 'INR',
             ];
+            if (array_key_exists('period_start', $row)) {
+                $normalized['period_start'] = $row['period_start'];
+            }
+            // Preserve the canonical metadata envelope, never the entire provider row.
+            // Fiscal labels in source_meta are not the date-cast reported_period field.
+            if (is_array($row['source_meta'] ?? null)) {
+                $normalized['source_meta'] = $row['source_meta'];
+            }
+            $out[] = $normalized;
         }
 
         return $out;
