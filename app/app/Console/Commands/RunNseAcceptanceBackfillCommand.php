@@ -83,7 +83,12 @@ class RunNseAcceptanceBackfillCommand extends Command
         $this->line(json_encode(['run_id' => $run->id, 'status' => $run->status,
             'processed' => count($run->processed_dates ?? []), 'failed_dates' => $run->failed_dates ?? []], JSON_THROW_ON_ERROR));
 
-        return $run->status === 'completed' ? self::SUCCESS : self::FAILURE;
+        $complete = $backfill->isComplete($run);
+        if ($run->status === 'completed' && ! $complete) {
+            $this->error('Backfill marked completed without complete requested-date evidence.');
+        }
+
+        return $complete ? self::SUCCESS : self::FAILURE;
     }
 
     private function waitForRun(MlUniverseSnapshotBackfillRun $run, int $timeout, int $pollMicroseconds): MlUniverseSnapshotBackfillRun
@@ -101,7 +106,7 @@ class RunNseAcceptanceBackfillCommand extends Command
     }
 
     /** @param list<string> $dates
-     *  @return list<string>
+     * @return list<string>
      */
     private function sorted(array $dates): array
     {

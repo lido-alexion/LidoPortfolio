@@ -371,3 +371,66 @@ SHA through the existing release process, create a **fresh governed preview** on
 all 360 campaign dates with parser5/evidence digest, review each date's diagnostics,
 and satisfy apply/preflight and all horizon training/acceptance gates. Run3 stays
 cancelled; earlier parser/preview digests must not be reused. FEAT-057 stays REVIEW.
+
+## Governed multi-date apply lifecycle correction — 2026-10-03
+
+FEAT-057 remains **REVIEW**. Production evidence from build
+`6d2963cc4aac15fb9612c79f8a16368ad220f1e1` / build392 supersedes the earlier
+not-run preview entry: run4 preview **PASSED 360/360 dates**, minimum **93.4096%**,
+with all source bytes/digests checked, no retries and no membership writes.
+Its authorized apply was **BLOCKED after 1/360 dates**, despite the durable run
+reporting `completed`. Only **2022-11-04** materialized: **1,715 memberships**,
+matching the preview digest. Cursor1 and 359 unprocessed dates remained; the
+first unprocessed date is **2022-11-11**. This is a lifecycle failure, not a
+mapping rejection. All 360 preview results remain intact. Post-apply preflight
+and training were **NOT RUN**.
+
+The nested historical-membership backfill reused the governed run ID and marked
+its one-date batch complete. The outer Eloquent instance still considered
+`queued` and null `completed_at` its original values, so its final save omitted
+those columns. The next job observed the prematurely completed row and returned.
+The CLI also incorrectly treated that status alone as success.
+
+The correction reloads the shared run immediately after nested materialization,
+inside the existing transaction and distributed write lock. The final governed
+save is therefore authoritative for the full cursor, status and completion time.
+A reload is smaller than factoring a new membership-only API and leaves
+standalone backfill behavior unchanged; the nested transient state remains
+inside the atomic transaction. A shared completion check additionally requires
+all requested dates, cursor, processed dates, sources and snapshot evidence
+before accepting apply or reporting CLI success. No parser, identity evidence,
+configuration, threshold, raw-price, stock-master or resume-policy change is made.
+
+The isolated regression uses actual sealed CSV sources, preview/snapshot
+services and dispatched backfill-job handlers across two dates. On the unmodified
+merged base, the first apply unit persisted `completed` instead of `queued`;
+a fresh-preview recovery fixture failed likewise. The initial seven regression
+cases all failed, including incomplete-preview acceptance and CLI false success.
+The final focused suite **PASSED 41 tests / 361 assertions**, including ten new
+lifecycle/completeness cases. The required `./scripts/verify-ci.sh --backend`
+**PASSED** on isolated MySQL8.4 (`127.0.0.1:33357`, database
+`feat057_apply_fix_ci`): **2,156 tests, 2,154 passed, 2 existing skips,
+14,502 assertions**; PHPUnit duration **1,757.804 seconds**. Migration portability
+passed for **168 migrations**, Python passed **22 tests / 8 existing skips**, and
+the OpenAPI contract check passed. Scoped Pint and `git diff --check` passed.
+This is local implementation verification, not production qualification.
+
+### Recovery design — proposed, not executed
+
+Keep production run4 immutable; do not broaden completed-run resume, force its
+status with SQL, clear locks, repeat apply4 or delete its valid first boundary.
+After a reviewed fix and verified release, create one **fresh current-build
+campaign** for cutoff2026-10-01 and verify its persisted date union. Create a
+fresh governed preview over the same 360 sealed sources. Existing provenance
+checks must confirm the first boundary's source and mapped-membership hashes;
+conflicting provenance still blocks. Review every new preview result, then apply
+that new preview through the existing supported command. The first matching
+boundary is idempotently skipped while the governed cursor advances; the
+remaining 359 dates can materialize. The regression verifies that this path
+preserves the old partial run, its first boundary and its memberships.
+
+A fresh post-apply campaign/preflight must subsequently establish all frozen
+membership, breadth, feature/fundamental, sector and dataset gates. Training may
+only use a ready current campaign. New FEAT-054 coverage blockers remain unknown
+until that preflight actually runs. This code-only phase performs no production
+operation and adds no recovery API.
