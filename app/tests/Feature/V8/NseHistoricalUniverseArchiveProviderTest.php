@@ -44,6 +44,7 @@ class NseHistoricalUniverseArchiveProviderTest extends TestCase
             $this->assertSame(1, $audit['source_company_equity_member_count']);
             $this->assertSame(0, $audit['mapped_count']);
             $this->assertSame(['INE000000001'], $audit['unmapped_identifiers']);
+            $this->assertSame(['conflicting_symbol_isin_without_dated_evidence' => 1], $audit['unmapped_reason_counts']);
             $this->assertEquals(0, $audit['mapping_percentage']);
             $this->assertDatabaseCount('stox_ml_universe_snapshot_boundaries', 0);
             $this->assertDatabaseCount('stox_ml_universe_memberships', 0);
