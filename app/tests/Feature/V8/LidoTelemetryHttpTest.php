@@ -101,9 +101,9 @@ class LidoTelemetryHttpTest extends TestCase
         ]);
 
         $marker = 'synthetic-private-marker';
-        $request = \\Illuminate\\Http\\Request::create('/api/'.$marker, 'GET');
-        app(\\App\\Telemetry\\LidoTelemetry::class)->recordHttpRequest(
-            $request, 500, 1.0, new \\RuntimeException($marker)
+        $request = \Illuminate\Http\Request::create('/api/'.$marker, 'GET');
+        app(\App\Telemetry\LidoTelemetry::class)->recordHttpRequest(
+            $request, 500, 1.0, new \RuntimeException($marker)
         );
 
         Http::assertSent(function ($outbound) use ($marker): bool {
