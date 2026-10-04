@@ -97,6 +97,9 @@ class FundamentalDataIntegrationTest extends TestCase
             'statement_basis' => 'consolidated',
             'fact_key' => 'revenue',
             'period_end' => '2025-12-31',
+            // Same availability date makes A -> B -> A reuse the old content hash
+            // unless each distinct revision has a distinct revision identity.
+            'availability_date' => '2026-09-20',
         ];
 
         $service->storeFacts($stock, [$row + ['value' => 100]], Carbon::parse('2026-09-20'));
@@ -108,7 +111,8 @@ class FundamentalDataIntegrationTest extends TestCase
         $this->assertSame([1, 2, 3], $facts->pluck('revision_number')->all());
         $this->assertSame([false, false, true], $facts->pluck('is_current')->all());
         $this->assertSame([100.0, 120.0, 100.0], $facts->map(fn ($fact): float => (float) $fact->value)->all());
-        $this->assertSame('2026-09-22', $facts->last()->availability_date->toDateString());
+        $this->assertCount(3, $facts->pluck('revision_hash')->unique());
+        $this->assertSame('2026-09-20', $facts->last()->availability_date->toDateString());
     }
 
     public function test_yfinance_share_mapping_excludes_buyback_amounts_and_pb_never_uses_them(): void

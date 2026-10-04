@@ -45,6 +45,11 @@ class FundamentalDataService
         $stats = ['inserted' => 0, 'deduped' => 0, 'restated' => 0];
 
         DB::transaction(function () use ($stock, $rows, $fetchedAt, &$stats): void {
+            // Lock the parent stock row so writers serialize even when no current
+            // fact row exists yet. This covers bootstrap and incremental writers,
+            // which have separate process-level locks.
+            Stock::query()->whereKey($stock->id)->lockForUpdate()->firstOrFail();
+
             foreach ($rows as $row) {
                 $periodEnd = Carbon::parse((string) $row['period_end'])->toDateString();
                 $availability = $row['availability_date'] ?? null;
@@ -75,7 +80,8 @@ class FundamentalDataService
                 }
 
                 $revision = (int) $this->factIdentityQuery($identity)->max('revision_number');
-                $hash = $this->revisionHash($identity, $row['value'] ?? null, $availabilityDate);
+                $nextRevision = $revision + 1;
+                $hash = $this->revisionHash($identity, $row['value'] ?? null, $availabilityDate, $nextRevision);
                 if ($revision > 0) {
                     $this->factIdentityQuery($identity)->update(['is_current' => false]);
                     $stats['restated']++;
@@ -93,7 +99,7 @@ class FundamentalDataService
                     'first_fetched_at' => $fetchedAt,
                     'last_provider_checked_at' => $fetchedAt,
                     'revision_hash' => $hash,
-                    'revision_number' => $revision + 1,
+                    'revision_number' => $nextRevision,
                     'is_current' => true,
                     'source_meta' => is_array($row['source_meta'] ?? null) ? $row['source_meta'] : [],
                 ]));
@@ -448,9 +454,14 @@ class FundamentalDataService
     }
 
     /** @param array<string,mixed> $identity */
-    private function revisionHash(array $identity, mixed $value, string $availabilityDate): string
+    private function revisionHash(array $identity, mixed $value, string $availabilityDate, int $revisionNumber): string
     {
-        return hash('sha256', json_encode([$identity, $this->canonicalDecimal($value), $availabilityDate], JSON_THROW_ON_ERROR));
+        // The same value can return after a restatement. Include its sequence so
+        // that distinct revision events remain unique under the DB constraint.
+        return hash(
+            'sha256',
+            json_encode([$identity, $this->canonicalDecimal($value), $availabilityDate, $revisionNumber], JSON_THROW_ON_ERROR),
+        );
     }
 
     private function canonicalDecimal(mixed $value): ?string
