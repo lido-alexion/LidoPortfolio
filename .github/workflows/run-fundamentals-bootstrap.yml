@@ -11,6 +11,14 @@ on:
         description: Stocks per durable production slice
         required: true
         default: "10"
+      run_id:
+        description: Existing bootstrap run to resume; leave blank only for a new guarded snapshot
+        required: false
+        default: ""
+      slice_seconds:
+        description: Maximum worker slice duration in seconds before a resumable clean exit
+        required: true
+        default: "2400"
 
 permissions:
   contents: read
@@ -38,6 +46,8 @@ jobs:
           STOXLA_SSH_USER: ${{ secrets.STOXLA_SSH_USER }}
           STOXLA_FUNDAMENTALS_CANARY_SYMBOL: ${{ inputs.canary_symbol }}
           STOXLA_FUNDAMENTALS_BOOTSTRAP_BATCH: ${{ inputs.batch }}
+          STOXLA_FUNDAMENTALS_RUN_ID: ${{ inputs.run_id }}
+          STOXLA_FUNDAMENTALS_SLICE_SECONDS: ${{ inputs.slice_seconds }}
         shell: bash
         run: |
           set -euo pipefail
