@@ -25,6 +25,9 @@ This audit maps the frozen FEAT-063 contract to the current repository evidence.
 | Durable idempotent finalization with bounded retry/backoff | PASS | `FinalizationState`, atomic manifest, active-minute regression, retry tests, manual retry command. |
 | Backup only after validated finalization; retry-safe failure handling | PASS | Finalization gates backup; staged backup replacement preserves canonical data; integration test and Admin retry path exist. Live secondary storage validation pending. |
 | Admin status and bounded controls with server-side Admin authorization | PASS | Laravel controller/control service, Admin UI, authorization tests, controls for start/stop/resubscribe/finalization/backup/universe. |
+| Configured-user daily Kite quick-connect UX | IMPLEMENTED LOCALLY — deployed acceptance pending | Lightweight `/kite-connect` Blade page, authenticated configured-user status/login APIs, dashboard live-tick state card, 09:00 Asia/Kolkata Telegram reminder, and deduplicated 09:20 no-WebSocket/no-recent-packet alert; see `docs/current/microstructure-collector-operations.md`. Must verify after next-trading-day login. |
+| New Kite expiry timestamp UTC persistence | IMPLEMENTED LOCALLY — deployed acceptance pending | New session expiry is the UTC instant for 06:00 Asia/Kolkata; existing connection rows are deliberately not rewritten. Focused timezone regression covers before/after 06:00 IST. |
+| Zero-row day finalization | IMPLEMENTED LOCALLY — deployed acceptance pending | Zero-row partitions fail finalization and are not backed up as successful; legacy zero-row markers remain unchanged and are flagged for review. |
 | Manual hold survives restart and authentication | PASS | Persisted Laravel state and login signal tests; live service restart proof pending. |
 | Operational alerts and duplicate suppression | PASS | Existing StoX alert publisher handles condition persistence/dedup; stale/error/disk/finalization/backup/low-coverage conditions are covered, while collector-side reconnect and universe failures surface through the actionable error condition. |
 | VPS dependency, systemd, persistent paths, writable storage, import checks | PASS — deployed | Dedicated Python environment and systemd collector were provisioned on the VPS; the service was enabled and active during the 2026-09-29 acceptance run. Persistent primary and backup Parquet paths were writable. |
@@ -62,6 +65,12 @@ The production acceptance run confirmed:
 
 FEAT-063 remains **REVIEW**: the live collection and end-of-day data/backup path passed production checks, while the broader deployed operational-control and recovery acceptance is not yet evidenced.
 
+## Local UX and integrity continuation — 2026-10-04
+
+The approved FEAT-063 quick-connect and integrity changes are implemented in the isolated `feat063-kite-quick-connect` worktree. The dedicated page is server-rendered and does not load the React dashboard bundle. Its browser APIs require the authenticated StoX session and enforce `MICROSTRUCTURE_KITE_USER_ID`; the existing encrypted callback state, official Zerodha OTP entry, and account trading flow are retained. Reminder cadence remains bounded and calendar-aware. The 09:20 packet/WebSocket alert uses a five-minute packet recency grace after 09:15; this is an operational judgment to allow normal connection setup.
+
+This is local code and test evidence only. No production database, live Kite login, production service, or deployment was used. The next trading-day verification in the operations runbook remains required, and this continuation does not change FEAT-063's **REVIEW** status.
+
 
 
 ## Closure continuation — 2026-10-01 (production build `ef66133c`)
@@ -77,3 +86,7 @@ Operator: Codex via connected `stoxla-prod`; UTC times below. **This entry does 
 ### Backup location assessment — 2026-10-01 18:34 UTC
 
 Read-only `findmnt` on `stoxla-prod` showed root/boot filesystems and ephemeral virtual mounts, with no independent backup filesystem mounted. This does not rule out remote object storage, but no external destination or restore validation has been established. Secondary backup/restore remains **BLOCKED pending a configured independent destination**. Do not treat the matching same-VPS partition copy as disaster recovery.
+
+### Isolated verification — 2026-10-04
+
+From `feat063-kite-quick-connect` at base `764ba1f9`, using a disposable MySQL 8.4 container and an ephemeral test encryption key: focused PHPUnit **17 tests, 65 assertions passed**. The Python collector finalization suite passed **4 tests** with the installed `pyarrow` runtime. Frontend checks passed **202 Node tests and 1 focused Vitest test**, and `npm run build` completed. The PHP/JS dependency lockfiles matched the VPS release; dependencies were copied or installed within the isolated worktree. No test used the production database. Deployed login, reminder delivery, WebSocket packets, and next trading-day collection remain unverified.

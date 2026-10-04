@@ -64,6 +64,20 @@ class CollectorFinalizationTest(unittest.TestCase):
                 second = json.loads(next(root.rglob("_FINALIZED.json")).read_text())["row_count"]
                 self.assertEqual(first, second)
 
+    def test_zero_row_day_is_not_finalized_or_backed_up(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "data"
+            backup = Path(tmp) / "backup"
+            with patch.dict(os.environ, {"MICROSTRUCTURE_BACKUP_ROOT": str(backup)}):
+                app = CollectorApp(Path(tmp) / "command.json", Path(tmp) / "heartbeat.json", root)
+                with patch("collector.collector_app.partition_row_count", return_value=0):
+                    app.finalize_today(force=True)
+
+            self.assertEqual("finalization_failed", app._finalization.load()["status"])
+            self.assertIn("zero-row", app._finalization.load()["last_error"])
+            self.assertEqual([], list(root.rglob("_FINALIZED.json")))
+            self.assertFalse(backup.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

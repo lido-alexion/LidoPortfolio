@@ -57,7 +57,7 @@ class BrokerConnectionService
         $state = Crypt::encryptString(json_encode([
             'user_id' => $user->id,
             'expires_at' => now()->addSeconds(self::LOGIN_STATE_TTL_SECONDS)->getTimestamp(),
-            'return_to' => in_array($returnTo, ['dashboard', 'account'], true) ? $returnTo : 'account',
+            'return_to' => in_array($returnTo, ['dashboard', 'account', 'kite-connect'], true) ? $returnTo : 'account',
         ], JSON_THROW_ON_ERROR));
         $redirectParams = http_build_query(['state' => $state], '', '&', PHP_QUERY_RFC3986);
 
@@ -95,7 +95,9 @@ class BrokerConnectionService
         } catch (DecryptException|\JsonException) {
             return 'account';
         }
-        return ($payload['return_to'] ?? null) === 'dashboard' ? 'dashboard' : 'account';
+        $returnTo = $payload['return_to'] ?? null;
+
+        return in_array($returnTo, ['dashboard', 'account', 'kite-connect'], true) ? $returnTo : 'account';
     }
 
     public function completeLogin(User $user, #[\SensitiveParameter] string $requestToken): BrokerConnection
@@ -189,12 +191,15 @@ class BrokerConnectionService
      */
     public function nextKiteExpiry(?Carbon $now = null): Carbon
     {
+        // Build the exchange-local boundary first, then return a UTC instant for
+        // Eloquent/database persistence. Carbon retains the source timezone,
+        // which otherwise led to a misleading IST wall-clock in UTC columns.
         $now = ($now ?? now())->copy()->timezone('Asia/Kolkata');
         $expiry = $now->copy()->setTime(6, 0, 0);
         if ($now->gte($expiry)) {
             $expiry->addDay();
         }
 
-        return $expiry;
+        return $expiry->utc();
     }
 }

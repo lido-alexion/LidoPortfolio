@@ -44,7 +44,12 @@ class BrokerController extends Controller
         $status = $request->query('status');
         $user = $this->connections->userFromLoginState($request->query('state'));
         $destination = $this->connections->returnToFromLoginState($request->query('state'));
-        $frontend = rtrim((string) config('app.url'), '/').($destination === 'dashboard' ? '/' : '/settings/account');
+        $destinationPath = match ($destination) {
+            'dashboard' => '/',
+            'kite-connect' => '/kite-connect',
+            default => '/settings/account',
+        };
+        $frontend = rtrim((string) config('app.url'), '/').$destinationPath;
 
         if ($status === 'error' || ! is_string($token) || $token === '' || $user === null) {
             return redirect($frontend.'?kite=failed');
