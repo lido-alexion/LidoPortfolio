@@ -37,6 +37,43 @@ class MlAcceptanceBackfillService
         return $run;
     }
 
+    /** A terminal status alone does not prove that every governed date finished. */
+    public function isComplete(MlUniverseSnapshotBackfillRun $run): bool
+    {
+        $state = $run->acceptance ?? [];
+        $dates = $run->requested_dates ?? [];
+        if (! is_array($state) || ! is_array($dates) || ! array_is_list($dates)) {
+            return false;
+        }
+        $sources = $state['sources'] ?? [];
+        $results = $state['results'] ?? [];
+        if ($run->status !== 'completed' || $dates === []
+            || ! in_array($state['mode'] ?? null, ['preview', 'apply'], true)
+            || ($state['cursor'] ?? null) !== count($dates)
+            || $run->processed_dates !== $dates || ($run->failed_dates ?? []) !== []
+            || ! is_array($sources) || count($sources) !== count($dates)
+            || ! is_array($results) || count($results) !== count($dates)) {
+            return false;
+        }
+        $seenDates = $seenSources = [];
+        foreach ($dates as $index => $date) {
+            $source = $sources[$index] ?? null;
+            if (! is_string($date) || ! is_string($source) || $source === ''
+                || isset($seenDates[$date]) || isset($seenSources[$source])) {
+                return false;
+            }
+            $seenDates[$date] = $seenSources[$source] = true;
+            $result = $results[$date] ?? [];
+            $digest = $result['snapshot_sha256'] ?? null;
+            if (! is_string($digest) || ! preg_match('/\A[a-f0-9]{64}\z/', $digest)
+                || ($result['diagnostics']['source_id'] ?? null) !== $source) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     public function action(MlUniverseSnapshotBackfillRun $run, string $action, int $actor): MlUniverseSnapshotBackfillRun
     {
         if ($action !== 'cancel') {
@@ -50,7 +87,7 @@ class MlAcceptanceBackfillService
                 $this->fail('This is not an acceptance backfill.');
             }
             if ($action === 'apply') {
-                if ($state['mode'] !== 'preview' || $run->status !== 'completed') {
+                if ($state['mode'] !== 'preview' || ! $this->isComplete($run)) {
                     $this->fail('Successful preview is required.');
                 }
                 $state['mode'] = 'apply';
@@ -105,6 +142,10 @@ class MlAcceptanceBackfillService
                                 $this->fail('Source mapping changed after preview; create a new preview.');
                             }
                             app(MlHistoricalUniverseMembershipService::class)->backfillHistoricalSnapshots([$snapshot], 'admin_sealed_nse', $run->id, $run->universe_key);
+                            // The nested backfill updates this shared run for its one-date batch.
+                            // Reload its originals so our authoritative governed state below is
+                            // persisted even when queued/null matched the pre-batch originals.
+                            $run->refresh();
                         }
                         $diagnostics = $snapshot['diagnostics'];
                         unset($diagnostics['unmapped_identifiers']);

@@ -16,7 +16,7 @@ require_command() {
 verify_php_platform() {
   require_command php
   require_command composer
-  local extensions=(curl dom fileinfo mbstring opentelemetry pdo_mysql pdo_sqlite tokenizer xml zip)
+  local extensions=(curl dom fileinfo mbstring opentelemetry pdo_mysql pdo_sqlite tokenizer xml zip zlib)
   local missing=()
   for extension in "${extensions[@]}"; do
     php -m | tr '[:upper:]' '[:lower:]' | grep -qx "$extension" || missing+=("$extension")

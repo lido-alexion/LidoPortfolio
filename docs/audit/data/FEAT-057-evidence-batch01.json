@@ -1,0 +1,325 @@
+{
+  "checkpoint": "batch01",
+  "symbols": 10,
+  "reviewed_transitions": 11,
+  "registry_added": false,
+  "events": [
+    {
+      "symbol": "ACCURACY",
+      "old_isin": "INE648Z01015",
+      "new_isin": "INE648Z01023",
+      "effective_on": "2023-02-15",
+      "action": "subdivision",
+      "status": "reviewed_old_new_event_pair",
+      "evidence": [
+        {
+          "role": "old_isin_event",
+          "document": "CMPT55584",
+          "url": "https://archives.nseindia.com/content/circulars/CMPT55584.pdf",
+          "sha256": "0a63becc7f6c7e1873992e4793bd566f572821036fbb7c3a106cfd93eb7cf532",
+          "published_on": "2023-02-13",
+          "page": 1,
+          "excerpt": "Shipping Limited (ACCURACY) ACCURACY INE648Z01015 Face Value Split from Rs.10/- each into Rs. 1/- each\u2019 15-FEB - 2023 15-FEB- 2023 Members doing EPI of"
+        },
+        {
+          "role": "new_isin_event",
+          "document": "CML55595",
+          "url": "https://archives.nseindia.com/content/circulars/CML55595.pdf",
+          "sha256": "31df2169a7cf7c2dd87871053ed06a21e3a68b465156b87f0ab22b7b10f10d85",
+          "published_on": "2023-02-14",
+          "page": 1,
+          "excerpt": "ACCURACY Accuracy Shipping Limited INE648Z01023 Sub-Division from Rs. 10/- to Re. 1/- The new ISIN shall be effective for all trades done on and"
+        }
+      ]
+    },
+    {
+      "symbol": "ADANIPOWER",
+      "old_isin": "INE814H01011",
+      "new_isin": "INE814H01029",
+      "effective_on": "2025-09-22",
+      "action": "subdivision",
+      "status": "reviewed_old_new_event_pair",
+      "evidence": [
+        {
+          "role": "old_isin_event",
+          "document": "CMPT70308",
+          "url": "https://archives.nseindia.com/content/circulars/CMPT70308.pdf",
+          "sha256": "2b49c0403fdcfaa4ba46f339aa8889b4de75dc8804bcd05c20c91103a16b1119",
+          "published_on": "2025-09-19",
+          "page": 1,
+          "excerpt": "Adani Power Limited ADANIPOWER INE814H01011 Face Value Split (Sub-Division) - From Rs 10/- Per Share to Rs 2/- Per Share 22-SEP- 2025 22-SEP- 2025"
+        },
+        {
+          "role": "new_isin_event",
+          "document": "CML70203",
+          "url": "https://archives.nseindia.com/content/circulars/CML70203.pdf",
+          "sha256": "764b45776ce66e6fcb6f6ccf4616a1a2dd5691a617fe9b7d22f2c63a4dbabbad",
+          "published_on": "2025-09-15",
+          "page": 1,
+          "excerpt": "ADANIPOWER Adani Power Limited INE814H01029 Sub-Division from Rs. 10/- to Rs. 2/- The new ISIN shall be effective for all trades done on and"
+        }
+      ]
+    },
+    {
+      "symbol": "ADFFOODS",
+      "old_isin": "INE982B01019",
+      "new_isin": "INE982B01027",
+      "effective_on": "2023-09-11",
+      "action": "subdivision",
+      "status": "reviewed_old_new_event_pair",
+      "evidence": [
+        {
+          "role": "old_isin_event",
+          "document": "CMPT58326",
+          "url": "https://archives.nseindia.com/content/circulars/CMPT58326.pdf",
+          "sha256": "46a8fce9dd56da3b6db35748b12e419305420db2d70c1852bbadad7281a665c0",
+          "published_on": "2023-09-08",
+          "page": 1,
+          "excerpt": "ADF FOODS LTD ADFFOODS INE982B01019 Face Value Split from Rs.10/- each into R s. 2/- each\u2019 11-SEP- 2023 11-SEP- 2023 Members doing EPI of"
+        },
+        {
+          "role": "new_isin_event",
+          "document": "CML58269",
+          "url": "https://archives.nseindia.com/content/circulars/CML58269.pdf",
+          "sha256": "c43d396c94f9b7a9534c279b1656be4a946b372f18edbade36dbd192aceba4c2",
+          "published_on": "2023-09-06",
+          "page": 1,
+          "excerpt": "ADFFOODS ADF Foods Limited INE982B01027 Sub-Division from Rs. 10/- to Rs. 2/- The new ISIN shall be effective for all trades done on and"
+        }
+      ]
+    },
+    {
+      "symbol": "AJMERA",
+      "old_isin": "INE298G01027",
+      "new_isin": "INE298G01035",
+      "effective_on": "2026-01-14",
+      "action": "subdivision",
+      "status": "reviewed_old_new_event_pair",
+      "evidence": [
+        {
+          "role": "old_isin_event",
+          "document": "CMPT72310",
+          "url": "https://archives.nseindia.com/content/circulars/CMPT72310.pdf",
+          "sha256": "c6ae54ef3f321ba4474f14c4659b2e70368c492cd29e39d5cc6baac8c229149f",
+          "published_on": "2026-01-13",
+          "page": 1,
+          "excerpt": "Infra India Limited AJMERA INE298G01027 Face Value Split (Sub-Division) - From Rs 10/- Per Share to Rs 2/- Per Share 15-JAN-2026 14-JAN-2026 Members doing"
+        },
+        {
+          "role": "new_isin_event",
+          "document": "CML72247",
+          "url": "https://archives.nseindia.com/content/circulars/CML72247.pdf",
+          "sha256": "ae634c4036fe3f7c62eef3f5902d8bb9fc690e51fca8d7b686c30d900cbb5728",
+          "published_on": "2026-01-09",
+          "page": 1,
+          "excerpt": "& Infra India Limited INE298G01035 Sub-Division from Rs. 10/- to Rs. 2/- The new ISIN shall be effective for all trades done on and"
+        }
+      ]
+    },
+    {
+      "symbol": "AKSHAR",
+      "old_isin": "INE256Z01017",
+      "new_isin": "INE256Z01025",
+      "effective_on": "2023-07-31",
+      "action": "subdivision",
+      "status": "reviewed_old_new_event_pair",
+      "evidence": [
+        {
+          "role": "old_isin_event",
+          "document": "CMPT57759",
+          "url": "https://archives.nseindia.com/content/circulars/CMPT57759.pdf",
+          "sha256": "2ca26260352908c74faa452a96ad8384cc8d5c125c5a89219e20c7b1a8a372dc",
+          "published_on": "2023-07-28",
+          "page": 1,
+          "excerpt": "Akshar Spintex Limited AKSHAR INE256Z01017 Face Value Split from Rs.10/- each into R e. 1/- each\u2019 31-JUL- 2023 31-JUL- 2023 Members doing EPI of"
+        },
+        {
+          "role": "new_isin_event",
+          "document": "CML57736",
+          "url": "https://archives.nseindia.com/content/circulars/CML57736.pdf",
+          "sha256": "edc8f318a1b09df2f292a7adfd0cfbbd5bbc8980b33b0f2ba7c2a93c78911765",
+          "published_on": "2023-07-28",
+          "page": 1,
+          "excerpt": "AKSHAR Akshar Spintex Limited INE256Z01025 Sub-Division from Rs. 10/- to Re. 1/- The new ISIN shall be effective for all trades done on and"
+        }
+      ]
+    },
+    {
+      "symbol": "ANDHRAPAP",
+      "old_isin": "INE435A01028",
+      "new_isin": "INE435A01051",
+      "effective_on": "2024-09-11",
+      "action": "subdivision",
+      "status": "reviewed_old_new_event_pair",
+      "evidence": [
+        {
+          "role": "old_isin_event",
+          "document": "CMPT63834",
+          "url": "https://archives.nseindia.com/content/circulars/CMPT63834.pdf",
+          "sha256": "c873e26b3160e3be52ef4b9a506886677b806ac2edbdc3720dc857eb93aced02",
+          "published_on": "2024-09-09",
+          "page": 1,
+          "excerpt": "Andhra Paper Limited ANDHRAPAP INE435A01028 Face Value Split from Rs.10/- each into R s. 2/- each 11-SEP - 2024 11-SEP- 2024 Members doing EPI"
+        },
+        {
+          "role": "new_isin_event",
+          "document": "CML63749",
+          "url": "https://archives.nseindia.com/content/circulars/CML63749.pdf",
+          "sha256": "6fec67af64491987cf6b2355ba1facd5c0b0593a7de71cbf63fd5bbb2a64b4a3",
+          "published_on": "2024-09-04",
+          "page": 1,
+          "excerpt": "ANDHRAPAP Andhra Paper Limited INE435A01051 Sub-Division from Rs. 10/- to Rs. 2/- The new ISIN shall be effective for all trades done on and"
+        }
+      ]
+    },
+    {
+      "symbol": "CGCL",
+      "old_isin": "INE180C01026",
+      "new_isin": "INE180C01042",
+      "effective_on": "2024-03-05",
+      "action": "subdivision",
+      "status": "reviewed_old_new_event_pair",
+      "evidence": [
+        {
+          "role": "old_isin_event",
+          "document": "CMPT60971",
+          "url": "https://archives.nseindia.com/content/circulars/CMPT60971.pdf",
+          "sha256": "00d3fd415e74d3935d6f165cd6b41cd0fe51745cb0aee2d5d311b1a888241196",
+          "published_on": "2024-03-04",
+          "page": 1,
+          "excerpt": "Global Capital Limited CGCL INE180C01026 Face Value Split from Rs.2/- each into R e. 1/- each 05-MAR- 2024 05-MAR- 2024 Members doing EPI of"
+        },
+        {
+          "role": "new_isin_event",
+          "document": "CML60920",
+          "url": "https://archives.nseindia.com/content/circulars/CML60920.pdf",
+          "sha256": "8915e2a3b71389faef585f79c301d690db2fb5bf93fd6eba16de4543eba93124",
+          "published_on": "2024-02-29",
+          "page": 1,
+          "excerpt": "Capri Global Capital Limited INE180C01042 Sub-Division from Rs. 2/- to Re. 1/- The new ISIN shall be effective for all trades done on and"
+        }
+      ]
+    },
+    {
+      "symbol": "GPIL",
+      "old_isin": "INE177H01021",
+      "new_isin": "INE177H01039",
+      "effective_on": "2024-10-04",
+      "action": "subdivision",
+      "status": "reviewed_old_new_event_pair",
+      "evidence": [
+        {
+          "role": "old_isin_event",
+          "document": "CMPT64350",
+          "url": "https://archives.nseindia.com/content/circulars/CMPT64350.pdf",
+          "sha256": "a9c9870e494eaf88fc322a88b4358a70bac96c305fe747ac6edf4fafcef289ce",
+          "published_on": "2024-10-03",
+          "page": 1,
+          "excerpt": "& Ispat Ltd GPIL INE177H01021 Face Value Split from Rs.5/- each into Rs. 1/- each 04-OCT - 2024 04-OCT- 2024 Members doing EPI of"
+        },
+        {
+          "role": "new_isin_event",
+          "document": "CML64289",
+          "url": "https://archives.nseindia.com/content/circulars/CML64289.pdf",
+          "sha256": "77a01a82b3377617f727d638984fd0762475d8998697ffab91cda3fefd76615b",
+          "published_on": "2024-10-01",
+          "page": 1,
+          "excerpt": "Power And Ispat Limited INE177H01039 Sub-Division from Rs. 5/- to Re. 1/- The new ISIN shall be effective for all trades done on and"
+        }
+      ]
+    },
+    {
+      "symbol": "HAL",
+      "old_isin": "INE066F01012",
+      "new_isin": "INE066F01020",
+      "effective_on": "2023-09-28",
+      "action": "subdivision",
+      "status": "reviewed_old_new_event_pair",
+      "evidence": [
+        {
+          "role": "old_isin_event",
+          "document": "CMPT58637",
+          "url": "https://archives.nseindia.com/content/circulars/CMPT58637.pdf",
+          "sha256": "e29c315be0b81238b368fd61d6190059d4badecfc96076cc33bed03b16a32e12",
+          "published_on": "2023-09-27",
+          "page": 1,
+          "excerpt": "Hindustan Aeronautics Limited HAL INE066F01012 Face Value Split from Rs.10/- each into R s. 5/- each\u2019 29-SEP- 2023 28-SEP- 2023 Members doing EPI of"
+        },
+        {
+          "role": "new_isin_event",
+          "document": "CML58539",
+          "url": "https://archives.nseindia.com/content/circulars/CML58539.pdf",
+          "sha256": "9855465748af6422ae0eff871c60ba2872f5a6612c665f5c21ab891506a71a7d",
+          "published_on": "2023-09-25",
+          "page": 1,
+          "excerpt": "HAL Hindustan Aeronautics Limited INE066F01020 Sub-Division from Rs. 10/- to Rs. 5/- The new ISIN shall be effective for all trades done on and"
+        },
+        {
+          "role": "effective_date_revision",
+          "document": "CML58633",
+          "url": "https://archives.nseindia.com/content/circulars/CML58633.pdf",
+          "sha256": "123fb870eaad6ab30bda6f49b0232a7ec584f4ff7b2606bf40f0bf26708edfa0",
+          "published_on": "2023-09-27",
+          "page": 1,
+          "excerpt": "effective from September 29, 2023, will now be effective from September 28, 2023."
+        }
+      ]
+    },
+    {
+      "symbol": "VBL",
+      "old_isin": "INE200M01013",
+      "new_isin": "INE200M01021",
+      "effective_on": "2023-06-15",
+      "action": "subdivision",
+      "status": "reviewed_old_new_event_pair",
+      "evidence": [
+        {
+          "role": "old_isin_event",
+          "document": "CMPT57105",
+          "url": "https://archives.nseindia.com/content/circulars/CMPT57105.pdf",
+          "sha256": "2e4e7d1f775f1d05cdbb54385cedd4c66736b305ed961b6251f3b889adc787ef",
+          "published_on": "2023-06-14",
+          "page": 1,
+          "excerpt": "Beverages Limited (VBL) VBL INE200M01013 Face Value Split from Rs.10/- each into R s. 5/- each\u2019 15-JUN- 2023 15-JUN- 2023 Members doing EPI of"
+        },
+        {
+          "role": "new_isin_event",
+          "document": "CML57078",
+          "url": "https://archives.nseindia.com/content/circulars/CML57078.pdf",
+          "sha256": "958e8d6999773bf6ac8bec17cf51a0009a04bd0858702d32562080ac95bc4b6c",
+          "published_on": "2023-06-12",
+          "page": 1,
+          "excerpt": "VBL Varun Beverages Limited INE200M01021 Sub-Division from Rs. 10/- to Rs. 5/- The new ISIN shall be effective for all trades done on and"
+        }
+      ]
+    },
+    {
+      "symbol": "VBL",
+      "old_isin": "INE200M01021",
+      "new_isin": "INE200M01039",
+      "effective_on": "2024-09-12",
+      "action": "subdivision",
+      "status": "reviewed_old_new_event_pair",
+      "evidence": [
+        {
+          "role": "old_isin_event",
+          "document": "CMPT63857",
+          "url": "https://archives.nseindia.com/content/circulars/CMPT63857.pdf",
+          "sha256": "24d4d77b01fc9b37f1381abf095dcbb250bdc6635135b392a3970f8f31af3420",
+          "published_on": "2024-09-10",
+          "page": 1,
+          "excerpt": "Varun Beverages Limited VBL INE200M01021 Face Value Split from Rs.5/- each into R s. 2/- each 12-SEP - 2024 12-SEP- 2024 Members doing EPI"
+        },
+        {
+          "role": "new_isin_event",
+          "document": "CML63833",
+          "url": "https://archives.nseindia.com/content/circulars/CML63833.pdf",
+          "sha256": "b42a53eb6c89dfecb5a532469a7e04388265988ac387fe975ec09ca46ada9a73",
+          "published_on": "2024-09-09",
+          "page": 1,
+          "excerpt": "VBL Varun Beverages Limited INE200M01039 Sub-Division from Rs. 5/- to Rs. 2/- The new ISIN shall be effective for all trades done on and"
+        }
+      ]
+    }
+  ]
+}

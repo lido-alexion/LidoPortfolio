@@ -15,7 +15,7 @@ use ZipArchive;
  */
 class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvider
 {
-    public const PARSER_VERSION = 'nse-pit-universe-parser-3';
+    public const PARSER_VERSION = 'nse-pit-universe-parser-5';
     private const ALLOWED_SERIES = ['EQ', 'BE', 'BZ'];
 
     public function snapshotForDate(string $date): array
@@ -59,16 +59,22 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
         $mapped = [];
         $unknown = [];
         $seen = [];
+        $reasons = [];
+        $historicalIdentityCount = 0;
         foreach ($parsed['members'] as $member) {
-            $stock = $this->resolve($member);
+            $reason = null;
+            $stock = $this->resolve($member, $date, $reason);
             if ($stock === null) {
                 $unknown[] = $member['isin'] ?: $member['symbol'];
+                $reasons[$reason] = ($reasons[$reason] ?? 0) + 1;
                 continue;
             }
             if (isset($seen[$stock->id])) {
+                $reasons['duplicate_canonical_target'] = ($reasons['duplicate_canonical_target'] ?? 0) + 1;
                 $unknown[] = $member['isin'] ?: $member['symbol'];
                 continue;
             }
+            $historicalIdentityCount += $reason === 'dated_identity' ? 1 : 0;
             $seen[$stock->id] = true;
             $mapped[] = [
                 'stock_id' => (int) $stock->id,
@@ -98,6 +104,9 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
             'unmapped_identifiers' => array_values(array_unique(array_filter($unknown))),
             'mapping_percentage' => $percentage,
             'parser_version' => self::PARSER_VERSION,
+            'identity_evidence_sha256' => app(NseHistoricalIdentityEvidence::class)->hash(),
+            'historical_identity_mapped_count' => $historicalIdentityCount,
+            'unmapped_reason_counts' => $reasons,
         ];
         foreach (['archive_sha256', 'archive_url'] as $key) {
             if (isset($file[$key])) {
@@ -324,14 +333,14 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
         $lines = preg_split('/\r\n|\n|\r/', trim($contents)) ?: [];
         if ($lines === [] || trim($lines[0]) === '') return [];
         $delimiter = substr_count($lines[0], "\t") > substr_count($lines[0], ',') ? "\t" : ',';
-        $headers = array_map(fn ($v) => $this->header((string) $v), str_getcsv(array_shift($lines), $delimiter));
+        $headers = array_map(fn ($v) => $this->header((string) $v), str_getcsv(array_shift($lines), $delimiter, '"', '\\'));
         $index = array_flip($headers);
         $dateKey = $this->firstKey($index, ['trad dt', 'traddt', 'trading date', 'tradingdate', 'bizdt', 'date', 'timestamp']);
         if ($dateKey === null) return [];
         $dates = [];
         foreach ($lines as $line) {
             if (trim($line) === '') continue;
-            $columns = str_getcsv($line, $delimiter);
+            $columns = str_getcsv($line, $delimiter, '"', '\\');
             $value = trim((string) ($columns[$index[$dateKey]] ?? ''));
             $date = $this->parseDateValue($value);
             if ($date === null) throw new MlHistoricalUniverseProviderException('NSE source contains an invalid or missing content date.');
@@ -371,7 +380,7 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
             return ['format_version' => $format, 'members' => []];
         }
         $delimiter = substr_count($lines[0], "\t") > substr_count($lines[0], ',') ? "\t" : ',';
-        $header = array_map(fn ($v) => $this->header((string) $v), str_getcsv(array_shift($lines), $delimiter));
+        $header = array_map(fn ($v) => $this->header((string) $v), str_getcsv(array_shift($lines), $delimiter, '"', '\\'));
         $index = array_flip($header);
         $symbolKey = $this->firstKey($index, ['symbol', 'ticker', 'tradingsymbol', 'tckrsymb']);
         $seriesKey = $this->firstKey($index, ['series', 'scty srs', 'sctysrs', 'securityseries']);
@@ -385,7 +394,7 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
         $dedupe = [];
         foreach ($lines as $line) {
             if (trim($line) === '') continue;
-            $columns = str_getcsv($line, $delimiter);
+            $columns = str_getcsv($line, $delimiter, '"', '\\');
             $symbol = strtoupper(trim((string) ($columns[$index[$symbolKey]] ?? '')));
             $series = strtoupper(trim((string) ($columns[$index[$seriesKey]] ?? '')));
             $isin = $isinKey !== null ? strtoupper(trim((string) ($columns[$index[$isinKey]] ?? ''))) : '';
@@ -409,19 +418,37 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
         return null;
     }
 
-    private function resolve(array $member): ?Stock
+    private function resolve(array $member, string $date, ?string &$reason): ?Stock
     {
         $query = Stock::query()->where('exchange', 'NSE')->where('is_benchmark', false);
         if ($member['isin']) {
-            $stock = (clone $query)->whereRaw('UPPER(isin) = ?', [$member['isin']])->first();
-            if ($stock) return $stock;
+            $stocks = (clone $query)->whereRaw('UPPER(isin) = ?', [$member['isin']])->limit(2)->get();
+            if ($stocks->count() > 1) {
+                $reason = 'ambiguous_current_isin';
+                return null;
+            }
+            if ($stocks->count() === 1) return $stocks->first();
+
+            $canonical = app(NseHistoricalIdentityEvidence::class)->canonicalIsin($member, $date);
+            if ($canonical !== null) {
+                $stocks = (clone $query)->whereRaw('UPPER(isin) = ?', [$canonical])->limit(2)->get();
+                $reason = $stocks->count() === 1 ? 'dated_identity' : 'historical_target_missing_or_ambiguous';
+                return $stocks->count() === 1 ? $stocks->first() : null;
+            }
         }
-        $stock = $query->whereRaw('UPPER(symbol) = ?', [$member['symbol']])->first();
+        $stocks = $query->whereRaw('UPPER(symbol) = ?', [$member['symbol']])->limit(2)->get();
+        if ($stocks->count() > 1) {
+            $reason = 'ambiguous_current_symbol';
+            return null;
+        }
+        $stock = $stocks->first();
         // A reused symbol cannot override a conflicting stable identity.
         if ($stock !== null && $member['isin'] && trim((string) $stock->isin) !== ''
             && strtoupper(trim($stock->isin)) !== $member['isin']) {
+            $reason = 'conflicting_symbol_isin_without_dated_evidence';
             return null;
         }
+        $reason = $stock === null ? 'no_current_identity_candidate' : null;
         return $stock;
     }
 }

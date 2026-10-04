@@ -59,7 +59,7 @@ class MlAcceptanceReportService
     {
         $out = [];
         foreach ($value as $key => $item) {
-            if (is_string($key) && preg_match('/path|stderr|unmapped_identifiers|failure|source_meta|raw_payload|(?:^|_)(?:error|exception|traceback)(?:$|_)/i', $key)) {
+            if (is_string($key) && preg_match('/path|nse_source_file|stderr|unmapped_identifiers|failure|source_meta|raw_payload|(?:^|_)(?:error|exception|traceback)(?:$|_)/i', $key)) {
                 continue;
             }
             $out[$key] = is_array($item) ? $this->safe($item) : $item;

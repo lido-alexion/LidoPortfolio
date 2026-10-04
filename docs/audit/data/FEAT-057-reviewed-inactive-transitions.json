@@ -1,0 +1,122 @@
+{
+  "scope": "evidence only; not runtime aliases",
+  "events": [
+    {
+      "id": "CML64528",
+      "symbol": "HEG",
+      "old_isin": "INE545A01016",
+      "new_isin": "INE545A01024",
+      "effective_on": "2024-10-18",
+      "action": "subdivision",
+      "evidence": [
+        {
+          "symbols": [
+            "HEG"
+          ],
+          "isin": "INE545A01016",
+          "effective_on": "2024-10-18",
+          "role": "old_isin_event",
+          "document": "CMPT64615",
+          "url": "https://archives.nseindia.com/content/circulars/CMPT64615.pdf",
+          "sha256": "e88ddacdf0024dfd73bb16dbbd84a919c5551e22ed0f85f50ada547d878c03dd",
+          "date": "2024-10-17",
+          "page": 1,
+          "excerpt": "Date HEG Limited HEG INE545A01016 Face Value Split from Rs. 10/- each into Rs. 2/- each 18-OCT - 2024 18-OCT- 2024 Members doing EPI"
+        },
+        {
+          "symbols": [
+            "HEG"
+          ],
+          "isin": "INE545A01024",
+          "effective_on": "2024-10-18",
+          "role": "new_isin_event",
+          "document": "CML64528",
+          "url": "https://archives.nseindia.com/content/circulars/CML64528.pdf",
+          "sha256": "04381fceb449c5903854fab817a71252c76d8e1346a62e6fb022e9e652456581",
+          "date": "2024-10-14",
+          "page": 1,
+          "excerpt": "1 HEG HEG Limited INE545A01024 Sub-Division from Rs. 10/- to Rs. 2/- The new ISIN shall be effective for all trades done on and"
+        }
+      ],
+      "review_status": "reviewed_old_new_event_pair"
+    },
+    {
+      "id": "CML62697",
+      "symbol": "VERTOZ",
+      "old_isin": "INE188Y01015",
+      "new_isin": "INE188Y01023",
+      "effective_on": "2024-07-05",
+      "action": "subdivision",
+      "evidence": [
+        {
+          "symbols": [
+            "VERTOZ"
+          ],
+          "isin": "INE188Y01015",
+          "effective_on": "2024-07-05",
+          "role": "old_isin_event",
+          "document": "CMPT62713",
+          "url": "https://archives.nseindia.com/content/circulars/CMPT62713.pdf",
+          "sha256": "dc0a613f8583219c203caf962a0cfd83bf1ec69c5389d4aaa93ea6e227508cd4",
+          "date": "2024-07-02",
+          "page": 1,
+          "excerpt": "Vertoz Advertising Limited VERTOZ INE188Y01015 Face Value Split from Rs.10/- each into R s. 1/- each 05-JUL - 2024 05-JUL- 2024 Members doing EPI"
+        },
+        {
+          "symbols": [
+            "VERTOZ"
+          ],
+          "isin": "INE188Y01023",
+          "effective_on": "2024-07-05",
+          "role": "new_isin_event",
+          "document": "CML62697",
+          "url": "https://archives.nseindia.com/content/circulars/CML62697.pdf",
+          "sha256": "9354cdee2ecd8f0ca9326b6673d7696e7b6f3b0f6b924eda84ec0ee3810fe039",
+          "date": "2024-07-01",
+          "page": 1,
+          "excerpt": "VERTOZ Vertoz Advertising Limited INE188Y01023 Sub-Division from Rs. 10/- to Re. 1/- The new ISIN shall be effective for all trades done on and"
+        }
+      ],
+      "review_status": "reviewed_old_new_event_pair"
+    },
+    {
+      "id": "CML70318",
+      "symbol": "SUMEETINDS",
+      "old_isin": "INE235C01028",
+      "new_isin": "INE235C01036",
+      "effective_on": "2025-10-03",
+      "action": "subdivision",
+      "evidence": [
+        {
+          "symbols": [
+            "SUMEETINDS"
+          ],
+          "isin": "INE235C01028",
+          "effective_on": "2025-10-03",
+          "role": "old_isin_event",
+          "document": "CMPT70550",
+          "url": "https://archives.nseindia.com/content/circulars/CMPT70550.pdf",
+          "sha256": "018ef34377e7bf570f1a03f6a90b0312159e284ae8e43c8ac63a1563d9aa4bad",
+          "date": "2025-09-30",
+          "page": 1,
+          "excerpt": "Sumeet Industries Limited SUMEETINDS INE235C01028 Face Value Split (Sub-Division) - From Rs 10/- Per Share to Rs 2/- Per Share 03-OCT- 2025 03-OCT- 2025"
+        },
+        {
+          "symbols": [
+            "SUMEETINDS"
+          ],
+          "isin": "INE235C01036",
+          "effective_on": "2025-10-03",
+          "role": "new_isin_event",
+          "document": "CML70318",
+          "url": "https://archives.nseindia.com/content/circulars/CML70318.pdf",
+          "sha256": "186b953961c750b532957bd0fb6386d94b34dc2bd646e99bac5e115a6d9dfe9a",
+          "date": "2025-09-22",
+          "page": 1,
+          "excerpt": "SUMEETINDS Sumeet Industries Limited INE235C01036 Sub-Division from Rs. 10/- to Rs. 2/- The new ISIN shall be effective for all trades done on and"
+        }
+      ],
+      "review_status": "reviewed_old_new_event_pair"
+    }
+  ]
+}

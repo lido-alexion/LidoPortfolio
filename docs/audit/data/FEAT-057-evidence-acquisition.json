@@ -1,0 +1,5044 @@
+{
+  "scope": "public NSE evidence acquisition; downloads are not approved aliases",
+  "records": [
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML54479.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:58.197996+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "218c8d7f261842aeeedc90abd88bde38bb259e996f38cca336e7af10012f4c1b",
+      "bytes": 456299,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML54525.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:58.235448+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "f4f03ba8a710cfa1954ff4c3bf08d68296abebba7425f179ad470b28487ef11b",
+      "bytes": 134731,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML54628.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:57.902472+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "c4f303d458947856e5719bdd13340a2fca724f5df12cccd844d8b23cca675a6b",
+      "bytes": 472614,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML54645.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:57.956006+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "ce838f4162215260b765d851feabca706f7b971860203f9c93d63643656afced",
+      "bytes": 134898,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML54805.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:57.751864+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "31073c008a8a1a4dc70715997a3cdecd64212abb49867655c1a0619a3ed6515f",
+      "bytes": 134294,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML54836.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:57.559796+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "ac3128fa382725d2c05cfa8b79cb3cec3ed73078b2fae86be10102b072c229c4",
+      "bytes": 135382,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML55038.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:57.316580+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "1688ea292539d9a38389af7c1ba14ad82fa3e58fa9db1eb7b0c3ab5b6630155d",
+      "bytes": 140838,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML55092.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:43.462932+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "90b8b7b49dc2a289c9798b1c7a576ecd81629a2c5f686c00f379017b55847395",
+      "bytes": 470622,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML55291.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:43.296593+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "770c7a9e1f1a7fdec2bcf31d7e65d9c7b77f75fd28118ed38a23ffbafd2bd9c5",
+      "bytes": 458997,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML55408.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:43.017788+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "132922a1eb70742273d1f4c050784d97b5f75d9d33ed6fac5aabb599d4ffe7bb",
+      "bytes": 163915,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML55595.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:05.200374+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "31df2169a7cf7c2dd87871053ed06a21e3a68b465156b87f0ab22b7b10f10d85",
+      "bytes": 161764,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML55596.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:42.815208+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "3c0662f98aca28d132371352a3241578a686e55b761fc7bd72ccce9167d93a6a",
+      "bytes": 160832,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML55625.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:42.907554+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "4f90c9fd680894c4ac45227939126009cc4cf0a45fba5719fd626bb9b3c4f1dd",
+      "bytes": 470406,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML55978.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:42.710279+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "6d121d667d4a995b74cba4a8c58ed547bc12a8d88ecd07b5d74b023155146c5e",
+      "bytes": 159779,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML55998.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:42.530801+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "68098f2ea5da034bf2d1bd888f6f5fb4c641a53cb31a4d78acde05b0d7775dfd",
+      "bytes": 160419,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML56270.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:42.334316+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "d6e5b96608be8639751d0c49e3ac04b08f08cba5fc91ffeeca8e53375f6fef84",
+      "bytes": 469625,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML56411.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:42.428495+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "86d524fe8c226bc43b408cfd07ab216baffc363b94983fc2296da51c55222a2f",
+      "bytes": 458667,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML56558.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:42.133330+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "ec0836f44168ee3b9599aedbca4e765f6488b7d87eed1ac74c679032512ae1d3",
+      "bytes": 456914,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML56637.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:41.957812+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "fe1a5cc05f8cfd9bdf0605081f0d944708ed781447aa7aa0cd4d49904c4f3f15",
+      "bytes": 161602,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML56804.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:41.664416+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "b83c036a166595d18e799414f72063ebd474ae2d9a8c5afbe8dc1772f1791407",
+      "bytes": 164267,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML56924.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:41.505577+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "7d844589e0572ecaeb189079dfe876bcfe69a701b2ea7c14116d7d133d38fef4",
+      "bytes": 162367,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML57000.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:41.460193+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "9653f59200f6ac85ad940d1a60fcad37cb483a7a77f4cf33830d2ef7911fab27",
+      "bytes": 162238,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML57078.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:05.342397+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "958e8d6999773bf6ac8bec17cf51a0009a04bd0858702d32562080ac95bc4b6c",
+      "bytes": 469935,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML57674.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:41.587824+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "2d8e7a98a23eaa1705441473a420ddff7da685fbc958752ba364eb279871ed45",
+      "bytes": 159269,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML57686.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:41.375763+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "1a1587fde9b6bfd5d331815f456ba9e9ddd89c8c3f3fedc66049466bf18749f8",
+      "bytes": 136015,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML57736.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:05.065152+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "edc8f318a1b09df2f292a7adfd0cfbbd5bbc8980b33b0f2ba7c2a93c78911765",
+      "bytes": 161807,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML57798.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:41.051824+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "399be416b6eb157815ea9676a21307a3cd96920b2bf596e82ec588043e2ca242",
+      "bytes": 160633,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML57893.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:47.415803+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "25e9ffe5203a687b214e5d79e96a32c81710011e844d7eb1d0936bb97208b209",
+      "bytes": 159228,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML58269.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:04.641003+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "c43d396c94f9b7a9534c279b1656be4a946b372f18edbade36dbd192aceba4c2",
+      "bytes": 649525,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML58377.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:40.981527+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "0933881bbe2a39496cb05cfd27c5f7ab21c99b8c56bd40ee1276199578708fac",
+      "bytes": 474471,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML58539.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:04.551438+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "9855465748af6422ae0eff871c60ba2872f5a6612c665f5c21ab891506a71a7d",
+      "bytes": 133776,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML58633.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:45:18.417820+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "123fb870eaad6ab30bda6f49b0232a7ec584f4ff7b2606bf40f0bf26708edfa0",
+      "bytes": 471246,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML58689.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:40.604389+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "bd1cf269b00f822decdb11292bedf034e9c0b6ee7ef53e1937aa2f258f3a81dd",
+      "bytes": 161657,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML58723.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:40.454149+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "cfa568fd94530adcf713aa08e10cd57fe0aa35db7dcb2be9c84e7f9b615cb3fd",
+      "bytes": 134345,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML58736.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:40.430175+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "99324682ef53e53bac659cb78844ab2ea80c073b2a69df86bf8ecf3a8688d74c",
+      "bytes": 134739,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML58740.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:40.393761+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "caeff524e097abcd77e1a5681882d17d9713efa16c10d22d70485aef5e716175",
+      "bytes": 161539,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML58990.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:40.240805+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "50beadb622b8f4d7d89f684bc6e4bbd1c60823260d7b2eb475c1a7cf065eac6b",
+      "bytes": 136237,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML58996.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:40.225943+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "5f24d6dfaccfe7201665723ca10baf78fccbd2f3cbb6fe4740e319dd654c8d88",
+      "bytes": 165102,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML59023.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:40.110362+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "6fa6cddd13759c076a91668e7bcc97b9cb3d6486cd16411bbec9e53273ba269f",
+      "bytes": 134176,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML59024.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:40.006825+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "d1b0cef87c3ef62ea0615cb53fa9635b78104b477d518ccffc1741273c150503",
+      "bytes": 134501,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML59144.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:39.571849+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "b0c2a12cd35f9645333e9732c78c86f0ad4525b4dfe44507625ae3847984c91f",
+      "bytes": 160754,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML59145.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:39.551373+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "7f4b94224f2df721c8471c8b89dc83a8a590c7162d2631427283d2231fe330ed",
+      "bytes": 121788,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML59238.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:39.442218+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "bc5031c34dc2f66cbfa5dc78ea53b6527011b4661396893f734deb8033e30016",
+      "bytes": 160589,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML59260.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:39.436686+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "0b01851b0eb46bf8467043ae44167e9fbd29e28446d27cc0a5611333faa512be",
+      "bytes": 160826,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML59455.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:39.209011+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "7e89b264110df4886ccef03b185e531df334f908f1fc4499e46b1e65adf38509",
+      "bytes": 134196,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML60080.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:49.370311+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "ca90fe53194e204da1f9c9cc01383f98f1e2c6fd1100b10af0cf48fc9c32fab5",
+      "bytes": 160097,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML60107.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:49.147983+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "0ee2f206da1aadfc629b227c2e506db51c3e84012281c633a735b5f44727a2e1",
+      "bytes": 159935,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML60920.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:06.378885+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "8915e2a3b71389faef585f79c301d690db2fb5bf93fd6eba16de4543eba93124",
+      "bytes": 159020,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML60968.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:48.956104+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "45f11eac1deddaeecc8f9820844acb34bb61f808bcedb1e24ce6eee70057c29e",
+      "bytes": 160376,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML61202.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:48.719081+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "e1eb527a123662a6755f8d7609308587281c8136da3408044d2b9c9eb7a3d4ca",
+      "bytes": 159884,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML61331.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:48.593534+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "11623fa5cc8346b97d7f89bc75a4b384bede2549e550aef66c8cc25b9ef9b6bf",
+      "bytes": 470290,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML61434.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:48.369284+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "de1c1c1f567609ca5584220e342dc729bc587eebcb6ab63389875987ac577dfe",
+      "bytes": 134490,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML61690.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:48.269142+00:00",
+          "http_status": "404",
+          "curl_exit": 0
+        }
+      ],
+      "status": "retryable_public_acquisition_failure"
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML61718.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:48.374933+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "0e7eb6ddc46189eb8e1fc249e899d93054acca493eca3dd2f264c8d4a919f2b6",
+      "bytes": 162240,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML61905.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:48.163818+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "e0df900849628691f903038cbe020f99fbf829e38c088149890547caacaf1f00",
+      "bytes": 120945,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML61995.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:48.072445+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "5637eaafa20849f40d4269461095f3fc502ea490812f7e21b8fc2001994bd9d7",
+      "bytes": 163614,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML62006.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:47.864425+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "c29524695961a9e744b919bb85759fb1e0c813634a41c593d72289911e0dcc29",
+      "bytes": 120859,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML62138.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:47.775783+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "b44339c930c031a0f0c1fce156218111d0f2e6d656c4ce2c523e10ce7e269a59",
+      "bytes": 161769,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML62171.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:47.572235+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "6dfd833e1c904527280cbd83f700afee4b0e15e08c35b6df059971c9dd5680db",
+      "bytes": 121627,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML62306.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:47.492886+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "6867f9ea15019f96ebd43356f2c13400b05162cda982e6013fb497e1fd51bf90",
+      "bytes": 121806,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML62488.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:47.434163+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "eef45b8a2279be823e9165553f60f6441cd653d172d7361f358f89871989d0d3",
+      "bytes": 120950,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML62591.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:47.353960+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "d8d970c1def0cd7692843e4135f9bdbf95ea35f80e92c1e0c2c4f65e81cfc1c8",
+      "bytes": 162076,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML62676.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:47.254317+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "858074bb6e3eac1625eeeb25a9ece2d60f2a033cc26d301e8b75a682483fbcfe",
+      "bytes": 121110,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML62697.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:47.226339+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "9354cdee2ecd8f0ca9326b6673d7696e7b6f3b0f6b924eda84ec0ee3810fe039",
+      "bytes": 123283,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML62843.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:47.074098+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "d5b20bc64bef34eea10d07df5a8d7d7fc338645b96f4efa53b78170f73ce41c0",
+      "bytes": 160973,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML62953.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:47.001134+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "bdb88e4fd17f240bbf04ad02673bfb480ed92973f438b5da2e20f0623a52cd5f",
+      "bytes": 121235,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML62960.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:46.891530+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "1b54ba8b57feff0e820c3ce80980ca29eeff30508ec5d0b5b232eeaaa43077a7",
+      "bytes": 161063,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML63006.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:46.775869+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "742f003461a25a129d3dc57f46b78fa319e643dc7ba40a42dac140fdf3616704",
+      "bytes": 122696,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML63027.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:46.701067+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "71d6d2fb9dd31f29020617b5738dce8e71b34967f26fa3d7d402f0d591384071",
+      "bytes": 120258,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML63217.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:46.566273+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "168cc0bd4850b3d8e132f6412d116966f00264f86b03a9adba786503cc321ce8",
+      "bytes": 160935,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML63220.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:46.578160+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "2aa05f392274ede13a309b22a624ef00e75722dd2c7d7cdc85b3f0bc8ebaa1c8",
+      "bytes": 121220,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML63256.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:46.526397+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "7aec888966436852969d09ee6f8c886e3804e1e4615ffaddfa023657cce6447c",
+      "bytes": 120916,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML63670.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:46.231868+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "9e8bc7fd2b5c62032f9e7e7367dcca5a015c4aeb15f44a4b42636d2ac17138eb",
+      "bytes": 120191,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML63749.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:06.143185+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "6fec67af64491987cf6b2355ba1facd5c0b0593a7de71cbf63fd5bbb2a64b4a3",
+      "bytes": 120632,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML63764.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:46.186199+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "2d963b17a5c0d61ce8672baa926bcbf6a5087f6e8a69148a463d4542ae848268",
+      "bytes": 121597,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML63833.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:05.804925+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "b42a53eb6c89dfecb5a532469a7e04388265988ac387fe975ec09ca46ada9a73",
+      "bytes": 161403,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML63865.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:45.926065+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "8c9cb2eeeac96216d12ac04f694527176ddf293823872919ac40cbcc153cd7b9",
+      "bytes": 161406,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML63920.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:45.807786+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "166fd6ee3572d4bfccf76e701f243b3fb827acbfbe7adc6f0047c3982f6b9c43",
+      "bytes": 163707,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML63979.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:45.620081+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "2196252fb166ed037364bbc9cf845ccedaee2aaa792bd1f00d9b10baa0403735",
+      "bytes": 120768,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML64149.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:45.516369+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "6a906b68f1eec5c7be6465c1ebd90e7978dfdb73ee2a2c6e07d4cf370bdaeb94",
+      "bytes": 122071,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML64289.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:05.744392+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "77a01a82b3377617f727d638984fd0762475d8998697ffab91cda3fefd76615b",
+      "bytes": 120538,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML64354.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:45.351797+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "80f009f785ec03048c09eb1d1a81e6561b14fe6d6d34b7b21e3fe65410c854c2",
+      "bytes": 121071,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML64514.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:45.347595+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "a1720adf4f13e4a68fb57292c8c1dd52c5ba03d6a60839f997431836bdb2a6c9",
+      "bytes": 121260,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML64528.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:45.116410+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "04381fceb449c5903854fab817a71252c76d8e1346a62e6fb022e9e652456581",
+      "bytes": 120636,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML64665.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:45.090961+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "cf0a1d5769c16e3953692c3e98f6bf3d4a78c008172ede8ddba085d6300aa4e7",
+      "bytes": 126043,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML64724.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:44.893959+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "6af68adb4e12433b3331c13197a6342e975cb0d27673bc18944554a27c54ac5b",
+      "bytes": 125828,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML64867.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:44.844282+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "a2b600bc10a54d5c23378367d9a4605ba94a0e91241db8b84dcb57eec76ca2cc",
+      "bytes": 160039,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML64875.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:44.573006+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "dfb8026bcaf28578119c8d2622adedcc07a1d4a23d68bb58b58be7cc40e10255",
+      "bytes": 160539,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML65414.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:44.636559+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "69bfdbc2674f412c3a0292d6b608a0b54d48c9202c1b8f7c8fc33d5a91ccf53c",
+      "bytes": 163273,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML65458.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:44.456951+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "c89376afc472b250d11f609c59233ef74e9f7a697e13e7fab5870db37751b45b",
+      "bytes": 161893,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML65508.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:44.366409+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "b8486cb8d6b7426f3825c494d6dfe0f64e12139b1de1876d0a40a0d8375edf35",
+      "bytes": 121708,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML65575.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:43.893179+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "486399d81475a7ccc8a5521b9b13d37f92280ede411a7cffa0a1252c6bc4193f",
+      "bytes": 120990,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML65659.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:43.857179+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "d3fb34fa6588f277b57965b52f33d23c1d76e7569f41a97017a3d54291c43f53",
+      "bytes": 119891,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML65684.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:43.644428+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "89fbe6d88916d9d1407d671c8bfcc400516577f719c78691ec15bba8a61ce6d6",
+      "bytes": 122750,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML65910.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:43.759132+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "66ed629c24f1709622b4dae43b17b4f718691711858d6bf729f1c53a1fb99065",
+      "bytes": 472265,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML65988.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:54.763858+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "e841912b0a29e68ef5e4e7aa257d687e92987022b85aef9378dd1dc94aa9e188",
+      "bytes": 163325,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML66142.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:54.524765+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "180cd47273a3bed41d697efbe6d49711df4494d28390490a86cfe33cc97a2040",
+      "bytes": 121632,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML66150.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:54.456537+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "14afb3fb992d04b22e09b68a13146aebe271cac3b45e82cb9ff2a9f007281ca4",
+      "bytes": 469354,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML66287.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:54.271984+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "cd4b70110305adb304f46159277c8b33107ccd72c605d60e66cd3bc3b43295fd",
+      "bytes": 161658,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML66300.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:54.180232+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "2153b31e4e3bc8900e67792603bbd4b691c40df5bdc277da6d34385083449753",
+      "bytes": 121278,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML66484.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:54.125290+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "96ba0a9eae7be8a357e54a88c2c3a57f3a97f66f7e657058b102f5ec312ef93f",
+      "bytes": 162156,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML66487.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:53.994527+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "4b0c14d9a510ff304a836bff6052f8ecb4536c8cde6cedd5f904d0e679a03a9e",
+      "bytes": 162732,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML66592.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:53.954629+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "df0a6b773ead58d1a3fa2f60238a1fb67db981ed951f2e70e49874e361d76934",
+      "bytes": 159662,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML66896.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:53.664032+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "742023bc73f89d045c8e88c779bedd9660eb897ae830a54e6dfe7879983a6cf6",
+      "bytes": 120592,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML66908.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:53.590207+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "c5809542752cf3091719ae3c062c7624b7d75d707815ff6a166d53b15e671d52",
+      "bytes": 160684,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML66945.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:53.463927+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "9592f606238607edd7bf8c19d3a78f4999df9ac2f0f7fa724730208ddb931895",
+      "bytes": 160675,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML67740.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:53.099710+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "10d29ff9e988e7b3002dfae98abc3c4f36494271f82ffb9caf5798ca593b657a",
+      "bytes": 165090,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML67789.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:52.988385+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "944810024c178229ede72b2e5535a6af798be9ad0e36790e59d709941d077ea1",
+      "bytes": 161638,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML68318.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:52.786788+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "20b4368a09f6214c1044aa0a77580ce1413cbdfd78d0b58219cc214d6967c180",
+      "bytes": 160566,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML68344.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:52.576181+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "efcfcf2b4f7e49b40ee3547a07acedee7804ebb68c3d501029b19c14baf5f65c",
+      "bytes": 120981,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML68472.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:52.415906+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "0513f355122e2af95a87ed9ccad859d7aca03625c59eaa5cf7795d8da7b7cb56",
+      "bytes": 170693,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML68875.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:52.331649+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "7c360663457a98f3d0a345f91a75b9b6c415a0e4903dfa5c9be4320a7cf3b0d0",
+      "bytes": 160503,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML69129.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:52.008748+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "6cb69612efcdffb5b5287540b8e5543c7fa35a2747dde52daaa5e43e58382ebe",
+      "bytes": 170038,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML69261.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:51.919634+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "a49851d7fc31657cc1449c17627cb6680911592c6239b080a039028fb61f3a9a",
+      "bytes": 162126,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML69514.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:51.816508+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "4b83beff9c30de52024ed0ec3145cdddb523d5d1a0056096183ee9ff2741a862",
+      "bytes": 161304,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML69730.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:51.759932+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "0130be1afab148f07b9a354ed4266b0f555bc17dad4f40d5f9bb247359666c9e",
+      "bytes": 169488,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML69816.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:51.790928+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "a73d348f47fd57357e03be01eb81b8a45b4faf7a71c9f4b4ed02aef195563ed8",
+      "bytes": 159856,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML70160.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:51.440530+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "6b70879cf4ef6c5ccc1479339a779dc3d6adcd2c9cf6795b9d56fec0b0283bad",
+      "bytes": 170706,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML70203.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:06.532825+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "764b45776ce66e6fcb6f6ccf4616a1a2dd5691a617fe9b7d22f2c63a4dbabbad",
+      "bytes": 162550,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML70238.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:51.233204+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "2945d7111b213119cbd94dcba68786d5ef73f53ecef97f71fce01dfb3a6671b3",
+      "bytes": 159370,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML70318.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:51.025491+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "186b953961c750b532957bd0fb6386d94b34dc2bd646e99bac5e115a6d9dfe9a",
+      "bytes": 160032,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML70333.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:51.095860+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "e4578e0627cb023d284ec101450fa63d9a5d3fde962b4d768795bc66d26a6fda",
+      "bytes": 169838,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML70634.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:50.827731+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "1720bd24834056772d8609f460c2403534848d873c70252aa82d50c9b11ff8f8",
+      "bytes": 163291,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML70644.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:50.853821+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "4c506a3d648bedabd249832d71d7f84132754364b146790b3bedfd46e167911a",
+      "bytes": 161000,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML70813.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:50.647837+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "5a882df8452ab7872451c4f0c89b034051d5f5685a318c78c4760c4767e01c83",
+      "bytes": 161532,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML71019.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:50.716520+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "ab6e507310d60f388288e40b6c2fc51b88725752f68b3713f42312928e66cf8f",
+      "bytes": 474628,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML71028.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:50.269559+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "7792be933151edd46c28008af364375d285f9580aa13423221f894f754a2f12b",
+      "bytes": 159339,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML71036.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:50.138389+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "9c38eb687a768cfefebb6b6cf2ea7587e23ed421bb29e9dc234ea0da4775606c",
+      "bytes": 160134,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML71247.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:50.140424+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "dc429b0e3ec4e67347180ea3a93dbb1febf772e623f04a26b1d90d05ade589ba",
+      "bytes": 162678,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML71408.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:49.850164+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "29cb33effb69b3208cfdd29f74618e22472ba7ab9ed0a9ae71d9450d6f3f6c30",
+      "bytes": 161740,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML71534.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:49.799812+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "9af4271d3a4f0afd53c7b260e3a35e4d2b4d399cab711e2dd6290c95ceb5ba41",
+      "bytes": 159546,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML71597.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:49.766756+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "8eb5590b42cf9a72804a144683b4b7fd645ea1294e03b508eac637eb42bbfac9",
+      "bytes": 161362,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML71625.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:49.511981+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "8a70c5ab307178a7ba9d1b56bb63a53067a0761eb5397984d92ee5e9b0fe4499",
+      "bytes": 161207,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML72091.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:49.415784+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "15162e8ba729d376b272984798f2c8402e6a9f611a8b706c871b0c465c03cc0f",
+      "bytes": 169548,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML72189.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:57.221297+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "c8b65e74604a630533975441c6c5c4a4846b337d0d2579ed7474a25ef86c6bb4",
+      "bytes": 168621,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML72216.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:57.074104+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "21277003c66db2c991b7467d42e49065c1fd8ff5277bc7b69fde32dd0f6cf39f",
+      "bytes": 169476,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML72247.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:07.068948+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "ae634c4036fe3f7c62eef3f5902d8bb9fc690e51fca8d7b686c30d900cbb5728",
+      "bytes": 170442,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML72272.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:56.850746+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "a331a2b70b53dd2ba8a4fde8f6ab284de2a1fbb5062b28aae124576f7e21e00c",
+      "bytes": 167178,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML72746.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:57.285132+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "643f3e32d9d9d026a24797b14e7bdd5f3d7ba912888403d9210b22a60b851fb0",
+      "bytes": 169731,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML72914.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:56.555739+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "33b11d9fda753a4fedc590c37b996b2373e7e82a3ef86d0f263966c4ffec5e6e",
+      "bytes": 166542,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML73009.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:56.287011+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "3ee8e66ec5da8a629a6e407bd58a97493f82e12a1af7cafa60dd38dc33f8a90b",
+      "bytes": 166521,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML73036.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:56.314825+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "8307de6b4bb966d997d449311865aafddbf3336f82bce7d91b4b5a9b2c4f025c",
+      "bytes": 168618,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML73431.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:56.055225+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "2a4674e40cad48388bb5008e56e1da69da6c04d7c646486bc3aa14cf25c10296",
+      "bytes": 203977,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML73983.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:55.860005+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "8dd27266581b45741e3edd82360e204d4f1e77538b621f4509f2c92b4e10fe80",
+      "bytes": 161299,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML74505.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:56.062948+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "b3ca8c69549922ab63d1954ba9848d1f5bc0e117544c2e56fd45e4b602d5cb3b",
+      "bytes": 203314,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML74938.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:55.708151+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "5d3bb309d228791f340b619fe7e030ad66c2289bbcd0044f32d7d4478083c7dc",
+      "bytes": 219483,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML74947.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:55.539925+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "53b667dc18f977168675d494535d63e67af1e279c828bebef7afb89943f3117c",
+      "bytes": 434109,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML75462.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:55.343832+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "64f362fde0047e65f76065015cc962d92826982cc02347c74980d31756240e04",
+      "bytes": 162408,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML75480.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:55.547547+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "8be309542bcbe358eaa90f8e8f84bba47f64186cad42f2c04dea9c5bb95e603c",
+      "bytes": 219027,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML75555.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:55.051822+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "ab0fb4f205d49b297b3ef8467ee769373b408a434d1e4e4a66af2a739df98f0e",
+      "bytes": 211693,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CML75855.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:55.049776+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "6016bec01414f6596ed077b937ebe4d24f5fd940ffca7e483730f1b40b4da8e9",
+      "bytes": 221400,
+      "pages": 1
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT54330.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:58.249651+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "5ae645cc8bb55fd452f5b04e31945a288dc7d905df1c62a5bbb6f452ef21249d",
+      "bytes": 162833,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT54484.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:58.139259+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "28b409563d72fda51a4c98b228f54fdfb9a87be229b3669445c7cc074ac84b61",
+      "bytes": 169098,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT54561.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:58.044012+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "b833d7244d933248930b818550ac2cd0e6bce5c287ddc67ea01854eb1fb3b749",
+      "bytes": 163422,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT54617.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:57.977208+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "1a5673507b585b3c48757f1de59fd3d1f32fb7c43a0342a29752acb37e029c7e",
+      "bytes": 163929,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT54656.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:57.924847+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "a31fd47d17ac2eb8365a77603cf2be45835d6419f2baaeb3ae3a88abec56c597",
+      "bytes": 171168,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT54781.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:57.813343+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "726a7fad37a301da54e242485b60372fe5a2348deb53dcb166edc05bbb956541",
+      "bytes": 160019,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT54969.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:57.713797+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "4d1cbef34683ded693b870493e04d92fd92d7fb2260f841ca43ac4a418783710",
+      "bytes": 168135,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT54970.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:57.464278+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "2d819d996bfd1e491de53f088e8a5305881598f206a7f4cbb7274aa8f4d50120",
+      "bytes": 171962,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT55227.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:43.251835+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "fabcff5abdc8666c1edf475a68ce3f1cc7e16988e98590a9699de92215d985a2",
+      "bytes": 163788,
+      "pages": 3
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT55297.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:43.369762+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "53155701570cecd49c506adb63246b401aa35e09835631c3382cb1889af0afac",
+      "bytes": 163383,
+      "pages": 3
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT55448.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:42.994585+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "1f5cc7207fc4719ab401caf60c0777c71c6e564fb6f04eacab8672a385027a7a",
+      "bytes": 164154,
+      "pages": 3
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT55584.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:05.404697+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "0a63becc7f6c7e1873992e4793bd566f572821036fbb7c3a106cfd93eb7cf532",
+      "bytes": 162497,
+      "pages": 3
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT55585.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:43.024871+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "379c412ade16a9423f0e9ca42d5f8ba658d17649c2e532518f991f77a7417bd3",
+      "bytes": 161183,
+      "pages": 3
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT55587.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:42.840146+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "56121ff292635c653e411fb073f55c6215875d013049b8cba9cc8016540e0953",
+      "bytes": 160676,
+      "pages": 3
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT55988.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:42.604496+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "46254c18b9f1fcde056360c3fa6c9fa56cc25fd4cc7368addfecef5018a9b409",
+      "bytes": 161073,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT55990.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:42.611222+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "4296298210cff9b8c47890644516d217c2b102da7a09fef5cdbde9ce40f5d4fc",
+      "bytes": 161002,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT56263.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:42.380813+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "c8d6ff43497a66d59947ef61f731c3466a1eb91a6032a47851e6f2b6c84b2c8e",
+      "bytes": 162209,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT56470.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:42.227791+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "5f073da8c93538d482edab9eb7450a919d8448c412d1b9a4916a561aa0fddcc7",
+      "bytes": 164330,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT56587.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:42.026776+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "7b4f0fb6e636c1f57aba46bab8a775f7898d8dc80ed59d4e70f7adff0dc968b2",
+      "bytes": 163244,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT56672.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:41.898877+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "1a7b98a1c1dfd69cdc6dcfc76c355df344497a275c1611b2e5369c4e4643282a",
+      "bytes": 162683,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT56795.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:41.751827+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "496d7dcbd4c46651d96bda0b41c20af2e9c500f093ebc7f3b772233aa478068b",
+      "bytes": 163563,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT56877.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:41.639089+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "32351ed29beb4d7b765795af1b5aff673fd75f6393f919c84847fc4e35014312",
+      "bytes": 164765,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT57105.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:05.178575+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "2e4e7d1f775f1d05cdbb54385cedd4c66736b305ed961b6251f3b889adc787ef",
+      "bytes": 162702,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT57693.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:41.185484+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "77451623073f07dd8bf67c39918b9ca11827ef2eea6af8f30c9b91d5d7f6727e",
+      "bytes": 162827,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT57708.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:41.187485+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "ceec51ae63cbd374f77dfa71041fc8bd53d167090906951ac61ff23e7a270e41",
+      "bytes": 165388,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT57759.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:05.131406+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "2ca26260352908c74faa452a96ad8384cc8d5c125c5a89219e20c7b1a8a372dc",
+      "bytes": 164075,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT57789.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:41.154477+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "627d5877182933a7cbe7176212006cecdcb9ddb55d4fbab98602cc7a94501e23",
+      "bytes": 163245,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT57871.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:40.924699+00:00",
+          "http_status": "302",
+          "curl_exit": 0
+        }
+      ],
+      "status": "retryable_public_acquisition_failure"
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT58326.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:04.547563+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "46a8fce9dd56da3b6db35748b12e419305420db2d70c1852bbadad7281a665c0",
+      "bytes": 162320,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT58618.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:45:18.576465+00:00",
+          "http_status": "404",
+          "curl_exit": 0
+        }
+      ],
+      "status": "retryable_public_acquisition_failure"
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT58637.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:04.566334+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "e29c315be0b81238b368fd61d6190059d4badecfc96076cc33bed03b16a32e12",
+      "bytes": 164180,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT58698.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:40.629317+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "96b719ab86d2002e4f6f284449863fc2b4a888a25987901f80b2334116c5d938",
+      "bytes": 163165,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT58712.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:40.566709+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "c5538967bd44d5554e1a5b285ac8b30229708703d710d93aa56e4e536c1af7a5",
+      "bytes": 163518,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT58781.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:40.360084+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "cccbd709cbcfa428d4390cd6d3f972cda1e82782b9db4bce6560727c5c3b3e70",
+      "bytes": 163167,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT58782.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:40.301222+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "89a1d6b283563ad1c172c388ac19533690b58b7697e492d7cc8db65ed928767e",
+      "bytes": 162664,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT59019.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:40.078529+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "76185e698f0dceab0dfd50fc7830102fb291491090b0fe8a8e7ce2353e281d80",
+      "bytes": 164755,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT59067.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:39.791829+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "6162998a8151b03de76fadb0f335eda5ff2982b3677766b4a4f333d31f99bd67",
+      "bytes": 162724,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT59068.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:39.682009+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "dbe8c94865777d123f13629a562e54322498cf573b195e76785f052d27b2cd49",
+      "bytes": 162709,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT59070.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:39.680034+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "4e70cbdc1c3a54ae9aa4ca45f8145d2e3a0080a21c146cc89812551d0275068c",
+      "bytes": 163058,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT59149.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:39.659872+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "a53fb8cf7f0309b3d3e6bc4734cadb04dec68edafbb0d71101a5746bf63476d3",
+      "bytes": 162271,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT59158.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:39.484418+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "37241b5380e40807ac2683911641221e60afd8d3300a46afb477f4377703ccb5",
+      "bytes": 162559,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT59267.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:39.198331+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "61c2c3b2572fb221276fdac224bbf21e96803318e39120683b789478f35a5542",
+      "bytes": 155206,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT59306.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:39.173109+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "ae9b9a146dbe0e3fa68e3cc248811f833d8095b7cee47a6943e44bc44045f967",
+      "bytes": 155946,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT59468.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:39.302111+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "d9e9958276b23083541b34d8be074eeba652d4adf1dbc4a44863b85c0b951af8",
+      "bytes": 163417,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT60086.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:49.170318+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "871e6427f5ad5c3863bbbd38f58d7adb361a7e556824d66e9d6ed54d2d0bdd6b",
+      "bytes": 155387,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT60151.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:48.935254+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "5dec3d2d0b795092baad66f8b04fa566649a3e62079be75efbff32d46f6ef9ab",
+      "bytes": 154954,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT60971.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:06.194057+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "00d3fd415e74d3935d6f165cd6b41cd0fe51745cb0aee2d5d311b1a888241196",
+      "bytes": 155017,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT60972.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:48.776237+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "e1f9a90c0366d363dec48121639b7d5af23c78851bf29a6992205e950d058d33",
+      "bytes": 154594,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT61034.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:48.769627+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "c2c113281d5f747f14a090b92a7e98df5268d62f45cdeb3f64d50f13450fa876",
+      "bytes": 192074,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT61246.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:48.619809+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "f0766dc2f1d72507ef469896e28417e95ad5befc2744e97e566b0be3617d58f7",
+      "bytes": 155017,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT61351.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:48.423389+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "461c8e7a3d859b7e91d383154e2b5f27110ecabe443b6760892e5249811f2d16",
+      "bytes": 155925,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT61449.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:48.370550+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "9182663dac04ac2f0f3b34507beb00ff321106c3c29fc615084eb7eda7f08625",
+      "bytes": 151845,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT61815.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:48.112993+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "b678f2f784b82a37acdfbc3f886ec6119f3f506afab47d77984568740e52bb27",
+      "bytes": 153740,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT62000.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:48.018566+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "5f09538e6cf7115d8015c4a170e19921484e4d971be741a00a30c0a09d1085b7",
+      "bytes": 153355,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT62034.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:47.850818+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "00b1dddcb52de07f85639ffe9d754d203ddcef275e3d94dfb88006a778f0dca7",
+      "bytes": 153882,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT62134.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:47.791350+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "6f7fcd4cf58e838705841c35a9f0de28e77aa7c0655bdc180da613f362ffec35",
+      "bytes": 154474,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT62136.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:47.687877+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "97104906c828b1bd5f9d7ca313885968212e0abacdf507788510b137b0168de4",
+      "bytes": 154818,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT62207.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:47.613289+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "07d3f2b3a524ef57b6f934ad1abd42c73e2dccf3de84ec8236709501945a44a7",
+      "bytes": 154409,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT62454.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:47.449850+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "987bcbeecdf115f996736923c66ba70292c4dd6d8867264e86ea665c62fc540c",
+      "bytes": 154303,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT62611.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:47.296361+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "e7655e4fbaea502142ce246125db9a52749fc5896a7efcf10d41d5adc6349ee2",
+      "bytes": 155159,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT62713.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:47.174104+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "dc0a613f8583219c203caf962a0cfd83bf1ec69c5389d4aaa93ea6e227508cd4",
+      "bytes": 154737,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT62715.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:47.119708+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "f2688bb0564f9e05770eab8084b34be83b58a69ff63a51b095e81f00b584db52",
+      "bytes": 154257,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT62846.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:47.041289+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "a5c71a41a88c3a417b31f4629239861222dc2454713c8f473c7237bc4d286a4a",
+      "bytes": 154212,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT62958.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:46.890268+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "2f451d44ef122db3c4e31a6479564527dafa7e5cf238b8a49677700e152200f6",
+      "bytes": 155381,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT62990.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:46.838464+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "f7a4ddd4a42ce65aa7ed2f81ed22add7675125be1ef6b82d5bca3c648f349385",
+      "bytes": 154010,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT63032.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:46.693562+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "5db962fa47296f2483172ddea2492744be6da35dfe38d81953cec463a6e4b8a1",
+      "bytes": 152648,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT63051.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:46.647124+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "a766caf126753b836d421b8cad7253633fa17ee751ed4f905be8d309a44ce452",
+      "bytes": 152133,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT63290.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:46.334158+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "3793a8a25eb23a3e3a0d6c2fafe019e972ed4c0887877da9dab6328e73289501",
+      "bytes": 154837,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT63291.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:46.363133+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "1fe3f6fb2ed778a6c0931c7aba25bbdf5aaf4e2256236e70476667f9fa971669",
+      "bytes": 154406,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT63294.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:46.380571+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "2fb365a76cb1a44d4def62efeee109cdae9d3538c8a7922c14f80fa0cecfac17",
+      "bytes": 154351,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT63739.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:46.139740+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "74bffd5763817545b2c77b6298c5ae2a3fc02aca4b57a70604d350a0bd15bd2c",
+      "bytes": 153197,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT63834.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:05.674129+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "c873e26b3160e3be52ef4b9a506886677b806ac2edbdc3720dc857eb93aced02",
+      "bytes": 153211,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT63857.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:05.719394+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "24d4d77b01fc9b37f1381abf095dcbb250bdc6635135b392a3970f8f31af3420",
+      "bytes": 153296,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT63858.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:45.998035+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "13ca61e6ef423839936e84b8aea351bf78cd4705ed0caac67ed97d8d3ef0bdbe",
+      "bytes": 153700,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT63884.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:45.929587+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "a38744d1b860d749d5d2812173f3dde57684d5e0150b28cdb2d0a34197e7d5f5",
+      "bytes": 153760,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT63978.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:45.826986+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "d98ee79eb7424f59e748f6c287a0de00b0047e29ff1cf61ea4550a0823ffdb88",
+      "bytes": 154573,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT64014.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:45.587989+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "91459bb77c1f6b7e6cfa4749616505f0fe0ec690cade32dc1c595b01a93d0301",
+      "bytes": 153673,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT64184.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:45.570385+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "3718451aa460bb17dc5f0a56f8dab74a7388ff3d8a7280f5e4674c974097b604",
+      "bytes": 154600,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT64350.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:05.531807+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "a9c9870e494eaf88fc322a88b4358a70bac96c305fe747ac6edf4fafcef289ce",
+      "bytes": 154355,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT64452.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:45.309186+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "2a0e5aa5d76f8650b91e5c96eec8e2a2ab4e97281f5e04cb88ada5531b6b47d0",
+      "bytes": 153821,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT64540.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:44.986037+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "7e94307e5fe2897a60f290ef1b155009178fea87094cc916ce1d966008d4ee7a",
+      "bytes": 154939,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT64615.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:45.036119+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "e88ddacdf0024dfd73bb16dbbd84a919c5551e22ed0f85f50ada547d878c03dd",
+      "bytes": 153984,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT64749.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:44.799537+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "8bbe04f24bb20c949eb5bdcc3c9ef9dc721aaada0c7ec2357733a25d0367281d",
+      "bytes": 192413,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT64810.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:44.753983+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "0e3fbaa35a17ad503012d1a269120cf452a13887d0535f52c48025a48ca5fb96",
+      "bytes": 152496,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT64886.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:44.661172+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "1af979c996712767845a992a841f52eb5d18e5b1fd962cf5616352ea1bd3d070",
+      "bytes": 152555,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT64951.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:44.533519+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "054ba9bc2ab41924396cf116c3a5d9255767b52ace498c6a9f319a1068e81a05",
+      "bytes": 153165,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT65497.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:44.403294+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "a9e0de7c736c2e3bd0fc3e2f66367fa837284d8041b80eef82619e6d475b10a8",
+      "bytes": 154767,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT65498.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:44.117389+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "4c8756b87be7a0f9d29346bfb54fd2320cee7ebdb8df983985e161212fd04ca1",
+      "bytes": 154130,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT65545.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:44.137881+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "350eefdb069930beb49559b0def0b4de07b7c35537dc34ca63ecd88c4e7b2688",
+      "bytes": 154423,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT65546.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:43.970860+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "b21da2c3469740b54bd03b9a242eef620dca0393f76702eae44cf4d4976c7086",
+      "bytes": 154293,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT65699.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:43.654831+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "e15d175342e864c8bb2d14013040a288839afafb63346dacd686edb3ef8bed7c",
+      "bytes": 151376,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT65800.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:43.491257+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "06cab37595b1aa1beeaae14bbc05cbf577b805d63ffc372775702e41c5d4787f",
+      "bytes": 154233,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT66026.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:54.723797+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "4f0db3b7759f6485e72a8cf07f4f8bbb0562b117d6ecc372aac626eb2377838d",
+      "bytes": 154219,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT66027.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:54.484962+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "bcf4609f1be22e1094037aba9b5ccdb57c4fccfc45f6a9ff56fc0a000ae56157",
+      "bytes": 154336,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT66178.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:54.541785+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "790457a0266b681e6b48e15af254e2b228aa18d4c1a0e2e6253a8222fd673316",
+      "bytes": 153435,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT66289.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:54.149735+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "23344bb9167ec0e1e3e6b0ac57e425e383b6d4bf660720a0fb06f0a72168bc10",
+      "bytes": 153779,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT66290.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:54.158198+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "9004476323f8dc73a4e9fdb50af2f3e8965a7053e8bdc59bf462b2806f8af6bb",
+      "bytes": 153883,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT66501.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:53.923802+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "455f1d8f9dea7fc9ddbed070e04ab2320c80d12b206d3568b90e9a703c79135d",
+      "bytes": 146705,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT66502.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:53.817676+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "7768f2eb316ce91936d28ea8649d8814eeaa587d1e67f2061e6f48552b56a8cd",
+      "bytes": 145076,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT66602.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:53.679001+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "ca35f05d457cb3397145d4626bd598c66ebd86bc0e517c3212c4b91de87b367c",
+      "bytes": 143927,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT66929.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:53.537655+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "ccd2bf80c1b73b3f839da00a349a0e5cdb624db818a9a8024ad8732c791dbab6",
+      "bytes": 142258,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT66930.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:53.391810+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "1880c5cefdbae5b4048717fbb45fe25797b596555a807fe0d10dc62f711e148a",
+      "bytes": 144369,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT67002.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:53.357588+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "9ac4806ae4d1334e47678d881a9aab7674d1504fa1c8f347485578a048f2433b",
+      "bytes": 141571,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT67805.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:53.209039+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "cb1cf5f498c5297d7024e7717fe10d9c89a3abbd47177e3c5552df3c8cdfd4a5",
+      "bytes": 144391,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT67862.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:52.924114+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "36f12ed6d92e4f5a9a1233f860d54cbc0d0768fc8bbe9b4b9d405e29f923e353",
+      "bytes": 146297,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT68326.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:52.577505+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "f3a14870bd3255e4a8c692ab433cafb1a8b24c65ec2ee47b90f5871c88af3f07",
+      "bytes": 145023,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT68446.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:52.438490+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "f46777fbfdcadfc9f96e415f6f48a27a68f6aab1f99135bc2d45b3af3367f6d0",
+      "bytes": 178451,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT68549.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:52.477336+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "13d23e626334db780bc8f5e065f58a05f5e6f288f01375e8b62ac3429c62546a",
+      "bytes": 146549,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT68918.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:52.116519+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "0ba4d605a768c311723b3aac5debfb4f8d4e8dfa059fd695ebdab4f42f8b9124",
+      "bytes": 176375,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT69085.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:52.145928+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "ad2abe7a7f4715b54fcff988fe07411a69cd4216ee8f8d5b406e1c86582961fa",
+      "bytes": 176031,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT69209.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:52.075567+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "1bd7882e4eb09a3e01fa5ef8d34688e17c06a27bd361473dc732c2a519903d09",
+      "bytes": 178888,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT69401.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:51.937993+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "9f41acc18b6fcac240b1bdf8b5f52d9dcf8ab933385801318899e3e4361f19c2",
+      "bytes": 174608,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT69732.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:51.632121+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "1fe33a330eb04c71d0709279557ccac09577d3f3190bcd452ef8a4c1b57d04cc",
+      "bytes": 174515,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT69862.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:51.481854+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "fcc72176329edbe0c77bab24bce668fd3b9e71502db09f3e8470fa3ed8a66a81",
+      "bytes": 173342,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT70260.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:51.370927+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "9cab37c1ef281b3e44a201ac1f560c74b1d93ba1a62031516589078c86dfe609",
+      "bytes": 174722,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT70282.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:51.286233+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "5db2626075720f55baa4317bf5365404ab0cb976c8c0382d78941fff56eaaad6",
+      "bytes": 192788,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT70308.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:06.269331+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "2b49c0403fdcfaa4ba46f339aa8889b4de75dc8804bcd05c20c91103a16b1119",
+      "bytes": 193295,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT70408.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:50.994064+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "273c6974a01bcb2a5bf58fa7d998025a9951f223272a32afee2b97280ad0305f",
+      "bytes": 194387,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT70550.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:52.569548+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "018ef34377e7bf570f1a03f6a90b0312159e284ae8e43c8ac63a1563d9aa4bad",
+      "bytes": 192638,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT70792.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:50.738012+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "056c0a08f294e6443a412b7b7a33a52a49bad11bdbe94960e9a3b008d98103bc",
+      "bytes": 180993,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT70793.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:50.593784+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "d6bf9b79a54fb6b7aada0a01a61ea13fac10a49a1f8eb05232b068d887f8112c",
+      "bytes": 180792,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT70871.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:50.833103+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "1350a90bda58d6e2b52da4f4015a678decbb112736af92ba39c440705146fe46",
+      "bytes": 192960,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT71022.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:50.403684+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "9b5c1527253da2fce3657b40e76d67afa9132972100af9e37f2d4f588552ec59",
+      "bytes": 193260,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT71024.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:50.269790+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "2cf5a08e9c7e875cc26c48a5b47452d04be6cfdc1963a9feaa78600b0eb3079c",
+      "bytes": 192941,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT71108.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:50.266866+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "c33720aaa66845f5b7b7ad93d8797587bf8b9b6ec57a82329e54be7408799e44",
+      "bytes": 192904,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT71264.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:50.207060+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "75049c1c92a64bcaa465c5b8f177acda0505ee9725311b8123adf109794eed09",
+      "bytes": 192948,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT71479.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:49.784991+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "074f21c472349aec28cb68a9749cd7f257ea32ee84a3c77fd9ea7fdcf7ad8a0d",
+      "bytes": 198105,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT71607.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:49.632076+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "8e3912fad00ec825241a11b47c7f0d91394d943e0481c714285ed5b01bccefd0",
+      "bytes": 193545,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT71720.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:49.425735+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "50e47e337b733324d3c7e22ffeb3a603cf9ecc6ab2c793b1af177d6005cd4dbd",
+      "bytes": 193055,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT71721.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:49.435113+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "b5350447aeea1ba192b0232fae98b941ae909b9c6cdc2d7f4854a6fbd7c0dc78",
+      "bytes": 192352,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT72078.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:57.493739+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "3a97f21b1834acb6c2d9f80c42338bd6697638c03b9f3a59183cd3de5478128e",
+      "bytes": 193256,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT72246.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:57.036696+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "7f4413eca874c1c93109e1927d076b19fb375e2130db483b3b5d5deadcda197e",
+      "bytes": 193064,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT72256.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:56.975303+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "9ecba10f50c536759389109ea7f8e088f5e27703e3cebb9c347326c7ad4e0a12",
+      "bytes": 193254,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT72310.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:48:06.912653+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "c6ae54ef3f321ba4474f14c4659b2e70368c492cd29e39d5cc6baac8c229149f",
+      "bytes": 194202,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT72339.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:56.693816+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "5dde121a0e0df3cdcd6e1ed1c05317a296a16f5197c68a16721bda39a5e5d326",
+      "bytes": 193034,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT72757.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:56.573715+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "fa21482131a9ddaa4e1e717535fce5d74a520e759ce14bac3ba2fa7bb57b45d7",
+      "bytes": 201584,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT72965.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:56.382154+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "58da3ebe18b5feb87319ad6d9d1f9a6e13385c11695af38fc3c8504b6680153e",
+      "bytes": 201517,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT73027.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:56.289468+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "c4c65d0d6de24d825a6cdc66d58e72d37e847d2ab2f49e5d6e538534338842df",
+      "bytes": 202052,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT73153.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:56.137255+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "e8a1c23aa200a52e7ca1fcf767d8ce5b20a5750b61d7241b0c548e40c25e5eb3",
+      "bytes": 279070,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT73423.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:56.006296+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "93177f35021b00ac0d827a1a5848ac1d19637b52e73a688e80d78a84a76aa547",
+      "bytes": 244616,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT74039.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:55.860336+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "410cdc45b21fe15cd3b6fa45762b9429b6da403be86356cabbaad0c318439d4f",
+      "bytes": 246394,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT74541.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:55.786344+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "2743c14b56ca5f1e256e51021ecc30991dd072fdb2bcacf54f587722a26d435d",
+      "bytes": 247338,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT74989.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:55.509843+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "becf3ecd62a3492aa2c49865e1aba37cb372e68d1350be98fcae6224ecc45cd7",
+      "bytes": 248400,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT74990.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:55.336808+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "caa37568b8c4ef738ffafb19ec10c38fd5e0a060a3a1b1dc3d5ec3000121b3a8",
+      "bytes": 250170,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT75476.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:55.263809+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "e49481fc00b0502672fd120bd457e2bca36f22bd376c7bbc2981bb487a80e214",
+      "bytes": 246268,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT75557.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:54.986449+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "c12ce86b8995cd89cb6ceb235e2f23ef5608c925b305ff766b7854060fedbfcf",
+      "bytes": 245958,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/CMPT75864.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:54.888127+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "7e4e6c3a5c321aad17563b1e511bf59c5fa3b10a9a9e9dc99515f47a7d17faa2",
+      "bytes": 245856,
+      "pages": 2
+    },
+    {
+      "url": "https://archives.nseindia.com/content/circulars/FAOP58629.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:52:40.560248+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "b3a83c1f0ab0ee4a5bd84e0e184bfaf8d564bee1808ab59f3639148bed648a6d",
+      "bytes": 240311,
+      "pages": 5
+    },
+    {
+      "url": "https://archives.nseindia.com/corporate/ADANIPOWER_24092025175759_APLcreditofshares24092025.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:45:19.840210+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "0369ce8d1489d0b44b65858a38277f2543d03e5b60c43d81eef51eceb295338e",
+      "bytes": 428013,
+      "pages": 3
+    },
+    {
+      "url": "https://archives.nseindia.com/corporate/AJMERA_22012026182312_Intimation-sd.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:45:19.041780+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "6bc3c221ee06fa65523e8c8f3e5551cdde3b3adb9f921c3f4714b07f276bb391",
+      "bytes": 728070,
+      "pages": 5
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML54247.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:54.080054+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "aa1fd75834a340aa40cb126a54b44baab20c37021d37d8e564c534274a7fc091",
+      "bytes": 648662,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML54412.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:07.768825+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "eb5394020d0182fbe322b2b79b8ed29e581a030a3579b32334c2a90fe231e4a5",
+      "bytes": 454108,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML54479.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:07.737892+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "218c8d7f261842aeeedc90abd88bde38bb259e996f38cca336e7af10012f4c1b",
+      "bytes": 456299,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML54547.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:07.568636+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "9ed6c2dc7014325e3ecf8f42aefc45fa17d0b421813a3e990b1589665fcbb4af",
+      "bytes": 140581,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML54645.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:07.652939+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "ce838f4162215260b765d851feabca706f7b971860203f9c93d63643656afced",
+      "bytes": 134898,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML54836.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:07.413153+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "ac3128fa382725d2c05cfa8b79cb3cec3ed73078b2fae86be10102b072c229c4",
+      "bytes": 135382,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML54888.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:07.421557+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "5cb7727a797ca4bdadda73e214026b1b5288deba22666995b50bb71a5c73b06f",
+      "bytes": 135875,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML56884.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:04.155907+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "67796b9e5fd20eb08fc653fcf1961d9eb6f7d76cb875406116ee7dea6214edff",
+      "bytes": 161214,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML57000.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:03.962847+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "9653f59200f6ac85ad940d1a60fcad37cb483a7a77f4cf33830d2ef7911fab27",
+      "bytes": 162238,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML57893.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:05:16.838001+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "25e9ffe5203a687b214e5d79e96a32c81710011e844d7eb1d0936bb97208b209",
+      "bytes": 159228,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML58231.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:03.911948+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "900b7614a5d315c448af3aae1914a2e57051cf15e7575ee2242534ad488ddc52",
+      "bytes": 646753,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML58377.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:03.644983+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "0933881bbe2a39496cb05cfd27c5f7ab21c99b8c56bd40ee1276199578708fac",
+      "bytes": 474471,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML60160.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:15:41.699569+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "12c879bb62742c713c5531318bd5692b20d2aa419ff9b03e6e7c01e3043f4449",
+      "bytes": 136778,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML60528.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:15:41.431184+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "868a0a8d4ca84388a38f165b3d44af21e908749d11e1e14fff58e7de8b6430e2",
+      "bytes": 135474,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML61690.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:05:16.928020+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "4be633fc44daecb29c3e0d392ebfa07977525941cda713d919c91cffb90f28ae",
+      "bytes": 472482,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML62408.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:05.807161+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "31284d9dc7ff18d2b15b05b93d41571fe27de78dd31fba705332953ff076543a",
+      "bytes": 121794,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML62488.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:05.679796+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "eef45b8a2279be823e9165553f60f6441cd653d172d7361f358f89871989d0d3",
+      "bytes": 120950,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML62633.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:05.297379+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "670b318efd0eeadf66e276171c584461b45ddde6b645d299e9f7d207eaaf37a2",
+      "bytes": 160516,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML62697.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:05.314706+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "9354cdee2ecd8f0ca9326b6673d7696e7b6f3b0f6b924eda84ec0ee3810fe039",
+      "bytes": 123283,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML63033.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:04.799503+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "7cc9ec15c8c76958ad868a12a90fc3c091fe0ab01fbd8585bcd7277212f81748",
+      "bytes": 163386,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML63741.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:04.935484+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "3e0454478fcf4b7ac0c6ed1f000b11ae1dd35402af2e3e2cc8915082a02d0e3b",
+      "bytes": 121478,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML63920.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:04.798511+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "166fd6ee3572d4bfccf76e701f243b3fb827acbfbe7adc6f0047c3982f6b9c43",
+      "bytes": 163707,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML63980.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:04.275969+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "339b69e9628895491d8d4685b3bf8c320953087eb89d7e1859000d6c81b53168",
+      "bytes": 161802,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML65960.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:07.221808+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "99ae702a8f8edc92c8f6c581d95d9659653da389b2312e25405378dd98d0dfa7",
+      "bytes": 157964,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML66142.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:07.118892+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "180cd47273a3bed41d697efbe6d49711df4494d28390490a86cfe33cc97a2040",
+      "bytes": 121632,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML66829.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:06.796804+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "e6b1506be4bfc99813dd8340136aa768f277ba67b720f23c6b02f2c33bff2d6d",
+      "bytes": 122072,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML66945.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:06.538770+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "9592f606238607edd7bf8c19d3a78f4999df9ac2f0f7fa724730208ddb931895",
+      "bytes": 160675,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML68575.zip",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:06.586780+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        },
+        {
+          "at": "2026-10-03T03:06:54.498551+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "56d935a5cdc6db700bdefa7ec70a567c098b752137cbbf1f9b6a0af545bbada2",
+      "bytes": 982321,
+      "content_kind": "other"
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML68640.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:15:42.395330+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "b3af09cbaa39f8d579b476645580ed233bc8bc9005542f7ffe18df715c708901",
+      "bytes": 470364,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML69016.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:15:41.989965+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "75be6f481c664f990c1d4ff3fb684e2da0ce76828b7d0374d34e23e657b18fe3",
+      "bytes": 484867,
+      "pages": 2
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML69658.zip",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:06.468600+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        },
+        {
+          "at": "2026-10-03T03:06:54.328360+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "f2a3aadc734dacb35eaf04c7ae9f550ebe35a0997243e90df3cc01b96419ccf9",
+      "bytes": 1809815,
+      "content_kind": "other"
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML70226.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:06.344846+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "c839fa94eb2236a591885f6056236f54b8f848f6f48f140737a1e85e987231ac",
+      "bytes": 158738,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML70318.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:06.015417+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "186b953961c750b532957bd0fb6386d94b34dc2bd646e99bac5e115a6d9dfe9a",
+      "bytes": 160032,
+      "pages": 1
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML75653.zip",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:07.589846+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        },
+        {
+          "at": "2026-10-03T03:06:54.965289+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "9a8c799ccbd4bd5a8127b475374fc7984726d5028bdc13c21be944fd5362ec95",
+      "bytes": 2715467,
+      "content_kind": "other"
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML76044.zip",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:07.377094+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        },
+        {
+          "at": "2026-10-03T03:06:54.776434+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "6921dbf725d742fe6752128a2e4cb506c6074f215332282b08a4b5c939d13802",
+      "bytes": 1960158,
+      "content_kind": "other"
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CMPT54330.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:07.861042+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "5ae645cc8bb55fd452f5b04e31945a288dc7d905df1c62a5bbb6f452ef21249d",
+      "bytes": 162833,
+      "pages": 2
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CMPT54484.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:07.681023+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "28b409563d72fda51a4c98b228f54fdfb9a87be229b3669445c7cc074ac84b61",
+      "bytes": 169098,
+      "pages": 2
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CMPT54656.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:07.498868+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "a31fd47d17ac2eb8365a77603cf2be45835d6419f2baaeb3ae3a88abec56c597",
+      "bytes": 171168,
+      "pages": 2
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CMPT57012.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:03.900054+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "ff84b276b90137af38f17713257891d00a34307bf31bd1d0aef7c2df0977d6c4",
+      "bytes": 164382,
+      "pages": 2
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CMPT57871.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:05:17.118405+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "2a60f241dfff807ba1c34abe83d7342b48faed63f369250f5586c05189ab16c9",
+      "bytes": 163239,
+      "pages": 2
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CMPT58405.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:03.699112+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "614a1e36103aa8b6f9adc8b00f8793b6ca1218f7dca7c58431c9583e311d3c01",
+      "bytes": 162481,
+      "pages": 2
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CMPT61697.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:10:16.208144+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "3c5e01aea83b66dda2ba1ef1256c5aff981064118558b2c4c2a721f1d266ebac",
+      "bytes": 153239,
+      "pages": 2
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CMPT62510.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:05.278324+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "2f383841a895685153268894fd578e6adaffde9c5df077676a6e6ba7e0f97d76",
+      "bytes": 154327,
+      "pages": 2
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CMPT62713.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:05.325817+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "dc0a613f8583219c203caf962a0cfd83bf1ec69c5389d4aaa93ea6e227508cd4",
+      "bytes": 154737,
+      "pages": 2
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CMPT63978.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:04.673766+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "d98ee79eb7424f59e748f6c287a0de00b0047e29ff1cf61ea4550a0823ffdb88",
+      "bytes": 154573,
+      "pages": 2
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CMPT66161.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:07.159795+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "1a9bdc18a2b5244420aad4b2646d7d44745df2a715ab708e51b5f935477fd3c8",
+      "bytes": 153926,
+      "pages": 2
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CMPT67002.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:06.444424+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "9ac4806ae4d1334e47678d881a9aab7674d1504fa1c8f347485578a048f2433b",
+      "bytes": 141571,
+      "pages": 2
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CMPT70550.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:05.770768+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "018ef34377e7bf570f1a03f6a90b0312159e284ae8e43c8ac63a1563d9aa4bad",
+      "bytes": 192638,
+      "pages": 2
+    },
+    {
+      "url": "https://nsearchives.nseindia.com/content/circulars/CMPT71589.pdf",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:05.817118+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "359e06b20ca3cd90dd1915d21091c3992d295a4ebd2cb1e62b618ae93341b901",
+      "bytes": 221687,
+      "pages": 2
+    },
+    {
+      "url": "https://www.nseindia.com/api/circulars?fromDate=01-01-2023&toDate=31-12-2023",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:45:20.409409+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "8b8a0547bd9db3e6a233372da5f05f3206ad6ea87fcbb8b393376cb701ca5c20",
+      "bytes": 2528358,
+      "content_kind": "json"
+    },
+    {
+      "url": "https://www.nseindia.com/api/circulars?fromDate=01-01-2024&toDate=31-12-2024",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:46:29.163016+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "f06be55f3edea7b66a35e91b900e1913efed3c067eb520b936979da9d4b6cfbd",
+      "bytes": 2970130,
+      "content_kind": "json"
+    },
+    {
+      "url": "https://www.nseindia.com/api/circulars?fromDate=01-01-2025&toDate=31-12-2025",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:46:29.462827+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "2cbe1518b471fb82a1fb9ae7773462a5e0916277e38260dae810b2969790e001",
+      "bytes": 3063062,
+      "content_kind": "json"
+    },
+    {
+      "url": "https://www.nseindia.com/api/circulars?fromDate=01-01-2026&toDate=01-10-2026",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:46:29.706861+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "c90a74bdf0bf2af52879c2f47c8c460f35b67ee3ea0abd3dd68b1d10797f97ea",
+      "bytes": 2366486,
+      "content_kind": "json"
+    },
+    {
+      "url": "https://www.nseindia.com/api/circulars?fromDate=01-10-2022&toDate=03-11-2022",
+      "attempts": [
+        {
+          "at": "2026-10-03T03:06:29.543546+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "8c118d671aad369e842324031990bdd8db5226552ac9944bf54570622c1445b4",
+      "bytes": 194109,
+      "content_kind": "json"
+    },
+    {
+      "url": "https://www.nseindia.com/api/circulars?fromDate=04-11-2022&toDate=31-12-2022",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:46:30.062688+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "db767c60d5113e35c7db1fbb08c5d7ffe4c7a03842539b68f001e6df0fa908c6",
+      "bytes": 402471,
+      "content_kind": "json"
+    },
+    {
+      "url": "https://www.nseindia.com/api/corporates-corporateActions?index=equities&from_date=04-11-2022&to_date=01-10-2026",
+      "attempts": [
+        {
+          "at": "2026-10-03T02:45:20.981500+00:00",
+          "http_status": "200",
+          "curl_exit": 0
+        }
+      ],
+      "status": "acquired",
+      "sha256": "c62c047f30f1d5641c125665d2cc2aab3aea1d1532acf5c26b519f5774ccfae7",
+      "bytes": 2825026,
+      "content_kind": "json"
+    }
+  ],
+  "zip_members": [
+    {
+      "document": "CML69658",
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML69658.zip",
+      "archive_sha256": "f2a3aadc734dacb35eaf04c7ae9f550ebe35a0997243e90df3cc01b96419ccf9",
+      "member": "CML69658.pdf",
+      "member_sha256": "26f5c578967003dd1854a698fb68f0cc2fd04169acb61e247ec1374199e32de9"
+    },
+    {
+      "document": "CML68575",
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML68575.zip",
+      "archive_sha256": "56d935a5cdc6db700bdefa7ec70a567c098b752137cbbf1f9b6a0af545bbada2",
+      "member": "CML68575.pdf",
+      "member_sha256": "44954301f75018848c171b416303e377147c3dbf03941cf219847d473e713784"
+    },
+    {
+      "document": "CML76044",
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML76044.zip",
+      "archive_sha256": "6921dbf725d742fe6752128a2e4cb506c6074f215332282b08a4b5c939d13802",
+      "member": "CML76044.pdf",
+      "member_sha256": "7523a5a17430a5be3adb4a3b7d8f1b44cb462e071c4130cea42b594a72967512"
+    },
+    {
+      "document": "CML75653",
+      "url": "https://nsearchives.nseindia.com/content/circulars/CML75653.zip",
+      "archive_sha256": "9a8c799ccbd4bd5a8127b475374fc7984726d5028bdc13c21be944fd5362ec95",
+      "member": "CML75653.pdf",
+      "member_sha256": "a35a7b9dac19e269f686b0f0474fc65dea7cc031cd6117a8f7bf4b96e2ab667b"
+    }
+  ]
+}
