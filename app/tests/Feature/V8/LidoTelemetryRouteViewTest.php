@@ -31,6 +31,26 @@ class LidoTelemetryRouteViewTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.recorded', true);
 
+        $this->actingAs($user)->withProfileHeader($user)
+            ->postJson('/api/telemetry/route-view', [
+                'route' => '/invite/synthetic-private-marker',
+                'wall_duration_ms' => 100,
+                'active_duration_ms' => 50,
+            ])
+            ->assertOk();
+
+        Http::assertSent(function ($request) {
+            if (! isset($request->data()['resourceSpans'])) {
+                return false;
+            }
+
+            $body = json_encode($request->data());
+            $this->assertStringNotContainsString('synthetic-private-marker', (string) $body);
+            $this->assertStringNotContainsString('"route"', (string) $body);
+
+            return str_contains((string) $body, 'route_group');
+        });
+
         Http::assertSent(function ($request) {
             $body = json_encode($request->data());
 
