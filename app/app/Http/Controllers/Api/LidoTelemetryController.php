@@ -23,12 +23,36 @@ class LidoTelemetryController extends Controller
         ]);
 
         $telemetry->recordBusinessEvent(LidoTelemetryCatalog::BUSINESS_ROUTE_VIEW, [
-            'route' => $validated['route'],
+            'route_group' => $this->safeRouteGroup($validated['route']),
             'wall_duration_ms' => (int) $validated['wall_duration_ms'],
             'active_duration_ms' => (int) $validated['active_duration_ms'],
         ]);
 
         return ApiEnvelope::success(['recorded' => $telemetry->enabled()]);
+    }
+
+    private function safeRouteGroup(string $route): string
+    {
+        if ($route === '/') {
+            return 'dashboard';
+        }
+
+        if (preg_match('~^/([a-z][a-z-]*)(?:/|$)~', $route, $matches) !== 1) {
+            return 'other';
+        }
+
+        // Only known, static route families are safe to export. Never copy a
+        // client-provided path segment or a dynamic route parameter verbatim.
+        $allowed = [
+            'transactions', 'cash', 'corporate-action', 'holdings', 'watchlist',
+            'fundamentals', 'explorer', 'indices', 'market-depth', 'screeners',
+            'candidates', 'recommendations', 'strategy', 'artifact-library',
+            'backtests', 'portfolio', 'review', 'notification-history',
+            'settings', 'patterns', 'knowledge-board', 'calendar', 'profile',
+            'documentation', 'portfolios',
+        ];
+
+        return in_array($matches[1], $allowed, true) ? $matches[1] : 'other';
     }
 
     public function relayTraces(Request $request): HttpResponse
