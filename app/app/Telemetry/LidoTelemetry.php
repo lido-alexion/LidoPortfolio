@@ -48,9 +48,14 @@ class LidoTelemetry
 
         $attributes = [
             ['key' => 'http.method', 'value' => ['stringValue' => $request->method()]],
-            ['key' => 'http.route', 'value' => ['stringValue' => (string) $request->path()]],
             ['key' => 'http.status_code', 'value' => ['intValue' => (string) $status]],
         ];
+
+        // The matched Laravel route is a template; the raw request path may contain secrets.
+        $routeTemplate = $request->route()?->uri();
+        if (is_string($routeTemplate) && $routeTemplate !== '') {
+            $attributes[] = ['key' => 'http.route', 'value' => ['stringValue' => $routeTemplate]];
+        }
 
         $user = $request->user();
         $pseudo = $this->pseudonymousUserId($user instanceof User ? $user : null);
@@ -77,7 +82,6 @@ class LidoTelemetry
                 'timeUnixNano' => (string) $now,
                 'attributes' => [
                     ['key' => 'exception.type', 'value' => ['stringValue' => $exception::class]],
-                    ['key' => 'exception.message', 'value' => ['stringValue' => substr($exception->getMessage(), 0, 500)]],
                 ],
             ]];
         }
