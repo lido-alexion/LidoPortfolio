@@ -164,4 +164,21 @@ class FundamentalBootstrapWorkflowTest extends TestCase
         $service->process($run, 1);
         $this->assertSame(1, $job->fresh()->attempts);
     }
+
+    public function test_resume_workflow_forwards_validated_run_and_slice_inputs_to_remote_worker(): void
+    {
+        $workflow = file_get_contents(base_path('../.github/workflows/run-fundamentals-bootstrap.yml'));
+
+        $this->assertIsString($workflow);
+        $this->assertStringContainsString('STOXLA_FUNDAMENTALS_RUN_ID: ${{ inputs.run_id }}', $workflow);
+        $this->assertStringContainsString('STOXLA_FUNDAMENTALS_SLICE_SECONDS: ${{ inputs.slice_seconds }}', $workflow);
+        $this->assertStringContainsString('[[ "$STOXLA_FUNDAMENTALS_RUN_ID" =~ ^[0-9]+$ ]]', $workflow);
+        $this->assertStringContainsString('[[ "$STOXLA_FUNDAMENTALS_SLICE_SECONDS" =~ ^[0-9]+$ ]]', $workflow);
+        $this->assertStringContainsString('printf -v remote_command', $workflow);
+        $this->assertStringContainsString('STOXLA_FUNDAMENTALS_RUN_ID=%q', $workflow);
+        $this->assertStringContainsString('STOXLA_FUNDAMENTALS_SLICE_SECONDS=%q', $workflow);
+        $this->assertStringContainsString('bash %q', $workflow);
+        $this->assertStringNotContainsString("STOXLA_FUNDAMENTALS_RUN_ID='\$STOXLA_FUNDAMENTALS_RUN_ID'", $workflow);
+        $this->assertStringNotContainsString("STOXLA_FUNDAMENTALS_SLICE_SECONDS='\$STOXLA_FUNDAMENTALS_SLICE_SECONDS'", $workflow);
+    }
 }
