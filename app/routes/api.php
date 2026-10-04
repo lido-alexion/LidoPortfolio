@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\AccessRequestAdminController;
 use App\Http\Controllers\Api\MicrostructureCollectorAdminController;
 use App\Http\Controllers\Api\MicrostructureCollectorInternalController;
+use App\Http\Controllers\Api\MicrostructureKiteConnectController;
 use App\Http\Controllers\Api\AccessRequestPublicController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BuildInfoController;
@@ -138,6 +139,11 @@ Route::post('/reset-password/accept', [PasswordResetAcceptController::class, 'ac
 Route::get('/auth/me', [AuthController::class, 'me']);
 Route::get('/auth/csrf-token', [AuthController::class, 'csrfToken']);
 Route::get('/build-info', [BuildInfoController::class, 'show']);
+Route::middleware('auth:sanctum')->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class)
+    ->prefix('microstructure-kite')->group(function () {
+        Route::get('/status', [MicrostructureKiteConnectController::class, 'status']);
+        Route::get('/login-url', [MicrostructureKiteConnectController::class, 'loginUrl'])->middleware('throttle:10,1');
+    });
 Route::post('/telemetry/otlp/v1/traces', [\App\Http\Controllers\Api\LidoTelemetryController::class, 'relayTraces'])
     ->middleware('throttle:telemetry-relay');
 

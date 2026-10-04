@@ -4,9 +4,11 @@ namespace Tests\Feature\V8;
 
 use App\Models\CalendarEvent;
 use App\Models\User;
+use App\Services\Broker\BrokerConnectionService;
+use App\Services\Microstructure\MicrostructureCollectorControlService;
 use App\Services\Microstructure\MicrostructureCollectorKiteAuthReminderService;
 use App\Services\Notification\NotificationPublisher;
-use Carbon\Carbon;
+use Illuminate\Support\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -19,10 +21,10 @@ class MicrostructureCollectorKiteAuthReminderTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        Carbon::setTestNow(Carbon::parse('2026-07-07 08:45:00', 'Asia/Kolkata'));
+        Carbon::setTestNow(Carbon::parse('2026-07-07 09:00:00', 'Asia/Kolkata'));
         config([
             'microstructure_collector.enabled' => true,
-            'microstructure_collector.kite_auth_reminder_time' => '08:45',
+            'microstructure_collector.kite_auth_reminder_time' => '09:00',
             'microstructure_collector.market_session_start' => '09:15',
             'microstructure_collector.market_session_end' => '15:30',
         ]);
@@ -49,12 +51,16 @@ class MicrostructureCollectorKiteAuthReminderTest extends TestCase
             ->with(
                 MicrostructureCollectorKiteAuthReminderService::CONDITION_KEY,
                 $this->callback(fn ($users) => count($users) === 1 && $users[0]->id === $user->id),
-                $this->callback(fn ($payload) => ($payload['primary_action']['route'] ?? '') === '/dashboard'),
+                $this->callback(fn ($payload) => ($payload['primary_action']['route'] ?? '') === '/kite-connect'),
             );
         $this->app->instance(NotificationPublisher::class, $publisher);
 
         $result = app(MicrostructureCollectorKiteAuthReminderService::class)->sendDue();
         $this->assertTrue($result['sent']);
+        $repeat = app(MicrostructureCollectorKiteAuthReminderService::class)->sendDue(
+            Carbon::parse('2026-07-07 09:00:30', 'Asia/Kolkata'),
+        );
+        $this->assertSame('already_sent', $repeat['reason']);
     }
 
     public function test_skips_when_collector_disabled(): void
@@ -91,5 +97,35 @@ class MicrostructureCollectorKiteAuthReminderTest extends TestCase
         $result = app(MicrostructureCollectorKiteAuthReminderService::class)->sendDue();
         $this->assertTrue($result['skipped']);
         $this->assertSame('not_trading_day', $result['reason']);
+    }
+
+    public function test_alerts_when_a_usable_session_has_no_live_socket_or_packets_after_grace(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-07 09:20:00', 'Asia/Kolkata'));
+        $user = User::query()->create([
+            'name' => 'Collector Op',
+            'email' => 'op-'.Str::random(6).'@example.com',
+            'password' => Hash::make('password123'),
+        ]);
+        config(['microstructure_collector.kite_user_id' => $user->id]);
+        $connections = $this->createMock(BrokerConnectionService::class);
+        $connections->expects($this->once())->method('status')->willReturn(['usable' => true]);
+        $this->app->instance(BrokerConnectionService::class, $connections);
+        $collector = $this->createMock(MicrostructureCollectorControlService::class);
+        $collector->expects($this->once())->method('operationalStatus')->willReturn([
+            'websocket_connected' => false, 'last_packet_at' => null,
+        ]);
+        $this->app->instance(MicrostructureCollectorControlService::class, $collector);
+
+        $publisher = $this->createMock(NotificationPublisher::class);
+        $publisher->expects($this->once())->method('publishCondition')->with(
+            MicrostructureCollectorKiteAuthReminderService::PACKET_ALERT_KEY,
+            $this->callback(fn ($users) => count($users) === 1 && $users[0]->id === $user->id),
+            $this->callback(fn ($payload) => ($payload['primary_action']['route'] ?? '') === '/kite-connect'),
+        );
+        $publisher->expects($this->once())->method('resolveCondition')->with(MicrostructureCollectorKiteAuthReminderService::CONDITION_KEY);
+        $this->app->instance(NotificationPublisher::class, $publisher);
+
+        app(MicrostructureCollectorKiteAuthReminderService::class)->sendDue();
     }
 }

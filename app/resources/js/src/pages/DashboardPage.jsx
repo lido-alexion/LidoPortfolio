@@ -10,6 +10,7 @@ import DashboardTopMoverCard from '../components/DashboardTopMoverCard';
 import DashboardAllocationCard from '../components/DashboardAllocationCard';
 import DashboardLayoutToolbar from '../components/DashboardLayoutToolbar';
 import KiteReadinessCard from '../components/KiteReadinessCard';
+import MicrostructureKiteStatusCard from '../components/MicrostructureKiteStatusCard';
 import PortfolioReconciliationCard from '../components/PortfolioReconciliationCard';
 import PercentGradientBar from '../components/PercentGradientBar';
 import SentimentGauge from '../components/SentimentGauge';
@@ -816,6 +817,7 @@ export default function DashboardPage() {
     return (
         <div className="row g-3">
             <DashboardLayoutToolbar userId={userId} onLayoutChange={setDashboardLayout} />
+            <div className="col-12"><MicrostructureKiteStatusCard /></div>
             {activePortfolio?.portfolio_type !== 'paper' ? <div className="col-12">
                 <KiteReadinessCard executionMode={activePortfolio?.execution_mode} />
             </div> : <div className="col-12"><div className="alert alert-warning mb-0"><strong>PAPER portfolio</strong> · Uses simulated cash and execution. Kite submission and reconciliation are unavailable.</div></div>}

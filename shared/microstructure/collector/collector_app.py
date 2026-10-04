@@ -174,6 +174,8 @@ class CollectorApp:
         if is_partition_finalized(self.data_root, trading_day):
             try:
                 validate_finalized_partition(self.data_root, trading_day)
+                if partition_row_count(self.data_root, trading_day) <= 0:
+                    raise ValueError("legacy finalized partition has zero rows; retain marker as evidence and review manually")
             except (OSError, ValueError, RuntimeError) as exc:
                 self._finalization.mark_finalization_failed(str(exc))
                 self.collector_state = "finalization_failed"
@@ -198,6 +200,8 @@ class CollectorApp:
                 self._record_coverage(flushed)
                 append_rows(self.data_root, trading_day, flushed, part_name=f"part-final-{int(time.time())}.parquet")
             row_count = partition_row_count(self.data_root, trading_day)
+            if row_count <= 0:
+                raise ValueError("zero-row trading day cannot be marked finalized; preserve the collection gap for review")
             write_finalization_manifest(
                 self.data_root,
                 trading_day,

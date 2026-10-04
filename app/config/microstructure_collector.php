@@ -32,8 +32,8 @@ return [
     'heartbeat_stale_minutes' => max(2, (int) env('MICROSTRUCTURE_HEARTBEAT_STALE_MINUTES', 5)),
 
     // FEAT-063 §11 — operator Telegram reminders when Kite session is missing (Asia/Kolkata).
-    'kite_auth_reminder_time' => env('MICROSTRUCTURE_KITE_AUTH_REMINDER_TIME', '08:45'),
-    'kite_auth_reminder_route' => env('MICROSTRUCTURE_KITE_AUTH_REMINDER_ROUTE', '/dashboard'),
+    'kite_auth_reminder_time' => env('MICROSTRUCTURE_KITE_AUTH_REMINDER_TIME', '09:00'),
+    'kite_packet_alert_time' => env('MICROSTRUCTURE_KITE_PACKET_ALERT_TIME', '09:20'),
     'market_session_start' => env('MICROSTRUCTURE_MARKET_SESSION_START', '09:15'),
     'market_session_end' => env('MICROSTRUCTURE_MARKET_SESSION_END', '15:30'),
 
