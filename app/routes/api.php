@@ -222,7 +222,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/ai/assistant/feedback', [AiAssistantStreamController::class, 'feedback'])->middleware('throttle:20,1');
     Route::post('/ai/assistant/stream', [AiAssistantStreamController::class, 'stream'])->middleware('throttle:20,1');
     Route::post('/logs/frontend', [FrontendLogController::class, 'store']);
-    Route::post('/ops/api-failures', [ApiFailureReportController::class, 'store'])->middleware('throttle:api');
+    Route::post('/ops/api-failures', [ApiFailureReportController::class, 'store'])->middleware('throttle:30,1');
     Route::post('/telemetry/route-view', [\App\Http\Controllers\Api\LidoTelemetryController::class, 'routeView']);
 
     Route::get('/portfolios', [PortfolioController::class, 'index'])->middleware('token.scope:portfolio:read');

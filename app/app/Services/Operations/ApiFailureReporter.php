@@ -19,12 +19,28 @@ class ApiFailureReporter
             $fingerprint = $this->fingerprints->make($observation);
             $now = now();
             $incident = DB::transaction(function () use ($observation, $fingerprint, $now) {
-                $incident = ApiFailureIncident::query()->where('fingerprint', $fingerprint)->lockForUpdate()->first();
-                if ($incident) {
-                    $incident->update(['last_seen_at' => $now, 'occurrence_count' => $incident->occurrence_count + 1, 'safe_message' => $observation['safe_message'], 'trace_id' => $observation['trace_id']]);
-                    return $incident->fresh();
-                }
-                return ApiFailureIncident::create([...$observation, 'fingerprint' => $fingerprint, 'first_seen_at' => $now, 'last_seen_at' => $now, 'sync_status' => 'pending']);
+                $table = 'portfolio_api_failure_incidents';
+                DB::table($table)->insertOrIgnore([
+                    ...$observation,
+                    'fingerprint' => $fingerprint,
+                    'first_seen_at' => $now,
+                    'last_seen_at' => $now,
+                    // Increment below counts both the initial insert and races
+                    // that find an already inserted fingerprint.
+                    'occurrence_count' => 0,
+                    'sync_status' => 'pending',
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+                DB::table($table)->where('fingerprint', $fingerprint)->update([
+                    'last_seen_at' => $now,
+                    'occurrence_count' => DB::raw('occurrence_count + 1'),
+                    'safe_message' => $observation['safe_message'],
+                    'trace_id' => $observation['trace_id'],
+                    'updated_at' => $now,
+                ]);
+
+                return ApiFailureIncident::query()->where('fingerprint', $fingerprint)->firstOrFail();
             });
             if (config('api_failure_reporting.enabled') && in_array(app()->environment(), config('api_failure_reporting.environments', []), true)) {
                 $dispatch = function () use ($incident): void {
@@ -61,14 +77,14 @@ class ApiFailureReporter
         return [
             'environment' => app()->environment(),
             'direction' => (string) ($observation['direction'] ?? 'unknown'),
-            'component' => $this->redactor->message($observation['component'] ?? null),
+            'component' => $this->redactor->message($observation['component'] ?? null, 160),
             'method' => strtoupper((string) ($observation['method'] ?? '')) ?: null,
             'endpoint' => $this->fingerprints->normalizeEndpoint((string) ($observation['endpoint'] ?? '')),
             'http_status' => isset($observation['http_status']) ? (int) $observation['http_status'] : null,
-            'failure_class' => $this->redactor->message($observation['failure_class'] ?? null),
-            'error_category' => $this->redactor->message($observation['error_category'] ?? null),
+            'failure_class' => $this->redactor->message($observation['failure_class'] ?? null, 80),
+            'error_category' => $this->redactor->message($observation['error_category'] ?? null, 80),
             'safe_message' => is_string($safe) ? $safe : null,
-            'trace_id' => $this->redactor->message($observation['trace_id'] ?? null),
+            'trace_id' => $this->redactor->message($observation['trace_id'] ?? null, 128),
             'skip_reporting' => (bool) ($observation['skip_reporting'] ?? false),
         ];
     }

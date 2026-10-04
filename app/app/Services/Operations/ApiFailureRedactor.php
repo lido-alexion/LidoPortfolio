@@ -23,17 +23,21 @@ class ApiFailureRedactor
         }
         if (is_object($value)) return $this->redact((array) $value, $depth + 1);
         if (is_string($value)) {
+            // Redact common inline credential forms before the value reaches
+            // incident storage. Structured payloads are never accepted here.
             $value = preg_replace('/Bearer\s+[A-Za-z0-9._~+\/-]+=*/i', 'Bearer [redacted]', $value) ?? $value;
+            $value = preg_replace('/\b(?:token|access_token|refresh_token|api[_-]?key|password|secret|authorization|cookie)\s*[:=]\s*[^\s,;&]+/i', '[credential-redacted]', $value) ?? $value;
             $value = preg_replace('/https?:\/\/[^\s]+/i', '[url-redacted]', $value) ?? $value;
             $value = preg_replace('/\b[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}\b/i', '[email-redacted]', $value) ?? $value;
+            $value = preg_replace('/\b(?:user|account|portfolio|customer)[ _-]?(?:id|#)\s*[:=]?\s*[A-Za-z0-9_-]+/i', '[identifier-redacted]', $value) ?? $value;
             return Str::limit($value, 1000, '…');
         }
         return is_scalar($value) || $value === null ? $value : '[redacted]';
     }
 
-    public function message(?string $message): ?string
+    public function message(?string $message, int $limit = 1000): ?string
     {
         $redacted = $this->redact($message);
-        return is_string($redacted) ? $redacted : null;
+        return is_string($redacted) ? Str::limit($redacted, $limit, '…') : null;
     }
 }

@@ -164,7 +164,20 @@ api.interceptors.response.use(
         const requestId = error?.config?.metadata?.requestId;
         const status = error?.response?.status;
         const url = error?.config?.url || '';
-        const shouldReportFailure = (status >= 500 || !error?.response)
+        let stoxApiPath = null;
+        try {
+            const apiBase = new URL(error?.config?.baseURL || appUrl('/api'), window.location.origin);
+            const requestUrl = new URL(url, apiBase);
+            const apiBasePath = apiBase.pathname.replace(/\/$/, '');
+            if (requestUrl.origin === apiBase.origin
+                && (requestUrl.pathname === apiBasePath || requestUrl.pathname.startsWith(`${apiBasePath}/`))) {
+                stoxApiPath = `/api${requestUrl.pathname.slice(apiBasePath.length)}`;
+            }
+        } catch {
+            // Malformed and non-URL requests are not StoX API observations.
+        }
+        const shouldReportFailure = Boolean(stoxApiPath)
+            && ((status !== undefined && (status < 200 || status >= 300)) || !error?.response)
             && !url.includes('/ops/api-failures')
             && !url.includes('/auth/')
             && !error?.config?._apiFailureReported;
@@ -177,7 +190,7 @@ api.interceptors.response.use(
             };
             void api.post('/ops/api-failures', {
                 method: error?.config?.method || 'GET',
-                endpoint: url.split('?')[0],
+                endpoint: stoxApiPath,
                 status: status || null,
                 message: typeof error?.message === 'string' ? error.message.slice(0, 500) : null,
                 request_id: requestId || null,

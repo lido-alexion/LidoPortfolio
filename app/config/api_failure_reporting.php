@@ -13,5 +13,6 @@ return [
     'comment_cooldown_hours' => max(1, (int) env('STOX_GITHUB_AUTO_ISSUE_COMMENT_COOLDOWN_HOURS', 6)),
     'recurrence_cooldown_hours' => max(1, (int) env('STOX_GITHUB_AUTO_ISSUE_RECURRENCE_COOLDOWN_HOURS', 24)),
     'retention_days' => max(1, (int) env('STOX_GITHUB_INCIDENT_RETENTION_DAYS', 90)),
-    'expected_statuses' => (array) env('STOX_API_FAILURE_EXPECTED_STATUSES', []),
+    'expected_statuses' => array_values(array_filter(array_map('intval', explode(',', (string) env('STOX_API_FAILURE_EXPECTED_STATUSES', ''))))),
+    'expected_endpoint_statuses' => json_decode((string) env('STOX_API_FAILURE_EXPECTED_ENDPOINT_STATUSES', '{}'), true) ?: [],
 ];
