@@ -1,6 +1,6 @@
 # V9-OPS-003 implementation and acceptance audit
 
-Starting local revision for final reconciliation: `480ed417cdd7658e456fa5f3ae33f873531e8121`. Fetched and fast-forwarded normally to `origin/master` at `5b274128a5b571ac8b42d34cd27f6068c9b14411`, then restored the complete staged/unstaged OPS-003 worktree and untracked prompt files. The implementation is preserved in a local commit; push is withheld pending post-reconciliation acceptance.
+The final verification continuation started at local `02375709e68fc0457ca2b85507a7b990c3b9c889` with `origin/master` at `5b274128a5b571ac8b42d34cd27f6068c9b14411`. Successive fetches were reconciled by normal fast-forward through `0040ea1f`, `41ad6823`, and final verification base `113355c18444be85d7f40b6c465d451076e957b9`. The committed OPS-003 implementation was preserved, and the two untracked prompt files remain untracked.
 
 ## Frozen acceptance map and initial gaps
 
@@ -66,24 +66,28 @@ The requested starting SHA was `480ed417`. By the first inspection in this conti
 
 The changed-path comparison between `480ed417..5b274128` and the OPS-003 commit has no path overlap. Upstream adds `app/resources/ai-schemas/{stock_analysis_insight,strategy_designer}.v1.json`; `EmbeddedAiContract` loads those through Laravel `resource_path`. OPS-003's distinct `ops.log_error_triage` schema stays in `app/config/ai-schemas`, which its migration and service load through `config_path`. These are separate capabilities and packaging roots; no duplicate schema loader was added. Upstream's `EmbeddedAiService` cache normalization and canonicalization in `480ed417` remain untouched and are not duplicated. Shared OPS-003 AI projection/runtime changes remain limited to declaring background `service_class` and sending triage schema/provider settings. There was no material merge or overlapping implementation to resolve in this continuation.
 
+During the final verification, `origin/master` advanced from `764ba1f9` to `0040ea1f`. The six commits were integrated by fast-forward. `29200ac4` updates OPS-002 reporter policy/redaction and `V9ApiFailureReportingTest`, which OPS-003 shares; the focused acceptance suite was rerun against this final tree. The remaining commits update FEAT-052 evidence and the FEAT-054 bootstrap workflow; they do not overlap OPS-003 implementation paths.
+
+The base `41ad6823` includes FEAT-063 commit `6a843cd4` and four subsequent evidence/documentation commits. FEAT-063 adds routes and broker/collector behavior outside OPS-003; its `app/routes/api.php` change was reviewed alongside the OPS-003 routes. The latest base `113355c1` adds FEAT-052 telemetry privacy handling and tests in `LidoTelemetryController`/`LidoTelemetry`. Focused OPS, shared-AI, Python, OpenAPI, and backend gates all passed on `113355c1`.
+
 ## Shared AI regression context
 
 The order-sensitive `EmbeddedAi` cache normalization and regression assertion repair are already present upstream in `480ed417`. OPS-003 does not modify `EmbeddedAiService` or duplicate that repair.
 
 ## Verification results
 
-- Post-fast-forward focused OPS-003 MySQL 8.4 acceptance: **55 tests, 235 assertions passed** (including shared OPS-002 reporter/API failure tests and MySQL concurrency coverage).
+- Post-final-fast-forward focused OPS-003/OPS-002 MySQL 8.4 acceptance: **62 tests, 288 assertions passed** (including the upstream OPS-002 reporter/redaction regressions and MySQL concurrency coverage).
 - Post-fast-forward shared Laravel AI regression: **50 tests, 299 assertions passed** across the seven shared AI feature files.
 - Post-fast-forward shared AI runtime suite: **56 passed**.
 - Post-reconciliation migration portability: **passed**, 169 migrations.
 - Post-reconciliation static documentation and assistant corpus: **passed**, 53 topics (`node scripts/check-static-docs.mjs`).
 - Post-reconciliation OpenAPI `/api/v1`: **passed**, current at 219 operations. Dedicated Admin contract remains `app/openapi/ops-log-triage.json`.
-- PHP's system test configuration lacks `pdo_sqlite`; focused MySQL validation used the dedicated MySQL 8.4 test container on port 3314 with a separate `ops003_postreconcile` database. An initial test attempt collided with another process on the earlier shared test database and was discarded; the isolated rerun above is authoritative.
-- Full backend gate was not rerun: the full green backend gate supplied for the reconciled OPS-003 tree remains **2,187 passed, 2 skipped, 13,901 assertions**, and changed-path comparison shows no overlap between upstream commits and OPS-003 changes. Post-fast-forward focused PHP, Python, docs, migration, and OpenAPI validations cover the OPS-003 and AI schema/runtime surfaces.
+- Focused MySQL validation used the dedicated MySQL 8.4 database `ops003_focused` on port 3314. The CI-parity backend gate uses the separate `ops003_ci` database and PHP 8.4.26 with the CI extension scan path.
+- Final post-fast-forward CI-parity backend gate on `113355c1`: **2,228 passed, 2 skipped, 14,877 assertions**; OpenAPI `/api/v1` check passed at 219 operations.
 - V9 register row: **IMPLEMENTED / VERIFIED**, based on the post-fast-forward acceptance and regression results above. This records implementation verification, not deployment or live-provider acceptance.
 
 No frontend code was changed for OPS-003; Node/Vitest/typecheck/build/browser gates are outside this change's scope. No deployed/live-provider acceptance is claimed; automated tests fake AI/GitHub and never create real issues.
 
 ## Publication
 
-The OPS-003 implementation is committed locally. Push is authorized by the task and will use normal `origin/master` synchronization and trigger only the repository's standard CI/CD; no manual workflow or production deployment is performed.
+The acceptance record commit `764ba1f9` is present in the `origin/master` history. Final evidence and the verified register status are recorded in a scoped follow-up commit on the latest reconciled `origin/master` tree. The push uses the repository's standard path; no manual workflow or production deployment is performed.
