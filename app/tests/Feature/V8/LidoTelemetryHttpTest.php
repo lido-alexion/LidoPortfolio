@@ -90,6 +90,36 @@ class LidoTelemetryHttpTest extends TestCase
         }
     }
 
+    public function test_custom_http_fallback_omits_raw_path_and_exception_message(): void
+    {
+        Http::fake();
+        config([
+            'lido_telemetry.enabled' => true,
+            'lido_telemetry.official_sdk_enabled' => false,
+            'lido_telemetry.otlp_traces_endpoint' => 'http://collector.test/v1/traces',
+            'lido_telemetry.otlp_metrics_endpoint' => 'http://collector.test/v1/metrics',
+        ]);
+
+        $marker = 'synthetic-private-marker';
+        $request = \Illuminate\Http\Request::create('/api/'.$marker, 'GET');
+        app(\App\Telemetry\LidoTelemetry::class)->recordHttpRequest(
+            $request, 500, 1.0, new \RuntimeException($marker)
+        );
+
+        Http::assertSent(function ($outbound) use ($marker): bool {
+            if (! isset($outbound->data()['resourceSpans'])) {
+                return false;
+            }
+
+            $body = json_encode($outbound->data());
+            $this->assertStringNotContainsString($marker, (string) $body);
+            $this->assertStringNotContainsString('exception.message', (string) $body);
+            $this->assertStringContainsString('exception.type', (string) $body);
+
+            return true;
+        });
+    }
+
     public function test_business_telemetry_omits_sensitive_attributes(): void
     {
         Http::fake();
