@@ -3,60 +3,40 @@
 namespace App\Jobs;
 
 use App\Models\ApiFailureIncident;
-use App\Services\Operations\GitHubIssueClient;
+use App\Services\Operations\GitHubIssueReporter;
+use App\Services\Operations\LogTriageGuard;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Facades\Log;
 
 class CreateOrLinkGitHubIssueJob implements ShouldQueue
 {
     use Queueable;
 
     public int $tries = 3;
+    public int $timeout = 120;
 
     public function __construct(public readonly int $incidentId) {}
 
     public function backoff(): array { return [60, 300]; }
 
-    public function handle(GitHubIssueClient $github): void
+    public function handle(GitHubIssueReporter $github): void
     {
-        $incident = ApiFailureIncident::find($this->incidentId);
-        if (! $incident || ! config('api_failure_reporting.enabled')) return;
-        if (! in_array(app()->environment(), config('api_failure_reporting.environments', []), true)) return;
-
-        $marker = '<!-- stox-api-failure:'.$incident->fingerprint.' -->';
-        try {
-            $incident->update(['sync_status' => 'syncing', 'last_github_checked_at' => now(), 'sync_error' => null]);
-            $existing = $github->searchOpen($marker);
-            if (! $existing) {
-                $historical = $github->searchAny($marker);
-                $quietSince = $incident->last_reported_at?->addHours((int) config('api_failure_reporting.recurrence_cooldown_hours', 24));
-                if ($historical && $quietSince && now()->lt($quietSince)) {
-                    $incident->update(['github_issue_number' => $historical['number'] ?? null, 'github_issue_url' => $historical['html_url'] ?? null, 'github_issue_state' => $historical['state'] ?? 'closed', 'sync_status' => 'linked']);
-                    return;
-                }
-                $newIssues = ApiFailureIncident::query()->whereNotNull('github_issue_number')->where('last_reported_at', '>=', now()->subHour())->count();
-                if ($newIssues >= (int) config('api_failure_reporting.max_new_per_hour', 10)) {
-                    $incident->update(['sync_status' => 'rate_limited']);
-                    return;
-                }
-            }
-            $issue = $existing ?: $github->create(
-                '[Auto][API] '.($incident->component ?: 'StoX').' '.($incident->http_status ?: $incident->failure_class ?: 'failure'),
-                $this->body($incident, $marker),
-                ['automated', 'api-failure', app()->environment()],
-            );
-            $incident->update([
-                'github_issue_number' => $issue['number'] ?? null,
-                'github_issue_url' => $issue['html_url'] ?? null,
-                'github_issue_state' => $issue['state'] ?? 'open',
-                'sync_status' => 'linked',
-                'last_reported_at' => now(),
-            ]);
-        } catch (\Throwable $error) {
-            $incident->update(['sync_status' => 'failed', 'sync_error' => substr($error->getMessage(), 0, 1000)]);
-            Log::warning('API failure GitHub reporting failed', ['incident_id' => $incident->id, 'error' => $error->getMessage(), 'skip_api_failure_reporting' => true]);
-        }
+        LogTriageGuard::run(function () use ($github) {
+            try {
+                $incident = ApiFailureIncident::find($this->incidentId);
+                if (! $incident) return;
+                $marker = '<!-- stox-api-failure:'.$incident->fingerprint.' -->';
+                $result = $github->report($marker, '[Auto][API] '.($incident->component ?: 'StoX').' '.($incident->http_status ?: $incident->failure_class ?: 'failure'), $this->body($incident, $marker), ['automated', 'api-failure', app()->environment()], $incident->last_seen_at);
+                $incident->update([
+                    'sync_status' => $result['status'], 'sync_error' => $result['reason'] ?? null,
+                    'github_issue_number' => $result['number'] ?? $incident->github_issue_number,
+                    'github_issue_url' => $result['url'] ?? $incident->github_issue_url,
+                    'github_issue_state' => isset($result['number']) ? ($result['status'] === 'cooldown' ? 'closed' : 'open') : $incident->github_issue_state,
+                    'last_github_checked_at' => now(),
+                    'last_reported_at' => isset($result['number']) ? now() : $incident->last_reported_at,
+                ]);
+            } catch (\Throwable) { LogTriageGuard::failure('api_reporter_failed'); }
+        });
     }
 
     private function body(ApiFailureIncident $incident, string $marker): string

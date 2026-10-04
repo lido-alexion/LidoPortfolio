@@ -67,6 +67,8 @@ class OpenAICompatibleAdapter(ProviderAdapter):
             if not endpoint or not api_key:
                 raise ProviderFailure(FailureCategory.AUTHENTICATION, "Provider path is not configured")
             payload = {"model": self.model, "messages": [{"role": "system", "content": request.system_prompt}, {"role": "user", "content": request.user_prompt or str(request.input)}], "stream": False, "max_tokens": request.max_output_tokens}
+            if request.capability_id == "ops.log_error_triage":
+                payload["temperature"] = 0
             async with httpx.AsyncClient(timeout=float(self.config.get("timeout_seconds", 20))) as client:
                 if request.stream and self.config.get("streaming", False):
                     payload["stream"] = True

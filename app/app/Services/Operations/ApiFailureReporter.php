@@ -5,7 +5,6 @@ namespace App\Services\Operations;
 use App\Jobs\CreateOrLinkGitHubIssueJob;
 use App\Models\ApiFailureIncident;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class ApiFailureReporter
 {
@@ -28,11 +27,20 @@ class ApiFailureReporter
                 return ApiFailureIncident::create([...$observation, 'fingerprint' => $fingerprint, 'first_seen_at' => $now, 'last_seen_at' => $now, 'sync_status' => 'pending']);
             });
             if (config('api_failure_reporting.enabled') && in_array(app()->environment(), config('api_failure_reporting.environments', []), true)) {
-                CreateOrLinkGitHubIssueJob::dispatch($incident->id)->afterCommit();
+                $dispatch = function () use ($incident): void {
+                    try {
+                        $connection = config('api_failure_reporting.queue_connection', 'log-triage');
+                        if (! in_array(config("queue.connections.$connection.driver"), ['database','redis','sqs','beanstalkd'], true)) throw new \RuntimeException('Async reporter queue required');
+                        CreateOrLinkGitHubIssueJob::dispatch($incident->id)->onConnection($connection)
+                            ->onQueue(config('api_failure_reporting.queue', 'log-triage'))->beforeCommit();
+                    } catch (\Throwable) { LogTriageGuard::failure('api_queue_failed'); }
+                };
+                if (DB::transactionLevel() > 0) DB::afterCommit(fn () => LogTriageGuard::run($dispatch));
+                else LogTriageGuard::run($dispatch);
             }
             return $incident;
         } catch (\Throwable $error) {
-            Log::warning('API failure observation failed open', ['error' => $error->getMessage(), 'skip_api_failure_reporting' => true]);
+            LogTriageGuard::failure('api_observation_failed');
             return null;
         }
     }

@@ -32,6 +32,7 @@ class AiPlatformConfigurationService
                 'output_schema' => $capability->output_schema, 'prompt_id' => $capability->capability_id,
                 'streaming' => in_array($capability->capability_id, ['documentation_chat', ...EmbeddedAiContract::CAPABILITIES], true),
                 'max_concurrency' => max(1, (int) $capability->max_concurrency),
+                'service_class' => $capability->capability_id === 'ops.log_error_triage' ? 'background' : 'interactive',
             ])->all(),
             'provider_paths' => $paths, 'prompts' => $prompts,
             'budgets' => AiBudgetLimit::query()->whereNotNull('hard_limit')->get()->map(fn ($budget) => ['scope' => $budget->scope, 'hard_limit' => (float) $budget->hard_limit, 'spent' => (float) $budget->spent])->all(),

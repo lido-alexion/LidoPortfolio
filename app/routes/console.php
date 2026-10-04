@@ -599,3 +599,5 @@ Artisan::command('ai:reconcile-reservations', function () {
     app(\App\Services\AI\AiBudgetReservationService::class)->reconcile();
 })->purpose('Conservatively settle expired AI provider reservations');
 Schedule::command('ai:reconcile-reservations')->everyMinute()->withoutOverlapping();
+
+Schedule::command('ops:maintain-log-triages')->everyTenMinutes()->withoutOverlapping()->name('log-triage-maintenance');

@@ -1,0 +1,81 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "classification",
+    "confidence",
+    "summary",
+    "evidence",
+    "suspected_component",
+    "bug_kind",
+    "actionability",
+    "safe_issue_title",
+    "security_sensitive"
+  ],
+  "properties": {
+    "classification": {
+      "type": "string",
+      "enum": [
+        "code_bug",
+        "external_dependency",
+        "configuration_or_environment",
+        "expected_operational_condition",
+        "data_quality_or_input",
+        "security_or_abuse_signal",
+        "uncertain"
+      ]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "evidence": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 300
+      }
+    },
+    "suspected_component": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 200
+    },
+    "bug_kind": {
+      "type": "string",
+      "enum": [
+        "null_handling",
+        "type_mismatch",
+        "invalid_state",
+        "invariant_violation",
+        "query_schema",
+        "logic_error",
+        "unknown"
+      ]
+    },
+    "actionability": {
+      "type": "string",
+      "enum": [
+        "actionable",
+        "not_actionable",
+        "insufficient_evidence"
+      ]
+    },
+    "safe_issue_title": {
+      "type": "string",
+      "maxLength": 160
+    },
+    "security_sensitive": {
+      "type": "boolean"
+    }
+  }
+}

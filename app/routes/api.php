@@ -434,6 +434,8 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/settings/test-telegram', [SettingsController::class, 'testTelegram']);
 
     Route::middleware('admin')->group(function () {
+        Route::get('/admin/log-error-triages', [\App\Http\Controllers\Api\LogErrorTriageAdminController::class, 'index']);
+        Route::get('/admin/log-error-triages/{triage}', [\App\Http\Controllers\Api\LogErrorTriageAdminController::class, 'show'])->whereNumber('triage');
         Route::put('/admin/ai-platform/concurrency', [AiPlatformAdminController::class, 'concurrency']);
         Route::get('/admin/ai-platform', [AiPlatformAdminController::class, 'index']);
         Route::put('/admin/ai-platform/capabilities/{capability}', [AiPlatformAdminController::class, 'upsertCapability']);
