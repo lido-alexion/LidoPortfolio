@@ -4,75 +4,164 @@ namespace App\Services\Operations;
 
 use App\Jobs\TriageLogErrorJob;
 use App\Models\LogErrorTriage;
+use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class LogErrorTriageService
 {
-    private const CLASSIFICATIONS = [
-        'code_bug', 'external_dependency', 'configuration_or_environment',
-        'expected_operational_condition', 'data_quality_or_input',
-        'security_or_abuse_signal', 'uncertain',
-    ];
+    public function __construct(private LogErrorSanitizer $sanitizer) {}
+
+    public function enabled(): bool
+    {
+        return config('log_error_triage.enabled') && in_array(app()->environment(), config('log_error_triage.environments', []), true);
+    }
 
     public function observe(\Throwable $exception, array $context = []): void
     {
-        try {
-            if (! config('log_error_triage.enabled') || ! in_array(app()->environment(), config('log_error_triage.environments', []), true)) return;
-            $envelope = $this->sanitize($exception, $context);
-            if ($this->excluded($envelope)) return;
-            $fingerprint = hash('sha256', implode('|', [$envelope['component'], $envelope['exception_class'], $envelope['safe_message']]));
-            $now = now();
-            $triage = DB::transaction(function () use ($fingerprint, $envelope, $now) {
-                $existing = LogErrorTriage::query()->where('fingerprint', $fingerprint)->lockForUpdate()->first();
-                if ($existing && $existing->last_seen_at?->gt($now->copy()->subMinutes((int) config('log_error_triage.debounce_minutes', 5)))) {
-                    $existing->increment('occurrence_count');
-                    $existing->update(['last_seen_at' => $now]);
-                    return null;
+        $this->observeLog(new MessageLogged('error', $exception->getMessage(), ['exception' => $exception, ...$context]));
+    }
+
+    public function observeLog(MessageLogged $event): void
+    {
+        if (LogTriageGuard::active()) return;
+        LogTriageGuard::run(function () use ($event) {
+            try {
+                if (! $this->enabled() || ! in_array($event->level, ['error','critical','alert','emergency'], true)) return;
+                $context = $event->context;
+                if (($context['skip_log_error_triage'] ?? false) || ($context['skip_api_failure_reporting'] ?? false)
+                    || ($context['capability_id'] ?? $context['capability'] ?? null) === 'ops.log_error_triage') return;
+                if (in_array($context['job'] ?? null, [TriageLogErrorJob::class, \App\Jobs\CreateOrLinkGitHubIssueJob::class], true)) return;
+                $exception = ($context['exception'] ?? null) instanceof \Throwable ? $context['exception'] : null;
+                $frames = $exception ? [['file' => $exception->getFile(), 'line' => $exception->getLine()], ...$exception->getTrace()] : debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 40);
+                foreach ($frames as $frame) {
+                    if ($exception && (str_starts_with((string) ($frame['class'] ?? ''), __NAMESPACE__.'\\') || in_array($frame['class'] ?? '', [TriageLogErrorJob::class, \App\Jobs\CreateOrLinkGitHubIssueJob::class], true))) return;
                 }
-                return LogErrorTriage::query()->updateOrCreate(
-                    ['fingerprint' => $fingerprint],
-                    [...$envelope, 'first_seen_at' => $existing?->first_seen_at ?? $now, 'last_seen_at' => $now, 'status' => 'pending'],
-                );
-            });
-            if ($triage) TriageLogErrorJob::dispatch($triage->id)->afterCommit();
-        } catch (\Throwable $failure) {
-            Log::warning('Log error triage failed open', ['error' => $failure->getMessage(), 'skip_log_error_triage' => true]);
+                if ($exception && in_array($exception::class, config('log_error_triage.ignored_exceptions', []), true)) return;
+                $message = is_string($event->message) ? $event->message : '';
+                if (in_array($message, config('log_error_triage.ignored_messages', []), true)) return;
+                $route = request()?->route();
+                if ($route instanceof \Illuminate\Routing\Route && in_array($route->uri(), config('log_error_triage.ignored_routes', []), true)) return;
+                $envelope = $this->sanitizer->envelope($event->level, $message, $exception, $frames);
+                if (! $envelope['exception_class'] && ! $envelope['component']) return;
+                if (($context['security_sensitive'] ?? false) || in_array(strtolower((string) ($context['category'] ?? '')), ['security','abuse'], true)) $envelope['safe_context']['security_sensitive'] = true;
+                $signature = $this->sanitizer->signature($envelope, $message);
+                $id = DB::transaction(function () use ($signature, $envelope) {
+                    // Atomic upsert takes a write lock immediately; duplicate INSERT IGNORE
+                    // shared-lock upgrades can deadlock and lose concurrent occurrences.
+                    DB::table('stox_log_error_triages')->upsert([
+                        ...$envelope, 'safe_context' => json_encode($envelope['safe_context'], JSON_THROW_ON_ERROR),
+                        'signature' => $signature, 'first_seen_at' => now(), 'last_seen_at' => now(),
+                        'occurrence_count' => 1, 'status' => 'pending', 'created_at' => now(), 'updated_at' => now(),
+                    ], ['signature'], ['occurrence_count' => DB::raw('occurrence_count + 1'), 'last_seen_at' => now(), 'updated_at' => now()]);
+                    $row = LogErrorTriage::where('signature', $signature)->lockForUpdate()->firstOrFail();
+                    $row->last_seen_at = now();
+                    $cached = $row->triaged_at && $row->triaged_at->gt(now()->subSeconds(config('log_error_triage.decision_ttl_seconds')));
+                    $inFlight = $row->lease_until?->isFuture();
+                    $scheduled = $row->next_attempt_at && $row->next_attempt_at->gt(now()->subMinutes(10));
+                    $dispatch = ! $inFlight && ! $scheduled && (! $cached || $this->issueEligible($row));
+                    if ($dispatch) {
+                        $row->next_attempt_at = now()->addSeconds(config('log_error_triage.debounce_seconds'));
+                        if (! $cached) $row->status = 'pending';
+                    }
+                    $row->save();
+                    return $dispatch ? $row->id : null;
+                }, 3);
+                if ($id) $this->dispatch($id);
+            } catch (\Throwable) { LogTriageGuard::failure('observation_failed'); }
+        });
+    }
+
+    public function dispatch(int $id): void
+    {
+        try {
+            // Catch deferred dispatch errors inside the callback, not only registration.
+            if (DB::transactionLevel() > 0) {
+                DB::afterCommit(fn () => LogTriageGuard::run(fn () => $this->enqueue($id)));
+            } else {
+                $this->enqueue($id);
+            }
+        } catch (\Throwable) { $this->fail($id, 'queue_failed'); }
+    }
+
+    private function enqueue(int $id): void
+    {
+        try {
+            $connection = config('log_error_triage.queue_connection');
+            if (! in_array(config("queue.connections.$connection.driver"), ['database','redis','sqs','beanstalkd'], true)) throw new \RuntimeException('Async queue required');
+            TriageLogErrorJob::dispatch($id)->onConnection($connection)->onQueue(config('log_error_triage.queue'))
+                ->delay(now()->addSeconds(config('log_error_triage.debounce_seconds')))->beforeCommit();
+        } catch (\Throwable) {
+            $this->fail($id, 'queue_failed');
         }
     }
 
-    public function applyClassification(LogErrorTriage $triage, array $result): void
+    public function fail(int $id, string $reason): void
     {
-        $classification = (string) ($result['classification'] ?? 'uncertain');
-        if (! in_array($classification, self::CLASSIFICATIONS, true)) $classification = 'uncertain';
-        $triage->update([
-            'classification' => $classification,
-            'confidence' => (float) ($result['confidence'] ?? 0),
-            'evidence' => is_string($result['evidence'] ?? null) ? substr($result['evidence'], 0, 2000) : null,
-            'status' => 'triaged',
-            'triaged_at' => now(),
-        ]);
+        try { LogErrorTriage::whereKey($id)->update(['status' => 'failed', 'failure_reason' => $reason, 'lease_until' => null, 'lease_token' => null, 'next_attempt_at' => null]); }
+        catch (\Throwable) { /* Original operation still wins. */ }
+        LogTriageGuard::failure($reason, $id);
     }
 
-    private function sanitize(\Throwable $exception, array $context): array
+    public function input(LogErrorTriage $row): array
     {
-        $message = preg_replace('/([A-Za-z0-9_\-]*(?:token|secret|password|authorization|cookie)[A-Za-z0-9_\-]*\s*[:=]\s*)[^\s,;]+/i', '$1[REDACTED]', $exception->getMessage()) ?? '';
-        $message = preg_replace('/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i', '[REDACTED_EMAIL]', $message) ?? $message;
-        $safeContext = [];
-        foreach (['component', 'route', 'method', 'trace_id', 'job', 'build_sha'] as $key) {
-            if (isset($context[$key]) && is_scalar($context[$key])) $safeContext[$key] = substr((string) $context[$key], 0, 200);
-        }
         return [
-            'environment' => app()->environment(), 'severity' => 'error',
-            'component' => $safeContext['component'] ?? 'laravel',
-            'exception_class' => substr($exception::class, 0, 200),
-            'safe_message' => substr($message, 0, 2000), 'safe_context' => $safeContext,
+            'severity' => $row->severity, 'component' => $row->component, 'exception_class' => $row->exception_class,
+            'message' => $row->safe_message, 'context' => $row->safe_context,
+            'occurrence_count' => $row->occurrence_count,
+            'evidence_candidates' => $this->sanitizer->evidence($row->toArray()),
         ];
     }
 
-    private function excluded(array $envelope): bool
+    public function schema(): array
     {
-        return str_contains(strtolower($envelope['exception_class'].' '.$envelope['safe_message']), 'logerrortriage')
-            || str_contains(strtolower($envelope['safe_message']), 'github reporting');
+        return json_decode(file_get_contents(config_path('ai-schemas/ops.log_error_triage.v1.json')), true, 512, JSON_THROW_ON_ERROR);
+    }
+
+    public function applyClassification(LogErrorTriage $row, array $result): void
+    {
+        $schema = $this->schema();
+        if (array_diff($schema['required'], array_keys($result)) || array_diff(array_keys($result), $schema['required'])) throw new \UnexpectedValueException('structured_output_invalid');
+        foreach (['summary' => 500, 'safe_issue_title' => 160] as $key => $length) {
+            if (! is_string($result[$key]) || mb_strlen($result[$key]) > $length) throw new \UnexpectedValueException('structured_output_invalid');
+        }
+        if (! is_string($result['classification']) || ! in_array($result['classification'], $schema['properties']['classification']['enum'], true)
+            || ! in_array($result['actionability'], $schema['properties']['actionability']['enum'], true)
+            || ! in_array($result['bug_kind'], $schema['properties']['bug_kind']['enum'], true)
+            || ! is_bool($result['security_sensitive'])
+            || (! is_float($result['confidence']) && ! is_int($result['confidence']))
+            || ! is_finite((float) $result['confidence']) || $result['confidence'] < 0 || $result['confidence'] > 1
+            || ! is_array($result['evidence']) || ! array_is_list($result['evidence']) || count($result['evidence']) > 8
+            || ($result['suspected_component'] !== null && (! is_string($result['suspected_component']) || strlen($result['suspected_component']) > 200))) throw new \UnexpectedValueException('structured_output_invalid');
+        $candidates = $this->sanitizer->evidence($row->toArray());
+        foreach ($result['evidence'] as $item) {
+            if (! is_string($item) || ! in_array($item, $candidates, true)) throw new \UnexpectedValueException('ungrounded_evidence');
+        }
+        if ($result['suspected_component'] !== null && $result['suspected_component'] !== $row->component) throw new \UnexpectedValueException('unstable_component');
+        $security = $result['security_sensitive'] || ($row->safe_context['security_sensitive'] ?? true);
+        // Model prose is never persisted. Use the validated extractive evidence and code identity.
+        $row->fill([
+            'classification' => $security ? 'security_or_abuse_signal' : $result['classification'],
+            // Never round a just-below-threshold score upward in the DECIMAL(5,4) column.
+            'confidence' => floor((float) $result['confidence'] * 10000) / 10000, 'actionability' => $result['actionability'],
+            'bug_kind' => $result['bug_kind'], 'summary' => $row->safe_message.' in '.($row->component ?: $row->exception_class),
+            'evidence' => json_encode(array_values(array_unique($result['evidence'])), JSON_THROW_ON_ERROR),
+            'status' => 'classified', 'triaged_at' => now(), 'failure_reason' => null,
+        ]);
+        $identity = [$row->environment, $row->component, $row->exception_class, $row->safe_context['frames'][0] ?? null, $row->safe_context['route'] ?? null, $result['bug_kind']];
+        $row->fingerprint = $row->component && $result['bug_kind'] !== 'unknown' ? hash('sha256', json_encode($identity, JSON_THROW_ON_ERROR)) : null;
+        $row->save();
+    }
+
+    public function confidenceThreshold(): float
+    {
+        $value = config('log_error_triage.confidence_threshold', .85);
+        return is_numeric($value) && is_finite((float) $value) && $value >= 0 && $value <= 1 ? (float) $value : .85;
+    }
+
+    public function issueEligible(LogErrorTriage $row): bool
+    {
+        return $row->classification === 'code_bug' && $row->confidence >= $this->confidenceThreshold()
+            && $row->actionability === 'actionable' && collect(json_decode($row->evidence ?: '[]', true) ?: [])->contains(fn ($item) => is_string($item) && str_starts_with($item, 'Application frame: '))
+            && $row->fingerprint && ! ($row->safe_context['security_sensitive'] ?? true);
     }
 }

@@ -144,6 +144,10 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(12)->by($request->user()?->id ?: $request->ip());
         });
 
+        Event::listen(\Illuminate\Log\Events\MessageLogged::class, function ($event): void {
+            try { app(\App\Services\Operations\LogErrorTriageService::class)->observeLog($event); }
+            catch (\Throwable) { /* Observation cannot affect the log write. */ }
+        });
         $this->registerTelemetryListeners();
         if (config('lido_telemetry.official_sdk_enabled') && extension_loaded('opentelemetry')) {
             OpenTelemetryLogging::setLogWriter(new OtelDiagnosticLogWriter);

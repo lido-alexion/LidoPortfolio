@@ -95,11 +95,16 @@ async def execute(request: InferenceRequest):
             return await record_result(request, InferenceResult(request_id=request.request_id, capability_id=request.capability_id, degraded=True, status="failure", error_code=NormalizedError.GROUNDING_INSUFFICIENT, error_message="No maintained StoX documentation supports this answer"))
         request.input["grounding"] = provenance
     prompt = projection.get("prompts", {}).get(request.capability_id)
-    if request.capability_id in {"agent_planning", "agent_synthesis", "stock_analysis_insight", "strategy_designer"} and not prompt:
+    if request.capability_id in {"agent_planning", "agent_synthesis", "stock_analysis_insight", "strategy_designer", "ops.log_error_triage"} and not prompt:
         return await record_result(request, InferenceResult(request_id=request.request_id, capability_id=request.capability_id, degraded=True, status="failure", error_code=NormalizedError.CONFIGURATION_INVALID))
     if prompt:
         request.system_prompt = str(prompt.get("template", ""))
         request.user_prompt = str(request.input.get("question", request.user_prompt))
+    if request.capability_id == "ops.log_error_triage":
+        # The provider must see the schema as well as the router validating it.
+        capability = execution.registry.capabilities.get(request.capability_id)
+        request.user_prompt = json.dumps({"evidence": request.input,
+            "response_schema": request.output_schema or (capability.output_schema if capability else None)}, ensure_ascii=False)
     if request.capability_id == "documentation_chat":
         if not prompt:
             return await record_result(request, InferenceResult(request_id=request.request_id, capability_id=request.capability_id, degraded=True, status="failure", error_code=NormalizedError.CONFIGURATION_INVALID))

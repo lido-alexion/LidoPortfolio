@@ -30,6 +30,14 @@ return [
     */
 
     'connections' => [
+        'log-triage' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'portfolio_jobs'),
+            'queue' => 'log-triage',
+            'retry_after' => 180,
+            'after_commit' => true,
+        ],
 
         // Isolated from notifications/default; never change their visibility window.
         'ml-acceptance' => [

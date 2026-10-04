@@ -92,3 +92,21 @@ owned strategy-result `fingerprint`. It creates an AI-002 run and stages exactly
 `strategy.create` preview. Existing `/api/ai/assistant/runs/{id}/approve` owns all
 approval, stale-state, idempotency, mutation and verification behavior. Generation
 itself never invokes the mutation service.
+
+## Operational log triage (OPS-003)
+
+`ops.log_error_triage` is a background capability with default concurrency one and
+`app/config/ai-schemas/ops.log_error_triage.v1.json` as its output contract.
+It requires an active governed prompt and uses shared routing, admission, budgets,
+structured validation and audit. Its adapter request uses temperature zero.
+Laravel sends only code-derived bounded frames, exception/diagnostic categories,
+registered route identity, deploy SHA and exact evidence candidates. No user/account
+context, request correlation header or arbitrary source message is forwarded.
+
+Laravel additionally validates exact evidence membership and requires actionable
+`code_bug`, default confidence >= 0.85, concrete app-frame evidence, stable bug
+identity and no security flag before requesting the shared OPS-002 GitHub reporter.
+Unknown/schema-invalid results fail closed. Prompt version, inference UUID and
+selected path are retained locally alongside safe decisions and issue linkage.
+See [the OPS-003 acceptance audit](../audits/V9-OPS-003-implementation-audit.md)
+for queue, cache, recurrence, privacy, retention and Admin inspection contracts.
