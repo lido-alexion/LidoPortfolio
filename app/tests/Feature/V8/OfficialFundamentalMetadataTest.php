@@ -1,4 +1,3 @@
-use App\\Services\\Fundamentals\\Historical\\ExchangeRequestDeferred;
 <?php
 
 namespace Tests\Feature\V8;
@@ -10,12 +9,12 @@ use App\Services\Fundamentals\FundamentalDataProvider;
 use App\Services\Fundamentals\FundamentalDataService;
 use App\Services\Fundamentals\FundamentalHistoricalIngestService;
 use App\Services\Fundamentals\Historical\BseOfficialFundamentalHistoricalSource;
+use App\Services\Fundamentals\Historical\ExchangeRequestDeferred;
 use App\Services\Fundamentals\Historical\NseOfficialFundamentalHistoricalSource;
 use App\Services\Fundamentals\Historical\YahooFundamentalHistoricalSource;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use Mockery;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -151,7 +150,6 @@ class OfficialFundamentalMetadataTest extends TestCase
         try {
             $service->fetch(new Stock(['symbol' => 'META', 'exchange' => $exchange]), 'quarterly', true);
             $this->fail('A failed exchange request should be deferred safely.');
-        } catch (ExchangeRequestDeferred $error) {
             $this->assertSame('Exchange request deferred: the source request failed', $error->getMessage());
             $this->assertStringNotContainsString('PRIVATE-PAYLOAD', $error->getMessage());
             $this->assertStringNotContainsString('SECRET', $error->getMessage());
