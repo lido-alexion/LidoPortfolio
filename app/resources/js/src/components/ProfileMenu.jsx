@@ -29,6 +29,7 @@ export default function ProfileMenu({ user }) {
                 }}
                 aria-expanded={isOpen}
                 aria-haspopup="true"
+                aria-label={`Profile menu for ${displayName}`}
             >
                 <ProfileAvatar user={user} size={28} />
                 <span className="lido-profile-name">{displayName}</span>

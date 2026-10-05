@@ -23,6 +23,11 @@ class NotificationDeliveryProcessor
             }
 
             $delivery->load('recipientNotification.source', 'recipientNotification.user');
+            if ($delivery->channel === 'email' && ! $this->optionalEmailStillAllowed($delivery)) {
+                $delivery->update(['status' => 'suppressed', 'suppressed_at' => now(), 'last_error_code' => null]);
+
+                return null;
+            }
             if ($delivery->recipientNotification->condition_state === 'resolved'
                 && $delivery->recipientNotification->source->condition_key !== null) {
                 $delivery->update(['status' => 'suppressed', 'suppressed_at' => now()]);
@@ -55,6 +60,7 @@ class NotificationDeliveryProcessor
 
             if ($result['successful']) {
                 $delivery->update(['status' => 'delivered', 'delivered_at' => now(), 'last_error_code' => null]);
+                $delivery->digestMemberships()->whereNull('delivered_at')->update(['delivered_at' => now()]);
                 $delivery->recipientNotification()->update(['last_successful_external_delivery_at' => now()]);
                 if (! str_starts_with($delivery->recipientNotification->source->notification_type, 'notification.channel_health')) {
                     $this->health->recovered($delivery->recipientNotification->user, $delivery->channel);
@@ -78,6 +84,23 @@ class NotificationDeliveryProcessor
 
             return ['retry' => $retry, 'status' => $retry ? 'queued' : 'failed'];
         });
+    }
+
+    private function optionalEmailStillAllowed(NotificationDelivery $delivery): bool
+    {
+        $type = strtolower($delivery->recipientNotification->source->notification_type);
+        if (str_starts_with($type, 'account.') || str_starts_with($type, 'security.')) return true;
+        $configuration = $delivery->channelSetting?->configuration ?? [];
+        $preferences = (array) ($configuration['optional_email_preferences'] ?? []);
+        if (! ($preferences['enabled'] ?? false)) return false;
+        $category = match (true) {
+            str_contains($type, 'recommend') => 'recommendation',
+            str_contains($type, 'order'), str_contains($type, 'execution') => 'order_execution',
+            str_contains($type, 'connection'), str_contains($type, 'kite'), str_contains($type, 'broker') => 'connection',
+            default => 'operations',
+        };
+
+        return (bool) ($preferences['categories'][$category] ?? false);
     }
 
     private function syncLegacyTosStatus(NotificationDelivery $delivery, string $status, ?string $error = null): void

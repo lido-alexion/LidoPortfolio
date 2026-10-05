@@ -92,6 +92,23 @@ class NotificationCenterApiTest extends TestCase
         $this->assertDatabaseMissing('portfolio_profiles', ['user_id' => $admin->id]);
     }
 
+    public function test_history_search_category_date_read_filters_and_mark_unread_are_account_scoped(): void
+    {
+        $investor = User::factory()->create();
+        $first = $this->publisher->publishEvent([$investor], [...$this->content('info'), 'notification_type' => 'account.lifecycle', 'title' => 'Welcome account', 'message' => 'Account is ready.'])->recipients->sole();
+        $second = $this->publisher->publishEvent([$investor], [...$this->content('info'), 'notification_type' => 'recommendation.changed', 'title' => 'Recommendation update', 'message' => 'Status changed.'])->recipients->sole();
+        $second->update(['attention_state' => 'read', 'read_at' => now()]);
+
+        $this->actingAs($investor)->getJson('/api/notification-center?q=Welcome&category=account.lifecycle&read_state=unread')
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $first->id);
+        $this->actingAs($investor)->getJson('/api/notification-center?q=Welcome&from='.now()->addDay()->toDateString())
+            ->assertOk()->assertJsonCount(0, 'data');
+        $this->actingAs($investor)->postJson('/api/notification-center/'.$first->id.'/read')->assertOk();
+        $this->actingAs($investor)->postJson('/api/notification-center/'.$first->id.'/unread')
+            ->assertOk()->assertJsonPath('data.attention_state', 'unread');
+        $this->actingAs($investor)->deleteJson('/api/notification-center/'.$first->id)->assertStatus(405);
+    }
+
     private function content(string $severity, string $audience = 'investor'): array
     {
         return [

@@ -41,15 +41,27 @@ class AccessRequestAdminController extends Controller
     public function createInvite(Request $request, AccessRequest $accessRequest): JsonResponse
     {
         $request->validate([
-            'confirm' => ['sometimes', 'boolean'],
+            'confirm_unverified' => ['sometimes', 'accepted'],
         ]);
 
-        $updated = $this->admin->createInvite($request->user(), $accessRequest);
+        $updated = $this->admin->createInvite($request->user(), $accessRequest, $request->boolean('confirm_unverified'));
 
         return response()->json([
             'data' => $updated,
             'message' => 'Invitation issued and account access request marked created.',
         ]);
+    }
+
+    public function resendVerification(AccessRequest $accessRequest): JsonResponse
+    {
+        $this->admin->resendVerification($accessRequest);
+
+        return response()->json(['message' => 'Verification email queued.']);
+    }
+
+    public function copyInvite(AccessRequest $accessRequest): JsonResponse
+    {
+        return response()->json(['data' => $this->admin->copyInvite($accessRequest)]);
     }
 
     public function ignore(Request $request, AccessRequest $accessRequest): JsonResponse

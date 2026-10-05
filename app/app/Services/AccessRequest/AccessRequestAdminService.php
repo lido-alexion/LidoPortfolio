@@ -7,6 +7,7 @@ use App\Models\AccessRequestAuditEvent;
 use App\Models\AccessRequestBan;
 use App\Models\User;
 use App\Services\UserInviteService;
+use App\Services\AccessRequest\AccessRequestVerificationService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -17,6 +18,7 @@ class AccessRequestAdminService
         protected UserInviteService $invites,
         protected AccessRequestNotificationService $notifications,
         protected AccessRequestAuditLogger $audit,
+        protected AccessRequestVerificationService $verifications,
     ) {}
 
     /**
@@ -24,7 +26,7 @@ class AccessRequestAdminService
      */
     public function list(array $filters = []): array
     {
-        $query = AccessRequest::query()->with(['resolvedBy:id,name,email', 'userInvite:id,email']);
+        $query = AccessRequest::query()->with(['resolvedBy:id,name,email', 'userInvite:id,email,email_delivery_status,email_delivery_attempts,email_last_error_code', 'latestVerification']);
 
         $status = $filters['status'] ?? null;
         if ($status !== null && $status !== '') {
@@ -64,7 +66,7 @@ class AccessRequestAdminService
         $ban = $this->policy->activeBan($request->email_normalized);
 
         return [
-            'request' => $this->toPayload($request->load(['resolvedBy:id,name,email', 'userInvite:id,email'])),
+            'request' => $this->toPayload($request->load(['resolvedBy:id,name,email', 'userInvite:id,email,email_delivery_status,email_delivery_attempts,email_last_error_code', 'latestVerification'])),
             'history' => $history,
             'ban' => $ban ? $this->banPayload($ban) : null,
             'bans' => AccessRequestBan::query()
@@ -90,15 +92,18 @@ class AccessRequestAdminService
         ];
     }
 
-    public function createInvite(User $admin, AccessRequest $request): AccessRequest
+    public function createInvite(User $admin, AccessRequest $request, bool $confirmUnverified = false): AccessRequest
     {
-        return DB::transaction(function () use ($admin, $request) {
+        return DB::transaction(function () use ($admin, $request, $confirmUnverified) {
             $locked = AccessRequest::query()->whereKey($request->id)->lockForUpdate()->firstOrFail();
 
             if (! $locked->isPending()) {
                 throw ValidationException::withMessages([
                     'request' => ['This request was already resolved.'],
                 ]);
+            }
+            if ($locked->verification_status === AccessRequest::VERIFICATION_UNVERIFIED && ! $confirmUnverified) {
+                throw ValidationException::withMessages(['confirm_unverified' => ['Explicit confirmation is required to approve an unverified email address.']]);
             }
 
             $check = $this->policy->canIssueInvitationForEmail($locked->email_normalized);
@@ -120,10 +125,46 @@ class AccessRequestAdminService
                 'invite_id' => $inviteResult['invite']->id,
             ]);
 
-            $this->notifications->sendInviteEmail($inviteResult['invite'], $inviteResult['raw_token']);
+            $verificationState = $locked->verification_status;
+            $this->audit->record('admin_approval', $locked->email_normalized, $locked->id, $admin, [
+                'request_id' => $locked->id,
+                'verification_state' => $verificationState,
+                'admin_id' => $admin->id,
+                'approved_at' => $locked->resolved_at->toIso8601String(),
+                'unverified_approval' => $verificationState === AccessRequest::VERIFICATION_UNVERIFIED,
+                'invite_id' => $inviteResult['invite']->id,
+            ]);
+            $invite = $inviteResult['invite'];
+            $rawToken = $inviteResult['raw_token'];
+            DB::afterCommit(fn () => $this->notifications->queueInviteEmail($invite, $rawToken));
 
-            return $locked->fresh(['resolvedBy:id,name,email', 'userInvite:id,email']);
+            return $locked->fresh(['resolvedBy:id,name,email', 'userInvite:id,email,email_delivery_status,email_delivery_attempts,email_last_error_code']);
         });
+    }
+
+    public function resendVerification(AccessRequest $request): void
+    {
+        DB::transaction(function () use ($request): void {
+            $locked = AccessRequest::query()->whereKey($request->id)->lockForUpdate()->firstOrFail();
+            $result = $this->verifications->resend($locked);
+            DB::afterCommit(fn () => $this->notifications->queueVerificationEmail(
+                $locked->email_normalized,
+                $locked->full_name,
+                $locked->id,
+                $result['verification']->id,
+            ));
+            $this->audit->record('verification_resent', $locked->email_normalized, $locked->id);
+        });
+    }
+
+    public function copyInvite(AccessRequest $request): array
+    {
+        $invite = $request->userInvite;
+        if ($invite === null) {
+            throw ValidationException::withMessages(['invite' => ['No invitation exists for this request.']]);
+        }
+
+        return $this->invites->copyableInvitation($invite);
     }
 
     public function ignore(User $admin, AccessRequest $request, ?string $reason): AccessRequest
@@ -238,11 +279,19 @@ class AccessRequestAdminService
             'full_name' => $request->full_name,
             'email' => $request->email_normalized,
             'status' => $request->status,
+            'verification_status' => $request->verification_status,
             'verified_at' => $request->verified_at?->toIso8601String(),
             'resolved_at' => $request->resolved_at?->toIso8601String(),
+            'expires_at' => $request->expires_at?->toIso8601String(),
+            'expiry_reason' => $request->expiry_reason,
             'resubmit_allowed_after' => $request->resubmit_allowed_after?->toIso8601String(),
             'resolved_by' => $request->resolvedBy?->only(['id', 'name', 'email']),
             'user_invite_id' => $request->user_invite_id,
+            'invite_email_delivery_status' => $request->userInvite?->email_delivery_status,
+            'invite_email_delivery_attempts' => (int) ($request->userInvite?->email_delivery_attempts ?? 0),
+            'invite_email_last_error_code' => $request->userInvite?->email_last_error_code,
+            'verification_email_delivery_status' => $request->latestVerification?->email_delivery_status,
+            'verification_email_delivery_attempts' => (int) ($request->latestVerification?->email_delivery_attempts ?? 0),
             'has_admin_reason' => $request->admin_reason !== null && trim((string) $request->admin_reason) !== '',
             'created_at' => $request->created_at?->toIso8601String(),
         ];

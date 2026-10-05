@@ -39,6 +39,28 @@ class NotificationSettingsApiTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_optional_email_defaults_off_and_category_choices_persist_while_master_is_off(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user)->getJson('/api/notification-settings')
+            ->assertOk()->assertJsonPath('optional_email_preferences.enabled', false)
+            ->assertJsonPath('optional_email_preferences.categories.recommendation', false);
+        $this->actingAs($user)->putJson('/api/notification-settings/optional-emails', [
+            'enabled' => false,
+            'categories' => ['recommendation' => true],
+            'modes' => ['recommendation' => 'digest'],
+            'quiet_start' => '22:00',
+            'quiet_end' => '07:00',
+            'digest_time' => '08:15',
+            'timezone' => 'Asia/Kolkata',
+        ])->assertOk()->assertJsonPath('data.enabled', false)
+            ->assertJsonPath('data.categories.recommendation', true)
+            ->assertJsonPath('data.modes.recommendation', 'digest');
+        $this->actingAs($user)->getJson('/api/notification-settings')
+            ->assertJsonPath('optional_email_preferences.categories.recommendation', true)
+            ->assertJsonPath('optional_email_preferences.modes.recommendation', 'digest');
+    }
+
     public function test_external_channel_cannot_be_enabled_before_successful_verification(): void
     {
         $user = User::factory()->create();

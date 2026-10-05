@@ -17,6 +17,7 @@ export default function NotificationSettingsPage() {
     const [emailDestinations, setEmailDestinations] = useState([]);
     const [additionalEmail, setAdditionalEmail] = useState('');
     const [loadError, setLoadError] = useState(null);
+    const [optionalPrefs, setOptionalPrefs] = useState({ enabled: false, categories: {}, quiet_start: '', quiet_end: '', digest_time: '09:00', timezone: 'UTC', catalogue: {} });
 
     const load = async () => {
         setLoading(true);
@@ -25,6 +26,7 @@ export default function NotificationSettingsPage() {
             const response = await api.get('/notification-settings', { skipErrorToast: true });
             const next = response.data?.data || [];
             setChannels(next);
+            setOptionalPrefs(response.data?.optional_email_preferences || optionalPrefs);
             const destinations = await api.get('/notification-settings/email-destinations', { skipErrorToast: true });
             setEmailDestinations(destinations.data?.data || []);
             setForms((current) => Object.fromEntries(next.filter((item) => item.channel !== 'in_app').map((item) => [
@@ -36,6 +38,19 @@ export default function NotificationSettingsPage() {
             showToast('Could not load notification settings.', 'danger');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const saveOptionalPreferences = async () => {
+        setBusy('optional-email-preferences');
+        try {
+            const response = await api.put('/notification-settings/optional-emails', optionalPrefs, { skipErrorToast: true });
+            setOptionalPrefs(response.data?.data || optionalPrefs);
+            showToast('Optional email preferences saved.', 'success');
+        } catch (error) {
+            showToast(error.response?.data?.message || 'Could not save optional email preferences.', 'danger');
+        } finally {
+            setBusy(null);
         }
     };
 
@@ -120,6 +135,16 @@ export default function NotificationSettingsPage() {
         <div className="container-fluid py-3">
             <h1 className="h3 mb-1">Notification Settings</h1>
             <p className="text-muted small mb-4">Configure account-level delivery channels. In-app notifications are always enabled.</p>
+            <section className="card mb-3" aria-labelledby="optional-email-heading">
+                <div className="card-body">
+                    <h2 className="h5" id="optional-email-heading">Optional product emails</h2>
+                    <p className="small text-muted">Account and security messages remain enabled. Optional emails are off by default.</p>
+                    <label className="form-check mb-3"><input className="form-check-input" type="checkbox" checked={!!optionalPrefs.enabled} onChange={(event) => setOptionalPrefs({ ...optionalPrefs, enabled: event.target.checked })} /><span className="form-check-label">Enable optional emails</span></label>
+                    <fieldset className="mb-3" disabled={!optionalPrefs.enabled}><legend className="small fw-semibold">Categories and delivery</legend>{Object.entries(optionalPrefs.catalogue || {}).map(([key, label]) => <div className="d-flex flex-wrap align-items-center gap-3 mb-2" key={key}><label className="form-check mb-0"><input className="form-check-input" type="checkbox" checked={!!optionalPrefs.categories?.[key]} onChange={(event) => setOptionalPrefs({ ...optionalPrefs, categories: { ...optionalPrefs.categories, [key]: event.target.checked } })} /><span className="form-check-label">{label}</span></label><select className="form-select form-select-sm" aria-label={`${label} delivery`} style={{ maxWidth: 190 }} value={optionalPrefs.modes?.[key] || 'immediate'} onChange={(event) => setOptionalPrefs({ ...optionalPrefs, modes: { ...optionalPrefs.modes, [key]: event.target.value } })}><option value="immediate">Immediate</option><option value="digest">Daily digest</option></select></div>)}</fieldset>
+                    <div className="row g-2 mb-3"><div className="col-6 col-md-3"><label className="form-label" htmlFor="optional-quiet-start">Quiet hours start</label><input id="optional-quiet-start" type="time" className="form-control" value={optionalPrefs.quiet_start || ''} onChange={(event) => setOptionalPrefs({ ...optionalPrefs, quiet_start: event.target.value || null })} /></div><div className="col-6 col-md-3"><label className="form-label" htmlFor="optional-quiet-end">Quiet hours end</label><input id="optional-quiet-end" type="time" className="form-control" value={optionalPrefs.quiet_end || ''} onChange={(event) => setOptionalPrefs({ ...optionalPrefs, quiet_end: event.target.value || null })} /></div><div className="col-6 col-md-3"><label className="form-label" htmlFor="optional-digest-time">Daily digest time</label><input id="optional-digest-time" type="time" className="form-control" value={optionalPrefs.digest_time || '09:00'} onChange={(event) => setOptionalPrefs({ ...optionalPrefs, digest_time: event.target.value })} /></div><div className="col-6 col-md-3"><label className="form-label" htmlFor="optional-timezone">Timezone</label><input id="optional-timezone" className="form-control" value={optionalPrefs.timezone || 'UTC'} onChange={(event) => setOptionalPrefs({ ...optionalPrefs, timezone: event.target.value })} /></div></div>
+                    <button type="button" className="btn btn-primary btn-sm" onClick={saveOptionalPreferences} disabled={busy === 'optional-email-preferences'}>Save email preferences</button>
+                </div>
+            </section>
             <section className="card mb-3">
                 <div className="card-body">
                     <h2 className="h5">Email recipients</h2>

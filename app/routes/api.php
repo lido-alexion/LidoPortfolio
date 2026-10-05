@@ -201,10 +201,12 @@ Route::middleware('auth:sanctum')->prefix('notification-center')->group(function
         ->whereNumber('notification')->whereNumber('delivery');
     Route::get('/{notification}', [NotificationCenterController::class, 'show'])->whereNumber('notification');
     Route::post('/{notification}/read', [NotificationCenterController::class, 'markRead'])->whereNumber('notification');
+    Route::post('/{notification}/unread', [NotificationCenterController::class, 'markUnread'])->whereNumber('notification');
 });
 
 Route::middleware('auth:sanctum')->prefix('notification-settings')->group(function () {
     Route::get('/', [NotificationSettingsController::class, 'index']);
+    Route::put('/optional-emails', [NotificationSettingsController::class, 'updateOptionalEmailPreferences']);
     Route::get('/email-destinations', [NotificationSettingsController::class, 'emailDestinations']);
     Route::post('/email-destinations', [NotificationSettingsController::class, 'addEmailDestination']);
     Route::delete('/email-destinations/{destination}', [NotificationSettingsController::class, 'removeEmailDestination'])->whereNumber('destination');
@@ -514,11 +516,15 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         Route::get('/invites', [UserInviteController::class, 'index']);
         Route::post('/invites', [UserInviteController::class, 'store']);
         Route::post('/invites/{invite}/regenerate', [UserInviteController::class, 'regenerate']);
+        Route::get('/invites/{invite}/copy', [UserInviteController::class, 'copy']);
+        Route::post('/invites/{invite}/retry-email', [UserInviteController::class, 'retryEmail']);
         Route::delete('/invites/{invite}', [UserInviteController::class, 'destroy']);
 
         Route::get('/access-requests', [AccessRequestAdminController::class, 'index']);
         Route::get('/access-requests/{accessRequest}', [AccessRequestAdminController::class, 'show']);
         Route::post('/access-requests/{accessRequest}/create-invite', [AccessRequestAdminController::class, 'createInvite']);
+        Route::post('/access-requests/{accessRequest}/resend-verification', [AccessRequestAdminController::class, 'resendVerification']);
+        Route::get('/access-requests/{accessRequest}/invitation-copy', [AccessRequestAdminController::class, 'copyInvite']);
         Route::post('/access-requests/{accessRequest}/ignore', [AccessRequestAdminController::class, 'ignore']);
         Route::post('/access-requests/{accessRequest}/reject', [AccessRequestAdminController::class, 'reject']);
         Route::get('/access-request-bans', [AccessRequestAdminController::class, 'bans']);

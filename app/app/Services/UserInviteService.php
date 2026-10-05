@@ -3,9 +3,12 @@
 namespace App\Services;
 
 use App\Mail\UserInvitationMail;
+use App\Jobs\SendUserInviteEmail;
 use App\Models\User;
 use App\Models\UserInvite;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -93,6 +96,7 @@ class UserInviteService
         $invite = UserInvite::query()->create([
             'email' => $email,
             'token' => $this->hashToken($rawToken),
+            'token_encrypted' => Crypt::encryptString($rawToken),
             'invited_by_user_id' => $admin->id,
             'expires_at' => now()->addHours(self::EXPIRY_HOURS),
         ]);
@@ -118,6 +122,12 @@ class UserInviteService
 
         $rawToken = $this->generateRawToken();
         $invite->token = $this->hashToken($rawToken);
+        $invite->token_encrypted = Crypt::encryptString($rawToken);
+        $invite->email_delivery_status = 'not_queued';
+        $invite->email_delivery_attempts = 0;
+        $invite->email_queued_at = null;
+        $invite->email_accepted_at = null;
+        $invite->email_last_error_code = null;
         $invite->save();
 
         return [
@@ -175,6 +185,7 @@ class UserInviteService
 
         $invite->accepted_at = now();
         $invite->user_id = $user->id;
+        $invite->token_encrypted = null;
         $invite->save();
 
         return [
@@ -214,6 +225,10 @@ class UserInviteService
             'expires_at' => $invite->expires_at?->toIso8601String(),
             'accepted_at' => $invite->accepted_at?->toIso8601String(),
             'created_at' => $invite->created_at?->toIso8601String(),
+            'email_delivery_status' => $invite->email_delivery_status,
+            'email_delivery_attempts' => (int) $invite->email_delivery_attempts,
+            'email_accepted_at' => $invite->email_accepted_at?->toIso8601String(),
+            'email_last_error_code' => $invite->email_last_error_code,
             'invited_by' => $invite->invitedBy?->only(['id', 'name', 'email']),
             'invite_url' => $includeUrl ? $this->inviteUrl($rawToken) : null,
             'invite_message' => $includeUrl ? $this->composeInviteMessage($invite, $rawToken) : null,
@@ -245,16 +260,55 @@ class UserInviteService
         ));
     }
 
-    public function composeInviteMessage(UserInvite $invite, string $rawToken): string
+    public function queueInvitationEmail(UserInvite $invite, string $rawToken): void
+    {
+        Mail::to($invite->email)->queue(new UserInvitationMail(
+            $this->composeInviteMessage($invite, $rawToken, $invite->accessRequest?->full_name)
+        ));
+    }
+
+    public function copyableInvitation(UserInvite $invite): array
+    {
+        if (! $invite->isPending() || ! $invite->token_encrypted) {
+            throw ValidationException::withMessages(['invite' => ['The existing invitation link is no longer available.']]);
+        }
+        $token = Crypt::decryptString($invite->token_encrypted);
+
+        return [
+            'invite_url' => $this->inviteUrl($token),
+            'invite_message' => $this->composeInviteMessage($invite, $token, $invite->accessRequest?->full_name),
+        ];
+    }
+
+    public function retryInvitationEmail(UserInvite $invite): void
+    {
+        if (! $invite->isPending() || ! $invite->token_encrypted) {
+            throw ValidationException::withMessages(['invite' => ['The active invitation token is unavailable.']]);
+        }
+        if (in_array($invite->email_delivery_status, ['queued', 'processing', 'accepted'], true)) return;
+        $invite->update(['email_delivery_status' => 'queued', 'email_queued_at' => now(), 'email_last_error_code' => null]);
+        try {
+            SendUserInviteEmail::dispatch($invite->id)->onQueue('notifications');
+        } catch (\Throwable $e) {
+            $invite->refresh();
+            if ($invite->email_delivery_status === 'queued') {
+                $invite->update(['email_delivery_status' => 'failed', 'email_last_error_code' => 'MAIL_QUEUE_UNAVAILABLE']);
+            }
+            Log::warning('user_invite.email_queue_failed', ['invite_id' => $invite->id]);
+        }
+    }
+
+    public function composeInviteMessage(UserInvite $invite, string $rawToken, ?string $recipientName = null): string
     {
         $url = $this->inviteUrl($rawToken);
         $expires = $invite->expires_at?->timezone(config('app.timezone', 'UTC'))->format('D, M j, Y g:i A T');
-        $appName = config('app.name', 'Lido Portfolio');
+        $appName = 'StoX';
+        $greeting = trim((string) $recipientName) !== '' ? 'Hello '.trim((string) $recipientName).',' : 'Hello,';
 
         return <<<TEXT
 Subject: You're invited to {$appName}
 
-Hello,
+{$greeting}
 
 You've been invited to join {$appName}. Use the link below to set your password and sign in:
 
@@ -264,7 +318,8 @@ This link expires on {$expires} (72 hours from when the invitation was created).
 
 If it has expired or you no longer have the link, contact your administrator for a new invitation URL.
 
-Thank you.
+Thank you,
+StoX
 TEXT;
     }
 

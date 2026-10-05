@@ -322,6 +322,27 @@ export default function UserManagementPage() {
         }
     };
 
+    const copyExistingInvite = async (invite, field) => {
+        try {
+            const response = await api.get(`/invites/${invite.id}/copy`);
+            await copyText(response.data?.data?.[field] || '', field === 'invite_url' ? 'Invitation URL copied' : 'Invite message copied');
+        } catch (error) {
+            showToast(error?.response?.data?.message || 'Could not retrieve the existing invitation.', 'danger');
+        }
+    };
+
+    const retryInviteEmail = async (invite) => {
+        setInviteBusyId(invite.id);
+        try {
+            await api.post(`/invites/${invite.id}/retry-email`);
+            showToast('Invitation email queued for retry.', 'success');
+        } catch (error) {
+            showToast(error?.response?.data?.message || 'Could not retry invitation email.', 'danger');
+        } finally {
+            setInviteBusyId(null);
+        }
+    };
+
     const revokeInvite = async (invite) => {
         setInviteBusyId(invite.id);
         try {
@@ -509,6 +530,8 @@ export default function UserManagementPage() {
                                                                 Regenerating invalidates the current invitation URL.
                                                             </p>
                                                         ) : null}
+                                                        {invite.status === 'pending' ? <div className="d-flex flex-wrap gap-1 justify-content-end mb-1"><button type="button" className="btn btn-sm btn-outline-primary" disabled={busy} onClick={() => copyExistingInvite(invite, 'invite_url')}>Copy link</button><button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={() => copyExistingInvite(invite, 'invite_message')}>Copy invitation email</button><button type="button" className="btn btn-sm btn-outline-success" disabled={busy} onClick={() => retryInviteEmail(invite)}>Retry email</button></div> : null}
+                                                        {invite.status === 'pending' ? <div className="small text-muted text-end mb-1">Email: {invite.email_delivery_status || 'not queued'}{invite.email_last_error_code ? ` · ${invite.email_last_error_code}` : ''}</div> : null}
                                                         <LinkActionButtons
                                                             busy={busy}
                                                             url={null}

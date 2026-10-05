@@ -15,6 +15,13 @@ class NotificationChannelSettingsService
 {
     public const EXTERNAL_CHANNELS = ['telegram', 'email', 'webhook'];
 
+    public const OPTIONAL_EMAIL_CATEGORIES = [
+        'recommendation' => 'Recommendation updates',
+        'order_execution' => 'Order and execution updates',
+        'connection' => 'Broker connection issues',
+        'operations' => 'Scheduled job and data issues',
+    ];
+
     public function __construct(private LegacyTelegramChannelMigrator $legacyTelegram) {}
 
     public function all(User $user): array
@@ -31,6 +38,54 @@ class NotificationChannelSettingsService
             ['channel' => 'in_app', 'enabled' => true, 'health_status' => 'healthy', 'can_disable' => false],
             ...array_map(fn (string $channel) => $this->present($settings->get($channel), $channel, $accountEmail), self::EXTERNAL_CHANNELS),
         ];
+    }
+
+    public function optionalEmailPreferences(User $user): array
+    {
+        $setting = NotificationChannelSetting::query()->firstOrNew(['user_id' => $user->id, 'channel' => 'email']);
+        $stored = $setting->configuration ?? [];
+        $defaults = [
+            'enabled' => false,
+            'categories' => array_fill_keys(array_keys(self::OPTIONAL_EMAIL_CATEGORIES), false),
+            'modes' => array_fill_keys(array_keys(self::OPTIONAL_EMAIL_CATEGORIES), 'immediate'),
+            'quiet_start' => null,
+            'quiet_end' => null,
+            'digest_time' => '09:00',
+            'timezone' => $user->timezone ?: config('app.timezone', 'UTC'),
+        ];
+
+        return [
+            ...$defaults,
+            ...(array) ($stored['optional_email_preferences'] ?? []),
+            'catalogue' => self::OPTIONAL_EMAIL_CATEGORIES,
+        ];
+    }
+
+    public function updateOptionalEmailPreferences(User $user, array $data): array
+    {
+        $setting = NotificationChannelSetting::query()->firstOrNew(['user_id' => $user->id, 'channel' => 'email']);
+        $configuration = $setting->configuration ?? [];
+        $categories = array_fill_keys(array_keys(self::OPTIONAL_EMAIL_CATEGORIES), false);
+        foreach ((array) ($data['categories'] ?? []) as $category => $enabled) {
+            if (array_key_exists($category, $categories)) $categories[$category] = (bool) $enabled;
+        }
+        $modes = array_fill_keys(array_keys(self::OPTIONAL_EMAIL_CATEGORIES), 'immediate');
+        foreach ((array) ($data['modes'] ?? []) as $category => $mode) {
+            if (array_key_exists($category, $modes) && in_array($mode, ['immediate', 'digest'], true)) $modes[$category] = $mode;
+        }
+        $configuration['optional_email_preferences'] = [
+            'enabled' => (bool) ($data['enabled'] ?? false),
+            'categories' => $categories,
+            'modes' => $modes,
+            'quiet_start' => $data['quiet_start'] ?? null,
+            'quiet_end' => $data['quiet_end'] ?? null,
+            'digest_time' => $data['digest_time'] ?? '09:00',
+            'timezone' => $data['timezone'] ?? config('app.timezone', 'UTC'),
+        ];
+        $setting->configuration = $configuration;
+        $setting->save();
+
+        return $this->optionalEmailPreferences($user);
     }
 
     public function emailDestinations(User $user): array

@@ -120,7 +120,28 @@ class NotificationDeliveryProcessorTest extends TestCase
         Mail::assertSent(NotificationDeliveryMail::class, fn ($mail) => $mail->hasTo($delivery->destination));
     }
 
-    private function delivery(string $channel, string $conditionKey = 'processor:test'): NotificationDelivery
+    public function test_email_uses_minimal_canonical_content_and_strips_mutating_links(): void
+    {
+        Mail::fake();
+        $delivery = $this->delivery('email', 'privacy:test', [
+            'context' => ['portfolio_value' => 'VALUE_SECRET', 'quantity' => 'QUANTITY_SECRET', 'secret' => 'private-value'],
+            'primary_action' => ['label' => 'Cancel order', 'url' => '/api/orders/12/cancel'],
+        ]);
+        app(NotificationDeliveryProcessor::class)->process($delivery->id);
+
+        Mail::assertSent(NotificationDeliveryMail::class, function (NotificationDeliveryMail $mail) use ($delivery): bool {
+            $this->assertSame('Processor test', $mail->notificationTitle);
+            $this->assertSame('Delivery processor test.', $mail->notificationMessage);
+            $this->assertNull($mail->primaryAction);
+            $rendered = $mail->render();
+            $this->assertStringNotContainsString('VALUE_SECRET', $rendered);
+            $this->assertStringNotContainsString('QUANTITY_SECRET', $rendered);
+            $this->assertStringNotContainsString('private-value', $rendered);
+            return $mail->hasTo($delivery->destination);
+        });
+    }
+
+    private function delivery(string $channel, string $conditionKey = 'processor:test', array $overrides = []): NotificationDelivery
     {
         $user = User::factory()->create(['email' => 'processor@example.test']);
         $settings = app(NotificationChannelSettingsService::class);
@@ -132,12 +153,16 @@ class NotificationDeliveryProcessorTest extends TestCase
         $settings->update($user, $channel, $configuration, false);
         $settings->markVerified($user, $channel);
         $settings->update($user, $channel, $configuration, true);
+        if ($channel === 'email') {
+            $settings->updateOptionalEmailPreferences($user, ['enabled' => true, 'categories' => ['operations' => true], 'modes' => ['operations' => 'immediate']]);
+        }
         app(NotificationPublisher::class)->publishCondition($conditionKey, [$user], [
             'notification_type' => 'test.processor',
             'audience' => 'investor',
             'severity' => 'critical',
             'title' => 'Processor test',
             'message' => 'Delivery processor test.',
+            ...$overrides,
         ]);
 
         return NotificationDelivery::query()->firstOrFail();

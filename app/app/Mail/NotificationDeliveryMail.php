@@ -12,15 +12,20 @@ class NotificationDeliveryMail extends Mailable
         public readonly string $notificationTitle,
         public readonly string $notificationMessage,
         public readonly ?array $primaryAction = null,
+        public readonly array $items = [],
     ) {}
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: '[StoX] '.$this->notificationTitle);
+        return new Envelope(subject: $this->items ? '[StoX] Daily notification digest' : '[StoX] '.$this->notificationTitle);
     }
 
     public function content(): Content
     {
-        return new Content(text: 'emails.notification-delivery');
+        return new Content(
+            view: 'emails.notification-delivery-html',
+            text: 'emails.notification-delivery',
+            with: ['items' => $this->items],
+        );
     }
 }

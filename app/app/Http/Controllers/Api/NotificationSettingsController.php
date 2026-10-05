@@ -15,7 +15,24 @@ class NotificationSettingsController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        return response()->json(['data' => $this->settings->all($request->user())]);
+        return response()->json(['data' => $this->settings->all($request->user()), 'optional_email_preferences' => $this->settings->optionalEmailPreferences($request->user())]);
+    }
+
+    public function updateOptionalEmailPreferences(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'enabled' => ['required', 'boolean'],
+            'categories' => ['required', 'array'],
+            'categories.*' => ['boolean'],
+            'modes' => ['nullable', 'array'],
+            'modes.*' => ['in:immediate,digest'],
+            'quiet_start' => ['nullable', 'date_format:H:i'],
+            'quiet_end' => ['nullable', 'date_format:H:i'],
+            'digest_time' => ['required', 'date_format:H:i'],
+            'timezone' => ['required', 'timezone'],
+        ]);
+
+        return response()->json(['data' => $this->settings->updateOptionalEmailPreferences($request->user(), $validated)]);
     }
 
     public function emailDestinations(Request $request): JsonResponse

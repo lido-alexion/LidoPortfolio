@@ -45,14 +45,38 @@ class NotificationDeliveryAdapter
 
     private function email(NotificationDelivery $delivery): array
     {
+        if ($delivery->delivery_kind === 'digest') {
+            $items = $delivery->digestMemberships()->with('recipientNotification.source')
+                ->get()->map(fn ($membership) => [
+                    'title' => $membership->recipientNotification->source->title,
+                    'message' => $membership->recipientNotification->source->message,
+                ])->all();
+            if ($items === []) return $this->failure(false, null, 'DIGEST_EMPTY');
+            Mail::to($delivery->destination)->send(new NotificationDeliveryMail('Your StoX daily digest', '', null, $items));
+
+            return $this->success(null);
+        }
         $source = $delivery->recipientNotification->source;
         Mail::to($delivery->destination)->send(new NotificationDeliveryMail(
             $source->title,
             $source->message,
-            $source->primary_action,
+            $this->navigationAction($source->primary_action),
         ));
 
         return $this->success(null);
+    }
+
+    private function navigationAction(?array $action): ?array
+    {
+        if (! $action || ! isset($action['url']) || ! is_string($action['url'])) return null;
+        $path = parse_url($action['url'], PHP_URL_PATH) ?: '';
+        $host = parse_url($action['url'], PHP_URL_HOST);
+        $expectedHost = parse_url((string) config('app.url'), PHP_URL_HOST);
+        if (! str_starts_with($path, '/') || str_starts_with($path, '//')
+            || ($host !== null && strtolower($host) !== strtolower((string) $expectedHost))
+            || preg_match('#/(approve|execute|place|cancel|reject|accept)(/|$)#i', $path)) return null;
+
+        return ['label' => 'Open in StoX', 'url' => $action['url']];
     }
 
     private function webhook(NotificationDelivery $delivery): array

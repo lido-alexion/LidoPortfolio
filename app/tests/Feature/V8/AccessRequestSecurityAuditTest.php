@@ -39,7 +39,7 @@ class AccessRequestSecurityAuditTest extends TestCase
         $this->assertInstanceOf(TestingHumanVerificationService::class, app(HumanVerificationService::class));
     }
 
-    public function test_two_verification_tokens_for_one_email_create_one_pending_request(): void
+    public function test_duplicate_submission_does_not_create_another_verification_or_pending_request(): void
     {
         Mail::fake();
         config(['access_requests.captcha.driver' => 'testing']);
@@ -49,16 +49,12 @@ class AccessRequestSecurityAuditTest extends TestCase
         $this->postJson('/api/auth/access-requests', $payload)->assertOk();
         $this->postJson('/api/auth/access-requests', $payload)->assertOk();
 
-        $tokens = [];
-        Mail::assertSent(AccessRequestVerificationMail::class, function (AccessRequestVerificationMail $mail) use (&$tokens): bool {
-            $tokens[] = Str::afterLast($mail->verificationUrl, '/verify/');
+        Mail::assertSent(AccessRequestVerificationMail::class, 1);
+        $this->assertDatabaseCount('stox_access_requests', 1);
+        $this->assertDatabaseCount('stox_access_request_verifications', 1);
 
-            return true;
-        });
-        $this->assertCount(2, $tokens);
-
-        $this->postJson('/api/auth/access-requests/verify/'.$tokens[0])->assertJsonPath('status', 'pending');
-        $this->postJson('/api/auth/access-requests/verify/'.$tokens[1])->assertJsonPath('status', 'blocked');
-        $this->assertSame(1, AccessRequest::query()->where('email_normalized', Str::lower($email))->count());
+        $request = AccessRequest::query()->where('email_normalized', Str::lower($email))->firstOrFail();
+        $this->assertSame(AccessRequest::VERIFICATION_UNVERIFIED, $request->verification_status);
+        $this->assertSame(AccessRequest::STATUS_PENDING, $request->status);
     }
 }

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class UserInvite extends Model
 {
@@ -15,6 +16,12 @@ class UserInvite extends Model
     protected $fillable = [
         'email',
         'token',
+        'token_encrypted',
+        'email_delivery_status',
+        'email_delivery_attempts',
+        'email_queued_at',
+        'email_accepted_at',
+        'email_last_error_code',
         'invited_by_user_id',
         'expires_at',
         'accepted_at',
@@ -23,12 +30,15 @@ class UserInvite extends Model
 
     protected $hidden = [
         'token',
+        'token_encrypted',
     ];
 
     protected function casts(): array
     {
         return [
             'expires_at' => 'datetime',
+            'email_queued_at' => 'datetime',
+            'email_accepted_at' => 'datetime',
             'accepted_at' => 'datetime',
         ];
     }
@@ -36,6 +46,11 @@ class UserInvite extends Model
     public function invitedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'invited_by_user_id');
+    }
+
+    public function accessRequest(): HasOne
+    {
+        return $this->hasOne(AccessRequest::class, 'user_invite_id');
     }
 
     public function user(): BelongsTo

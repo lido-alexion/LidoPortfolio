@@ -40,12 +40,29 @@ class AccessRequestService
                 return ['message' => $this->genericSubmitMessage()];
             }
 
-            $result = $this->verifications->create($fullName, $normalized);
-            $url = $this->verifications->verificationUrl($result['raw_token']);
-            $this->notifications->sendVerificationEmail($normalized, trim($fullName), $url);
-            $this->audit->record('verification_initiated', $normalized, null, null, [
-                'verification_id' => $result['verification']->id,
-            ]);
+            if ($check['reason'] === 'existing_user') {
+                $this->audit->record('verification_blocked', $normalized, null, null, ['reason' => 'existing_user']);
+
+                return ['message' => $this->genericSubmitMessage()];
+            }
+
+            $request = DB::transaction(function () use ($fullName, $normalized) {
+                $request = AccessRequest::query()->create([
+                    'full_name' => trim($fullName),
+                    'email_normalized' => $normalized,
+                    'status' => AccessRequest::STATUS_PENDING,
+                    'verification_status' => AccessRequest::VERIFICATION_UNVERIFIED,
+                    'verified_at' => null,
+                ]);
+                $result = $this->verifications->create($fullName, $normalized, $request);
+                $verificationId = $result['verification']->id;
+                DB::afterCommit(fn () => $this->notifications->queueVerificationEmail($normalized, trim($fullName), $request->id, $verificationId));
+                $this->audit->record('request_created_unverified', $normalized, $request->id, null, [
+                    'verification_id' => $result['verification']->id,
+                ]);
+
+                return $request;
+            });
 
             return ['message' => $this->genericSubmitMessage()];
         });
@@ -70,35 +87,21 @@ class AccessRequestService
                 ->lockForUpdate()
                 ->first();
 
-            if ($locked === null || $locked->isUsed() || $locked->isExpired()) {
+            $request = $locked?->accessRequest()->lockForUpdate()->first();
+            if ($locked === null || $request === null || $locked->isUsed() || $locked->isExpired()
+                || ! $request->isPending() || $request->verification_status !== AccessRequest::VERIFICATION_UNVERIFIED) {
                 throw ValidationException::withMessages([
                     'token' => ['This verification link is invalid or has expired.'],
                 ]);
             }
 
-            $check = $this->policy->canCreatePendingRequest($locked->email_normalized);
-            if (! $check['allowed']) {
-                $this->verifications->markUsed($locked);
-                $this->audit->record('pending_blocked', $locked->email_normalized, null, null, [
-                    'reason' => $check['reason'],
-                ]);
-
-                return [
-                    'message' => 'Thank you. If your request can proceed, an administrator will follow up by email.',
-                    'status' => 'blocked',
-                ];
-            }
-
-            $request = AccessRequest::query()->create([
-                'full_name' => $locked->full_name,
-                'email_normalized' => $locked->email_normalized,
-                'status' => AccessRequest::STATUS_PENDING,
-                'verified_at' => now(),
-            ]);
-
+            $request->verification_status = AccessRequest::VERIFICATION_VERIFIED;
+            $request->verified_at = now();
+            $request->save();
             $this->verifications->markUsed($locked);
-            $this->audit->record('pending_created', $locked->email_normalized, $request->id);
-            $this->notifications->notifyAdminsPending($request);
+            $this->audit->record('verification_completed', $locked->email_normalized, $request->id, null, [
+                'verification_status' => 'verified',
+            ]);
 
             return [
                 'message' => 'Your email is verified. An administrator will review your request and contact you by email.',
@@ -110,7 +113,7 @@ class AccessRequestService
 
     public function genericSubmitMessage(): string
     {
-        return 'If this email is eligible for an access request, a verification email will be sent shortly. If you already have an account, use the login page.';
+        return 'If this email is eligible, an administrator can review the access request. If you already use StoX, please use the login page.';
     }
 
     protected function emailLockKey(string $normalized): string

@@ -19,6 +19,8 @@ function statusBadge(status) {
             return <span className="badge bg-secondary">Ignored</span>;
         case 'rejected':
             return <span className="badge bg-danger">Rejected</span>;
+        case 'expired':
+            return <span className="badge bg-secondary">Expired</span>;
         default:
             return <span className="badge bg-secondary">{status}</span>;
     }
@@ -94,6 +96,16 @@ export default function AccessRequestsAdminSection() {
         }
     };
 
+    const copyInvitation = async (row, field = 'invite_message') => {
+        try {
+            const response = await api.get(`/access-requests/${row.id}/invitation-copy`);
+            await navigator.clipboard.writeText(response.data?.data?.[field] || '');
+            showToast(field === 'invite_url' ? 'Existing invitation link copied.' : 'Ready-to-send invitation email copied.', 'success');
+        } catch (error) {
+            showToast(error?.response?.data?.message || 'Could not copy invitation email.', 'danger');
+        }
+    };
+
     return (
         <div className="card mb-3">
             <div className="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
@@ -109,7 +121,7 @@ export default function AccessRequestsAdminSection() {
             </div>
             <div className="card-body">
                 <p className="text-muted small">
-                    Verified guest requests awaiting Admin Create, Ignore, or Reject. Create issues the standard secure invitation email.
+                    Requests appear here before email verification. Verification is advisory; approval issues the standard secure invitation.
                 </p>
                 {loading ? (
                     <div className="text-muted">Loading access requests…</div>
@@ -124,6 +136,7 @@ export default function AccessRequestsAdminSection() {
                                     <th>Email</th>
                                     <th>Status</th>
                                     <th>Verified</th>
+                                    <th>Email delivery</th>
                                     <th />
                                 </tr>
                             </thead>
@@ -133,7 +146,8 @@ export default function AccessRequestsAdminSection() {
                                         <td>{row.full_name}</td>
                                         <td>{row.email}</td>
                                         <td>{statusBadge(row.status)}</td>
-                                        <td>{formatDate(row.verified_at)}</td>
+                                        <td><span className={`badge ${row.verification_status === 'verified' ? 'bg-success' : 'bg-warning text-dark'}`}>{row.verification_status === 'verified' ? 'Verified' : 'Unverified'}</span></td>
+                                        <td className="small">{row.invite_email_delivery_status || row.verification_email_delivery_status || '—'}{(row.invite_email_last_error_code || row.verification_email_last_error_code) ? <span className="text-danger d-block">{row.invite_email_last_error_code || row.verification_email_last_error_code}</span> : null}</td>
                                         <td className="text-end">
                                             <button
                                                 type="button"
@@ -148,10 +162,14 @@ export default function AccessRequestsAdminSection() {
                                                         type="button"
                                                         className="btn btn-sm btn-success me-1"
                                                         disabled={busyId === row.id}
-                                                        onClick={() => act(row, 'create-invite')}
+                                                        onClick={() => {
+                                                            if (row.verification_status !== 'verified' && !window.confirm('This email address has not been verified. Approve this request anyway?')) return;
+                                                            act(row, 'create-invite', row.verification_status === 'unverified' ? { confirm_unverified: true } : {});
+                                                        }}
                                                     >
                                                         Create invite
                                                     </button>
+                                                    {row.verification_status === 'unverified' ? <button type="button" className="btn btn-sm btn-outline-primary me-1" disabled={busyId === row.id} onClick={() => act(row, 'resend-verification')}>Resend verification</button> : null}
                                                     <button
                                                         type="button"
                                                         className="btn btn-sm btn-outline-secondary me-1"
@@ -188,6 +206,8 @@ export default function AccessRequestsAdminSection() {
                                                     </button>
                                                 </>
                                             ) : null}
+                                            {row.status === 'created' ? <><button type="button" className="btn btn-sm btn-outline-primary me-1" onClick={() => copyInvitation(row)}>Copy invitation email</button><button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => copyInvitation(row, 'invite_url')}>Copy invitation link</button></> : null}
+                                            {row.status === 'created' && row.invite_email_delivery_status === 'failed' ? <button type="button" className="btn btn-sm btn-outline-warning ms-1" onClick={async () => { try { await api.post(`/invites/${row.user_invite_id}/retry-email`); showToast('Invitation email queued for retry.'); await load(); } catch (error) { showToast(error?.response?.data?.message || 'Email retry failed.', 'danger'); } }}>Retry email</button> : null}
                                         </td>
                                     </tr>
                                 ))}
@@ -226,7 +246,7 @@ export default function AccessRequestsAdminSection() {
                     <ul className="small mb-3">
                         {(detail.history || []).map((h) => (
                             <li key={h.id}>
-                                #{h.id} — {h.status} — {formatDate(h.resolved_at || h.verified_at)}
+                                #{h.id} — {h.status} / {h.verification_status} — {formatDate(h.resolved_at || h.verified_at || h.created_at)}
                             </li>
                         ))}
                     </ul>

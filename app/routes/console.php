@@ -459,6 +459,11 @@ Schedule::command('portfolio:purge-access-request-verifications')
     ->timezone($timezone)
     ->name('purge-access-request-verifications');
 
+Schedule::command('portfolio:send-notification-digests')
+    ->everyMinute()
+    ->timezone($timezone)
+    ->name('notification-digest-dispatch');
+
 Schedule::command('portfolio:send-kite-readiness-reminders')
     ->everyMinute()
     ->timezone($timezone)

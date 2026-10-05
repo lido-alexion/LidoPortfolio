@@ -6,8 +6,10 @@ use App\Mail\AccessRequestIgnoredMail;
 use App\Mail\AccessRequestRejectedMail;
 use App\Mail\AccessRequestVerificationMail;
 use App\Models\AccessRequest;
+use App\Models\AccessRequestVerification;
 use App\Models\User;
 use App\Models\UserInvite;
+use App\Jobs\SendAccessRequestVerificationEmail;
 use App\Services\UserInviteService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -31,6 +33,23 @@ class AccessRequestNotificationService
             $this->audit->record('verification_email_failed', $email, null, null, [
                 'error' => $e->getMessage(),
             ]);
+        }
+    }
+
+    public function queueVerificationEmail(string $email, string $fullName, int $requestId, int $verificationId): void
+    {
+        try {
+            $verification = AccessRequestVerification::query()->findOrFail($verificationId);
+            $verification->update(['email_delivery_status' => 'queued', 'email_queued_at' => now(), 'email_last_error_code' => null]);
+            SendAccessRequestVerificationEmail::dispatch($verificationId)->onQueue('notifications');
+            $this->audit->record('verification_email_queued', $email, $requestId);
+        } catch (\Throwable $e) {
+            $verification = AccessRequestVerification::query()->find($verificationId);
+            if ($verification && $verification->email_delivery_status === 'queued') {
+                $verification->update(['email_delivery_status' => 'failed', 'email_last_error_code' => 'MAIL_QUEUE_UNAVAILABLE']);
+            }
+            Log::warning('access_request.verification_email_queue_failed', ['request_id' => $requestId]);
+            $this->audit->record('verification_email_failed', $email, $requestId, null, ['reason' => 'queue_unavailable']);
         }
     }
 
@@ -64,6 +83,15 @@ class AccessRequestNotificationService
                 'invite_id' => $invite->id,
                 'error' => $e->getMessage(),
             ]);
+        }
+    }
+
+    public function queueInviteEmail(UserInvite $invite, string $rawToken): void
+    {
+        try {
+            $this->invites->retryInvitationEmail($invite);
+        } catch (\Throwable $e) {
+            Log::warning('access_request.invite_email_queue_failed', ['invite_id' => $invite->id]);
         }
     }
 

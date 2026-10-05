@@ -22,6 +22,13 @@ class NotificationCenterController extends Controller
             'type' => ['nullable', 'string', 'max:128'],
             'portfolio_id' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'q' => ['nullable', 'string', 'max:200'],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+            'category' => ['nullable', 'string', 'max:128'],
+            'channel' => ['nullable', Rule::in(['email', 'telegram', 'webhook'])],
+            'delivery_status' => ['nullable', Rule::in(['queued', 'processing', 'delivered', 'failed', 'suppressed'])],
+            'read_state' => ['nullable', Rule::in(['read', 'unread'])],
         ]);
 
         $query = $this->accountQuery($request)->with('source');
@@ -46,6 +53,22 @@ class NotificationCenterController extends Controller
         if (isset($validated['portfolio_id'])) {
             $portfolioId = (int) $validated['portfolio_id'];
             $query->whereHas('source', fn (Builder $source) => $source->where('context->portfolio_id', $portfolioId));
+        }
+        if (isset($validated['q'])) {
+            $keyword = '%'.addcslashes(trim($validated['q']), '%_\\\\').'%';
+            $query->whereHas('source', fn (Builder $source) => $source->where('title', 'like', $keyword)->orWhere('message', 'like', $keyword));
+        }
+        if (isset($validated['category'])) {
+            $query->whereHas('source', fn (Builder $source) => $source->where('notification_type', $validated['category']));
+        }
+        if (isset($validated['from'])) $query->where('latest_activity_at', '>=', $validated['from']);
+        if (isset($validated['to'])) $query->where('latest_activity_at', '<=', $validated['to'].' 23:59:59');
+        if (isset($validated['read_state'])) $query->where('attention_state', $validated['read_state']);
+        if (isset($validated['channel']) || isset($validated['delivery_status'])) {
+            $query->whereHas('deliveries', function (Builder $delivery) use ($validated): void {
+                if (isset($validated['channel'])) $delivery->where('channel', $validated['channel']);
+                if (isset($validated['delivery_status'])) $delivery->where('status', $validated['delivery_status']);
+            });
         }
 
         $paginator = $query->orderByDesc('latest_activity_at')->orderByDesc('id')
@@ -109,6 +132,14 @@ class NotificationCenterController extends Controller
         $item = $this->accountQuery($request)->findOrFail($notification);
 
         return response()->json(['data' => $this->summary($publisher->markRead($item)->load('source'))]);
+    }
+
+    public function markUnread(Request $request, int $notification): JsonResponse
+    {
+        $item = $this->accountQuery($request)->findOrFail($notification);
+        $item->update(['attention_state' => 'unread', 'read_at' => null]);
+
+        return response()->json(['data' => $this->summary($item->fresh('source'))]);
     }
 
     public function markAllRead(Request $request): JsonResponse

@@ -38,4 +38,9 @@ class NotificationDelivery extends Model
     {
         return $this->hasMany(NotificationDeliveryAttempt::class, 'delivery_id');
     }
+
+    public function digestMemberships(): HasMany
+    {
+        return $this->hasMany(NotificationDigestMembership::class, 'delivery_id');
+    }
 }

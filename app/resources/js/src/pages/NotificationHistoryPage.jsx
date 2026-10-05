@@ -37,6 +37,8 @@ export default function NotificationHistoryPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [retryingDelivery, setRetryingDelivery] = useState(null);
+    const [filters, setFilters] = useState({ q: '', from: '', to: '', category: '', channel: '', delivery_status: '', read_state: '' });
+    const [appliedFilters, setAppliedFilters] = useState({});
     const view = params.get('view') || 'all';
     const selectedId = params.get('notification');
     const primaryAction = safePrimaryAction(detail?.primary_action);
@@ -45,14 +47,16 @@ export default function NotificationHistoryPage() {
         setLoading(true);
         setError(null);
         try {
-            const response = await api.get(`/notification-center?view=${encodeURIComponent(view)}&per_page=50`, { skipErrorToast: true });
+            const query = new URLSearchParams({ view, per_page: '50' });
+            Object.entries(appliedFilters).forEach(([key, value]) => { if (value) query.set(key, value); });
+            const response = await api.get(`/notification-center?${query.toString()}`, { skipErrorToast: true });
             setPayload(response.data || { data: [], meta: {} });
         } catch (requestError) {
             setError(requestError);
         } finally {
             setLoading(false);
         }
-    }, [view]);
+    }, [view, appliedFilters]);
 
     useEffect(() => { load(); }, [load]);
     useEffect(() => {
@@ -74,6 +78,10 @@ export default function NotificationHistoryPage() {
     const reloadAll = () => Promise.all([load(), refreshChrome()]);
     const markRead = async (id) => {
         await api.post(`/notification-center/${id}/read`, null, { skipErrorToast: true });
+        await reloadAll();
+    };
+    const markUnread = async (id) => {
+        await api.post(`/notification-center/${id}/unread`, null, { skipErrorToast: true });
         await reloadAll();
     };
     const markAllRead = async () => {
@@ -111,6 +119,17 @@ export default function NotificationHistoryPage() {
                     <button type="button" key={key} className={`nav-link${view === key ? ' active' : ''}`} onClick={() => setParams(key === 'all' ? {} : { view: key })}>{label}</button>
                 ))}
             </div>
+
+            <form className="row g-2 mb-3" role="search" aria-label="Filter notification history" onSubmit={(event) => { event.preventDefault(); setAppliedFilters(filters); }}>
+                <div className="col-12 col-md-4"><label className="visually-hidden" htmlFor="notification-search">Search notifications</label><input id="notification-search" className="form-control" value={filters.q} onChange={(event) => setFilters({ ...filters, q: event.target.value })} placeholder="Search title or message" /></div>
+                <div className="col-6 col-md-2"><label className="visually-hidden" htmlFor="notification-from">From date</label><input id="notification-from" type="date" className="form-control" value={filters.from} onChange={(event) => setFilters({ ...filters, from: event.target.value })} /></div>
+                <div className="col-6 col-md-2"><label className="visually-hidden" htmlFor="notification-to">To date</label><input id="notification-to" type="date" className="form-control" value={filters.to} onChange={(event) => setFilters({ ...filters, to: event.target.value })} /></div>
+                <div className="col-6 col-md-2"><label className="visually-hidden" htmlFor="notification-category">Category</label><input id="notification-category" className="form-control" value={filters.category} onChange={(event) => setFilters({ ...filters, category: event.target.value })} placeholder="Category" /></div>
+                <div className="col-6 col-md-2"><label className="visually-hidden" htmlFor="notification-read-state">Read state</label><select id="notification-read-state" className="form-select" value={filters.read_state} onChange={(event) => setFilters({ ...filters, read_state: event.target.value })}><option value="">Any read state</option><option value="unread">Unread</option><option value="read">Read</option></select></div>
+                <div className="col-6 col-md-2"><label className="visually-hidden" htmlFor="notification-channel">Channel</label><select id="notification-channel" className="form-select" value={filters.channel} onChange={(event) => setFilters({ ...filters, channel: event.target.value })}><option value="">Any channel</option><option value="email">Email</option><option value="telegram">Telegram</option><option value="webhook">Webhook</option></select></div>
+                <div className="col-6 col-md-2"><label className="visually-hidden" htmlFor="notification-delivery-status">Delivery status</label><select id="notification-delivery-status" className="form-select" value={filters.delivery_status} onChange={(event) => setFilters({ ...filters, delivery_status: event.target.value })}><option value="">Any delivery status</option>{['queued', 'processing', 'delivered', 'failed', 'suppressed'].map((status) => <option key={status} value={status}>{status}</option>)}</select></div>
+                <div className="col-12"><button className="btn btn-sm btn-primary" type="submit">Apply filters</button><button className="btn btn-sm btn-link" type="button" onClick={() => { const empty = { q: '', from: '', to: '', category: '', channel: '', delivery_status: '', read_state: '' }; setFilters(empty); setAppliedFilters(empty); }}>Clear</button></div>
+            </form>
 
             {selectedId && detail && (
                 <section className="card mb-3" aria-label="Notification detail">
@@ -189,7 +208,7 @@ export default function NotificationHistoryPage() {
                                     <div className="small mt-1">{item.message}</div>
                                     <div className="small text-muted mt-1">{item.condition_state} · {item.latest_activity_at ? new Date(item.latest_activity_at).toLocaleString() : '—'}</div>
                                 </div>
-                                {item.attention_state === 'unread' && <button type="button" className="btn btn-outline-secondary btn-sm align-self-start" onClick={() => markRead(item.id)}>Mark as read</button>}
+                                <button type="button" className="btn btn-outline-secondary btn-sm align-self-start" onClick={() => item.attention_state === 'unread' ? markRead(item.id) : markUnread(item.id)}>{item.attention_state === 'unread' ? 'Mark as read' : 'Mark unread'}</button>
                             </div>
                         </div>
                     ))}

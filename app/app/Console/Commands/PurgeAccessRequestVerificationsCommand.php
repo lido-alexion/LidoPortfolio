@@ -13,8 +13,9 @@ class PurgeAccessRequestVerificationsCommand extends Command
 
     public function handle(AccessRequestVerificationService $verifications): int
     {
+        $expiredRequests = $verifications->expireUnverifiedRequests();
         $deleted = $verifications->purgeExpired();
-        $this->info("Purged {$deleted} verification record(s).");
+        $this->info("Expired {$expiredRequests} unverified request(s); purged {$deleted} verification record(s).");
 
         return self::SUCCESS;
     }
