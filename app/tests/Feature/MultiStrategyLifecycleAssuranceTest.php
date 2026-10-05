@@ -321,7 +321,7 @@ class MultiStrategyLifecycleAssuranceTest extends TestCase
             'allocation_pct' => 40,
             'is_factory' => false,
         ]);
-        $version = TradingStrategyVersion::query()->create([
+        $version = $this->createTestStrategyVersion([
             'strategy_id' => $second->id,
             'version' => 1,
             'version_label' => '1.0',
