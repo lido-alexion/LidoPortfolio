@@ -12,7 +12,8 @@
 | **History target** | Up to 8 years of available 1-minute OHLCV |
 | **Canonical storage** | Apache Parquet |
 | **Analytical stack** | DuckDB + Polars/Python |
-| **Primary research machine** | MacBook Pro |
+| **Initial receiving/holding machine** | Windows 11 laptop with sufficient local storage; verified batches are manually offloaded to NTFS external storage |
+| **Canonical research/training machine** | MacBook Pro |
 | **Downstream ML epic** | V4-FEAT-057 — ML Feature Engineering, Model Training & Validation |
 | **Production lifecycle epic** | V4-FEAT-056 — ML Lifecycle Automation, Deployment & Operations |
 | **Related prospective-data epic** | V4-FEAT-063 — Live Microstructure Data Collection |
@@ -28,13 +29,19 @@ The epic owns acquisition, validation, storage and analytical access for a large
 The intended operating model is:
 
 ```text
-Zerodha Kite historical API
+Kite historical source
         |
         v
-FEAT-065 historical backfill
+StoX VPS backfill and verified daily batches
         |
         v
-Canonical Parquet corpus on MacBook
+Windows 11 initial receipt / holding
+        |
+        v
+Manual offload to NTFS external storage
+        |
+        v
+MacBook canonical Parquet corpus
         |
         +--> DuckDB / Polars research
         +--> PIT-safe dataset construction
@@ -49,15 +56,13 @@ Approved/versioned model artifact
 StoX VPS / FEAT-056 production lifecycle + inference
 ```
 
-The MacBook is the heavy offline data/research/training workstation. The StoX VPS remains focused on production serving, FEAT-063 live collection, model lifecycle and production inference.
-
----
+The Windows laptop is the initial receiving/holding machine; it does not replace the MacBook as the canonical research-data home or heavy offline research/training workstation. The user manually offloads verified batches to NTFS external storage and later copies them to the MacBook. Kite acquisition and the secure VPS-to-Windows transfer are specified by V9-DATA-002; this V8 epic remains the owner of the canonical Parquet and research contract. The StoX VPS also remains focused on production serving, FEAT-063 live collection, model lifecycle and production inference.
 
 ## 2. Frozen product decisions
 
 | Decision | Frozen choice |
 |---|---|
-| 065-01 | The MacBook Pro is the primary historical-data, research and heavy offline ML training machine. Approved model artifacts can later be deployed to the StoX VPS for production inference. |
+| 065-01 | The Windows 11 laptop is the initial receiving/holding machine for verified historical-data batches. The user manually offloads batches to NTFS external storage and later copies them to the MacBook Pro, which remains the canonical research-data home and heavy offline ML research/training machine. Approved model artifacts can later be deployed to the StoX VPS for production inference. |
 | 065-02 | Apache Parquet is the canonical historical storage format. MySQL/MariaDB is not the primary repository for the minute-level corpus. |
 | 065-03 | Use the **current NIFTY 500 fixed universe** for V8. Historical constituent reconstruction is out of scope and survivorship bias is explicitly accepted. |
 | 065-04 | Backfill **up to 8 years** of available 1-minute OHLCV, subject to actual provider/instrument availability. |
@@ -71,7 +76,7 @@ The MacBook is the heavy offline data/research/training workstation. The StoX VP
 | 065-12 | Historical derivative/Open-Interest enrichment is optional Dataset B work and must not block the core Dataset A OHLCV corpus. |
 | 065-13 | Implement in stages: POC -> full backfill -> downstream feature/model research. |
 | 065-14 | Keep the storage/analytical architecture source-agnostic enough to support a future alternate historical provider. |
-| 065-15 | StoX will build **no automated backup mechanism** for the Mac-hosted historical corpus. The user will periodically copy canonical Parquet and metadata to an external disk manually. |
+| 065-15 | StoX will build **no automated backup mechanism** for the Mac-hosted historical corpus. The user will manually offload verified incoming batches from the Windows holding machine to NTFS external storage and later copy them to the Mac; ongoing manual external-disk copies of canonical Parquet and metadata remain the backup process. |
 
 ---
 
@@ -180,7 +185,7 @@ There is no requirement to maximize API throughput. Reliability and resumability
 
 ## 7. Canonical storage architecture
 
-The canonical analytical store is **Apache Parquet on the MacBook**.
+The canonical analytical store is **Apache Parquet on the MacBook**. The Windows laptop is an initial receiving/holding location only; it is not a competing canonical corpus.
 
 The implementation SHALL prefer partitioning that supports efficient date/instrument pruning without creating pathological numbers of tiny files.
 
@@ -213,6 +218,7 @@ FEAT-065 SHALL NOT implement an automated backup/replication subsystem.
 Operational assumption:
 
 - the active canonical corpus lives on the MacBook;
+- verified delivery batches are initially received/held on the Windows laptop, manually offloaded to NTFS external storage, then copied to the MacBook;
 - the user periodically copies the canonical Parquet corpus and essential metadata to an external disk manually;
 - temporary caches, DuckDB spill files and reproducible intermediate datasets do not require backup;
 - loss of the active corpus is recoverable by rerunning the historical backfill, although doing so has a time cost.
@@ -230,7 +236,7 @@ Use:
 
 Do not load the complete corpus into memory unnecessarily.
 
-The POC must validate representative workloads on the actual MacBook before the full backfill is launched.
+The bounded POC must validate the agreed Windows receipt/holding and NTFS-to-Mac handoff, then verify representative Parquet, DuckDB and Polars workloads on the actual MacBook before the full corpus is accepted for research. Secure VPS-to-Windows acquisition and transfer behavior is governed by V9-DATA-002.
 
 ---
 
@@ -377,7 +383,7 @@ FEAT-065 is complete when:
 9. Coverage and missingness reports exist by instrument/date range.
 10. Source/provenance metadata is retained.
 11. Provider-specific API details do not leak into the canonical analytical contract unnecessarily.
-12. POC performance confirms the MacBook is suitable before full-scale backfill.
+12. The bounded POC validates the Windows receiving/holding and NTFS-to-Mac handoff, and confirms the MacBook is suitable for representative Parquet/DuckDB/Polars research workloads before the full corpus is accepted for research.
 13. Dataset B remains optional and non-blocking.
 14. FEAT-063 remains independently deployable and is not coupled to completion of this epic.
 15. FEAT-057 can consume the resulting corpus without depending on retired FEAT-058/059 contracts.
@@ -411,7 +417,8 @@ This epic does not own:
 - selected historical index acquisition;
 - source normalization/provenance;
 - quality and coverage reporting;
-- schema-versioned Parquet storage on the MacBook;
+- initial receipt/holding on the Windows laptop with manual NTFS external-storage handoff;
+- schema-versioned canonical Parquet storage on the MacBook;
 - resumable/idempotent historical backfill;
 - DuckDB/Polars analytical access;
 - reusable PIT-safe data foundation for downstream research.
