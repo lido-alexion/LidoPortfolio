@@ -150,6 +150,7 @@ class OfficialFundamentalMetadataTest extends TestCase
         try {
             $service->fetch(new Stock(['symbol' => 'META', 'exchange' => $exchange]), 'quarterly', true);
             $this->fail('A failed exchange request should be deferred safely.');
+        } catch (ExchangeRequestDeferred $error) {
             $this->assertSame('Exchange request deferred: the source request failed', $error->getMessage());
             $this->assertStringNotContainsString('PRIVATE-PAYLOAD', $error->getMessage());
             $this->assertStringNotContainsString('SECRET', $error->getMessage());
