@@ -2,7 +2,7 @@
 
 - **Frozen specification:** `docs/archive/specs/V9-User-Journey-Typeahead-How-Do-I-Search-Specification.md`
 - **Starting SHA:** `1782da64` (local implementation base, 2026-10-05)
-- **Final reconciled base:** `305bd370` (`origin/master`, fast-forwarded after inspecting twelve upstream documentation commits since the local starting SHA on 2026-10-05)
+- **Final reconciled base:** `8fba404a` (`origin/master`, fast-forwarded after inspecting fourteen upstream documentation commits since the local starting SHA on 2026-10-05)
 - **Audit status:** **IMPLEMENTED / VERIFIED**; all required backend, frontend, browser, and contract gates are green.
 
 ## Gap matrix
