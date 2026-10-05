@@ -1,6 +1,6 @@
 # FEAT-057 ML Feature Engineering, Training & Validation — reconciliation audit
 
-Status: **REVIEW**
+Status: **IMPLEMENTED — repository implementation complete; production acceptance remains open**
 
 This is a code-reconciliation checkpoint against `docs/archive/specs/V8-ML-Feature-Engineering-Training-Validation-Specification.md`. Existing inherited ML code is useful V7/V8 foundation, but it is not treated as complete merely because training and admin endpoints exist.
 
@@ -434,3 +434,8 @@ membership, breadth, feature/fundamental, sector and dataset gates. Training may
 only use a ready current campaign. New FEAT-054 coverage blockers remain unknown
 until that preflight actually runs. This code-only phase performs no production
 operation and adds no recovery API.
+
+
+## Implementation status — 2026-10-05
+
+FEAT-057 is **IMPLEMENTED**, not COMPLETE. The repository implementation is merged in PRs #46 and #47, with green CI and bounded 1m/3m/6m implementation evidence. Mapping is no longer the blocker: the parser v5 replay and production run 4 preview passed the unchanged 90% floor on all 360 dates at a 93.4096% minimum. The run 4 apply lifecycle defect was corrected in merged PR #47; however, run 4 itself remains a partial historical run and must not be forced or reused. Production completion still requires the fresh governed recovery sequence, post-apply preflight, qualified 1m/3m/6m evidence, active-model pairing where applicable, and investor-facing acceptance. See [the functional acceptance plan](../testing/V8-FEAT-057-FUNCTIONAL-TEST-PLAN.md).
