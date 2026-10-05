@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Epic** | V9-DATA-002 |
-| **Status** | **PO REVIEW — WINDOWS DELIVERY / ARCHIVE REVISION** |
+| **Status** | **PO REVIEW — AUTHENTICODE SIGNING POLICY** |
 | **Issue** | [V9-DATA-002](https://github.com/lido-alexion/LidoPortfolio/issues/16) |
 | **Related Windows app** | [SKR-001 — StoX-Kite-Rain](https://github.com/lido-alexion/StoX-Kite-Rain/issues/1) |
 | **Companion spec** | [Windows downloader specification](https://github.com/lido-alexion/StoX-Kite-Rain/blob/main/docs/SK-001-Windows-Downloader-Specification.md) |
@@ -259,4 +259,4 @@ V9-DATA-002 is complete only when:
 15. Existing FEAT-065 Parquet corpus remains canonical, readable and compatible with DuckDB/Polars.
 16. Tests cover checksum mismatch, schema rejection, incomplete day, stale lease, duplicate ack, crash between import and ack, low quota, unacknowledged-batch retention beyond 30 days, superseded-batch deletion only after successful replacement acknowledgment, supplemental repair and blocking oldest-batch behavior.
 
-**Document state: PO REVIEW — WINDOWS DELIVERY / ARCHIVE REVISION.** The Windows receiver, NTFS archive/handoff, and indefinite catalog are recorded. Authenticode signing policy for the private Windows executable remains open in SKR-001.
+**Document state: PO REVIEW — AUTHENTICODE SIGNING POLICY.** The Windows receiver, NTFS archive/handoff, and indefinite catalog are recorded. Authenticode signing policy for the private Windows executable remains open in SKR-001.
