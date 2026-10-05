@@ -236,7 +236,7 @@ Use:
 
 Do not load the complete corpus into memory unnecessarily.
 
-The bounded POC must validate the agreed Windows receipt/holding and NTFS-to-Mac handoff, then verify representative Parquet, DuckDB and Polars workloads on the actual MacBook before the full corpus is accepted for research. Secure VPS-to-Windows acquisition and transfer behavior is governed by V9-DATA-002.
+The Windows downloader, local receipt/integrity verification, NTFS archive and manual Mac handoff are implemented and acceptance-tested under SKR-001 in StoX-Kite-Rain; VPS staging and secure transfer are owned by V9-DATA-002. FEAT-065 POC acceptance begins when a representative verified batch is present in the canonical Mac corpus. It validates the Parquet schema/provenance, non-destructive adoption, and DuckDB/Polars access on the Mac before the full corpus is accepted for research. FEAT-065 does not duplicate the downloader or transfer acceptance.
 
 ---
 
@@ -383,7 +383,7 @@ FEAT-065 is complete when:
 9. Coverage and missingness reports exist by instrument/date range.
 10. Source/provenance metadata is retained.
 11. Provider-specific API details do not leak into the canonical analytical contract unnecessarily.
-12. The bounded POC validates the Windows receiving/holding and NTFS-to-Mac handoff, and confirms the MacBook is suitable for representative Parquet/DuckDB/Polars research workloads before the full corpus is accepted for research.
+12. After SKR-001/V9-DATA-002 delivers a representative verified batch, FEAT-065 validates its non-destructive adoption into the canonical Mac corpus and confirms representative Parquet/DuckDB/Polars research workloads before the full corpus is accepted.
 13. Dataset B remains optional and non-blocking.
 14. FEAT-063 remains independently deployable and is not coupled to completion of this epic.
 15. FEAT-057 can consume the resulting corpus without depending on retired FEAT-058/059 contracts.
@@ -396,7 +396,7 @@ FEAT-065 is complete when:
 
 This epic does not own:
 
-- live order-book/microstructure collection — V4-FEAT-063;
+- VPS batch staging, secure delivery and delivery catalog — V9-DATA-002;\n- Windows batch downloader, receipt verification and NTFS archive workflow — SKR-001 in StoX-Kite-Rain;\n- live order-book/microstructure collection — V4-FEAT-063;
 - detailed feature definitions/selection — V4-FEAT-057;
 - model training/calibration/validation contract — V4-FEAT-057;
 - model deployment/promotion/rollback/drift operations — V4-FEAT-056;
