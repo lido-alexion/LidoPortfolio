@@ -17,10 +17,6 @@ class FundamentalScreenerOperandService
         'fund_net_income_ttm' => ['metric' => 'net_income', 'basis' => 'ttm'],
         'fund_fcf_ttm' => ['metric' => 'free_cash_flow', 'basis' => 'ttm'],
         'fund_revenue_growth_yoy' => ['metric' => 'revenue', 'basis' => 'quarterly', 'growth' => true],
-        'fund_gross_npa_ratio' => ['metric' => 'gross_npa_ratio', 'basis' => 'quarterly'],
-        'fund_net_npa_ratio' => ['metric' => 'net_npa_ratio', 'basis' => 'quarterly'],
-        'fund_capital_adequacy_ratio' => ['metric' => 'capital_adequacy_ratio', 'basis' => 'quarterly'],
-        'fund_net_interest_margin' => ['metric' => 'net_interest_margin', 'basis' => 'quarterly'],
     ];
 
     public function __construct(
@@ -78,10 +74,6 @@ class FundamentalScreenerOperandService
             'fund_net_income_ttm' => 'net_income',
             'fund_fcf_ttm' => 'free_cash_flow',
             'fund_revenue_growth_yoy' => 'revenue_growth_yoy',
-            'fund_gross_npa_ratio' => 'gross_npa_ratio',
-            'fund_net_npa_ratio' => 'net_npa_ratio',
-            'fund_capital_adequacy_ratio' => 'capital_adequacy_ratio',
-            'fund_net_interest_margin' => 'net_interest_margin',
         ];
         $labels = [];
         foreach ($operandMetric as $operandId => $metricId) {
