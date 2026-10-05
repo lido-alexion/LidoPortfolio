@@ -53,3 +53,7 @@ an isolated MariaDB instance. Changed PHP syntax checks, Pint on new PHP files a
 `git diff --check` passed. The shared `./scripts/verify-ci.sh --backend` gate was
 attempted but stopped at its PHP platform preflight: `pdo_sqlite` is unavailable.
 These focused results do not replace that CI-parity gate. No migrations changed.
+
+## Closure continuation — 2026-10-05 (CI prerequisite reconciliation)
+
+The 2026-10-01 note above accurately records that the FEAT-056 verifier attempt in that shell stopped because `pdo_sqlite` was unavailable. This was an environment-specific limitation, not an unresolved repository dependency: FEAT-061 later ran the shared backend verifier successfully using existing PHP modules loaded through `PHP_INI_SCAN_DIR` (see `docs/audit/V8-FEAT-061-ACCEPTANCE-AUDIT.md`). FEAT-056 still needs its own full backend verifier run against the current code; the FEAT-061 result is not substituted for that feature-specific run. Current execution scratch has no PHP runtime, so that run has not been claimed here.
