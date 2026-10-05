@@ -73,3 +73,11 @@ Read-only checks on `stoxla-prod` found:
 - Production CLI PHP 8.4.26 has `pdo_mysql` but not `pdo_sqlite`; no tests were run on production.
 
 No lifecycle tick, queue action, configuration change, model operation or data mutation was performed. The FEAT-057 qualification gate is still unmet; do not enable schedules or exercise the live lifecycle until FEAT-057 qualifies and a dedicated acceptance setup is available.
+
+## Dependency correction — FEAT-057 mapping passed; governed apply remains open
+
+This addendum supersedes the earlier description of FEAT-057 as blocked on the 90% mapping floor. The current FEAT-057 audit records an offline 360-date replay and production run-4 preview at a **93.4096% minimum across all 360 dates**. Mapping is above the frozen 90% floor.
+
+FEAT-057 remains unqualified for FEAT-056 because run 4 apply materialized only **1/360** dates before reporting completed. The apply lifecycle correction has isolated regression and backend-CI evidence, but a verified release and a fresh governed campaign/preview/apply are still required, followed by post-apply preflight and complete 1m/3m/6m training evidence. Preserve run 4 and its first boundary; do not force its state or reuse its preview/digest. Source: [FEAT-057 acceptance audit](V8-FEAT-057-ACCEPTANCE-AUDIT.md), “Offline checkpoints and verification” and “Governed multi-date apply lifecycle correction.”
+
+FEAT-056 remains **REVIEW**. Its backend CI gate passes; deployed lifecycle acceptance remains deferred until FEAT-057 supplies qualified data/model evidence and a dedicated controlled acceptance worker is available. Production lifecycle settings remain disabled and were not changed.
