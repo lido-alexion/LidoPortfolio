@@ -11,18 +11,16 @@
 ## Current evidence and blockers
 
 - The acceptance audit records local implementation and focused tests as passing.
-- The prior FEAT-056 attempt stopped at platform preflight because `pdo_sqlite` was unavailable in that shell. This is not an unresolved repository/platform defect: FEAT-061 later ran the shared backend verifier successfully using the existing PHP extensions through `PHP_INI_SCAN_DIR`. Re-run the backend verifier for the current FEAT-056 code using that same working PHP setup; record the result against the tested commit.
+- **PASS — current code verified.** GitHub Actions ran `./scripts/verify-ci.sh --backend` successfully on 2026-10-05 at commit `d1279fb74b56a2cf488ba82f7c305cb58b424f24` (PHP 8.4/MySQL 8.4; the CI workflow installs `pdo_sqlite`). Results: 2,242 PHPUnit tests, 14,962 assertions, 2 skipped; migration portability passed for 172 migrations; Python checks 22 passed with 8 skipped; OpenAPI check passed at 219 operations. See [backend verification run](https://github.com/lido-alexion/LidoPortfolio/actions/runs/37261402892/job/111609241889). The earlier `pdo_sqlite` failure was environment-specific and is superseded by this CI run.
 - Production lifecycle acceptance is gated on FEAT-057 qualification with the deployed build, registry/configuration, and complete 1m/3m/6m real-adapter evidence.
 - Production must use `STOXLA_ML_MODEL_DIRECTORY=/var/www/stoxla/shared/ml/models`. Follow `docs/current/ml-lifecycle-operations.md`; first inspect with the documented artifact-repair dry run. Do not run repair or change production configuration as part of this plan.
 - The lifecycle flag was recorded false in the 2026-10-01 production audit. Recheck current state read-only before any later controlled exercise.
 
 ## Acceptance sequence
 
-### 1. Re-run the backend CI-parity gate
+### 1. Backend CI-parity gate — PASS
 
-- Reuse the PHP extension setup proven by FEAT-061 (`PHP_INI_SCAN_DIR`) and the isolated MySQL verification setup.
-- Run `./scripts/verify-ci.sh --backend` against the current FEAT-056 code.
-- Record the exact commit, command, environment, test counts, and result; resolve any failures before production acceptance.
+- Re-run this gate only if FEAT-056 backend code changes after commit `d1279fb74b56a2cf488ba82f7c305cb58b424f24`.
 
 ### 2. Confirm production prerequisites (read-only)
 
@@ -57,7 +55,7 @@ With an approved bounded acceptance setup and operator present:
 
 ## Exit criteria
 
-- Required backend CI-parity verification passes.
+- Backend CI-parity verification passes for the current code (2026-10-05 run recorded above).
 - FEAT-057 qualification is recorded for the deployed build/configuration before live lifecycle exercise.
 - Queue/scheduler, concurrency, SSE reconnect, retry, cancellation, restart recovery, and notifications have controlled runtime evidence.
 - Retention and explicit promotion/rollback checks preserve active-model and immutable-artifact invariants.
