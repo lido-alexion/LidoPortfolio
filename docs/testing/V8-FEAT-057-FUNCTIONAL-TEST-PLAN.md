@@ -11,13 +11,12 @@
 
 ## Production acceptance gates
 
-### 1. Recover the governed data apply safely
+### 1. Recover the governed data apply safely — COMPLETE
 
-- Use the verified release containing PR #47.
-- Preserve run 4 and its valid 2022-11-04 boundary. Do not force its state, resume it, or reuse its preview/digest.
-- Create a fresh current-build campaign and confirm its 360-date union and source identities.
-- Create and review a fresh governed preview over the sealed sources. Confirm every date clears the unchanged 90% mapping floor, including the identity-registry/parser digest.
-- Apply only through the supported governed flow. Confirm the matching first boundary is idempotently skipped, the remaining dates are applied, and the durable cursor/status indicate all 360 dates completed. Reconcile any queued job or lease before starting; do not run duplicate workers.
+- Run 5 used the verified release containing PR #47 and completed a fresh governed apply for the 360-date source set.
+- Run 4 and its valid 2022-11-04 boundary remain intact; run 4 was not forced, resumed or reused.
+- Run 5's parser 5 results cover all 360 dates, with minimum mapping of 93.4096% (above the unchanged 90% gate).
+- The existing first boundary was recognized idempotently; run 5's snapshot and membership digests match run 4's boundary. Durable cursor and processed-date evidence both equal 360/360. See the [production audit continuation](../audit/V8-FEAT-057-ACCEPTANCE-AUDIT.md#production-governed-apply-and-current-build-readiness--2026-10-05).
 
 ### 2. Verify post-apply data readiness
 
@@ -42,12 +41,12 @@ Only after readiness passes:
 
 ## Current known blocker
 
-Production run 4 preview passed coverage, but its apply materialized only 1/360 dates before reporting completion. PR #47 fixes the lifecycle defect and is merged; a fresh campaign/preview/apply and post-apply preflight are still required. Training has not been run from a qualified post-apply production campaign. The detailed row-level classification, replay ledger and runtime evidence remain in the [acceptance audit](../audit/V8-FEAT-057-ACCEPTANCE-AUDIT.md).
+Run 4's partial apply defect is preserved as historical evidence; run 5 has since completed the fresh 360/360 governed apply. The remaining gate is the new current-build campaign preflight, which is queued but awaiting the inactive dedicated acceptance worker. A prior build-393 preflight showed 1m canonical dataset/coverage gaps and missing 3m/6m core fundamentals; current blockers must be confirmed by running the build-436 preflight. No production training has run from a current qualified campaign. Detailed runtime evidence remains in the [acceptance audit](../audit/V8-FEAT-057-ACCEPTANCE-AUDIT.md).
 
 ## Exit criteria
 
-- Fresh governed apply completes all 360 dates with provenance and the frozen mapping threshold intact.
-- Post-apply preflight passes all frozen data-quality gates.
+- Fresh governed apply completes all 360 dates with provenance and the frozen mapping threshold intact. **Passed by run 5.**
+- Post-apply preflight passes all frozen data-quality gates. **Pending current-build preflight** (campaign `ee93e3a6-5740-4dea-bfef-c109abc90a69`).
 - 1m/3m/6m production evidence, active-model comparison where applicable, immutable artifacts and investor-facing acceptance are recorded.
 - No model was automatically promoted or rolled back.
 
