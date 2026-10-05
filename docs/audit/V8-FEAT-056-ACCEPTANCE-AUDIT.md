@@ -57,3 +57,7 @@ These focused results do not replace that CI-parity gate. No migrations changed.
 ## Closure continuation — 2026-10-05 (CI prerequisite reconciliation)
 
 The 2026-10-01 note above accurately records that the FEAT-056 verifier attempt in that shell stopped because `pdo_sqlite` was unavailable. This was an environment-specific limitation, not an unresolved repository dependency: FEAT-061 later ran the shared backend verifier successfully using existing PHP modules loaded through `PHP_INI_SCAN_DIR` (see `docs/audit/V8-FEAT-061-ACCEPTANCE-AUDIT.md`). FEAT-056 still needs its own full backend verifier run against the current code; the FEAT-061 result is not substituted for that feature-specific run. Current execution scratch has no PHP runtime, so that run has not been claimed here.
+
+### 2026-10-05 CI parity correction
+
+The historical local preflight failure above is superseded for the current repository code. GitHub Actions passed `./scripts/verify-ci.sh --backend` on commit `d1279fb74b56a2cf488ba82f7c305cb58b424f24` using PHP 8.4, MySQL 8.4 and CI-provisioned `pdo_sqlite`: **2,242 PHPUnit tests, 14,962 assertions, 2 skipped**; migration portability passed for 172 migrations; Python checks ran 22 tests (8 skipped); OpenAPI remained current at 219 operations. [Backend verification job](https://github.com/lido-alexion/LidoPortfolio/actions/runs/37261402892/job/111609241889). This satisfies the CI-parity gate for the code at that commit; repeat only if FEAT-056 backend code changes.
