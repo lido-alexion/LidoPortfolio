@@ -86,3 +86,12 @@ A privacy-limited read of the existing audit ledger and request state found the 
 | Admin Create | Request 3 is `created`; `admin_create` exists, and `user_invite_id` is populated. This is evidence of existing invite linkage, not proof the invite was accepted. |
 
 These records demonstrate the deployed lifecycle and Admin decisions in bounded prior testing. They do **not** establish receipt of every outcome/Admin notification, that all three submissions used the real provider rather than a different earlier configuration, multi-worker duplicate contention, or current browser/mobile UX. Keep FEAT-055 **REVIEW** until the remaining acceptance scope is explicitly resolved or transferred to product functional testing.
+
+
+## 2026-10-05 production database-cache concurrency and SMTP probes
+
+A controlled synthetic verification used a unique `example.invalid` address in production. Two independent PHP processes called `completeVerification` concurrently against the deployed database cache and MariaDB. Mail was faked **inside those processes** so no notice was sent to the synthetic address. One process returned `pending`; the other raised `ValidationException`. Inspection found exactly one pending request, one consumed verification and one `pending_created` audit event. The synthetic request, verification, audit row and mode-0600 token file were then removed; targeted checks found zero remaining rows. **PASS for concurrent verification of the same token under the deployed cache/DB configuration.** This does not establish every possible different-token/same-email race or multi-host contention.
+
+Using the configured production SMTP transport, five clearly labeled non-actionable test messages were submitted to the account owner's previously authorized test mailbox: verification, Ignore, Reject, invite template and Admin notice. Each send returned without exception; the process exited 0. No real verification token, invitation, pending request or Admin decision was created for these mail checks. **PASS for template rendering and SMTP submission; recipient inbox delivery remains unconfirmed.** The historical owner report confirms an earlier verification email arrived, but does not verify these five messages or all outcome types.
+
+FEAT-055 remains **REVIEW** until inbox receipt is confirmed and any remaining functional scenarios are explicitly assigned or closed. This checkpoint makes no claim of a newly solved production Turnstile widget or a complete live end-to-end Admin journey today.
