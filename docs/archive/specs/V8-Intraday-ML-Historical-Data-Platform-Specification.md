@@ -236,7 +236,7 @@ Use:
 
 Do not load the complete corpus into memory unnecessarily.
 
-The Windows downloader, local receipt/integrity verification, NTFS archive and manual Mac handoff are implemented and acceptance-tested under SKR-001 in StoX-Kite-Rain; VPS staging and secure transfer are owned by V9-DATA-002. FEAT-065 POC acceptance begins when a representative verified batch is present in the canonical Mac corpus. It validates the Parquet schema/provenance, non-destructive adoption, and DuckDB/Polars access on the Mac before the full corpus is accepted for research. FEAT-065 does not duplicate the downloader or transfer acceptance.
+The Windows downloader, local receipt/integrity verification, NTFS archive and manual Mac handoff are specified under SKR-001 in StoX-Kite-Rain; end-to-end acceptance remains pending in that epic. VPS staging and secure transfer are specified by V9-DATA-002. FEAT-065 POC acceptance begins when a representative verified batch is present in the canonical Mac corpus. It validates the Parquet schema/provenance, non-destructive adoption, and DuckDB/Polars access on the Mac before the full corpus is accepted for research. FEAT-065 does not duplicate the downloader or transfer acceptance.
 
 ---
 
@@ -396,7 +396,9 @@ FEAT-065 is complete when:
 
 This epic does not own:
 
-- VPS batch staging, secure delivery and delivery catalog — V9-DATA-002;\n- Windows batch downloader, receipt verification and NTFS archive workflow — SKR-001 in StoX-Kite-Rain;\n- live order-book/microstructure collection — V4-FEAT-063;
+- VPS batch staging, secure delivery and delivery catalog — V9-DATA-002;
+- Windows batch downloader, receipt verification and NTFS archive workflow — SKR-001 in StoX-Kite-Rain;
+- live order-book/microstructure collection — V4-FEAT-063;
 - detailed feature definitions/selection — V4-FEAT-057;
 - model training/calibration/validation contract — V4-FEAT-057;
 - model deployment/promotion/rollback/drift operations — V4-FEAT-056;
