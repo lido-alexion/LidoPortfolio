@@ -70,3 +70,19 @@ A public `POST /api/auth/access-requests` with a unique `example.invalid` addres
 An unauthenticated `GET /api/access-requests` returned 401. A well-formed 64-character but invalid verification token submitted to `POST /api/auth/access-requests/verify/{token}` returned 422. **PASS for these narrow access and invalid-link checks.** A malformed token instead misses the route's 64-character constraint and returns 404; it is not a valid test of the verification handler.
 
 **REVIEW remains.** Next controlled test: a human solves the production Turnstile widget using a dedicated mailbox they can access, confirms the verification email and single-use link, then exercises Admin Create/Ignore/Reject with disposable test addresses and cleanup. Record provider and mail results without disclosing tokens; test cross-worker duplicate submissions separately.
+
+
+## 2026-10-05 reconciliation of prior human test (2026-09-29 records)
+
+The account owner clarified that the reported verification email arrival and successful link completion were from **previous testing**, not a new 2026-10-05 submission. The unchanged production totals (3 requests, 4 verification rows) therefore do not contradict that report. No new production submission is claimed today.
+
+A privacy-limited read of the existing audit ledger and request state found the following September 29 sequence, without retrieving addresses, names, tokens, or reason text:
+
+| Stored evidence | Result |
+|---|---|
+| Verification initiation and pending creation | Three `pending_created` events produced request IDs 1–3 with non-null `verified_at`; the owner reports receipt of a verification email and successful link completion in the earlier test. This supports the prior valid Turnstile → email → verification path, but does not identify which exact row corresponds to the owner's report. |
+| Admin Reject | Request 1 is `rejected`; `admin_reject` exists, a ban row was created, and `ban_cleared` later cleared it. An internal reason is stored. |
+| Admin Ignore | Request 2 is `ignored`; `admin_ignore` exists, and `resubmit_allowed_after` is populated. An internal reason is stored. |
+| Admin Create | Request 3 is `created`; `admin_create` exists, and `user_invite_id` is populated. This is evidence of existing invite linkage, not proof the invite was accepted. |
+
+These records demonstrate the deployed lifecycle and Admin decisions in bounded prior testing. They do **not** establish receipt of every outcome/Admin notification, that all three submissions used the real provider rather than a different earlier configuration, multi-worker duplicate contention, or current browser/mobile UX. Keep FEAT-055 **REVIEW** until the remaining acceptance scope is explicitly resolved or transferred to product functional testing.
