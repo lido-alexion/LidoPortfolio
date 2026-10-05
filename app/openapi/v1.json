@@ -10734,6 +10734,66 @@
                 }
             }
         },
+        "/api/v1/stocks/{stock}/fundamentals/manual-fetch": {
+            "post": {
+                "tags": [
+                    "stocks"
+                ],
+                "summary": "POST manualFetch",
+                "description": "Live route: `POST /api/v1/stocks/{stock}/fundamentals/manual-fetch`. Action: `App\\Http\\Controllers\\Api\\V1\\FundamentalDataController@manualFetch`.",
+                "operationId": "post_stocks_stock_fundamentals_manual-fetch",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "stock",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/stocks/{stock}/fundamentals/metrics/{metric}/history": {
             "get": {
                 "tags": [
