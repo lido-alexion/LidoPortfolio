@@ -20,7 +20,7 @@ V8 also contains the one-time Historical Fundamental Data Bootstrap, a guest-to-
 
 | ID | Feature | Scope / rationale | Status |
 |---|---|---|---|
-| V4-FEAT-052 | StoX OpenTelemetry / LidoTelemetry Integration | Instrument StoX React/browser, Laravel/backend, queues and scheduler with OpenTelemetry; propagate distributed trace context; add explicit StoX business telemetry and focused metrics; export through an OpenTelemetry Collector to the existing LidoTelemetry service; remain fail-open and privacy-safe. **Canonical implementation spec:** [`V8-StoX-OpenTelemetry-LidoTelemetry-Integration-Specification.md`](V8-StoX-OpenTelemetry-LidoTelemetry-Integration-Specification.md). | FROZEN / IMPLEMENTATION-READY |
+| V4-FEAT-052 | StoX OpenTelemetry / LidoTelemetry Integration | Instrument StoX React/browser, Laravel/backend, queues and scheduler with OpenTelemetry; propagate distributed trace context; add explicit StoX business telemetry and focused metrics; export through an OpenTelemetry Collector to the existing LidoTelemetry service; remain fail-open and privacy-safe. **Canonical implementation spec:** [`V8-StoX-OpenTelemetry-LidoTelemetry-Integration-Specification.md`](V8-StoX-OpenTelemetry-LidoTelemetry-Integration-Specification.md). | **IMPLEMENTED**; functional testing tracked in [FEAT-052 test plan](../../testing/V8-FEAT-052-FUNCTIONAL-TEST-PLAN.md) |
 | V4-FEAT-054 | Historical Fundamental Data Bootstrap | Complete the V7 fundamentals foundation with canonical fact-gap filling, curated derived metrics, official NSE/BSE historical backfill with Yahoo fallback, resumable queue-backed bootstrap, investor Fundamentals UI, historical charts and Screener eligibility integration. **Canonical implementation spec:** [`V8-Historical-Fundamentals-Bootstrap-Specification.md`](V8-Historical-Fundamentals-Bootstrap-Specification.md). | FROZEN / IMPLEMENTATION-READY |
 | V4-FEAT-055 | Account Access Request / Admin Approval Workflow | Add a guest-facing **Request an account** flow with CAPTCHA and mandatory email verification, followed by Admin Create/Ignore/Reject review. Create reuses the existing secure invite flow; Ignore applies a configurable cooldown; Reject creates a reversible request ban. **Canonical implementation spec:** [`V8-Account-Access-Request-Admin-Approval-Specification.md`](V8-Account-Access-Request-Admin-Approval-Specification.md). | FROZEN / IMPLEMENTATION-READY |
 | V4-FEAT-056 | ML Lifecycle Automation, Deployment & Operations | Consolidates former FEAT-056 + FEAT-060. Own the operational ML lifecycle: scheduled/manual/drift-triggered queued training, SSE progress, retries/cancellation, candidate lifecycle, explicit Admin promotion/rollback, bounded retained versions, production drift/health monitoring and actionable notifications. **Canonical implementation spec:** [`V8-ML-Lifecycle-Automation-Deployment-Operations-Specification.md`](V8-ML-Lifecycle-Automation-Deployment-Operations-Specification.md). | FROZEN / IMPLEMENTATION-READY |
@@ -63,6 +63,10 @@ StoX queues/scheduler --/
 ```
 
 Telemetry is unsampled in V8, bounded, privacy-safe and non-blocking. LidoTelemetry or Collector failure must not fail StoX business execution.
+
+### 3.4 Implementation status (2026-10-05)
+
+**IMPLEMENTED.** Production evidence covers browser → HTTP parentage, database queue propagation, a natural cron root and child tasks, metrics receipt, and deployed Collector/producer privacy mitigations. The remaining broader privacy, actual asynchronous/business outage, and sustained-delivery scenarios are tracked as product functional testing in [`V8-FEAT-052-FUNCTIONAL-TEST-PLAN.md`](../../testing/V8-FEAT-052-FUNCTIONAL-TEST-PLAN.md). See the [acceptance audit](../../audit/V8-FEAT-052-ACCEPTANCE-AUDIT.md) for exact evidence and historical findings. Implementation status does not assert that those open functional scenarios have passed.
 
 ## 4. V4-FEAT-055 — Account Access Request / Admin Approval Workflow
 
