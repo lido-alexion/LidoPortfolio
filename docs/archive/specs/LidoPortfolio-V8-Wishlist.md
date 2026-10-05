@@ -138,6 +138,18 @@ Production run 4's preview passed; its apply stopped after 1/360 dates and repor
 
 FEAT-057 owns feature engineering, training, calibration, validation and candidate-eligibility evidence. Scheduled/manual run orchestration, deployment/promotion execution, retained versions/rollback, lifecycle notifications and production drift monitoring remain owned by **V4-FEAT-056**.
 
+
+## 6.5 Remaining before COMPLETE
+
+FEAT-057 is **IMPLEMENTED**, but it is not yet **COMPLETE**. The following production acceptance work remains:
+
+1. **Recover the governed data campaign.** Keep production run 4 and its valid first-date boundary intact. Confirm the deployed build contains the merged PR #47 apply correction; inspect queued-job/lease state read-only; then create a fresh campaign and preview for all 360 source dates. Confirm every date meets the frozen 90% mapping floor under parser 5 and the evidence digest, then apply through the supported process. Verify the existing first-date boundary is handled idempotently and that the campaign cursor and processed evidence reach 360/360.
+2. **Pass post-apply data readiness.** Run a fresh preflight after the new apply. Confirm point-in-time membership, breadth, sector and price coverage, plus the FEAT-054 fundamental coverage gates, pass for the required horizons. Do not begin training on partial coverage or a current-universe fallback.
+3. **Produce production training and validation evidence.** After readiness passes, run the real-adapter 1m, 3m and 6m campaigns. Record dataset/profile identity, partition coverage, purge/embargo and preprocessing evidence, calibration, deterministic StoX baseline and active-model comparison (where an active model exists), candidate eligibility, archive integrity, artifact reload, and explainability results. Do not promote a candidate here; deployment and promotion remain FEAT-056 scope.
+4. **Complete investor-facing acceptance.** Verify deployed scores and explanations match the pinned feature profile, expose provenance and meaningful drivers, and handle loading, unavailable and rejected states without stale data or current-universe fallback.
+5. **Record disposition.** Update the [acceptance audit](../../audit/V8-FEAT-057-ACCEPTANCE-AUDIT.md) with evidence and exceptions. Mark FEAT-057 **COMPLETE** only after all applicable gates pass.
+
+The bounded procedures and acceptance criteria are in the [functional acceptance plan](../../testing/V8-FEAT-057-FUNCTIONAL-TEST-PLAN.md).
 ## 7. V4-FEAT-061 — Guided Tour / Welcome Onboarding
 
 ### 7.1 Frozen status
