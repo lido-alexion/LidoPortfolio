@@ -26,6 +26,34 @@ class Nifty500ConstituentService
     }
 
     /**
+     * Read only an already-cached, fresh membership list. This method never makes
+     * a network request and is used to decide automatic exchange fallback scope.
+     *
+     * @return list<string>
+     */
+    public function cachedSymbols(): array
+    {
+        $symbols = $this->constituents->cachedSymbols('NIFTY500');
+        if ($symbols !== []) {
+            return $symbols;
+        }
+
+        $cachedAt = \App\Models\Setting::getValue(self::CACHE_AT_KEY);
+        if (! is_string($cachedAt) || $cachedAt === '') {
+            return [];
+        }
+        try {
+            if (\Carbon\Carbon::parse($cachedAt)->lt(now()->subDays(max(1, (int) config('portfolio.universe_price_sync.nifty500_cache_days', 7))))) {
+                return [];
+            }
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return $this->legacyCachedSymbols();
+    }
+
+    /**
      * Legacy cache keys used before IndexConstituentService.
      *
      * @return list<string>

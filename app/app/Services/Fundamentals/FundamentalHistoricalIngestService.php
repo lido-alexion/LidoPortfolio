@@ -7,16 +7,20 @@ use App\Services\Fundamentals\Historical\BseOfficialFundamentalHistoricalSource;
 use App\Services\Fundamentals\Historical\FundamentalHistoricalSource;
 use App\Services\Fundamentals\Historical\NseOfficialFundamentalHistoricalSource;
 use App\Services\Fundamentals\Historical\YahooFundamentalHistoricalSource;
+use App\Services\Nifty500ConstituentService;
 
 class FundamentalHistoricalIngestService
 {
     /** @var list<FundamentalHistoricalSource> */
     protected array $sources;
 
+    private ?string $lastProviderChecked = null;
+
     public function __construct(
         NseOfficialFundamentalHistoricalSource $nse,
         BseOfficialFundamentalHistoricalSource $bse,
         YahooFundamentalHistoricalSource $yahoo,
+        private readonly ?Nifty500ConstituentService $nifty500 = null,
     ) {
         $this->sources = [$nse, $bse, $yahoo];
         usort($this->sources, fn (FundamentalHistoricalSource $a, FundamentalHistoricalSource $b) => $a->priority() <=> $b->priority());
@@ -25,14 +29,27 @@ class FundamentalHistoricalIngestService
     /**
      * @return list<array<string, mixed>>
      */
-    public function fetch(Stock $stock, string $cadence): array
+    public function fetch(Stock $stock, string $cadence, bool $manualStockRequest = false): array
     {
+        $this->lastProviderChecked = null;
         $rejectedRows = [];
         foreach ($this->sources as $source) {
             if (! $source->supports($stock)) {
                 continue;
             }
 
+            // Automatic exchange fallback is deliberately limited to NSE NIFTY 500.
+            // A user-initiated request may target one other stock, but it still passes
+            // through the same feed-enabled and access-authorization gates.
+            if (! $manualStockRequest && $source->id() !== 'yahoo') {
+                if ($source->id() !== 'nse_official'
+                    || ! in_array(strtoupper((string) $stock->exchange), ['NSE', 'NSE+'], true)
+                    || ! in_array(strtoupper((string) $stock->symbol), ($this->nifty500 ?? app(Nifty500ConstituentService::class))->cachedSymbols(), true)) {
+                    continue;
+                }
+            }
+
+            $this->lastProviderChecked = $source->id();
             $rowsByIdentity = [];
             foreach ($source->fetch($stock, $cadence) as $row) {
                 $identity = $this->identityKey($row);
@@ -61,6 +78,11 @@ class FundamentalHistoricalIngestService
         // Preserve malformed numeric candidates for the bootstrap quality gate
         // when no primary or fallback provider could supply usable facts.
         return $rejectedRows;
+    }
+
+    public function lastProviderChecked(): ?string
+    {
+        return $this->lastProviderChecked;
     }
 
     /**

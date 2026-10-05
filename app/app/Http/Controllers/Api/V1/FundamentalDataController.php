@@ -19,6 +19,8 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\RateLimiter;
 
 class FundamentalDataController extends Controller
 {
@@ -78,6 +80,51 @@ class FundamentalDataController extends Controller
         }
 
         return ApiEnvelope::success($snapshot);
+    }
+
+    public function manualFetch(Request $request, Stock $stock): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($user !== null, 401);
+        abort_unless($stock->isEffectivelyActive() && ! $stock->is_benchmark, 422, 'Only active company stocks can be fetched.');
+
+        $exchange = strtoupper((string) $stock->exchange);
+        if (! in_array($exchange, ['NSE', 'NSE+', 'BSE'], true)) {
+            return ApiEnvelope::error('unsupported_exchange', 'Manual exchange fetching is unavailable for this stock.', 422);
+        }
+        $fallbacks = $this->fundamentals->exchangeFallbackStatus();
+        $key = strtolower($exchange === 'NSE+' ? 'nse' : $exchange);
+        if (! ($fallbacks[$key]['active'] ?? false)) {
+            return ApiEnvelope::error('exchange_fallback_disabled', 'The approved exchange feed is not enabled yet.', 409);
+        }
+        if (\Illuminate\Support\Facades\DB::table('stox_fundamental_facts')->where('stock_id', $stock->id)->exists()) {
+            return ApiEnvelope::error('fundamentals_already_present', 'Fundamental data already exists for this stock.', 409);
+        }
+
+        $userLimitKey = 'fundamentals-manual-fetch:user:'.$user->id;
+        if (RateLimiter::tooManyAttempts($userLimitKey, 3)) {
+            return ApiEnvelope::error('manual_fetch_rate_limited', 'Please wait before requesting another stock.', 429);
+        }
+        $stockLock = Cache::lock('fundamentals-manual-fetch:stock:'.$stock->id, 300);
+        if (! $stockLock->get()) {
+            return ApiEnvelope::error('manual_fetch_in_progress', 'A fetch for this stock is already in progress.', 409);
+        }
+
+        RateLimiter::hit($userLimitKey, 3600);
+        try {
+            $run = $this->updates->createRun('manual', 'manual_stock', (int) $stock->id, 1);
+            $result = $this->updates->process($run, 2);
+            if (in_array(($result['status'] ?? null), ['queued', 'running'], true)) {
+                return ApiEnvelope::error('manual_fetch_busy', 'Another fundamentals update is running. Try again shortly.', 409);
+            }
+            if (($result['status'] ?? null) === 'completed_with_errors' || ! empty($result['last_error'])) {
+                return ApiEnvelope::error('manual_fetch_incomplete', 'The exchange temporarily deferred this fetch. Please try again after its cooldown.', 503);
+            }
+
+            return ApiEnvelope::success(['run' => $result]);
+        } finally {
+            $stockLock->release();
+        }
     }
 
     public function history(Request $request, Stock $stock): JsonResponse

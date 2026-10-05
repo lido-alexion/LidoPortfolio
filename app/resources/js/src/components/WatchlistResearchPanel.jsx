@@ -68,6 +68,9 @@ export default function WatchlistResearchPanel({ stockId }) {
     const [valuationChartFrequency, setValuationChartFrequency] = useState('monthly');
     const [fundamentalsLoading, setFundamentalsLoading] = useState(false);
     const [fundamentalsError, setFundamentalsError] = useState(null);
+    const [fundamentalsFetchBusy, setFundamentalsFetchBusy] = useState(false);
+    const [fundamentalsFetchMessage, setFundamentalsFetchMessage] = useState(null);
+    const [fundamentalsRefreshKey, setFundamentalsRefreshKey] = useState(0);
     const [mlInsights, setMlInsights] = useState(null);
     const [mlLoading, setMlLoading] = useState(false);
     const [mlRefreshing, setMlRefreshing] = useState(false);
@@ -197,7 +200,7 @@ export default function WatchlistResearchPanel({ stockId }) {
             });
 
         return () => { cancelled = true; };
-    }, [stockId, tab, fundamentalsCadence, valuationChartFrequency]);
+    }, [stockId, tab, fundamentalsCadence, valuationChartFrequency, fundamentalsRefreshKey]);
 
     useEffect(() => {
         if (!stockId || tab !== 'ml') {
@@ -334,6 +337,32 @@ export default function WatchlistResearchPanel({ stockId }) {
                                     {' · '}
                                     Annual history: {formatCoveragePeriods(fundamentals.coverage, 'annual')}
                                 </p>
+                            ) : null}
+                            {!(fundamentals.summary || []).some((row) => row.value !== null && row.value !== undefined) ? (
+                                <div className="d-flex flex-wrap align-items-center gap-2">
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline-primary btn-sm"
+                                        disabled={fundamentalsFetchBusy}
+                                        onClick={async () => {
+                                            setFundamentalsFetchBusy(true);
+                                            setFundamentalsFetchMessage(null);
+                                            try {
+                                                await api.post(`/v1/stocks/${stockId}/fundamentals/manual-fetch`, {}, { skipErrorToast: true });
+                                                setFundamentalsFetchMessage('Fetch completed. Refreshing data…');
+                                                setFundamentalsRefreshKey((value) => value + 1);
+                                            } catch (e) {
+                                                setFundamentalsFetchMessage(e?.response?.data?.error?.message || 'Fetch could not be completed.');
+                                            } finally {
+                                                setFundamentalsFetchBusy(false);
+                                            }
+                                        }}
+                                    >
+                                        {fundamentalsFetchBusy ? 'Fetching…' : 'Fetch fundamentals for this stock'}
+                                    </button>
+                                    <span className="text-muted small">This checks Yahoo first, then the approved exchange feed for this stock only.</span>
+                                    {fundamentalsFetchMessage ? <span className="small" role="status">{fundamentalsFetchMessage}</span> : null}
+                                </div>
                             ) : null}
                             <FundamentalStatementTables
                                 history={fundamentalsHistory}

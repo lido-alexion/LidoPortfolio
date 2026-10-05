@@ -273,3 +273,7 @@ Both endpoints use the authenticated Laravel session and CSRF boundary; neither 
 - `POST /api/ai/assistant/feedback` accepts `request_id` (UUID), `helpful` (boolean), and optional `comment` (max 500). It returns `{ "success": true }`. A request must identify the current user's `documentation_chat` inference record; otherwise Laravel returns 404. Feedback is upserted per user/answer and retains its link to private inference evidence.
 
 The assistant has no mutation or independent account-read tools. Conversation memory is browser-session-only. Maintained journey help remains available during AI failures. See `docs/architecture/ai-runtime-private-contract.md` for the internal contract and deterministic evidence validation.
+
+## Manual fundamentals fetch
+
+`POST /api/v1/stocks/{stock}/fundamentals/manual-fetch` requests a bounded Yahoo-first update for one stock. The approved matching exchange feed is consulted only if Yahoo has no usable facts.

@@ -439,7 +439,7 @@ class IndexConstituentService
     /**
      * @return list<string>
      */
-    protected function cachedSymbols(string $symbol, bool $ignoreExpiry = false): array
+    public function cachedSymbols(string $symbol, bool $ignoreExpiry = false): array
     {
         $raw = Setting::getValue($this->cacheKey($symbol));
         if (! is_string($raw) || $raw === '') {

@@ -55,7 +55,7 @@ class BseOfficialFundamentalHistoricalTest extends TestCase
         );
 
         $stock = Stock::query()->create(['symbol' => 'BSECO', 'exchange' => 'BSE', 'name' => 'BSE Co']);
-        $rows = $service->fetch($stock, 'quarterly');
+        $rows = $service->fetch($stock, 'quarterly', true);
 
         $this->assertCount(1, $rows);
         $this->assertSame('bse_official', $rows[0]['provider']);
