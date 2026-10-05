@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Epic** | V9-DATA-002 |
-| **Status** | **PO REVIEW — AUTHENTICODE SIGNING POLICY** |
+| **Status** | **FROZEN — WINDOWS DELIVERY / ARCHIVE REVISION** |
 | **Issue** | [V9-DATA-002](https://github.com/lido-alexion/LidoPortfolio/issues/16) |
 | **Related Windows app** | [SKR-001 — StoX-Kite-Rain](https://github.com/lido-alexion/StoX-Kite-Rain/issues/1) |
 | **Companion spec** | [Windows downloader specification](https://github.com/lido-alexion/StoX-Kite-Rain/blob/main/docs/SK-001-Windows-Downloader-Specification.md) |
@@ -223,6 +223,7 @@ The following new V9/SKR decisions are frozen:
 - provider corrections to already accepted candles are ignored;
 - supplemental immutable repair batches may fill only genuinely missing rows;
 - minimal Admin operational UI with safe retry/re-enrollment actions only.
+- private-use Windows executable remains unsigned; the owner accepts Windows unknown-publisher/SmartScreen warnings, and no Authenticode certificate, signing key or signing pipeline is required.
 
 ## 15. Implementation-delegated details
 
@@ -259,4 +260,4 @@ V9-DATA-002 is complete only when:
 15. Existing FEAT-065 Parquet corpus remains canonical, readable and compatible with DuckDB/Polars.
 16. Tests cover checksum mismatch, schema rejection, incomplete day, stale lease, duplicate ack, crash between import and ack, low quota, unacknowledged-batch retention beyond 30 days, superseded-batch deletion only after successful replacement acknowledgment, supplemental repair and blocking oldest-batch behavior.
 
-**Document state: PO REVIEW — AUTHENTICODE SIGNING POLICY.** The Windows receiver, NTFS archive/handoff, and indefinite catalog are recorded. Authenticode signing policy for the private Windows executable remains open in SKR-001.
+**Document state: FROZEN — WINDOWS DELIVERY / ARCHIVE REVISION.** The Windows receiver, NTFS archive/handoff, indefinite catalog, and approved unsigned private-use executable policy are recorded. This aligns with the frozen SKR-001 companion specification.
