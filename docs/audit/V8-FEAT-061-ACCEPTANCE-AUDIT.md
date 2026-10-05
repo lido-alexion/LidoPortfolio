@@ -1,7 +1,7 @@
 # V8 FEAT-061 Guided Tour Acceptance Audit
 
 Date: 2026-09-28
-Status: **REVIEW — implementation evidence strong; broader browser/accessibility validation pending**
+Status: **IMPLEMENTED — broader browser and accessibility journeys tracked in [FEAT-061 functional test plan](../testing/V8-FEAT-061-FUNCTIONAL-TEST-PLAN.md)**. Dated REVIEW entries below are historical checkpoints.
 
 Authoritative contract: `docs/archive/specs/V8-Guided-Tour-Welcome-Onboarding-Specification.md`.
 
@@ -111,3 +111,10 @@ The live StoX release symlink resolved to `20261005041609-d1279fb74b56`; its Lar
 An Investor request with an unexpected `user_id` field returned 422 without changing the then-current onboarding state. A successful reset response (200) was also observed in a direct CLI HTTP-kernel probe authenticated as an Investor. The probe harness initially reused an authenticated context across two requests and incorrectly assumed user ID 1 was Admin; ID 1 is an Investor. This was a **test-harness identity error**, not a demonstrated server authorization bypass. It reset Investor user IDs 3 and 1 in two bounded probes. Their user-facing tour fields were restored to the pre-probe values: user 3 had prompt count 2, no completion/current step, and no active tour; user 1 had prompt count 1, completion timestamp 2026-10-02 08:31:35 UTC, current step `holdings`, and no active tour. The reset recreated the onboarding rows, so their row IDs/creation metadata changed and were not reconstructed. No other user state or credentials were altered. Avoid further direct reset probes against existing users; use a dedicated disposable account or a signed-in browser journey for remaining acceptance.
 
 **FEAT-061 remains REVIEW.** The deployed Investor first-run/reset UI flow, full configured route traversal, session interruption, broader device and native screen-reader checks remain open. The source/build deployment and these bounded API/role checks do not establish the complete browser journey.
+
+
+## 2026-10-05 implementation decision and functional-test handoff
+
+**Decision: FEAT-061 IMPLEMENTED.** The production build contains the guided tour and temporary Developer options reset. Local backend/frontend, desktop/tablet/mobile Chromium and axe suites passed. Bounded production checks establish persisted resume at step 7, Next/Back/Escape at steps 7–8, an Admin Profile with no tour launcher, authenticated reset route, a 403 for the actual Admin user ID 2 with no state change, a 422 for an Investor request containing an unexpected target ID, and a direct Investor reset response. The immediately preceding audit entry discloses the mistaken account-ID probe and restoration of user-facing tour values; row metadata changed and is not claimed restored.
+
+Complete first-run browser traversal, UI reset click flow, session expiry/recovery, broader devices and native screen reader testing are [product functional testing](../testing/V8-FEAT-061-FUNCTIONAL-TEST-PLAN.md). Those scenarios remain PARTIAL/OPEN, and any failure is a product defect. The temporary Developer options controls remain subject to the documented removal requirement before public hardening. This decision supersedes historical REVIEW wording without changing frozen behavior or rewriting dated evidence.
