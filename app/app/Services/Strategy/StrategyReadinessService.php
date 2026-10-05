@@ -5,6 +5,7 @@ namespace App\Services\Strategy;
 use App\Engines\Strategy\SupportedIndicators;
 use App\Models\TradingStrategy;
 use App\Models\TradingStrategyVersion;
+use App\Services\StrategyEligibilityService;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -34,6 +35,17 @@ class StrategyReadinessService
                 'code' => 'eligibility_missing',
                 'message' => 'Add at least one enabled screener for eligibility.',
                 'action' => 'assign_screeners',
+            ];
+        }
+        if (app(StrategyEligibilityService::class)->unresolvedPinnedScreeners($config, $version) !== []) {
+            $requirements[] = [
+                'code' => 'screener_version_unresolved',
+                'message' => $strategy->reusable_artifact_id !== null
+                    ? 'Create an explicit Artifact binding revision to adopt the current Screener version before enabling this Strategy.'
+                    : 'Save this Strategy to adopt the current Screener version before enabling it.',
+                'action' => $strategy->reusable_artifact_id !== null
+                    ? 'revise_artifact_binding'
+                    : 'assign_screeners',
             ];
         }
 

@@ -9,8 +9,8 @@ use App\Models\HoldingAdoption;
 use App\Models\PortfolioProfile;
 use App\Models\Stock;
 use App\Models\StockPrice;
-use App\Models\TradingRecommendation;
 use App\Models\TradingOrder;
+use App\Models\TradingRecommendation;
 use App\Models\TradingStrategy;
 use App\Models\TradingStrategyVersion;
 use App\Models\Transaction;
@@ -20,6 +20,7 @@ use App\Services\HoldingsCalculationService;
 use App\Services\Strategy\PortfolioCapitalAccountingService;
 use App\Services\Strategy\StrategyRegistrySupport;
 use App\Services\StrategyConfigurationService;
+use App\Services\StrategyEligibilityService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -327,6 +328,10 @@ class MultiStrategyLifecycleAssuranceTest extends TestCase
             'config_json' => $first->activeVersion?->config_json ?? $this->executableStrategyConfig($profile),
             'status' => TradingStrategyVersion::STATUS_DRAFT,
         ]);
+        app(StrategyEligibilityService::class)->syncStrategyScreeners(
+            $version,
+            $version->config_json['eligibility_sources'] ?? [],
+        );
         $second->forceFill(['active_version_id' => $version->id])->save();
         $second = app(StrategyRegistrySupport::class)->activate($profile, $second);
         $first->forceFill(['allocation_pct' => 60])->save();

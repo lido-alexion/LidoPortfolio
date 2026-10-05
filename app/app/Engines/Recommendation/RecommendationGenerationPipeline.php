@@ -145,7 +145,28 @@ class RecommendationGenerationPipeline
 
         DB::transaction(function () use ($profile, $evaluationRun, $versions, $snapshot, &$created, &$strategySummaries) {
             foreach ($versions as $strategyVersion) {
+                $config = is_array($strategyVersion->config_json) ? $strategyVersion->config_json : [];
+                $unresolved = $this->eligibility->unresolvedPinnedScreeners($config, $strategyVersion);
+                if ($unresolved !== []) {
+                    $this->logger->event('RecommendationEngine', 'strategy.provenance_unresolved', 'warning',
+                        'Strategy skipped: Screener version pin unresolved', [
+                            'profile_id' => $profile->id,
+                            'strategy_version_id' => $strategyVersion->id,
+                            'screener_ids' => $unresolved,
+                        ]);
+
+                    continue;
+                }
                 $ctx = $this->prepareContext($profile, $evaluationRun, $strategyVersion, $snapshot);
+                if (($ctx['eligibility']['mode'] ?? null) === 'provenance_unresolved') {
+                    $this->logger->event('RecommendationEngine', 'strategy.provenance_unresolved', 'warning',
+                        'Strategy skipped: runtime Screener dependency unresolved', [
+                            'profile_id' => $profile->id,
+                            'strategy_version_id' => $strategyVersion->id,
+                        ]);
+
+                    continue;
+                }
                 $strategyId = (int) ($ctx['strategy']?->id ?? 0);
                 $this->cancelStaleRecommendations($profile, $strategyId > 0 ? $strategyId : null);
 
@@ -238,8 +259,44 @@ class RecommendationGenerationPipeline
             ];
         }
 
+        if ($strategyVersion !== null) {
+            $config = is_array($strategyVersion->config_json) ? $strategyVersion->config_json : [];
+            if ($this->eligibility->unresolvedPinnedScreeners($config, $strategyVersion) !== []) {
+                return [
+                    'available' => false,
+                    'unavailable_reasons' => [[
+                        'code' => 'SCREENER_VERSION_UNRESOLVED',
+                        'message' => 'This Strategy has an unresolved Screener version. Save it or revise its Artifact binding to adopt the current version.',
+                    ]],
+                    'evaluation_run' => $evaluationRun,
+                    'strategy_version' => $strategyVersion,
+                    'draft' => null,
+                    'final_action' => null,
+                    'reasoning' => null,
+                    'eligibility' => null,
+                    'gate_decision' => null,
+                ];
+            }
+        }
+
         $snapshot = $this->capitalAccounting->snapshot($profile);
         $ctx = $this->prepareContext($profile, $evaluationRun, $strategyVersion, $snapshot);
+        if (($ctx['eligibility']['mode'] ?? null) === 'provenance_unresolved') {
+            return [
+                'available' => false,
+                'unavailable_reasons' => [[
+                    'code' => 'SCREENER_VERSION_UNRESOLVED',
+                    'message' => 'This Strategy has an unresolved Screener version. Save it or revise its Artifact binding to adopt the current version.',
+                ]],
+                'evaluation_run' => $evaluationRun,
+                'strategy_version' => $ctx['strategy_version'],
+                'draft' => null,
+                'final_action' => null,
+                'reasoning' => null,
+                'eligibility' => $ctx['eligibility'],
+                'gate_decision' => $ctx['market_gate_decision'] ?? null,
+            ];
+        }
         $drafts = $this->buildDrafts($ctx);
         $drafts = $this->rankDrafts($drafts, $ctx);
         $drafts = $this->enforceMaxHoldingsOpenCap($drafts, $ctx);
