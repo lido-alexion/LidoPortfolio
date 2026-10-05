@@ -46,6 +46,9 @@ A broker submission, broker acknowledgement, fill and StoX accounting transactio
 
 ## EXE-03 — Execute in Semi-Automatic mode
 
+- Requires: A valid Kite connection for the current session.
+- Warning: StoX requires explicit execution authorization, and broker submission does not confirm a fill.
+
 **Goal:** Let StoX submit an approved trade to Kite while requiring explicit user authorization.
 
 1. Ensure the Zerodha/Kite connection is valid for the day/session.
@@ -140,6 +143,8 @@ StoX/Kite can involve more than one authentication concept. Follow the label sho
 ---
 
 ## EXE-09 — Cancel a submitted broker order
+
+- Warning: Cancellation requested is an intermediate state; wait for Kite confirmation before treating the order as cancelled.
 
 **Goal:** Request cancellation after broker submission without falsely claiming success before Kite confirms it.
 

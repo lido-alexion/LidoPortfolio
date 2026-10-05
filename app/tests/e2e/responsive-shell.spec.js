@@ -28,6 +28,47 @@ async function assertNoDocumentOverflow(page) {
 }
 
 test.describe('responsive shell and representative page archetypes', () => {
+    test('mobile help search opens selected topic and restores it through refresh and history', async ({ page }) => {
+        test.skip((page.viewportSize()?.width || 0) >= 768, 'mobile-only help journey');
+        await installAndOpen(page);
+        await page.getByRole('button', { name: 'Open global search' }).click();
+        const searchA11y = await new AxeBuilder({ page }).include('.lido-global-search-surface').analyze();
+        expect(searchA11y.violations).toEqual([]);
+        const input = page.getByRole('searchbox', { name: 'Search pages, stocks, or help' });
+        await input.fill('create screener');
+        await page.getByRole('link', { name: /How do I create a screener/i }).click();
+        await expect(page).toHaveURL(/documentation\?journey=SCR-01/);
+        await expect(page.getByTestId('journey-help-topic')).toContainText('Start creation of a new screener');
+        await expect(page.getByRole('link', { name: 'View full guide' })).toHaveAttribute('href', /01-screeners\.html#scr-01/);
+        await expect(page.getByRole('button', { name: 'Helpful', exact: true })).toBeVisible();
+        await page.goBack();
+        await expect(page).toHaveURL(/recommendations/);
+        await page.goForward();
+        await expect(page.getByTestId('journey-help-topic')).toBeVisible();
+        await page.reload();
+        await expect(page.getByTestId('journey-help-topic')).toBeVisible();
+        await assertNoDocumentOverflow(page);
+    });
+
+    test('desktop Ctrl/Cmd+K keyboard selection opens a help topic', async ({ page }) => {
+        test.skip((page.viewportSize()?.width || 0) < 1200, 'desktop-only help shortcut');
+        await installAndOpen(page);
+        await page.keyboard.press('Control+k');
+        const input = page.getByRole('searchbox', { name: 'Search pages, stocks, or help' });
+        await expect(input).toBeFocused();
+        await input.fill('create screener');
+        await expect(page.getByRole('link', { name: /How do I create a screener/i })).toBeVisible();
+        let activeId = '';
+        for (let attempt = 0; attempt < 12 && activeId !== 'global-search-result-help-SCR-01'; attempt += 1) {
+            await page.keyboard.press('ArrowDown');
+            activeId = await input.getAttribute('aria-activedescendant') || '';
+        }
+        expect(activeId).toBe('global-search-result-help-SCR-01');
+        await page.keyboard.press('Enter');
+        await expect(page).toHaveURL(/documentation\?journey=SCR-01/);
+        await expect(page.getByTestId('journey-help-topic')).toBeVisible();
+    });
+
     test('mobile shell keeps navigation, utilities, search, help and profile reachable', async ({ page }) => {
         test.skip((page.viewportSize()?.width || 0) >= 768, 'mobile-only shell assertions');
         await installAndOpen(page);

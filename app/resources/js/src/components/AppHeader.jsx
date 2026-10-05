@@ -69,7 +69,7 @@ export default function AppHeader({ user, showSidebarToggle = false }) {
                         </h1>
                     </Link>
                 </div>
-                {user && !user.is_admin && <GlobalSearch user={user} />}
+                {user && <GlobalSearch user={user} />}
                 <div className="lido-header-actions">
                     {user && !user.is_admin && <PortfolioSwitcher />}
                     <ExecutionSafetyControls user={user} />

@@ -65,6 +65,10 @@ For an actionable recommendation, the normal user-facing lifecycle is approximat
 
 ## REC-04 — Understand OPEN, INCREASE, REDUCE and EXIT
 
+1. Open the recommendation and read its action type.
+2. Match the action to the strategy-owned position: OPEN starts a position, INCREASE adds, REDUCE sells part, and EXIT closes it.
+3. Before approval, verify that the action matches the current strategy-owned position.
+
 - **OPEN_POSITION** — The strategy wants to initiate its own position where it currently owns none.
 - **INCREASE_POSITION** — The strategy already owns a position and policy permits adding to it.
 - **REDUCE_POSITION** — The strategy wants to sell part of its own position.
@@ -75,6 +79,10 @@ Before approval, verify that the action matches the current strategy-owned posit
 ---
 
 ## REC-05 — Understand WATCH and HOLD
+
+1. Open the recommendation and identify whether it is WATCH or HOLD_POSITION.
+2. Treat WATCH as monitoring guidance and HOLD_POSITION as informational guidance to retain the strategy-owned position.
+3. Do not approve or execute either action as a trade.
 
 **WATCH** means the security is worth presenting/monitoring under policy but there is no executable trade intent.
 
@@ -100,6 +108,8 @@ Do not look for an Approve-to-trade flow for WATCH/HOLD. If such a legacy/incons
 ---
 
 ## REC-07 — Approve a recommendation
+
+- Requires: An actionable recommendation with capital readiness.
 
 **Goal:** Authorize an actionable recommendation to proceed to execution when readiness rules permit.
 

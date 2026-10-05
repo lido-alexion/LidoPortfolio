@@ -62,9 +62,12 @@ function SearchResults({ results, activeIndex, onHover, onSelect }) {
                                 <Link
                                     to={result.destination}
                                     className={`lido-global-search-result${activeIndex === resultIndex ? ' is-active' : ''}`}
+                                    id={`global-search-result-${result.kind}-${result.sourceId}`}
                                     aria-label={resultLabel(result)}
                                     onMouseEnter={() => onHover(resultIndex)}
-                                    onClick={() => {
+                                    onClick={(event) => {
+                                        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                                        event.preventDefault();
                                         onSelect(result);
                                     }}
                                 >
@@ -89,7 +92,7 @@ function SearchResults({ results, activeIndex, onHover, onSelect }) {
     };
 
     return (
-        <div className="lido-global-search-results" aria-label="Search results">
+        <div id="lido-global-search-results" className="lido-global-search-results" aria-label="Search results">
             {renderGroup('Pages', pages)}
             {renderGroup('How do I?', help)}
             {renderGroup('Stocks', stocks)}
@@ -97,9 +100,10 @@ function SearchResults({ results, activeIndex, onHover, onSelect }) {
     );
 }
 
-function SearchSurface({ mobile, inline = false, open = false, inputRef, surfaceRef, query, setQuery, results, activeIndex, onKeyDown, onHover, onSelect, onClose, onClearHistory, hasHistory, stockLoading, stockError, onFocus }) {
+function SearchSurface({ mobile, inline = false, open = false, inputRef, surfaceRef, query, setQuery, results, activeIndex, onKeyDown, onHover, onSelect, onClose, onClearHistory, hasHistory, stockLoading, stockError, onFocus, onAskAssistant }) {
     const hasQuery = Boolean(normalizeGlobalSearchQuery(query));
     const hasResults = results.length > 0;
+    const hasStrongHelp = results.some((result) => result.kind === 'help' && result.textScore > 20);
     const status = stockLoading
         ? 'Searching stocks…'
         : stockError
@@ -119,12 +123,12 @@ function SearchSurface({ mobile, inline = false, open = false, inputRef, surface
             } : {})}
         >
             {mobile && (
-                <header className="lido-global-search-mobile-header">
+                <div className="lido-global-search-mobile-header">
                     <h2 id="lido-global-search-title">Search StoX</h2>
                     <button type="button" className="lido-icon-action" aria-label="Close search" title="Close search" onClick={onClose}>
                         <X size={18} />
                     </button>
-                </header>
+                </div>
             )}
             <label className="visually-hidden" htmlFor="lido-global-search-input">Search pages, stocks, or help</label>
             <div className="lido-global-search-field">
@@ -141,6 +145,8 @@ function SearchSurface({ mobile, inline = false, open = false, inputRef, surface
                     onKeyDown={onKeyDown}
                     autoComplete="off"
                     aria-describedby="lido-global-search-status"
+                    aria-controls={open && results.length ? 'lido-global-search-results' : undefined}
+                    aria-activedescendant={open && activeIndex >= 0 && results[activeIndex] ? `global-search-result-${results[activeIndex].kind}-${results[activeIndex].sourceId}` : undefined}
                 />
             </div>
             {(!inline || open) && <>
@@ -158,6 +164,11 @@ function SearchSurface({ mobile, inline = false, open = false, inputRef, surface
                         <div className="lido-global-search-empty">{status || 'Search pages or stocks'}</div>
                     )}
                 </div>
+                {hasQuery && !hasStrongHelp && <div className="small mt-2">
+                    <p className="mb-1">No strong deterministic help match. Try a broader term or browse the journey index.</p>
+                    <Link to="/documentation?q=help" onClick={onClose}>Browse help topics</Link>
+                    {' · '}<button type="button" className="btn btn-link btn-sm p-0 align-baseline" onClick={onAskAssistant}>Ask StoX Assistant</button>
+                </div>}
             </>}
         </div>
     );
@@ -184,17 +195,20 @@ function GlobalSearchFeature({ user }) {
     const openRef = useRef(false);
     const requestGenerationRef = useRef(0);
     const lastPathRef = useRef(location.pathname);
+    const diagnosticKeysRef = useRef(new Set());
 
     const pageResults = useMemo(() => searchVisiblePages(query, user), [query, user]);
     const helpResults = useMemo(() => searchJourneyTopics(query, {
         currentPath: location.pathname,
         history: helpHistory,
-    }).filter((topic) => topic.score >= 12).map((topic) => ({
+    }).map((topic) => ({
         kind: 'help',
         title: topic.title,
         secondary: topic.category,
         sourceId: topic.id,
-        destination: `/documentation?journey=${encodeURIComponent(topic.id)}&q=${encodeURIComponent(topic.id)}`,
+        score: topic.score,
+        textScore: topic.textScore,
+        destination: `/documentation?journey=${encodeURIComponent(topic.id)}`,
         matchReason: explainJourneyMatch(topic, query),
     })), [query, location.pathname, helpHistory]);
     const results = useMemo(() => [
@@ -209,6 +223,20 @@ function GlobalSearchFeature({ user }) {
             destination: holdingsPricesPath(stock.id),
         })),
     ], [helpResults, pageResults, stockResults]);
+
+    useEffect(() => {
+        const normalized = normalizeGlobalSearchQuery(query);
+        if (!open || normalized.length < 2) return undefined;
+        const timer = window.setTimeout(() => {
+            const hasHelpMatch = helpResults.length > 0;
+            const event = !hasHelpMatch ? 'no_match' : helpResults[0].textScore <= 20 ? 'weak_match' : null;
+            const key = `${event}:${normalized}`;
+            if (!event || diagnosticKeysRef.current.has(key)) return;
+            diagnosticKeysRef.current.add(key);
+            api.post('/help-feedback', { topic_id: '__query__', event, query: normalized }, { skipErrorToast: true }).catch(() => {});
+        }, 700);
+        return () => window.clearTimeout(timer);
+    }, [helpResults, open, query]);
 
     const clearTransientState = useCallback(() => {
         requestGenerationRef.current += 1;
@@ -331,12 +359,18 @@ function GlobalSearchFeature({ user }) {
             try { localStorage.setItem(`stox_help_history_${user?.id}`, JSON.stringify(next)); } catch { /* best effort */ }
         }
         closeSearch(false);
-        navigate(result.destination);
+        navigate(result.destination, result.kind === 'help' ? { state: { helpQuery: query } } : undefined);
     };
 
     const clearHelpHistory = () => {
         setHelpHistory([]);
         try { localStorage.removeItem(`stox_help_history_${user?.id}`); } catch { /* best effort */ }
+    };
+
+    const askAssistant = () => {
+        const question = query;
+        closeSearch(false);
+        window.dispatchEvent(new CustomEvent('lido-assistant-handoff', { detail: { question } }));
     };
 
     const onKeyDown = (event) => {
@@ -392,6 +426,7 @@ function GlobalSearchFeature({ user }) {
                         hasHistory={helpHistory.length > 0}
                         stockLoading={stockLoading}
                         stockError={stockError}
+                        onAskAssistant={askAssistant}
                     />
                 </>}
             </> : <SearchSurface
@@ -412,12 +447,13 @@ function GlobalSearchFeature({ user }) {
                 stockLoading={stockLoading}
                 stockError={stockError}
                 onFocus={openSearch}
+                onAskAssistant={askAssistant}
             />}
         </div>
     );
 }
 
 export default function GlobalSearch({ user }) {
-    if (!user || user.is_admin) return null;
+    if (!user) return null;
     return <GlobalSearchFeature user={user} />;
 }

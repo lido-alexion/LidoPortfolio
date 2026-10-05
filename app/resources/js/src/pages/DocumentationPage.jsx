@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { appUrl } from '../appBase';
 import { findDocumentationByKeyword } from '../utils/documentationLinks';
-import { JOURNEY_TOPICS } from '../data/journeyMetadata';
+import { explainJourneyMatch, JOURNEY_TOPICS, searchJourneyTopics } from '../data/journeyMetadata';
 import api from '../api';
 
 /**
@@ -10,9 +10,12 @@ import api from '../api';
  */
 export default function DocumentationPage() {
     const [searchParams] = useSearchParams();
+    const location = useLocation();
     const q = searchParams.get('q') || 'overview';
     const journeyId = searchParams.get('journey');
+    const journeyQuery = searchParams.get('q') || location.state?.helpQuery || '';
     const topic = JOURNEY_TOPICS.find((item) => item.id === journeyId);
+    const alternatives = topic ? searchJourneyTopics(journeyQuery || topic.title, { limit: 4, exclude: [topic.id] }) : [];
     const [feedback, setFeedback] = useState(null);
 
     useEffect(() => {
@@ -37,14 +40,16 @@ export default function DocumentationPage() {
                     <div className="card-body">
                         <div className="text-muted small mb-1">{topic.id} · {topic.category}</div>
                         <h1 className="h4">{topic.title}</h1>
-                        <ol>{topic.steps.map((step) => <li key={step}>{step}</li>)}</ol>
+                        {topic.steps.length ? <ol aria-label="Task steps">{topic.steps.map((step) => <li key={step}>{step}</li>)}</ol> : <p>The journey has no concise steps marked for inline display. Open the full guide for the authoritative instructions.</p>}
                         {topic.prerequisites.length > 0 && <p className="small mb-1"><strong>Prerequisites:</strong> {topic.prerequisites.join(' ')}</p>}
                         {topic.warnings.length > 0 && <p className="small text-warning-emphasis mb-3"><strong>Warning:</strong> {topic.warnings.join(' ')}</p>}
                         <div className="d-flex flex-wrap gap-2 align-items-center">
-                            <a className="btn btn-primary btn-sm" href={topic.route}>Open {topic.category}</a>
+                            <a className="btn btn-primary btn-sm" href={appUrl(topic.route)}>Open {topic.category}</a>
                             <a className="btn btn-outline-secondary btn-sm" href={appUrl(topic.guide)}>View full guide</a>
                             <span className="small text-muted ms-2">Search match is informational; normal StoX authorization still applies.</span>
                         </div>
+                        <p className="small text-muted mt-3 mb-1">{journeyQuery ? `Why this matched: ${explainJourneyMatch(topic, journeyQuery)}.` : 'Why this matched: this topic’s title and approved search metadata match the selected help topic.'}</p>
+                        {alternatives.length > 0 && <nav aria-label="Alternative help topics" className="small mt-2"><strong>Other possible matches</strong><ul className="mb-0">{alternatives.map((alternative) => <li key={alternative.id}><Link to={`/documentation?journey=${encodeURIComponent(alternative.id)}`} state={journeyQuery ? { helpQuery: journeyQuery } : undefined}>{alternative.title}</Link></li>)}</ul></nav>}
                         <div className="mt-3 d-flex align-items-center gap-2" aria-label="Help feedback">
                             <span className="small text-muted">Was this helpful?</span>
                             <button type="button" className="btn btn-sm btn-outline-success" onClick={() => recordFeedback('helpful')}>Helpful</button>

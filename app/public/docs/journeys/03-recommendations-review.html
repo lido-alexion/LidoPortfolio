@@ -65,6 +65,10 @@
 
 <h2 id="rec-04-understand-open-increase-reduce-and-exit">REC-04 — Understand OPEN, INCREASE, REDUCE and EXIT</h2>
 
+<p>1. Open the recommendation and read its action type.</p>
+<p>2. Match the action to the strategy-owned position: OPEN starts a position, INCREASE adds, REDUCE sells part, and EXIT closes it.</p>
+<p>3. Before approval, verify that the action matches the current strategy-owned position.</p>
+
 <p>- **OPEN_POSITION** — The strategy wants to initiate its own position where it currently owns none.</p>
 <p>- **INCREASE_POSITION** — The strategy already owns a position and policy permits adding to it.</p>
 <p>- **REDUCE_POSITION** — The strategy wants to sell part of its own position.</p>
@@ -75,6 +79,10 @@
 <p>---</p>
 
 <h2 id="rec-05-understand-watch-and-hold">REC-05 — Understand WATCH and HOLD</h2>
+
+<p>1. Open the recommendation and identify whether it is WATCH or HOLD_POSITION.</p>
+<p>2. Treat WATCH as monitoring guidance and HOLD_POSITION as informational guidance to retain the strategy-owned position.</p>
+<p>3. Do not approve or execute either action as a trade.</p>
 
 <p>**WATCH** means the security is worth presenting/monitoring under policy but there is no executable trade intent.</p>
 
@@ -100,6 +108,8 @@
 <p>---</p>
 
 <h2 id="rec-07-approve-a-recommendation">REC-07 — Approve a recommendation</h2>
+
+<p>- Requires: An actionable recommendation with capital readiness.</p>
 
 <p>**Goal:** Authorize an actionable recommendation to proceed to execution when readiness rules permit.</p>
 

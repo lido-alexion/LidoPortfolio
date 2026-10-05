@@ -12,6 +12,8 @@ StoX screener conditions use supported indicators or numeric constants. Groups c
 
 ## SCR-01 — Create a screener from scratch
 
+- Search synonyms: stock filter, screening rule
+
 **Goal:** Create a reusable definition that finds stocks matching a measurable condition.
 
 **Example:** Find stocks whose current price is above their 200-period moving average.

@@ -10,6 +10,11 @@ import { searchJourneyTopics } from '../data/journeyMetadata';
 export default function AssistantDrawer() {
     const { pathname } = useLocation();
     const [open, setOpen] = useState(false), [question, setQuestion] = useState('');
+    useEffect(() => {
+        const handoff = (event) => { setQuestion(event.detail?.question || ''); setOpen(true); };
+        window.addEventListener('lido-assistant-handoff', handoff);
+        return () => window.removeEventListener('lido-assistant-handoff', handoff);
+    }, []);
     const [turns, setTurns] = useState([]), [busy, setBusy] = useState(false);
     const [notice, setNotice] = useState('');
     const [mode, setMode] = useState('documentation'), [runs, setRuns] = useState([]);

@@ -9,7 +9,7 @@ import { TEST_USER } from './fixtures/tosApi.js';
 
 function LocationProbe() {
     const location = useLocation();
-    return <output data-testid="location">{location.pathname}</output>;
+    return <output data-testid="location">{location.pathname}{location.search}</output>;
 }
 
 function renderSearch(user = TEST_USER, route = '/') {
@@ -50,10 +50,16 @@ describe('Global Search', () => {
         expect(screen.queryByText('Administration')).not.toBeInTheDocument();
     });
 
-    it('does not render for Admin users', () => {
+    it('renders for authenticated admin users and remains absent for unauthenticated visitors', () => {
         desktopMatchMedia();
         renderSearch({ ...TEST_USER, is_admin: true });
-        expect(screen.queryByRole('button', { name: 'Open global search' })).not.toBeInTheDocument();
+        expect(screen.getByRole('searchbox', { name: 'Search pages, stocks, or help' })).toBeInTheDocument();
+    });
+
+    it('does not render for unauthenticated visitors', () => {
+        desktopMatchMedia();
+        renderSearch(null);
+        expect(screen.queryByRole('searchbox', { name: 'Search pages, stocks, or help' })).not.toBeInTheDocument();
     });
 
     it('debounces stock lookup and navigates to the existing stock-price route', async () => {
@@ -123,11 +129,59 @@ describe('Global Search', () => {
         expect(input).toHaveFocus();
         await user.type(input, 'hold');
         await screen.findByRole('link', { name: 'Holdings, Portfolio' });
+        await waitFor(() => expect(document.getElementById(input.getAttribute('aria-controls'))).toBeInTheDocument());
         await user.keyboard('{ArrowDown}{Enter}');
         expect(screen.getByTestId('location')).toHaveTextContent('/holdings');
 
         await user.keyboard('{Escape}');
-        expect(screen.getByRole('searchbox', { name: 'Search pages, stocks, or help' })).toBeInTheDocument();
+        expect(screen.getByRole('searchbox', { name: 'Search pages, stocks, or help' })).toHaveFocus();
+    });
+
+    it('opens deterministic help from search and carries a shareable selected topic URL', async () => {
+        desktopMatchMedia();
+        const user = userEvent.setup();
+        renderSearch();
+        const input = screen.getByRole('searchbox', { name: 'Search pages, stocks, or help' });
+        await user.type(input, 'create screener');
+        const result = await screen.findByRole('link', { name: /How do I create a screener/i });
+        await user.click(result);
+        expect(screen.getByTestId('location')).toHaveTextContent('/documentation?journey=SCR-01');
+        expect(screen.getByTestId('location')).not.toHaveTextContent('create%20screener');
+    });
+
+    it('offers an explicit assistant handoff for a no-match query without submitting a question', async () => {
+        desktopMatchMedia();
+        const user = userEvent.setup();
+        const handoff = vi.fn();
+        window.addEventListener('lido-assistant-handoff', handoff, { once: true });
+        renderSearch();
+        await user.type(screen.getByRole('searchbox', { name: 'Search pages, stocks, or help' }), 'zzqv-no-such-help-topic');
+        const button = await screen.findByRole('button', { name: 'Ask StoX Assistant' });
+        await user.click(button);
+        expect(handoff).toHaveBeenCalledTimes(1);
+        expect(handoff.mock.calls[0][0].detail.question).toBe('zzqv-no-such-help-topic');
+        expect(apiMock.post).not.toHaveBeenCalledWith('/ai/assistant/stream', expect.anything(), expect.anything());
+    });
+
+    it('keeps the explicit assistant handoff available beside weak deterministic matches', async () => {
+        desktopMatchMedia();
+        const user = userEvent.setup();
+        localStorage.setItem(`stox_help_history_${TEST_USER.id}`, JSON.stringify(['SCR-01']));
+        renderSearch(TEST_USER, '/screeners');
+        await user.type(screen.getByRole('searchbox', { name: 'Search pages, stocks, or help' }), 'screner');
+        expect(await screen.findByRole('link', { name: /How do I create a screener/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Ask StoX Assistant' })).toBeInTheDocument();
+    });
+
+    it('clears only this account’s bounded recent help topic IDs', async () => {
+        desktopMatchMedia();
+        const user = userEvent.setup();
+        localStorage.setItem(`stox_help_history_${TEST_USER.id}`, JSON.stringify(['SCR-01', 'STR-01']));
+        renderSearch();
+        await user.click(screen.getByRole('searchbox', { name: 'Search pages, stocks, or help' }));
+        await user.click(screen.getByRole('button', { name: 'Clear recent help searches' }));
+        expect(localStorage.getItem(`stox_help_history_${TEST_USER.id}`)).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Clear recent help searches' })).not.toBeInTheDocument();
     });
 
     it('uses a modal mobile surface with focus containment and restoration', async () => {

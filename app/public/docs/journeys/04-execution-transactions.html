@@ -46,6 +46,9 @@
 
 <h2 id="exe-03-execute-in-semi-automatic-mode">EXE-03 — Execute in Semi-Automatic mode</h2>
 
+<p>- Requires: A valid Kite connection for the current session.</p>
+<p>- Warning: StoX requires explicit execution authorization, and broker submission does not confirm a fill.</p>
+
 <p>**Goal:** Let StoX submit an approved trade to Kite while requiring explicit user authorization.</p>
 
 <p>1. Ensure the Zerodha/Kite connection is valid for the day/session.</p>
@@ -140,6 +143,8 @@
 <p>---</p>
 
 <h2 id="exe-09-cancel-a-submitted-broker-order">EXE-09 — Cancel a submitted broker order</h2>
+
+<p>- Warning: Cancellation requested is an intermediate state; wait for Kite confirmation before treating the order as cancelled.</p>
 
 <p>**Goal:** Request cancellation after broker submission without falsely claiming success before Kite confirms it.</p>
 

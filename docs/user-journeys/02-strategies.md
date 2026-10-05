@@ -213,6 +213,8 @@ A strategy is a named investment policy. It consumes discovery/screener evidence
 
 ## STR-13 — Enable a strategy
 
+- Requires: The strategy configuration is complete and valid.
+
 **Goal:** Allow a completed strategy to participate in eligible decision-pipeline runs.
 
 1. Open `/strategy/registry`.

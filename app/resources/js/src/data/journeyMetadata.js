@@ -264,7 +264,11 @@ export const JOURNEY_TOPICS = Object.freeze([
       "Enable the strategy using [STR-13](02-strategies.md#str-13--enable-a-strategy).",
       "Run/wait for the decision pipeline using [REC-01](03-recommendations-review.md#rec-01--generate-recommendations-through-the-decision-pipeline).",
       "Open `/recommendations` and inspect the generated OPEN/INCREASE recommendation and its evidence.",
-      "Confirm capital state and actual executable amount."
+      "Confirm capital state and actual executable amount.",
+      "Approve it using [REC-07](03-recommendations-review.md#rec-07--approve-a-recommendation).",
+      "Open `/transactions/pending` and perform the final check using [EXE-05](04-execution-transactions.md#exe-05--review-pending-execution).",
+      "Execute manually or through the configured broker-assisted mode.",
+      "Verify the resulting transaction and strategy-owned holding using [EXE-15](04-execution-transactions.md#exe-15--verify-transaction-and-holding-after-execution)."
     ],
     "prerequisites": [],
     "warnings": []
@@ -293,7 +297,9 @@ export const JOURNEY_TOPICS = Object.freeze([
       "Run the decision pipeline.",
       "Review the generated recommendation.",
       "Approve if desired.",
-      "Review Pending Execution."
+      "Review Pending Execution.",
+      "Execute.",
+      "Verify the resulting transaction and holding."
     ],
     "prerequisites": [],
     "warnings": []
@@ -323,7 +329,12 @@ export const JOURNEY_TOPICS = Object.freeze([
       "Inspect the primary exit reason and quantity.",
       "Confirm an entry market gate has not incorrectly suppressed the exit.",
       "Approve the actionable exit recommendation.",
-      "Open `/transactions/pending`."
+      "Open `/transactions/pending`.",
+      "Verify the SELL quantity belongs to this strategy's position.",
+      "Submit/record the SELL.",
+      "Wait for actual fill/reconciliation.",
+      "Inspect `/transactions` and `/transactions/closed`.",
+      "Verify the strategy-owned holding is reduced or closed as intended."
     ],
     "prerequisites": [],
     "warnings": []
@@ -383,7 +394,8 @@ export const JOURNEY_TOPICS = Object.freeze([
       "Wait for final broker confirmation. “Cancellation requested” is not final cancellation.",
       "Confirm whether any quantity filled before cancellation.",
       "Reconcile partial fills exactly once.",
-      "Confirm the recommendation remains current/eligible for retry according to lifecycle policy."
+      "Confirm the recommendation remains current/eligible for retry according to lifecycle policy.",
+      "Retry using [EXE-14](04-execution-transactions.md#exe-14--retry-without-creating-a-duplicate-order)."
     ],
     "prerequisites": [],
     "warnings": []
@@ -412,7 +424,9 @@ export const JOURNEY_TOPICS = Object.freeze([
       "Complete the supported capital-resolution step if you choose to fund it.",
       "Return to the recommendation and confirm capital state/readiness changed.",
       "Approve when lifecycle rules permit.",
-      "In `/transactions/pending`, verify actual executable amount and whole-share quantity."
+      "In `/transactions/pending`, verify actual executable amount and whole-share quantity.",
+      "Execute.",
+      "Verify actual transaction, cash and holding state."
     ],
     "prerequisites": [],
     "warnings": []
@@ -559,10 +573,15 @@ export const JOURNEY_TOPICS = Object.freeze([
       "Start the Semi-Automatic execution action.",
       "Complete the StoX execution authorization challenge when prompted.",
       "Confirm submission.",
-      "Wait for broker acknowledgement/state rather than assuming a click means a fill."
+      "Wait for broker acknowledgement/state rather than assuming a click means a fill.",
+      "Review the resulting order status and later fill/reconciliation."
     ],
-    "prerequisites": [],
-    "warnings": []
+    "prerequisites": [
+      "A valid Kite connection for the current session."
+    ],
+    "warnings": [
+      "StoX requires explicit execution authorization, and broker submission does not confirm a fill."
+    ]
   },
   {
     "id": "EXE-04",
@@ -613,7 +632,8 @@ export const JOURNEY_TOPICS = Object.freeze([
       "Confirm actual executable quantity and amount rather than only the original desired target.",
       "Confirm the execution window/lifetime has not expired.",
       "Confirm capital reservation/readiness for a BUY.",
-      "Confirm the broker session is usable for broker-assisted modes."
+      "Confirm the broker session is usable for broker-assisted modes.",
+      "Continue with execution or cancel the pending intent."
     ],
     "prerequisites": [],
     "warnings": []
@@ -642,7 +662,8 @@ export const JOURNEY_TOPICS = Object.freeze([
       "Complete required execution authorization.",
       "Submit once.",
       "Wait for the broker acknowledgement/status.",
-      "If the response is uncertain, do not immediately resubmit; follow EXE-13."
+      "If the response is uncertain, do not immediately resubmit; follow EXE-13.",
+      "After fill, verify the StoX transaction and strategy-owned holding."
     ],
     "prerequisites": [],
     "warnings": []
@@ -732,7 +753,9 @@ export const JOURNEY_TOPICS = Object.freeze([
       "Verify recommendation status, fills and reserved capital are reconciled correctly."
     ],
     "prerequisites": [],
-    "warnings": []
+    "warnings": [
+      "Cancellation requested is an intermediate state; wait for Kite confirmation before treating the order as cancelled."
+    ]
   },
   {
     "id": "EXE-10",
@@ -989,7 +1012,9 @@ export const JOURNEY_TOPICS = Object.freeze([
       "Inspect threshold/label interpretation.",
       "Check market-gate status.",
       "Check whether the strategy already owns a position in the stock.",
-      "Review desired position sizing and whole-share constraints."
+      "Review desired position sizing and whole-share constraints.",
+      "Review capital status separately from investment opinion.",
+      "For REDUCE/EXIT, inspect the primary exit reason."
     ],
     "prerequisites": [],
     "warnings": []
@@ -1014,9 +1039,9 @@ export const JOURNEY_TOPICS = Object.freeze([
     "route": "/recommendations",
     "guide": "/docs/journeys/03-recommendations-review.html#rec-04-understand-open-increase-reduce-and-exit",
     "steps": [
-      "Open the relevant StoX page.",
-      "Follow the documented workflow.",
-      "Confirm the expected result."
+      "Open the recommendation and read its action type.",
+      "Match the action to the strategy-owned position: OPEN starts a position, INCREASE adds, REDUCE sells part, and EXIT closes it.",
+      "Before approval, verify that the action matches the current strategy-owned position."
     ],
     "prerequisites": [],
     "warnings": []
@@ -1039,9 +1064,9 @@ export const JOURNEY_TOPICS = Object.freeze([
     "route": "/recommendations",
     "guide": "/docs/journeys/03-recommendations-review.html#rec-05-understand-watch-and-hold",
     "steps": [
-      "Open the relevant StoX page.",
-      "Follow the documented workflow.",
-      "Confirm the expected result."
+      "Open the recommendation and identify whether it is WATCH or HOLD_POSITION.",
+      "Treat WATCH as monitoring guidance and HOLD_POSITION as informational guidance to retain the strategy-owned position.",
+      "Do not approve or execute either action as a trade."
     ],
     "prerequisites": [],
     "warnings": []
@@ -1098,8 +1123,12 @@ export const JOURNEY_TOPICS = Object.freeze([
       "Complete any confirmation/review-note step presented by the UI.",
       "Confirm the resulting status."
     ],
-    "prerequisites": [],
-    "warnings": []
+    "prerequisites": [
+      "An actionable recommendation with capital readiness."
+    ],
+    "warnings": [
+      "`pending_execution` means approved and waiting for execution workflow. It does not mean the broker filled an order."
+    ]
   },
   {
     "id": "REC-08",
@@ -1249,7 +1278,10 @@ export const JOURNEY_TOPICS = Object.freeze([
       "from",
       "scratch"
     ],
-    "synonyms": [],
+    "synonyms": [
+      "stock filter",
+      "screening rule"
+    ],
     "category": "Screeners",
     "route": "/screeners",
     "guide": "/docs/journeys/01-screeners.html#scr-01-create-a-screener-from-scratch",
@@ -1261,10 +1293,13 @@ export const JOURNEY_TOPICS = Object.freeze([
       "Select the price/close indicator on one side.",
       "Select the supported moving-average indicator and set its period to `200` on the other side.",
       "Select the `>` comparison.",
-      "Review the definition and save it."
+      "Review the definition and save it.",
+      "Validate the screener before depending on it in a strategy."
     ],
     "prerequisites": [],
-    "warnings": []
+    "warnings": [
+      "If the stock does not have enough historical observations to calculate the requested indicator, StoX should treat the input as insufficient rather than fabricate a value."
+    ]
   },
   {
     "id": "SCR-02",
@@ -1354,7 +1389,9 @@ export const JOURNEY_TOPICS = Object.freeze([
       "Run the screener again when you need candidate evidence from the changed definition."
     ],
     "prerequisites": [],
-    "warnings": []
+    "warnings": [
+      "Editing and saving a screener does not silently rewrite historical candidate evidence or automatically execute a strategy."
+    ]
   },
   {
     "id": "SCR-05",
@@ -1486,7 +1523,8 @@ export const JOURNEY_TOPICS = Object.freeze([
       "For volume-dependent rules, check whether valid volume history existed. Missing volume is not zero.",
       "Check dataset freshness/data-quality status.",
       "Check whether the security was active and inside the configured universe at the relevant time.",
-      "For historical runs, confirm that the investigation uses data available at that historical point rather than today's mutable state."
+      "For historical runs, confirm that the investigation uses data available at that historical point rather than today's mutable state.",
+      "Distinguish three outcomes: a genuine condition failure, unavailable/insufficient input, and an actual processing failure."
     ],
     "prerequisites": [],
     "warnings": []
@@ -1521,7 +1559,8 @@ export const JOURNEY_TOPICS = Object.freeze([
       "Select/bind the intended screener for entry eligibility.",
       "Configure the remaining strategy policy: factors/weights, thresholds, exit policy, position sizing, limits, capital allocation and market gates as required.",
       "Review the complete policy. A screener is only one input to the strategy.",
-      "Save the strategy."
+      "Save the strategy.",
+      "Enable it when it is ready for live decision-pipeline runs."
     ],
     "prerequisites": [],
     "warnings": []
@@ -1560,7 +1599,12 @@ export const JOURNEY_TOPICS = Object.freeze([
       "Combine the conditions with AND.",
       "Save and validate the screener.",
       "Optionally run it and inspect representative matches to confirm the rule behaves as intended.",
-      "Go to `/strategy` or `/strategy/registry`."
+      "Go to `/strategy` or `/strategy/registry`.",
+      "Create the new strategy.",
+      "Select the newly created screener as the relevant eligibility/discovery input.",
+      "Configure scoring, thresholds, exit policy, sizing, limits and market gates.",
+      "Save the strategy.",
+      "Enable it only after reviewing the complete policy."
     ],
     "prerequisites": [],
     "warnings": []
@@ -1620,7 +1664,9 @@ export const JOURNEY_TOPICS = Object.freeze([
       "Allow a later pipeline run to evaluate existing strategy-owned holdings against the new policy."
     ],
     "prerequisites": [],
-    "warnings": []
+    "warnings": [
+      "Entry market gates must not be treated as a reason to suppress a valid exit."
+    ]
   },
   {
     "id": "STR-05",
@@ -1880,7 +1926,9 @@ export const JOURNEY_TOPICS = Object.freeze([
       "Enable/activate it using the available lifecycle action.",
       "Confirm its status is active/enabled."
     ],
-    "prerequisites": [],
+    "prerequisites": [
+      "The strategy configuration is complete and valid."
+    ],
     "warnings": []
   },
   {
@@ -1968,8 +2016,9 @@ export const JOURNEY_TOPICS = Object.freeze([
 ]);
 
 const STOP_WORDS = new Set(['a', 'an', 'and', 'do', 'how', 'i', 'the', 'to']);
-export function normalizeHelpQuery(value) { return String(value || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim(); }
+export function normalizeHelpQuery(value) { return String(value || '').toLowerCase().normalize('NFKD').replace(/\p{M}/gu, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
 function tokens(value) { return normalizeHelpQuery(value).split(/\s+/).filter((token) => token && !STOP_WORDS.has(token)); }
-function scoreTopic(topic, query, currentPath = '', history = []) { const normalized = normalizeHelpQuery(query); if (!normalized) return 0; const qTokens = new Set(tokens(normalized)); let score = 0; if ([topic.title, ...(topic.aliases || [])].map(normalizeHelpQuery).includes(normalized)) score += 100; for (const token of qTokens) { if (tokens(topic.title).includes(token)) score += 24; if ((topic.aliases || []).some((value) => tokens(value).includes(token))) score += 16; if ((topic.keywords || []).includes(token)) score += 10; if ((topic.synonyms || []).includes(token)) score += 7; } if (currentPath && topic.route === currentPath) score += 6; if (history.includes(topic.id)) score += 2; return score; }
-export function searchJourneyTopics(query, { currentPath = '', history = [], limit = 6 } = {}) { return JOURNEY_TOPICS.map((topic) => ({ ...topic, score: scoreTopic(topic, query, currentPath, history) })).filter((topic) => topic.score > 0).sort((a, b) => b.score - a.score || a.id.localeCompare(b.id)).slice(0, limit); }
+function editDistanceAtMostOne(left, right) { if (Math.abs(left.length - right.length) > 1) return false; let i = 0; let j = 0; let edits = 0; while (i < left.length && j < right.length) { if (left[i] === right[j]) { i++; j++; continue; } if (++edits > 1) return false; if (left.length > right.length) i++; else if (right.length > left.length) j++; else { i++; j++; } } return edits + (i < left.length || j < right.length ? 1 : 0) <= 1; }
+function scoreTopic(topic, query, currentPath = '', history = []) { const normalized = normalizeHelpQuery(query); if (!normalized) return 0; const qTokens = new Set(tokens(normalized)); let score = 0; const titleAliases = [topic.title, ...(topic.aliases || [])]; if (titleAliases.map(normalizeHelpQuery).includes(normalized)) score += 100; for (const token of qTokens) { if (tokens(topic.title).includes(token)) score += 24; if ((topic.aliases || []).some((value) => tokens(value).includes(token))) score += 16; if ((topic.keywords || []).includes(token)) score += 10; if ((topic.synonyms || []).some((value) => tokens(value).includes(token))) score += 7; if (token.length >= 4 && titleAliases.some((value) => tokens(value).some((candidate) => editDistanceAtMostOne(token, candidate)))) score += 5; } if (currentPath && topic.route === currentPath) score += 6; if (history.includes(topic.id)) score += 2; return score; }
+export function searchJourneyTopics(query, { currentPath = '', history = [], limit = 6, exclude = [] } = {}) { return JOURNEY_TOPICS.map((topic) => { const textScore = scoreTopic(topic, query); const score = textScore + (currentPath && topic.route === currentPath ? 6 : 0) + (history.includes(topic.id) ? 2 : 0); return { ...topic, score, textScore }; }).filter((topic) => topic.textScore > 0 && !exclude.includes(topic.id)).sort((a, b) => b.textScore - a.textScore || b.score - a.score || a.id.localeCompare(b.id)).slice(0, limit); }
 export function explainJourneyMatch(topic, query) { const q = new Set(tokens(query)); const matched = [topic.title, ...(topic.aliases || []), ...(topic.keywords || []), ...(topic.synonyms || [])].flatMap(tokens).filter((token) => q.has(token)); return matched.length ? 'Matched ' + [...new Set(matched)].slice(0, 3).join(', ') : 'Related StoX journey'; }

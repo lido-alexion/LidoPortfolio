@@ -139,6 +139,8 @@ Route::post('/reset-password/accept', [PasswordResetAcceptController::class, 'ac
 Route::get('/auth/me', [AuthController::class, 'me']);
 Route::get('/auth/csrf-token', [AuthController::class, 'csrfToken']);
 Route::get('/build-info', [BuildInfoController::class, 'show']);
+Route::post('/help-feedback', [HelpFeedbackController::class, 'store'])
+    ->middleware('auth:sanctum')->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class);
 Route::middleware('auth:sanctum')->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class)
     ->prefix('microstructure-kite')->group(function () {
         Route::get('/status', [MicrostructureKiteConnectController::class, 'status']);
@@ -275,7 +277,6 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
 
     Route::get('/guided-tour', [GuidedTourController::class, 'show']);
     Route::put('/guided-tour', [GuidedTourController::class, 'update']);
-    Route::post('/help-feedback', [HelpFeedbackController::class, 'store']);
 
     Route::get('/stocks/search', [StockController::class, 'search'])
         ->middleware('throttle:stock-search');
