@@ -11,18 +11,18 @@
 ## Current evidence and blockers
 
 - The acceptance audit records local implementation and focused tests as passing.
-- The shared `./scripts/verify-ci.sh --backend` gate stopped at platform preflight because `pdo_sqlite` is unavailable. Resolve this environment prerequisite and rerun the required CI-parity gate.
+- The prior FEAT-056 attempt stopped at platform preflight because `pdo_sqlite` was unavailable in that shell. This is not an unresolved repository/platform defect: FEAT-061 later ran the shared backend verifier successfully using the existing PHP extensions through `PHP_INI_SCAN_DIR`. Re-run the backend verifier for the current FEAT-056 code using that same working PHP setup; record the result against the tested commit.
 - Production lifecycle acceptance is gated on FEAT-057 qualification with the deployed build, registry/configuration, and complete 1m/3m/6m real-adapter evidence.
 - Production must use `STOXLA_ML_MODEL_DIRECTORY=/var/www/stoxla/shared/ml/models`. Follow `docs/current/ml-lifecycle-operations.md`; first inspect with the documented artifact-repair dry run. Do not run repair or change production configuration as part of this plan.
 - The lifecycle flag was recorded false in the 2026-10-01 production audit. Recheck current state read-only before any later controlled exercise.
 
 ## Acceptance sequence
 
-### 1. Close the local CI-parity gap
+### 1. Re-run the backend CI-parity gate
 
-- Run the documented backend verification in an environment with the required `pdo_sqlite` extension.
-- Record the exact commit, command, environment, test counts, and result.
-- Resolve any failures before production acceptance.
+- Reuse the PHP extension setup proven by FEAT-061 (`PHP_INI_SCAN_DIR`) and the isolated MySQL verification setup.
+- Run `./scripts/verify-ci.sh --backend` against the current FEAT-056 code.
+- Record the exact commit, command, environment, test counts, and result; resolve any failures before production acceptance.
 
 ### 2. Confirm production prerequisites (read-only)
 
