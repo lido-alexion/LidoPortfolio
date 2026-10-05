@@ -27,26 +27,40 @@ class FundamentalHistoricalIngestService
      */
     public function fetch(Stock $stock, string $cadence): array
     {
-        $merged = [];
-
+        $rejectedRows = [];
         foreach ($this->sources as $source) {
             if (! $source->supports($stock)) {
                 continue;
             }
+
+            $rowsByIdentity = [];
             foreach ($source->fetch($stock, $cadence) as $row) {
                 $identity = $this->identityKey($row);
                 if ($identity === '') {
                     continue;
                 }
-                $existing = $merged[$identity] ?? null;
-                if ($existing === null || $this->shouldReplace($existing, $row, $source->id())) {
-                    $row['provider'] = $source->id();
-                    $merged[$identity] = $row;
+                $row['provider'] = $source->id();
+                if (! is_numeric($row['value'] ?? null)) {
+                    $rejectedRows[] = $row;
+                    continue;
                 }
+                if (! isset($rowsByIdentity[$identity])) {
+                    $rowsByIdentity[$identity] = $row;
+                }
+            }
+            $rows = array_values($rowsByIdentity);
+
+            // Provider fallback is sequential: do not query exchange feeds when
+            // Yahoo already returned usable rows. A later source is used only
+            // when the earlier source has no usable result for this stock/cadence.
+            if ($rows !== []) {
+                return $rows;
             }
         }
 
-        return array_values($merged);
+        // Preserve malformed numeric candidates for the bootstrap quality gate
+        // when no primary or fallback provider could supply usable facts.
+        return $rejectedRows;
     }
 
     /**
@@ -54,24 +68,21 @@ class FundamentalHistoricalIngestService
      */
     protected function identityKey(array $row): string
     {
+        $required = ['statement_type', 'cadence', 'fact_key', 'period_end'];
+        foreach ($required as $key) {
+            if (! is_scalar($row[$key] ?? null) || trim((string) $row[$key]) === '') {
+                return '';
+            }
+        }
+
         return implode('|', [
-            (string) ($row['statement_type'] ?? ''),
-            (string) ($row['cadence'] ?? ''),
-            (string) ($row['fact_key'] ?? ''),
-            (string) ($row['period_end'] ?? ''),
+            (string) $row['statement_type'],
+            (string) $row['cadence'],
+            // Match persistence's legacy fallback; official adapters supply unknown.
+            (string) ($row['statement_basis'] ?? 'consolidated'),
+            (string) $row['fact_key'],
+            (string) $row['period_end'],
         ]);
     }
 
-    /**
-     * @param  array<string, mixed>  $existing
-     * @param  array<string, mixed>  $incoming
-     */
-    protected function shouldReplace(array $existing, array $incoming, string $incomingSource): bool
-    {
-        $rank = ['nse_official' => 1, 'bse_official' => 2, 'yahoo' => 3];
-        $existingRank = $rank[(string) ($existing['provider'] ?? 'yahoo')] ?? 99;
-        $incomingRank = $rank[$incomingSource] ?? 99;
-
-        return $incomingRank < $existingRank;
-    }
 }

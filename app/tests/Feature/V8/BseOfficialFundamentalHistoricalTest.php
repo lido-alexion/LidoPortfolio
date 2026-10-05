@@ -3,6 +3,7 @@
 namespace Tests\Feature\V8;
 
 use App\Models\Stock;
+use App\Models\V7\FundamentalSetting;
 use App\Services\Fundamentals\FundamentalDataProvider;
 use App\Services\Fundamentals\FundamentalHistoricalIngestService;
 use App\Services\Fundamentals\Historical\BseOfficialFundamentalHistoricalSource;
@@ -25,6 +26,7 @@ class BseOfficialFundamentalHistoricalTest extends TestCase
 
     public function test_bse_official_rows_used_for_bse_listed_stock(): void
     {
+        FundamentalSetting::query()->create(['bse_official_fallback_enabled' => true]);
         config([
             'fundamentals_bootstrap.bse_official_enabled' => true,
             'fundamentals_bootstrap.bse_official_feed_url' => 'https://feeds.example/bse-fundamentals',

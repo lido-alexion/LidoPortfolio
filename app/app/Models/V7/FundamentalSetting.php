@@ -15,6 +15,8 @@ class FundamentalSetting extends Model
         'max_attempts',
         'provider',
         'paused',
+        'nse_official_fallback_enabled',
+        'bse_official_fallback_enabled',
         'ai_insights_primary_provider',
     ];
 
@@ -26,6 +28,8 @@ class FundamentalSetting extends Model
             'request_delay_ms' => 'integer',
             'max_attempts' => 'integer',
             'paused' => 'boolean',
+            'nse_official_fallback_enabled' => 'boolean',
+            'bse_official_fallback_enabled' => 'boolean',
         ];
     }
 }

@@ -18,7 +18,7 @@ class YahooFundamentalHistoricalSource implements FundamentalHistoricalSource
 
     public function priority(): int
     {
-        return 100;
+        return 10;
     }
 
     public function supports(Stock $stock): bool

@@ -18,6 +18,7 @@ use App\Telemetry\LidoTelemetryCatalog;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class FundamentalDataController extends Controller
 {
@@ -122,6 +123,7 @@ class FundamentalDataController extends Controller
         return ApiEnvelope::success(array_merge($this->updates->status(), [
             'bootstrap' => $this->bootstrap->status(),
             'ai_insights' => $this->aiInsights->adminDiagnostics(),
+            'exchange_fallbacks' => $this->fundamentals->exchangeFallbackStatus(),
         ]));
     }
 
@@ -160,7 +162,17 @@ class FundamentalDataController extends Controller
             'max_attempts' => ['nullable', 'integer', 'min:1', 'max:10'],
             'paused' => ['nullable', 'boolean'],
             'ai_insights_primary_provider' => ['nullable', 'in:gemini,codex'],
+            'nse_official_fallback_enabled' => ['nullable', 'boolean'],
+            'bse_official_fallback_enabled' => ['nullable', 'boolean'],
         ]);
+
+        $fallbacks = $this->fundamentals->exchangeFallbackStatus();
+        foreach (['nse', 'bse'] as $exchange) {
+            $field = $exchange.'_official_fallback_enabled';
+            if (($validated[$field] ?? false) && ! $fallbacks[$exchange]['configured']) {
+                throw ValidationException::withMessages([$field => strtoupper($exchange).' fallback cannot be enabled until an approved feed route is configured.']);
+            }
+        }
 
         $settings = $this->fundamentals->settings();
         $settings->update($validated);
