@@ -102,3 +102,12 @@ Reconciled `feat061-dev-options` by fast-forwarding to `origin/master` at `7e0e3
 Finalization is a local commit only; no push or deployment is authorized. Prompt files and generated timestamp-only documentation are excluded.
 
 These local checks do not close the outstanding production/assistive-technology acceptance items above. **FEAT-061 remains REVIEW.**
+
+
+## 2026-10-05 deployed Developer options and role checks
+
+The live StoX release symlink resolved to `20261005041609-d1279fb74b56`; its Laravel route list contains authenticated `POST /api/developer-options/guided-tour/reset`. The cloud browser restored the actual Admin account on production: its Profile had no guided-tour launch control. A fresh single-request Laravel HTTP-kernel probe authenticated as the **actual Admin user ID 2** returned 403 from the reset route and left that user's onboarding row absent/unchanged. **PASS for deployed Admin denial.**
+
+An Investor request with an unexpected `user_id` field returned 422 without changing the then-current onboarding state. A successful reset response (200) was also observed in a direct CLI HTTP-kernel probe authenticated as an Investor. The probe harness initially reused an authenticated context across two requests and incorrectly assumed user ID 1 was Admin; ID 1 is an Investor. This was a **test-harness identity error**, not a demonstrated server authorization bypass. It reset Investor user IDs 3 and 1 in two bounded probes. Their user-facing tour fields were restored to the pre-probe values: user 3 had prompt count 2, no completion/current step, and no active tour; user 1 had prompt count 1, completion timestamp 2026-10-02 08:31:35 UTC, current step `holdings`, and no active tour. The reset recreated the onboarding rows, so their row IDs/creation metadata changed and were not reconstructed. No other user state or credentials were altered. Avoid further direct reset probes against existing users; use a dedicated disposable account or a signed-in browser journey for remaining acceptance.
+
+**FEAT-061 remains REVIEW.** The deployed Investor first-run/reset UI flow, full configured route traversal, session interruption, broader device and native screen-reader checks remain open. The source/build deployment and these bounded API/role checks do not establish the complete browser journey.
