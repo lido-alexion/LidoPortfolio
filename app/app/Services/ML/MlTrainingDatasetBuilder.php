@@ -1172,13 +1172,22 @@ class MlTrainingDatasetBuilder
     /** @return list<array<string,mixed>> */
     private function fundamentalFacts(Stock $stock, Carbon $cutoff): array
     {
-        return FundamentalFact::query()->where('stock_id', $stock->id)->where('cadence', 'quarterly')->whereDate('availability_date', '<=', $cutoff->toDateString())->orderBy('period_end')->orderBy('availability_date')->orderBy('revision_number')->get()->map(fn (FundamentalFact $fact): array => [
-            'fact_key' => $fact->fact_key,
-            'period_end' => $fact->period_end?->toDateString(),
-            'availability_date' => $fact->availability_date?->toDateString(),
-            'value' => $fact->value !== null ? (float) $fact->value : null,
-            'revision_number' => (int) $fact->revision_number,
-        ])->all();
+        return FundamentalFact::query()
+            ->where('stock_id', $stock->id)
+            ->where('cadence', 'quarterly')
+            ->whereDate('availability_date', '<=', $cutoff->toDateString())
+            ->orderBy('period_end')
+            ->orderBy('availability_date')
+            ->orderBy('revision_number')
+            ->get()
+            ->reject(fn (FundamentalFact $fact): bool => ($fact->source_meta['availability_quality'] ?? null) === 'non_pit')
+            ->map(fn (FundamentalFact $fact): array => [
+                'fact_key' => $fact->fact_key,
+                'period_end' => $fact->period_end?->toDateString(),
+                'availability_date' => $fact->availability_date?->toDateString(),
+                'value' => $fact->value !== null ? (float) $fact->value : null,
+                'revision_number' => (int) $fact->revision_number,
+            ])->all();
     }
 
     /** @return array<string,?float> */

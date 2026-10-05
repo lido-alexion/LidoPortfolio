@@ -32,7 +32,32 @@ class FundamentalDataService
             'max_attempts' => 3,
             'provider' => 'yahoo',
             'paused' => false,
+            'nse_official_fallback_enabled' => false,
+            'bse_official_fallback_enabled' => false,
         ]);
+    }
+
+    /** @return array<string,array{enabled:bool,configured:bool,active:bool}> */
+    public function exchangeFallbackStatus(): array
+    {
+        $settings = $this->settings();
+        $nseConfigured = trim((string) config('fundamentals_bootstrap.nse_official_feed_url', '')) !== ''
+            || (bool) config('fundamentals_bootstrap.nse_official_direct_enabled', false)
+                && (bool) config('fundamentals_bootstrap.nse_official_direct_access_authorized', false);
+        $bseConfigured = trim((string) config('fundamentals_bootstrap.bse_official_feed_url', '')) !== '';
+        $nseEnabled = (bool) $settings->nse_official_fallback_enabled;
+        $bseEnabled = (bool) $settings->bse_official_fallback_enabled;
+
+        return [
+            'nse' => ['enabled' => $nseEnabled, 'configured' => $nseConfigured, 'active' => $nseEnabled && $nseConfigured],
+            'bse' => ['enabled' => $bseEnabled, 'configured' => $bseConfigured, 'active' => $bseEnabled && $bseConfigured],
+        ];
+    }
+
+    public function exchangeFallbackIsActive(string $exchange): bool
+    {
+        $key = strtolower($exchange);
+        return (bool) ($this->exchangeFallbackStatus()[$key]['active'] ?? false);
     }
 
     /**
@@ -146,7 +171,8 @@ class FundamentalDataService
             ->orderByDesc('period_end')
             ->orderByDesc('availability_date')
             ->orderByDesc('revision_number')
-            ->first();
+            ->get()
+            ->first(fn (FundamentalFact $fact): bool => $this->isPitEligible($fact));
     }
 
     /**
@@ -297,6 +323,9 @@ class FundamentalDataService
 
         $out = [];
         foreach ($rows as $row) {
+            if (! $this->isPitEligible($row)) {
+                continue;
+            }
             if (! isset($out[$row->fact_key])) {
                 $out[$row->fact_key] = $row;
             }
@@ -354,6 +383,9 @@ class FundamentalDataService
 
         $periods = [];
         foreach ($facts as $fact) {
+            if (! $this->isPitEligible($fact)) {
+                continue;
+            }
             $period = $fact->period_end?->toDateString();
             if ($period !== null && ! array_key_exists($period, $periods)) {
                 $periods[$period] = $fact;
@@ -535,6 +567,11 @@ class FundamentalDataService
     private function minus(?float $left, ?float $right): ?float
     {
         return $left !== null && $right !== null ? $left - $right : null;
+    }
+
+    private function isPitEligible(FundamentalFact $fact): bool
+    {
+        return ($fact->source_meta['availability_quality'] ?? null) !== 'non_pit';
     }
 
     private function percent(?float $ratio): ?float

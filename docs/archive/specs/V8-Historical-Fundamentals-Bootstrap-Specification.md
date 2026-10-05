@@ -105,7 +105,7 @@ The following are authoritative. Implementation must not reopen these unless a g
 | 054-11 | Completion is source exhaustion + quality classification. |
 | 054-12 | Separate quarterly and annual fact catalogues/coverage expectations. |
 | 054-13 | Historical bootstrap stores latest known value only; do not reconstruct old revision chronology. |
-| 054-14 | Automatic Yahoo fallback per missing official fact/period. |
+| 054-14 | Yahoo is primary; the matching authorized NSE/BSE source is queried only when Yahoo returns no usable facts for the stock/cadence. See PO decision `docs/decisions/2026-10-05-yahoo-primary-fundamentals-source-order.md`. |
 | 054-15 | One bootstrap job per stock. |
 | 054-16 | Missing derived-metric inputs produce unavailable; no hidden estimation. |
 | 054-17 | Growth = same-period YoY; no QoQ in V8. |
@@ -443,23 +443,19 @@ Same ISIN on NSE + BSE
 
 BSE rows are canonical only for BSE-only securities.
 
-### 8.2 Official source routing
+### 8.2 Source routing
+
+**Updated by PO decision dated 2026-10-05:** Yahoo is the primary fundamentals source. For each stock and cadence, use the first source with at least one usable numeric fact:
 
 ```text
-NSE / NSE+
-  -> NSE official filings first
-  -> Yahoo fallback per missing fact/period
-
-BSE-only
-  -> BSE official filings first
-  -> Yahoo fallback per missing fact/period
+All supported listings
+  -> Yahoo first
+  -> if Yahoo has no usable facts, query the matching authorized exchange source
+       NSE / NSE+ -> NSE
+       BSE-only   -> BSE
 ```
 
-Exceptional same-ISIN official conflict:
-
-```text
-NSE > BSE > Yahoo
-```
+Do not merge providers within one stock/cadence response. A partial but usable Yahoo response remains the selected response; an exchange source is not queried to fill individual Yahoo fact gaps. This replaces the earlier official-first/per-fact fallback rule. Exchange access remains subject to explicit authorization and configured approved feeds. See `docs/decisions/2026-10-05-yahoo-primary-fundamentals-source-order.md`.
 
 Do not build a manual conflict-resolution workflow in V8.
 
@@ -507,21 +503,11 @@ stock
 
 reconciliation compares incoming evidence with existing facts.
 
-### 10.1 Source-quality ordering
+### 10.1 Source selection
 
-Use:
+For new acquisition, use the PO-approved provider order in §8.2: Yahoo first, then the matching authorized exchange source only if Yahoo returns no usable facts for the stock/cadence. No cross-source merge occurs in one acquisition response.
 
-```text
-exact official
-> estimated official
-> Yahoo/fallback
-```
-
-Within official exchange conflict for a dual-listed ISIN:
-
-```text
-NSE > BSE
-```
+Availability quality remains independent of provider choice: a Yahoo or exchange fact is PIT-eligible only when its availability semantics meet the PIT contract. A fallback source does not become PIT-eligible merely because it is official.
 
 ### 10.2 Same value
 
@@ -1521,11 +1507,11 @@ Implementation is not complete until automated tests cover the following.
 
 ### 27.1 Canonical ingestion and reconciliation
 
-1. Existing Yahoo fact + identical NSE value upgrades source/availability metadata without creating duplicate economic value.
-2. Higher-priority official conflicting value replaces lower-priority Yahoo canonical value.
-3. NSE official wins over BSE for same canonical ISIN.
-4. BSE-only stock uses BSE official source.
-5. Missing official fact falls back to Yahoo automatically.
+1. Usable Yahoo facts are selected without querying NSE/BSE.
+2. When Yahoo has no usable facts, the authorized exchange source matching the stock listing is used as fallback.
+3. Providers are not merged within one stock/cadence response; malformed/null-value Yahoo rows do not prevent exchange fallback.
+4. BSE fallback is used only for BSE-only stock; NSE fallback is used for NSE/NSE+ stock.
+5. If neither primary nor eligible fallback returns usable facts, ingestion returns no facts.
 6. Unmapped provider fields are ignored.
 7. Missing currency for Indian-listed equity becomes INR.
 8. Source crore/lakh/etc. values normalize to raw INR correctly.

@@ -10,6 +10,8 @@ export default function FundamentalDataAdminPage() {
         request_delay_ms: 750,
         max_attempts: 3,
         paused: false,
+        nse_official_fallback_enabled: false,
+        bse_official_fallback_enabled: false,
         ai_insights_primary_provider: '',
     });
     const [busy, setBusy] = useState(false);
@@ -24,6 +26,8 @@ export default function FundamentalDataAdminPage() {
                 request_delay_ms: data.data.settings.request_delay_ms,
                 max_attempts: data.data.settings.max_attempts,
                 paused: Boolean(data.data.settings.paused),
+                nse_official_fallback_enabled: Boolean(data.data.settings.nse_official_fallback_enabled),
+                bse_official_fallback_enabled: Boolean(data.data.settings.bse_official_fallback_enabled),
                 ai_insights_primary_provider: data.data.settings.ai_insights_primary_provider || '',
             });
         }
@@ -38,7 +42,7 @@ export default function FundamentalDataAdminPage() {
                 ...form,
                 ai_insights_primary_provider: form.ai_insights_primary_provider || null,
             });
-            showToast('Fundamental freshness policy saved.', 'success');
+            showToast('Fundamental settings saved.', 'success');
             await load();
         } finally {
             setBusy(false);
@@ -98,6 +102,18 @@ export default function FundamentalDataAdminPage() {
                                 <input className="form-check-input" type="checkbox" checked={form.paused} onChange={(e) => setForm({ ...form, paused: e.target.checked })} />
                                 <span className="form-check-label">Pause updater</span>
                             </label>
+                            <div className="border-top mt-3 pt-3">
+                                <h2 className="h6">Historical bootstrap exchange fallbacks</h2>
+                                <p className="small text-muted">Yahoo stays primary. NSE/BSE are tried only when Yahoo returns no usable facts.</p>
+                                {['nse', 'bse'].map((exchange) => {
+                                    const field = `${exchange}_official_fallback_enabled`;
+                                    const route = status?.exchange_fallbacks?.[exchange];
+                                    return <label className="form-check mb-2" key={exchange}>
+                                        <input className="form-check-input" type="checkbox" checked={form[field]} disabled={busy || (!route?.configured && !form[field])} onChange={(e) => setForm({ ...form, [field]: e.target.checked })} />
+                                        <span className="form-check-label">Enable {exchange.toUpperCase()} fallback <span className="text-muted small">({route?.configured ? 'approved route configured' : 'no approved route configured'})</span></span>
+                                    </label>;
+                                })}
+                            </div>
                             <button className="btn btn-outline-primary mt-3" type="button" onClick={save} disabled={busy}>Save</button>
                         </div>
                     </div>

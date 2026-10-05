@@ -61,6 +61,41 @@ class FundamentalAiAdminDiagnosticsTest extends TestCase
             ->assertJsonPath('data.ai_insights.secondary_provider', 'gemini');
     }
 
+
+    public function test_admin_can_control_exchange_fallbacks_only_when_route_is_configured(): void
+    {
+        config([
+            'fundamentals_bootstrap.nse_official_feed_url' => 'https://feeds.example/nse',
+            'fundamentals_bootstrap.bse_official_feed_url' => null,
+            'fundamentals_bootstrap.nse_official_direct_enabled' => false,
+            'fundamentals_bootstrap.nse_official_direct_access_authorized' => false,
+        ]);
+        $admin = User::factory()->admin()->create();
+        $this->defaultPortfolioFor($admin);
+        $client = $this->actingAs($admin)->withProfileHeader($admin);
+
+        $client->getJson('/api/v1/admin/fundamentals')->assertOk()
+            ->assertJsonPath('data.exchange_fallbacks.nse.enabled', false)
+            ->assertJsonPath('data.exchange_fallbacks.nse.configured', true)
+            ->assertJsonPath('data.exchange_fallbacks.nse.active', false)
+            ->assertJsonPath('data.exchange_fallbacks.bse.configured', false);
+
+        $client->putJson('/api/v1/admin/fundamentals/settings', [
+            'quarterly_freshness_months' => 5,
+            'annual_freshness_months' => 15,
+            'nse_official_fallback_enabled' => true,
+        ])->assertOk();
+        $client->getJson('/api/v1/admin/fundamentals')->assertOk()
+            ->assertJsonPath('data.exchange_fallbacks.nse.enabled', true)
+            ->assertJsonPath('data.exchange_fallbacks.nse.active', true);
+
+        $client->putJson('/api/v1/admin/fundamentals/settings', [
+            'quarterly_freshness_months' => 5,
+            'annual_freshness_months' => 15,
+            'bse_official_fallback_enabled' => true,
+        ])->assertUnprocessable()->assertJsonValidationErrors('bse_official_fallback_enabled');
+    }
+
     public function test_admin_can_probe_ai_provider(): void
     {
         config([

@@ -14,6 +14,10 @@ use Illuminate\Support\Facades\Log;
  */
 class NseOfficialFundamentalHistoricalSource implements FundamentalHistoricalSource
 {
+    public function __construct(private readonly ?NseIntegratedFilingClient $exchangeClient = null)
+    {
+    }
+
     public function id(): string
     {
         return 'nse_official';
@@ -21,12 +25,12 @@ class NseOfficialFundamentalHistoricalSource implements FundamentalHistoricalSou
 
     public function priority(): int
     {
-        return 10;
+        return 20;
     }
 
     public function supports(Stock $stock): bool
     {
-        if (! config('fundamentals_bootstrap.nse_official_enabled', false)) {
+        if (! app(\App\Services\Fundamentals\FundamentalDataService::class)->exchangeFallbackIsActive('nse')) {
             return false;
         }
 
@@ -39,7 +43,12 @@ class NseOfficialFundamentalHistoricalSource implements FundamentalHistoricalSou
     {
         $url = trim((string) config('fundamentals_bootstrap.nse_official_feed_url', ''));
         if ($url === '') {
-            return [];
+            if (! config('fundamentals_bootstrap.nse_official_direct_enabled', false)
+                || ! config('fundamentals_bootstrap.nse_official_direct_access_authorized', false)) {
+                return [];
+            }
+
+            return ($this->exchangeClient ?? app(NseIntegratedFilingClient::class))->fetch($stock, $cadence);
         }
 
         $timeout = (float) config('fundamentals_bootstrap.nse_official_timeout_seconds', 30);
@@ -52,10 +61,9 @@ class NseOfficialFundamentalHistoricalSource implements FundamentalHistoricalSou
                     'cadence' => $cadence,
                     'exchange' => 'NSE',
                 ]);
-        } catch (\Throwable $e) {
+        } catch (\Throwable) {
             Log::warning('fundamentals.nse_official_fetch_failed', [
                 'stock_id' => $stock->id,
-                'message' => $e->getMessage(),
             ]);
 
             return [];
@@ -87,15 +95,27 @@ class NseOfficialFundamentalHistoricalSource implements FundamentalHistoricalSou
             if ($factKey === '' || $periodEnd === '') {
                 continue;
             }
-            $out[] = [
+            $normalized = [
                 'statement_type' => (string) ($row['statement_type'] ?? 'income_statement'),
                 'cadence' => (string) ($row['cadence'] ?? $cadence),
+                // An official feed must establish basis; absence is not consolidated.
+                'statement_basis' => in_array($row['statement_basis'] ?? null, ['standalone', 'consolidated', 'unknown'], true)
+                    ? $row['statement_basis'] : 'unknown',
                 'fact_key' => $factKey,
                 'period_end' => $periodEnd,
                 'value' => $row['value'] ?? null,
                 'availability_date' => $row['availability_date'] ?? null,
                 'currency' => $row['currency'] ?? 'INR',
             ];
+            if (array_key_exists('period_start', $row)) {
+                $normalized['period_start'] = $row['period_start'];
+            }
+            // Preserve the canonical metadata envelope, never the entire provider row.
+            // Fiscal labels in source_meta are not the date-cast reported_period field.
+            if (is_array($row['source_meta'] ?? null)) {
+                $normalized['source_meta'] = $row['source_meta'];
+            }
+            $out[] = $normalized;
         }
 
         return $out;

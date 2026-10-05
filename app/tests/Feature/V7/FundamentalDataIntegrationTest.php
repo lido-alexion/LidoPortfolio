@@ -38,6 +38,39 @@ class FundamentalDataIntegrationTest extends TestCase
         $this->assertSame(125.0, (float) $service->latestFact($stock, 'net_income', FundamentalDataService::CADENCE_QUARTERLY, Carbon::parse('2026-08-20'))->value);
     }
 
+    public function test_non_pit_exchange_facts_are_not_available_to_historical_readers(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'NONPIT', 'exchange' => 'NSE', 'name' => 'Non PIT']);
+        $service = app(FundamentalDataService::class);
+        $rows = [];
+        foreach ([
+            ['2025-09-30', '2025-07-01'],
+            ['2025-12-31', '2025-10-01'],
+            ['2026-03-31', '2026-01-01'],
+            ['2026-06-30', '2026-04-01'],
+        ] as [$end, $start]) {
+            $rows[] = [
+                'provider' => 'nse_official',
+                'statement_type' => 'income_statement',
+                'cadence' => FundamentalDataService::CADENCE_QUARTERLY,
+                'statement_basis' => 'standalone',
+                'fact_key' => 'revenue',
+                'period_start' => $start,
+                'period_end' => $end,
+                'value' => 100,
+                'availability_date' => '2026-08-20',
+                'currency' => 'INR',
+                'source_meta' => ['availability_quality' => 'non_pit'],
+            ];
+        }
+        $service->storeFacts($stock, $rows, Carbon::parse('2026-08-21'));
+
+        $this->assertNull($service->latestFact($stock, 'revenue', FundamentalDataService::CADENCE_QUARTERLY, Carbon::parse('2026-09-01')));
+        $this->assertArrayNotHasKey('revenue', $service->factMap($stock, FundamentalDataService::CADENCE_QUARTERLY, Carbon::parse('2026-09-01')));
+        $this->assertNull($service->ttmFlowSum($stock, 'revenue', Carbon::parse('2026-09-01')));
+        $this->assertNull($service->growthMetric($stock, 'revenue', FundamentalDataService::CADENCE_QUARTERLY, Carbon::parse('2026-09-01'))['value']);
+    }
+
     public function test_ttm_metrics_return_null_when_required_flow_facts_are_missing(): void
     {
         $stock = Stock::query()->create(['symbol' => 'SPARSE', 'exchange' => 'NSE', 'name' => 'Sparse Fundamentals']);

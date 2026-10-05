@@ -10,7 +10,7 @@ Authoritative contract: `docs/archive/specs/V8-Historical-Fundamentals-Bootstrap
 | Requirement | Status | Evidence / remaining work |
 |---|---|---|
 | Canonical fact catalogue and normalization | PASS | `fundamentals_catalog.php`, `FundamentalDataService`, normalizer and historical-source tests. |
-| Official NSE/BSE source priority with Yahoo fallback | PASS | `FundamentalHistoricalIngestService` ranks official sources before Yahoo; `NseOfficialFundamentalHistoricalTest`, `BseOfficialFundamentalHistoricalTest`, and bootstrap workflow tests pass. |
+| Provider order (PO decision 2026-10-05) | PASS locally | Yahoo is primary; matching NSE/BSE source is queried only when Yahoo yields no usable rows. Automated fallback and non-query-on-Yahoo-success behavior are covered by focused tests. Exchange access remains gated pending authorization/feed access. |
 | Historical bootstrap for active equities | PASS | `FundamentalBootstrapService` creates bounded queue-backed one-stock jobs, persists progress/status, retries failures, and stores partial completion; `FundamentalBootstrapWorkflowTest`. |
 | Idempotency and duplicate-period handling | PASS | `FundamentalDataService::storeFacts` revision identity/current-row semantics plus bootstrap rerun tests. |
 | PIT availability and source metadata | PASS | API fact filtering, availability dates, provider/source metadata, snapshot provenance, and PIT Screener tests. |
@@ -24,7 +24,7 @@ Authoritative contract: `docs/archive/specs/V8-Historical-Fundamentals-Bootstrap
 | Historical charts and tables | PASS locally | Watchlist lazy-loads snapshot/history, quarterly/annual statement history, revenue/valuation series, and monthly/daily valuation frequency; sparse/no data remains unavailable. Desktop and 390px Chromium visual journeys pass. |
 | Screener eligibility boundary | PASS | Selected `fund_*` operands use the canonical metric service, PIT values, and unavailable semantics; `FundamentalScreenerOperandTest` and related bank tests pass. |
 | Authorization and account isolation | PASS | Authenticated stock fundamentals routes and existing portfolio/profile middleware; V8 API tests cover intended investor access and Admin boundaries. |
-| Official upgrade/fallback auditability | PASS locally | Deterministic source ranking and canonical revision storage allow later official rows to replace lower-ranked fallback rows; live provider upgrade exercise remains external. |
+| Source provenance and fallback auditability | PASS locally | Selected provider provenance is stored; source fallback is deterministic. This now follows the 2026-10-05 PO decision rather than the original official-first rule. |
 | Production/runtime acceptance | EXTERNAL VALIDATION PENDING | Representative provider calls and deployed queue/runtime proof remain to be exercised. Local Chromium now covers the Watchlist fundamentals summary, provenance, historical Basic/Advanced tables and user-scoped preference reload on desktop and a 390px touch viewport (3/3 focused journeys, including the two-user preference isolation case); the focused full WCAG 2A/2AA axe scan passes on the fundamentals page. |
 
 ## Verification executed
@@ -66,3 +66,10 @@ The targeted-scope defect above is **resolved in code and deployed**, supersedin
 On production release `20261002051219-046e67de2c4c`, `php artisan stox:fundamentals-bootstrap --dry-run --stock=STOX_V8_UNKNOWN_20261002 --no-interaction` exited 1 with `No stock matched the requested symbol scope.` Bootstrap run/job counts were 2/3 immediately before and after. This is a **PASS** for the live unknown-symbol rejection and absence of a new run/job; the earlier NOT YET RUN row records its historical checkpoint.
 
 Read-only indexed inspection of the three bounded Yahoo fallback issuers found 530 facts in total: TCS (100 annual across four periods, 107 quarterly across five), SBIN (80 annual across four, 72 quarterly across five), and LAURUSLABS (104 annual across four, 67 quarterly across five). Annual periods span 2023-03-31 through 2026-03-31; quarterly periods span 2025-03-31 through 2026-06-30. All six groups had zero null `availability_date` and zero dates earlier than `period_end`. This checks stored fallback fact metadata for the slice; it does not prove official-source replacement, full-universe coverage, or PIT computation/rendering for every period. **FEAT-054 remains REVIEW.**
+
+
+## Provider-order update — 2026-10-05
+
+The product owner set Yahoo as the primary historical fundamentals source, with the matching NSE/BSE source used only when Yahoo returns no usable facts for that stock and cadence. This supersedes the original official-first/per-fact fallback rule in the specification. The implementation is sequential and does not query exchange sources after usable Yahoo output. NSE/BSE access remains disabled by default and requires authorization; current live provider acceptance is still pending.
+
+Focused verification after the change: **38 tests, 522 assertions passed**, covering Yahoo precedence, skipping exchange requests when Yahoo has usable facts, NSE and BSE fallback, malformed-value handling, bootstrap anomaly tracking, metadata preservation, and PIT/metric regressions. PHP syntax checks and `git diff --check` passed.
