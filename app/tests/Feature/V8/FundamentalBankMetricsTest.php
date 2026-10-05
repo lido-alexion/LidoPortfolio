@@ -16,7 +16,7 @@ class FundamentalBankMetricsTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_yahoo_maps_interest_income_facts(): void
+    public function test_yahoo_maps_interest_income_cwip_and_total_provisions(): void
     {
         $rows = (new YahooFundamentalNormalizer)->normalizeYfinance([
             'statements' => [
@@ -28,13 +28,26 @@ class FundamentalBankMetricsTest extends TestCase
                         'Net Interest Income' => 600,
                     ],
                 ]],
-                'balance_sheet' => [],
+                'balance_sheet' => [[
+                    'period_end' => '2025-03-31',
+                    'facts' => [
+                        'Construction In Progress' => 900,
+                        'Current Provisions' => 25,
+                        'Long Term Provisions' => 75,
+                    ],
+                ]],
                 'cash_flow' => [],
             ],
         ], FundamentalDataService::CADENCE_QUARTERLY);
 
         $keys = collect($rows)->pluck('fact_key')->sort()->values()->all();
-        $this->assertSame(['interest_expense', 'interest_income', 'net_interest_income'], $keys);
+        $this->assertSame([
+            'capital_work_in_progress', 'interest_expense', 'interest_income', 'net_interest_income', 'provisions',
+        ], $keys);
+        $this->assertSame(900.0, collect($rows)->firstWhere('fact_key', 'capital_work_in_progress')['value']);
+        $provisions = collect($rows)->firstWhere('fact_key', 'provisions');
+        $this->assertSame(100.0, $provisions['value']);
+        $this->assertSame('Current Provisions + Long Term Provisions', $provisions['source_meta']['provider_key']);
     }
 
     public function test_bank_metrics_use_reported_ratios_and_derive_nim_from_ttm_flows(): void
@@ -80,8 +93,9 @@ class FundamentalBankMetricsTest extends TestCase
         $metric = $service->metric($stock, 'gross_npa_ratio', 'quarterly', $asOf);
         $this->assertSame(2.5, (float) $metric['value']);
 
-        $operand = app(FundamentalScreenerOperandService::class)->valueForIndicator($stock, 'fund_gross_npa_ratio', $asOf);
-        $this->assertSame(2.5, $operand);
+        $operandService = app(FundamentalScreenerOperandService::class);
+        $this->assertFalse($operandService->supports('fund_gross_npa_ratio'));
+        $this->assertNull($operandService->valueForIndicator($stock, 'fund_gross_npa_ratio', $asOf));
     }
 
     public function test_ml_feature_vector_includes_bank_columns_as_null_for_industrial(): void
