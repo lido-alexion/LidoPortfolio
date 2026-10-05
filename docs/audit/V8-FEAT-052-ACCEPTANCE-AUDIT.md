@@ -1,6 +1,6 @@
 # FEAT-052 OpenTelemetry / LidoTelemetry — acceptance audit
 
-Status: **REVIEW — observed production query-attribute leak mitigated at Collector export; broader runtime and privacy acceptance pending**
+Status: **IMPLEMENTED — remaining functional scenarios tracked in [FEAT-052 functional test plan](../testing/V8-FEAT-052-FUNCTIONAL-TEST-PLAN.md)**. Historical REVIEW/FAILED entries below describe checkpoints at their recorded dates; this header and final decision state are current.
 
 | Requirement | Status | Evidence / remaining work |
 |---|---|---|
@@ -189,3 +189,12 @@ The authorized operator ran a hash-checked Collector rollout, retaining root-own
 StoX PR #60 passed canonical PHP backend CI and was merged as `113355c18444be85d7f40b6c465d451076e957b9`. It changes the custom HTTP fallback to emit a matched Laravel route template only, omits raw exception messages, and replaces client-provided route-view path values with an allowlisted static `route_group` (unknown/dynamic route families become `other`). The live StoX build at 2026-10-05 02:49 UTC was `073ba812e8e2fd36360060f4ea9254fd3f687541`, and the installed controller contained `route_group`. A controlled direct controller invocation in that deployed runtime (not an authenticated browser HTTP request) supplied a synthetic `/invite/<marker>` route, returned 200, and exported exact trace `c199f3a7be6d91af2d3c2e5b2da5c547`. Its indexed `stox.ui.route_view` span had keys `route_group`, `wall_duration_ms`, and `active_duration_ms`; `route_group=other`, and marker-presence was false across all three spans in the trace. **PASS for deployed producer route-view sanitization in this controlled invocation.** The fallback branch and actual authenticated browser route-view request were covered by CI tests, not a production HTTP probe.
 
 At 2026-10-05 02:50 UTC the Collector trace queue was 1, sent spans 2,429,960, and cumulative failed spans 1,257 since the 2026-10-04 09:42 UTC restart. At the earlier 02:49 sample the queue was 0, sent spans 2,429,193 and failures were also 1,257. StoX and LidoTelemetry `/up` both returned 200. The flat failed counter over this short interval does not establish sustained zero-loss delivery or explain prior failures. Actual cron root, broader producer/attribute/privacy surfaces, outage fail-open and sustained delivery remain open. FEAT-052 stays **REVIEW**.
+
+
+## 2026-10-05 implementation decision and functional-test handoff
+
+**Decision: FEAT-052 IMPLEMENTED.** This records deployed StoX producer and Collector integration, with verified browser-request parentage, CLI → database worker propagation, HTTP metric receipt, natural cron root/task spans, privacy mitigations and fail-open probes. The natural cron trace `a5cd8c5e18cdf304fd55026a6f8775ef` at 02:57 UTC contains root `Command schedule:run` and child `stox.scheduler.task` spans, including `universe-schedule-heartbeat`. Its sampled attribute-key inventory is bounded to function/line, database system/namespace/operation, HTTP method/status/body size, server address/port, task and URL scheme; prohibited URL path/query and SQL text keys were absent.
+
+An isolated unreachable-exporter probe returned HTTP 200 for a read-only `GET /api/build-info` and completed a harmless sync `about` job, while SDK export errors were logged after the operations. At the later Collector sample, the trace queue was 0, sent spans were 2,505,056 and cumulative failed spans remained 1,257 over the short observed interval. These are bounded results, not proof of all business/async outage behavior or long-term zero-loss delivery.
+
+The open broader privacy matrix, actual asynchronous-worker/business-flow outage, browser outage/recovery and sustained-delivery window are now explicit product functional testing scenarios in [`V8-FEAT-052-FUNCTIONAL-TEST-PLAN.md`](../testing/V8-FEAT-052-FUNCTIONAL-TEST-PLAN.md). Their current state remains PARTIAL or OPEN until executed. This decision supersedes the historical REVIEW status statements above without rewriting their dated evidence or weakening the frozen specification.
