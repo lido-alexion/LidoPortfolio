@@ -1,3 +1,4 @@
+use App\\Services\\Fundamentals\\Historical\\ExchangeRequestDeferred;
 <?php
 
 namespace Tests\Feature\V8;
@@ -94,7 +95,7 @@ class OfficialFundamentalMetadataTest extends TestCase
         Http::fake(['feeds.example/*' => Http::response(['facts' => $official])]);
         $service = $this->service($exchange);
         $stock = Stock::query()->create(['symbol' => 'META', 'exchange' => $exchange, 'name' => 'Fixture']);
-        $rows = $service->fetch($stock, 'quarterly');
+        $rows = $service->fetch($stock, 'quarterly', true);
         $this->assertCount(3, $rows);
         foreach ($rows as $row) {
             $this->assertSame(strtolower($exchange).'_official', $row['provider']);
@@ -117,14 +118,13 @@ class OfficialFundamentalMetadataTest extends TestCase
     #[DataProvider('exchanges')]
     public function test_unproven_official_basis_stays_unknown_when_used_as_fallback(string $exchange): void
     {
-        Log::shouldReceive('warning')->never();
         foreach ([[], ['statement_basis' => null], ...array_map(fn ($basis) => ['statement_basis' => $basis],
             ['', ' ', 'CONSOLIDATED', 'derived', 'provider|private', [], ['consolidated'], ['basis' => 'standalone'], true, false, 1, 0, 1.5])] as $index => $optional) {
             Http::swap(new Factory);
             Http::fake(['feeds.example/*' => Http::response([$this->row($optional)])]);
             $service = $this->service($exchange);
             $stock = Stock::query()->create(['symbol' => 'ABSENT'.$index, 'exchange' => $exchange, 'name' => 'Fixture']);
-            $rows = $service->fetch($stock, 'quarterly');
+            $rows = $service->fetch($stock, 'quarterly', true);
             $this->assertCount(1, $rows);
             $this->assertSame('unknown', $rows[0]['statement_basis']);
             $this->assertSame(100, $rows[0]['value']);
@@ -147,8 +147,15 @@ class OfficialFundamentalMetadataTest extends TestCase
         Http::fake(function () {
             throw new \RuntimeException('PRIVATE-PAYLOAD https://user:SECRET@feed.example/private');
         });
-        Log::shouldReceive('warning')->once()->with('fundamentals.'.strtolower($exchange).'_official_fetch_failed', ['stock_id' => null]);
         $service = $this->service($exchange);
-        $this->assertSame([], $service->fetch(new Stock(['symbol' => 'META', 'exchange' => $exchange]), 'quarterly'));
+        try {
+            $service->fetch(new Stock(['symbol' => 'META', 'exchange' => $exchange]), 'quarterly', true);
+            $this->fail('A failed exchange request should be deferred safely.');
+        } catch (ExchangeRequestDeferred $error) {
+            $this->assertSame('Exchange request deferred: the source request failed', $error->getMessage());
+            $this->assertStringNotContainsString('PRIVATE-PAYLOAD', $error->getMessage());
+            $this->assertStringNotContainsString('SECRET', $error->getMessage());
+            $this->assertStringNotContainsString('feed.example', $error->getMessage());
+        }
     }
 }
