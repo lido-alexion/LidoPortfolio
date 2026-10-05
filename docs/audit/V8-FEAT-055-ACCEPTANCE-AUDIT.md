@@ -59,3 +59,14 @@ Operator: Codex via connected `stoxla-prod`; UTC times below. **This entry does 
 ### Public deployed UI inspection — 2026-10-01 about 18:40 UTC
 
 Cloud Chrome at `https://stoxla.in/request-account` rendered the invite-only description, Full name and Email fields, Cloudflare Turnstile "Verify you are human" widget, and Send verification email action. **PASS for page/widget rendering only.** No CAPTCHA was solved, no address submitted, and no provider token/mail delivery or enumeration/concurrency outcome was inferred. Authenticated Admin/Investor UX remains unrun because the browser session is at public login.
+
+
+## 2026-10-05 production negative-path checkpoint (about 03:15 UTC)
+
+On the deployed StoX production runtime, effective configuration reports the Turnstile driver, configured site/secret keys and SMTP mailer; secret values were not read or printed. Before the probe there were 3 access requests and 4 verification rows.
+
+A public `POST /api/auth/access-requests` with a unique `example.invalid` address and deliberately invalid CAPTCHA token returned HTTP 422 with only the `captcha_token` validation error. Counts remained 3 requests and 4 verifications; no row for that synthetic address exists in either table. **PASS for this invalid-token/no-state-change production slice.** This does not prove valid provider-token verification, real mail delivery, or the behavior under provider outage.
+
+An unauthenticated `GET /api/access-requests` returned 401. A well-formed 64-character but invalid verification token submitted to `POST /api/auth/access-requests/verify/{token}` returned 422. **PASS for these narrow access and invalid-link checks.** A malformed token instead misses the route's 64-character constraint and returns 404; it is not a valid test of the verification handler.
+
+**REVIEW remains.** Next controlled test: a human solves the production Turnstile widget using a dedicated mailbox they can access, confirms the verification email and single-use link, then exercises Admin Create/Ignore/Reject with disposable test addresses and cleanup. Record provider and mail results without disclosing tokens; test cross-worker duplicate submissions separately.
