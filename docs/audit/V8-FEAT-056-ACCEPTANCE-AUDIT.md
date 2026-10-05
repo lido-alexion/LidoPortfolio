@@ -61,3 +61,15 @@ The 2026-10-01 note above accurately records that the FEAT-056 verifier attempt 
 ### 2026-10-05 CI parity correction
 
 The historical local preflight failure above is superseded for the current repository code. GitHub Actions passed `./scripts/verify-ci.sh --backend` on commit `d1279fb74b56a2cf488ba82f7c305cb58b424f24` using PHP 8.4, MySQL 8.4 and CI-provisioned `pdo_sqlite`: **2,242 PHPUnit tests, 14,962 assertions, 2 skipped**; migration portability passed for 172 migrations; Python checks ran 22 tests (8 skipped); OpenAPI remained current at 219 operations. [Backend verification job](https://github.com/lido-alexion/LidoPortfolio/actions/runs/37261402892/job/111609241889). This satisfies the CI-parity gate for the code at that commit; repeat only if FEAT-056 backend code changes.
+
+## Closure continuation — 2026-10-05 production preflight (read-only)
+
+Read-only checks on `stoxla-prod` found:
+
+- Deployed release: `/var/www/stoxla/releases/20261005054340-1782da64f629`.
+- `php artisan schedule:list` includes `portfolio:ml-lifecycle-tick`; this confirms registration only.
+- `php artisan config:show ml_lifecycle`: lifecycle `false`; 1m/3m/6m schedule flags `false`; retention `false`; drift trigger `false`; notifications `true`.
+- `stoxla-queue.service` is active, but runs the normal `notifications,default` queues. A dedicated bounded acceptance worker was not evidenced.
+- Production CLI PHP 8.4.26 has `pdo_mysql` but not `pdo_sqlite`; no tests were run on production.
+
+No lifecycle tick, queue action, configuration change, model operation or data mutation was performed. The FEAT-057 qualification gate is still unmet; do not enable schedules or exercise the live lifecycle until FEAT-057 qualifies and a dedicated acceptance setup is available.
