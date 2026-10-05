@@ -1,7 +1,7 @@
 # V8 FEAT-055 Acceptance and Security Audit
 
 Date: 2026-09-28
-Status: **REVIEW — implementation evidence strong; production provider validation pending**
+Status: **IMPLEMENTED — broader product journeys tracked in [FEAT-055 functional test plan](../testing/V8-FEAT-055-FUNCTIONAL-TEST-PLAN.md)**. Dated REVIEW statements below are historical checkpoints.
 
 Authoritative contract: `docs/archive/specs/V8-Account-Access-Request-Admin-Approval-Specification.md`.
 
@@ -95,3 +95,12 @@ A controlled synthetic verification used a unique `example.invalid` address in p
 Using the configured production SMTP transport, five clearly labeled non-actionable test messages were submitted to the account owner's previously authorized test mailbox: verification, Ignore, Reject, invite template and Admin notice. Each send returned without exception; the process exited 0. No real verification token, invitation, pending request or Admin decision was created for these mail checks. **PASS for template rendering and SMTP submission; recipient inbox delivery remains unconfirmed.** The historical owner report confirms an earlier verification email arrived, but does not verify these five messages or all outcome types.
 
 FEAT-055 remains **REVIEW** until inbox receipt is confirmed and any remaining functional scenarios are explicitly assigned or closed. This checkpoint makes no claim of a newly solved production Turnstile widget or a complete live end-to-end Admin journey today.
+
+
+## 2026-10-05 implementation decision and functional-test handoff
+
+The account owner confirmed receipt in the authorized mailbox of **all five** labeled messages sent in the preceding production SMTP probe: verification, Ignore, Reject, invite template and Admin notice. They were direct, non-actionable template tests; they did not create a new request, invitation or Admin decision. This upgrades that probe from SMTP-submission-only to recipient-confirmed delivery for those messages. The prior owner report of an earlier verification email and successful link remains a separate historical test.
+
+**Decision: FEAT-055 IMPLEMENTED.** The feature is deployed; local security and lifecycle suites passed; the September production ledger shows verified pending requests, Admin Create/Ignore/Reject, linked invite, cooldown and cleared ban; the current invalid CAPTCHA/no-write, invalid link and unauthenticated Admin probes passed; independent processes against production database cache created exactly one pending request from one token; and all five labeled template messages reached the test inbox. These observations establish implementation while retaining the limits stated above.
+
+The broader current browser/Admin journey, different-token/same-email and multi-host races, provider outage, failed-mail domain transition, and manual accessibility/retention checks move to [`V8-FEAT-055-FUNCTIONAL-TEST-PLAN.md`](../testing/V8-FEAT-055-FUNCTIONAL-TEST-PLAN.md). They remain OPEN/PARTIAL and a failure must be triaged as a product defect. This decision supersedes historical REVIEW statements without rewriting their dated evidence or weakening the frozen specification.
