@@ -169,6 +169,7 @@ The following are authoritative. Implementation must not reopen these unless a g
 | 054-76 | Lightweight read-only Admin bootstrap status in V8. |
 | 054-77 | Bootstrap progress/checkpoints survive restart/deploy. |
 | 054-78 | Queue-backed one-stock jobs. |
+| 054-79 | Temporary PO-approved field-availability exceptions are listed in §25.4; no indicator, zero fill, or unsafe inference is created for them. |
 
 ---
 
@@ -1384,6 +1385,8 @@ Screener operand
 
 Fundamental metrics should be discoverable in the existing catalogue/UI with a clear category such as `Fundamental`.
 
+Discovery is gated by reliable, usable source evidence. The 13 PO-exception facts in §25.4 remain canonical facts for storage and display, but SHALL NOT be published as Screener operands until a separate source-validation decision removes their exception. The current Screener catalogue omits all 13.
+
 ### 22.3 Eligibility only
 
 FEAT-054 adds fundamentals only as boolean filter conditions.
@@ -1486,6 +1489,28 @@ Do not mix consolidated and standalone inputs inside one derived metric for the 
 ### 25.3 Sector applicability
 
 If a metric is not economically appropriate for the stock sector/type, return unavailable rather than force it.
+
+### 25.4 PO-approved temporary field-availability exceptions
+
+The PO has approved temporary exceptions for these 13 canonical primary facts because the current data sources have not demonstrated reliable coverage:
+
+- `capital_work_in_progress`
+- `gross_npa`
+- `gross_npa_ratio`
+- `net_npa`
+- `net_npa_ratio`
+- `capital_adequacy_ratio`
+- `provisions`
+- `net_interest_margin`
+- `promoter_holding`
+- `fii_holding`
+- `dii_holding`
+- `public_holding`
+- `promoter_pledge`
+
+Together with the earlier PO exceptions `dividends_paid` and `trade_receivables`, these fields are excluded from both field non-empty and 50%-of-covered-stocks acceptance thresholds. These are acceptance exceptions only: keep their canonical definitions, return unavailable when absent, and never fill with zero or infer a value from an unrelated metric. `Construction In Progress` is a promising Yahoo alias for `capital_work_in_progress`. `Current Provisions` plus `Long Term Provisions` may represent total `provisions` for the same balance-sheet period; only combine those components when both are present and no explicit total is supplied. This normalization is a candidate source mapping and still needs a targeted Yahoo rerun to populate persisted records. The remaining source-limited fields have no safe derivation from the currently stored general facts. Remove an exception only after a reliable source is implemented and a fresh coverage report verifies the field; if a new dependable source is licensed, ingest it under a separate epic.
+
+Field-coverage criteria apply to the 40 canonical primary facts. Derived-metric output coverage is tracked separately because derived metrics have input, sector, basis and period requirements; it is not silently counted as primary-fact coverage.
 
 ---
 
@@ -1593,13 +1618,15 @@ Implementation is not complete until automated tests cover the following.
 63. Historical Screener/backtest uses PIT-correct historical fundamentals/prices.
 64. Technical-only Screeners remain unchanged.
 65. No new fundamental scoring/ranking behavior is introduced.
+66. No Screener operand is exposed for any of the 13 PO-exception canonical facts.
+67. Admin can inspect latest bootstrap run and status counts.
+68. Admin can inspect failed/partial summary.
+69. Investor cannot access Admin bootstrap status.
+70. V8 Admin UI does not expose full start/pause/resume/retry operations.
 
-### 27.9 Admin
+### PO coverage acceptance (2026-10-05 decision)
 
-66. Admin can inspect latest bootstrap run and status counts.
-67. Admin can inspect failed/partial summary.
-68. Investor cannot access Admin bootstrap status.
-69. V8 Admin UI does not expose full start/pause/resume/retry operations.
+For closing FEAT-054, require: (a) at least 98% of the current Nifty 500, using a verified 500-member denominator; (b) at least 50% of the eligible all-stocks universe; and (c) for non-exempt canonical primary facts, at least one covered stock and at least 50% coverage among covered stocks. The 15 fields named above (the 13 temporary exceptions plus `dividends_paid` and `trade_receivables`) are excluded from criteria (c) until separately reviewed. A field exception does not waive stock-universe coverage or data-quality/PIT checks.
 
 ---
 
@@ -1731,7 +1758,7 @@ V4-FEAT-054 is complete when:
 7. snapshot, multi-period and historical metric APIs are implemented;
 8. the selected-stock Watchlist detail exposes a functional Fundamentals tab with summary, charts, Basic and Advanced tables;
 9. chart controls reuse/generalize the existing time-series UX;
-10. selected fundamental metrics work as existing-framework Screener eligibility filters with PIT correctness;
+10. source-supported, non-exempt fundamental metrics work as existing-framework Screener eligibility filters with PIT correctness; none of the 13 PO-exception fields is exposed as a Screener operand;
 11. all acceptance tests and V1-V7 non-regression tests are green;
 12. representative runtime verification confirms official-source ingestion, Yahoo fallback, historical upgrade, investor UI and Screener behavior.
 
