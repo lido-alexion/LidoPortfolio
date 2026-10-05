@@ -17,7 +17,7 @@ class NseIntegratedFilingClient
     private const ARCHIVE_HOSTS = ['nsearchives.nseindia.com', 'archives.nseindia.com'];
     private const MAX_INDEX_BYTES = 2_000_000;
     private const MAX_DOCUMENT_BYTES = 1_500_000;
-    private const MAX_DOCUMENTS = 40;
+    private const MAX_DOCUMENTS = 4;
 
     /** @var array<string, list<array<string,mixed>>> */
     private array $cache = [];
@@ -52,14 +52,14 @@ class NseIntegratedFilingClient
             try {
                 $xml = $this->documentCache[$url] ?? null;
                 if ($xml === null) {
-                    $response = Http::timeout((float) config('fundamentals_bootstrap.nse_official_timeout_seconds', 30))
+                    $response = app(ExchangeRequestGate::class)->request(fn () => Http::timeout((float) config('fundamentals_bootstrap.nse_official_timeout_seconds', 30))
                         ->withHeaders([
                             'User-Agent' => 'StoX/1.0 (+https://stoxla.in)',
                             'Referer' => self::PAGE_URL,
                             'Accept' => 'application/xml,text/xml,*/*',
                         ])
-                        ->get($url);
-                    if (! $response->successful() || strlen($response->body()) > self::MAX_DOCUMENT_BYTES) {
+                        ->get($url));
+                    if ($response === null || ! $response->successful() || strlen($response->body()) > self::MAX_DOCUMENT_BYTES) {
                         continue;
                     }
                     $xml = $response->body();
@@ -69,6 +69,8 @@ class NseIntegratedFilingClient
                 foreach ($this->parser->parse($xml, $filing, $cadence) as $row) {
                     $facts[] = $row;
                 }
+            } catch (ExchangeRequestDeferred $deferred) {
+                throw $deferred;
             } catch (\Throwable) {
                 // A bad/temporarily unavailable filing must not stop Yahoo fallback
                 // or expose provider response bodies in application logs.
@@ -85,7 +87,7 @@ class NseIntegratedFilingClient
     private function filings(string $symbol): array
     {
         try {
-            $response = Http::timeout((float) config('fundamentals_bootstrap.nse_official_timeout_seconds', 30))
+            $response = app(ExchangeRequestGate::class)->request(fn () => Http::timeout((float) config('fundamentals_bootstrap.nse_official_timeout_seconds', 30))
                 ->withHeaders([
                     'User-Agent' => 'StoX/1.0 (+https://stoxla.in)',
                     'Referer' => self::PAGE_URL,
@@ -97,8 +99,8 @@ class NseIntegratedFilingClient
                     'symbol' => $symbol,
                     'page' => 1,
                     'size' => 100,
-                ]);
-            if (! $response->successful() || strlen($response->body()) > self::MAX_INDEX_BYTES) {
+                ]));
+            if ($response === null || ! $response->successful() || strlen($response->body()) > self::MAX_INDEX_BYTES) {
                 return [];
             }
 
@@ -116,6 +118,8 @@ class NseIntegratedFilingClient
             }
 
             return $filings;
+        } catch (ExchangeRequestDeferred $deferred) {
+            throw $deferred;
         } catch (\Throwable) {
             return [];
         }

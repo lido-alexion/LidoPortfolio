@@ -54,13 +54,15 @@ class NseOfficialFundamentalHistoricalSource implements FundamentalHistoricalSou
         $timeout = (float) config('fundamentals_bootstrap.nse_official_timeout_seconds', 30);
 
         try {
-            $response = Http::timeout($timeout)
+            $response = app(ExchangeRequestGate::class)->request(fn () => Http::timeout($timeout)
                 ->acceptJson()
                 ->get($url, [
                     'symbol' => strtoupper((string) $stock->symbol),
                     'cadence' => $cadence,
                     'exchange' => 'NSE',
-                ]);
+                ]));
+        } catch (ExchangeRequestDeferred $deferred) {
+            throw $deferred;
         } catch (\Throwable) {
             Log::warning('fundamentals.nse_official_fetch_failed', [
                 'stock_id' => $stock->id,
@@ -69,7 +71,7 @@ class NseOfficialFundamentalHistoricalSource implements FundamentalHistoricalSou
             return [];
         }
 
-        if (! $response->successful()) {
+        if ($response === null || ! $response->successful()) {
             return [];
         }
 

@@ -685,6 +685,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::get('/analytics/stocks/{stock}/research', [AnalyticsArchitectureController::class, 'watchlistResearch']);
     Route::get('/fundamentals/metric-catalog', [FundamentalDataController::class, 'metricCatalog']);
     Route::get('/stocks/{stock}/fundamentals', [FundamentalDataController::class, 'show'])->whereNumber('stock');
+    Route::post('/stocks/{stock}/fundamentals/manual-fetch', [FundamentalDataController::class, 'manualFetch'])->whereNumber('stock');
     Route::get('/stocks/{stock}/fundamentals/metrics/{metric}/history', [FundamentalDataController::class, 'metricHistory'])
         ->whereNumber('stock')
         ->where('metric', '[a-z0-9_]+');

@@ -6,6 +6,8 @@ use App\Models\Stock;
 use App\Models\V7\FundamentalUpdateJob;
 use App\Models\V7\FundamentalUpdateRun;
 use App\Services\AdminOperationalAlertService;
+use App\Services\Nifty500ConstituentService;
+use App\Services\Fundamentals\Historical\ExchangeRequestDeferred;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -18,8 +20,9 @@ class FundamentalUpdateService
 
     public function __construct(
         protected FundamentalDataService $fundamentals,
-        protected FundamentalDataProvider $provider,
+        protected FundamentalHistoricalIngestService $historicalIngest,
         protected AdminOperationalAlertService $opsAlerts,
+        private readonly ?Nifty500ConstituentService $nifty500 = null,
     ) {}
 
     /**
@@ -80,7 +83,16 @@ class FundamentalUpdateService
                         });
                     });
                 }
-            })->orderByRaw("COALESCE((SELECT MIN(pc.last_successful_check_at) FROM stox_fundamental_provider_checks pc WHERE pc.stock_id = portfolio_stocks.id), '1970-01-01') ASC");
+            });
+            $symbols = ($this->nifty500 ?? app(Nifty500ConstituentService::class))->cachedSymbols();
+            if ($symbols !== []) {
+                $placeholders = implode(',', array_fill(0, count($symbols), '?'));
+                $query->orderByRaw(
+                    "CASE WHEN portfolio_stocks.exchange IN (?, ?) AND portfolio_stocks.symbol IN ($placeholders) THEN 0 ELSE 1 END ASC",
+                    array_merge(['NSE', 'NSE+'], $symbols),
+                );
+            }
+            $query->orderByRaw("COALESCE((SELECT MIN(pc.last_successful_check_at) FROM stox_fundamental_provider_checks pc WHERE pc.stock_id = portfolio_stocks.id), '1970-01-01') ASC");
         }
         $query->orderBy('id');
         if ($stockId !== null) {
@@ -371,27 +383,24 @@ class FundamentalUpdateService
                     ])->save();
                     continue;
                 }
-                if (! $this->needsFetch($stock, $job->cadence)) {
+                if ($run->scope !== 'manual_stock' && ! $this->needsFetch($stock, $job->cadence)) {
                     $job->forceFill(['status' => 'skipped'])->save();
                     continue;
                 }
 
                 $checkedAt = now();
-                $rows = $this->provider->fetch($stock, $job->cadence);
+                $rows = $this->historicalIngest->fetch($stock, $job->cadence, $run->scope === 'manual_stock');
                 $stats = $this->fundamentals->storeFacts($stock, $rows, $checkedAt);
                 // Empty/unchanged responses are successful checks too. This is
                 // separate from fact first_fetched_at and prevents starvation.
-                $responseHash = method_exists($this->provider, 'lastResponseHash')
-                    ? $this->provider->lastResponseHash()
-                    : null;
-                $responseMetadata = method_exists($this->provider, 'lastResponseMetadata')
-                    ? $this->provider->lastResponseMetadata()
-                    : [];
+                $responseHash = null;
+                $checkedProvider = $this->historicalIngest->lastProviderChecked() ?? (string) $settings->provider;
+                $responseMetadata = ['source' => $checkedProvider];
                 $this->fundamentals->recordSuccessfulProviderCheck(
                     $stock,
                     $job->cadence,
                     $checkedAt,
-                    (string) $settings->provider,
+                    $checkedProvider,
                     $responseHash,
                     isset($responseMetadata['provider_symbol']) ? (string) $responseMetadata['provider_symbol'] : null,
                     $responseMetadata,
@@ -400,10 +409,13 @@ class FundamentalUpdateService
                 $run->forceFill(['stats_json' => $this->mergeStats($run->stats_json ?? [], $stats)])->save();
             } catch (Throwable $error) {
                 $sliceError = $error->getMessage();
-                $willRetry = $job->attempts < $settings->max_attempts;
+                $deferred = $error instanceof ExchangeRequestDeferred;
+                $willRetry = $run->scope !== 'manual_stock' && ($deferred || $job->attempts < $settings->max_attempts);
                 $job->forceFill([
                     'status' => $willRetry ? 'retry' : 'failed',
-                    'next_attempt_at' => $willRetry ? now()->addMinutes((int) pow(2, max(0, $job->attempts - 1))) : null,
+                    'next_attempt_at' => $willRetry
+                        ? ($deferred ? now()->addSeconds($error->retryAfterSeconds) : now()->addMinutes((int) pow(2, max(0, $job->attempts - 1))))
+                        : null,
                     'last_error' => $error->getMessage(),
                 ])->save();
                 $run->forceFill(['last_error' => $error->getMessage()])->save();
