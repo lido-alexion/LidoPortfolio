@@ -121,11 +121,12 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 
 ## Next task
 
-1. FEAT-056: perform deployed worker/runtime validation for the committed lifecycle implementation; no separate lifecycle WIP is currently pending ownership reconciliation.
-2. FEAT-057: complete authoritative-provider/runtime coverage evidence, active-model paired runtime evidence where an active model exists, artifact prediction reload and investor-facing explainability acceptance.
-3. FEAT-062: perform browser/mobile and real-provider acceptance; deterministic catalogue/PIT implementation is complete locally.
-4. FEAT-052: close remaining telemetry deployment evidence.
-5. FEAT-054 / FEAT-055 / FEAT-061: perform only the remaining external browser/provider/VPS validations.
+- **Next epic: FEAT-054 — Historical fundamentals.** Continue its open provider/deployed acceptance and reconcile the active FEAT-054 changes against the current master before closing it. This epic is an upstream data dependency for the final FEAT-057 campaign.
+- **FEAT-057 — DEFERRED by Product Owner direction (2026-10-07).** Resume production qualification only after work on the other active V8 epics is complete and deployment churn has stopped. The deployed build must remain stable across the FEAT-057 preflight, any approved training campaigns, artifact review and investor acceptance. Do not queue another campaign or start 1m/3m/6m training while this hold applies. Do not promote or roll back a model through FEAT-057.
+- The governed data apply remains complete on run 5 (360/360 dates; parser v5; 93.4096% minimum mapping). Preserve run 4 as a partial historical run. The prior production campaign failed its identity check after a deployment change and is not reusable. When the hold is lifted, create a fresh campaign against the then-current verified build and review its preflight before any training.
+- **FEAT-056 remains downstream of FEAT-057 qualification.** Keep lifecycle schedules, drift triggers and retention disabled until the FEAT-057 evidence gate and controlled FEAT-056 runtime acceptance are satisfied.
+- Other open acceptance work remains tracked in the corresponding audits: FEAT-052 telemetry delivery/privacy; FEAT-055 Turnstile, mail and multi-worker behavior; FEAT-061 deployed/device accessibility; FEAT-062 real provider and assistive-technology review; FEAT-064 production membership-drift/runtime behavior.
+
 
 ## Failing tests
 
