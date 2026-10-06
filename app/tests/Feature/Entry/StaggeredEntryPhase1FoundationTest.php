@@ -533,7 +533,7 @@ class StaggeredEntryPhase1FoundationTest extends TestCase
             'allocation_pct' => 50,
             'is_factory' => false,
         ]);
-        $v2 = TradingStrategyVersion::query()->create([
+        $v2 = $this->createTestStrategyVersion([
             'strategy_id' => $second->id,
             'version' => 1,
             'version_label' => '1.0',
