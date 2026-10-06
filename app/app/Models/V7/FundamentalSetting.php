@@ -17,6 +17,8 @@ class FundamentalSetting extends Model
         'paused',
         'nse_official_fallback_enabled',
         'bse_official_fallback_enabled',
+        'nse_official_feed_url',
+        'bse_official_feed_url',
         'ai_insights_primary_provider',
     ];
 

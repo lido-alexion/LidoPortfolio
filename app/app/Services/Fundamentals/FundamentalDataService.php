@@ -6,11 +6,13 @@ use App\Models\Stock;
 use App\Models\V7\FundamentalFact;
 use App\Models\V7\FundamentalSetting;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 class FundamentalDataService
 {
     public const CADENCE_QUARTERLY = 'quarterly';
+
     public const CADENCE_ANNUAL = 'annual';
 
     public function resolvedAiInsightsPrimaryProvider(): string
@@ -34,29 +36,56 @@ class FundamentalDataService
             'paused' => false,
             'nse_official_fallback_enabled' => false,
             'bse_official_fallback_enabled' => false,
+            'nse_official_feed_url' => null,
+            'bse_official_feed_url' => null,
         ]);
     }
 
-    /** @return array<string,array{enabled:bool,configured:bool,active:bool}> */
-    public function exchangeFallbackStatus(): array
+    /** @return array<string,array{enabled:bool,configured:bool,active:bool,route_mode:string,feed_url:?string}> */
+    public function exchangeFallbackStatus(array $overrides = []): array
     {
         $settings = $this->settings();
-        $nseConfigured = trim((string) config('fundamentals_bootstrap.nse_official_feed_url', '')) !== ''
-            || (bool) config('fundamentals_bootstrap.nse_official_direct_enabled', false)
-                && (bool) config('fundamentals_bootstrap.nse_official_direct_access_authorized', false);
-        $bseConfigured = trim((string) config('fundamentals_bootstrap.bse_official_feed_url', '')) !== '';
+        $feedUrl = static function (string $exchange) use ($settings, $overrides): string {
+            $field = $exchange.'_official_feed_url';
+            $configuredUrl = array_key_exists($field, $overrides)
+                ? trim((string) ($overrides[$field] ?? ''))
+                : trim((string) ($settings->{$field} ?? ''));
+
+            return $configuredUrl !== ''
+                ? $configuredUrl
+                : trim((string) config('fundamentals_bootstrap.'.$field, ''));
+        };
+        $nseFeedUrl = $feedUrl('nse');
+        $bseFeedUrl = $feedUrl('bse');
+        $nseDirectConfigured = (bool) config('fundamentals_bootstrap.nse_official_direct_enabled', false)
+            && (bool) config('fundamentals_bootstrap.nse_official_direct_access_authorized', false);
+        $nseConfigured = $nseFeedUrl !== '' || $nseDirectConfigured;
+        $bseConfigured = $bseFeedUrl !== '';
         $nseEnabled = (bool) $settings->nse_official_fallback_enabled;
         $bseEnabled = (bool) $settings->bse_official_fallback_enabled;
 
         return [
-            'nse' => ['enabled' => $nseEnabled, 'configured' => $nseConfigured, 'active' => $nseEnabled && $nseConfigured],
-            'bse' => ['enabled' => $bseEnabled, 'configured' => $bseConfigured, 'active' => $bseEnabled && $bseConfigured],
+            'nse' => [
+                'enabled' => $nseEnabled,
+                'configured' => $nseConfigured,
+                'active' => $nseEnabled && $nseConfigured,
+                'route_mode' => $nseFeedUrl !== '' ? 'normalized_feed' : ($nseDirectConfigured ? 'direct' : 'unconfigured'),
+                'feed_url' => $nseFeedUrl !== '' ? $nseFeedUrl : null,
+            ],
+            'bse' => [
+                'enabled' => $bseEnabled,
+                'configured' => $bseConfigured,
+                'active' => $bseEnabled && $bseConfigured,
+                'route_mode' => $bseConfigured ? 'normalized_feed' : 'unconfigured',
+                'feed_url' => $bseFeedUrl !== '' ? $bseFeedUrl : null,
+            ],
         ];
     }
 
     public function exchangeFallbackIsActive(string $exchange): bool
     {
         $key = strtolower($exchange);
+
         return (bool) ($this->exchangeFallbackStatus()[$key]['active'] ?? false);
     }
 
@@ -101,6 +130,7 @@ class FundamentalDataService
                     // not mutate first_fetched_at: it is immutable provenance.
                     $current->forceFill(['last_provider_checked_at' => $fetchedAt])->save();
                     $stats['deduped']++;
+
                     continue;
                 }
 
@@ -143,8 +173,7 @@ class FundamentalDataService
         ?string $responseHash = null,
         ?string $providerSymbol = null,
         array $sourceMeta = [],
-    ): void
-    {
+    ): void {
         DB::table('stox_fundamental_provider_checks')->upsert([[
             'stock_id' => $stock->id,
             'cadence' => $cadence,
@@ -509,7 +538,7 @@ class FundamentalDataService
     }
 
     /** @param array<string,mixed> $identity */
-    private function factIdentityQuery(array $identity): \Illuminate\Database\Eloquent\Builder
+    private function factIdentityQuery(array $identity): Builder
     {
         return FundamentalFact::query()
             ->where('stock_id', $identity['stock_id'])

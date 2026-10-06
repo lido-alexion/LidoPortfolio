@@ -6,10 +6,10 @@ use App\Engines\Support\ApiEnvelope;
 use App\Http\Controllers\Controller;
 use App\Models\Stock;
 use App\Models\V7\FundamentalUpdateRun;
-use App\Services\Fundamentals\FundamentalDataService;
-use App\Services\Fundamentals\FundamentalBootstrapService;
-use App\Services\Fundamentals\FundamentalInvestorSnapshotService;
 use App\Services\Fundamentals\AIInsightsService;
+use App\Services\Fundamentals\FundamentalBootstrapService;
+use App\Services\Fundamentals\FundamentalDataService;
+use App\Services\Fundamentals\FundamentalInvestorSnapshotService;
 use App\Services\Fundamentals\FundamentalMetricCatalog;
 use App\Services\Fundamentals\FundamentalSignalsService;
 use App\Services\Fundamentals\FundamentalUpdateService;
@@ -18,9 +18,10 @@ use App\Telemetry\LidoTelemetryCatalog;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Validation\ValidationException;
 
 class FundamentalDataController extends Controller
 {
@@ -97,7 +98,7 @@ class FundamentalDataController extends Controller
         if (! ($fallbacks[$key]['active'] ?? false)) {
             return ApiEnvelope::error('exchange_fallback_disabled', 'The approved exchange feed is not enabled yet.', 409);
         }
-        if (\Illuminate\Support\Facades\DB::table('stox_fundamental_facts')->where('stock_id', $stock->id)->exists()) {
+        if (DB::table('stox_fundamental_facts')->where('stock_id', $stock->id)->exists()) {
             return ApiEnvelope::error('fundamentals_already_present', 'Fundamental data already exists for this stock.', 409);
         }
 
@@ -211,9 +212,12 @@ class FundamentalDataController extends Controller
             'ai_insights_primary_provider' => ['nullable', 'in:gemini,codex'],
             'nse_official_fallback_enabled' => ['nullable', 'boolean'],
             'bse_official_fallback_enabled' => ['nullable', 'boolean'],
+            'nse_official_feed_url' => ['nullable', 'string', 'max:2048', 'url:https'],
+            'bse_official_feed_url' => ['nullable', 'string', 'max:2048', 'url:https'],
         ]);
 
-        $fallbacks = $this->fundamentals->exchangeFallbackStatus();
+        $this->validateApprovedFeedUrls($validated);
+        $fallbacks = $this->fundamentals->exchangeFallbackStatus($validated);
         foreach (['nse', 'bse'] as $exchange) {
             $field = $exchange.'_official_fallback_enabled';
             if (($validated[$field] ?? false) && ! $fallbacks[$exchange]['configured']) {
@@ -225,6 +229,49 @@ class FundamentalDataController extends Controller
         $settings->update($validated);
 
         return ApiEnvelope::success($settings->fresh()->toArray());
+    }
+
+    /**
+     * Accept only HTTPS feed URLs on an approved public hostname. Credentials and query
+     * parameters are forbidden so secrets cannot be stored in or leaked from route URLs.
+     *
+     * @param  array<string,mixed>  $validated
+     */
+    private function validateApprovedFeedUrls(array $validated): void
+    {
+        $allowedHosts = array_values(array_filter(array_map(
+            static fn ($host) => strtolower(rtrim(trim((string) $host), '.')),
+            (array) config('fundamentals_bootstrap.approved_feed_hosts', []),
+        )));
+
+        foreach (['nse', 'bse'] as $exchange) {
+            $field = $exchange.'_official_feed_url';
+            $url = trim((string) ($validated[$field] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+
+            $parts = parse_url($url);
+            $host = strtolower(rtrim((string) ($parts['host'] ?? ''), '.'));
+            $safeHost = $host !== ''
+                && filter_var($host, FILTER_VALIDATE_IP) === false
+                && ! in_array($host, ['localhost'], true)
+                && ! str_ends_with($host, '.local')
+                && collect($allowedHosts)->contains(
+                    static fn (string $allowed): bool => $host === $allowed || str_ends_with($host, '.'.$allowed),
+                );
+
+            if (($parts['scheme'] ?? null) !== 'https'
+                || isset($parts['user'])
+                || isset($parts['pass'])
+                || isset($parts['query'])
+                || isset($parts['fragment'])
+                || ! $safeHost) {
+                throw ValidationException::withMessages([
+                    $field => 'Use an HTTPS URL on an approved host, with no credentials, query string, or fragment.',
+                ]);
+            }
+        }
     }
 
     public function startRun(Request $request): JsonResponse
