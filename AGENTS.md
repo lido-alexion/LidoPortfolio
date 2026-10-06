@@ -1,6 +1,6 @@
 # StoX agent rules
 
-These rules apply equally to Codex, ChatGPT Work, ChatGPT Chat, human contributors, and automated tools. They are outcome rules: GitHub verification and protected-branch policy are authoritative.
+These rules apply equally to Codex, ChatGPT Work, ChatGPT Chat, human contributors, and automated tools. They are outcome rules: GitHub verification and protected-branch policy are authoritative. For production VPS checkout, verification, and push lessons, read [docs/current/CODEX-VPS-REPO-WORKFLOW-LEARNINGS.md](docs/current/CODEX-VPS-REPO-WORKFLOW-LEARNINGS.md).
 
 ## Before changing code
 
