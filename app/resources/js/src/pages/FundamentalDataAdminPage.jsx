@@ -17,7 +17,7 @@ export default function FundamentalDataAdminPage() {
         ai_insights_primary_provider: '',
     });
     const [busy, setBusy] = useState(false);
-    const [uploadForm, setUploadForm] = useState({ stock_symbol: '', exchange: 'NSE', statement_basis: 'consolidated', confirm_company: false });
+    const [uploadForm, setUploadForm] = useState({ stock_symbol: '', exchange: '', statement_basis: '', confirm_company: false });
     const [uploadFile, setUploadFile] = useState(null);
     const [uploadBusy, setUploadBusy] = useState(false);
     const uploadInputRef = useRef(null);
@@ -73,7 +73,7 @@ export default function FundamentalDataAdminPage() {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
             const result = data?.data?.import;
-            showToast(`Imported ${result?.imported_rows || 0} fundamental records for ${data?.data?.stock?.symbol || uploadForm.stock_symbol}.`, 'success');
+            showToast(`Imported ${result?.imported_rows || 0} facts from ${result?.company_name || 'the workbook'} into ${data?.data?.stock?.symbol || uploadForm.stock_symbol}; ${result?.ignored_rows || 0} unsupported rows skipped.`, 'success');
             setUploadFile(null);
             if (uploadInputRef.current) uploadInputRef.current.value = '';
             await load();
@@ -188,14 +188,16 @@ export default function FundamentalDataAdminPage() {
                                     disabled={uploadBusy} placeholder="e.g. NH" />
                                 <label className="form-label" htmlFor="manual-fundamentals-exchange">Exchange</label>
                                 <select id="manual-fundamentals-exchange" className="form-select mb-3" value={uploadForm.exchange}
-                                    onChange={(e) => setUploadForm({ ...uploadForm, exchange: e.target.value })} disabled={uploadBusy}>
+                                    onChange={(e) => setUploadForm({ ...uploadForm, exchange: e.target.value })} disabled={uploadBusy} required>
+                                    <option value="">Choose an exchange</option>
                                     <option value="NSE">NSE</option>
                                     <option value="NSE+">NSE+</option>
                                     <option value="BSE">BSE</option>
                                 </select>
                                 <label className="form-label" htmlFor="manual-fundamentals-basis">Statement basis</label>
                                 <select id="manual-fundamentals-basis" className="form-select mb-3" value={uploadForm.statement_basis}
-                                    onChange={(e) => setUploadForm({ ...uploadForm, statement_basis: e.target.value })} disabled={uploadBusy}>
+                                    onChange={(e) => setUploadForm({ ...uploadForm, statement_basis: e.target.value })} disabled={uploadBusy} required>
+                                    <option value="">Choose statement basis</option>
                                     <option value="consolidated">Consolidated</option>
                                     <option value="standalone">Standalone</option>
                                 </select>
@@ -212,7 +214,7 @@ export default function FundamentalDataAdminPage() {
                                         onChange={(e) => setUploadForm({ ...uploadForm, confirm_company: e.target.checked })} disabled={uploadBusy} required />
                                     <span className="form-check-label">I checked that the workbook company matches this stock symbol and exchange.</span>
                                 </label>
-                                <button type="submit" className="btn btn-outline-primary" disabled={uploadBusy || !uploadFile || !uploadForm.stock_symbol.trim() || !uploadForm.confirm_company}>
+                                <button type="submit" className="btn btn-outline-primary" disabled={uploadBusy || !uploadFile || !uploadForm.stock_symbol.trim() || !uploadForm.exchange || !uploadForm.statement_basis || !uploadForm.confirm_company}>
                                     {uploadBusy ? 'Uploading…' : 'Upload and import'}
                                 </button>
                             </form>

@@ -486,9 +486,10 @@ class ManualFundamentalSpreadsheetImporter
             'currency' => $factKey === 'shares_outstanding' ? null : 'INR',
             'source_meta' => array_merge([
                 'source' => 'admin_manual_spreadsheet',
+                'availability_quality' => 'non_pit',
                 'template_version' => $version,
                 'company_name_in_workbook' => $companyName,
-                'original_filename' => basename($originalFilename),
+                'original_filename' => basename(str_replace('\\', '/', $originalFilename)),
                 'workbook_sha256' => $hash,
                 'uploaded_by_user_id' => $userId,
                 'value_unit_in_workbook' => $factKey === 'shares_outstanding' ? 'shares' : 'INR crore converted to INR',
