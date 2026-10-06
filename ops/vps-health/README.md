@@ -16,6 +16,7 @@ VPS_HEALTH_FPM_STATUS_ENABLED=true
 VPS_HEALTH_FPM_STATUS_HOST=127.0.0.1
 VPS_HEALTH_FPM_STATUS_PORT=9001
 VPS_HEALTH_FPM_MAX_CHILDREN=5
+VPS_HEALTH_NGINX_499_CRITICAL=5
 VPS_HEALTH_DISK_CRITICAL_PERCENT=90
 VPS_HEALTH_RAM_CRITICAL_PERCENT=10
 VPS_HEALTH_SWAP_CRITICAL_PERCENT=80
@@ -35,7 +36,7 @@ VPS_HEALTH_SMTP_STARTTLS=true
 
 Telegram requires both token and chat ID and is used for urgent alerts/recovery only. Email requires SMTP host, sender and recipient; it uses STARTTLS by default and sends the 30-minute digest as well as urgent/recovery messages. SMTP authentication is optional. Missing channels are shown as booleans in local JSON status; credentials are never printed. Configure the external heartbeat URL with a third-party uptime service's check-in URL. The URL is called only after a check completes; choose a service that alerts when expected check-ins are missed. A heartbeat URL is itself a secret and belongs only in the external file.
 
-Threshold defaults: FPM listen queue >0 immediately; FPM active workers equal configured `FPM_MAX_CHILDREN` for two checks; at least 3 Nginx 502/504 responses in the bounded rolling five-minute access-log sample; root disk >=90%; available RAM <10%; swap >80%; normalized one-minute load >=2 for two checks. The documented FPM default is 5 for the incident pool; verify it matches the actual current pool config and set `VPS_HEALTH_FPM_MAX_CHILDREN` accordingly. If no max is configured, saturation is not inferred from historical max-active metrics. Nginx 499/502/503/504 counts are reported. Recent standard combined access-log timestamps are used for the five-minute window; the 30-minute digest sums per-minute counts.
+Threshold defaults: FPM listen queue >0 immediately; FPM active workers equal configured `FPM_MAX_CHILDREN` for two checks; at least 3 Nginx 502/504 responses or the configured `VPS_HEALTH_NGINX_499_CRITICAL` count (default 5) of Nginx 499 client-closed responses in the bounded rolling five-minute access-log sample (499 is reported and alerted separately); root disk >=90%; available RAM <10%; swap >80%; normalized one-minute load >=2 for two checks. The documented FPM default is 5 for the incident pool; verify it matches the actual current pool config and set `VPS_HEALTH_FPM_MAX_CHILDREN` accordingly. If no max is configured, saturation is not inferred from historical max-active metrics. Nginx 499/502/503/504 counts are reported. Recent standard combined access-log timestamps are used for the five-minute window; the 30-minute digest sums per-minute counts.
 
 ## PHP-FPM status endpoint
 
@@ -63,7 +64,7 @@ python3 /var/www/stoxla/current/scripts/vps-health/monitor.py diagnose
 python3 /var/www/stoxla/current/scripts/vps-health/monitor.py summary
 ```
 
-`diagnose` saves and prints a bounded JSON snapshot with resource values, FPM status, top five sanitized Nginx paths/error summaries, readable slow-log excerpt and a short process list. IP addresses are masked in error summaries; query strings are not retained. Treat snapshots as operational data. First inspect the relevant metric and timestamp, FPM queue/worker capacity, Nginx/PHP errors, disk/RAM pressure, and recent changes; diagnosis alone does not establish causality. When present, `vmstat`, `iostat`, and `pidstat` run only in the diagnostic snapshot, with short timeouts and bounded output; the recurring health check does not invoke them. They are optional and are never installed by this change.
+`diagnose` saves and prints a bounded JSON snapshot with resource values, FPM status, top five sanitized Nginx paths/error summaries, readable slow-log excerpt, a short process list, and optional MariaDB aggregate status counters. MariaDB collection invokes only the read-only `mariadb-admin status`/`mysqladmin status` command, may use the service user’s existing private client option file, never passes credentials in arguments or notification environment variables, and retains only an allowlist of numeric counters. It does not collect process lists, SQL text, or raw client output; if authentication is unavailable the MariaDB section is empty. IP addresses are masked in error summaries; query strings are not retained. Treat snapshots as operational data. First inspect the relevant metric and timestamp, FPM queue/worker capacity, Nginx/PHP errors, disk/RAM pressure, and recent changes; diagnosis alone does not establish causality. When present, `vmstat`, `iostat`, and `pidstat` run only in the diagnostic snapshot, with short timeouts and bounded output; the recurring health check does not invoke them. They are optional and are never installed by this change.
 
 No package installation is required. Threshold changes belong in the external EnvironmentFile. Missing notification channels are visible in local command output, so verify them before relying on alerts.
 

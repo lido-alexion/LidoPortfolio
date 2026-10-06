@@ -49,6 +49,13 @@ class MonitorTests(unittest.TestCase):
                 self.assertEqual(monitor.log_counts(), {"502": 1})
                 self.assertEqual(monitor.top_paths(), [("/new", 1)])
 
+    def test_499_spike_is_a_distinct_critical_alert(self):
+        metrics = {"fpm": {}, "nginx": {"499": 5}, "root_used_percent": 20,
+                   "ram_available_percent": 80, "swap_used_percent": 0, "load_per_core": 0}
+        issues, _ = monitor.criticals(metrics, {"history": []})
+        self.assertTrue(any("499" in issue for issue in issues))
+        self.assertFalse(any("502/504" in issue for issue in issues))
+
     def test_load_and_fpm_saturation_require_previous_high_check(self):
         base = {"fpm": {"active processes": 4, "max children": 4}, "nginx": {},
                 "root_used_percent": 20, "ram_available_percent": 80,
@@ -75,6 +82,24 @@ class MonitorTests(unittest.TestCase):
             self.assertNotIn("secret", rendered)
             self.assertNotIn("10.2.3.4", rendered)
 
+    def test_mariadb_evidence_is_aggregate_only_and_omits_secrets(self):
+        raw = ("Uptime: 123 Threads: 2 Questions: 42 Slow queries: 1 "
+               "Opens: 3 Open tables: 2 Queries per second avg: 0.4 "
+               "SELECT * FROM private_table password=do-not-export")
+        with patch.dict(os.environ, {"VPS_HEALTH_TELEGRAM_BOT_TOKEN":"secret-token",
+                                     "VPS_HEALTH_SMTP_PASSWORD":"secret-password"}), \
+             patch.object(monitor.shutil, "which", side_effect=lambda name: "/usr/bin/mariadb-admin" if name == "mariadb-admin" else None), \
+             patch.object(monitor, "run", return_value=raw) as run:
+            result = monitor.mariadb_activity()
+        self.assertEqual(result, {"uptime":123, "threads":2, "questions":42,
+                                  "slow_queries":1, "opens":3, "open_tables":2})
+        args = run.call_args.args[0]
+        self.assertEqual(args[-1], "status")
+        self.assertNotIn("processlist", args)
+        self.assertNotIn("secret-password", str(run.call_args))
+        self.assertNotIn("secret-token", str(run.call_args))
+        self.assertNotIn("private_table", str(result))
+
     def test_diagnostics_add_bounded_optional_sysstat(self):
         with patch.object(monitor, "collect", return_value={"ok": True}), \
              patch.object(monitor, "top_paths", return_value=[]), \
@@ -83,7 +108,7 @@ class MonitorTests(unittest.TestCase):
              patch.object(monitor, "run", return_value="row\n"*100) as run:
             result = monitor.diagnose()
         self.assertEqual(set(result["sysstat"]), {"vmstat", "iostat", "pidstat"})
-        self.assertEqual(run.call_count, 4)  # ps plus three optional samplers
+        self.assertEqual(run.call_count, 5)  # ps, MariaDB status, and three optional samplers
         for rows in result["sysstat"].values():
             self.assertEqual(len(rows), 30)
 

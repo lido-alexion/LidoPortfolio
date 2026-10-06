@@ -24,7 +24,7 @@ DEFAULTS = {
     "ERROR_SCAN_BYTES": "262144", "SLOW_SCAN_BYTES": "16384",
     "DISK_CRITICAL_PERCENT": "90", "RAM_CRITICAL_PERCENT": "10",
     "SWAP_CRITICAL_PERCENT": "80", "LOAD_PER_CORE_CRITICAL": "2",
-    "FPM_MAX_CHILDREN": "5",
+    "FPM_MAX_CHILDREN": "5", "NGINX_499_CRITICAL": "5",
     "ALERT_COOLDOWN_MINUTES": "60",
     "HEARTBEAT_URL": "", "SMTP_HOST": "", "SMTP_PORT": "587", "SMTP_USER": "",
     "SMTP_PASSWORD": "", "SMTP_FROM": "", "SMTP_TO": "", "SMTP_STARTTLS": "true",
@@ -86,6 +86,24 @@ def log_counts(window_seconds=300):
         if m and m.group(2) in ("499", "502", "503", "504") and age is not None and 0 <= age <= window_seconds:
             counts[m.group(2)] += 1
     return dict(counts)
+def mariadb_activity():
+    """Return allowlisted aggregate counters only; never capture process lists or SQL."""
+    binary = shutil.which("mariadb-admin") or shutil.which("mysqladmin")
+    if not binary: return {}
+    # The client may read its normal private option files. Never pass credentials on argv,
+    # inherit notification secrets, or retain the raw command output.
+    child_env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(Path.home())}
+    output = run([binary, "--connect-timeout=2", "status"], 3, env=child_env)
+    labels = {
+        "uptime": "Uptime", "threads": "Threads", "questions": "Questions",
+        "slow_queries": "Slow queries", "opens": "Opens", "open_tables": "Open tables",
+    }
+    result = {}
+    for key, label in labels.items():
+        match = re.search(r"(?:^|\s)" + re.escape(label) + r":\s*(\d+)", output, re.I)
+        if match: result[key] = int(match.group(1))
+    return result
+
 def collect():
     load1, load5, load15 = os.getloadavg()
     cpus = max(1, os.cpu_count() or 1)
@@ -116,6 +134,7 @@ def criticals(m, old):
     issues=[]
     if f.get("listen queue", 0) > 0: issues.append("FPM listen queue is nonzero")
     if sum(m["nginx"].get(x,0) for x in ("502","504")) >= 3: issues.append("at least 3 Nginx 502/504 responses in scanned recent log")
+    if m["nginx"].get("499",0) >= int(cfg("NGINX_499_CRITICAL")): issues.append("Nginx 499 client-closed responses reached the configured five-minute threshold")
     if m["root_used_percent"] >= float(cfg("DISK_CRITICAL_PERCENT")): issues.append("root filesystem usage is critical")
     if m["ram_available_percent"] is not None and m["ram_available_percent"] < float(cfg("RAM_CRITICAL_PERCENT")): issues.append("available RAM is critical")
     if m["swap_used_percent"] > float(cfg("SWAP_CRITICAL_PERCENT")): issues.append("swap usage is critical")
@@ -152,7 +171,7 @@ def diagnose(m=None):
     return {"time":stamp(),"metrics":m,"top_nginx_paths":top_paths(),
             "nginx_error_summaries":[sanitize_log_line(x) for x in errors[-5:]],
             "php_fpm_slow_log_excerpt":[sanitize_log_line(x) for x in slow[-20:]],
-            "process_top":procs,"sysstat":sysstat}
+            "process_top":procs,"mariadb_activity":mariadb_activity(),"sysstat":sysstat}
 def prune_diagnostics(directory):
     cutoff=time.time()-14*86400
     paths=sorted(directory.glob("diagnostic-*.json"), key=lambda p: p.stat().st_mtime if p.exists() else 0)
