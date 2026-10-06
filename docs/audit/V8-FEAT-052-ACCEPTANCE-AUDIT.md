@@ -198,3 +198,16 @@ At 2026-10-05 02:50 UTC the Collector trace queue was 1, sent spans 2,429,960, a
 An isolated unreachable-exporter probe returned HTTP 200 for a read-only `GET /api/build-info` and completed a harmless sync `about` job, while SDK export errors were logged after the operations. At the later Collector sample, the trace queue was 0, sent spans were 2,505,056 and cumulative failed spans remained 1,257 over the short observed interval. These are bounded results, not proof of all business/async outage behavior or long-term zero-loss delivery.
 
 The open broader privacy matrix, actual asynchronous-worker/business-flow outage, browser outage/recovery and sustained-delivery window are now explicit product functional testing scenarios in [`V8-FEAT-052-FUNCTIONAL-TEST-PLAN.md`](../testing/V8-FEAT-052-FUNCTIONAL-TEST-PLAN.md). Their current state remains PARTIAL or OPEN until executed. This decision supersedes the historical REVIEW status statements above without rewriting their dated evidence or weakening the frozen specification.
+
+
+## 2026-10-06 passive sustained-delivery observation
+
+Read-only observation on StoX release `20261006173350-38107807be32` (commit `38107807be3293139732b71f397d106ee6e1ef1d`). The `otelcol-contrib` and `stoxla-queue` services were active; Collector metrics were scraped locally at three points, with label values redacted:
+
+| UTC sample | Queue (summed) | Sent spans (approx.) | Accepted spans (approx.) | Failed spans (cumulative) | Refused spans |
+|---|---:|---:|---:|---:|---:|
+| 18:28:42 | 0 | 8,691,430 | 8,769,700 | 78,274 | 0 |
+| 18:33:42 | 0 | 8,692,390 | 8,770,670 | 78,274 | 0 |
+| 18:38:42 | 0 | 8,693,360 | 8,771,630 | 78,274 | 0 |
+
+The Collector service start timestamp was 2026-10-04 15:12:12 IST. A sanitized journal aggregation found no error/warning/retry/timeout lines since that start or during the observation window. This supports a bounded 10-minute no-new-failure/queue-growth slice with active throughput, but the nonzero cumulative failed-span counter remains unexplained. The samples were not correlated to exact trace IDs at LidoTelemetry, and the counter values were read at rounded display precision. **FT-052-05 remains PARTIAL; do not mark sustained delivery complete from this observation alone.** The next check is to identify which exporter/pipeline contributes the cumulative failures, then correlate a fresh synthetic non-secret trace across StoX, Collector and LidoTelemetry with exact IDs and receipt times.
