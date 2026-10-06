@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\OperationalAlert;
 use App\Models\SyncRun;
-use App\Services\Microstructure\MicrostructureCollectorHealthService;
 use App\Support\TradingCalendar;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Schema;
@@ -42,18 +41,6 @@ class AdminOperationalAlertService
 
     public const KEY_FORWARD_DATA_INCOMPLETE = 'forward_data_incomplete';
 
-    public const KEY_MICROSTRUCTURE_COLLECTOR_STALE = MicrostructureCollectorHealthService::ALERT_KEY_STALE;
-
-    public const KEY_MICROSTRUCTURE_COLLECTOR_ERROR = MicrostructureCollectorHealthService::ALERT_KEY_ERROR;
-
-    public const KEY_MICROSTRUCTURE_COLLECTOR_DISK_LOW = MicrostructureCollectorHealthService::ALERT_KEY_DISK_LOW;
-
-    public const KEY_MICROSTRUCTURE_COLLECTOR_FINALIZATION_FAILED = MicrostructureCollectorHealthService::ALERT_KEY_FINALIZATION_FAILED;
-
-    public const KEY_MICROSTRUCTURE_COLLECTOR_BACKUP_FAILED = MicrostructureCollectorHealthService::ALERT_KEY_BACKUP_FAILED;
-
-    public const KEY_MICROSTRUCTURE_COLLECTOR_COVERAGE_LOW = MicrostructureCollectorHealthService::ALERT_KEY_COVERAGE_LOW;
-
     public const SETTING_UNATTENDED_FAILURES = 'unattended_ops_failures';
 
     /** @var list<string> */
@@ -73,7 +60,6 @@ class AdminOperationalAlertService
         protected UniversePriceSyncService $universeSync,
         protected TelegramNotificationService $telegram,
         protected PortfolioLoggerService $logger,
-        protected MicrostructureCollectorHealthService $microstructureHealth,
     ) {}
 
     /**
@@ -283,16 +269,6 @@ class AdminOperationalAlertService
                 (string) ($row['severity'] ?? 'critical'),
                 (string) ($row['title'] ?? 'Unattended operation failed'),
                 (string) ($row['message'] ?? 'An unattended operation failed.'),
-                is_array($row['context'] ?? null) ? $row['context'] : [],
-            );
-        }
-
-        foreach ($this->microstructureHealth->evaluateOperationalAlerts() as $row) {
-            $alerts[] = $this->alert(
-                (string) $row['key'],
-                (string) $row['severity'],
-                (string) $row['title'],
-                (string) $row['message'],
                 is_array($row['context'] ?? null) ? $row['context'] : [],
             );
         }

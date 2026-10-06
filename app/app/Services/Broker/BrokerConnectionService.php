@@ -57,7 +57,7 @@ class BrokerConnectionService
         $state = Crypt::encryptString(json_encode([
             'user_id' => $user->id,
             'expires_at' => now()->addSeconds(self::LOGIN_STATE_TTL_SECONDS)->getTimestamp(),
-            'return_to' => in_array($returnTo, ['dashboard', 'account', 'kite-connect'], true) ? $returnTo : 'account',
+            'return_to' => in_array($returnTo, ['dashboard', 'account'], true) ? $returnTo : 'account',
         ], JSON_THROW_ON_ERROR));
         $redirectParams = http_build_query(['state' => $state], '', '&', PHP_QUERY_RFC3986);
 
@@ -97,7 +97,7 @@ class BrokerConnectionService
         }
         $returnTo = $payload['return_to'] ?? null;
 
-        return in_array($returnTo, ['dashboard', 'account', 'kite-connect'], true) ? $returnTo : 'account';
+        return in_array($returnTo, ['dashboard', 'account'], true) ? $returnTo : 'account';
     }
 
     public function completeLogin(User $user, #[\SensitiveParameter] string $requestToken): BrokerConnection
@@ -149,11 +149,6 @@ class BrokerConnectionService
             'user_id' => $user->id,
             'broker_connection_id' => $connection->id,
         ]);
-
-        if (app()->bound(\App\Services\Microstructure\MicrostructureCollectorControlService::class)) {
-            app(\App\Services\Microstructure\MicrostructureCollectorControlService::class)
-                ->signalAutoStartAfterKiteLogin($user);
-        }
 
         return $connection->fresh();
     }

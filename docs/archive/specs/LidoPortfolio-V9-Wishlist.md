@@ -18,7 +18,7 @@ V8 `V4-FEAT-052` remains the owner of StoX OpenTelemetry integration with the in
 
 V9 assistance builds progressively from user-journey governance and deterministic help through documentation-grounded AI, governed agentic actions, and contextual embedded AI insights.
 
-V9 historical-data delivery extends the frozen V8 `V4-FEAT-065` historical-data platform through `V9-DATA-002`; FEAT-065 remains authoritative for canonical corpus semantics unless V9-DATA-002 explicitly overrides a product choice.
+V9-DATA-002 historical-data delivery was retired on 2026-10-06 and is no longer part of the active V9 roadmap.
 
 V9 operational reliability includes centralized automatic GitHub issue creation for unexpected API failures through `V9-OPS-002`, plus AI-assisted ERROR-log triage through `V9-OPS-003`. OPS-003 reuses the same governed V4-FEAT-017 AI platform and the same GitHub issue/deduplication infrastructure rather than introducing separate model or GitHub integrations.
 
@@ -37,8 +37,7 @@ V9 epics are frozen for implementation unless a row is explicitly marked **PO RE
 | V9-OPS-002 | Automated API Failure GitHub Issue Reporting | Centralized operational reporting for unexpected backend external-API and supported frontend StoX-API failures. Normalize/classify failures, create deterministic low-cardinality fingerprints, persist local occurrences, reconcile duplicate open GitHub issues through stable fingerprint markers, create new recurrence generations after cooldown, strictly redact secrets/PII, and keep GitHub reporting asynchronous/fail-open. Canonical spec: [`V9-OPS-002-Automated-API-Failure-GitHub-Issue-Reporting-Specification.md`](V9-OPS-002-Automated-API-Failure-GitHub-Issue-Reporting-Specification.md). | **IMPLEMENTED / VERIFIED** — OPS-002 + shared reporter: 22 MySQL tests / 114 assertions; frontend: 202 node tests + 142 Vitest tests; typecheck, build, migrations, static docs and OpenAPI passed. See [acceptance audit](../../audits/V9-OPS-002-implementation-audit.md) |
 | V9-OPS-003 | LLM Log Error Triage & GitHub Issue Reporting | Observe centralized ERROR-level application logs, sanitize and deduplicate them, classify them through a dedicated `ops.log_error_triage` capability on the shared V4-FEAT-017 AI platform, and create deduplicated GitHub issues only for sufficiently confident actionable `code_bug` classifications. Reuse OPS-002 GitHub adapter, credential, rate limits and marker-based duplicate reconciliation. Canonical spec: [`V9-OPS-003-LLM-Log-Error-Triage-GitHub-Issue-Reporting-Specification.md`](V9-OPS-003-LLM-Log-Error-Triage-GitHub-Issue-Reporting-Specification.md). | **IMPLEMENTED / VERIFIED** |
 | V9-DATA-001 | Data Export Framework | Reusable investor-facing CSV/XLSX export for tables, charts and analytical datasets with explicit scope/field selection, provenance, synchronous small exports, cancellable large exports, temporary artifacts and persistent account-private export basket. Canonical spec: [`V9-Data-Export-Framework-Specification.md`](V9-Data-Export-Framework-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
-| V9-DATA-002 | VPS Historical Data Staging and Windows Delivery | VPS acquires maximum provider-available Kite 1-minute OHLCV and stages immutable trading-day batches for authenticated Windows-app HTTPS transfer. Windows is the initial holding device; Mac remains the eventual canonical research corpus. User manually archives verified batches plus manifests to NTFS and later verifies/imports them to Mac. Keep delivery catalog and per-file manifests/checksums indefinitely; local delivery status never depends on scanning Windows payload folders. Canonical revision: [`V9-DATA-002-Windows-Receiver-Revision.md`](V9-DATA-002-Windows-Receiver-Revision.md). Companion spec: [SKR-001 Windows app](https://github.com/lido-alexion/StoX-Kite-Rain/blob/main/docs/SK-001-Windows-Downloader-Specification.md). | **PO REVIEW — WINDOWS PLATFORM REVISION** |
-| V9-DATA-003 | Forward Data Collection, Recovery & Readiness | Campaign-independent official NSE evidence, fair fundamentals polling, sourced effective-dated sectors, corporate-action feed operation, daily-price recovery and shared dataset freshness/coverage/backlog monitoring. Reuse domain engines; observe FEAT-063 and FEAT-065/DATA-002 separately; preserve PIT provenance and training/promotion gates. Canonical spec: [`V9-DATA-003-Forward-Data-Collection-Recovery-Readiness-Specification.md`](V9-DATA-003-Forward-Data-Collection-Recovery-Readiness-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
+| V9-DATA-003 | Forward Data Collection, Recovery & Readiness | Campaign-independent official NSE evidence, fair fundamentals polling, sourced effective-dated sectors, corporate-action feed operation, daily-price recovery and shared dataset freshness/coverage/backlog monitoring. Reuse domain engines; preserve PIT provenance and training/promotion gates. Canonical spec: [`V9-DATA-003-Forward-Data-Collection-Recovery-Readiness-Specification.md`](V9-DATA-003-Forward-Data-Collection-Recovery-Readiness-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
 | V9-UX-003 | Customizable Summary Fields & Dashboard Layouts | Configurable summary fields, card visibility/order/size, desktop/mobile variants, local working layouts, named dashboards, import/export, locking, defaults and forward-compatible migration. Canonical spec: [`V9-Customizable-Summary-Fields-Dashboard-Layouts-Specification.md`](V9-Customizable-Summary-Fields-Dashboard-Layouts-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
 | V9-UX-004 | Guided Production ML Acceptance Wizard | Replace the technical all-in-one Production ML acceptance panel with a recoverable seven-step wizard covering readiness, discovery preflight, dated NSE sources, preview/apply backfill, final preflight, explicit 1m/3m/6m candidate training and completion review. Include deterministic plain-language education, accessible tooltips/info help, blocker-to-action guidance, asynchronous recovery and Advanced diagnostics while preserving V8 ownership and explicit promotion/lifecycle decisions. Canonical spec: [`V9-UX-004-ML-Acceptance-Guided-Wizard-Specification.md`](V9-UX-004-ML-Acceptance-Guided-Wizard-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
 | V9-VIZ-001 | Combo Chart Support | Curated StoX-defined combo-chart library in Stock Details with preset navigation, reusable chart patterns, range/sampling controls, preset axes/renderers, synchronized tooltips, legend controls, per-stock availability and account-wide default/fallback. Canonical spec: [`V9-Combo-Chart-Support-Specification.md`](V9-Combo-Chart-Support-Specification.md). | **FROZEN / IMPLEMENTATION-READY** |
@@ -61,29 +60,6 @@ AI-003 is recorded by commit `40d89d3b`; earlier AI implementation evidence is r
 V9-DATA-003 is an early data reliability priority. Reconcile any forward-data remediation already underway into its evidence and shared adapters; do not duplicate ingestion engines.
 
 ## 3. Key inherited boundaries
-
-### Historical data
-
-`V9-DATA-002` inherits `V4-FEAT-065` unless explicitly overridden. In particular:
-
-- MacBook remains the canonical historical-data/research machine;
-- Parquet remains canonical storage;
-- current NIFTY 500 + configured broad/sector indices remain the universe;
-- DuckDB + Polars/Python analytical access remains intact;
-- historical collection remains resumable/idempotent and coverage-aware;
-- FEAT-063 prospective microstructure remains separate;
-- no automated backup subsystem is introduced for the Mac corpus.
-
-V9-DATA-002 explicitly overrides/adds:
-
-- maximum provider-available historical depth;
-- VPS-based Kite acquisition using whitelisted egress;
-- temporary bounded VPS staging;
-- one-trading-day immutable delivery batches;
-- secure Windows-app-initiated outbound HTTPS transfer through the dedicated transfer surface;
-- atomic Windows holding-folder publication + exact acknowledgment + lifecycle-governed cleanup;
-- indefinite server-side delivery catalog and manifest retention, independent of Windows payload presence;
-- manual NTFS archive handoff from Windows to Mac after checksum verification.
 
 ### Telemetry and operational incident reporting
 
@@ -115,7 +91,7 @@ Dependency-aware release sequence:
 
 1. **V9-UX-001 foundation slice** — journey governance, conformance workflow, automation harness, deterministic test-data and CI conventions. Keep open until final closure.
 2. **Shared non-AI infrastructure** — `V9-COMM-001` notification framework/account lifecycle messaging and `V9-OPS-002` automated API-failure incident reporting may proceed independently/parallel where safe. OPS-002 remains additive and must not rewrite protected V8 provider/domain semantics during V8 closure.
-3. **Data-platform wave** — prioritize `V9-DATA-003` collection/recovery foundations and production daily-data adapters; Admin fundamentals operations reuse the corrected FEAT-054 engine. Minute/live health integration closes against owner evidence without blocking daily collection. Then `V9-DATA-001` and `V9-DATA-002`, parallelized where dependencies permit. V9-DATA-002 must preserve the FEAT-065 contract and coordinate protocol compatibility with SKR-001.
+3. **Data-platform wave** — prioritize `V9-DATA-003` collection/recovery foundations and production daily-data adapters; Admin fundamentals operations reuse the corrected FEAT-054 engine. V9-DATA-001 may proceed independently.
 4. **Deterministic/user-facing feature wave** — `V9-UX-002`, `V9-OPS-001`, `V9-UX-003`, `V9-UX-004`, `V9-VIZ-001`. UX-004 depends on the implemented V8 production-acceptance domain and must preserve its server-authoritative gates.
 5. **V4-FEAT-017 core** — shared AI capability registry, provider adapters/routing, structured outputs, prompt registry/governance, budgets/concurrency and failure isolation.
 6. **V9-OPS-003** — register `ops.log_error_triage`, add centralized sanitized ERROR-log triage, bounded inference/deduplication and high-confidence code-bug GitHub issue generation using OPS-002 infrastructure. This can proceed in parallel with later user-facing AI work once the V4-FEAT-017 core gate is satisfied.
@@ -126,26 +102,12 @@ Dependency-aware release sequence:
 
 Independent implementation may be parallelized, but hard dependencies, protected V8 closure boundaries and cross-repo protocol compatibility must be preserved.
 
-## 6. V9-DATA-002 / SKR-001 release gate
-
-V9-DATA-002 is complete only when the VPS and Windows client are compatible and green, and the documented verified handoff to the Mac corpus is demonstrated:
-
-- VPS collection/staging/manifest/lease/range-download/ack/retention behavior passes its frozen acceptance criteria;
-- SKR-001 portable C# / WPF Windows utility passes its frozen network, recovery, disk-safety, integrity and atomic-publication acceptance criteria;
-- shared manifest/protocol versions interoperate;
-- existing FEAT-065 corpus remains canonical and DuckDB/Polars-compatible;
-- no Kite credential reaches Windows;
-- no inbound listener, SSH tunnel or VPN is required on Windows;
-- cleanup never deletes an unacknowledged/failed payload before a successful local import and matching acknowledgment; acknowledged payloads follow the 7-day grace period.
-
 ## 7. Implementation-ready declaration
 
 The previously audited V9 scope had no unresolved product-level contradiction. Subsequent additions have now been separately product-defined and frozen:
 
 - `V9-AI-003` — Embedded AI Insights & Prompt Execution;
 - `V9-COMM-001` beta access-request email resilience companion;
-- `V9-DATA-002` — VPS Historical Data Staging and Delivery, reconciled against V8 FEAT-065;
-- `SKR-001` companion Windows downloader specification;
 - `V9-OPS-002` — Automated API Failure GitHub Issue Reporting;
 - `V9-OPS-003` — LLM Log Error Triage & GitHub Issue Reporting;
 - `V9-UX-004` — Guided Production ML Acceptance Wizard;
@@ -159,14 +121,12 @@ Normative reconciliations include:
 - OPS-002 default success semantics are 2xx, with policy-based expected non-2xx exclusion, local + GitHub-marker deduplication, strict redaction and fail-open queued GitHub integration;
 - OPS-003 consumes ERROR logs asynchronously, sanitizes before inference, uses only the governed `ops.log_error_triage` capability on V4-FEAT-017, and automatically creates an issue only for actionable `code_bug` classifications meeting the default 0.85 confidence/evidence gates;
 - OPS-003 reuses OPS-002 GitHub credentials/adapter/rate limits/deduplication rather than creating a second integration, and its own AI/GitHub failures are excluded from recursive triage;
-- DATA-002 changes FEAT-065 acquisition/delivery topology but does not replace its canonical research-data contract;
-- the Mac remains the eventual canonical historical corpus; Windows is the initial holding device, and VPS payloads are bounded temporary staging;
 - AI-002 extends AI-001 from visible-page explanation to governed account-data reasoning;
 - AI-003 consumes the same shared platform and reuses AI-002 for Strategy draft mutation;
 - UX-004 is a deterministic educational/orchestration layer over V8 production acceptance and does not change training, qualification, promotion or lifecycle rules;
 - deterministic calculations remain in StoX services rather than being delegated to LLMs;
-- V8 telemetry ownership and FEAT-063/FEAT-065 data-domain boundaries remain intact.
+- V8 telemetry ownership remains intact.
 
-**StoX V9 remains FROZEN / IMPLEMENTATION-READY except V9-DATA-002, which is in PO REVIEW for the Windows receiver/archive revision, V9-AI-003, and V9-UX-004 subject to the implemented V8 production-acceptance domain. V9-OPS-002 and V9-OPS-003 are IMPLEMENTED / VERIFIED.**
+**V9-DATA-002 is retired (2026-10-06) and removed from the active register. V9-DATA-003 remains FROZEN / IMPLEMENTATION-READY; V9-AI-003 and V9-UX-004 retain their existing statuses. V9-OPS-002 and V9-OPS-003 are IMPLEMENTED / VERIFIED.**
 
-The implementation agent may begin automatically from this register and its linked frozen specifications, subject to any row explicitly marked PO REVIEW and its listed dependency gates. V9-DATA-002/SKR-001 must not be treated as fully frozen until their Windows signing/distribution decision is resolved. No additional planning handoff is required for the other frozen work unless implementation discovers a genuinely new material product decision or a direct frozen-spec contradiction.
+The implementation agent may begin automatically from this register and its linked frozen specifications, subject to each active row's listed dependency gates. Retired V9-DATA-002/SKR-001 references are historical only; the linked Windows companion project is outside this repository's active scope.

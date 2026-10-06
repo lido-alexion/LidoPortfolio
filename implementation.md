@@ -3444,7 +3444,9 @@ Document in this section. Authenticator TOTP for broker execution shipped as V4-
 - Production Collector check: `deploy/cpanel-lido-telemetry-probe.php` (`?token=…&send=1`) emits `stox.telemetry.collector_probe` when `LIDO_TELEMETRY_ENABLED` + OTLP endpoint are set.
 - Not yet implemented: official OpenTelemetry PHP/JS SDKs (current path uses lightweight OTLP/JSON exporter + W3C traceparent).
 
-## V8 FEAT-063 — Live microstructure collector (foundation, 2026-09-27)
+## Historical record: V8 FEAT-063 live microstructure collector (foundation, 2026-09-27)
+
+**Retired from the active repository on 2026-10-06.** The details below document past implementation only; the collector is no longer an active feature or deployment requirement.
 
 **Spec:** `docs/archive/specs/V8-Live-Microstructure-Data-Collection-Specification.md`.
 
@@ -3544,18 +3546,9 @@ Document in this section. Authenticator TOTP for broker execution shipped as V4-
 - Logistic baseline and **HistGradientBoosting challenger** probabilities are **Platt/isotonic-calibrated** on the validation partition (`ml_adapter.py`); metadata + promotion review expose `calibration` (Brier, reliability buckets).
 - Not yet implemented: optional intraday-derived features; gradient-boosted return model (Ridge is the V8 secondary baseline).
 
-## V8 FEAT-065 — Intraday ML historical platform (foundation, 2026-09-27)
+## Historical record: V8 FEAT-065 — Intraday ML historical platform (retired 2026-10-06)
 
-**Spec:** `docs/archive/specs/V8-Intraday-ML-Historical-Data-Platform-Specification.md`.
-
-- `config/intraday_ml_platform.php`; `stox_intraday_backfill_checkpoints` migration; `IntradayHistoricalPlatformService` + admin `GET /api/v1/admin/intraday-platform`.
-- Mac worker: `shared/intraday/backfill_worker.py` (dry-run + checkpoint POST; apply mode writes Parquet via `parquet_store.py` when `--bars-json` is supplied); internal API `GET/POST /api/internal/intraday-backfill/*` with `STOXLA_INTRADAY_BACKFILL_INTERNAL_TOKEN` (`IntradayBackfillInternalApiTest.php`).
-- Parquet layout: `shared/intraday/parquet_store.py` (`schema_v1/year=YYYY/month=MM/*.parquet`, zstd); `shared/intraday/requirements.txt` (pyarrow).
-- Operator docs: `shared/intraday/README.md` (Parquet corpus on Mac, separate from FEAT-063 live collector).
-- Tests: `IntradayPlatformAdminTest.php`, `IntradayBackfillInternalApiTest.php`, `shared/intraday/tests/test_backfill_worker.py`, `shared/intraday/tests/test_parquet_store.py`.
-- Kite historical client: `shared/intraday/kite_historical_client.py` (chunked minute fetch; env `STOXLA_KITE_*`); worker auto-fetches on `--apply` when credentials + instrument token are set.
-- Coverage + analytics: `coverage_report.py` (CLI inventory), `dataset_builder.py` (DuckDB symbol summary + PIT-bounded Polars daily OHLC from 1m bars).
-- Not yet implemented: full NIFTY 500 / index corpus backfill at scale; Mac POC performance sign-off.
+Product Owner direction permanently retired FEAT-065 and V9-DATA-002 from active scope on 2026-10-06. Their exclusive acquisition, corpus, staging, delivery and operator surfaces, along with active specifications and acceptance plans, have been removed. This entry is retained as a brief historical marker only. Historical schema migrations and persisted data are preserved; FEAT-057, FEAT-056 and V9-DATA-003 retain their separate ownership and behavior.
 
 ## V8 FEAT-056 — ML lifecycle automation (foundation, 2026-09-27)
 

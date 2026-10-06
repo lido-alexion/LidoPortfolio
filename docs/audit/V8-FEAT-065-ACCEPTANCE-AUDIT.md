@@ -1,8 +1,10 @@
-# FEAT-065 Intraday ML Historical Data Platform — acceptance audit
+# Historical FEAT-065 Intraday ML Data Platform — acceptance audit
 
-Status: **IMPLEMENTED — local implementation and isolated verification complete; Mac-side functional acceptance pending**. Remaining runtime scenarios are tracked in [FEAT-065 Mac Corpus Acceptance Plan](../testing/V8-FEAT-065-FUNCTIONAL-TEST-PLAN.md).
+> **Retired 2026-10-06.** This file records evidence gathered before retirement. It is retained as historical evidence only; its former specifications, implementation, and functional-test plan were removed from active repository scope. The statuses and open checks below do not represent current work or release gates.
 
-Evidence is mapped to `docs/archive/specs/V8-Intraday-ML-Historical-Data-Platform-Specification.md`.
+Historical status at retirement: **IMPLEMENTED — local implementation and isolated verification complete; Mac-side functional acceptance pending**. The former Mac Corpus Acceptance Plan has been removed and is no longer an active gate.
+
+Evidence was mapped to the former FEAT-065 specification, which was removed when the epic was retired.
 
 | Requirement | Status | Evidence / remaining work |
 |---|---|---|
@@ -17,7 +19,7 @@ Evidence is mapped to `docs/archive/specs/V8-Intraday-ML-Historical-Data-Platfor
 | Retry/backoff and failed-window tracking | PASS locally / runtime population pending | Kite client retries bounded 429/5xx/network failures with exponential backoff; each bounded unit records failed state through the durable checkpoint API and remains retryable. |
 | Durable pause/resume control | PASS locally | `stox_intraday_backfill_controls` persists the global operator hold; Admin-only pause/resume endpoints survive restart, the internal worker control read prevents new units, and `test_planned_run_honours_durable_pause_before_next_unit` plus API/Admin tests cover the contract |
 | Bounded checkpoint state semantics | PASS locally | Checkpoint service validates `pending/running/complete/failed`, rejects invalid windows/statuses, clears stale completion timestamps on retry, and exposes filtered durable checkpoint reads |
-| Mac corpus intake / bounded POC | OPEN — functional acceptance | SKR-001 in StoX-Kite-Rain owns Windows receipt, integrity checks, NTFS archive and Mac handoff; V9-DATA-002 owns VPS staging/secure delivery. FEAT-065 begins with a verified batch on Mac and validates canonical adoption, schema/provenance, DuckDB/Polars access, bounded coverage and Mac performance. See the linked functional test plan. |
+| Mac corpus intake / bounded POC | OPEN — functional acceptance | SKR-001 in StoX-Kite-Rain owns Windows receipt, integrity checks, NTFS archive and Mac handoff; V9-DATA-002 owns VPS staging/secure delivery. FEAT-065 begins with a verified batch on Mac and validates canonical adoption, schema/provenance, DuckDB/Polars access, bounded coverage and Mac performance. The corresponding functional test plan was removed at retirement; this row records only the former acceptance state. |
 | Optional derivatives/OI do not block Dataset A | PASS by architecture | Canonical Dataset A writer is OHLCV-only; no derivative dependency is introduced |
 | No automated backup subsystem | PASS | README explicitly documents manual external-disk backup and no application backup path is implemented |
 | FEAT-057 handoff remains PIT-safe and separate | PASS by architecture | Dataset helpers are research-corpus access only; FEAT-057 production feature registry contains no intraday/minute feature definitions |
@@ -45,6 +47,6 @@ Operator: Codex via connected `stoxla-prod`; UTC times below. **This entry does 
 
 **Decision: FEAT-065 IMPLEMENTED.** The historical-corpus implementation and isolated project-compatible verification are complete. This decision covers the FEAT-065 corpus and analytical contract only; it does not claim a live Kite campaign, a populated full corpus, or end-to-end Windows transfer acceptance.
 
-The Windows downloader, transfer verification, NTFS archive and manual Mac handoff belong to SKR-001 in StoX-Kite-Rain. VPS staging and secure delivery belong to V9-DATA-002. FEAT-065 begins runtime acceptance after a representative verified batch reaches the Mac. Its remaining checks are listed in [V8-FEAT-065-FUNCTIONAL-TEST-PLAN.md](../testing/V8-FEAT-065-FUNCTIONAL-TEST-PLAN.md).
+The Windows downloader, transfer verification, NTFS archive and manual Mac handoff belong to SKR-001 in StoX-Kite-Rain. VPS staging and secure delivery belong to V9-DATA-002. FEAT-065 begins runtime acceptance after a representative verified batch reaches the Mac. Its remaining checks were formerly listed in the FEAT-065 functional test plan, removed at retirement.
 
 The bounded Mac POC must pass before launching the full backfill. Full-corpus coverage/performance, campaign retry/checkpoint behavior and the manual external-disk backup are checked after that corpus is populated. FEAT-065 remains **IMPLEMENTED, not COMPLETE**, until those applicable runtime exit criteria have evidence.

@@ -8,8 +8,6 @@ use App\Http\Middleware\AssignRequestId;
 use App\Http\Middleware\LidoTelemetryHttpMiddleware;
 use App\Http\Middleware\DebugAgentToken;
 use App\Http\Middleware\EnsurePersonalApiTokenScope;
-use App\Http\Middleware\EnsureIntradayBackfillInternalToken;
-use App\Http\Middleware\EnsureMicrostructureCollectorInternalToken;
 use App\Http\Middleware\EnsureAiRuntimeServiceKey;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\ResolveActivePortfolio;
@@ -53,8 +51,6 @@ $application = Application::configure(basePath: dirname(__DIR__))
         $middleware->appendToGroup('web', LidoTelemetryHttpMiddleware::class);
         $middleware->alias([
             'admin' => EnsureUserIsAdmin::class,
-            'microstructure.collector.internal' => EnsureMicrostructureCollectorInternalToken::class,
-            'intraday.backfill.internal' => EnsureIntradayBackfillInternalToken::class,
             'ai.runtime.internal' => EnsureAiRuntimeServiceKey::class,
             'active.portfolio' => ResolveActivePortfolio::class,
             'token.scope' => EnsurePersonalApiTokenScope::class,

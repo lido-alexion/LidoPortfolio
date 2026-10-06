@@ -98,32 +98,6 @@ test('production activation fails closed for debug auth and normalizes PHP writa
     }
 });
 
-test('microstructure collector unit matches the provisioned runtime layout', async () => {
-    const [unit, deploy, health, requirements, runbook] = await Promise.all([
-        source('deploy/systemd/stoxla-microstructure-collector.service'),
-        source('deploy/scripts/stoxla-deploy-release.sh'),
-        source('deploy/scripts/stoxla-runtime-health-check.sh'),
-        source('shared/microstructure/requirements.txt'),
-        source('deploy/STOXLA-VPS-DEPLOY.md'),
-    ]);
-
-    assert.match(unit, /User=nitty/);
-    assert.match(unit, /Group=www-data/);
-    assert.match(unit, /WorkingDirectory=\/var\/www\/stoxla\/current\/shared\/microstructure/);
-    assert.match(unit, /ExecStart=\/var\/www\/stoxla\/shared\/python\/microstructure\/bin\/python -m collector/);
-    assert.match(unit, /EnvironmentFile=-\/var\/www\/stoxla\/shared\/\.env\.microstructure-collector/);
-    assert.match(unit, /MICROSTRUCTURE_(DATA_ROOT|BACKUP_ROOT|HEARTBEAT_FILE|COMMAND_FILE|FINALIZATION_STATE_FILE)=\/var\/www\/stoxla\/shared\/storage\/app\/microstructure/);
-    assert.match(unit, /Restart=on-failure/);
-    assert.match(unit, /StandardOutput=journal/);
-    assert.match(deploy, /prepare_microstructure_python/);
-    assert.match(deploy, /shared\/microstructure\/requirements\.txt/);
-    assert.match(health, /import kiteconnect, pyarrow, polars/);
-    assert.match(requirements, /kiteconnect/);
-    assert.match(requirements, /pyarrow/);
-    assert.match(runbook, /stoxla-microstructure-collector\.service/);
-    assert.match(runbook, /systemctl enable stoxla-microstructure-collector/);
-});
-
 test('acceptance worker must drain before shared Python changes or rollback activation', async () => {
     const [deploy, rollback, unit] = await Promise.all([
         source('deploy/scripts/stoxla-deploy-release.sh'),

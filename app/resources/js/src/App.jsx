@@ -23,7 +23,6 @@ import SettingsPage from './pages/SettingsPage';
 import ProfilePage from './pages/ProfilePage';
 import SyncLogsPage from './pages/SyncLogsPage';
 import UniversePriceSyncPage from './pages/UniversePriceSyncPage';
-import MicrostructureCollectorAdminPage from './pages/MicrostructureCollectorAdminPage';
 import DataQualityCenterPage from './pages/DataQualityCenterPage';
 import IndicatorRegistryPage from './pages/IndicatorRegistryPage';
 import IndicatorRegistryDetailPage from './pages/IndicatorRegistryDetailPage';
@@ -156,11 +155,6 @@ function AppRoutes() {
                     <UniversePriceSyncPage />
                 </AdminRoute>
             )} />
-            <Route path="/settings/microstructure-collector" element={(
-                <AdminRoute>
-                    <MicrostructureCollectorAdminPage />
-                </AdminRoute>
-            )} />
             <Route path="/settings/data-quality" element={(
                 <AdminRoute>
                     <DataQualityCenterPage />
@@ -263,7 +257,6 @@ function AdminAppRoutes() {
             <Route path="/settings/admin-alerts" element={<AdminAlertsPage />} />
             <Route path="/settings/audit" element={<AdminAuditExplorerPage />} />
             <Route path="/settings/universe-price-sync" element={<UniversePriceSyncPage />} />
-            <Route path="/settings/microstructure-collector" element={<MicrostructureCollectorAdminPage />} />
             <Route path="/settings/universe-price-sync/gap-failures" element={<GapFillFailuresPage />} />
             <Route path="/settings/universe-price-sync/ignored-gaps" element={<IgnoredPriceGapsPage />} />
             <Route path="/settings/data-quality" element={<DataQualityCenterPage />} />

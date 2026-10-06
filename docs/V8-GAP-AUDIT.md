@@ -1,3 +1,5 @@
+**Retirement update (2026-10-06): FEAT-063, FEAT-065 and V9-DATA-002 have been removed from active scope. Verification baselines and prior test results below are historical.**
+
 # StoX V8 gap audit (requirement-level)
 
 **Purpose:** Honest end-state check against frozen V8 specs. Complements [V8-ACCEPTANCE-AUDIT.md](V8-ACCEPTANCE-AUDIT.md) (test gates + checklists).
@@ -13,13 +15,13 @@
 | FEAT-057 | **REVIEW** | Versioned/PIT-safe registry, training-only missing-value/outlier preprocessing, same-architecture bounded 1m/3m/6m training, archive integrity, paired baseline evidence, partition coverage and artifact explainability are verified; production provider population, deployed active-model pairing and investor browser acceptance remain external. |
 | FEAT-061 | **REVIEW** | Keyed i18n, missing-target behavior, persisted resume, in-progress refresh recovery, full configured-route traversal, desktop/mobile/tablet journeys, focus return and Tab containment are verified; production session interruption, screen-reader review and broader-device acceptance remain. |
 | FEAT-062 | **REVIEW** | Deterministic catalogue, PIT comparisons, provider-neutral bounded AI validation, degradation behavior and local desktop/mobile/full-axe browser coverage are verified; screen-reader/device and real-provider acceptance remain external. |
-| FEAT-063 | **REVIEW** | Collector lifecycle, quality states, recovery, finalization, backup gating, alerts and resilience tests are locally verified; VPS installation, live Kite full-mode collection and deployed backup remain external. |
+| FEAT-063 | **RETIRED (2026-10-06)** | Historical implementation/evidence retained in audit records; no active repository implementation or acceptance gate. |
 | FEAT-064 | **REVIEW** | Runtime create/import/shared copy, immutable provenance/readiness semantics, legacy fixture reconciliation and Playwright journeys are verified; live membership-drift/runtime acceptance remains external. |
-| FEAT-065 | **REVIEW** | Schema-versioned Parquet, resumable/idempotent backfill, retries, checkpoints, coverage, DuckDB/Polars and manual-backup architecture are locally verified; live Kite POC/full corpus and handoff evidence remain external. |
+| FEAT-065 | **RETIRED (2026-10-06)** | Exclusive implementation and active acceptance work removed; persisted schemas/data remain untouched. |
 
 ## Evidence anchors (implemented slices)
 
-- **Tests:** full `app/tests/Feature` (1,347 total, 1,346 passed, 1 skip); full configured Playwright run (52 configured, 31 executed passed, 21 intentional skips); `shared/intraday/tests` (22/22) and `shared/microstructure/tests/` (28/28) in the isolated project-compatible environment.
+- **Tests:** full `app/tests/Feature` (1,347 total, 1,346 passed, 1 skip); full configured Playwright run (52 configured, 31 executed passed, 21 intentional skips); `shared/intraday/tests` (22/22) in the isolated project-compatible environment.
 - **Ledger:** [docs/V8-IMPLEMENTATION-LEDGER.md](V8-IMPLEMENTATION-LEDGER.md).
 - **Behavior:** [implementation.md](../implementation.md) § V8 FEAT-* sections.
 

@@ -1,3 +1,5 @@
+> **Historical audit record.** FEAT-063 references describe the base commit under review at that time; FEAT-063 was retired from the active repository on 2026-10-06.
+
 # V9-OPS-003 implementation and acceptance audit
 
 The final verification continuation started at local `02375709e68fc0457ca2b85507a7b990c3b9c889` with `origin/master` at `5b274128a5b571ac8b42d34cd27f6068c9b14411`. Successive fetches were reconciled by normal fast-forward through `0040ea1f`, `41ad6823`, and final verification base `113355c18444be85d7f40b6c465d451076e957b9`. The committed OPS-003 implementation was preserved, and the two untracked prompt files remain untracked.

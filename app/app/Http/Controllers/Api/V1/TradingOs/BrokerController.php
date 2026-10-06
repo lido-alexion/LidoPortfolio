@@ -46,7 +46,6 @@ class BrokerController extends Controller
         $destination = $this->connections->returnToFromLoginState($request->query('state'));
         $destinationPath = match ($destination) {
             'dashboard' => '/',
-            'kite-connect' => '/kite-connect',
             default => '/settings/account',
         };
         $frontend = rtrim((string) config('app.url'), '/').$destinationPath;
