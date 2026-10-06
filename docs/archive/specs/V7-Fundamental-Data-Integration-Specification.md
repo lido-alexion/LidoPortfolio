@@ -221,6 +221,8 @@ The Registry remains metadata/discovery, not the fundamental calculator.
 
 Fundamental values intended for product consumption must expose appropriate registry metadata/capabilities so existing consumers can discover them through the Registry/façades rather than maintain separate hardcoded lists.
 
+Registry presence is not automatic. Only reliable, usable canonical metrics may be exposed to consumer catalogues. Until a separate PO review removes the temporary exception, no Screener/Strategy indicator may be created from `capital_work_in_progress`, `gross_npa`, `gross_npa_ratio`, `net_npa`, `net_npa_ratio`, `capital_adequacy_ratio`, `provisions`, `net_interest_margin`, `promoter_holding`, `fii_holding`, `dii_holding` or `promoter_pledge`. Keep these facts canonical and return unavailable when no evidence exists; do not fabricate zero values or infer from unrelated fields.
+
 Relevant consumers include:
 
 - Screener
@@ -320,6 +322,7 @@ This preserves point-in-time truth without imposing today’s live-age policy on
 - If a Screener explicitly uses a fundamental condition, required data must be available and live-valid according to the global freshness policy for that condition’s basis.
 - If any required fundamental condition cannot be evaluated because its metric is missing/stale, that stock **fails that Screener**.
 - StoX must never silently drop/ignore the unavailable condition.
+- The temporary PO-exception facts above are not published as configurable indicators or conditions. They must not be used to create Screeners until a dependable source and PO review lift the exception.
 - There is no per-Screener freshness threshold or freshness toggle.
 
 ---
@@ -525,5 +528,6 @@ Implementation must preserve these invariants:
 16. Missing/stale fundamentals never manufacture an exit.
 17. Stale values remain visible to investors.
 18. Historical backtests use point-in-time availability/revision semantics rather than today’s live freshness thresholds.
-19. Pre-fetch dedupe minimises unnecessary provider calls.
-20. One-time deep history loading remains separate under V4-FEAT-054.
+19. PO-exception fundamental facts are not published as Screeners/Strategy indicators until reliable-source evidence and explicit PO review.
+20. Pre-fetch dedupe minimises unnecessary provider calls.
+21. One-time deep history loading remains separate under V4-FEAT-054.
