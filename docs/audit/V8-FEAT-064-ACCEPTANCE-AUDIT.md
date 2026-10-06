@@ -59,3 +59,21 @@ Operator: Codex via connected `stoxla-prod`; UTC times below. **This entry does 
 ### Authenticated workflow inspection — 2026-10-01 about 19:05 UTC
 
 Cloud Chrome showed seven existing rows under `My screens`, a separate `Shared screens` tab (empty for this portfolio), and a Strategies selector with multiple concurrent enabled strategies (Ts2, Test swing, Swing SmallCap, Momentum Strategy Copy). The selected published Artifact Library binding displayed a read-only notice and disabled Save. **PASS for UI presence and multiple-enabled display only**; no cross-account copy, new version, membership drift or historical provenance mutation was tested.
+
+## Closure continuation — 2026-10-05 (read-only production provenance check)
+
+**State: REVIEW — blocker found.** This check did not execute a Screener, generate a Recommendation, or change production data.
+
+- Four active Strategies (IDs 3, 4, 5, 7) have an enabled Screener dependency whose active Strategy-version link has a null `screener_version_id`. Their active version's `eligibility_sources` also lacks a `screener_version_id`. Strategy 8 has an exact link to Screener version 7.
+- Exact immutable Screener-version rows exist for the affected Screener lineages (4 and 5); the missing Strategy dependency pins are not explained by missing version records.
+- `StrategyEligibilityService::resolve()` only applies its run-version filter when a positive pin exists. For the four unpinned active versions, a future recent completed run of the same Screener lineage could be selected without exact version matching. `resolveExitScreeners()` has the same conditional filter pattern. `StrategyReadinessService::assess()` checks the presence of enabled Screener IDs but does not require exact pins.
+- All 11 existing production Screener runs have null `screener_version_id`; the newest finished on 2026-09-15. The 72-hour eligibility lookback excludes them now. This establishes a latent code-path risk, **not an observed incorrect Recommendation**. Of 786 Recommendations, 765 carry a Strategy-version ID; existing historical nulls need migration review rather than guessed backfills.
+
+### Required next work before IMPLEMENTED
+
+1. Add a regression that exercises an active legacy unpinned Strategy when a new Screener run exists, including the exit-rule path. Preserve the rule that new runs and newly saved Strategy versions pin exact immutable versions.
+2. Reconcile the four active legacy Strategy versions through the documented provenance migration process. Do not silently edit immutable `config_json` or assign a historical version from current state without evidence; if exact historic identity cannot be proven, preserve uncertainty and require a new copy-on-write Strategy save to adopt the current Screener version.
+3. Make runtime eligibility fail closed or report Setup Required for an unresolved pin, with a clear investor action. Verify activation/readiness and recommendation generation cannot silently treat an unpinned dependency as version-agnostic. Assess the operational impact before production rollout.
+4. Re-run the exact-version regression and production read-only provenance report; then perform the controlled two-account workflow, membership-drift, and deployed accessibility checks already pending above. Only mark FEAT-064 IMPLEMENTED when the provenance gate passes.
+
+The frozen requirement is exact Strategy-version-to-Screener-version reconstruction. Historical nulls must remain visible as unresolved evidence, not be cosmetically filled to clear a gate.
