@@ -76,6 +76,9 @@ class YahooFundamentalNormalizer
         'Net PPE' => 'property_plant_equipment',
         'Gross PPE' => 'property_plant_equipment',
         'Capital Work In Progress' => 'capital_work_in_progress',
+        'Construction In Progress' => 'capital_work_in_progress',
+        'Provisions' => 'provisions',
+        'Current Provisions + Long Term Provisions' => 'provisions',
         'Interest Income' => 'interest_income',
         'Interest Expense' => 'interest_expense',
         'Net Interest Income' => 'net_interest_income',
@@ -155,7 +158,14 @@ class YahooFundamentalNormalizer
                 if (! is_array($statement) || ! is_string($statement['period_end'] ?? null)) {
                     continue;
                 }
-                foreach (($statement['facts'] ?? []) as $sourceName => $value) {
+                $facts = is_array($statement['facts'] ?? null) ? $statement['facts'] : [];
+                if ($statementType === 'balance_sheet'
+                    && ! is_numeric($facts['Provisions'] ?? null)
+                    && is_numeric($facts['Current Provisions'] ?? null)
+                    && is_numeric($facts['Long Term Provisions'] ?? null)) {
+                    $facts['Current Provisions + Long Term Provisions'] = (float) $facts['Current Provisions'] + (float) $facts['Long Term Provisions'];
+                }
+                foreach ($facts as $sourceName => $value) {
                     $factKey = self::YFINANCE_FACT_MAP[$sourceName] ?? null;
                     if ($factKey === null || ! is_numeric($value)) {
                         continue;
