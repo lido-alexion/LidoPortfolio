@@ -322,7 +322,7 @@ class BacktestDuplicateTest extends TestCase
         $profile = $this->defaultPortfolioFor($user);
         $current = app(StrategyConfigurationService::class)->ensureActive($profile);
 
-        $stale = TradingStrategyVersion::query()->create([
+        $stale = $this->createTestStrategyVersion([
             'strategy_id' => $current->strategy_id,
             'version' => 2,
             'version_label' => 'stale-snapshot',

@@ -24,7 +24,7 @@ class RecommendationSupersessionServiceTest extends TestCase
             'profile_id' => $profile->id, 'name' => 'Strategy', 'slug' => 'strategy',
             'definition_hash' => str_repeat('a', 64), 'status' => TradingStrategy::STATUS_ACTIVE,
         ]);
-        $version = TradingStrategyVersion::query()->create([
+        $version = $this->createTestStrategyVersion([
             'strategy_id' => $strategy->id, 'version' => 1, 'config_json' => [],
             'definition_hash' => str_repeat('b', 64), 'status' => TradingStrategyVersion::STATUS_ACTIVE,
         ]);
@@ -59,7 +59,7 @@ class RecommendationSupersessionServiceTest extends TestCase
             'profile_id' => $profile->id, 'name' => 'Strategy', 'slug' => 'same-strategy',
             'definition_hash' => str_repeat('c', 64), 'status' => TradingStrategy::STATUS_ACTIVE,
         ]);
-        $version = TradingStrategyVersion::query()->create([
+        $version = $this->createTestStrategyVersion([
             'strategy_id' => $strategy->id, 'version' => 1, 'config_json' => [],
             'definition_hash' => str_repeat('d', 64), 'status' => TradingStrategyVersion::STATUS_ACTIVE,
         ]);

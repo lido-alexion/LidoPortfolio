@@ -84,7 +84,11 @@ final class ArtifactLegacyProjectionService
         }
 
         $legacyVersion = $strategy->activeVersion;
-        if (! $legacyVersion || $legacyVersion->definition_hash !== $version->definition_hash) {
+        // An explicit binding revision can adopt current Screener versions for
+        // a legacy unpinned projection. Preserve the old Strategy version.
+        $needsDependencyAdoption = $legacyVersion
+            && $this->strategyEligibility->unresolvedPinnedScreeners($definition, $legacyVersion) !== [];
+        if (! $legacyVersion || $legacyVersion->definition_hash !== $version->definition_hash || $needsDependencyAdoption) {
             if ($legacyVersion) {
                 $legacyVersion->forceFill(['status' => TradingStrategyVersion::STATUS_SUPERSEDED])->save();
             }

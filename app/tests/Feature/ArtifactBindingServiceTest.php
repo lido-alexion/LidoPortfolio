@@ -4,12 +4,14 @@ namespace Tests\Feature;
 
 use App\Models\ArtifactBinding;
 use App\Models\Screener;
+use App\Models\StrategyScreener;
 use App\Models\TradingStrategy;
 use App\Models\User;
 use App\Services\Artifacts\ArtifactBindingService;
 use App\Services\Artifacts\ArtifactType;
 use App\Services\Artifacts\ReusableArtifactLifecycleService;
 use App\Services\Indicators\IndicatorRegistry;
+use App\Services\StrategyEligibilityService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
 use LogicException;
@@ -141,6 +143,39 @@ class ArtifactBindingServiceTest extends TestCase
         $this->assertSame($v11->definition_hash, $projection->definition_hash);
         $this->assertSame(75, $projection->activeVersion->config_json['thresholds']['open_position']);
         $this->assertSame($v11->id, $upgraded->activeRevision->artifact_version_id);
+    }
+
+    public function test_explicit_binding_revision_adopts_unpinned_legacy_dependency_without_rewriting_history(): void
+    {
+        $owner = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($owner);
+        $screener = app(StrategyEligibilityService::class)->ensureMinerviniScreener($profile);
+        $envelope = $this->strategyEnvelope(60);
+        $envelope['definition']['eligibility_sources'] = [[
+            'screener_id' => $screener->id, 'enabled' => true,
+        ]];
+        $lifecycle = app(ReusableArtifactLifecycleService::class);
+        $artifactVersion = $lifecycle->publish(
+            $lifecycle->createDraft($owner, ArtifactType::STRATEGY, 'bound-strategy', 'Bound Strategy', $envelope),
+            $owner,
+        );
+        $bindings = app(ArtifactBindingService::class);
+        $binding = $bindings->bind($profile, $artifactVersion, $owner, [], true);
+        $strategy = TradingStrategy::query()->where('reusable_artifact_id', $artifactVersion->artifact_id)->sole();
+        $oldVersion = $strategy->activeVersion;
+        $oldConfig = $oldVersion->config_json;
+        $oldLink = StrategyScreener::query()->where('strategy_version_id', $oldVersion->id)->sole();
+        $expectedScreenerVersionId = $oldLink->screener_version_id;
+        $oldLink->forceFill(['screener_version_id' => null])->save();
+
+        $updated = $bindings->upgrade($binding, $artifactVersion, $owner, 0);
+        $newVersion = $strategy->fresh('activeVersion')->activeVersion;
+        $this->assertSame(2, $updated->activeRevision->revision_number);
+        $this->assertNotSame($oldVersion->id, $newVersion->id);
+        $this->assertSame($oldConfig, $oldVersion->fresh()->config_json);
+        $this->assertNull($oldLink->fresh()->screener_version_id);
+        $this->assertSame($expectedScreenerVersionId, StrategyScreener::query()
+            ->where('strategy_version_id', $newVersion->id)->sole()->screener_version_id);
     }
 
     public function test_projection_failure_rolls_back_the_entire_binding(): void

@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Engines\Strategy\ExitStrategyEvaluator;
-use App\Services\Artifacts\DefinitionHasher;
 use App\Engines\Strategy\FactoryMomentumStrategy;
 use App\Engines\Strategy\MinerviniTrendTemplateScreener;
 use App\Engines\Strategy\SupportedIndicators;
@@ -11,6 +10,7 @@ use App\Models\PortfolioProfile;
 use App\Models\Screener;
 use App\Models\TradingStrategy;
 use App\Models\TradingStrategyVersion;
+use App\Services\Artifacts\DefinitionHasher;
 use App\Services\Indicators\IndicatorRegistry;
 use App\Services\Strategy\StrategyReadinessService;
 use App\Services\Strategy\StrategyRegistrySupport;
@@ -349,15 +349,18 @@ class StrategyConfigurationService
             $lockedVersion = TradingStrategyVersion::query()->whereKey($version->id)->lockForUpdate()->firstOrFail();
 
             $configChanged = $this->configHash($lockedVersion->config_json ?? []) !== $this->configHash($normalized);
+            // A legacy lineage-only dependency must be adopted through a new
+            // immutable Strategy version even if the editor fields are unchanged.
+            $dependenciesUnresolved = $this->eligibility->unresolvedPinnedScreeners($normalized, $lockedVersion) !== [];
             $trimmedName = $name !== null ? trim($name) : null;
             $nameChanged = $trimmedName !== null && $trimmedName !== '' && $trimmedName !== $lockedStrategy->name;
             $descriptionChanged = $description !== null && $description !== $lockedStrategy->description;
 
-            if (! $configChanged && ! $nameChanged && ! $descriptionChanged) {
+            if (! $configChanged && ! $dependenciesUnresolved && ! $nameChanged && ! $descriptionChanged) {
                 return $this->serializeStrategy($lockedStrategy, $lockedVersion);
             }
 
-            if (! $configChanged) {
+            if (! $configChanged && ! $dependenciesUnresolved) {
                 $lockedStrategy->forceFill([
                     'name' => $nameChanged ? $trimmedName : $lockedStrategy->name,
                     'description' => $descriptionChanged ? $description : $lockedStrategy->description,
