@@ -3,6 +3,7 @@
 namespace App\Services\Fundamentals\Historical;
 
 use App\Models\Stock;
+use App\Services\Fundamentals\FundamentalDataService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -23,7 +24,7 @@ class BseOfficialFundamentalHistoricalSource implements FundamentalHistoricalSou
 
     public function supports(Stock $stock): bool
     {
-        if (! app(\App\Services\Fundamentals\FundamentalDataService::class)->exchangeFallbackIsActive('bse')) {
+        if (! app(FundamentalDataService::class)->exchangeFallbackIsActive('bse')) {
             return false;
         }
 
@@ -32,7 +33,11 @@ class BseOfficialFundamentalHistoricalSource implements FundamentalHistoricalSou
 
     public function fetch(Stock $stock, string $cadence): array
     {
-        $url = trim((string) config('fundamentals_bootstrap.bse_official_feed_url', ''));
+        $configuredUrl = trim((string) app(FundamentalDataService::class)
+            ->settings()->bse_official_feed_url);
+        $url = $configuredUrl !== ''
+            ? $configuredUrl
+            : trim((string) config('fundamentals_bootstrap.bse_official_feed_url', ''));
         if ($url === '') {
             return [];
         }
@@ -40,7 +45,8 @@ class BseOfficialFundamentalHistoricalSource implements FundamentalHistoricalSou
         $timeout = (float) config('fundamentals_bootstrap.bse_official_timeout_seconds', 30);
 
         try {
-            $response = app(ExchangeRequestGate::class)->request(fn () => Http::timeout($timeout)
+            $response = app(ExchangeRequestGate::class)->request(fn () => Http::withOptions(['allow_redirects' => false])
+                ->timeout($timeout)
                 ->acceptJson()
                 ->get($url, [
                     'symbol' => strtoupper((string) $stock->symbol),
