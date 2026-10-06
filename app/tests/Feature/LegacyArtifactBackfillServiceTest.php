@@ -248,7 +248,7 @@ class LegacyArtifactBackfillServiceTest extends TestCase
             'status' => TradingStrategy::STATUS_ACTIVE,
             'allocation_pct' => 100,
         ]);
-        $version = TradingStrategyVersion::query()->create([
+        $version = $this->createTestStrategyVersion([
             'strategy_id' => $strategy->id,
             'version' => 3,
             'config_json' => [

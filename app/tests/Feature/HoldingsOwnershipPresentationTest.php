@@ -54,7 +54,7 @@ class HoldingsOwnershipPresentationTest extends TestCase
             'allocation_pct' => 0,
             'is_factory' => false,
         ]);
-        $version = TradingStrategyVersion::query()->create([
+        $version = $this->createTestStrategyVersion([
             'strategy_id' => $archived->id,
             'version' => 1,
             'version_label' => '1.0',
@@ -114,7 +114,7 @@ class HoldingsOwnershipPresentationTest extends TestCase
             'allocation_pct' => 50,
             'is_factory' => false,
         ]);
-        $version = TradingStrategyVersion::query()->create([
+        $version = $this->createTestStrategyVersion([
             'strategy_id' => $b->id,
             'version' => 1,
             'version_label' => '1.0',

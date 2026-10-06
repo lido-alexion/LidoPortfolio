@@ -7,10 +7,10 @@ use App\Models\PortfolioProfile;
 use App\Models\Screener;
 use App\Models\ScreenerRun;
 use App\Models\ScreenerRunHit;
+use App\Models\ScreenerVersion;
 use App\Models\StrategyScreener;
 use App\Models\TradingStrategyVersion;
 use App\Services\Screener\ScreenerVersioningService;
-use Illuminate\Support\Facades\DB;
 
 /**
  * SD-030: Resolve Strategy eligibility exclusively via configured Screeners.
@@ -19,6 +19,49 @@ use Illuminate\Support\Facades\DB;
 class StrategyEligibilityService
 {
     public const LOOKBACK_HOURS = 72;
+
+    /**
+     * Legacy Strategy versions may retain lineage-only dependencies. Never infer an
+     * immutable pin from the current Screener when evaluating such a version.
+     *
+     * @param  array<string, mixed>  $config
+     * @return list<int>
+     */
+    public function unresolvedPinnedScreeners(array $config, TradingStrategyVersion $version): array
+    {
+        $sources = is_array($config['eligibility_sources'] ?? null) ? $config['eligibility_sources'] : [];
+        $exit = is_array($config['exit_strategy'] ?? null) ? $config['exit_strategy'] : [];
+        if ($exit['enabled'] ?? true) {
+            foreach (is_array($exit['rules'] ?? null) ? $exit['rules'] : [] as $rule) {
+                if (is_array($rule) && ($rule['key'] ?? '') === 'screener_exit' && ($rule['enabled'] ?? false)) {
+                    $sources[] = $rule;
+                }
+            }
+        }
+
+        $links = StrategyScreener::query()->where('strategy_version_id', $version->id)
+            ->get()->keyBy('screener_id');
+        $unresolved = [];
+        foreach ($sources as $source) {
+            if (! is_array($source) || ! ($source['enabled'] ?? true)) {
+                continue;
+            }
+            $screenerId = (int) ($source['screener_id'] ?? 0);
+            if ($screenerId < 1) {
+                continue;
+            }
+            $pin = (int) ($source['screener_version_id'] ?? 0);
+            if ($pin < 1) {
+                $pin = (int) ($links->get($screenerId)?->screener_version_id ?? 0);
+            }
+            if ($pin < 1 || ! ScreenerVersion::query()->whereKey($pin)
+                ->where('screener_id', $screenerId)->exists()) {
+                $unresolved[$screenerId] = $screenerId;
+            }
+        }
+
+        return array_values($unresolved);
+    }
 
     /**
      * Seed / ensure factory Minervini Trend Template screener for a profile.
@@ -57,9 +100,9 @@ class StrategyEligibilityService
             'slug' => MinerviniTrendTemplateScreener::FACTORY_KEY,
         ]);
 
-        if (class_exists(\App\Services\Screener\ScreenerVersioningService::class)) {
+        if (class_exists(ScreenerVersioningService::class)) {
             try {
-                app(\App\Services\Screener\ScreenerVersioningService::class)
+                app(ScreenerVersioningService::class)
                     ->afterCreate($screener, 'Factory Minervini Trend Template');
             } catch (\Throwable) {
                 // Registry columns may not exist yet during early migrate
@@ -149,6 +192,14 @@ class StrategyEligibilityService
             $sources,
             fn ($s) => is_array($s) && ($s['enabled'] ?? true) && (int) ($s['screener_id'] ?? 0) > 0
         ));
+        if ($strategyVersion && $this->unresolvedPinnedScreeners($config, $strategyVersion) !== []) {
+            return [
+                'mode' => 'provenance_unresolved',
+                'eligible_security_ids' => [],
+                'screeners' => [],
+                'lookback_hours' => self::LOOKBACK_HOURS,
+            ];
+        }
 
         usort($enabledSources, fn ($a, $b) => ((int) ($a['priority'] ?? 0)) <=> ((int) ($b['priority'] ?? 0)));
 
@@ -178,7 +229,7 @@ class StrategyEligibilityService
                 $pinnedVersionId = (int) $pinnedVersions->get($screenerId)->screener_version_id;
             }
 
-            if ($screener) {
+            if ($screener && ($strategyVersion === null || $pinnedVersionId > 0)) {
                 $run = ScreenerRun::query()
                     ->where('screener_id', $screener->id)
                     ->when($pinnedVersionId > 0, fn ($q) => $q->where('screener_version_id', $pinnedVersionId))
@@ -201,6 +252,8 @@ class StrategyEligibilityService
             $status = 'NO_RUN';
             if ($screener === null) {
                 $status = 'MISSING';
+            } elseif ($strategyVersion !== null && $pinnedVersionId < 1) {
+                $status = 'UNPINNED';
             } elseif ($run && $hitIds !== []) {
                 $status = 'PASS';
                 $idSets[] = $hitIds;
@@ -288,6 +341,7 @@ class StrategyEligibilityService
                     'run_id' => null,
                     'hit_count' => 0,
                 ];
+
                 continue;
             }
 
@@ -307,7 +361,7 @@ class StrategyEligibilityService
                     ->value('screener_version_id');
             }
 
-            if ($screener) {
+            if ($screener && ($strategyVersion === null || $pinnedVersionId > 0)) {
                 $run = ScreenerRun::query()
                     ->where('screener_id', $screener->id)
                     ->when($pinnedVersionId > 0, fn ($q) => $q->where('screener_version_id', $pinnedVersionId))
@@ -330,6 +384,8 @@ class StrategyEligibilityService
             $status = 'NO_RUN';
             if ($screener === null) {
                 $status = 'MISSING';
+            } elseif ($strategyVersion !== null && $pinnedVersionId < 1) {
+                $status = 'UNPINNED';
             } elseif ($run && $hitIds !== []) {
                 $status = 'PASS';
             } elseif ($run) {

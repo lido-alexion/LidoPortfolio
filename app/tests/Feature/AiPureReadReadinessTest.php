@@ -22,7 +22,7 @@ class AiPureReadReadinessTest extends TestCase
         $profile = $this->defaultPortfolioFor(User::factory()->create());
         $first = app(\App\Services\StrategyConfigurationService::class)->ensureActive($profile)->strategy;
         $second = \App\Models\TradingStrategy::query()->create(['profile_id' => $profile->id, 'name' => 'Strategy B', 'slug' => 'strategy_b', 'status' => 'active', 'is_factory' => false]);
-        $version = \App\Models\TradingStrategyVersion::query()->create(['strategy_id' => $second->id, 'version' => 1, 'version_label' => '1.0', 'config_json' => $first->activeVersion->config_json, 'status' => 'active']);
+        $version = $this->createTestStrategyVersion(['strategy_id' => $second->id, 'version' => 1, 'version_label' => '1.0', 'config_json' => $first->activeVersion->config_json, 'status' => 'active']);
         $second->forceFill(['active_version_id' => $version->id])->save();
         $registry = app(StrategyArtifactRegistry::class);
         $envelope = $registry->get((string) $second->id, $profile);

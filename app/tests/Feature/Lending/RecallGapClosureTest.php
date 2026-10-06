@@ -452,7 +452,7 @@ class RecallGapClosureTest extends TestCase
             'status' => TradingStrategy::STATUS_DRAFT,
             'allocation_pct' => 0,
         ]);
-        $version = TradingStrategyVersion::query()->create([
+        $version = $this->createTestStrategyVersion([
             'strategy_id' => $strategy->id,
             'version' => 1,
             'config_json' => array_merge($this->executableStrategyConfig($profile), [
