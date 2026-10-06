@@ -95,6 +95,30 @@ class ForwardDataAdminHealthTest extends TestCase
             ->assertJsonPath('data.idempotent', true);
     }
 
+    public function test_admin_work_api_returns_requested_page_metadata_and_rows(): void
+    {
+        foreach ([1, 2, 3] as $day) {
+            ForwardCollectionWork::query()->create([
+                'dataset_key' => 'official_nse_membership',
+                'exchange' => 'NSE',
+                'session_date' => sprintf('2026-09-%02d', $day),
+                'scope_key' => "active_eligible_nse_{$day}",
+                'state' => 'retry_wait',
+                'next_attempt_at' => now()->addHour(),
+            ]);
+        }
+        $admin = User::factory()->create(['is_admin' => true]);
+        $this->defaultPortfolioFor($admin);
+
+        $this->actingAs($admin)
+            ->getJson('/api/forward-data/work?per_page=1&page=2')
+            ->assertOk()
+            ->assertJsonPath('data.current_page', 2)
+            ->assertJsonPath('data.last_page', 3)
+            ->assertJsonPath('data.total', 3)
+            ->assertJsonPath('data.data.0.session_date', '2026-09-02');
+    }
+
     public function test_data003_admin_endpoints_reject_missing_and_invalid_bearer_credentials(): void
     {
         foreach (['/api/forward-data/health', '/api/forward-data/work', '/api/operational-alerts'] as $path) {

@@ -22,7 +22,15 @@ class ForwardDataAdminController extends Controller
         if ($request->filled('dataset')) $query->where('dataset_key', (string) $request->string('dataset'));
         if ($request->filled('state')) $query->where('state', (string) $request->string('state'));
         $perPage = min(100, max(1, (int) $request->input('per_page', 25)));
-        return response()->json(['data' => $query->paginate($perPage)]);
+        $page = $query->paginate($perPage);
+        $page->through(static function (ForwardCollectionWork $work): array {
+            $data = $work->toArray();
+            $data['session_date'] = $work->session_date?->toDateString();
+
+            return $data;
+        });
+
+        return response()->json(['data' => $page]);
     }
 
     public function dispatch(ForwardDataPlanner $planner): JsonResponse
