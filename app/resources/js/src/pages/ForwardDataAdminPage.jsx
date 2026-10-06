@@ -37,7 +37,7 @@ export default function ForwardDataAdminPage() {
     return (
         <div className="container-fluid py-3">
             <div className="d-flex justify-content-between align-items-center mb-3">
-                <div><h1 className="h5 mb-1">Forward data collection</h1><p className="text-muted small mb-0">Freshness and validated coverage for DATA-003. Minute corpus and live microstructure remain separate owner datasets.</p></div>
+                <div><h1 className="h5 mb-1">Forward data collection</h1><p className="text-muted small mb-0">Freshness and validated coverage for DATA-003.</p></div>
                 <Link to="/settings/admin-alerts" className="btn btn-sm btn-outline-secondary">Admin alerts</Link>
             </div>
             <div className="d-flex gap-2 mb-3 flex-wrap">

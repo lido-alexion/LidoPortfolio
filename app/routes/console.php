@@ -10,7 +10,6 @@ use App\Services\Broker\KiteReadinessReminderService;
 use App\Services\Fundamentals\FundamentalBootstrapService;
 use App\Services\Fundamentals\FundamentalUpdateService;
 use App\Services\HistoryDepthBackfillService;
-use App\Services\Microstructure\MicrostructureCollectorKiteAuthReminderService;
 use App\Services\ML\MlLifecycleAutomationService;
 use App\Services\Notification\NotificationReminderService;
 use App\Services\NotificationScheduleService;
@@ -143,17 +142,6 @@ Artisan::command('portfolio:ml-lifecycle-tick', function () {
 
     return 0;
 })->purpose('FEAT-056: evaluate ML retrain schedules and queue background retrains');
-
-Artisan::command('portfolio:send-microstructure-kite-auth-reminders', function () {
-    $result = app(MicrostructureCollectorKiteAuthReminderService::class)->sendDue();
-    if ($result['sent']) {
-        $this->info('Microstructure Kite auth reminder sent.');
-    } else {
-        $this->info('Microstructure Kite auth reminder skipped: '.($result['reason'] ?? 'unknown'));
-    }
-
-    return 0;
-})->purpose('Telegram reminders when the microstructure collector Kite session is missing');
 
 Artisan::command('portfolio:queue-notification-reminders', function () {
     $result = app(NotificationReminderService::class)->queueDue();
@@ -468,11 +456,6 @@ Schedule::command('portfolio:send-kite-readiness-reminders')
     ->everyMinute()
     ->timezone($timezone)
     ->name('kite-readiness-reminders');
-
-Schedule::command('portfolio:send-microstructure-kite-auth-reminders')
-    ->everyMinute()
-    ->timezone('Asia/Kolkata')
-    ->name('microstructure-kite-auth-reminders');
 
 Schedule::command('portfolio:ml-lifecycle-tick')
     ->everyMinute()

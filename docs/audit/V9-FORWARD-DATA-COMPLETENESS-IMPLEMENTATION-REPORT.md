@@ -1,3 +1,5 @@
+> **Historical audit record (baseline 2026-10-01).** FEAT-063, FEAT-065, and V9-DATA-002 were retired from the active repository on 2026-10-06. References below describe the implementation and ownership state at the time of this audit; they are not active contracts or readiness requirements.
+
 # StoX forward-data completeness — implementation report
 
 **Audit baseline:** 2026-10-01

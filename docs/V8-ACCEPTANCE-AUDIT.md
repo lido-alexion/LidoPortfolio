@@ -1,8 +1,10 @@
-# StoX V8 acceptance audit (living)
+**Retirement update (2026-10-06): FEAT-063, FEAT-065 and V9-DATA-002 are retired from the active repository. The dated evidence and checks below are historical records and do not indicate current operation or acceptance work.**
+
+# StoX V8 acceptance audit (historical snapshot; updated 2026-10-06)
 
 Authoritative specs: `docs/archive/specs/LidoPortfolio-V8-Wishlist.md`. Implementation ledger: `docs/V8-IMPLEMENTATION-LEDGER.md`. Requirement-level gaps: [V8-GAP-AUDIT.md](V8-GAP-AUDIT.md).
 
-Status key: **COMPLETE** | **REVIEW** | **IN PROGRESS** | **NOT STARTED** | **N/A**
+Status key: **COMPLETE** | **REVIEW** | **IN PROGRESS** | **NOT STARTED** | **N/A** | **RETIRED**
 
 | Epic | Status | Evidence |
 |------|--------|----------|
@@ -13,9 +15,9 @@ Status key: **COMPLETE** | **REVIEW** | **IN PROGRESS** | **NOT STARTED** | **N/
 | FEAT-057 ML feature engineering / training | REVIEW | Registry `v8-registry-11`, 50/50 implemented features; calibration, chronological validation, durable candidate archive, bounded same-architecture 1m/3m/6m training, partition coverage and artifact reload/contribution evidence; production/browser acceptance remains external |
 | FEAT-061 Guided tour | REVIEW | §FEAT-061 checklist, `GuidedTourTest.php`, persisted resume, full configured-route traversal and desktop/mobile/tablet browser journeys are locally verified; live refresh/session interruption, screen-reader and broader-device acceptance remain |
 | FEAT-062 Fundamental signals & AI | REVIEW | Deterministic signal catalogue, PIT comparisons, provider-neutral orchestrator, insights page, admin preferences, invocation audit, daily limits and provider test; browser/mobile and real-provider validation remain |
-| FEAT-063 Live microstructure | REVIEW | Production VPS collector and paid Kite FULL-mode stream validated with 499 instruments; 2026-09-29 finalization marker records 15,213 rows, primary and same-VPS backup-copy partitions match recursively, and raw spool is empty after cleanup. Independent secondary-storage durability, deployed Admin controls, persistent hold, restart/reconnect and retry acceptance remain open; journal recorded a WebSocket 1006 close at 15:30 IST. |
+| FEAT-063 Live microstructure | RETIRED (2026-10-06) | Historical production evidence is retained below; collector implementation and deployment support have been removed from the active repository. |
 | FEAT-064 Screener/Strategy UX | REVIEW | Runtime create/import/shared copy; WP-09/10; `Feat064MandatoryAuditAcceptanceTest`; provenance `definition_json`; Playwright screener and incomplete-Strategy `Setup Required` journey; live membership drift/runtime acceptance remains external |
-| FEAT-065 Intraday ML historical platform | REVIEW | Kite client, Parquet store, DuckDB/Polars builders, instrument map, checkpoints and retryable backfill; live POC/full NIFTY 500 corpus remains external |
+| FEAT-065 Intraday ML historical platform | RETIRED (2026-10-06) | Historical evidence below is retained; exclusive implementation, active specification and acceptance plan have been removed. Persisted schemas/data remain untouched. |
 
 ## Test gate
 
@@ -109,7 +111,7 @@ Latest recorded: **1,346 passed / 1,347 total** Feature tests under `tests/Featu
 
 FEAT-063 production checks confirmed the VPS collector was enabled and active; paid Kite Connect delivered real FULL-mode ticks for 499 mapped instruments; and minute Parquet output was produced. Post-market finalization recorded 15,213 rows in identical primary and backup `_FINALIZED.json` markers. Recursive comparison of the day partitions found no differences, and the raw-tick spool contained no files after finalization. The backup directory is under the same VPS shared-storage tree, so this proves a consistent local copy, not an independent secondary backup. The journal recorded a WebSocket close code `1006` at 15:30 IST; finalization completed despite that close.
 
-FEAT-063 remains **REVIEW**. Independent secondary-storage backup, deployed Admin controls, persistent manual hold, restart/reconnect/resubscription, retry flows, and normal market-close handling of the WebSocket close still need acceptance evidence.
+At the time of this historical observation, FEAT-063 remained **REVIEW**; its then-open acceptance items are recorded here as past context, not current work after retirement.
 
 
 ## 2026-10-01 closure continuation checkpoint (historical; see 2026-10-02 reconciliation below)
@@ -119,7 +121,7 @@ Deployed build `ef66133c05cb84d9760f95026ffe6d08fcc44cde` (run `36899469783`), d
 - FEAT-054: production runs #1–2 completed three representative stocks with 530 Yahoo facts, no rejected rows. Official NSE/BSE feeds are disabled/unconfigured. Active-equity universe is 5,140 while only 19 stocks had facts before the slice. A targeted unknown symbol could accidentally expand to the entire universe; a guarded fix and focused tests are on branch `audit/v8-closure-20261001`, pending CI and a safely sequenced deployment.
 - FEAT-057: preview run #1 was 332/360, zero failed and zero boundaries at 18:31:37 UTC; existing worker and continuation own the NSE lane. No duplicate preview/apply, worker, training, deployment or service restart was initiated in this checkpoint.
 - FEAT-052/055: configuration and service presence verified only; end-to-end provider/runtime results remain open. FEAT-062 real-provider test is blocked by disabled AI and absent configured keys. FEAT-056 qualification is blocked while its production campaign remains blocked; lifecycle remains disabled.
-- FEAT-061/064 deployed authenticated UX paths, FEAT-063 independent backup/recovery, and FEAT-065 research-machine Kite corpus remain open. The Mac research device was offline.
+- At that reconciliation point, FEAT-061/064 deployed authenticated UX paths, FEAT-063 independent backup/recovery, and FEAT-065 research-machine Kite corpus remained open. The Mac research device was offline.
 
 Release and production acceptance gates remain unsatisfied. After the NSE preview/apply stabilizes, reconcile the deployed SHA with master, pass CI and deploy without interrupting a worker, then rerun release gates and update each criterion from actual evidence.
 
@@ -129,7 +131,7 @@ Release and production acceptance gates remain unsatisfied. After the NSE previe
 - **Resolved:** FEAT-054 targeted unknown-symbol scope defect. PR #23 passed all three CI jobs in run `36925637515`, merged as `920eb6a`, and is included in live build `ac6602ae2db35b52b68a7183c50f987a1b4d615f` (`build-332-attempt-1-ac6602ae2db3`; successful deployment run `36963314151`). The 2026-10-01 branch-pending and not-deployed wording above is historical. A subsequent deployed unknown-symbol dry-run exited 1 with no new run or job; the per-epic audit records the bounded probe.
 - **FEAT-054 remains REVIEW:** only two bounded production runs/three jobs were observed, covering TCS, SBIN and LAURUSLABS with 530 Yahoo facts. Official NSE/BSE adapters are still disabled and feed URLs unset. Official precedence and full-universe quality/coverage have not passed.
 - **FEAT-057 remains FAILED at apply:** its 360-date preview completed with zero failed dates and minimum 94.2266% mapping, but the first apply date failed the sealed membership hash comparison and the run was cancelled with zero processed dates/boundaries. Read-only production inspection on 2026-10-02 found no replacement run, one unreserved `ml-acceptance` queue job, and the dedicated worker inactive. Reconcile that job and diagnose mapping determinism with the NSE operator before a fresh preview; do not train from this failed apply.
-- **Other gates remain REVIEW:** production telemetry propagation, real access-request provider/mail/concurrency, deployed lifecycle qualification, full guided-tour and accessibility, real AI-provider validation, independent FEAT-063 backup/restore and controls, FEAT-064 live provenance, and FEAT-065 real Kite minute corpus. No epic is promoted to COMPLETE or N/A by this reconciliation.
+- **Other gates remain REVIEW:** production telemetry propagation, real access-request provider/mail/concurrency, deployed lifecycle qualification, full guided-tour and accessibility, real AI-provider validation, historical FEAT-063 backup/restore and controls evidence, FEAT-064 live provenance, and FEAT-065 real Kite minute corpus. No epic is promoted to COMPLETE or N/A by this reconciliation.
 
 The CI and production deployment gates for the FEAT-054 guard are now satisfied. **Overall V8 release acceptance remains open** until every active epic has production-backed COMPLETE or justified N/A evidence.
 

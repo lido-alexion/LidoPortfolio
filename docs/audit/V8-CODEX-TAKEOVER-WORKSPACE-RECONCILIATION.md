@@ -1,3 +1,5 @@
+> **Historical audit record.** FEAT-063 references describe the prior repository state; FEAT-063 was permanently retired from the active repository on 2026-10-06.
+
 # StoX V8 Codex Takeover Reconciliation
 
 Date: 2026-09-28

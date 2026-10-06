@@ -26,16 +26,16 @@ This epic is the collection/recovery contract and shared operational visibility 
 | Financial statements/facts | FEAT-054 ingestion; OPS-001 Admin backfill operations | Fair incremental polling, last-check tracking, freshness and backlog |
 | Company sector classifications | Existing stock/ML classification services | Sourced effective-dated population and PIT-safe consumption |
 | Corporate-action events | Existing data-quality/event approval and repair services | Working provider integration, event deduplication, late-event recovery and freshness |
-| Historical 1-minute OHLCV | FEAT-065 + V9-DATA-002 | Observe collection/coverage and link to owner operations; do not add another collector |
-| Prospective microstructure | FEAT-063 | Verify operational session coverage and alert; reuse owner recovery controls |
+| Historical 1-minute OHLCV | Retired FEAT-065 / V9-DATA-002 boundary | No active collection, transfer, or owner-health integration is part of DATA-003. Persisted schemas and data remain untouched. |
+| Prospective live microstructure | Retired FEAT-063 scope | No collector, recovery control, or operational coverage obligation remains in this repository. Historical gaps are not reconstructed from OHLCV. |
 
-Production daily 1m/3m/6m readiness and minute-corpus research readiness are distinct profiles. Minute/microstructure deficits do not block the daily profile unless the authoritative feature registry explicitly consumes them. The fixed current-NIFTY-500 research universe never replaces the production `active_eligible_nse` evidence universe. Index-price collection is not company-sector population.
+Production daily 1m/3m/6m readiness is separate from the retired minute-corpus boundary. The fixed current-NIFTY-500 research universe never replaces the production `active_eligible_nse` evidence universe. Index-price collection is not company-sector population. FEAT-063, FEAT-065 and V9-DATA-002 were retired from this repository on 2026-10-06; DATA-003 does not operate or report their owner health.
 
 Out of scope: model training, feature-definition changes, auto-promotion, lifecycle/drift enablement, broker trades, historical constituent reconstruction for FEAT-065, Windows protocol changes and a second generic notification platform.
 
 ## 3. Architecture
 
-Use Laravel for scheduling, durable work inventory, domain writes, authorization and Admin APIs. Existing Python minute/live collectors remain with their owners and report sanitized coverage through existing control planes. No LLM or new MCP subsystem is required.
+Use Laravel for scheduling, durable work inventory, domain writes, authorization and Admin APIs. No LLM or new MCP subsystem is required.
 
 Suggested components (names may adapt to repository conventions):
 
@@ -77,7 +77,6 @@ Recommended configurable defaults:
 | Fundamentals due-stock dispatch | Hourly, batch 20 initially, continuously through bounded work |
 | Successful fundamentals/sector provider checks | Due again after 7 days; provider constraints may require slower documented cadence |
 | Corporate-action polling | Daily after close plus bounded overlapping recent-event queries |
-| Minute/live collection | Owner schedules; DATA-002 default incremental 18:00 IST; FEAT-063 market-session lifecycle |
 
 Keep existing owner schedules when valid; do not introduce competing writers. Default publication grace is until the next trading session's 12:00 IST; configure provider-specific overrides and expose them. During grace show waiting, not ready. Retry transient failures with bounded backoff and jitter; honor Retry-After. Exhaustion after a configurable default eight attempts raises an incident; subsequent daily sweeps or Admin retry can reopen an obligation without deleting history. Configuration/authentication failures avoid hot retries.
 
@@ -123,13 +122,12 @@ Persist/reuse event identity, stock identity, action type, announcement/availabi
 
 Collection is automatic; portfolio/accounting or price-history corrections remain subject to existing approval/repair rules. Do not adjust investor holdings, rewrite accepted prices or auto-approve an action merely because an event was downloaded. Track unresolved mappings/reviews separately from fetch health. Distinguish a validated zero-event interval from an unconfigured/unreachable feed.
 
-## 10. Prices, minute corpus and live collection
+## 10. Prices and historical minute corpus
 
 Reproduce and repair existing daily gap-fill failures using owner provider fallback, calendar and adjusted/unadjusted price contracts. Measure coverage from persisted rows across expected instruments/sessions. A successful batch with omitted stocks is incomplete. Corporate-action adjustments remain owner-governed; no new pricing formula.
 
-For DATA-002, surface last complete session, failed windows, staged/acknowledged status and quota/backpressure from its owner. Collection and delivery are distinct: a disconnected Windows receiver does not erase acquired-data evidence. Preserve immutable READY batches and minute-corpus fixed-universe metadata.
 
-For FEAT-063, inspect subscriptions, session state, auth, socket timeouts, finalized partition rows, expected instruments/minutes and finalization evidence. Service `active` is insufficient. Warn on zero rows during an expected open session after a configurable 15-minute grace and on missing/poor finalized sessions under FEAT-063 quality rules. Holidays/closed sessions must not cause false alerts. Never manufacture missed order-book observations from historical OHLCV; irreversible missing days stay visible.
+FEAT-063 live collection is retired. DATA-003 does not operate a live microstructure collector or issue live-session collection alerts. Historical missed live observations cannot be synthesized from OHLCV; this retirement does not alter the historical minute-corpus contract.
 
 ## 11. Coverage, freshness and readiness
 
@@ -145,7 +143,7 @@ Derived ML features and matured labels are computed from validated source inputs
 
 Add an Admin Data Collection health page (or coherent section of existing data operations) with dataset cards, profile summary and paginated backlog/run detail. Reuse existing navigation/design patterns. Filters: dataset, state, date range and reason. Controls: Run due checks now, retry selected failures, inspect evidence, pause dispatch and resume. Pause preserves backlog and inflight safety; resume plans missed sessions. Configuration changes affect future work with audited versions.
 
-Link to OPS-001 fundamentals operations, UX-004 acceptance wizard, DATA-002 corpus operations and FEAT-063 controls. Do not recreate their launch flows. Add a compact collection summary to the acceptance wizard through a read-only shared response without bypassing wizard gates.
+Link to OPS-001 fundamentals operations and UX-004 acceptance wizard. Do not recreate their launch flows. Add a compact collection summary to the acceptance wizard through a read-only shared response without bypassing wizard gates.
 
 Plain-language help (hover/focus tooltips and mobile-accessible info buttons):
 
@@ -155,13 +153,12 @@ Plain-language help (hover/focus tooltips and mobile-accessible info buttons):
 - Waiting for publication: "The source has not published a validated file yet. StoX will retry."
 - Membership evidence: "A dated official file proving the eligible NSE securities for that session."
 - Point-in-time: "Use only information that was available on the date being analysed."
-- Microstructure gap: "Missed live order-book observations may be impossible to recreate later."
 
 Admin-only controls use existing authorization and audited actor identity. Suggested read endpoints: dataset health list, dataset detail, paginated work list. Suggested mutations: bounded dispatch/retry/pause/resume through existing route/version conventions. Final paths must be added to OpenAPI and regenerated docs during implementation. HTTP returns durable run/work IDs; UI polls boundedly and safely resumes after refresh.
 
 ## 13. Alerts and operational settings
 
-Persist incident state keyed by dataset/scope/reason. Notify Admins on required dataset missing beyond publication grace, configuration/auth failure, exhausted work, materially overdue stock-check sweep, zero-row live session or coverage regression. Aggregate bursts and send recovery notification when the same incident clears. Reuse COMM-001; use existing notification primitives during its staged implementation and integrate rather than create another mail stack. Reuse OPS-002 for genuine unexpected API failures and FEAT-052 telemetry where available; expected publication delays do not become code-bug reports.
+Persist incident state keyed by dataset/scope/reason. Notify Admins on required dataset missing beyond publication grace, configuration/auth failure, exhausted work, materially overdue stock-check sweep or coverage regression. Aggregate bursts and send recovery notification when the same incident clears. Reuse COMM-001; use existing notification primitives during its staged implementation and integrate rather than create another mail stack. Reuse OPS-002 for genuine unexpected API failures and FEAT-052 telemetry where available; expected publication delays do not become code-bug reports.
 
 Persist health/incidents even if external notification delivery fails. No secrets, raw provider bodies or account-private data in logs/alerts. Configurable settings include enabled state, forward start, timezone/calendar, publication grace, rate/concurrency caps, retry policy, stock-check age, repair share and alert delay. Avoid duplicate env names when an existing setting provides the same behavior.
 
@@ -171,7 +168,7 @@ Persist health/incidents even if external notification delivery fails. No secret
 2. Add missing bookkeeping/migrations and regression tests for starvation/freshness; preserve immutable facts.
 3. Implement planner/dispatcher and official membership forward adapter with shared locks and governed writes.
 4. Verify sector/corporate-action source integrations and price repair; show unavailable integrations explicitly until operational.
-5. Integrate minute/live owner health, coverage reconciliation, profile status, Admin UI and notifications.
+5. Preserve DATA-003's daily dataset freshness and recovery behavior without a dependency on retired minute-corpus or live-microstructure owner surfaces.
 6. Deploy through repository CI/CD. Enable collection after source/config/runtime checks, seed the recovery floor and reconcile gaps without restarting the separate historical campaign.
 7. Record live evidence for completed sessions plus an outage/late-publication recovery scenario. Fixture-only success cannot close runtime acceptance.
 
@@ -216,14 +213,13 @@ reveals the latest automatic observation without rewriting historical membership
 | FDC-08 | Sector/industry observations use the approved free-source taxonomy and retain source/hash/observation evidence; Admin fallback validates relationships, audits revisions and never backfills historical membership; no future or current-only classification leaks backward |
 | FDC-09 | Corporate-action feed works end to end, captures late/corrected events and deduplicates without automatic accounting repair |
 | FDC-10 | Daily equity/index coverage reconciles persisted expected sessions; known gap failures have reproduced cause and verified recovery |
-| FDC-11 | Minute/live health reports evidence, detects zero rows and distinguishes delivery backlog from collection loss |
 | FDC-12 | Required unknown/unconfigured/incomplete data remains blocked/degraded even when jobs exit successfully |
 | FDC-13 | Admin authorization, pagination, retry idempotency, pause/resume, refresh recovery and accessible help pass tests |
 | FDC-14 | Incident aggregation, publication grace, recovery notifications and notification transport failure are tested |
 | FDC-15 | No training/promotion/lifecycle/drift or investor portfolio mutations are introduced |
 | FDC-16 | Production evidence includes source IDs/hashes, session/scope counts, provider check progression, recovery and exact deployed SHA |
 
-Use deterministic clocks and provider fixtures for edge cases; use the canonical MySQL verifier for backend changes, frontend/browser verifier for UI and migration/OpenAPI checks where affected. Record coverage denominators and legitimate unavailable data; do not demand fabricated 100% provider availability. An implemented collector with a missing provider configuration is not operationally accepted. Update current market-data documentation and the implementation evidence ledger when behavior actually ships.
+Use deterministic clocks and provider fixtures for edge cases; use the canonical MySQL verifier for backend changes, frontend/browser verifier for UI and migration/OpenAPI checks where affected. Record coverage denominators and legitimate unavailable data; do not demand fabricated 100% provider availability. Configured data acquisition must produce validated persisted evidence before it counts as operationally accepted. Update current market-data documentation and the implementation evidence ledger when behavior actually ships.
 
 ## 16. Frozen product defaults
 
@@ -232,6 +228,6 @@ Use deterministic clocks and provider fixtures for edge cases; use the canonical
 - Production eligible-NSE evidence and fixed NIFTY-500 research corpus remain separate.
 - Existing owner services/tables/providers/notifications are reused; unavailable sources remain explicit blockers.
 - Current-only sector information is useful now but cannot silently fill past classifications.
-- Daily ML readiness and optional minute/live research health are separate.
+- Daily ML readiness remains scoped to active daily-data sources.
 - Admin sees freshness, validated coverage, backlog and actionable reasons in plain language.
 - Collection is independent of training, model promotion and lifecycle/drift activation.

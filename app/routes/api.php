@@ -13,9 +13,6 @@ use App\Http\Controllers\Api\AnalysisEvidenceController;
 use App\Http\Controllers\Api\AnalysisPreferenceController;
 use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\AccessRequestAdminController;
-use App\Http\Controllers\Api\MicrostructureCollectorAdminController;
-use App\Http\Controllers\Api\MicrostructureCollectorInternalController;
-use App\Http\Controllers\Api\MicrostructureKiteConnectController;
 use App\Http\Controllers\Api\AccessRequestPublicController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BuildInfoController;
@@ -141,28 +138,10 @@ Route::get('/auth/csrf-token', [AuthController::class, 'csrfToken']);
 Route::get('/build-info', [BuildInfoController::class, 'show']);
 Route::post('/help-feedback', [HelpFeedbackController::class, 'store'])
     ->middleware('auth:sanctum')->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class);
-Route::middleware('auth:sanctum')->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class)
-    ->prefix('microstructure-kite')->group(function () {
-        Route::get('/status', [MicrostructureKiteConnectController::class, 'status']);
-        Route::get('/login-url', [MicrostructureKiteConnectController::class, 'loginUrl'])->middleware('throttle:10,1');
-    });
 Route::post('/telemetry/otlp/v1/traces', [\App\Http\Controllers\Api\LidoTelemetryController::class, 'relayTraces'])
     ->middleware('throttle:telemetry-relay');
 
-Route::prefix('internal/microstructure-collector')
-    ->middleware('microstructure.collector.internal')
-    ->group(function () {
-        Route::get('/bootstrap', [MicrostructureCollectorInternalController::class, 'bootstrap']);
-    });
 
-Route::prefix('internal/intraday-backfill')
-    ->middleware('intraday.backfill.internal')
-    ->group(function () {
-        Route::get('/plan', [\App\Http\Controllers\Api\IntradayBackfillInternalController::class, 'plan']);
-        Route::get('/checkpoints', [\App\Http\Controllers\Api\IntradayBackfillInternalController::class, 'listCheckpoints']);
-        Route::post('/checkpoints', [\App\Http\Controllers\Api\IntradayBackfillInternalController::class, 'upsertCheckpoint']);
-        Route::get('/control', [\App\Http\Controllers\Api\IntradayBackfillInternalController::class, 'control']);
-    });
 
 // Private runtime projection/audit boundary.  This is deliberately not exposed
 // through Sanctum or a browser route; the Python runtime has no database access.
@@ -531,8 +510,6 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         Route::get('/access-request-bans', [AccessRequestAdminController::class, 'bans']);
         Route::post('/access-request-bans/{ban}/clear', [AccessRequestAdminController::class, 'clearBan']);
 
-        Route::get('/microstructure-collector/status', [MicrostructureCollectorAdminController::class, 'status']);
-        Route::post('/microstructure-collector/command', [MicrostructureCollectorAdminController::class, 'command']);
         Route::prefix('/forward-data')->group(function () {
             Route::get('/health', [\App\Http\Controllers\Api\ForwardDataAdminController::class, 'health']);
             Route::get('/work', [\App\Http\Controllers\Api\ForwardDataAdminController::class, 'work']);
@@ -633,9 +610,6 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
         Route::get('/admin/fundamentals/bootstrap', [FundamentalDataController::class, 'bootstrapStatus']);
         Route::post('/admin/fundamentals/ai-insights/test', [FundamentalDataController::class, 'testAiInsights']);
         Route::get('/admin/fundamentals/metric-catalog', [FundamentalDataController::class, 'metricCatalog']);
-        Route::get('/admin/intraday-platform', [\App\Http\Controllers\Api\V1\IntradayPlatformAdminController::class, 'status']);
-        Route::post('/admin/intraday-platform/pause', [\App\Http\Controllers\Api\V1\IntradayPlatformAdminController::class, 'pause']);
-        Route::post('/admin/intraday-platform/resume', [\App\Http\Controllers\Api\V1\IntradayPlatformAdminController::class, 'resume']);
         Route::prefix('/admin/ml/acceptance')->middleware(['throttle:60,1', \App\Http\Middleware\MlAcceptanceRequestLimit::class])->group(function () {
             $controller = \App\Http\Controllers\Api\V1\MlAcceptanceController::class;
             Route::get('/', [$controller, 'report']);

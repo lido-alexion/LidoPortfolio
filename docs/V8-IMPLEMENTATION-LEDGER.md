@@ -1,3 +1,5 @@
+**Retirement update (2026-10-06): FEAT-063, FEAT-065 and V9-DATA-002 are retired from active scope. Historical entries later in this ledger retain dated implementation evidence only.**
+
 # StoX V8 implementation ledger
 
 Authoritative specs: `docs/archive/specs/LidoPortfolio-V8-Wishlist.md` and linked `V8-*-Specification.md` files.
@@ -12,17 +14,14 @@ FEAT-056  [REVIEW] ML lifecycle automation (queued runs, persistent per-horizon 
 FEAT-057  [IMPLEMENTED] ML feature engineering / training (versioned horizon-resolved registry, PIT context refusal of current-universe fallback, authoritative dated provider adapter with resumable backfill, horizon-derived purge/embargo, training-only missing-value/outlier preprocessing, paired active/baseline evidence, pinned explainability, durable archive integrity, per-partition feature coverage and bounded same-architecture 1m/3m/6m training evidence verified locally; production apply/preflight, 1m/3m/6m evidence, deployed active-model comparison where applicable and investor-facing acceptance remain open)
 FEAT-061  [REVIEW] Guided tour / onboarding (formal audit complete; missing-target regression, keyed i18n, viewport-safe placement, desktop/mobile/tablet welcome-to-tour journeys, persisted-step resume, in-progress browser-refresh recovery, scrim interception, full configured-route traversal, labelled modal descriptions, welcome/resume/step focus containment, Escape handling and manual-launch focus return covered; production session interruption and screen-reader/device acceptance remain open)
 FEAT-062  [REVIEW] Fundamental signals & AI insights (complete deterministic catalogue matrix with PIT comparison evidence, provider-neutral orchestration, bounded investor-safe validation, follow-up guidance, local desktop/mobile degradation coverage and full axe accessibility coverage; screen-reader/device and real-provider acceptance remain)
-FEAT-063  [REVIEW] Live microstructure collection (paid Kite FULL-mode stream for 499 instruments and 2026-09-29 positive-row finalization previously validated; quick-connect/reminder/alert/expiry/zero-row integrity changes merged as PR #56 and deployed in `6a843cd` on 2026-10-04 with green CI and deployment health; next trading-day collector login, live packets/rows and reminder/alert acceptance, independent backup/restore, deployed controls/recovery and 15:30 WebSocket 1006 review remain open)
 FEAT-064  [REVIEW] Screener / Strategy UX (semantic versions, exact pinned runtime execution, immutable activation/dependency semantics, immutable save, readiness, no obsolete last-active restriction, provenance audit, WP-09 return flow and legacy fixture reconciliation; live membership-drift/runtime acceptance remains)
-FEAT-065  [REVIEW] Intraday ML historical data platform (schema/checkpoints/admin status, deterministic bounded work-unit planning, durable checkpoint consumption, restart-safe resume, persistent Admin pause/resume, explicit current-universe and selected-index orchestration, idempotent Parquet corpus, bounded retry/failed-window reporting, DuckDB/Polars access and coverage reporting; live Kite POC/full corpus and handoff acceptance remain external)
+FEAT-065  [RETIRED 2026-10-06] Intraday ML historical data platform (historical implementation evidence only; exclusive implementation and acceptance paths removed)
 ```
 
 ## Dependency order (implementation)
 
-1. FEAT-063 (prospective data; parallel with 055/061/052)
 2. FEAT-055, FEAT-061, FEAT-052, FEAT-064 (largely independent)
 3. FEAT-054 → FEAT-062, FEAT-057 (fundamentals)
-4. FEAT-065 → FEAT-057 (intraday corpus)
 5. FEAT-057 → FEAT-056 (training evidence → lifecycle)
 
 ## FEAT-055 matrix (partial — updated as work lands)
@@ -35,27 +34,6 @@ FEAT-065  [REVIEW] Intraday ML historical data platform (schema/checkpoints/admi
 | Request bans + clear | done | same |
 | Ignore cooldown | done | `test_ignore_establishes_cooldown` |
 | Prior history + audit | done | `AccessRequestWorkflowTest::test_verified_request_flow_and_admin_create` |
-
-## FEAT-063 matrix (partial)
-
-| Area | Status | Tests |
-|------|--------|-------|
-| Admin status API | done | `MicrostructureCollectorAdminTest.php` |
-| Internal bootstrap API | done | `MicrostructureCollectorInternalApiTest.php` |
-| Manual hold + commands | done | same |
-| Kite login auto-start signal | done | same |
-| Minute aggregation + Parquet (real pyarrow validation) | done locally | `shared/microstructure/tests/test_minute_aggregator.py`, `test_parquet_store.py`, `test_collector_finalization.py` |
-| Live KiteTicker WebSocket | wired (`kite_ticker_bridge.py`) | manual VPS + kiteconnect |
-| Finalization + partition backup | done locally (durable bounded retry, active-minute drain, corruption validation, atomic manifest/staged backup, spool pruning) | `test_finalization_state.py`, `test_collector_finalization.py`, `MicrostructureCollectorHealthAlertTest.php` |
-| Reconnect + full-mode resubscription | done locally (bridge recovery and reconnect quality) | `test_kite_ticker_bridge.py`, `test_minute_aggregator.py` |
-| No-trade/outage/reconnect quality rows | done | `test_minute_aggregator.py` |
-| Operational alerts | done locally (stale heartbeat / error / disk / finalization / backup / low coverage; provider failures surface as actionable errors) | `MicrostructureCollectorHealthAlertTest.php` |
-| Universe refresh audit | done locally (bounded additions/removals/mapping/conflict history and rejected partial refresh preservation) | `universe_audit.py`, `test_universe_audit.py` |
-| VPS venv/systemd/runtime gate | deployed; restart/recovery acceptance pending | Dedicated environment and active service observed on 2026-09-29; `deploy/systemd/stoxla-microstructure-collector.service` |
-| Telegram auth reminders and packet gap alert | deployed; live trading-day delivery pending | `MicrostructureCollectorKiteAuthReminderTest.php`; PR #56 / deploy `6a843cd` |
-| Lightweight collector-user `/kite-connect` and dashboard status | deployed; authenticated browser and second-user acceptance pending | `MicrostructureKiteConnectTest.php`, JS status test; PR #56 |
-| Corrected new-session 06:00 IST expiry and zero-row failure | deployed; next-session/day acceptance pending | `KiteCallbackTest.php`, `test_collector_finalization.py`; PR #56 |
-| Independent secondary backup and restore | pending | Existing matched copy shares primary VPS failure domain |
 
 ## FEAT-061 matrix (partial)
 
@@ -101,7 +79,7 @@ FEAT-065  [REVIEW] Intraday ML historical data platform (schema/checkpoints/admi
 
 ## Takeover reconciliation
 
-See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-FEAT-063-ACCEPTANCE-AUDIT.md`, `docs/audit/V8-FEAT-055-ACCEPTANCE-AUDIT.md`, and `docs/audit/V8-FEAT-061-ACCEPTANCE-AUDIT.md` for evidence and remaining external validation. This ledger is verified against the current workspace as of 2026-09-29; it is not a claim that any epic is production complete.
+See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-FEAT-055-ACCEPTANCE-AUDIT.md`, and `docs/audit/V8-FEAT-061-ACCEPTANCE-AUDIT.md` for evidence and remaining external validation. The separate FEAT-063 audit is retained as a historical record. This ledger's dated entries are not claims that any epic is production complete.
 
 ## Verified continuation checkpoint (2026-09-29)
 
@@ -146,8 +124,8 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 1. FEAT-056: perform deployed worker/runtime validation for the committed lifecycle implementation; no separate lifecycle WIP is currently pending ownership reconciliation.
 2. FEAT-057: complete authoritative-provider/runtime coverage evidence, active-model paired runtime evidence where an active model exists, artifact prediction reload and investor-facing explainability acceptance.
 3. FEAT-062: perform browser/mobile and real-provider acceptance; deterministic catalogue/PIT implementation is complete locally.
-4. FEAT-065 / FEAT-052: close current-universe orchestration and telemetry/collector deployment evidence without conflating FEAT-065 with FEAT-063 backup.
-5. FEAT-063 / FEAT-054 / FEAT-055 / FEAT-061: perform only the remaining external browser/provider/VPS validations.
+4. FEAT-052: close remaining telemetry deployment evidence.
+5. FEAT-054 / FEAT-055 / FEAT-061: perform only the remaining external browser/provider/VPS validations.
 
 ## Failing tests
 
@@ -158,4 +136,3 @@ The broad direct PHPUnit Feature run with `php -d memory_limit=512M vendor/bin/p
 ## MlScoringService ownership reconciliation
 
 The inherited `MlScoringService` lifecycle work was inspected and separated from FEAT-057 ownership. Queueing, cancellation, retries, lifecycle notifications, challenger registration, promotion review, drift dashboard, and investor insight orchestration are FEAT-056-owned and are now represented by focused committed slices (`2900e50`, `73307cb`, `bd4148b`); no separate uncommitted `MlScoringService` diff remains in the current checkout. FEAT-057 profile pinning used by training/artifacts is independently committed and tested.
-

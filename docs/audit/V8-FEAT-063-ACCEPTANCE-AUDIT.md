@@ -1,10 +1,12 @@
+> **Historical audit record. FEAT-063 was permanently retired from the active repository on 2026-10-06.** The evidence below documents prior implementation/deployment only; it is not a current operation or acceptance checklist.
+
 # V8 FEAT-063 Acceptance Audit
 
 Original audit date: 2026-09-28
 Updated: 2026-10-04
 Status: **REVIEW — live VPS collection, day finalization, and backup validated; remaining deployed operational-control acceptance is open**
 
-This audit maps the frozen FEAT-063 contract to the current repository evidence. It is intentionally conservative: local code/tests do not substitute for live Kite or VPS evidence.
+This audit records evidence against the frozen FEAT-063 contract at the time of review. It is intentionally conservative: local code/tests did not substitute for live Kite or VPS evidence.
 
 ## Requirement matrix
 
@@ -25,7 +27,7 @@ This audit maps the frozen FEAT-063 contract to the current repository evidence.
 | Durable idempotent finalization with bounded retry/backoff | PASS | `FinalizationState`, atomic manifest, active-minute regression, retry tests, manual retry command. |
 | Backup only after validated finalization; retry-safe failure handling | PASS | Finalization gates backup; staged backup replacement preserves canonical data; integration test and Admin retry path exist. Live secondary storage validation pending. |
 | Admin status and bounded controls with server-side Admin authorization | PASS | Laravel controller/control service, Admin UI, authorization tests, controls for start/stop/resubscribe/finalization/backup/universe. |
-| Configured-user daily Kite quick-connect UX | DEPLOYED — live acceptance pending | Lightweight `/kite-connect` Blade page, authenticated configured-user status/login APIs, dashboard live-tick state card, 09:00 Asia/Kolkata Telegram reminder, and deduplicated 09:20 no-WebSocket/no-recent-packet alert; see `docs/current/microstructure-collector-operations.md`. Must verify after next-trading-day login. |
+| Configured-user daily Kite quick-connect UX | DEPLOYED — live acceptance pending at audit date | Lightweight `/kite-connect` Blade page, authenticated configured-user status/login APIs, dashboard live-tick state card, 09:00 Asia/Kolkata Telegram reminder, and deduplicated 09:20 no-WebSocket/no-recent-packet alert; its operations runbook was removed with FEAT-063 on 2026-10-06. |
 | New Kite expiry timestamp UTC persistence | DEPLOYED — live acceptance pending | New session expiry is the UTC instant for 06:00 Asia/Kolkata; existing connection rows are deliberately not rewritten. Focused timezone regression covers before/after 06:00 IST. |
 | Zero-row day finalization | DEPLOYED — live acceptance pending | Zero-row partitions fail finalization and are not backed up as successful; legacy zero-row markers remain unchanged and are flagged for review. |
 | Manual hold survives restart and authentication | PASS | Persisted Laravel state and login signal tests; live service restart proof pending. |
@@ -63,7 +65,7 @@ The production acceptance run confirmed:
 3. Review the 15:30 WebSocket `1006` close in normal market-close behavior and ensure it does not cause repeated post-market reconnect errors.
 4. Continue routine monitoring of storage thresholds and later trading-day collection stability.
 
-FEAT-063 remains **REVIEW**: the live collection and end-of-day data/backup path passed production checks, while the broader deployed operational-control and recovery acceptance is not yet evidenced.
+At the audit date, FEAT-063 was **REVIEW**: the live collection and end-of-day data/backup path passed production checks, while the broader deployed operational-control and recovery acceptance was not evidenced.
 
 ## Local UX and integrity continuation — 2026-10-04
 

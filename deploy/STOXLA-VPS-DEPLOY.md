@@ -591,32 +591,9 @@ During future deployments, restart the worker after code changes:
 sudo systemctl restart stoxla-queue
 ```
 
-### 8.9 Live microstructure collector service
+### 8.9 Retired FEAT-063 collector
 
-FEAT-063 uses the separately provisioned Python runtime and the release's
-current microstructure module. Install the committed
-[`stoxla-microstructure-collector.service`](systemd/stoxla-microstructure-collector.service)
-only after the application release has passed its runtime health gate and the
-collector environment file has been created at
-`/var/www/stoxla/shared/.env.microstructure-collector`:
-
-```bash
-sudo install -o root -g root -m 0644 deploy/systemd/stoxla-microstructure-collector.service /etc/systemd/system/stoxla-microstructure-collector.service
-sudo systemctl daemon-reload
-sudo systemctl enable stoxla-microstructure-collector
-sudo systemctl start stoxla-microstructure-collector
-sudo systemctl status stoxla-microstructure-collector --no-pager
-sudo journalctl -u stoxla-microstructure-collector -n 100 --no-pager
-```
-
-The unit intentionally runs as `nitty:www-data`, uses the persistent
-`shared/python/microstructure` virtualenv, and writes only to the persistent
-microstructure data, backup, heartbeat, command and finalization-state paths.
-The collector must not be started until the Laravel internal bootstrap token,
-Kite credentials/session configuration, writable directories and backup
-destination have been verified. A deliberate Admin Stop creates a persistent
-hold; after a service restart, clear that hold through the Admin control path
-before expecting automatic startup.
+The FEAT-063 live microstructure collector was permanently retired from the repository on 2026-10-06. Its application integration, Python runtime, and service template are no longer part of release provisioning.
 
 The worker must explicitly consume every named production queue. Current StoX
 dispatches use `notifications` and `default`; notification delivery must not be

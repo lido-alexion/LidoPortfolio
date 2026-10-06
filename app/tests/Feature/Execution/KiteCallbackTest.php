@@ -92,27 +92,6 @@ class KiteCallbackTest extends TestCase
         ]))->assertRedirect('https://www.lidoalexion.com/portfolio/?kite=connected');
     }
 
-    public function test_kite_connect_login_state_returns_to_dedicated_page_after_callback(): void
-    {
-        $user = User::factory()->create();
-        $loginUrl = app(BrokerConnectionService::class)->loginUrl($user, 'kite-connect');
-        parse_str((string) parse_url($loginUrl, PHP_URL_QUERY), $loginQuery);
-        parse_str($loginQuery['redirect_params'], $redirectParams);
-
-        Http::fake([
-            'https://api.kite.trade/session/token' => Http::response([
-                'status' => 'success',
-                'data' => ['access_token' => 'connect-page-token', 'user_id' => 'AB1234'],
-            ]),
-        ]);
-
-        $this->get('/api/v1/broker/kite/callback?'.http_build_query([
-            'status' => 'success',
-            'request_token' => 'one-time-request-token',
-            'state' => $redirectParams['state'],
-        ]))->assertRedirect('https://www.lidoalexion.com/portfolio/kite-connect?kite=connected');
-    }
-
     public function test_login_state_rejects_unlisted_return_destinations(): void
     {
         $user = User::factory()->create();
@@ -121,6 +100,11 @@ class KiteCallbackTest extends TestCase
         parse_str($loginQuery['redirect_params'], $redirectParams);
 
         $this->assertSame('account', app(BrokerConnectionService::class)->returnToFromLoginState($redirectParams['state']));
+
+        $retiredPageLoginUrl = app(BrokerConnectionService::class)->loginUrl($user, 'kite-connect');
+        parse_str((string) parse_url($retiredPageLoginUrl, PHP_URL_QUERY), $retiredPageQuery);
+        parse_str($retiredPageQuery['redirect_params'], $retiredPageParams);
+        $this->assertSame('account', app(BrokerConnectionService::class)->returnToFromLoginState($retiredPageParams['state']));
     }
 
     public function test_expired_or_tampered_callback_state_cannot_attach_a_connection(): void

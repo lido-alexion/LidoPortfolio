@@ -1,10 +1,12 @@
+> **Historical planning record only.** FEAT-063, FEAT-065 and V9-DATA-002 were retired from active repository scope on 2026-10-06. References below describe the earlier plan and do not represent current implementation or roadmap status. Current V9-DATA-003 does not operate any of those owners.
+
 # StoX V9 — Final Cross-Spec Audit & Implementation Sequence
 
 | Field | Value |
 |---|---|
 | **Version** | V9 |
 | **Document type** | Final architecture/specification audit and implementation sequencing contract |
-| **Status** | **PO REVIEW — V9-DATA-002 WINDOWS RECEIVER REVISION** |
+| **Status** | **HISTORICAL RECORD — V9-DATA-002 RETIRED 2026-10-06** |
 | **Parent register** | `docs/archive/specs/LidoPortfolio-V9-Wishlist.md` |
 | **Original audit date** | 2026-09-28 |
 | **Latest reconciliation** | 2026-10-01 — Windows receiver, NTFS archive and indefinite delivery catalog recorded for V9-DATA-002 |
