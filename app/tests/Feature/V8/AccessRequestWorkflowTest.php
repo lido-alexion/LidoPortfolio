@@ -143,7 +143,8 @@ class AccessRequestWorkflowTest extends TestCase
 
         $this->assertSame(AccessRequest::VERIFICATION_VERIFIED, $request->fresh()->verification_status);
         $this->assertDatabaseCount('stox_access_request_audit_events', 2);
-        $this->assertNotNull($secondVerification->fresh()->used_at);
+        $this->assertNotNull(AccessRequestVerification::query()->where('token_hash', hash('sha256', $firstToken))->sole()->used_at);
+        $this->assertNull($secondVerification->fresh()->used_at);
     }
 
     public function test_captcha_failure_creates_no_verification(): void
