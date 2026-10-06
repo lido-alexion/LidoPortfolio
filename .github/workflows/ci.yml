@@ -20,6 +20,7 @@ jobs:
     outputs:
       backend: ${{ steps.changed.outputs.backend }}
       frontend: ${{ steps.changed.outputs.frontend }}
+      vps_health: ${{ steps.changed.outputs.vps_health }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
