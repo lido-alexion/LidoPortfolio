@@ -529,5 +529,5 @@ Implementation must preserve these invariants:
 17. Stale values remain visible to investors.
 18. Historical backtests use point-in-time availability/revision semantics rather than today’s live freshness thresholds.
 19. PO-exception fundamental facts are not published as Screeners/Strategy indicators until reliable-source evidence and explicit PO review.
-19. Pre-fetch dedupe minimises unnecessary provider calls.
-20. One-time deep history loading remains separate under V4-FEAT-054.
+20. Pre-fetch dedupe minimises unnecessary provider calls.
+21. One-time deep history loading remains separate under V4-FEAT-054.
