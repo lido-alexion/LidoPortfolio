@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../api';
 import { showToast } from '../toast';
 
@@ -17,6 +17,10 @@ export default function FundamentalDataAdminPage() {
         ai_insights_primary_provider: '',
     });
     const [busy, setBusy] = useState(false);
+    const [uploadForm, setUploadForm] = useState({ stock_symbol: '', exchange: 'NSE', statement_basis: 'consolidated', confirm_company: false });
+    const [uploadFile, setUploadFile] = useState(null);
+    const [uploadBusy, setUploadBusy] = useState(false);
+    const uploadInputRef = useRef(null);
 
     const load = useCallback(async () => {
         const { data } = await api.get('/v1/admin/fundamentals');
@@ -50,6 +54,31 @@ export default function FundamentalDataAdminPage() {
             await load();
         } finally {
             setBusy(false);
+        }
+    };
+
+    const uploadManualWorkbook = async (event) => {
+        event.preventDefault();
+        if (!uploadFile || !uploadForm.confirm_company) return;
+
+        setUploadBusy(true);
+        try {
+            const payload = new FormData();
+            payload.append('stock_symbol', uploadForm.stock_symbol.trim());
+            payload.append('exchange', uploadForm.exchange);
+            payload.append('statement_basis', uploadForm.statement_basis);
+            payload.append('confirm_company', '1');
+            payload.append('file', uploadFile);
+            const { data } = await api.post('/v1/admin/fundamentals/manual-import', payload, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            const result = data?.data?.import;
+            showToast(`Imported ${result?.imported_rows || 0} fundamental records for ${data?.data?.stock?.symbol || uploadForm.stock_symbol}.`, 'success');
+            setUploadFile(null);
+            if (uploadInputRef.current) uploadInputRef.current.value = '';
+            await load();
+        } finally {
+            setUploadBusy(false);
         }
     };
 
@@ -142,6 +171,51 @@ export default function FundamentalDataAdminPage() {
                                 </p>
                             </div>
                             <button className="btn btn-outline-primary mt-3" type="button" onClick={save} disabled={busy}>Save</button>
+                        </div>
+                    </div>
+                    <div className="card mt-3">
+                        <div className="card-header">Manual fundamentals upload</div>
+                        <div className="card-body">
+                            <p className="small text-muted">
+                                Upload the version 2.1 Excel template. Only its <strong>Data Sheet</strong> tab is read.
+                                Supported statement rows are added to the selected stock's fundamental history.
+                            </p>
+                            <form onSubmit={uploadManualWorkbook}>
+                                <label className="form-label" htmlFor="manual-fundamentals-symbol">Stock symbol</label>
+                                <input id="manual-fundamentals-symbol" className="form-control mb-3" maxLength="32" required
+                                    value={uploadForm.stock_symbol}
+                                    onChange={(e) => setUploadForm({ ...uploadForm, stock_symbol: e.target.value.toUpperCase() })}
+                                    disabled={uploadBusy} placeholder="e.g. NH" />
+                                <label className="form-label" htmlFor="manual-fundamentals-exchange">Exchange</label>
+                                <select id="manual-fundamentals-exchange" className="form-select mb-3" value={uploadForm.exchange}
+                                    onChange={(e) => setUploadForm({ ...uploadForm, exchange: e.target.value })} disabled={uploadBusy}>
+                                    <option value="NSE">NSE</option>
+                                    <option value="NSE+">NSE+</option>
+                                    <option value="BSE">BSE</option>
+                                </select>
+                                <label className="form-label" htmlFor="manual-fundamentals-basis">Statement basis</label>
+                                <select id="manual-fundamentals-basis" className="form-select mb-3" value={uploadForm.statement_basis}
+                                    onChange={(e) => setUploadForm({ ...uploadForm, statement_basis: e.target.value })} disabled={uploadBusy}>
+                                    <option value="consolidated">Consolidated</option>
+                                    <option value="standalone">Standalone</option>
+                                </select>
+                                <label className="form-label" htmlFor="manual-fundamentals-file">Excel workbook (.xlsx, up to 5 MB)</label>
+                                <input ref={uploadInputRef} id="manual-fundamentals-file" className="form-control mb-3" type="file"
+                                    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)} disabled={uploadBusy} required />
+                                <div className="form-text mb-3">
+                                    Financial amounts are interpreted as crore rupees and converted to rupees. Share counts are kept as share counts.
+                                    Only explicitly supported rows are imported; gaps remain empty.
+                                </div>
+                                <label className="form-check mb-3">
+                                    <input className="form-check-input" type="checkbox" checked={uploadForm.confirm_company}
+                                        onChange={(e) => setUploadForm({ ...uploadForm, confirm_company: e.target.checked })} disabled={uploadBusy} required />
+                                    <span className="form-check-label">I checked that the workbook company matches this stock symbol and exchange.</span>
+                                </label>
+                                <button type="submit" className="btn btn-outline-primary" disabled={uploadBusy || !uploadFile || !uploadForm.stock_symbol.trim() || !uploadForm.confirm_company}>
+                                    {uploadBusy ? 'Uploading…' : 'Upload and import'}
+                                </button>
+                            </form>
                         </div>
                     </div>
                 </div>
