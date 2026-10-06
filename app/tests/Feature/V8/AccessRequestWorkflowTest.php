@@ -3,6 +3,7 @@
 namespace Tests\Feature\V8;
 
 use App\Models\AccessRequest;
+use App\Models\AccessRequestVerification;
 use App\Models\AccessRequestBan;
 use App\Models\User;
 use App\Mail\AccessRequestVerificationMail;
@@ -113,6 +114,37 @@ class AccessRequestWorkflowTest extends TestCase
         $this->assertNotEmpty($detail['history']);
         $this->assertNotEmpty($detail['audit_events']);
         $this->assertTrue(collect($detail['audit_events'])->contains(fn ($e) => $e['event_type'] === 'admin_create'));
+    }
+
+    public function test_distinct_valid_verification_tokens_for_one_request_only_verify_once(): void
+    {
+        $email = 'two-tokens-'.Str::random(8).'@example.com';
+
+        $this->postJson('/api/auth/access-requests', [
+            'full_name' => 'Applicant',
+            'email' => $email,
+            'captcha_token' => 'ok',
+        ])->assertOk();
+
+        $request = AccessRequest::query()->where('email_normalized', Str::lower($email))->sole();
+        $firstToken = $this->verificationTokenFromMail();
+        $secondToken = Str::random(64);
+
+        $secondVerification = AccessRequestVerification::query()->create([
+            'access_request_id' => $request->id,
+            'full_name' => $request->full_name,
+            'email_normalized' => $request->email_normalized,
+            'token_hash' => hash('sha256', $secondToken),
+            'expires_at' => now()->addHour(),
+        ]);
+
+        $this->postJson('/api/auth/access-requests/verify/'.$firstToken)->assertOk();
+        $this->postJson('/api/auth/access-requests/verify/'.$secondToken)->assertUnprocessable();
+
+        $this->assertSame(AccessRequest::VERIFICATION_VERIFIED, $request->fresh()->verification_status);
+        $this->assertDatabaseCount('stox_access_request_audit_events', 2);
+        $this->assertNotNull(AccessRequestVerification::query()->where('token_hash', hash('sha256', $firstToken))->sole()->used_at);
+        $this->assertNull($secondVerification->fresh()->used_at);
     }
 
     public function test_captcha_failure_creates_no_verification(): void

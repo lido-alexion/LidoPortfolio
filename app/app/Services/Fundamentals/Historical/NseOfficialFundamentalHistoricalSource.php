@@ -3,6 +3,7 @@
 namespace App\Services\Fundamentals\Historical;
 
 use App\Models\Stock;
+use App\Services\Fundamentals\FundamentalDataService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -14,9 +15,7 @@ use Illuminate\Support\Facades\Log;
  */
 class NseOfficialFundamentalHistoricalSource implements FundamentalHistoricalSource
 {
-    public function __construct(private readonly ?NseIntegratedFilingClient $exchangeClient = null)
-    {
-    }
+    public function __construct(private readonly ?NseIntegratedFilingClient $exchangeClient = null) {}
 
     public function id(): string
     {
@@ -30,7 +29,7 @@ class NseOfficialFundamentalHistoricalSource implements FundamentalHistoricalSou
 
     public function supports(Stock $stock): bool
     {
-        if (! app(\App\Services\Fundamentals\FundamentalDataService::class)->exchangeFallbackIsActive('nse')) {
+        if (! app(FundamentalDataService::class)->exchangeFallbackIsActive('nse')) {
             return false;
         }
 
@@ -41,7 +40,11 @@ class NseOfficialFundamentalHistoricalSource implements FundamentalHistoricalSou
 
     public function fetch(Stock $stock, string $cadence): array
     {
-        $url = trim((string) config('fundamentals_bootstrap.nse_official_feed_url', ''));
+        $configuredUrl = trim((string) app(FundamentalDataService::class)
+            ->settings()->nse_official_feed_url);
+        $url = $configuredUrl !== ''
+            ? $configuredUrl
+            : trim((string) config('fundamentals_bootstrap.nse_official_feed_url', ''));
         if ($url === '') {
             if (! config('fundamentals_bootstrap.nse_official_direct_enabled', false)
                 || ! config('fundamentals_bootstrap.nse_official_direct_access_authorized', false)) {
@@ -54,7 +57,8 @@ class NseOfficialFundamentalHistoricalSource implements FundamentalHistoricalSou
         $timeout = (float) config('fundamentals_bootstrap.nse_official_timeout_seconds', 30);
 
         try {
-            $response = app(ExchangeRequestGate::class)->request(fn () => Http::timeout($timeout)
+            $response = app(ExchangeRequestGate::class)->request(fn () => Http::withOptions(['allow_redirects' => false])
+                ->timeout($timeout)
                 ->acceptJson()
                 ->get($url, [
                     'symbol' => strtoupper((string) $stock->symbol),

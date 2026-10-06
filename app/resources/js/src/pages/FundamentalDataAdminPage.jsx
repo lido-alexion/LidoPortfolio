@@ -12,6 +12,8 @@ export default function FundamentalDataAdminPage() {
         paused: false,
         nse_official_fallback_enabled: false,
         bse_official_fallback_enabled: false,
+        nse_official_feed_url: '',
+        bse_official_feed_url: '',
         ai_insights_primary_provider: '',
     });
     const [busy, setBusy] = useState(false);
@@ -28,6 +30,8 @@ export default function FundamentalDataAdminPage() {
                 paused: Boolean(data.data.settings.paused),
                 nse_official_fallback_enabled: Boolean(data.data.settings.nse_official_fallback_enabled),
                 bse_official_fallback_enabled: Boolean(data.data.settings.bse_official_fallback_enabled),
+                nse_official_feed_url: data.data.settings.nse_official_feed_url || data.data.exchange_fallbacks?.nse?.feed_url || '',
+                bse_official_feed_url: data.data.settings.bse_official_feed_url || data.data.exchange_fallbacks?.bse?.feed_url || '',
                 ai_insights_primary_provider: data.data.settings.ai_insights_primary_provider || '',
             });
         }
@@ -107,12 +111,35 @@ export default function FundamentalDataAdminPage() {
                                 <p className="small text-muted">Yahoo stays primary. NSE/BSE are tried only when Yahoo returns no usable facts.</p>
                                 {['nse', 'bse'].map((exchange) => {
                                     const field = `${exchange}_official_fallback_enabled`;
+                                    const urlField = `${exchange}_official_feed_url`;
                                     const route = status?.exchange_fallbacks?.[exchange];
-                                    return <label className="form-check mb-2" key={exchange}>
-                                        <input className="form-check-input" type="checkbox" checked={form[field]} disabled={busy || (!route?.configured && !form[field])} onChange={(e) => setForm({ ...form, [field]: e.target.checked })} />
-                                        <span className="form-check-label">Enable {exchange.toUpperCase()} fallback <span className="text-muted small">({route?.configured ? 'approved route configured' : 'no approved route configured'})</span></span>
-                                    </label>;
+                                    return <div className="mb-3" key={exchange}>
+                                        <label className="form-label" htmlFor={urlField}>
+                                            {exchange.toUpperCase()} approved normalized-feed URL
+                                        </label>
+                                        <input
+                                            id={urlField}
+                                            className="form-control"
+                                            type="url"
+                                            inputMode="url"
+                                            autoComplete="off"
+                                            placeholder={exchange === 'nse' ? 'https://approved-host.example/nse/fundamentals' : 'https://approved-host.example/bse/fundamentals'}
+                                            value={form[urlField]}
+                                            disabled={busy}
+                                            onChange={(e) => setForm({ ...form, [urlField]: e.target.value })}
+                                        />
+                                        <div className="form-text">
+                                            HTTPS only; the host must be approved in server settings. The endpoint must return normalized fundamental-fact JSON. Saving this URL does not contact it.
+                                        </div>
+                                        <label className="form-check mt-2">
+                                            <input className="form-check-input" type="checkbox" checked={form[field]} disabled={busy || (!route?.configured && !form[field] && !form[urlField])} onChange={(e) => setForm({ ...form, [field]: e.target.checked })} />
+                                            <span className="form-check-label">Enable {exchange.toUpperCase()} fallback <span className="text-muted small">({route?.configured ? `${route.route_mode} route configured` : 'no approved route configured'})</span></span>
+                                        </label>
+                                    </div>;
                                 })}
+                                <p className="small text-muted mb-0">
+                                    Leave the NSE URL blank to use StoX’s built-in NSE filing search and XBRL parser when direct access is authorized on the server. The URL field is for an optional normalized JSON bridge. BSE currently supports the normalized JSON bridge only. Never put credentials or query parameters in these URLs.
+                                </p>
                             </div>
                             <button className="btn btn-outline-primary mt-3" type="button" onClick={save} disabled={busy}>Save</button>
                         </div>

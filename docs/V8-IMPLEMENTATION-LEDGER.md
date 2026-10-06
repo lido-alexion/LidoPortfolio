@@ -9,7 +9,7 @@ Authoritative specs: `docs/archive/specs/LidoPortfolio-V8-Wishlist.md` and linke
 ```text
 FEAT-052  [REVIEW] OpenTelemetry / LidoTelemetry (producer core, shared middleware/route wiring, fail-open OTLP traces/events/metrics, browser fetch plus uncaught-exception/unhandled-rejection instrumentation, queue/scheduler context propagation and documented configuration; PHP SDK/extension, Collector and deployed acceptance remain open)
 FEAT-054  [REVIEW] Historical fundamental bootstrap (summary/derived metrics, provenance, user-scoped Advanced preference, history UI, Screener boundary, bootstrap evidence and focused desktop/390px Chromium Watchlist acceptance complete locally; provider/deployed runtime acceptance remains)
-FEAT-055  [REVIEW] Account access request / Admin approval (formal audit complete; production Turnstile/mail and deployed multi-worker validation remain external)
+FEAT-055  [IMPLEMENTED / FUNCTIONAL ACCEPTANCE OPEN] Account access request / Admin approval (deployed implementation, security and lifecycle suites; remaining browser, race, outage and accessibility scenarios tracked in the functional plan)
 FEAT-056  [REVIEW] ML lifecycle automation (queued runs, persistent per-horizon queue locking, SSE, drift, cancel, notifications, transient retries, retention, stale-run recovery and mixed scoring integration committed; deployed lifecycle acceptance remains open)
 FEAT-057  [IMPLEMENTED] ML feature engineering / training (versioned horizon-resolved registry, PIT context refusal of current-universe fallback, authoritative dated provider adapter with resumable backfill, horizon-derived purge/embargo, training-only missing-value/outlier preprocessing, paired active/baseline evidence, pinned explainability, durable archive integrity, per-partition feature coverage and bounded same-architecture 1m/3m/6m training evidence verified locally; production apply/preflight, 1m/3m/6m evidence, deployed active-model comparison where applicable and investor-facing acceptance remain open)
 FEAT-061  [REVIEW] Guided tour / onboarding (formal audit complete; missing-target regression, keyed i18n, viewport-safe placement, desktop/mobile/tablet welcome-to-tour journeys, persisted-step resume, in-progress browser-refresh recovery, scrim interception, full configured-route traversal, labelled modal descriptions, welcome/resume/step focus containment, Escape handling and manual-launch focus return covered; production session interruption and screen-reader/device acceptance remain open)
@@ -121,11 +121,11 @@ See `docs/audit/V8-CODEX-TAKEOVER-WORKSPACE-RECONCILIATION.md`, `docs/audit/V8-F
 
 ## Next task
 
-1. FEAT-056: perform deployed worker/runtime validation for the committed lifecycle implementation; no separate lifecycle WIP is currently pending ownership reconciliation.
-2. FEAT-057: complete authoritative-provider/runtime coverage evidence, active-model paired runtime evidence where an active model exists, artifact prediction reload and investor-facing explainability acceptance.
-3. FEAT-062: perform browser/mobile and real-provider acceptance; deterministic catalogue/PIT implementation is complete locally.
-4. FEAT-052: close remaining telemetry deployment evidence.
-5. FEAT-054 / FEAT-055 / FEAT-061: perform only the remaining external browser/provider/VPS validations.
+- **Current thread: FEAT-055 functional acceptance.** The implementation is already deployed and recorded as IMPLEMENTED. Continue with the partial/open scenarios in `docs/testing/V8-FEAT-055-FUNCTIONAL-TEST-PLAN.md`; do not duplicate its completed implementation work.
+- **FEAT-054 and FEAT-057 are assigned to another thread (PO direction, 2026-10-07).** Skip both here. FEAT-057 remains deferred for this thread until the other active V8 epic work is complete and deployment churn has stopped; its production build must remain stable throughout qualification. FEAT-056 remains downstream of FEAT-057 qualification.
+- Handoff: before this direction arrived, this thread created FEAT-057 preflight campaign `abab7807-4745-473d-af36-7605ffccbb9e` on build `38107807be3293139732b71f397d106ee6e1ef1d`. Last read-only check (2026-10-07 00:59 IST) found it still in `preflight`, with no horizon results and one reserved `ml-acceptance` queue job. No training, promotion, rollback, schedule enablement, or model mutation was started. The other thread should check this campaign's live state before creating another.
+
+After FEAT-055, continue the independent acceptance items in their audits: FEAT-061 deployed/device accessibility; FEAT-062 real provider and assistive-technology review; FEAT-064 production membership-drift/runtime behavior; FEAT-052 telemetry delivery/privacy.
 
 ## Failing tests
 

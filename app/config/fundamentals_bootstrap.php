@@ -14,4 +14,9 @@ return [
     'exchange_block_cooldown_seconds' => max(3600, (int) env('FUNDAMENTALS_EXCHANGE_BLOCK_COOLDOWN_SECONDS', 21600)),
     'bse_official_feed_url' => env('FUNDAMENTALS_BSE_OFFICIAL_FEED_URL'),
     'bse_official_timeout_seconds' => (float) env('FUNDAMENTALS_BSE_OFFICIAL_TIMEOUT_SECONDS', 30),
+    // Additional HTTPS hostnames approved for operator-managed normalized feeds.
+    'approved_feed_hosts' => array_values(array_filter(array_map(
+        'strtolower',
+        array_map('trim', explode(',', (string) env('FUNDAMENTALS_APPROVED_FEED_HOSTS', 'nseindia.com,bseindia.com'))),
+    ))),
 ];

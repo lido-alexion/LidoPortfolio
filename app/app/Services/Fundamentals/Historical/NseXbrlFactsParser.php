@@ -36,7 +36,7 @@ class NseXbrlFactsParser
     ];
 
     /**
-     * @param array<string, mixed> $filing
+     * @param  array<string, mixed>  $filing
      * @return list<array<string, mixed>>
      */
     public function parse(string $xml, array $filing, string $cadence): array
@@ -53,8 +53,15 @@ class NseXbrlFactsParser
             $document = new DOMDocument;
             $document->resolveExternals = false;
             $document->substituteEntities = false;
-            if (! $document->loadXML($xml, LIBXML_NONET | LIBXML_NOBLANKS | LIBXML_COMPACT)) {
-                throw new RuntimeException('Official filing is not valid XML.');
+            $loadedAsXml = $document->loadXML($xml, LIBXML_NONET | LIBXML_NOBLANKS | LIBXML_COMPACT);
+            if (! $loadedAsXml) {
+                libxml_clear_errors();
+                $document = new DOMDocument;
+                $document->resolveExternals = false;
+                $document->substituteEntities = false;
+                if (! $document->loadHTML($xml, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING | LIBXML_COMPACT)) {
+                    throw new RuntimeException('Official filing is not readable XML or inline XBRL HTML.');
+                }
             }
         } finally {
             libxml_clear_errors();
@@ -63,11 +70,14 @@ class NseXbrlFactsParser
 
         $rootName = $document->documentElement?->localName;
         $rootNamespace = $document->documentElement?->namespaceURI;
-        if ($rootName !== 'xbrl' || $rootNamespace !== 'http://www.xbrl.org/2003/instance') {
-            throw new RuntimeException('Official filing is not an XBRL instance document.');
+        $xpath = new DOMXPath($document);
+        $isInstanceDocument = $rootName === 'xbrl' && $rootNamespace === 'http://www.xbrl.org/2003/instance';
+        $inlineFacts = $xpath->query('//*[contains(translate(local-name(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "nonfraction") and @name]');
+        $isInlineDocument = $inlineFacts !== false && $inlineFacts->length > 0;
+        if (! $isInstanceDocument && ! $isInlineDocument) {
+            throw new RuntimeException('Official filing is not an XBRL instance or inline XBRL document.');
         }
 
-        $xpath = new DOMXPath($document);
         $contexts = $this->contexts($xpath);
         $units = $this->units($xpath);
         $basis = $this->basis((string) ($filing['consolidated'] ?? ''));
@@ -89,28 +99,36 @@ class NseXbrlFactsParser
         ];
 
         $rows = [];
-        foreach ($xpath->query('//*[local-name()="xbrl"]/*') ?: [] as $fact) {
-            if (! $fact instanceof DOMElement || ! $fact->hasAttribute('contextRef')) {
+        $factQuery = $isInlineDocument
+            ? '//*[contains(translate(local-name(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "nonfraction") and @name]'
+            : '//*[local-name()="xbrl"]/*[@contextRef]';
+        foreach ($xpath->query($factQuery) ?: [] as $fact) {
+            if (! $fact instanceof DOMElement) {
                 continue;
             }
-            $concept = $fact->localName;
+            $contextRef = $this->attribute($fact, 'contextRef');
+            if ($contextRef === '') {
+                continue;
+            }
+            $conceptName = $isInlineDocument ? $fact->getAttribute('name') : $fact->localName;
+            $concept = str_contains($conceptName, ':') ? substr($conceptName, strrpos($conceptName, ':') + 1) : $conceptName;
             $mapping = self::CONCEPTS[$concept] ?? null;
             if ($mapping === null) {
                 continue;
             }
-            $context = $contexts[$fact->getAttribute('contextRef')] ?? null;
+            $context = $contexts[$contextRef] ?? null;
             if ($context === null || $context['has_dimensions'] || ! $this->matchesCadence($context, $cadence)) {
                 continue;
             }
             if (strtolower($fact->getAttributeNS('http://www.w3.org/2001/XMLSchema-instance', 'nil')) === 'true') {
                 continue;
             }
-            $value = trim($fact->textContent);
-            if ($value === '' || ! is_numeric($value)) {
+            $value = $isInlineDocument ? $this->inlineNumericValue($fact) : trim($fact->textContent);
+            if (! is_string($value) || $value === '' || ! is_numeric($value)) {
                 continue;
             }
 
-            $unit = $units[$fact->getAttribute('unitRef')] ?? null;
+            $unit = $units[$this->attribute($fact, 'unitRef')] ?? null;
             // These catalogued concepts are currency amounts. Unknown and non-INR
             // units are not silently treated as rupees.
             if ($unit !== 'INR') {
@@ -120,10 +138,10 @@ class NseXbrlFactsParser
 
             $availabilityDate = $this->sourceDate($filing);
             $sourceMeta = $metadata + [
-                'concept' => $fact->tagName,
-                'context_id' => $fact->getAttribute('contextRef'),
+                'concept' => $conceptName,
+                'context_id' => $contextRef,
                 'unit' => $unit,
-                'decimals' => $fact->getAttribute('decimals') ?: null,
+                'decimals' => $this->attribute($fact, 'decimals') ?: null,
                 'period_kind' => $context['kind'],
                 'has_dimensions' => false,
             ];
@@ -152,22 +170,22 @@ class NseXbrlFactsParser
     private function contexts(DOMXPath $xpath): array
     {
         $result = [];
-        foreach ($xpath->query('//*[local-name()="context"]') ?: [] as $context) {
+        foreach ($xpath->query('//*[translate(substring-after(concat(":", local-name()), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="context"]') ?: [] as $context) {
             if (! $context instanceof DOMElement) {
                 continue;
             }
-            $period = $xpath->query('./*[local-name()="period"]', $context)?->item(0);
+            $period = $xpath->query('./*[translate(substring-after(concat(":", local-name()), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="period"]', $context)?->item(0);
             if (! $period instanceof DOMElement) {
                 continue;
             }
-            $start = $xpath->query('./*[local-name()="startDate"]', $period)?->item(0)?->textContent;
-            $end = $xpath->query('./*[local-name()="endDate"]', $period)?->item(0)?->textContent;
-            $instant = $xpath->query('./*[local-name()="instant"]', $period)?->item(0)?->textContent;
+            $start = $xpath->query('./*[translate(substring-after(concat(":", local-name()), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="startdate"]', $period)?->item(0)?->textContent;
+            $end = $xpath->query('./*[translate(substring-after(concat(":", local-name()), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="enddate"]', $period)?->item(0)?->textContent;
+            $instant = $xpath->query('./*[translate(substring-after(concat(":", local-name()), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="instant"]', $period)?->item(0)?->textContent;
             $dateEnd = $instant ?: $end;
             if (! is_string($dateEnd) || ! $this->validDate($dateEnd)) {
                 continue;
             }
-            $hasDimensions = $xpath->query('.//*[local-name()="explicitMember" or local-name()="typedMember"]', $context)->length > 0;
+            $hasDimensions = $xpath->query('.//*[translate(substring-after(concat(":", local-name()), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="explicitmember" or translate(substring-after(concat(":", local-name()), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="typedmember"]', $context)->length > 0;
             $result[$context->getAttribute('id')] = [
                 'start' => is_string($start) && $this->validDate($start) ? $start : null,
                 'end' => $dateEnd,
@@ -183,11 +201,11 @@ class NseXbrlFactsParser
     private function units(DOMXPath $xpath): array
     {
         $result = [];
-        foreach ($xpath->query('//*[local-name()="unit"]') ?: [] as $unit) {
+        foreach ($xpath->query('//*[translate(substring-after(concat(":", local-name()), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="unit"]') ?: [] as $unit) {
             if (! $unit instanceof DOMElement) {
                 continue;
             }
-            $measure = $xpath->query('.//*[local-name()="measure"]', $unit)?->item(0)?->textContent;
+            $measure = $xpath->query('.//*[translate(substring-after(concat(":", local-name()), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="measure"]', $unit)?->item(0)?->textContent;
             if (! is_string($measure)) {
                 continue;
             }
@@ -198,8 +216,60 @@ class NseXbrlFactsParser
         return $result;
     }
 
+    private function attribute(DOMElement $element, string $name): string
+    {
+        $value = $element->getAttribute($name);
+
+        return $value !== '' ? $value : $element->getAttribute(strtolower($name));
+    }
+
+    private function inlineNumericValue(DOMElement $fact): ?string
+    {
+        $raw = html_entity_decode($fact->textContent, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $raw = trim(str_replace(["\u{00A0}", "\u{202F}"], ' ', $raw));
+        $negative = false;
+        if (preg_match('/^\((.*)\)$/u', $raw, $matches) === 1) {
+            $negative = true;
+            $raw = $matches[1];
+        }
+        $raw = preg_replace('/[\s,]+/u', '', $raw) ?? '';
+        if (strlen($raw) > 100 || ! preg_match('/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/D', $raw)) {
+            return null;
+        }
+        if (str_starts_with($raw, '-') || $this->attribute($fact, 'sign') === '-') {
+            $negative = true;
+        }
+
+        $scaleText = $this->attribute($fact, 'scale');
+        $scale = $scaleText === '' ? 0 : (filter_var($scaleText, FILTER_VALIDATE_INT) !== false ? (int) $scaleText : 99);
+        if ($scale < -18 || $scale > 18) {
+            return null;
+        }
+
+        $unsigned = ltrim($raw, '+-');
+        [$integer, $fraction] = array_pad(explode('.', $unsigned, 2), 2, '');
+        $digits = ltrim($integer.$fraction, '0');
+        if ($digits === '') {
+            return '0';
+        }
+
+        $decimalPlaces = strlen($fraction) - $scale;
+        if ($decimalPlaces <= 0) {
+            $number = $digits.str_repeat('0', -$decimalPlaces);
+        } else {
+            if (strlen($digits) <= $decimalPlaces) {
+                $digits = str_pad($digits, $decimalPlaces + 1, '0', STR_PAD_LEFT);
+            }
+            $split = strlen($digits) - $decimalPlaces;
+            $number = substr($digits, 0, $split).'.'.substr($digits, $split);
+            $number = rtrim(rtrim($number, '0'), '.');
+        }
+
+        return $negative ? '-'.$number : $number;
+    }
+
     /**
-     * @param array{start:?string,end:string,kind:string,has_dimensions:bool} $context
+     * @param  array{start:?string,end:string,kind:string,has_dimensions:bool}  $context
      */
     private function matchesCadence(array $context, string $cadence): bool
     {
@@ -230,7 +300,7 @@ class NseXbrlFactsParser
     }
 
     /**
-     * @param list<array<string,mixed>> $rows
+     * @param  list<array<string,mixed>>  $rows
      * @return list<array<string,mixed>>
      */
     private function deduplicate(array $rows): array
@@ -243,6 +313,7 @@ class NseXbrlFactsParser
             ]);
             if (! isset($unique[$key])) {
                 $unique[$key] = $row;
+
                 continue;
             }
             if ((string) $unique[$key]['value'] !== (string) $row['value']) {

@@ -51,9 +51,11 @@ export default function DashboardTopMoverCard({
     loser,
     period,
     onPeriodChange,
+    className = 'col-12 col-md-6 col-lg-4',
+    style,
 }) {
     return (
-        <div className="col-12 col-md-6 col-lg-4">
+        <div className={className} style={style}>
             <div className="card h-100">
                 <div className="card-body">
                     <div className="d-flex justify-content-between align-items-center gap-2 mb-1">
