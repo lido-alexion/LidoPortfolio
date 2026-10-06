@@ -1,13 +1,13 @@
 # Configure an approved fundamentals exchange route
 
-This guide configures the normalized-feed route used by the FEAT-054 fundamentals fallback. Yahoo remains the primary provider. An exchange route is used only when Yahoo returns no usable facts and the corresponding Admin fallback switch is on.
+This guide explains the built-in NSE filing route and the optional normalized-feed bridge used by the FEAT-054 fundamentals fallback. Yahoo remains the primary provider. An exchange route is used only when Yahoo returns no usable facts and the corresponding Admin fallback switch is on.
 
 ## Configure it in Admin
 
 1. Open **Admin → Fundamental Data**.
-2. Under **Historical bootstrap exchange fallbacks**, enter the NSE or BSE **approved normalized-feed URL**.
-3. Save the settings. Saving only stores the URL; it does not contact or test the endpoint.
-4. After the exchange has allowlisted the VPS outbound IP and the route has been confirmed to return the required JSON, turn on the matching **Enable NSE/BSE fallback** switch and save.
+2. For the built-in NSE filing route, leave the NSE URL blank. It discovers official integrated filings for the stock and parses XBRL XML and inline-XBRL HTML. The server-side direct-access feature and authorization flags must be enabled after exchange access is approved.
+3. Enter a URL only when using an operator-managed normalized JSON bridge. Saving only stores the URL; it does not contact or test the endpoint.
+4. After the VPS outbound IP is allowlisted and source access is ready, turn on the matching **Enable NSE/BSE fallback** switch and save.
 5. Fetch through the existing bounded workflow. Do not start a broad backfill as a connectivity test.
 
 The application appends the `symbol`, `cadence`, and `exchange` query parameters. The endpoint must return either an array of canonical fact rows or an object with a `facts` array. Each usable row includes `fact_key`, `period_end`, and `value`; optional fields include `statement_type`, `cadence`, `statement_basis`, `period_start`, `availability_date`, `currency`, and `source_meta`.
@@ -36,8 +36,9 @@ Example response:
 - For a custom normalized-feed host, add its hostname to `FUNDAMENTALS_APPROVED_FEED_HOSTS` in the server environment and refresh Laravel's config cache during deployment. This is a hostname allowlist only; the full route URL stays editable in Admin.
 - Do not include credentials, query strings, or fragments in the saved URL. Credentials are not supported.
 - Redirects are disabled for feed requests.
-- The BSE adapter currently consumes this normalized JSON contract; it does not parse arbitrary raw BSE website responses.
-- NSE's built-in direct filing client remains a separate route protected by its server-side feature and authorization flags. The Admin feed URL selects the normalized-feed adapter; it does not change those direct-access flags.
+- The built-in NSE adapter calls NSE's integrated-filing index, accepts only allowlisted NSE archive document URLs, and parses mapped XBRL XML or inline-XBRL HTML facts. Unknown concepts remain ignored. Direct access stays protected by server-side feature and authorization flags.
+- BSE currently supports the normalized JSON contract only. StoX does not yet discover BSE filing links or parse raw BSE PDFs.
+- An Admin URL selects the optional normalized-feed bridge. It does not change the server-side authorization flags for the built-in NSE route.
 
 ## Safeguards
 

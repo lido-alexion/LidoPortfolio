@@ -138,7 +138,7 @@ export default function FundamentalDataAdminPage() {
                                     </div>;
                                 })}
                                 <p className="small text-muted mb-0">
-                                    The app adds the stock symbol, cadence, and exchange to each request. Do not put credentials or query parameters in this URL. Direct NSE filing access remains subject to its separate server authorization setting.
+                                    Leave the NSE URL blank to use StoX’s built-in NSE filing search and XBRL parser when direct access is authorized on the server. The URL field is for an optional normalized JSON bridge. BSE currently supports the normalized JSON bridge only. Never put credentials or query parameters in these URLs.
                                 </p>
                             </div>
                             <button className="btn btn-outline-primary mt-3" type="button" onClick={save} disabled={busy}>Save</button>
