@@ -68,6 +68,7 @@ return [
         'payout_ratio' => ['label' => 'Payout ratio (TTM)', 'default_basis' => 'ttm', 'requires_price' => false, 'kind' => 'ratio_percent'],
         'pe' => ['label' => 'P/E (TTM)', 'default_basis' => 'ttm', 'requires_price' => true, 'kind' => 'valuation'],
         'pb' => ['label' => 'P/B', 'default_basis' => 'ttm', 'requires_price' => true, 'kind' => 'valuation'],
+        'ps' => ['label' => 'P/S', 'default_basis' => 'ttm', 'requires_price' => true, 'kind' => 'valuation'],
         'revenue_growth_yoy' => ['label' => 'Revenue growth (YoY)', 'default_basis' => 'quarterly_yoy', 'requires_price' => false, 'kind' => 'growth'],
         'gross_npa_ratio' => ['label' => 'Gross NPA ratio', 'default_basis' => 'quarterly', 'requires_price' => false, 'kind' => 'bank_ratio', 'sector' => 'bank'],
         'net_npa_ratio' => ['label' => 'Net NPA ratio', 'default_basis' => 'quarterly', 'requires_price' => false, 'kind' => 'bank_ratio', 'sector' => 'bank'],

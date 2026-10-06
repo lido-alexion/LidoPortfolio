@@ -74,6 +74,7 @@ use App\Http\Controllers\Api\UserInviteController;
 use App\Http\Controllers\Api\UserManagementController;
 use App\Http\Controllers\Api\V1\AnalyticsArchitectureController;
 use App\Http\Controllers\Api\V1\ArtifactActionController;
+use App\Http\Controllers\Api\V1\ComboChartPreferenceController;
 use App\Http\Controllers\Api\V1\ArtifactLibraryController;
 use App\Http\Controllers\Api\V1\ArtifactRegistryController;
 use App\Http\Controllers\Api\V1\BacktestController;
@@ -539,6 +540,8 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
 | Auth: Sanctum session (existing SPA) rather than JWT.
 */
 Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
+    Route::get('/stock-details/combo-chart-preference', [ComboChartPreferenceController::class, 'show']);
+    Route::put('/stock-details/combo-chart-preference', [ComboChartPreferenceController::class, 'update']);
     Route::get('/securities', [TradingOsDataController::class, 'securities']);
     Route::get('/securities/{id}', [TradingOsDataController::class, 'securityShow'])->whereNumber('id');
     Route::get('/price-bars', [TradingOsDataController::class, 'priceBars']);

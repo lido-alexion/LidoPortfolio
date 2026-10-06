@@ -8,6 +8,7 @@ import ManageWatchlistsModal from '../components/ManageWatchlistsModal';
 import PatternSketch from '../components/PatternSketch';
 import StockAutocomplete from '../components/StockAutocomplete';
 import PriceVolumeChart from '../components/charts/PriceVolumeChart';
+import StockDetailsComboChart from '../components/charts/StockDetailsComboChart';
 import WatchlistResearchPanel from '../components/WatchlistResearchPanel';
 import { IconDelete } from '../components/knowledgeBoard/KnowledgeCardIcons';
 import { usePortfolio } from '../context/PortfolioContext';
@@ -320,6 +321,8 @@ function WatchlistStockPanel({
                 title={title}
                 emptyMessage="No cached price history for this stock."
             />
+
+            <StockDetailsComboChart key={stock.id} stockId={stock.id} prices={prices} />
 
             <WatchlistResearchPanel stockId={stock.id} />
         </div>

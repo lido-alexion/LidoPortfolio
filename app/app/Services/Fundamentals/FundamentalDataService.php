@@ -264,6 +264,7 @@ class FundamentalDataService
             'payout_ratio' => $this->percent($this->ratioWithPositiveDenominator($dividendsPaid !== null ? abs($dividendsPaid) : null, $netIncome)),
             'pe' => $price !== null ? $this->priceEarningsRatio($price, $eps) : null,
             'pb' => $price !== null ? $this->priceBookRatio($price, $facts) : null,
+            'ps' => $this->priceSalesRatio($marketCap, $revenue),
             default => in_array($metric, FundamentalBankMetricsService::METRIC_KEYS, true)
                 ? app(FundamentalBankMetricsService::class)->metricsForStock($stock, $asOf)[$metric]
                 : $this->factValue($facts, $metric),
@@ -580,6 +581,13 @@ class FundamentalDataService
         }
 
         return $price / $eps;
+    }
+
+    private function priceSalesRatio(?float $marketCap, ?float $revenue): ?float
+    {
+        return $marketCap !== null && $revenue !== null && $revenue > 0
+            ? $marketCap / $revenue
+            : null;
     }
 
     /** @param array<string,FundamentalFact> $facts */

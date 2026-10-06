@@ -18,6 +18,7 @@ class FundamentalMetricCatalogTest extends TestCase
         $derivedMetricIds = collect($catalog->derivedMetrics())->pluck('id')->all();
         $this->assertContains('gross_npa_ratio', $derivedMetricIds);
         $this->assertContains('net_interest_margin', $derivedMetricIds);
+        $this->assertContains('ps', $derivedMetricIds);
 
         $unavailableFacts = [
             'capital_work_in_progress', 'gross_npa', 'gross_npa_ratio', 'net_npa', 'net_npa_ratio',
@@ -63,6 +64,8 @@ class FundamentalMetricCatalogTest extends TestCase
         $catalog = app(FundamentalMetricCatalog::class);
         $this->assertTrue($catalog->isValuationMetric('pe'));
         $this->assertSame('monthly', $catalog->defaultChartFrequency('pe'));
+        $this->assertTrue($catalog->isValuationMetric('ps'));
+        $this->assertSame('monthly', $catalog->defaultChartFrequency('ps'));
         $this->assertSame('quarterly', $catalog->defaultChartFrequency('roe'));
     }
 }

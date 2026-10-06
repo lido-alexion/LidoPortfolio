@@ -4024,6 +4024,25 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     padding-right: 1rem;
 }
 
+.lido-combo-chart .card-header .btn,
+.lido-combo-chart .card-header .form-select,
+.lido-combo-chart .card-body [role="group"] .btn {
+    min-height: 40px;
+}
+
+.lido-combo-chart .card-header .form-select {
+    min-width: min(100%, 15rem);
+}
+
+.lido-combo-tooltip {
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--lido-chart-tooltip-border);
+    border-radius: 6px;
+    background: var(--lido-chart-tooltip-bg);
+    color: var(--lido-chart-tooltip-text);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 16%);
+}
+
 .lido-pattern-guide-card .card-header {
     cursor: pointer;
 }
