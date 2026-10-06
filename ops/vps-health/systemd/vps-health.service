@@ -1,0 +1,26 @@
+[Unit]
+Description=Read-only VPS health check
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=nitty
+Group=adm
+EnvironmentFile=-/etc/vps-health/monitor.env
+StateDirectory=vps-health
+StateDirectoryMode=0750
+ExecStart=/usr/bin/python3 /var/www/stoxla/current/scripts/vps-health/monitor.py check
+UMask=0027
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+ReadOnlyPaths=/var/log/nginx /var/log/php8.4-fpm-slow.log
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
