@@ -7,7 +7,6 @@ use Carbon\CarbonImmutable;
 use DOMDocument;
 use DOMElement;
 use DOMXPath;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use ZipArchive;
@@ -116,7 +115,10 @@ class ManualFundamentalSpreadsheetImporter
         if (strtoupper(trim($this->cell($grid, 1, 1))) !== 'COMPANY NAME' || trim($companyName) === '') {
             throw ValidationException::withMessages(['file' => 'The Data Sheet tab does not contain the expected company name header.']);
         }
-        $version = trim($this->cell($grid, 2, 2));
+        if (strtoupper(trim($this->cell($grid, 3, 1))) !== 'CURRENT VERSION') {
+            throw ValidationException::withMessages(['file' => 'The Data Sheet tab is missing its current template version.']);
+        }
+        $version = trim($this->cell($grid, 3, 2));
         if ($version !== self::TEMPLATE_VERSION) {
             throw ValidationException::withMessages([
                 'file' => 'Unsupported template version. Expected version '.self::TEMPLATE_VERSION.'.',
@@ -425,6 +427,9 @@ class ManualFundamentalSpreadsheetImporter
         $rows = [];
         foreach ($data as $record) {
             if (isset($record['sum'], $record['period_end'])) {
+                if (array_diff(['equitysharecapital', 'reserves'], array_unique($record['components'])) !== []) {
+                    continue;
+                }
                 $rows[] = $this->factRow(
                     $stock,
                     $basis,

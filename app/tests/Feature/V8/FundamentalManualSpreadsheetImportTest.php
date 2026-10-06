@@ -74,15 +74,23 @@ XML);
 </Relationships>
 XML);
         $zip->addFromString('xl/worksheets/sheet1.xml', '<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>WRONG TAB</t></is></c></row></sheetData></worksheet>');
+        $zip->addFromString('xl/sharedStrings.xml', <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="7" uniqueCount="7">
+  <si><t>COMPANY NAME</t></si><si><t>ACME LIMITED</t></si><si><t>LATEST VERSION</t></si>
+  <si><t>PROFIT &amp; LOSS</t></si><si><t>Report Date</t></si><si><t>Sales</t></si><si><t>CURRENT VERSION</t></si>
+</sst>
+XML);
         $zip->addFromString('xl/worksheets/sheet9.xml', <<<'XML'
 <?xml version="1.0" encoding="UTF-8"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
   <sheetData>
-    <row r="1"><c r="A1" t="inlineStr"><is><t>COMPANY NAME</t></is></c><c r="B1" t="inlineStr"><is><t>ACME LIMITED</t></is></c></row>
-    <row r="2"><c r="A2" t="inlineStr"><is><t>LATEST VERSION</t></is></c><c r="B2"><v>2.1</v></c></row>
-    <row r="15"><c r="A15" t="inlineStr"><is><t>PROFIT &amp; LOSS</t></is></c></row>
-    <row r="16"><c r="A16" t="inlineStr"><is><t>Report Date</t></is></c><c r="B16"><v>45016</v></c><c r="D16"><v>45751</v></c></row>
-    <row r="17"><c r="A17" t="inlineStr"><is><t>Sales</t></is></c><c r="B17"><v>1</v></c><c r="D17"><v>2.5</v></c></row>
+    <row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>
+    <row r="2"><c r="A2" t="s"><v>2</v></c><c r="B2"><v>2.1</v></c></row>
+    <row r="3"><c r="A3" t="s"><v>6</v></c><c r="B3"><v>2.1</v></c></row>
+    <row r="15"><c r="A15" t="s"><v>3</v></c></row>
+    <row r="16"><c r="A16" t="s"><v>4</v></c><c r="B16"><v>45016</v></c><c r="D16"><v>45747</v></c></row>
+    <row r="17"><c r="A17" t="s"><v>5</v></c><c r="B17"><v>1</v></c><c r="D17"><v>2.5</v></c></row>
   </sheetData>
 </worksheet>
 XML);
