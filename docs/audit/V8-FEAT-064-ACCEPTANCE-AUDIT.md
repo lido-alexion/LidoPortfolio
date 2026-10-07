@@ -1,7 +1,7 @@
 # V8 FEAT-064 Acceptance Audit
 
 Date: 2026-09-29
-Status: **REVIEW — implementation and local browser evidence complete; live membership-drift/runtime validation pending**
+Status: **REVIEW — implementation guard merged; production provenance adoption remains required**
 
 Authoritative contract: `docs/archive/specs/V8-Core-Investor-Workflow-UX-Simplification.md`.
 
@@ -69,7 +69,7 @@ Cloud Chrome showed seven existing rows under `My screens`, a separate `Shared s
 - `StrategyEligibilityService::resolve()` only applies its run-version filter when a positive pin exists. For the four unpinned active versions, a future recent completed run of the same Screener lineage could be selected without exact version matching. `resolveExitScreeners()` has the same conditional filter pattern. `StrategyReadinessService::assess()` checks the presence of enabled Screener IDs but does not require exact pins.
 - All 11 existing production Screener runs have null `screener_version_id`; the newest finished on 2026-09-15. The 72-hour eligibility lookback excludes them now. This establishes a latent code-path risk, **not an observed incorrect Recommendation**. Of 786 Recommendations, 765 carry a Strategy-version ID; existing historical nulls need migration review rather than guessed backfills.
 
-### Required next work before IMPLEMENTED
+### Required production provenance work before closing FEAT-064
 
 1. Add a regression that exercises an active legacy unpinned Strategy when a new Screener run exists, including the exit-rule path. Preserve the rule that new runs and newly saved Strategy versions pin exact immutable versions.
 2. Reconcile the four active legacy Strategy versions through the documented provenance migration process. Do not silently edit immutable `config_json` or assign a historical version from current state without evidence; if exact historic identity cannot be proven, preserve uncertainty and require a new copy-on-write Strategy save to adopt the current Screener version.
@@ -77,3 +77,10 @@ Cloud Chrome showed seven existing rows under `My screens`, a separate `Shared s
 4. Re-run the exact-version regression and production read-only provenance report; then perform the controlled two-account workflow, membership-drift, and deployed accessibility checks already pending above. Only mark FEAT-064 IMPLEMENTED when the provenance gate passes.
 
 The frozen requirement is exact Strategy-version-to-Screener-version reconstruction. Historical nulls must remain visible as unresolved evidence, not be cosmetically filled to clear a gate.
+
+
+## Implementation follow-up — 2026-10-07 (after PR #72)
+
+PR #72 is merged as `aa1ef576d49ed7270d5b1d7b9c5d18faf08c7f88`; its PHP 8.4 backend CI job passed. It adds fail-closed handling for missing/invalid exact Screener-version pins, prevents unresolved active Strategies from generating or cancelling recommendations, and requires an explicit copy-on-write save or binding revision to adopt current pins. Regression coverage includes fresh runs against unpinned legacy Strategies and exit rules.
+
+The remaining issue is production data and rollout, not an unimplemented guard: the 2026-10-05 read-only report identified four active bindings (42, 43, 44, 47) without exact pins. Reconcile their current definitions and immutable versions, then adopt exact versions through the supported flow and verify recommendation behavior after deployment. Do not guess historical versions or silently rewrite immutable history. FEAT-064 remains REVIEW until this provenance gate is safely resolved.
