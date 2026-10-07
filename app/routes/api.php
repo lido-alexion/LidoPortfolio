@@ -605,6 +605,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
         Route::put('/admin/users/{user}/automated-execution-entitlement', [TradingOsAdminEntitlementController::class, 'update']);
         Route::get('/admin/fundamentals', [FundamentalDataController::class, 'adminStatus']);
         Route::put('/admin/fundamentals/settings', [FundamentalDataController::class, 'updateSettings']);
+        Route::post('/admin/fundamentals/manual-import', [FundamentalDataController::class, 'importManualWorkbook'])->middleware('throttle:5,60');
         Route::post('/admin/fundamentals/runs', [FundamentalDataController::class, 'startRun']);
         Route::post('/admin/fundamentals/runs/{run}/process', [FundamentalDataController::class, 'processRun'])->whereNumber('run');
         Route::get('/admin/fundamentals/bootstrap', [FundamentalDataController::class, 'bootstrapStatus']);

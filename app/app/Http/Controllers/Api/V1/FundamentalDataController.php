@@ -11,6 +11,7 @@ use App\Services\Fundamentals\FundamentalBootstrapService;
 use App\Services\Fundamentals\FundamentalDataService;
 use App\Services\Fundamentals\FundamentalInvestorSnapshotService;
 use App\Services\Fundamentals\FundamentalMetricCatalog;
+use App\Services\Fundamentals\ManualFundamentalSpreadsheetImporter;
 use App\Services\Fundamentals\FundamentalSignalsService;
 use App\Services\Fundamentals\FundamentalUpdateService;
 use App\Telemetry\LidoTelemetry;
@@ -33,6 +34,7 @@ class FundamentalDataController extends Controller
         protected FundamentalSignalsService $fundamentalSignals,
         protected AIInsightsService $aiInsights,
         protected FundamentalMetricCatalog $metricCatalog,
+        protected ManualFundamentalSpreadsheetImporter $manualSpreadsheetImporter,
     ) {}
 
     public function metricCatalog(): JsonResponse
@@ -81,6 +83,45 @@ class FundamentalDataController extends Controller
         }
 
         return ApiEnvelope::success($snapshot);
+    }
+
+    public function importManualWorkbook(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'stock_symbol' => ['required', 'string', 'max:32'],
+            'exchange' => ['required', 'string', 'in:NSE,NSE+,BSE'],
+            'statement_basis' => ['required', 'in:standalone,consolidated'],
+            'file' => ['required', 'file', 'mimes:xlsx', 'max:5120'],
+            'confirm_company' => ['accepted'],
+        ]);
+
+        $stock = Stock::query()
+            ->whereRaw('UPPER(symbol) = ?', [strtoupper(trim($validated['stock_symbol']))])
+            ->whereRaw('UPPER(exchange) = ?', [strtoupper($validated['exchange'])])
+            ->where('is_active', true)
+            ->where('is_benchmark', false)
+            ->first();
+
+        if ($stock === null) {
+            throw ValidationException::withMessages([
+                'stock_symbol' => 'No active company stock matches that symbol and exchange.',
+            ]);
+        }
+
+        $uploadedFile = $validated['file'];
+        $result = $this->manualSpreadsheetImporter->import(
+            $uploadedFile->getRealPath(),
+            $stock,
+            (int) $request->user()->id,
+            $uploadedFile->getClientOriginalName(),
+            $validated['statement_basis'],
+            $this->fundamentals,
+        );
+
+        return ApiEnvelope::success([
+            'stock' => ['id' => $stock->id, 'symbol' => $stock->symbol, 'exchange' => $stock->exchange],
+            'import' => $result,
+        ]);
     }
 
     public function manualFetch(Request $request, Stock $stock): JsonResponse
