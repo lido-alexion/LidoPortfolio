@@ -133,6 +133,10 @@
             "description": "Routes under `/api/v1/securities`."
         },
         {
+            "name": "stock-details",
+            "description": "Stock Details visualization preferences."
+        },
+        {
             "name": "stocks",
             "description": "Routes under `/api/v1/stocks`."
         },
@@ -10858,6 +10862,57 @@
                                 "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
                             }
                         }
+                    }
+                }
+            }
+        },
+        "/api/v1/stock-details/combo-chart-preference": {
+            "get": {
+                "tags": ["stock-details"],
+                "summary": "GET account combo chart preference",
+                "description": "Returns the authenticated user's account-wide Stock Details combo chart default, or null when no explicit default is set.",
+                "operationId": "get_stock_details_combo_chart_preference",
+                "parameters": [{ "$ref": "#/components/parameters/XProfileId" }],
+                "responses": {
+                    "200": {
+                        "description": "Envelope containing default_preset_id and account scope.",
+                        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EnvelopeSuccess" } } }
+                    },
+                    "401": { "description": "Unauthenticated (Sanctum session missing or expired)." }
+                }
+            },
+            "put": {
+                "tags": ["stock-details"],
+                "summary": "PUT account combo chart preference",
+                "description": "Sets one catalogue preset as the authenticated user's account-wide default.",
+                "operationId": "put_stock_details_combo_chart_preference",
+                "parameters": [{ "$ref": "#/components/parameters/XProfileId" }],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": ["default_preset_id"],
+                                "properties": {
+                                    "default_preset_id": {
+                                        "type": "string",
+                                        "enum": ["price-volume", "price-pe", "price-pb", "price-ps", "price-eps", "price-revenue", "price-net-profit"]
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Envelope containing the stored default_preset_id and account scope.",
+                        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EnvelopeSuccess" } } }
+                    },
+                    "401": { "description": "Unauthenticated (Sanctum session missing or expired)." },
+                    "422": {
+                        "description": "Preset ID is not in the frozen catalogue.",
+                        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorOrValidation" } } }
                     }
                 }
             }
