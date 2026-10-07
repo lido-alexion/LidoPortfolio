@@ -18,6 +18,7 @@ use App\Services\PortfolioLoggerService;
 use App\Services\SettingsService;
 use App\Services\SyncLogService;
 use App\Services\UniversePriceSyncService;
+use App\Services\VpsHealth\VpsHealthNotificationService;
 use App\Support\TradingCalendar;
 use App\Support\TradingOsConfig;
 use Illuminate\Foundation\Inspiring;
@@ -28,6 +29,22 @@ use Illuminate\Support\Facades\Schema;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+Artisan::command('vps-health:notify', function () {
+    $payload = json_decode(stream_get_contents(STDIN), true);
+    if (! is_array($payload) || ! is_string($payload['title'] ?? null) || ! is_string($payload['message'] ?? null)) {
+        $this->error('Expected JSON on stdin with string title and message fields.');
+        return 2;
+    }
+
+    $result = app(VpsHealthNotificationService::class)->send(
+        mb_substr($payload['title'], 0, 180),
+        mb_substr($payload['message'], 0, 8000),
+        (bool) ($payload['urgent'] ?? false),
+    );
+    $this->line(json_encode($result, JSON_THROW_ON_ERROR));
+    return $result['success'] ? 0 : 1;
+})->purpose('Send health alerts to configured StoX admins through Laravel mail and Telegram');
 
 Artisan::command('portfolio:daily-sync', function () {
     @set_time_limit(0);
