@@ -710,115 +710,6 @@
                 "x-stox-admin": true
             }
         },
-        "/api/v1/admin/ml/acceptance/backfills/preview": {
-            "post": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Queue a preview of sealed historical sources",
-                "description": "Live route: `POST /api/v1/admin/ml/acceptance/backfills/preview`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@preview`. Requires admin (`is_admin`).",
-                "operationId": "post_admin_ml_acceptance_backfills_preview",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    }
-                ],
-                "responses": {
-                    "202": {
-                        "description": "Safe acceptance payload wrapped in `data`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "type": "object",
-                                            "additionalProperties": true
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "403": {
-                        "description": "Authenticated but not an admin (`admin` middleware)."
-                    },
-                    "413": {
-                        "description": "Content-Length exceeds the 1,500,000-byte acceptance request limit.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "message": {
-                                            "type": "string"
-                                        },
-                                        "request_id": {
-                                            "type": "string",
-                                            "nullable": true
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Laravel validation `{message, errors}`: invalid input, source quotas/state, queue prerequisites or campaign/backfill preconditions. Invalid base64 returns `{message, request_id}`."
-                    },
-                    "429": {
-                        "description": "Acceptance rate limit exceeded (60 requests per minute).",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "message": {
-                                            "type": "string"
-                                        },
-                                        "request_id": {
-                                            "type": "string",
-                                            "nullable": true
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "required": [
-                                    "sources"
-                                ],
-                                "properties": {
-                                    "sources": {
-                                        "type": "array",
-                                        "minItems": 1,
-                                        "maxItems": 5000,
-                                        "uniqueItems": true,
-                                        "items": {
-                                            "type": "string",
-                                            "format": "uuid"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                "x-stox-admin": true
-            }
-        },
         "/api/v1/admin/ml/acceptance/backfills/{backfill}": {
             "get": {
                 "tags": [
@@ -1044,6 +935,115 @@
                                         "request_id": {
                                             "type": "string",
                                             "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/acceptance/backfills/preview": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Queue a preview of sealed historical sources",
+                "description": "Live route: `POST /api/v1/admin/ml/acceptance/backfills/preview`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@preview`. Requires admin (`is_admin`).",
+                "operationId": "post_admin_ml_acceptance_backfills_preview",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Safe acceptance payload wrapped in `data`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "413": {
+                        "description": "Content-Length exceeds the 1,500,000-byte acceptance request limit.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Laravel validation `{message, errors}`: invalid input, source quotas/state, queue prerequisites or campaign/backfill preconditions. Invalid base64 returns `{message, request_id}`."
+                    },
+                    "429": {
+                        "description": "Acceptance rate limit exceeded (60 requests per minute).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "sources"
+                                ],
+                                "properties": {
+                                    "sources": {
+                                        "type": "array",
+                                        "minItems": 1,
+                                        "maxItems": 5000,
+                                        "uniqueItems": true,
+                                        "items": {
+                                            "type": "string",
+                                            "format": "uuid"
                                         }
                                     }
                                 }
@@ -1733,6 +1733,131 @@
                 "x-stox-admin": true
             }
         },
+        "/api/v1/admin/ml/acceptance/sources/{source}/{action}": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Finalize, resume or cancel a source upload",
+                "description": "Live route: `POST /api/v1/admin/ml/acceptance/sources/{source}/{action}`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@sourceAction`. Requires admin (`is_admin`).",
+                "operationId": "post_admin_ml_acceptance_sources_source_action",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "source",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "action",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "finalize",
+                                "resume",
+                                "cancel"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Safe acceptance payload wrapped in `data`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "404": {
+                        "description": "Resource missing, route parameter/action invalid, or inspected backfill is not an acceptance backfill.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "413": {
+                        "description": "Content-Length exceeds the 1,500,000-byte acceptance request limit.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Laravel validation `{message, errors}`: invalid input, source quotas/state, queue prerequisites or campaign/backfill preconditions. Invalid base64 returns `{message, request_id}`."
+                    },
+                    "429": {
+                        "description": "Acceptance rate limit exceeded (60 requests per minute).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
         "/api/v1/admin/ml/acceptance/sources/{source}/chunks": {
             "put": {
                 "tags": [
@@ -1861,131 +1986,6 @@
                                         "type": "string",
                                         "format": "byte",
                                         "maxLength": 1398104
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                "x-stox-admin": true
-            }
-        },
-        "/api/v1/admin/ml/acceptance/sources/{source}/{action}": {
-            "post": {
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Finalize, resume or cancel a source upload",
-                "description": "Live route: `POST /api/v1/admin/ml/acceptance/sources/{source}/{action}`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@sourceAction`. Requires admin (`is_admin`).",
-                "operationId": "post_admin_ml_acceptance_sources_source_action",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    },
-                    {
-                        "name": "source",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    },
-                    {
-                        "name": "action",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "enum": [
-                                "finalize",
-                                "resume",
-                                "cancel"
-                            ]
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Safe acceptance payload wrapped in `data`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "type": "object",
-                                            "additionalProperties": true
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "403": {
-                        "description": "Authenticated but not an admin (`admin` middleware)."
-                    },
-                    "404": {
-                        "description": "Resource missing, route parameter/action invalid, or inspected backfill is not an acceptance backfill.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "message": {
-                                            "type": "string"
-                                        },
-                                        "request_id": {
-                                            "type": "string",
-                                            "nullable": true
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "413": {
-                        "description": "Content-Length exceeds the 1,500,000-byte acceptance request limit.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "message": {
-                                            "type": "string"
-                                        },
-                                        "request_id": {
-                                            "type": "string",
-                                            "nullable": true
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Laravel validation `{message, errors}`: invalid input, source quotas/state, queue prerequisites or campaign/backfill preconditions. Invalid base64 returns `{message, request_id}`."
-                    },
-                    "429": {
-                        "description": "Acceptance rate limit exceeded (60 requests per minute).",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "message": {
-                                            "type": "string"
-                                        },
-                                        "request_id": {
-                                            "type": "string",
-                                            "nullable": true
-                                        }
                                     }
                                 }
                             }
@@ -2874,6 +2874,50 @@
                 "x-stox-admin": true
             }
         },
+        "/api/v1/admin/vps-health": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "GET index",
+                "description": "Live route: `GET /api/v1/admin/vps-health`. Action: `App\\Http\\Controllers\\Api\\VpsHealthController@index`. Requires admin (`is_admin`).",
+                "operationId": "get_admin_vps_health",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
         "/api/v1/analytics/dashboard": {
             "get": {
                 "tags": [
@@ -3386,6 +3430,162 @@
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-library/{uuid}": {
+            "get": {
+                "tags": [
+                    "artifact-library"
+                ],
+                "summary": "GET show",
+                "description": "Live route: `GET /api/v1/artifact-library/{uuid}`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactLibraryController@show`.",
+                "operationId": "get_artifact-library_uuid",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-library/{uuid}/archive": {
+            "post": {
+                "tags": [
+                    "artifact-library"
+                ],
+                "summary": "POST archive",
+                "description": "Live route: `POST /api/v1/artifact-library/{uuid}/archive`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactLibraryController@archive`.",
+                "operationId": "post_artifact-library_uuid_archive",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-library/{uuid}/diff": {
+            "get": {
+                "tags": [
+                    "artifact-library"
+                ],
+                "summary": "GET diff",
+                "description": "Live route: `GET /api/v1/artifact-library/{uuid}/diff`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactLibraryController@diff`.",
+                "operationId": "get_artifact-library_uuid_diff",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
                     }
                 ],
                 "responses": {
@@ -4059,162 +4259,6 @@
                 }
             }
         },
-        "/api/v1/artifact-library/{uuid}": {
-            "get": {
-                "tags": [
-                    "artifact-library"
-                ],
-                "summary": "GET show",
-                "description": "Live route: `GET /api/v1/artifact-library/{uuid}`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactLibraryController@show`.",
-                "operationId": "get_artifact-library_uuid",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    },
-                    {
-                        "name": "uuid",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "integer"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Envelope `{success: true, data, meta}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorOrValidation"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/artifact-library/{uuid}/archive": {
-            "post": {
-                "tags": [
-                    "artifact-library"
-                ],
-                "summary": "POST archive",
-                "description": "Live route: `POST /api/v1/artifact-library/{uuid}/archive`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactLibraryController@archive`.",
-                "operationId": "post_artifact-library_uuid_archive",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    },
-                    {
-                        "name": "uuid",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "integer"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Envelope `{success: true, data, meta}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorOrValidation"
-                                }
-                            }
-                        }
-                    }
-                },
-                "requestBody": {
-                    "required": false,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "additionalProperties": true,
-                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/artifact-library/{uuid}/diff": {
-            "get": {
-                "tags": [
-                    "artifact-library"
-                ],
-                "summary": "GET diff",
-                "description": "Live route: `GET /api/v1/artifact-library/{uuid}/diff`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactLibraryController@diff`.",
-                "operationId": "get_artifact-library_uuid_diff",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    },
-                    {
-                        "name": "uuid",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "integer"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Envelope `{success: true, data, meta}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorOrValidation"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/artifact-share-grants/{uuid}/adopt": {
             "post": {
                 "tags": [
@@ -4375,189 +4419,6 @@
                 }
             }
         },
-        "/api/v1/artifacts/export": {
-            "post": {
-                "tags": [
-                    "artifacts"
-                ],
-                "summary": "Export an artifact package",
-                "description": "Live route: `POST /api/v1/artifacts/export`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactRegistryController@exportPackage`.",
-                "operationId": "post_artifacts_export",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Envelope `{success: true, data, meta}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorOrValidation"
-                                }
-                            }
-                        }
-                    }
-                },
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "required": [
-                                    "targets"
-                                ],
-                                "properties": {
-                                    "targets": {
-                                        "type": "array",
-                                        "minItems": 1,
-                                        "items": {
-                                            "type": "object",
-                                            "required": [
-                                                "type",
-                                                "id"
-                                            ],
-                                            "properties": {
-                                                "type": {
-                                                    "type": "string",
-                                                    "enum": [
-                                                        "indicator",
-                                                        "screener",
-                                                        "strategy"
-                                                    ]
-                                                },
-                                                "id": {
-                                                    "type": "string"
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/artifacts/import": {
-            "post": {
-                "tags": [
-                    "artifacts"
-                ],
-                "summary": "POST importPackage",
-                "description": "Live route: `POST /api/v1/artifacts/import`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactRegistryController@importPackage`.",
-                "operationId": "post_artifacts_import",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Envelope `{success: true, data, meta}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorOrValidation"
-                                }
-                            }
-                        }
-                    }
-                },
-                "requestBody": {
-                    "required": false,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "additionalProperties": true,
-                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/artifacts/validate": {
-            "post": {
-                "tags": [
-                    "artifacts"
-                ],
-                "summary": "POST validatePackage",
-                "description": "Live route: `POST /api/v1/artifacts/validate`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactRegistryController@validatePackage`.",
-                "operationId": "post_artifacts_validate",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Envelope `{success: true, data, meta}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorOrValidation"
-                                }
-                            }
-                        }
-                    }
-                },
-                "requestBody": {
-                    "required": false,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "additionalProperties": true,
-                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/artifacts/{type}": {
             "get": {
                 "tags": [
@@ -4627,66 +4488,6 @@
                 ],
                 "responses": {
                     "201": {
-                        "description": "Envelope `{success: true, data, meta}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorOrValidation"
-                                }
-                            }
-                        }
-                    }
-                },
-                "requestBody": {
-                    "required": false,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "additionalProperties": true,
-                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/artifacts/{type}/validate": {
-            "post": {
-                "tags": [
-                    "artifacts"
-                ],
-                "summary": "POST validateArtifact",
-                "description": "Live route: `POST /api/v1/artifacts/{type}/validate`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactRegistryController@validateArtifact`.",
-                "operationId": "post_artifacts_type_validate",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    },
-                    {
-                        "name": "type",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
                         "description": "Envelope `{success: true, data, meta}`.",
                         "content": {
                             "application/json": {
@@ -4914,6 +4715,249 @@
                 }
             }
         },
+        "/api/v1/artifacts/{type}/validate": {
+            "post": {
+                "tags": [
+                    "artifacts"
+                ],
+                "summary": "POST validateArtifact",
+                "description": "Live route: `POST /api/v1/artifacts/{type}/validate`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactRegistryController@validateArtifact`.",
+                "operationId": "post_artifacts_type_validate",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "type",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifacts/export": {
+            "post": {
+                "tags": [
+                    "artifacts"
+                ],
+                "summary": "Export an artifact package",
+                "description": "Live route: `POST /api/v1/artifacts/export`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactRegistryController@exportPackage`.",
+                "operationId": "post_artifacts_export",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "targets"
+                                ],
+                                "properties": {
+                                    "targets": {
+                                        "type": "array",
+                                        "minItems": 1,
+                                        "items": {
+                                            "type": "object",
+                                            "required": [
+                                                "type",
+                                                "id"
+                                            ],
+                                            "properties": {
+                                                "type": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "indicator",
+                                                        "screener",
+                                                        "strategy"
+                                                    ]
+                                                },
+                                                "id": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifacts/import": {
+            "post": {
+                "tags": [
+                    "artifacts"
+                ],
+                "summary": "POST importPackage",
+                "description": "Live route: `POST /api/v1/artifacts/import`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactRegistryController@importPackage`.",
+                "operationId": "post_artifacts_import",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifacts/validate": {
+            "post": {
+                "tags": [
+                    "artifacts"
+                ],
+                "summary": "POST validatePackage",
+                "description": "Live route: `POST /api/v1/artifacts/validate`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactRegistryController@validatePackage`.",
+                "operationId": "post_artifacts_validate",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/backtests": {
             "get": {
                 "tags": [
@@ -5039,98 +5083,6 @@
                                         "type": "integer",
                                         "nullable": true
                                     }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/backtests/compare": {
-            "post": {
-                "tags": [
-                    "backtests"
-                ],
-                "summary": "POST compare",
-                "description": "Live route: `POST /api/v1/backtests/compare`. Action: `App\\Http\\Controllers\\Api\\V1\\BacktestController@compare`.",
-                "operationId": "post_backtests_compare",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Envelope `{success: true, data, meta}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorOrValidation"
-                                }
-                            }
-                        }
-                    }
-                },
-                "requestBody": {
-                    "required": false,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "additionalProperties": true,
-                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/backtests/meta": {
-            "get": {
-                "tags": [
-                    "backtests"
-                ],
-                "summary": "GET meta",
-                "description": "Live route: `GET /api/v1/backtests/meta`. Action: `App\\Http\\Controllers\\Api\\V1\\BacktestController@meta`.",
-                "operationId": "get_backtests_meta",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Envelope `{success: true, data, meta}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorOrValidation"
                                 }
                             }
                         }
@@ -5503,6 +5455,98 @@
                         "schema": {
                             "type": "string"
                         }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/backtests/compare": {
+            "post": {
+                "tags": [
+                    "backtests"
+                ],
+                "summary": "POST compare",
+                "description": "Live route: `POST /api/v1/backtests/compare`. Action: `App\\Http\\Controllers\\Api\\V1\\BacktestController@compare`.",
+                "operationId": "post_backtests_compare",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/backtests/meta": {
+            "get": {
+                "tags": [
+                    "backtests"
+                ],
+                "summary": "GET meta",
+                "description": "Live route: `GET /api/v1/backtests/meta`. Action: `App\\Http\\Controllers\\Api\\V1\\BacktestController@meta`.",
+                "operationId": "get_backtests_meta",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
                 "responses": {
@@ -7684,17 +7728,25 @@
                 "x-stox-admin": true
             }
         },
-        "/api/v1/indicators/meta": {
+        "/api/v1/indicators/{id}": {
             "get": {
                 "tags": [
                     "indicators"
                 ],
-                "summary": "GET meta",
-                "description": "Live route: `GET /api/v1/indicators/meta`. Action: `App\\Http\\Controllers\\Api\\V1\\IndicatorRegistryController@meta`. Requires admin (`is_admin`).",
-                "operationId": "get_indicators_meta",
+                "summary": "GET show",
+                "description": "Live route: `GET /api/v1/indicators/{id}`. Action: `App\\Http\\Controllers\\Api\\V1\\IndicatorRegistryController@show`. Requires admin (`is_admin`).",
+                "operationId": "get_indicators_id",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
                     }
                 ],
                 "responses": {
@@ -7728,25 +7780,17 @@
                 "x-stox-admin": true
             }
         },
-        "/api/v1/indicators/{id}": {
+        "/api/v1/indicators/meta": {
             "get": {
                 "tags": [
                     "indicators"
                 ],
-                "summary": "GET show",
-                "description": "Live route: `GET /api/v1/indicators/{id}`. Action: `App\\Http\\Controllers\\Api\\V1\\IndicatorRegistryController@show`. Requires admin (`is_admin`).",
-                "operationId": "get_indicators_id",
+                "summary": "GET meta",
+                "description": "Live route: `GET /api/v1/indicators/meta`. Action: `App\\Http\\Controllers\\Api\\V1\\IndicatorRegistryController@meta`. Requires admin (`is_admin`).",
+                "operationId": "get_indicators_meta",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/XProfileId"
-                    },
-                    {
-                        "name": "id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
                     }
                 ],
                 "responses": {
@@ -9136,86 +9180,6 @@
                 }
             }
         },
-        "/api/v1/recommendations/generate": {
-            "post": {
-                "tags": [
-                    "recommendations"
-                ],
-                "summary": "Generate recommendations from latest evaluation",
-                "description": "Not freshness-gated. Completing a recommendation by fill is not this endpoint; use POST /api/transactions with recommendation_id (legacy /api).",
-                "operationId": "post_recommendations_generate",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Envelope `{success: true, data, meta}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorOrValidation"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/recommendations/pending-execution": {
-            "get": {
-                "tags": [
-                    "recommendations"
-                ],
-                "summary": "Recommendations awaiting ledger fill",
-                "description": "Approved / pending_execution queue. Fill is POST /api/transactions (legacy), not this path.",
-                "operationId": "get_recommendations_pending-execution",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Envelope `{success: true, data, meta}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorOrValidation"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/recommendations/{id}": {
             "get": {
                 "tags": [
@@ -9657,6 +9621,86 @@
                 }
             }
         },
+        "/api/v1/recommendations/generate": {
+            "post": {
+                "tags": [
+                    "recommendations"
+                ],
+                "summary": "Generate recommendations from latest evaluation",
+                "description": "Not freshness-gated. Completing a recommendation by fill is not this endpoint; use POST /api/transactions with recommendation_id (legacy /api).",
+                "operationId": "post_recommendations_generate",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/recommendations/pending-execution": {
+            "get": {
+                "tags": [
+                    "recommendations"
+                ],
+                "summary": "Recommendations awaiting ledger fill",
+                "description": "Approved / pending_execution queue. Fill is POST /api/transactions (legacy), not this path.",
+                "operationId": "get_recommendations_pending-execution",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/review/dashboard": {
             "get": {
                 "tags": [
@@ -9804,6 +9848,54 @@
                 }
             }
         },
+        "/api/v1/reviews/{id}": {
+            "get": {
+                "tags": [
+                    "reviews"
+                ],
+                "summary": "GET reviewsShow",
+                "description": "Live route: `GET /api/v1/reviews/{id}`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\ReviewController@reviewsShow`.",
+                "operationId": "get_reviews_id",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/reviews/generate": {
             "post": {
                 "tags": [
@@ -9837,54 +9929,6 @@
                 ],
                 "responses": {
                     "201": {
-                        "description": "Envelope `{success: true, data, meta}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorOrValidation"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/reviews/{id}": {
-            "get": {
-                "tags": [
-                    "reviews"
-                ],
-                "summary": "GET reviewsShow",
-                "description": "Live route: `GET /api/v1/reviews/{id}`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\ReviewController@reviewsShow`.",
-                "operationId": "get_reviews_id",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    },
-                    {
-                        "name": "id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
                         "description": "Envelope `{success: true, data, meta}`.",
                         "content": {
                             "application/json": {
@@ -9963,210 +10007,6 @@
                 ],
                 "responses": {
                     "201": {
-                        "description": "Envelope `{success: true, data, meta}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorOrValidation"
-                                }
-                            }
-                        }
-                    }
-                },
-                "requestBody": {
-                    "required": false,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "additionalProperties": true,
-                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/screener-registry/import": {
-            "post": {
-                "tags": [
-                    "screener-registry"
-                ],
-                "summary": "Import a screener artifact pack",
-                "description": "Live route: `POST /api/v1/screener-registry/import`. Action: `App\\Http\\Controllers\\Api\\V1\\ScreenerRegistryController@import`.",
-                "operationId": "post_screener-registry_import",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Envelope `{success: true, data, meta}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorOrValidation"
-                                }
-                            }
-                        }
-                    }
-                },
-                "requestBody": {
-                    "required": false,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "additionalProperties": true,
-                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/screener-registry/meta": {
-            "get": {
-                "tags": [
-                    "screener-registry"
-                ],
-                "summary": "GET meta",
-                "description": "Live route: `GET /api/v1/screener-registry/meta`. Action: `App\\Http\\Controllers\\Api\\V1\\ScreenerRegistryController@meta`.",
-                "operationId": "get_screener-registry_meta",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Envelope `{success: true, data, meta}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorOrValidation"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/screener-registry/shared/{sourceId}/import": {
-            "post": {
-                "tags": [
-                    "screener-registry"
-                ],
-                "summary": "Import a shared screener into this portfolio",
-                "description": "Live route: `POST /api/v1/screener-registry/shared/{sourceId}/import`. Action: `App\\Http\\Controllers\\Api\\V1\\ScreenerRegistryController@importShared`.",
-                "operationId": "post_screener-registry_shared_sourceId_import",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    },
-                    {
-                        "name": "sourceId",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "integer"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Envelope `{success: true, data, meta}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorOrValidation"
-                                }
-                            }
-                        }
-                    }
-                },
-                "requestBody": {
-                    "required": false,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "additionalProperties": true,
-                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/screener-registry/validate": {
-            "post": {
-                "tags": [
-                    "screener-registry"
-                ],
-                "summary": "POST validateEnvelope",
-                "description": "Live route: `POST /api/v1/screener-registry/validate`. Action: `App\\Http\\Controllers\\Api\\V1\\ScreenerRegistryController@validateEnvelope`.",
-                "operationId": "post_screener-registry_validate",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    }
-                ],
-                "responses": {
-                    "200": {
                         "description": "Envelope `{success: true, data, meta}`.",
                         "content": {
                             "application/json": {
@@ -10418,6 +10258,210 @@
                 }
             }
         },
+        "/api/v1/screener-registry/import": {
+            "post": {
+                "tags": [
+                    "screener-registry"
+                ],
+                "summary": "Import a screener artifact pack",
+                "description": "Live route: `POST /api/v1/screener-registry/import`. Action: `App\\Http\\Controllers\\Api\\V1\\ScreenerRegistryController@import`.",
+                "operationId": "post_screener-registry_import",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/screener-registry/meta": {
+            "get": {
+                "tags": [
+                    "screener-registry"
+                ],
+                "summary": "GET meta",
+                "description": "Live route: `GET /api/v1/screener-registry/meta`. Action: `App\\Http\\Controllers\\Api\\V1\\ScreenerRegistryController@meta`.",
+                "operationId": "get_screener-registry_meta",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/screener-registry/shared/{sourceId}/import": {
+            "post": {
+                "tags": [
+                    "screener-registry"
+                ],
+                "summary": "Import a shared screener into this portfolio",
+                "description": "Live route: `POST /api/v1/screener-registry/shared/{sourceId}/import`. Action: `App\\Http\\Controllers\\Api\\V1\\ScreenerRegistryController@importShared`.",
+                "operationId": "post_screener-registry_shared_sourceId_import",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "sourceId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/screener-registry/validate": {
+            "post": {
+                "tags": [
+                    "screener-registry"
+                ],
+                "summary": "POST validateEnvelope",
+                "description": "Live route: `POST /api/v1/screener-registry/validate`. Action: `App\\Http\\Controllers\\Api\\V1\\ScreenerRegistryController@validateEnvelope`.",
+                "operationId": "post_screener-registry_validate",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/securities": {
             "get": {
                 "tags": [
@@ -10547,9 +10591,9 @@
                 "tags": [
                     "stock-details"
                 ],
-                "summary": "GET show",
-                "description": "Live route: `GET /api/v1/stock-details/combo-chart-preference`. Action: `App\\Http\\Controllers\\Api\\V1\\ComboChartPreferenceController@show`.",
-                "operationId": "get_stock-details_combo-chart-preference",
+                "summary": "GET account combo chart preference",
+                "description": "Returns the authenticated user's account-wide Stock Details combo chart default, or null when no explicit default is set.",
+                "operationId": "get_stock_details_combo_chart_preference",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/XProfileId"
@@ -10557,7 +10601,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Envelope `{success: true, data, meta}`.",
+                        "description": "Envelope containing default_preset_id and account scope.",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -10585,9 +10629,9 @@
                 "tags": [
                     "stock-details"
                 ],
-                "summary": "PUT update",
-                "description": "Live route: `PUT /api/v1/stock-details/combo-chart-preference`. Action: `App\\Http\\Controllers\\Api\\V1\\ComboChartPreferenceController@update`.",
-                "operationId": "put_stock-details_combo-chart-preference",
+                "summary": "PUT account combo chart preference",
+                "description": "Sets one catalogue preset as the authenticated user's account-wide default.",
+                "operationId": "put_stock_details_combo_chart_preference",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/XProfileId"
@@ -10595,7 +10639,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Envelope `{success: true, data, meta}`.",
+                        "description": "Envelope containing the stored default_preset_id and account scope.",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -10608,7 +10652,7 @@
                         "description": "Unauthenticated (Sanctum session missing or expired)."
                     },
                     "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "description": "Preset ID is not in the frozen catalogue.",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -10619,13 +10663,28 @@
                     }
                 },
                 "requestBody": {
-                    "required": false,
+                    "required": true,
                     "content": {
                         "application/json": {
                             "schema": {
                                 "type": "object",
-                                "additionalProperties": true,
-                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                                "required": [
+                                    "default_preset_id"
+                                ],
+                                "properties": {
+                                    "default_preset_id": {
+                                        "type": "string",
+                                        "enum": [
+                                            "price-volume",
+                                            "price-pe",
+                                            "price-pb",
+                                            "price-ps",
+                                            "price-eps",
+                                            "price-revenue",
+                                            "price-net-profit"
+                                        ]
+                                    }
+                                }
                             }
                         }
                     }
@@ -11284,190 +11343,6 @@
                 }
             }
         },
-        "/api/v1/strategy-registry/import": {
-            "post": {
-                "tags": [
-                    "strategy-registry"
-                ],
-                "summary": "Import a strategy artifact pack",
-                "description": "Live route: `POST /api/v1/strategy-registry/import`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyRegistryController@import`.",
-                "operationId": "post_strategy-registry_import",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Envelope `{success: true, data, meta}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorOrValidation"
-                                }
-                            }
-                        }
-                    }
-                },
-                "requestBody": {
-                    "required": false,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "additionalProperties": true,
-                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/strategy-registry/meta": {
-            "get": {
-                "tags": [
-                    "strategy-registry"
-                ],
-                "summary": "GET meta",
-                "description": "Live route: `GET /api/v1/strategy-registry/meta`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyRegistryController@meta`.",
-                "operationId": "get_strategy-registry_meta",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Envelope `{success: true, data, meta}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorOrValidation"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/strategy-registry/selection": {
-            "get": {
-                "tags": [
-                    "strategy-registry"
-                ],
-                "summary": "GET selection",
-                "description": "Live route: `GET /api/v1/strategy-registry/selection`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyRegistryController@selection`.",
-                "operationId": "get_strategy-registry_selection",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Envelope `{success: true, data, meta}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorOrValidation"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/strategy-registry/validate": {
-            "post": {
-                "tags": [
-                    "strategy-registry"
-                ],
-                "summary": "POST validateEnvelope",
-                "description": "Live route: `POST /api/v1/strategy-registry/validate`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyRegistryController@validateEnvelope`.",
-                "operationId": "post_strategy-registry_validate",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/XProfileId"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Envelope `{success: true, data, meta}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/EnvelopeSuccess"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthenticated (Sanctum session missing or expired)."
-                    },
-                    "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorOrValidation"
-                                }
-                            }
-                        }
-                    }
-                },
-                "requestBody": {
-                    "required": false,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "additionalProperties": true,
-                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/strategy-registry/{id}": {
             "get": {
                 "tags": [
@@ -11796,6 +11671,190 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ErrorOrValidation"
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/strategy-registry/import": {
+            "post": {
+                "tags": [
+                    "strategy-registry"
+                ],
+                "summary": "Import a strategy artifact pack",
+                "description": "Live route: `POST /api/v1/strategy-registry/import`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyRegistryController@import`.",
+                "operationId": "post_strategy-registry_import",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/strategy-registry/meta": {
+            "get": {
+                "tags": [
+                    "strategy-registry"
+                ],
+                "summary": "GET meta",
+                "description": "Live route: `GET /api/v1/strategy-registry/meta`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyRegistryController@meta`.",
+                "operationId": "get_strategy-registry_meta",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/strategy-registry/selection": {
+            "get": {
+                "tags": [
+                    "strategy-registry"
+                ],
+                "summary": "GET selection",
+                "description": "Live route: `GET /api/v1/strategy-registry/selection`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyRegistryController@selection`.",
+                "operationId": "get_strategy-registry_selection",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/strategy-registry/validate": {
+            "post": {
+                "tags": [
+                    "strategy-registry"
+                ],
+                "summary": "POST validateEnvelope",
+                "description": "Live route: `POST /api/v1/strategy-registry/validate`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyRegistryController@validateEnvelope`.",
+                "operationId": "post_strategy-registry_validate",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
                             }
                         }
                     }
