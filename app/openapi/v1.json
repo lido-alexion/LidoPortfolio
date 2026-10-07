@@ -134,7 +134,7 @@
         },
         {
             "name": "stock-details",
-            "description": "Stock Details visualization preferences."
+            "description": "Routes under `/api/v1/stock-details`."
         },
         {
             "name": "stocks",
@@ -299,6 +299,62 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ErrorOrValidation"
                                 }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/manual-import": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "POST importManualWorkbook",
+                "description": "Live route: `POST /api/v1/admin/fundamentals/manual-import`. Action: `App\\Http\\Controllers\\Api\\V1\\FundamentalDataController@importManualWorkbook`. Requires admin (`is_admin`).",
+                "operationId": "post_admin_fundamentals_manual-import",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
                             }
                         }
                     }
@@ -10486,6 +10542,96 @@
                 }
             }
         },
+        "/api/v1/stock-details/combo-chart-preference": {
+            "get": {
+                "tags": [
+                    "stock-details"
+                ],
+                "summary": "GET show",
+                "description": "Live route: `GET /api/v1/stock-details/combo-chart-preference`. Action: `App\\Http\\Controllers\\Api\\V1\\ComboChartPreferenceController@show`.",
+                "operationId": "get_stock-details_combo-chart-preference",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "stock-details"
+                ],
+                "summary": "PUT update",
+                "description": "Live route: `PUT /api/v1/stock-details/combo-chart-preference`. Action: `App\\Http\\Controllers\\Api\\V1\\ComboChartPreferenceController@update`.",
+                "operationId": "put_stock-details_combo-chart-preference",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/stocks/{stock}/fundamentals": {
             "get": {
                 "tags": [
@@ -10862,57 +11008,6 @@
                                 "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
                             }
                         }
-                    }
-                }
-            }
-        },
-        "/api/v1/stock-details/combo-chart-preference": {
-            "get": {
-                "tags": ["stock-details"],
-                "summary": "GET account combo chart preference",
-                "description": "Returns the authenticated user's account-wide Stock Details combo chart default, or null when no explicit default is set.",
-                "operationId": "get_stock_details_combo_chart_preference",
-                "parameters": [{ "$ref": "#/components/parameters/XProfileId" }],
-                "responses": {
-                    "200": {
-                        "description": "Envelope containing default_preset_id and account scope.",
-                        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EnvelopeSuccess" } } }
-                    },
-                    "401": { "description": "Unauthenticated (Sanctum session missing or expired)." }
-                }
-            },
-            "put": {
-                "tags": ["stock-details"],
-                "summary": "PUT account combo chart preference",
-                "description": "Sets one catalogue preset as the authenticated user's account-wide default.",
-                "operationId": "put_stock_details_combo_chart_preference",
-                "parameters": [{ "$ref": "#/components/parameters/XProfileId" }],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "required": ["default_preset_id"],
-                                "properties": {
-                                    "default_preset_id": {
-                                        "type": "string",
-                                        "enum": ["price-volume", "price-pe", "price-pb", "price-ps", "price-eps", "price-revenue", "price-net-profit"]
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "Envelope containing the stored default_preset_id and account scope.",
-                        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EnvelopeSuccess" } } }
-                    },
-                    "401": { "description": "Unauthenticated (Sanctum session missing or expired)." },
-                    "422": {
-                        "description": "Preset ID is not in the frozen catalogue.",
-                        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorOrValidation" } } }
                     }
                 }
             }
