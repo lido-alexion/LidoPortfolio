@@ -71,10 +71,10 @@ Cloud Chrome showed seven existing rows under `My screens`, a separate `Shared s
 
 ### Required production provenance work before closing FEAT-064
 
-1. Add a regression that exercises an active legacy unpinned Strategy when a new Screener run exists, including the exit-rule path. Preserve the rule that new runs and newly saved Strategy versions pin exact immutable versions.
-2. Reconcile the four active legacy Strategy versions through the documented provenance migration process. Do not silently edit immutable `config_json` or assign a historical version from current state without evidence; if exact historic identity cannot be proven, preserve uncertainty and require a new copy-on-write Strategy save to adopt the current Screener version.
-3. Make runtime eligibility fail closed or report Setup Required for an unresolved pin, with a clear investor action. Verify activation/readiness and recommendation generation cannot silently treat an unpinned dependency as version-agnostic. Assess the operational impact before production rollout.
-4. Re-run the exact-version regression and production read-only provenance report; then perform the controlled two-account workflow, membership-drift, and deployed accessibility checks already pending above. Only mark FEAT-064 IMPLEMENTED when the provenance gate passes.
+1. **Completed in PR #72:** regression coverage exercises an active legacy unpinned Strategy when a new Screener run exists, including exit rules; new runs and saved Strategy versions preserve exact immutable pins.
+2. **Still required:** reconcile the four active legacy Strategy bindings through the documented provenance process. Do not silently edit immutable `config_json` or assign a historical version from current state without evidence. If exact historic identity cannot be proven, preserve that uncertainty and use a new copy-on-write Strategy save to adopt the current Screener version.
+3. **Completed in PR #72:** runtime eligibility fails closed for unresolved pins, prevents recommendation generation/cancellation for those active Strategies, and readiness prevents activation; regression tests cover these boundaries.
+4. After the build is stable and the four bindings are safely reconciled, rerun the production read-only provenance report and perform the controlled two-account workflow, membership-drift, and deployed accessibility checks. Keep FEAT-064 in REVIEW until the production provenance gate is safely resolved.
 
 The frozen requirement is exact Strategy-version-to-Screener-version reconstruction. Historical nulls must remain visible as unresolved evidence, not be cosmetically filled to clear a gate.
 
