@@ -5,6 +5,7 @@
  */
 
 import {
+    Activity,
     ArrowLeftRight,
     BarChart4,
     Bell,
@@ -80,6 +81,7 @@ export function getIconComponent(name) {
 
 /** Built-in Lucide set used by the core catalog. Plugins may call registerIcon / registerIcons. */
 export const CORE_NAV_ICONS = Object.freeze({
+    Activity,
     ArrowLeftRight,
     BarChart4,
     Bell,

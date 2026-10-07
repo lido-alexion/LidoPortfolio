@@ -187,6 +187,23 @@ def channel_status(status=None):
     return {"telegram": int(status.get("telegram_recipients", 0)) > 0,
             "email": int(status.get("email_recipients", 0)) > 0,
             "cache_used": bool(status.get("cache_used", False))}
+def record_sample(metrics, issues):
+    artisan = Path(__file__).resolve().parents[2] / "artisan"
+    if not artisan.is_file() or not shutil.which("php"):
+        return False
+    payload = {"time": metrics.get("time", stamp()), "status": "critical" if issues else "ok",
+               "issues": issues, "metrics": metrics}
+    child_env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(Path.home()),
+                 "VPS_HEALTH_STATE_DIR": cfg("STATE_DIR")}
+    try:
+        result = subprocess.run(
+            ["php", str(artisan), "vps-health:record"], cwd=str(artisan.parent),
+            input=json.dumps(payload), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            text=True, timeout=8, check=False, env=child_env,
+        )
+        return result.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
 def notify(text, urgent=False):
     artisan = Path(__file__).resolve().parents[2] / "artisan"
     if not artisan.is_file() or not shutil.which("php"):
@@ -244,9 +261,12 @@ def check(directory):
         sm=summary_from(hist, state.get("last_notification_status"))
         state["last_notification_status"] = notify(json.dumps(sm,sort_keys=True),False)
         state["last_digest"]=time.time()
-    state["history"]=hist; save_state(directory,state); heartbeat()
+    state["history"]=hist; save_state(directory,state)
+    sample_recorded = record_sample(m, issues)
+    heartbeat()
     print(json.dumps({"status":"critical" if issues else "ok","issues":issues,"metrics":m,
-                      "channels":channel_status(state.get("last_notification_status"))},sort_keys=True))
+                      "channels":channel_status(state.get("last_notification_status")),
+                      "sample_recorded":sample_recorded},sort_keys=True))
 def summary_from(hist, notification_status=None):
     rows=[x for x in hist if x.get("epoch",0)>=time.time()-1800]
     return {"window_minutes":30,"samples":len(rows),"latest":rows[-1].get("metrics",{}) if rows else {},
