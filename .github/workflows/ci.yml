@@ -55,7 +55,7 @@ jobs:
             esac
 
             case "$file" in
-              app/app/*|app/bootstrap/*|app/config/*|app/database/*|app/routes/*|app/tests/*.php|app/tests/**/*.php|app/composer.json|app/composer.lock|app/phpunit.xml|scripts/**|deploy/**|.github/workflows/*.yml|.github/workflows/*.yaml)
+              app/app/*|app/bootstrap/*|app/config/*|app/database/*|app/routes/*|app/tests/*.php|app/tests/**/*.php|app/composer.json|app/composer.lock|app/phpunit.xml|app/openapi/**|app/public/docs/openapi-v1.json|scripts/**|deploy/**|.github/workflows/*.yml|.github/workflows/*.yaml)
                 backend=true
                 ;;
             esac
