@@ -1,6 +1,7 @@
 # FEAT-056 ML Lifecycle Functional Acceptance Plan
 
-**Status:** OPEN — local lifecycle implementation is complete; CI-parity and deployed runtime evidence remain.
+**Implementation state:** IMPLEMENTED (local lifecycle tests and backend CI passed).  
+**Functional acceptance state:** OPEN — deployed runtime checks remain deferred until FEAT-057 qualification.
 
 ## Ownership and boundaries
 
@@ -62,4 +63,4 @@ With an approved bounded acceptance setup and operator present:
 - No automatic promotion or rollback occurs.
 - Evidence, operator, timestamps, build/configuration, and any deviations are appended to `docs/audit/V8-FEAT-056-ACCEPTANCE-AUDIT.md`.
 
-FEAT-056 remains **REVIEW** until its acceptance audit records these gates as passed. Do not mark it COMPLETE based on local tests or this plan alone.
+FEAT-056 is **IMPLEMENTED** for code and test completion. The production functional acceptance gates above remain open; do not enable lifecycle settings or claim V8 operational completion until the safe runtime sequence passes after FEAT-057 qualification.
