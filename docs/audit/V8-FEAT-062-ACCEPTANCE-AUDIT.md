@@ -1,6 +1,6 @@
 # FEAT-062 Fundamental Signals & AI Insights — acceptance audit
 
-Status: **REVIEW — implementation and automated verification complete; screen-reader/device and real-provider validation pending**
+Status: **IMPLEMENTED — deterministic and AI implementation verified; real-provider and assistive-technology acceptance remains open**
 
 This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-AI-Insights-Specification.md`. The deterministic catalogue mapping and PIT comparison implementation are complete for structured source facts; unavailable source facts remain explicitly unavailable. Local Chromium desktop/mobile browser acceptance is covered; screen-reader accessibility and production provider validation remain external evidence gates.
 
@@ -38,7 +38,7 @@ This audit is evidence-based against `docs/archive/specs/V8-Fundamental-Signals-
 
 ## Next implementation slice
 
-The deterministic catalogue matrix is complete for all frozen rows where structured source data is available; absent data produces no invented signal. Desktop and narrow-mobile browser acceptance now cover deterministic evidence and provider failure degradation. Screen-reader/accessibility review and real-provider validation remain external, so the epic is REVIEW, not COMPLETE.
+The deterministic catalogue matrix is complete for all frozen rows where structured source data is available; absent data produces no invented signal. Desktop and narrow-mobile browser acceptance now cover deterministic evidence and provider failure degradation. Screen-reader/accessibility review and real-provider validation remain functional follow-up; implementation status is IMPLEMENTED, not a claim that every external acceptance scenario has passed.
 
 
 ## Closure continuation — 2026-10-01 (production build `ef66133c`)
@@ -53,3 +53,10 @@ Operator: Codex via connected `stoxla-prod`; UTC times below. **This entry does 
 ### Authenticated deployed disabled-provider behavior — 2026-10-01 about 19:04 UTC
 
 Cloud Chrome → Fundamental insights → SBIN displayed deterministic evidence (2 risk, 1 positive, 3 watch items), medium data sufficiency with missing cash-flow history, factual YoY delta and follow-up checks. The page explicitly said `AI insights: disabled` and preserved the deterministic results. **PASS for disabled-provider degradation/read-only display**; real-provider response validation, limits, failover and screen-reader remain blocked/not run.
+
+
+## Implementation disposition — 2026-10-07
+
+**Implementation state: IMPLEMENTED.** The deterministic signal catalogue, point-in-time comparison handling, provider-neutral Gemini/Codex adapters, failover, response safety validation, usage limits, audit, deterministic degradation, and investor UI have automated and local browser evidence. The audit records the focused backend, frontend, mobile, and axe results above.
+
+**Functional acceptance: OPEN.** A real provider call and native screen-reader/device review remain external product checks. Provider credentials were not configured in the last deployed inspection, and the disabled-provider experience preserved deterministic results. These checks remain visible without blocking the implementation status.
