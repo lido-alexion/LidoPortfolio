@@ -76,8 +76,8 @@ class VpsHealthNotificationServiceTest extends TestCase
         $this->assertSame(1, $result['telegram_recipients']);
         $this->assertFalse($result['cache_used']);
         Mail::assertSentTimes(NotificationDeliveryMail::class, 2);
-        Mail::assertSentTo('first-admin@example.com', NotificationDeliveryMail::class);
-        Mail::assertSentTo('second-admin@example.com', NotificationDeliveryMail::class);
+        Mail::assertSent(NotificationDeliveryMail::class, fn ($mail) => $mail->hasTo('first-admin@example.com'));
+        Mail::assertSent(NotificationDeliveryMail::class, fn ($mail) => $mail->hasTo('second-admin@example.com'));
         Http::assertSent(fn ($request) => str_contains($request->url(), 'admin-bot-secret')
             && $request['chat_id'] === 'admin-chat');
         Http::assertSentCount(1);
