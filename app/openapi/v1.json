@@ -2881,7 +2881,7 @@
                 ],
                 "summary": "GET index",
                 "description": "Live route: `GET /api/v1/admin/vps-health`. Action: `App\\Http\\Controllers\\Api\\VpsHealthController@index`. Requires admin (`is_admin`).",
-                "operationId": "get_admin_vps_health",
+                "operationId": "get_admin_vps-health",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/XProfileId"
