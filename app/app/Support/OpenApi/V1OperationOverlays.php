@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 11502)
+Total output lines: 825
+
 <?php
 
 namespace App\Support\OpenApi;
@@ -51,6 +54,35 @@ final class V1OperationOverlays
         ];
 
         return V1AcceptanceOverlays::all() + [
+            'GET /api/v1/stock-details/combo-chart-preference' => [
+                'summary' => 'GET account combo chart preference',
+                'description' => "Returns the authenticated user's account-wide Stock Details combo chart default, or null when no explicit default is set.",
+                'operationId' => 'get_stock_details_combo_chart_preference',
+                'successDescription' => 'Envelope containing default_preset_id and account scope.',
+                'noBody' => true,
+            ],
+            'PUT /api/v1/stock-details/combo-chart-preference' => [
+                'summary' => 'PUT account combo chart preference',
+                'description' => "Sets one catalogue preset as the authenticated user's account-wide default.",
+                'operationId' => 'put_stock_details_combo_chart_preference',
+                'successDescription' => 'Envelope containing the stored default_preset_id and account scope.',
+                'requestBody' => $json([
+                    'type' => 'object',
+                    'required' => ['default_preset_id'],
+                    'properties' => [
+                        'default_preset_id' => [
+                            'type' => 'string',
+                            'enum' => ['price-volume', 'price-pe', 'price-pb', 'price-ps', 'price-eps', 'price-revenue', 'price-net-profit'],
+                        ],
+                    ],
+                ]),
+                'responses' => [
+                    '422' => [
+                        'description' => 'Preset ID is not in the frozen catalogue.',
+                        'content' => ['application/json' => ['schema' => ['$ref' => '#/components/schemas/ErrorOrValidation']]],
+                    ],
+                ],
+            ],
             'GET /api/v1/dataset/status' => [
                 'summary' => 'Dataset / daily-sync inspection status',
                 'description' => 'Returns DataEngine datasetStatus(). `dataset_version` is the current immutable version_key (V4-FEAT-023) or `none`. `published` / `daily_sync.synced_today` mean successfully synced today in cron_timezone. Freshness for the decision pipeline uses `daily_sync.synced_at` (V4-FEAT-022), not `published`.',
@@ -249,268 +281,7 @@ final class V1OperationOverlays
                 'parameters' => $pageParams(100),
                 'successStatus' => '200',
                 'successRef' => '#/components/schemas/EnvelopePaginated',
-                'noBody' => true,
-            ],
-            'GET /api/v1/notifications' => [
-                'summary' => 'List TOS notification history',
-                'description' => 'Paginated (V4-FEAT-028). Default pageSize 50 (previous implicit cap), maximum 200.',
-                'parameters' => $pageParams(50),
-                'successStatus' => '200',
-                'successRef' => '#/components/schemas/EnvelopePaginated',
-                'noBody' => true,
-            ],
-            'GET /api/v1/reviews' => [
-                'summary' => 'List review reports',
-                'description' => 'Paginated (V4-FEAT-028). Default pageSize 20 (previous implicit cap), maximum 200. Dashboard/outcomes remain unpaginated aggregates.',
-                'parameters' => $pageParams(20),
-                'successStatus' => '200',
-                'successRef' => '#/components/schemas/EnvelopePaginated',
-                'noBody' => true,
-            ],
-            'POST /api/v1/orders' => [
-                'summary' => 'Create a TOS order (legacy / BC)',
-                'description' => 'Prefer recording a ledger transaction with recommendation_id. Default execute_now is false.',
-                'requestBody' => $json([
-                    'type' => 'object',
-                    'required' => ['side', 'quantity'],
-                    'properties' => [
-                        'side' => ['type' => 'string', 'enum' => ['buy', 'sell', 'BUY', 'SELL']],
-                        'quantity' => ['type' => 'number'],
-                        'price' => ['type' => 'number', 'nullable' => true],
-                        'fees' => ['type' => 'number', 'nullable' => true],
-                        'transaction_date' => ['type' => 'string', 'format' => 'date', 'nullable' => true],
-                        'notes' => ['type' => 'string', 'nullable' => true],
-                        'recommendation_id' => ['type' => 'integer', 'nullable' => true],
-                        'security_id' => ['type' => 'integer', 'nullable' => true],
-                        'stock_id' => ['type' => 'integer', 'nullable' => true],
-                        'symbol' => ['type' => 'string', 'nullable' => true],
-                        'execute_now' => ['type' => 'boolean', 'nullable' => true],
-                        'limit_price' => ['type' => 'number', 'nullable' => true],
-                    ],
-                ]),
-                'successStatus' => '201',
-            ],
-            'POST /api/v1/orders/{id}/execute' => [
-                'summary' => 'Execute a pending TOS order',
-                'description' => 'Marks the recommendation executed via RecommendationEngine::markExecuted when the order is linked to an actionable recommendation (V4-FEAT-024).',
-                'requestBody' => $json([
-                    'type' => 'object',
-                    'required' => ['price'],
-                    'properties' => [
-                        'price' => ['type' => 'number'],
-                        'fees' => ['type' => 'number', 'nullable' => true],
-                        'transaction_date' => ['type' => 'string', 'format' => 'date', 'nullable' => true],
-                        'notes' => ['type' => 'string', 'nullable' => true],
-                    ],
-                ]),
-                'successStatus' => '200',
-            ],
-            'GET /api/v1/strategy' => [
-                'summary' => 'Active/editor strategy (optional strategy_id)',
-                'parameters' => [
-                    $q('strategy_id', 'integer', 'Editor selection. Omitted → first enabled / factory.'),
-                ],
-                'successStatus' => '200',
-                'noBody' => true,
-            ],
-            'PUT /api/v1/strategy' => [
-                'summary' => 'Save strategy configuration in place',
-                'requestBody' => $json([
-                    'type' => 'object',
-                    'required' => ['config'],
-                    'properties' => [
-                        'strategy_id' => ['type' => 'integer', 'nullable' => true],
-                        'name' => ['type' => 'string', 'nullable' => true],
-                        'description' => ['type' => 'string', 'nullable' => true],
-                        'change_notes' => ['type' => 'string', 'nullable' => true],
-                        'config' => ['type' => 'object', 'additionalProperties' => true],
-                    ],
-                ]),
-                'successStatus' => '200',
-            ],
-            'PUT /api/v1/strategy/screeners' => [
-                'summary' => 'Assign eligibility screeners',
-                'requestBody' => $json([
-                    'type' => 'object',
-                    'required' => ['eligibility_sources'],
-                    'properties' => [
-                        'eligibility_sources' => [
-                            'type' => 'array',
-                            'items' => [
-                                'type' => 'object',
-                                'required' => ['screener_id'],
-                                'properties' => [
-                                    'screener_id' => ['type' => 'integer'],
-                                    'enabled' => ['type' => 'boolean', 'nullable' => true],
-                                    'priority' => ['type' => 'integer', 'nullable' => true],
-                                    'display_order' => ['type' => 'integer', 'nullable' => true],
-                                ],
-                            ],
-                        ],
-                    ],
-                ]),
-                'successStatus' => '200',
-            ],
-            'POST /api/v1/strategy-registry' => [
-                'summary' => 'Create a strategy (from-default or artifact JSON)',
-                'description' => 'Body `{name, description}` (no JSON pack) clones the factory/default as a draft. Artifact envelope import remains supported on this same path when a pack is posted.',
-                'requestBody' => $json([
-                    'type' => 'object',
-                    'additionalProperties' => true,
-                    'properties' => [
-                        'name' => ['type' => 'string'],
-                        'description' => ['type' => 'string', 'nullable' => true],
-                    ],
-                ], false),
-                'successStatus' => '201',
-            ],
-            'PUT /api/v1/capital/allocations' => [
-                'summary' => 'Update enabled-strategy allocation percents',
-                'description' => 'Requires every enabled strategy; sum must be 100 ± 0.01. No auto-normalize.',
-                'requestBody' => $json([
-                    'type' => 'object',
-                    'required' => ['allocations'],
-                    'properties' => [
-                        'allocations' => [
-                            'type' => 'array',
-                            'minItems' => 1,
-                            'items' => [
-                                'type' => 'object',
-                                'required' => ['strategy_id', 'allocation_pct'],
-                                'properties' => [
-                                    'strategy_id' => ['type' => 'integer'],
-                                    'allocation_pct' => ['type' => 'number', 'minimum' => 0, 'maximum' => 100],
-                                ],
-                            ],
-                        ],
-                    ],
-                ]),
-                'successStatus' => '200',
-            ],
-            'PUT /api/v1/capital/reserve-pct' => [
-                'summary' => 'Set portfolio cash reserve percent',
-                'requestBody' => $json([
-                    'type' => 'object',
-                    'required' => ['portfolio_cash_reserve_pct'],
-                    'properties' => [
-                        'portfolio_cash_reserve_pct' => ['type' => 'number', 'minimum' => 0, 'maximum' => 100],
-                    ],
-                ]),
-                'successStatus' => '200',
-            ],
-            'POST /api/v1/capital/requests/{capitalRequest}/approve' => [
-                'summary' => 'Approve a capital request as lender',
-                'requestBody' => $json([
-                    'type' => 'object',
-                    'required' => ['lender_strategy_id'],
-                    'properties' => [
-                        'lender_strategy_id' => ['type' => 'integer'],
-                    ],
-                ]),
-                'successStatus' => '200',
-            ],
-            'POST /api/v1/capital/recalls' => [
-                'summary' => 'Request a capital recall',
-                'requestBody' => $json([
-                    'type' => 'object',
-                    'required' => ['loan_id', 'kind'],
-                    'properties' => [
-                        'loan_id' => ['type' => 'integer'],
-                        'kind' => ['type' => 'string', 'enum' => ['full', 'partial']],
-                        'amount' => ['type' => 'number', 'nullable' => true],
-                        'lender_strategy_id' => ['type' => 'integer', 'nullable' => true],
-                    ],
-                ]),
-                'successStatus' => '201',
-            ],
-            'POST /api/v1/capital/bridge-loans' => [
-                'summary' => 'Manual Recall Bridge Loan create (rejected)',
-                'description' => 'Always 405. Bridge loans are created only by the recall settlement workflow.',
-                'noBody' => true,
-                'successStatus' => '405',
-                'successRef' => '#/components/schemas/EnvelopeError',
-                'successDescription' => '405 FORBIDDEN — cannot be created manually.',
-            ],
-            'POST /api/v1/capital/pending-sale-proceeds/{proceeds}/mark-available' => [
-                'summary' => 'Manual mark-available (rejected)',
-                'description' => 'Always 405. Settlement processing controls availability.',
-                'noBody' => true,
-                'successStatus' => '405',
-                'successRef' => '#/components/schemas/EnvelopeError',
-                'successDescription' => '405 FORBIDDEN — cannot be marked available manually.',
-            ],
-            'POST /api/v1/capital/resolve' => [
-                'summary' => 'Run capital resolution',
-                'requestBody' => $json([
-                    'type' => 'object',
-                    'required' => ['strategy_id', 'required_amount'],
-                    'properties' => [
-                        'strategy_id' => ['type' => 'integer'],
-                        'required_amount' => ['type' => 'number'],
-                        'recommendation_id' => ['type' => 'integer', 'nullable' => true],
-                        'bridge_lender_strategy_id' => ['type' => 'integer', 'nullable' => true],
-                    ],
-                ]),
-                'successStatus' => '200',
-            ],
-            'PUT /api/v1/capital/recall-period' => [
-                'summary' => 'Set or clear portfolio recall-period override',
-                'requestBody' => $json([
-                    'type' => 'object',
-                    'properties' => [
-                        'portfolio_recall_period_days' => ['type' => 'integer', 'nullable' => true, 'minimum' => 0, 'maximum' => 3650],
-                        'clear_override' => ['type' => 'boolean'],
-                    ],
-                ], false),
-                'successStatus' => '200',
-            ],
-            'POST /api/v1/backtests' => [
-                'summary' => 'Start a strategy backtest',
-                'requestBody' => $json([
-                    'type' => 'object',
-                    'required' => ['session_token'],
-                    'properties' => [
-                        'name' => ['type' => 'string', 'nullable' => true],
-                        'range_key' => ['type' => 'string', 'nullable' => true],
-                        'from_date' => ['type' => 'string', 'format' => 'date', 'nullable' => true],
-                        'to_date' => ['type' => 'string', 'format' => 'date', 'nullable' => true],
-                        'initial_capital' => ['type' => 'number', 'nullable' => true],
-                        'notes' => ['type' => 'string', 'nullable' => true],
-                        'tags' => ['type' => 'array', 'items' => ['type' => 'string']],
-                        'session_token' => ['type' => 'string'],
-                        'strategy_version_id' => ['type' => 'integer', 'nullable' => true],
-                    ],
-                ]),
-                'successStatus' => '200',
-            ],
-            'PUT /api/v1/backtests/{id}' => [
-                'summary' => 'Update backtest metadata',
-                'requestBody' => $json([
-                    'type' => 'object',
-                    'properties' => [
-                        'name' => ['type' => 'string', 'nullable' => true],
-                        'notes' => ['type' => 'string', 'nullable' => true],
-                        'tags' => ['type' => 'array', 'items' => ['type' => 'string']],
-                    ],
-                ], false),
-                'successStatus' => '200',
-            ],
-            'POST /api/v1/artifacts/export' => [
-                'summary' => 'Export an artifact package',
-                'requestBody' => $json([
-                    'type' => 'object',
-                    'required' => ['targets'],
-                    'properties' => [
-                        'targets' => [
-                            'type' => 'array',
-                            'minItems' => 1,
-                            'items' => [
-                                'type' => 'object',
-                                'required' => ['type', 'id'],
-                                'properties' => [
-                                    'type' => ['type' => 'string', 'enum' => ['indicator', 'screener', 'strategy']],
-                                    'id' => ['type' => 'string'],
-                                ],
+                'noBody' => true…3502 tokens truncated…          ],
                             ],
                         ],
                     ],
