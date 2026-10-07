@@ -1,6 +1,6 @@
 # FEAT-056 ML Lifecycle Automation / Deployment / Operations — acceptance audit
 
-Status: **REVIEW — local lifecycle implementation and tests complete; deployed worker/runtime evidence pending**
+Status: **IMPLEMENTED — code and CI verified; deployed lifecycle acceptance remains open and deferred until FEAT-057 qualification**
 
 Evidence is mapped to `docs/archive/specs/V8-ML-Lifecycle-Automation-Deployment-Operations-Specification.md`.
 
@@ -92,3 +92,9 @@ Production run 5 (`admin_sealed_nse`) completed its governed apply: **360 reques
 A fresh campaign `ee93e3a6-5740-4dea-bfef-c109abc90a69`, cutoff **2026-10-01**, was created against production build 436. Its status is `preflight`; exactly one `ml-acceptance` queue job is pending. No stale queue job was present before it was queued. The installed dedicated worker is currently inactive, so the preflight has not executed. An attempt to start the systemd unit through the connected remote command tool was rejected by that tool's command policy; no alternate service-control path was used. Start the unit through the approved VPS operator path, then continue the governed preflight.
 
 An earlier build-393 preflight reported `canonical_dataset_or_coverage_unavailable` for 1m and unavailable core fundamentals (`roe`, `debt_equity`, `operating_margin`, `net_margin`) for 3m/6m. Treat those as leads only; the new build-436 preflight must establish current blockers. Do not send NSE/BSE exchange requests unless the PO confirms receipt of the exchange approval letter recorded in [the exchange access decision](../decisions/2026-10-05-nifty500-exchange-fallback-and-manual-fetch.md). No training, promotion, rollback, lifecycle tick, schedule, drift or retention operation was performed. FEAT-056 remains **REVIEW** pending FEAT-057 qualification and the controlled FEAT-056 runtime acceptance below.
+
+## Implementation disposition — 2026-10-07
+
+**Implementation state: IMPLEMENTED.** Lifecycle scheduling, queue admission, durable progress/SSE, retry, cancellation, stale-run recovery, retention, explicit promotion/rollback boundaries, notifications and Admin authorization are covered by local tests. Backend CI passed for this feature code. This status records implementation completion; it does not claim deployed lifecycle qualification.
+
+**Functional acceptance: OPEN and safely deferred.** Production lifecycle settings remain disabled. Do not run schedules, training, promotion, rollback, or lifecycle mutation until FEAT-057 qualification is complete and a dedicated controlled acceptance worker is available. Then use the existing sequence in the functional acceptance plan for queue/SSE, cancellation, restart recovery, notifications, retention and archive checks. This disposition separates implementation from runtime acceptance and supersedes earlier REVIEW status statements.
