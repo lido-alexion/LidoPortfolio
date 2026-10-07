@@ -4,7 +4,7 @@
 
 Authoritative specs: `docs/archive/specs/LidoPortfolio-V8-Wishlist.md`. Implementation ledger: `docs/V8-IMPLEMENTATION-LEDGER.md`. Requirement-level gaps: [V8-GAP-AUDIT.md](V8-GAP-AUDIT.md).
 
-Status key: **COMPLETE** | **REVIEW** | **IN PROGRESS** | **NOT STARTED** | **N/A** | **RETIRED**
+Status key: **IMPLEMENTED / FUNCTIONAL ACCEPTANCE OPEN** | **COMPLETE** | **REVIEW** | **IN PROGRESS** | **NOT STARTED** | **N/A** | **RETIRED**
 
 | Epic | Status | Evidence |
 |------|--------|----------|
