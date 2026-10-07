@@ -1,6 +1,6 @@
 # VPS health monitor
 
-Python 3 standard-library monitor for low-cost, read-only checks. The timer records a sample every minute; configured email receives a rolling 30-minute digest, and Telegram/email receive critical and recovery notices. It does not restart or reload services. Alerts describe evidence of a possible bottleneck, not proof of its cause.
+Python 3 standard-library monitor for bounded, read-only host checks. Each timer run also stores one aggregate sample in StoX for the admin dashboard; it never changes host services or configuration. Configured email receives a rolling 30-minute digest, and Telegram/email receive critical and recovery notices. Alerts describe evidence of a possible bottleneck, not proof of its cause.
 
 ## Paths and configuration
 
@@ -27,7 +27,7 @@ VPS_HEALTH_ALERT_COOLDOWN_MINUTES=60
 VPS_HEALTH_HEARTBEAT_URL=
 ```
 
-The monitor reports whether database-backed email and Telegram recipients were reached, plus whether the encrypted cache supplied the target list. Credentials and recipient addresses are never included in its status output. Configure the external heartbeat URL with a third-party uptime service's check-in URL. The URL is called only after a check completes; choose a service that alerts when expected check-ins are missed. A heartbeat URL is itself a secret and belongs only in the external file.
+The monitor reports whether database-backed email and Telegram recipients were reached, plus whether the encrypted cache supplied the target list. Credentials and recipient addresses are never included in its status output. It also records the aggregate health sample in StoX's `portfolio_vps_health_samples` table through Artisan. The admin-only `/settings/vps-health` page shows the latest host, PHP-FPM, and Nginx measurements and 1-, 6-, or 24-hour trends, refreshing once a minute. The table retains 14 days of aggregate samples; detailed process and log diagnostics remain local to `/var/lib/vps-health` and are not exposed by the web API. The dashboard is read-only and does not restart or reconfigure services. Configure the external heartbeat URL with a third-party uptime service's check-in URL. The URL is called only after a check completes; choose a service that alerts when expected check-ins are missed. A heartbeat URL is itself a secret and belongs only in the external file.
 
 Threshold defaults: FPM listen queue >0 immediately; FPM active workers equal configured `FPM_MAX_CHILDREN` for two checks; at least 3 Nginx 502/504 responses or the configured `VPS_HEALTH_NGINX_499_CRITICAL` count (default 5) of Nginx 499 client-closed responses in the bounded rolling five-minute access-log sample (499 is reported and alerted separately); root disk >=90%; available RAM <10%; swap >80%; normalized one-minute load >=2 for two checks. The documented FPM default is 5 for the incident pool; verify it matches the actual current pool config and set `VPS_HEALTH_FPM_MAX_CHILDREN` accordingly. If no max is configured, saturation is not inferred from historical max-active metrics. Nginx 499/502/503/504 counts are reported. Recent standard combined access-log timestamps are used for the five-minute window; the 30-minute digest sums per-minute counts.
 
@@ -63,6 +63,6 @@ No package installation is required. Threshold changes belong in the external En
 
 ## Readiness and removal
 
-Before relying on the monitor, confirm config ownership/mode, expected log readability as `nitty:adm`, local JSON output has no secrets, Telegram and email delivery (if configured), heartbeat missed-check alert (if configured), FPM status availability (if enabled), timer cadence, state directory permissions, and snapshot pruning. Review a manual diagnostic and a 30-minute summary. A digest is emitted every 30 minutes after a successful scheduled check.
+Before relying on the monitor, confirm config ownership/mode, expected log readability as `nitty:adm`, local JSON output has no secrets, Telegram and email delivery (if configured), heartbeat missed-check alert (if configured), FPM status availability (if enabled), timer cadence, state directory permissions, database sample freshness on the admin dashboard, and snapshot pruning. Review a manual diagnostic and a 30-minute summary. A digest is emitted every 30 minutes after a successful scheduled check.
 
 Safe removal: as administrator run `systemctl disable --now vps-health.timer`, then remove the two installed unit files and run `systemctl daemon-reload`. Remove `/etc/vps-health` only after preserving/retiring needed config, then optionally remove `/var/lib/vps-health` snapshots/state after retention review. This does not remove or alter Nginx, PHP-FPM, databases, services, credentials elsewhere, or application deployment configuration.

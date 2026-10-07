@@ -41,6 +41,7 @@ import AdminAuditExplorerPage from './pages/AdminAuditExplorerPage';
 import FundamentalDataAdminPage from './pages/FundamentalDataAdminPage';
 import MlScoringAdminPage from './pages/MlScoringAdminPage';
 import ForwardDataAdminPage from './pages/ForwardDataAdminPage';
+import VpsHealthAdminPage from './pages/VpsHealthAdminPage';
 import AdminRoute from './components/AdminRoute';
 import StockExplorerPage from './pages/StockExplorerPage';
 import IndicesPage from './pages/IndicesPage';
@@ -210,6 +211,11 @@ function AppRoutes() {
                     <ForwardDataAdminPage />
                 </AdminRoute>
             )} />
+            <Route path="/settings/vps-health" element={(
+                <AdminRoute>
+                    <VpsHealthAdminPage />
+                </AdminRoute>
+            )} />
             <Route path="/settings/universe-price-sync/gap-failures" element={(
                 <AdminRoute>
                     <GapFillFailuresPage />
@@ -265,6 +271,7 @@ function AdminAppRoutes() {
             <Route path="/settings/indicators/:id" element={<IndicatorRegistryDetailPage />} />
             <Route path="/settings/fundamentals" element={<FundamentalDataAdminPage />} />
             <Route path="/settings/ml-scoring" element={<MlScoringAdminPage />} />
+            <Route path="/settings/vps-health" element={<VpsHealthAdminPage />} />
             <Route path="*" element={<Navigate to="/settings/users" replace />} />
         </Routes>
     );

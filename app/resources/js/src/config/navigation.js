@@ -678,6 +678,22 @@ export const NAVIGATION_CATALOG = [
 
     // ── Administration pages ────────────────────────────────
     {
+        id: 'vps-health',
+        title: 'VPS Health',
+        icon: 'Activity',
+        route: ROUTES.SETTINGS_VPS_HEALTH,
+        group: 'group-administration',
+        order: 61,
+        parent: 'group-administration',
+        children: null,
+        badge: null,
+        showInSidebar: true,
+        favouriteEligible: false,
+        kind: 'page',
+        permission: 'admin',
+        match: (p) => pathStartsWith(p, ROUTES.SETTINGS_VPS_HEALTH),
+    },
+    {
         id: 'settings',
         title: 'Settings',
         icon: 'Settings',

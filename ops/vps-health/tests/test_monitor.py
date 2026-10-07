@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import os
 import tempfile
 import unittest
@@ -44,6 +45,21 @@ class MonitorTests(unittest.TestCase):
         self.assertNotIn("VPS_HEALTH_SMTP_PASSWORD", kwargs["env"])
         self.assertNotIn("VPS_HEALTH_TELEGRAM_BOT_TOKEN", kwargs["env"])
         self.assertEqual(kwargs["env"]["VPS_HEALTH_STATE_DIR"], "/var/lib/vps-health")
+
+    def test_health_samples_are_recorded_through_stox_cli(self):
+        metrics = {"time":"2026-10-07T05:00:00+00:00", "load_per_core":0.25, "nginx":{"502":1}}
+        with patch.object(Path, "is_file", return_value=True), \
+             patch.object(monitor.shutil, "which", return_value="/usr/bin/php"), \
+             patch.object(monitor.subprocess, "run", return_value=type("P", (), {"returncode":0,"stdout":""})()) as run:
+            self.assertTrue(monitor.record_sample(metrics, ["FPM listen queue is nonzero"]))
+        args, kwargs = run.call_args
+        self.assertEqual(args[0][-1], "vps-health:record")
+        self.assertEqual(json.loads(kwargs["input"]), {
+            "time":"2026-10-07T05:00:00+00:00", "status":"critical",
+            "issues":["FPM listen queue is nonzero"], "metrics":metrics,
+        })
+        self.assertNotIn("VPS_HEALTH_SMTP_PASSWORD", kwargs["env"])
+        self.assertNotIn("VPS_HEALTH_TELEGRAM_BOT_TOKEN", kwargs["env"])
 
     def test_notification_status_reports_only_delivery_counts(self):
         self.assertEqual(monitor.channel_status({"email_recipients":2,"telegram_recipients":1,"cache_used":True}),

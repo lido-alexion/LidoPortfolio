@@ -808,6 +808,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
         ->where('id', '[A-Za-z0-9_\\-]+');
 
     Route::middleware('admin')->group(function () {
+        Route::get('/admin/vps-health', [\App\Http\Controllers\Api\VpsHealthController::class, 'index']);
         Route::get('/indicators', [IndicatorRegistryController::class, 'index']);
         Route::get('/indicators/meta', [IndicatorRegistryController::class, 'meta']);
         Route::get('/indicators/{id}', [IndicatorRegistryController::class, 'show'])
