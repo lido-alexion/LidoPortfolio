@@ -7,7 +7,7 @@ Authoritative specs: `docs/archive/specs/LidoPortfolio-V8-Wishlist.md` and linke
 ## Epic status
 
 ```text
-FEAT-052  [IMPLEMENTED / FUNCTIONAL ACCEPTANCE OPEN] OpenTelemetry / LidoTelemetry (producer core, shared middleware/route wiring, fail-open OTLP traces/events/metrics, browser fetch plus uncaught-exception/unhandled-rejection instrumentation, queue/scheduler context propagation and documented configuration; PHP SDK/extension, Collector and deployed acceptance remain open)
+FEAT-052  [IMPLEMENTED / FUNCTIONAL ACCEPTANCE OPEN] OpenTelemetry / LidoTelemetry (producer core, shared middleware/route wiring, fail-open OTLP traces/events/metrics, browser and PHP SDK paths, queue/scheduler propagation, production Collector integration and privacy mitigations verified; broader privacy, outage/recovery and sustained-delivery scenarios remain in the functional plan)
 FEAT-054  [REVIEW] Historical fundamental bootstrap (summary/derived metrics, provenance, user-scoped Advanced preference, history UI, Screener boundary, bootstrap evidence and focused desktop/390px Chromium Watchlist acceptance complete locally; provider/deployed runtime acceptance remains)
 FEAT-055  [IMPLEMENTED / FUNCTIONAL ACCEPTANCE OPEN] Account access request / Admin approval (deployed implementation, security and lifecycle suites; remaining browser, race, outage and accessibility scenarios tracked in the functional plan)
 FEAT-056  [IMPLEMENTED / DEPLOYED FUNCTIONAL ACCEPTANCE DEFERRED UNTIL FEAT-057 QUALIFICATION] ML lifecycle automation (queued runs, persistent per-horizon queue locking, SSE, drift, cancel, notifications, transient retries, retention, stale-run recovery and mixed scoring integration committed; deployed lifecycle acceptance remains open)
