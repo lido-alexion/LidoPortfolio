@@ -142,7 +142,19 @@ class AccessRequestWorkflowTest extends TestCase
         $this->postJson('/api/auth/access-requests/verify/'.$secondToken)->assertUnprocessable();
 
         $this->assertSame(AccessRequest::VERIFICATION_VERIFIED, $request->fresh()->verification_status);
-        $this->assertDatabaseCount('stox_access_request_audit_events', 2);
+        $this->assertDatabaseCount('stox_access_request_audit_events', 3);
+        $this->assertDatabaseHas('stox_access_request_audit_events', [
+            'access_request_id' => $request->id,
+            'event_type' => 'request_created_unverified',
+        ]);
+        $this->assertDatabaseHas('stox_access_request_audit_events', [
+            'access_request_id' => $request->id,
+            'event_type' => 'verification_email_queued',
+        ]);
+        $this->assertDatabaseHas('stox_access_request_audit_events', [
+            'access_request_id' => $request->id,
+            'event_type' => 'verification_completed',
+        ]);
         $this->assertNotNull(AccessRequestVerification::query()->where('token_hash', hash('sha256', $firstToken))->sole()->used_at);
         $this->assertNull($secondVerification->fresh()->used_at);
     }
