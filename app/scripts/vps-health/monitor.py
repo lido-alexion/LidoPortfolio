@@ -2,12 +2,10 @@
 """Small, read-only VPS health monitor. Python standard library only."""
 import argparse
 import collections
-import email.message
 import json
 import os
 import re
 import shutil
-import smtplib
 import socket
 import subprocess
 import sys
@@ -25,10 +23,7 @@ DEFAULTS = {
     "DISK_CRITICAL_PERCENT": "90", "RAM_CRITICAL_PERCENT": "10",
     "SWAP_CRITICAL_PERCENT": "80", "LOAD_PER_CORE_CRITICAL": "2",
     "FPM_MAX_CHILDREN": "5", "NGINX_499_CRITICAL": "5",
-    "ALERT_COOLDOWN_MINUTES": "60",
-    "HEARTBEAT_URL": "", "SMTP_HOST": "", "SMTP_PORT": "587", "SMTP_USER": "",
-    "SMTP_PASSWORD": "", "SMTP_FROM": "", "SMTP_TO": "", "SMTP_STARTTLS": "true",
-    "TELEGRAM_BOT_TOKEN": "", "TELEGRAM_CHAT_ID": "",
+    "ALERT_COOLDOWN_MINUTES": "60", "HEARTBEAT_URL": "",
 }
 MAX_LINE = 8192
 
@@ -187,34 +182,34 @@ def save_diagnostic(d, directory):
     path=directory/("diagnostic-"+now().strftime("%Y%m%dT%H%M%SZ")+".json")
     path.write_text(json.dumps(d,indent=2)); os.chmod(path,0o640)
     return path
-def channel_status():
-    return {"telegram": bool(cfg("TELEGRAM_BOT_TOKEN") and cfg("TELEGRAM_CHAT_ID")),
-            "email": bool(cfg("SMTP_HOST") and cfg("SMTP_FROM") and cfg("SMTP_TO"))}
+def channel_status(status=None):
+    status = status or {}
+    return {"telegram": int(status.get("telegram_recipients", 0)) > 0,
+            "email": int(status.get("email_recipients", 0)) > 0,
+            "cache_used": bool(status.get("cache_used", False))}
 def notify(text, urgent=False):
-    ready=channel_status()
-    attempted= False
-    failed=False
-    if ready["telegram"] and urgent:
-        attempted=True
-        import urllib.parse
-        url="https://api.telegram.org/bot"+cfg("TELEGRAM_BOT_TOKEN")+"/sendMessage"
-        data=urllib.parse.urlencode({"chat_id":cfg("TELEGRAM_CHAT_ID"),"text":text[:3500]}).encode()
-        try: urllib.request.urlopen(urllib.request.Request(url,data=data),timeout=5).read(1024)
-        except Exception: failed=True
-    if ready["email"]:
-        attempted=True
-        msg=email.message.EmailMessage(); msg["Subject"]="VPS health " + ("alert" if urgent else "30-minute digest")
-        msg["From"]=cfg("SMTP_FROM"); msg["To"]=cfg("SMTP_TO"); msg.set_content(text[:8000])
-        try:
-            with smtplib.SMTP(cfg("SMTP_HOST"),int(cfg("SMTP_PORT")),timeout=7) as s:
-                if cfg("SMTP_STARTTLS").lower()!="false": s.starttls()
-                if cfg("SMTP_USER"): s.login(cfg("SMTP_USER"),cfg("SMTP_PASSWORD"))
-                s.send_message(msg)
-        except Exception: failed=True
-    if not attempted:
-        print("notification failure: no channels configured", file=sys.stderr)
-    elif failed:
-        print("notification failure: configured channel delivery failed", file=sys.stderr)
+    artisan = Path(__file__).resolve().parents[2] / "artisan"
+    if not artisan.is_file() or not shutil.which("php"):
+        print("notification failure: StoX CLI is unavailable", file=sys.stderr)
+        return {"success": False, "email_recipients": 0, "telegram_recipients": 0, "cache_used": False}
+    payload = {"title": "VPS health alert" if urgent else "VPS health 30-minute digest",
+               "message": text[:8000], "urgent": urgent}
+    child_env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(Path.home()),
+                 "VPS_HEALTH_STATE_DIR": cfg("STATE_DIR")}
+    try:
+        process = subprocess.run(
+            ["php", str(artisan), "vps-health:notify"], cwd=str(artisan.parent),
+            input=json.dumps(payload), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            text=True, timeout=20, check=False, env=child_env,
+        )
+        result = json.loads(process.stdout.strip()) if process.stdout.strip() else {}
+        if isinstance(result, dict) and result:
+            result["success"] = bool(result.get("success")) and process.returncode == 0
+            return result
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        pass
+    print("notification failure: StoX could not deliver to admin channels", file=sys.stderr)
+    return {"success": False, "email_recipients": 0, "telegram_recipients": 0, "cache_used": False}
 def heartbeat():
     url=cfg("HEARTBEAT_URL")
     if url:
@@ -225,7 +220,8 @@ def summary(directory):
     ago=time.time()-1800
     rows=[r for r in hist if r.get("epoch",0)>=ago]
     totals=log_counts(1800)
-    return {"window_minutes":30,"samples":len(rows),"latest":latest,"nginx_counts":totals,"channels":channel_status()}
+    return {"window_minutes":30,"samples":len(rows),"latest":latest,"nginx_counts":totals,
+            "channels":channel_status(state.get("last_notification_status"))}
 def check(directory):
     prune_diagnostics(directory)
     m=collect(); state=read_state(directory); f=parse_fpm_totals(m["fpm"]); m["fpm"]=f
@@ -236,20 +232,25 @@ def check(directory):
         cooldown=float(cfg("ALERT_COOLDOWN_MINUTES"))*60
         if time.time()-state.get("last_alert",0) >= cooldown:
             d=diagnose(m); path=save_diagnostic(d,directory)
-            notify("Evidence suggests a VPS bottleneck; this snapshot does not prove root cause.\n"+"\n".join("- "+x for x in issues)+"\nSnapshot: "+str(path)+"\nFirst steps: inspect FPM queue/workers, Nginx/PHP errors, disk/RAM pressure, and recent deploys; avoid automatic restarts.",True)
+            delivery = notify("Evidence suggests a VPS bottleneck; this snapshot does not prove root cause.\n"+"\n".join("- "+x for x in issues)+"\nSnapshot: "+str(path)+"\nFirst steps: inspect FPM queue/workers, Nginx/PHP errors, disk/RAM pressure, and recent deploys; avoid automatic restarts.",True)
+            state["last_notification_status"] = delivery
             state["last_alert"]=time.time()
         state["active_issues"]=issues
     elif previous:
-        notify("VPS health recovered at "+stamp()+". Current critical thresholds are clear.",True); state["active_issues"]=[]
+        state["last_notification_status"] = notify("VPS health recovered at "+stamp()+". Current critical thresholds are clear.",True)
+        state["active_issues"]=[]
     # Periodic digest independently of alert activity.
     if time.time()-state.get("last_digest",0)>=1800:
-        sm=summary_from(hist); notify(json.dumps(sm,sort_keys=True),False); state["last_digest"]=time.time()
+        sm=summary_from(hist, state.get("last_notification_status"))
+        state["last_notification_status"] = notify(json.dumps(sm,sort_keys=True),False)
+        state["last_digest"]=time.time()
     state["history"]=hist; save_state(directory,state); heartbeat()
-    print(json.dumps({"status":"critical" if issues else "ok","issues":issues,"metrics":m,"channels":channel_status()},sort_keys=True))
-def summary_from(hist):
+    print(json.dumps({"status":"critical" if issues else "ok","issues":issues,"metrics":m,
+                      "channels":channel_status(state.get("last_notification_status"))},sort_keys=True))
+def summary_from(hist, notification_status=None):
     rows=[x for x in hist if x.get("epoch",0)>=time.time()-1800]
     return {"window_minutes":30,"samples":len(rows),"latest":rows[-1].get("metrics",{}) if rows else {},
-            "nginx_counts":log_counts(1800),"channels":channel_status()}
+            "nginx_counts":log_counts(1800),"channels":channel_status(notification_status)}
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument("--state-dir",default=cfg("STATE_DIR")); sub=ap.add_subparsers(dest="command",required=True)
     sub.add_parser("check"); sub.add_parser("diagnose"); sub.add_parser("summary")

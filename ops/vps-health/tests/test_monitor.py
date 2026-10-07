@@ -32,6 +32,23 @@ class MonitorTests(unittest.TestCase):
         counts.assert_called_once_with(1800)
         self.assertEqual(result["nginx_counts"], {"502": 4})
 
+    def test_notifications_use_stox_cli_without_passing_mail_or_telegram_secrets(self):
+        response = '{"success":true,"email_recipients":2,"telegram_recipients":1,"cache_used":true,"failures":0}'
+        with patch.object(monitor.shutil, "which", return_value="/usr/bin/php"), \
+             patch.object(monitor.subprocess, "run", return_value=type("P", (), {"returncode":0,"stdout":response})()) as run:
+            result = monitor.notify("incident details", urgent=True)
+        self.assertTrue(result["success"])
+        args, kwargs = run.call_args
+        self.assertEqual(args[0][-1], "vps-health:notify")
+        self.assertEqual(kwargs["input"], '{"title": "VPS health alert", "message": "incident details", "urgent": true}')
+        self.assertNotIn("VPS_HEALTH_SMTP_PASSWORD", kwargs["env"])
+        self.assertNotIn("VPS_HEALTH_TELEGRAM_BOT_TOKEN", kwargs["env"])
+        self.assertEqual(kwargs["env"]["VPS_HEALTH_STATE_DIR"], "/var/lib/vps-health")
+
+    def test_notification_status_reports_only_delivery_counts(self):
+        self.assertEqual(monitor.channel_status({"email_recipients":2,"telegram_recipients":1,"cache_used":True}),
+                         {"email":True,"telegram":True,"cache_used":True})
+
     def test_bounded_tail_respects_byte_limit(self):
         with tempfile.TemporaryDirectory() as td:
             p = Path(td) / "log"
