@@ -8,7 +8,7 @@ Authoritative specs: `docs/archive/specs/LidoPortfolio-V8-Wishlist.md` and linke
 
 ```text
 FEAT-052  [IMPLEMENTED / FUNCTIONAL ACCEPTANCE OPEN] OpenTelemetry / LidoTelemetry (producer core, shared middleware/route wiring, fail-open OTLP traces/events/metrics, browser and PHP SDK paths, queue/scheduler propagation, production Collector integration and privacy mitigations verified; broader privacy, outage/recovery and sustained-delivery scenarios remain in the functional plan)
-FEAT-054  [REVIEW] Historical fundamental bootstrap (summary/derived metrics, provenance, user-scoped Advanced preference, history UI, Screener boundary, bootstrap evidence and focused desktop/390px Chromium Watchlist acceptance complete locally; provider/deployed runtime acceptance remains)
+FEAT-054  [IMPLEMENTED / FUNCTIONAL ACCEPTANCE OPEN] Historical fundamental bootstrap (PO stock/field coverage thresholds pass on the 2026-10-05 persisted-fact snapshot, reconciled with the production Nifty cache on 2026-10-07; provider/deployed runtime acceptance remains open)
 FEAT-055  [IMPLEMENTED / FUNCTIONAL ACCEPTANCE OPEN] Account access request / Admin approval (deployed implementation, security and lifecycle suites; remaining browser, race, outage and accessibility scenarios tracked in the functional plan)
 FEAT-056  [IMPLEMENTED / DEPLOYED FUNCTIONAL ACCEPTANCE DEFERRED UNTIL FEAT-057 QUALIFICATION] ML lifecycle automation (queued runs, persistent per-horizon queue locking, SSE, drift, cancel, notifications, transient retries, retention, stale-run recovery and mixed scoring integration committed; deployed lifecycle acceptance remains open)
 FEAT-057  [IMPLEMENTED] ML feature engineering / training (versioned horizon-resolved registry, PIT context refusal of current-universe fallback, authoritative dated provider adapter with resumable backfill, horizon-derived purge/embargo, training-only missing-value/outlier preprocessing, paired active/baseline evidence, pinned explainability, durable archive integrity, per-partition feature coverage and bounded same-architecture 1m/3m/6m training evidence verified locally; production apply/preflight, 1m/3m/6m evidence, deployed active-model comparison where applicable and investor-facing acceptance remain open)
@@ -139,3 +139,14 @@ The broad direct PHPUnit Feature run with `php -d memory_limit=512M vendor/bin/p
 ## MlScoringService ownership reconciliation
 
 The inherited `MlScoringService` lifecycle work was inspected and separated from FEAT-057 ownership. Queueing, cancellation, retries, lifecycle notifications, challenger registration, promotion review, drift dashboard, and investor insight orchestration are FEAT-056-owned and are now represented by focused committed slices (`2900e50`, `73307cb`, `bd4148b`); no separate uncommitted `MlScoringService` diff remains in the current checkout. FEAT-057 profile pinning used by training/artifacts is independently committed and tested.
+
+
+### FEAT-054 PO coverage acceptance — 2026-10-07
+
+Read-only production reconciliation against the PO decision in `docs/decisions/2026-10-05-fundamental-field-availability-exceptions.md`:
+
+- All-stocks coverage: **4,696 / 5,148 (91.2%)**, above the 50% target.
+- Nifty coverage: the production cache held **501 symbols** (cache time `2026-10-03T21:00:09Z`, within the service's seven-day freshness window); **497 mapped active stocks had current persisted facts**. This exceeds the 490-stock minimum for 98% of 500. Four cached symbols were unmapped; no exchange refresh or fetch was performed.
+- Field coverage: **all 25 non-exempt canonical facts** had at least one value and at least 50% coverage among covered stocks. The 15 PO-exempt facts remain excluded from those field thresholds.
+
+The stock/field counts are from the persisted-fact coverage report dated 2026-10-05; the Nifty cache/fact check was repeated read-only on 2026-10-07. This records the PO coverage criteria as met against the production cache. Broader deployed provider/runtime acceptance remains open and is not represented as complete here.
