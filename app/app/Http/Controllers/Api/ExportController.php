@@ -89,7 +89,7 @@ class ExportController extends Controller
     public function cancel(Request $request, string $token): JsonResponse
     {
         $artifact = ExportArtifact::query()->where('user_id', $request->user()->id)->where('token', $token)->firstOrFail();
-        $cancelled = ExportArtifact::query()->whereKey($artifact->id)->whereIn('status', ['queued', 'running'])->whereNull('cancelled_at')->update(['status' => 'cancelled', 'cancelled_at' => now()]) === 1;
+        $cancelled = ExportArtifact::query()->whereKey($artifact->id)->whereIn('status', ['queued', 'running'])->whereNull('cancelled_at')->update(['status' => 'cancelled', 'cancelled_at' => now(), 'expires_at' => now()->addDay()]) === 1;
         if ($cancelled && $artifact->path) {
             foreach ([$artifact->path, $artifact->path.'.partial'] as $path) if (Storage::disk('local')->exists($path)) Storage::disk('local')->delete($path);
         }

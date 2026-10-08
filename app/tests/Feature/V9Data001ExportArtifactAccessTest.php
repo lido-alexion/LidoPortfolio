@@ -90,6 +90,33 @@ class V9Data001ExportArtifactAccessTest extends TestCase
         $this->actingAs($owner)->get('/api/exports/'.$token.'/download')->assertGone();
     }
 
+    public function test_cancellation_removes_partial_data_and_applies_the_retention_expiry(): void
+    {
+        Storage::fake('local');
+        $owner = User::factory()->create();
+        $token = (string) Str::uuid();
+        $path = 'exports/'.$owner->id.'/'.$token.'.csv';
+        $artifact = ExportArtifact::query()->create([
+            'user_id' => $owner->id,
+            'token' => $token,
+            'dataset' => 'portfolio-snapshots',
+            'format' => 'csv',
+            'path' => $path,
+            'status' => 'queued',
+            'expires_at' => null,
+        ]);
+        Storage::disk('local')->put($path.'.partial', 'partial data');
+
+        $this->actingAs($owner)->postJson('/api/exports/'.$token.'/cancel')
+            ->assertOk()
+            ->assertJsonPath('data.status', 'cancelled');
+
+        $this->assertSame('cancelled', $artifact->fresh()->status);
+        $this->assertNotNull($artifact->fresh()->expires_at);
+        $this->assertEqualsWithDelta(now()->addDay()->timestamp, $artifact->fresh()->expires_at->timestamp, 5);
+        Storage::disk('local')->assertMissing($path.'.partial');
+    }
+
     public function test_download_rejects_a_path_that_does_not_match_the_owner_token_and_format(): void
     {
         Storage::fake('local');

@@ -39,11 +39,11 @@
 | 20 | Restricted fields unavailable | Caller fields must be in provider's allow-listed columns; only currently registered public fields are exposed. | Partial — no provider-specific hidden-field policy test. |
 | 21 | Synchronous small export | Configurable default 1,000-row threshold. | Partial; feature test pending. |
 | 22 | Background large export | Feature test executes a queued worker, verifies fresh CSV contents, ready transition, 24-hour expiry and completion notification. | Partial — focused local SQLite test passes; queue backend/MySQL CI remains pending. |
-| 23 | Cancellation | Feature tests cover cancellation before worker start and cancellation after file write but before ready promotion. | Partial — focused race test passes; production queue concurrency remains unverified. |
+| 23 | Cancellation | Owner-scoped cancellation sets a one-day retention expiry, removes partial files, and feature tests cover cancellation before worker start and after file write but before ready promotion. | Partial — focused race test passes; production queue concurrency remains unverified. |
 | 24 | No downloadable partial output | Cancellation race test confirms the final and `.partial` files are absent after the cancelled worker returns. | Partial — focused test passes; production queue concurrency remains unverified. |
-| 25 | COMM-001 completion/failure notice | Worker success feature test verifies an `export.completed` source and owner recipient are created. | Partial — failure notice, durable retry and MySQL notification integration remain pending. |
-| 26 | Optional email obeys preference | Export is categorized under existing optional-email preferences; it is disabled by default and uses planner gating. | Partial — end-to-end preference delivery test pending. |
-| 27 | 24-hour retention | Synchronous-ready and background-ready artifacts set expiry to `now()->addDay()`. Access tests cover expired and missing-expiry behavior. | Partial — exact 24-hour generation boundary and MySQL-backed CI remain pending. |
+| 25 | COMM-001 completion/failure notice | Worker tests verify completion and failure events. A durable export-notification outbox records intent atomically with artifact terminal state, then hands delivery to COMM-001. | Partial — local tests cover delivery/retry; MySQL queue integration remains pending. |
+| 26 | Optional email obeys preference | Completion notices opt into the existing planner; feature test confirms default-off behavior and delivery only when the export preference is enabled. | Partial — focused local test passes; full mail-transport integration remains pending. |
+| 27 | 24-hour retention | Synchronous-ready, background-ready, failed, and cancelled artifacts set expiry to `now()->addDay()`. Feature tests assert the exact generation boundary and cover expired/missing-expiry behavior. | Partial — focused local tests pass; MySQL-backed CI remains pending. |
 | 28 | Expiry cleanup | Hourly scheduled purge removes artifact rows and files whose expiry is at or before the current instant. Feature test verifies exact-cutoff deletion and preservation of unexpired/queued artifacts. | Partial — focused local SQLite test passes; MySQL-backed CI remains pending. |
 | 29 | No user-facing history | No list/history endpoint added. | Pass by inspection |
 | 30 | Protected, non-guessable file access | Local private storage, UUID token, authenticated owner-scoped route and exact path check; feature tests verify other-account 404s and reject a mismatched artifact path. | Partial — focused local SQLite tests pass; broader security review and MySQL CI remain pending. |
@@ -55,7 +55,7 @@
 | 36 | Deterministic safe file names | Download name uses a dataset slug; internal path is owner/UUID/format-derived. Feature test asserts the deterministic download name. | Partial — focused local SQLite test passes; additional dataset-name edge cases remain pending. |
 | 37 | Formula injection | Formula-like text with leading whitespace/control is neutralized; numeric negatives remain numeric. | Partial; writer tests pass. |
 | 38 | Values only | XLSX emits inline strings and numeric `<v>` values; no formula element generation. | Partial; writer test passes. |
-| 39 | Retry-safe work/notifications | Atomic queued claim, terminal state checks and guarded promotion reduce duplicate artifacts. | **Open** — failure between ready transition and notification can lose the notification; no durable notification outbox/idempotency proof. |
+| 39 | Retry-safe work/notifications | Unique per-artifact completion/failure outbox records commit atomically with terminal artifact state. A locked, transactional delivery job marks the event delivered with the COMM-001 source; failed attempts retain a due time and a scheduled sweep redispatches pending events. | Partial — focused retry/no-duplicate tests pass; MySQL concurrency and queue recovery verification remain pending. |
 | 40 | Excluded formats/features | No PDF, image, password protection, or reusable presets added. | Pass by inspection |
 
 ## Surface and capability limits
@@ -80,7 +80,7 @@ Focused basket UI slice verification on 2026-10-08: `node --test tests/js/portfo
 | `php artisan openapi:v1 --check` (from `app/`) | Passed: OpenAPI document is current (221 operations). |
 | `npm run docs:static:check` (from `app/`) | Passed: static documentation contract current (53 topics). |
 | `git diff --check` (repository root) | Passed after the current test and audit changes. |
-| Database-backed backend gate | Current basket API feature test passed locally on the PHPUnit in-memory SQLite test configuration; MySQL-backed feature/full-suite verification is pending on the current PR head. Earlier PR runs skipped PHPUnit/frontend by change-area detection. |
+| Database-backed backend gate | Focused PHPUnit suites pass on the configured in-memory SQLite test database; MySQL-backed feature/full-suite verification is deferred by the feature-branch CI policy until the master gate. |
 
 The feature baseline and basket configuration slice are committed on `codex/v9-data001-completion`, based on current `master`; the V9 wishlist remains FROZEN / IMPLEMENTATION-READY because the acceptance evidence and unsupported capabilities listed above are incomplete.
 
@@ -88,17 +88,22 @@ The feature baseline and basket configuration slice are committed on `codex/v9-d
 
 Added `tests/Feature/V9Data001ExportBasketTest.php` to verify that basket configuration persists across requests, is isolated per account, contains configuration rather than row snapshots, rejects item counts above the configured maximum without mutating the previously saved basket, and requires authentication for read/write/export endpoints. Focused local verification passed: `vendor/bin/phpunit tests/Feature/V9Data001ExportBasketTest.php` (3 tests, 28 assertions). CI run 37790260359 passed its enabled jobs; PHPUnit and frontend jobs were intentionally skipped by the current feature-branch CI policy and remain deferred to master. The repository PHPUnit configuration uses in-memory SQLite locally; this is supplemental only. `git diff --check` passed. No production DB or deployment was touched.
 
-
 ## Artifact access and expiry verification slice (2026-10-08)
 
 Added focused feature coverage for owner-only artifact status/download, deterministic download filenames, expired artifacts, artifacts missing expiry, and strict owner/token/format path matching. The tests exposed that `status()` advertised expired artifacts and `download()` allowed a ready artifact with no expiry. The controller now withholds links unless expiry is in the future and rejects downloads when expiry is absent or no longer future. `php -l` passed; the combined focused run passed: `vendor/bin/phpunit tests/Feature/V9Data001ExportArtifactAccessTest.php tests/Feature/V9Data001ExportBasketTest.php tests/Unit/Export` (19 tests, 74 assertions; 2 existing PHPUnit notices). MySQL-backed acceptance remains pending under the feature-branch CI policy.
 
-
 ## Artifact retention and purge verification slice (2026-10-08)
 
-Added a feature test that freezes time at the expiry boundary and checks both database rows and private files. It exposed an exclusive `< now()` purge comparison that left an artifact expiring exactly at the run cutoff until a later hourly pass; the command now uses `<= now()`. The test verifies expired and exact-cutoff artifacts are purged while an unexpired artifact and a queued artifact with no expiry remain. Focused local verification passed: `vendor/bin/phpunit tests/Feature/V9Data001ExportRetentionTest.php tests/Feature/V9Data001ExportArtifactAccessTest.php tests/Feature/V9Data001ExportBasketTest.php` (8 tests, 52 assertions). In-memory SQLite is supplemental; feature-branch CI defers MySQL to master.
+Added a feature test that freezes time at the expiry boundary and checks both database rows and private files. It exposed an exclusive `< now()` purge comparison that left an artifact expiring exactly at the run cutoff until a later hourly pass; the command now uses `<= now()`. The test verifies expired and exact-cutoff artifacts are purged while an unexpired artifact and a queued artifact with no expiry remain. Focused local verification passed: `vendor/bin/phpunit tests/Feature/V9Data001ExportRetentionTest.php tests/Feature/V9Data001ExportArtifactAccessTest.php tests/Feature/V9Data001ExportBasketTest.php` (9 tests, 58 assertions after adding the cancellation expiry case). In-memory SQLite is supplemental; feature-branch CI defers MySQL to master.
 
 
 ## Background worker and cancellation verification slice (2026-10-08)
 
-Added `tests/Feature/V9Data001ExportWorkerTest.php`. It verifies that a queued job resolves newly added account-scoped snapshot rows at execution time, writes and promotes the export, sets expiry, creates the completion notification, does not include another account's row, exits if already cancelled, and removes the final file when cancellation wins after file writing. Focused local verification passed: `vendor/bin/phpunit tests/Feature/V9Data001ExportWorkerTest.php` (3 tests, 15 assertions). PHPUnit in-memory SQLite is supplemental; queue-backend/MySQL verification remains deferred.
+Added `tests/Feature/V9Data001ExportWorkerTest.php`. It verifies that a queued job resolves newly added account-scoped snapshot rows at execution time, writes and promotes the export, sets expiry, creates the completion notification, does not include another account's row, exits if already cancelled, and removes the final file when cancellation wins after file writing. Focused local verification passed: `vendor/bin/phpunit tests/Feature/V9Data001ExportWorkerTest.php` (4 tests, 21 assertions). PHPUnit in-memory SQLite is supplemental; queue-backend/MySQL verification remains deferred.
+
+
+## Durable notification and retry slice (2026-10-08)
+
+Added a private `portfolio_export_notification_outbox` with one completion/failure event per artifact. Artifact terminal-state changes and outbox creation share a database transaction; a queued delivery job records its COMM-001 notification source and marks the outbox delivered in one locked transaction. Failed attempts retain retry time/error class, and an hourly-independent one-minute scheduled sweep dispatches due undelivered events. Completion notices enter the existing optional-email preference planner; cancellation and worker-failure records receive a one-day cleanup expiry.
+
+Focused verification passed: export basket/access/retention/worker/outbox plus export unit suites (27 tests, 126 assertions, 2 existing PHPUnit notices); notification publisher/planner regressions (11 tests, 39 assertions); changed PHP syntax checks; and `php scripts/verify-migration-portability.php` (179 migrations). Tests cover worker completion/failure, cancellation race cleanup, outbox retry without duplicate sources, outbox redispatch, and optional email default-off/opt-in. Local PHPUnit uses in-memory SQLite; MySQL CI remains deferred by branch policy.

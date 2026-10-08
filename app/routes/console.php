@@ -1,7 +1,9 @@
 <?php
 
 use App\Jobs\DailyMarketDataJob;
+use App\Jobs\DeliverExportNotificationOutbox;
 use App\Models\ExportArtifact;
+use App\Models\ExportNotificationOutbox;
 use App\Models\ApiFailureIncident;
 use App\Services\AlertExpirationService;
 use App\Services\AlertNotificationService;
@@ -64,6 +66,30 @@ Artisan::command('portfolio:daily-sync', function () {
     DailyMarketDataJob::dispatchSync();
     $this->info('Daily portfolio sync completed.');
 })->purpose('Run daily market data sync manually');
+
+Artisan::command('portfolio:dispatch-export-notification-outbox', function () {
+    $dispatched = 0;
+    $retryWindow = now()->subMinutes(5);
+    ExportNotificationOutbox::query()
+        ->whereNull('delivered_at')
+        ->where(function ($query) { $query->whereNull('next_attempt_at')->orWhere('next_attempt_at', '<=', now()); })
+        ->where(function ($query) use ($retryWindow) { $query->whereNull('last_dispatched_at')->orWhere('last_dispatched_at', '<=', $retryWindow); })
+        ->orderBy('id')
+        ->chunkById(100, function ($events) use (&$dispatched, $retryWindow) {
+            foreach ($events as $event) {
+                $claimed = ExportNotificationOutbox::query()
+                    ->whereKey($event->id)
+                    ->whereNull('delivered_at')
+                    ->where(function ($query) { $query->whereNull('next_attempt_at')->orWhere('next_attempt_at', '<=', now()); })
+                    ->where(function ($query) use ($retryWindow) { $query->whereNull('last_dispatched_at')->orWhere('last_dispatched_at', '<=', $retryWindow); })
+                    ->update(['last_dispatched_at' => now()]);
+                if ($claimed !== 1) continue;
+                DeliverExportNotificationOutbox::dispatch($event->id)->onQueue('notifications');
+                $dispatched++;
+            }
+        });
+    $this->info("Dispatched {$dispatched} pending export notification(s).");
+})->purpose('Dispatch durable export notification outbox events');
 
 Artisan::command('portfolio:purge-export-artifacts', function () {
     $removed = 0;
@@ -466,6 +492,12 @@ Schedule::command('portfolio:expire-alerts')
     ->hourly()
     ->timezone($timezone)
     ->name('alert-max-age-cleanup');
+
+Schedule::command('portfolio:dispatch-export-notification-outbox')
+    ->everyMinute()
+    ->timezone($timezone)
+    ->withoutOverlapping(1)
+    ->name('export-notification-outbox');
 
 Schedule::command('portfolio:purge-export-artifacts')
     ->hourly()

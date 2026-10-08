@@ -3,17 +3,19 @@
 namespace App\Jobs;
 
 use App\Models\ExportArtifact;
+use App\Models\ExportNotificationOutbox;
 use App\Models\PortfolioProfile;
-use App\Services\Export\ExportDatasetRegistry;
 use App\Services\Export\ExportCancelledException;
+use App\Services\Export\ExportDatasetRegistry;
 use App\Services\Export\ExportFileWriter;
-use App\Services\Notification\NotificationPublisher;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class GenerateExportArtifact implements ShouldQueue
 {
@@ -21,14 +23,18 @@ class GenerateExportArtifact implements ShouldQueue
 
     public function __construct(public int $artifactId, public array $definition) {}
 
-    public function handle(ExportFileWriter $writer, NotificationPublisher $notifications, ExportDatasetRegistry $datasets): void
+    public function handle(ExportFileWriter $writer, ExportDatasetRegistry $datasets): void
     {
         $artifact = ExportArtifact::find($this->artifactId);
-        if (! $artifact || $artifact->cancelled_at || $artifact->status === 'ready') return;
+        if (! $artifact || $artifact->cancelled_at || in_array($artifact->status, ['ready', 'failed', 'cancelled'], true)) return;
         if (! ExportArtifact::query()->whereKey($artifact->id)->where('status', 'queued')->whereNull('cancelled_at')->update(['status' => 'running'])) return;
+
         $temporary = $artifact->path.'.partial';
         $path = Storage::disk('local')->path($temporary);
+        $finalPath = Storage::disk('local')->path($artifact->path);
         Storage::disk('local')->makeDirectory(dirname($artifact->path));
+        $promoted = false;
+
         try {
             $userId = $artifact->user_id;
             $profile = PortfolioProfile::query()->where('user_id', $userId)->findOrFail($this->definition['profile_id']);
@@ -49,22 +55,54 @@ class GenerateExportArtifact implements ShouldQueue
             if ($artifact->format === 'csv') $writer->csv($columns, $rows, $path, $metadata, $shouldCancel);
             else $writer->xlsx([['name' => 'Data', 'columns' => $columns, 'rows' => $rows, 'metadata' => $metadata]], $path, $shouldCancel);
             clearstatcache(true, $path);
-            $finalPath = Storage::disk('local')->path($artifact->path);
             if (! rename($path, $finalPath)) throw new \RuntimeException('Unable to finalize export artifact.');
-            if (ExportArtifact::query()->whereKey($artifact->id)->where('status', 'running')->whereNull('cancelled_at')->update(['status' => 'ready', 'expires_at' => now()->addDay()]) !== 1) {
+
+            $outboxId = DB::transaction(function () use ($artifact): ?int {
+                $updated = ExportArtifact::query()
+                    ->whereKey($artifact->id)
+                    ->where('status', 'running')
+                    ->whereNull('cancelled_at')
+                    ->update(['status' => 'ready', 'expires_at' => now()->addDay()]);
+                if ($updated !== 1) return null;
+
+                return ExportNotificationOutbox::query()->firstOrCreate(
+                    ['artifact_id' => $artifact->id, 'event_type' => 'completed'],
+                )->id;
+            });
+            if ($outboxId === null) {
                 @unlink($finalPath);
                 if (is_file($path)) @unlink($path);
                 return;
             }
-            $notifications->publishEvent([$artifact->user], ['notification_type' => 'export.completed', 'audience' => 'investor', 'severity' => 'info', 'title' => 'Export ready', 'message' => 'Your '.$artifact->dataset.' export is ready to download.', 'primary_action' => ['url' => route('api.exports.download', $artifact->token), 'label' => 'Download export']]);
+
+            // The durable outbox row committed with the ready transition. If
+            // queue dispatch fails, the scheduled outbox sweep will retry it.
+            $promoted = true;
+            DeliverExportNotificationOutbox::dispatch($outboxId)->onQueue('notifications');
         } catch (ExportCancelledException) {
             if (is_file($path)) @unlink($path);
+            if (is_file($finalPath)) @unlink($finalPath);
             return;
-        } catch (\Throwable $error) {
-            if (is_file($path)) @unlink($path);
-            if (ExportArtifact::query()->whereKey($artifact->id)->where('status', 'running')->whereNull('cancelled_at')->update(['status' => 'failed']) === 1) {
-                $notifications->publishEvent([$artifact->user], ['notification_type' => 'export.failed', 'audience' => 'investor', 'severity' => 'action_required', 'title' => 'Export failed', 'message' => 'The '.$artifact->dataset.' export could not be generated. Narrow the scope and try again.']);
+        } catch (Throwable $error) {
+            if (! $promoted) {
+                if (is_file($path)) @unlink($path);
+                if (is_file($finalPath)) @unlink($finalPath);
+
+                $outboxId = DB::transaction(function () use ($artifact): ?int {
+                    $updated = ExportArtifact::query()
+                        ->whereKey($artifact->id)
+                        ->where('status', 'running')
+                        ->whereNull('cancelled_at')
+                        ->update(['status' => 'failed', 'expires_at' => now()->addDay()]);
+                    if ($updated !== 1) return null;
+
+                    return ExportNotificationOutbox::query()->firstOrCreate(
+                        ['artifact_id' => $artifact->id, 'event_type' => 'failed'],
+                    )->id;
+                });
+                if ($outboxId !== null) DeliverExportNotificationOutbox::dispatch($outboxId)->onQueue('notifications');
             }
+
             throw $error;
         }
     }

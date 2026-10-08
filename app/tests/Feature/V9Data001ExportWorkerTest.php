@@ -4,12 +4,13 @@ namespace Tests\Feature;
 
 use App\Jobs\GenerateExportArtifact;
 use App\Models\ExportArtifact;
+use Carbon\Carbon;
 use App\Models\NotificationSource;
+use App\Models\ExportNotificationOutbox;
 use App\Models\PortfolioSnapshot;
 use App\Models\User;
 use App\Services\Export\ExportDatasetRegistry;
 use App\Services\Export\ExportFileWriter;
-use App\Services\Notification\NotificationPublisher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -52,10 +53,13 @@ class V9Data001ExportWorkerTest extends TestCase
             'columns' => ['snapshot_date', 'portfolio_value', 'invested_value'],
             'metadata' => ['scope' => 'full'],
         ]);
-        $job->handle(app(ExportFileWriter::class), app(NotificationPublisher::class), app(ExportDatasetRegistry::class));
+        $frozenNow = Carbon::parse('2026-10-08 12:00:00');
+        Carbon::setTestNow($frozenNow);
+        try {
+            $job->handle(app(ExportFileWriter::class), app(ExportDatasetRegistry::class));
 
-        $this->assertSame('ready', $artifact->fresh()->status);
-        $this->assertTrue($artifact->fresh()->expires_at->isFuture());
+            $this->assertSame('ready', $artifact->fresh()->status);
+            $this->assertSame($frozenNow->copy()->addDay()->toDateTimeString(), $artifact->fresh()->expires_at->toDateTimeString());
         Storage::disk('local')->assertExists($artifact->path);
         Storage::disk('local')->assertMissing($artifact->path.'.partial');
         $csv = Storage::disk('local')->get($artifact->path);
@@ -64,6 +68,46 @@ class V9Data001ExportWorkerTest extends TestCase
         $this->assertDatabaseHas('portfolio_notification_sources', ['notification_type' => 'export.completed']);
         $source = NotificationSource::query()->where('notification_type', 'export.completed')->firstOrFail();
         $this->assertDatabaseHas('portfolio_recipient_notifications', ['source_id' => $source->id, 'user_id' => $owner->id]);
+            $this->assertNotNull(ExportNotificationOutbox::query()->where('artifact_id', $artifact->id)->where('event_type', 'completed')->sole()->delivered_at);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_worker_failure_marks_artifact_failed_and_publishes_durable_failure_notice(): void
+    {
+        Storage::fake('local');
+        $owner = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($owner);
+        $artifact = $this->queuedArtifact($owner);
+        $failingWriter = new class extends ExportFileWriter {
+            public function csv(array $columns, array $rows, string $path, array $metadata = [], ?callable $shouldCancel = null): void
+            {
+                throw new \RuntimeException('simulated writer failure');
+            }
+        };
+        $job = new GenerateExportArtifact($artifact->id, [
+            'dataset' => 'portfolio-snapshots',
+            'profile_id' => $profile->id,
+            'scope' => 'full',
+            'selected' => [],
+            'filters' => [],
+            'columns' => ['snapshot_date', 'portfolio_value'],
+            'metadata' => [],
+        ]);
+
+        try {
+            $job->handle($failingWriter, app(ExportDatasetRegistry::class));
+            $this->fail('Expected the writer failure to be rethrown.');
+        } catch (\RuntimeException $error) {
+            $this->assertSame('simulated writer failure', $error->getMessage());
+        }
+
+        $this->assertSame('failed', $artifact->fresh()->status);
+        $this->assertTrue($artifact->fresh()->expires_at->isFuture());
+        $this->assertDatabaseHas('portfolio_notification_sources', ['notification_type' => 'export.failed']);
+        $failedEvent = ExportNotificationOutbox::query()->where('artifact_id', $artifact->id)->where('event_type', 'failed')->sole();
+        $this->assertNotNull($failedEvent->delivered_at);
     }
 
     public function test_cancellation_after_file_write_prevents_ready_promotion_and_removes_the_final_file(): void
@@ -91,7 +135,7 @@ class V9Data001ExportWorkerTest extends TestCase
             }
         };
 
-        $job->handle($cancellingWriter, app(NotificationPublisher::class), app(ExportDatasetRegistry::class));
+        $job->handle($cancellingWriter, app(ExportDatasetRegistry::class));
 
         $this->assertSame('cancelled', $artifact->fresh()->status);
         Storage::disk('local')->assertMissing($artifact->path);
@@ -107,7 +151,7 @@ class V9Data001ExportWorkerTest extends TestCase
         $artifact->update(['cancelled_at' => now()]);
         $job = new GenerateExportArtifact($artifact->id, ['dataset' => 'portfolio-snapshots']);
 
-        $job->handle(app(ExportFileWriter::class), app(NotificationPublisher::class), app(ExportDatasetRegistry::class));
+        $job->handle(app(ExportFileWriter::class), app(ExportDatasetRegistry::class));
 
         Storage::disk('local')->assertMissing($artifact->path);
         $this->assertSame('cancelled', $artifact->fresh()->status);
