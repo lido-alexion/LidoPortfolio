@@ -55,8 +55,13 @@ class LidoTelemetryController extends Controller
         return in_array($matches[1], $allowed, true) ? $matches[1] : 'other';
     }
 
-    public function relayTraces(Request $request): HttpResponse
+    public function relayTraces(Request $request, LidoTelemetry $telemetry): HttpResponse
     {
+        // Honor the global telemetry kill switch before forwarding browser spans.
+        if (! $telemetry->enabled()) {
+            return response('', 204);
+        }
+
         $maxBytes = max(1024, (int) config('lido_telemetry.browser_relay_max_bytes', 262144));
         if ((int) $request->header('Content-Length', 0) > $maxBytes) {
             return response('', 413);
