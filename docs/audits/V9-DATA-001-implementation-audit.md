@@ -49,9 +49,9 @@
 | 30 | Protected, non-guessable file access | Local private storage, UUID token, authenticated owner-scoped route and exact path check; feature tests verify other-account 404s and reject a mismatched artifact path. | Partial — focused local SQLite tests pass; broader security review and MySQL CI remain pending. |
 | 31 | Chart data only | Chart dataset exports snapshot values; no image route or format. | Partial — no chart-specific metadata test. |
 | 32 | Maximum rows | Configured 50,000 default; writer and request enforce. | Partial; unit limit test passes. |
-| 33 | Maximum file bytes | CSV checks while writing; XLSX checks archive size after close and removes failed temporary/output files. | **Partial** — XLSX temporary generation can exceed the configured cap before rejection. |
+| 33 | Maximum file bytes | CSV checks while writing; XLSX caps streamed worksheet XML temporary storage and checks final archive size after close, removing worksheet/archive temporary files on failure. | **Partial** — ZIP assembly and final archive bytes coexist before the final size check. |
 | 34 | Sheets/fields/cells | Configured limits: 10 sheets, 100 aggregate fields, 50,000 aggregate rows and 500,000 workbook cells; basket limit shares sheet cap. | Partial; aggregate row rejection and cancellation cleanup have focused unit coverage; aggregate field/cell boundaries and basket API behavior lack integration coverage. |
-| 35 | Runtime/memory | Configured 120-second and 256 MiB checks during writer loops. | **Partial** — providers materialize result rows and XLSX XML in memory before all checks; not a strict process-level ceiling. |
+| 35 | Runtime/memory | Configured 120-second and 256 MiB checks during writer loops; XLSX streams rows directly to bounded worksheet temporary files without building a second row array or worksheet XML string. | **Partial** — providers still materialize result rows, so the application-level check is not a strict process memory ceiling. |
 | 36 | Deterministic safe file names | Download name uses a dataset slug; internal path is owner/UUID/format-derived. Feature test asserts the deterministic download name. | Partial — focused local SQLite test passes; additional dataset-name edge cases remain pending. |
 | 37 | Formula injection | Formula-like text with leading whitespace/control is neutralized; numeric negatives remain numeric. | Partial; writer tests pass. |
 | 38 | Values only | XLSX emits inline strings and numeric `<v>` values; no formula element generation. | Partial; writer test passes. |
@@ -64,7 +64,7 @@ Registered datasets remain dashboard summary, portfolio growth chart data, and d
 
 ## Remaining unsupported acceptance criteria
 
-The current implementation does not support general analytics or fundamental datasets (criteria 4–6). It does not provide dual display-label/value columns for every dataset (8), complete provenance across all providers (9), a general hidden-field policy test (20), chart-specific metadata evidence (31), or strict process-level memory/runtime ceilings before provider and XML materialization (35). These are implementation limitations, not verified passes.
+The current implementation does not support general analytics or fundamental datasets (criteria 4–6). It does not provide dual display-label/value columns for every dataset (8), complete provenance across all providers (9), a general hidden-field policy test (20), chart-specific metadata evidence (31), or strict process-level memory/runtime ceilings before provider materialization (35). These are implementation limitations, not verified passes.
 
 Additional acceptance evidence remains incomplete for provider adapter registration, API/ownership/expiry security, selected-ID stale-item correction, database precision, background worker and cancellation races, notifications/preferences/retries, artifact retention and purge, aggregate basket API boundaries, and basket integration (criteria 1–2, 7, 11, 13–15, 17–30, 32–39). Criteria 12 and 29 remain pass by inspection; no new claim of full implementation or verification is made.
 
@@ -76,13 +76,13 @@ Focused basket UI slice verification on 2026-10-08: `node --test tests/js/portfo
 |---|---|
 | Branch reconciliation | `codex/v9-data001-completion` is reconciled with `origin/master` at `af65b7e5`; no history was rewritten. |
 | PHP syntax checks for changed export controllers, jobs, providers, writer and exception | Passed for all checked PHP files. |
-| `vendor/bin/phpunit tests/Unit/Export` (from `app/`) | Passed: 12 tests, 31 assertions; PHPUnit reported 2 notices. |
+| `vendor/bin/phpunit tests/Unit/Export` (from `app/`) | Latest run passed: 13 tests, 34 assertions; PHPUnit reported 2 existing notices. |
 | `php artisan openapi:v1 --check` (from `app/`) | Passed: OpenAPI document is current (221 operations). |
 | `npm run docs:static:check` (from `app/`) | Passed: static documentation contract current (53 topics). |
 | `git diff --check` (repository root) | Passed after the current test and audit changes. |
 | Database-backed backend gate | Focused PHPUnit suites pass on the configured in-memory SQLite test database; MySQL-backed feature/full-suite verification is deferred by the feature-branch CI policy until the master gate. |
 
-The feature baseline and basket configuration slice are committed on `codex/v9-data001-completion`, based on current `master`; the V9 wishlist remains FROZEN / IMPLEMENTATION-READY because the acceptance evidence and unsupported capabilities listed above are incomplete.
+The feature baseline and subsequent implementation slices are committed on `codex/v9-data001-completion`, based on current `master`; the V9 wishlist remains FROZEN / IMPLEMENTATION-READY because the acceptance evidence and unsupported capabilities listed above are incomplete.
 
 ## Basket API verification slice (2026-10-08)
 
@@ -107,3 +107,7 @@ Added `tests/Feature/V9Data001ExportWorkerTest.php`. It verifies that a queued j
 Added a private `portfolio_export_notification_outbox` with one completion/failure event per artifact. Artifact terminal-state changes and outbox creation share a database transaction; a queued delivery job records its COMM-001 notification source and marks the outbox delivered in one locked transaction. Failed attempts retain retry time/error class, and an hourly-independent one-minute scheduled sweep dispatches due undelivered events. Completion notices enter the existing optional-email preference planner; cancellation and worker-failure records receive a one-day cleanup expiry.
 
 Focused verification passed: export basket/access/retention/worker/outbox plus export unit suites (27 tests, 126 assertions, 2 existing PHPUnit notices); notification publisher/planner regressions (11 tests, 39 assertions); changed PHP syntax checks; and `php scripts/verify-migration-portability.php` (179 migrations). Tests cover worker completion/failure, cancellation race cleanup, outbox retry without duplicate sources, outbox redispatch, and optional email default-off/opt-in. Local PHPUnit uses in-memory SQLite; MySQL CI remains deferred by branch policy.
+
+## XLSX bounded worksheet generation slice (2026-10-08)
+
+The XLSX writer now streams one row at a time into private temporary worksheet XML files and adds them to the ZIP archive by file path. It avoids a second full row array and full worksheet XML string, enforces a configurable 256 MiB aggregate worksheet temporary-byte cap, and removes worksheet/archive temporary files on success, cancellation, or failure. Focused verification passed: `vendor/bin/phpunit tests/Unit/Export` (13 tests, 34 assertions, 2 existing notices) and export basket/access/worker/outbox feature tests (14 tests, 86 assertions) on in-memory SQLite; PHP syntax and `git diff --check` passed. MySQL and strict process-level provider-memory bounds remain pending.

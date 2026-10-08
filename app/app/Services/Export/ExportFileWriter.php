@@ -39,6 +39,8 @@ class ExportFileWriter
         if ($zip->open($temporaryPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) throw new RuntimeException('Unable to create XLSX file.');
         $completed = false;
         $zipOpen = true;
+        $worksheetPaths = [];
+        $temporaryBytes = 0;
         try {
         $usedNames = [];
         $cellCount = 0;
@@ -52,27 +54,43 @@ class ExportFileWriter
             if ($fieldCount > config('exports.max_fields', 100)) throw new RuntimeException('Export exceeds the maximum field count. Narrow the selected fields.');
             $cellCount += (count($sheet['rows']) + 1) * count($sheet['columns']) + (count($sheet['metadata'] ?? []) * 2) + (empty($sheet['metadata']) ? 0 : 4);
             if ($cellCount > config('exports.max_workbook_cells', 500000)) throw new RuntimeException('Export exceeds the maximum workbook complexity. Remove sheets or fields and try again.');
-            $rows = [$sheet['columns'], ...array_map(fn ($row) => array_map(fn ($column) => data_get($row, $column), $sheet['columns']), $sheet['rows'])];
-            if (! empty($sheet['metadata'])) {
-                $rows[] = [];
-                $rows[] = ['Metadata', 'Value'];
-                foreach ($sheet['metadata'] as $key => $value) $rows[] = [$key, is_scalar($value) || $value === null ? $value : json_encode($value, JSON_UNESCAPED_SLASHES)];
-            }
-            $xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>';
-            foreach ($rows as $rowIndex => $row) {
-                if ($shouldCancel && $shouldCancel()) throw new ExportCancelledException('Export was cancelled.');
-                $xml .= '<row r="'.($rowIndex + 1).'">';
-                foreach ($row as $columnIndex => $value) {
-                    $numeric = is_int($value) || is_float($value) || (is_string($value) && is_numeric($value) && ! preg_match('/^0\d/', $value));
-                    $safe = $numeric ? (string) $value : $this->safeCell($value);
-                    $cell = htmlspecialchars($safe, ENT_XML1);
-                    $ref = $this->column($columnIndex).($rowIndex + 1);
-                    $xml .= $numeric ? '<c r="'.$ref.'"><v>'.$cell.'</v></c>' : '<c r="'.$ref.'" t="inlineStr"><is><t xml:space="preserve">'.$cell.'</t></is></c>';
+            $worksheetPath = $temporaryPath.'.sheet'.($index + 1).'.xml';
+            $worksheet = fopen($worksheetPath, 'xb');
+            if ($worksheet === false) throw new RuntimeException('Unable to create XLSX worksheet temporary file.');
+            $worksheetPaths[] = $worksheetPath;
+            try {
+                $this->writeWorksheetChunk($worksheet, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>', $temporaryBytes);
+                $rowIndex = 0;
+                $writeRow = function (array $row) use ($worksheet, &$temporaryBytes, &$rowIndex, $shouldCancel, $started): void {
+                    if ($shouldCancel && $shouldCancel()) throw new ExportCancelledException('Export was cancelled.');
+                    $xml = '<row r="'.($rowIndex + 1).'">';
+                    foreach ($row as $columnIndex => $value) {
+                        $numeric = is_int($value) || is_float($value) || (is_string($value) && is_numeric($value) && ! preg_match('/^0\\d/', $value));
+                        $safe = $numeric ? (string) $value : $this->safeCell($value);
+                        $cell = htmlspecialchars($safe, ENT_XML1);
+                        $ref = $this->column($columnIndex).($rowIndex + 1);
+                        $xml .= $numeric ? '<c r="'.$ref.'"><v>'.$cell.'</v></c>' : '<c r="'.$ref.'" t="inlineStr"><is><t xml:space="preserve">'.$cell.'</t></is></c>';
+                    }
+                    $this->writeWorksheetChunk($worksheet, $xml.'</row>', $temporaryBytes);
+                    $rowIndex++;
+                    $this->assertRuntime($started);
+                };
+                $writeRow($sheet['columns']);
+                foreach ($sheet['rows'] as $sourceRow) {
+                    $row = [];
+                    foreach ($sheet['columns'] as $column) $row[] = data_get($sourceRow, $column);
+                    $writeRow($row);
                 }
-                $this->assertRuntime($started);
-                $xml .= '</row>';
+                if (! empty($sheet['metadata'])) {
+                    $writeRow([]);
+                    $writeRow(['Metadata', 'Value']);
+                    foreach ($sheet['metadata'] as $key => $value) $writeRow([$key, is_scalar($value) || $value === null ? $value : json_encode($value, JSON_UNESCAPED_SLASHES)]);
+                }
+                $this->writeWorksheetChunk($worksheet, '</sheetData></worksheet>', $temporaryBytes);
+            } finally {
+                fclose($worksheet);
             }
-            $zip->addFromString('xl/worksheets/sheet'.($index + 1).'.xml', $xml.'</sheetData></worksheet>');
+            if (! $zip->addFile($worksheetPath, 'xl/worksheets/sheet'.($index + 1).'.xml')) throw new RuntimeException('Unable to add XLSX worksheet.');
         }
         $rels = ''; $workbookSheets = '';
         foreach (array_keys($sheets) as $index) {
@@ -93,7 +111,23 @@ class ExportFileWriter
         $completed = true;
         } finally {
             if ($zipOpen) $zip->close();
+            foreach ($worksheetPaths as $worksheetPath) if (is_file($worksheetPath)) @unlink($worksheetPath);
             if (! $completed && is_file($temporaryPath)) @unlink($temporaryPath);
+        }
+    }
+
+    private function writeWorksheetChunk($handle, string $chunk, int &$temporaryBytes): void
+    {
+        $temporaryBytes += strlen($chunk);
+        if ($temporaryBytes > config('exports.max_temporary_bytes', 268435456)) {
+            throw new RuntimeException('XLSX worksheet data exceeds the temporary storage limit. Narrow the scope and try again.');
+        }
+        $offset = 0;
+        $length = strlen($chunk);
+        while ($offset < $length) {
+            $written = fwrite($handle, substr($chunk, $offset));
+            if ($written === false || $written === 0) throw new RuntimeException('Unable to write XLSX worksheet temporary file.');
+            $offset += $written;
         }
     }
 

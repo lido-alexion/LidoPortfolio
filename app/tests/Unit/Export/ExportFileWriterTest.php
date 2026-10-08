@@ -87,8 +87,8 @@ class ExportFileWriterTest extends TestCase
             $this->fail('Expected cancellation to stop the export.');
         } catch (\App\Services\Export\ExportCancelledException) {
             $this->assertFileDoesNotExist($path);
-            $this->assertSame([], glob($path.'.*.partial') ?: []);
-        } finally { @unlink($path); foreach (glob($path.'.*.partial') ?: [] as $partial) @unlink($partial); }
+            $this->assertSame([], glob($path.'.*.partial*') ?: []);
+        } finally { @unlink($path); foreach (glob($path.'.*.partial*') ?: [] as $partial) @unlink($partial); }
     }
 
     public function test_xlsx_enforces_aggregate_row_and_field_limits(): void
@@ -134,6 +134,22 @@ class ExportFileWriterTest extends TestCase
             $this->assertStringContainsString('maximum workbook complexity', $exception->getMessage());
             $this->assertFileDoesNotExist($path);
         } finally { @unlink($path); foreach (glob($path.'.*.partial') ?: [] as $partial) @unlink($partial); }
+    }
+
+    public function test_xlsx_streams_worksheet_to_bounded_temporary_storage_and_cleans_up_when_limit_is_exceeded(): void
+    {
+        if (! class_exists(\ZipArchive::class)) $this->markTestSkipped('ZipArchive is unavailable.');
+        $path = tempnam(sys_get_temp_dir(), 'stox-export-');
+        @unlink($path);
+        config(['exports.max_temporary_bytes' => 32]);
+        try {
+            app(ExportFileWriter::class)->xlsx([['columns' => ['value'], 'rows' => [['value' => str_repeat('x', 50)]]]], $path);
+            $this->fail('Expected the worksheet temporary byte limit to stop the export.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('temporary storage limit', $exception->getMessage());
+            $this->assertFileDoesNotExist($path);
+            $this->assertSame([], glob($path.'.*.partial*') ?: []);
+        } finally { @unlink($path); foreach (glob($path.'.*.partial*') ?: [] as $partial) @unlink($partial); }
     }
 
     public function test_xlsx_removes_output_when_runtime_limit_is_exceeded(): void

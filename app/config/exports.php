@@ -3,6 +3,7 @@
 return [
     'max_rows' => (int) env('EXPORT_MAX_ROWS', 50000),
     'max_file_bytes' => (int) env('EXPORT_MAX_FILE_BYTES', 52428800),
+    'max_temporary_bytes' => (int) env('EXPORT_MAX_TEMPORARY_BYTES', 268435456),
     'max_basket_items' => (int) env('EXPORT_MAX_BASKET_ITEMS', 10),
     'max_sheets' => (int) env('EXPORT_MAX_SHEETS', 10),
     'max_fields' => (int) env('EXPORT_MAX_FIELDS', 100),
