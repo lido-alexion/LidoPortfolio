@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Holding;
 use App\Models\ExportArtifact;
 use App\Models\Stock;
+use App\Models\PortfolioSnapshot;
 use App\Models\User;
 use App\Services\Export\ExportDatasetRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -16,6 +17,38 @@ use Tests\TestCase;
 class V9Data001ExportProviderCoverageTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_portfolio_growth_export_includes_chart_series_labels_units_and_scope_metadata(): void
+    {
+        $owner = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($owner);
+        PortfolioSnapshot::query()->create([
+            'profile_id' => $profile->id,
+            'snapshot_date' => '2026-10-07',
+            'portfolio_value' => '12345.6700',
+            'invested_value' => '10000.0000',
+        ]);
+
+        $resolved = app(ExportDatasetRegistry::class)->resolve('portfolio-growth', $profile, [
+            'range' => '180d',
+            'sort_direction' => 'desc',
+        ]);
+
+        $this->assertSame(['snapshot_date', 'portfolio_value', 'invested_value'], $resolved['columns']);
+        $this->assertSame('2026-10-07', $resolved['rows'][0]['snapshot_date']);
+        $this->assertSame('portfolio-growth', $resolved['metadata']['dataset']);
+        $this->assertSame(['range' => '180d'], $resolved['metadata']['filters']);
+        $this->assertSame(['by' => 'snapshot_date', 'direction' => 'desc'], $resolved['metadata']['sort']);
+        $this->assertSame([
+            'type' => 'time_series',
+            'x_axis' => ['field' => 'snapshot_date', 'label' => 'Snapshot date', 'format' => 'YYYY-MM-DD'],
+            'series' => [
+                ['field' => 'portfolio_value', 'label' => 'Portfolio value', 'unit' => 'INR'],
+                ['field' => 'invested_value', 'label' => 'Invested value', 'unit' => 'INR'],
+            ],
+        ], $resolved['metadata']['chart']);
+        $this->assertSame(['csv', 'xlsx'], collect(app(ExportDatasetRegistry::class)->catalog())->firstWhere('id', 'portfolio-growth')['formats']);
+    }
 
     public function test_fundamental_export_is_limited_to_current_holdings_and_excludes_internal_revision_fields(): void
     {

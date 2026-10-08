@@ -142,6 +142,14 @@ class PortfolioSnapshotExportProvider implements StreamingExportDatasetProvider
                 'portfolio_value' => 'Portfolio value',
                 'invested_value' => 'Invested value',
             ],
+            ...($dataset === 'portfolio-growth' ? ['chart' => [
+                'type' => 'time_series',
+                'x_axis' => ['field' => 'snapshot_date', 'label' => 'Snapshot date', 'format' => 'YYYY-MM-DD'],
+                'series' => [
+                    ['field' => 'portfolio_value', 'label' => 'Portfolio value', 'unit' => 'INR'],
+                    ['field' => 'invested_value', 'label' => 'Invested value', 'unit' => 'INR'],
+                ],
+            ]] : []),
             ...($resolvedFilters ? ['filters' => ['range' => $range], 'sort' => ['by' => 'snapshot_date', 'direction' => $direction]] : []),
         ];
     }
