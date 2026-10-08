@@ -78,8 +78,17 @@ export function registerBrowserOpenTelemetry() {
 
     const enabled = import.meta.env.VITE_LIDO_TELEMETRY_ENABLED === 'true'
         || import.meta.env.VITE_LIDO_TELEMETRY_ENABLED === '1';
-    const endpoint = String(import.meta.env.VITE_LIDO_TELEMETRY_OTLP_TRACES_ENDPOINT || '').trim();
-    if (!enabled || !endpoint) {
+    const configuredEndpoint = String(import.meta.env.VITE_LIDO_TELEMETRY_OTLP_TRACES_ENDPOINT || '').trim();
+    if (!enabled || !configuredEndpoint) {
+        return false;
+    }
+
+    let endpoint;
+    try {
+        // Browser fetch requires an absolute URL. Resolve same-origin paths such as
+        // `/api/telemetry/otlp/v1/traces` against the current page origin.
+        endpoint = new URL(configuredEndpoint, window.location.origin).toString();
+    } catch {
         return false;
     }
 
