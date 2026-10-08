@@ -120,6 +120,61 @@ class NseOfficialFundamentalHistoricalTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_nse_is_used_when_yahoo_throws_provider_error(): void
+    {
+        FundamentalSetting::query()->create(['nse_official_fallback_enabled' => true]);
+        Setting::setValue('nifty500_constituents_json', json_encode(['RELIANCE']));
+        Setting::setValue('nifty500_constituents_cached_at', now()->toIso8601String());
+        config([
+            'fundamentals_bootstrap.nse_official_enabled' => true,
+            'fundamentals_bootstrap.nse_official_feed_url' => 'https://feeds.example/nse-fundamentals',
+        ]);
+        Http::fake(['feeds.example/*' => Http::response(['facts' => [[
+            'statement_type' => 'income_statement',
+            'cadence' => 'quarterly',
+            'statement_basis' => 'consolidated',
+            'fact_key' => 'revenue',
+            'period_end' => '2024-03-31',
+            'value' => 500,
+        ]]], 200)]);
+
+        $provider = Mockery::mock(FundamentalDataProvider::class);
+        $provider->shouldReceive('fetch')->once()->andThrow(
+            new \RuntimeException('yfinance returned no fundamental statements')
+        );
+        $service = new FundamentalHistoricalIngestService(
+            new NseOfficialFundamentalHistoricalSource,
+            new BseOfficialFundamentalHistoricalSource,
+            new YahooFundamentalHistoricalSource($provider),
+        );
+        $stock = Stock::query()->create(['symbol' => 'RELIANCE', 'exchange' => 'NSE', 'name' => 'Reliance']);
+
+        $rows = $service->fetch($stock, 'quarterly');
+
+        $this->assertCount(1, $rows);
+        $this->assertSame('nse_official', $rows[0]['provider']);
+        $this->assertSame(500.0, (float) $rows[0]['value']);
+        Http::assertSentCount(1);
+    }
+
+    public function test_provider_error_is_not_treated_as_success_when_no_fallback_is_available(): void
+    {
+        config(['fundamentals_bootstrap.nse_official_enabled' => false]);
+
+        $provider = Mockery::mock(FundamentalDataProvider::class);
+        $provider->shouldReceive('fetch')->once()->andThrow(new \RuntimeException('provider unavailable'));
+        $service = new FundamentalHistoricalIngestService(
+            new NseOfficialFundamentalHistoricalSource,
+            new BseOfficialFundamentalHistoricalSource,
+            new YahooFundamentalHistoricalSource($provider),
+        );
+        $stock = Stock::query()->create(['symbol' => 'RELIANCE', 'exchange' => 'NSE', 'name' => 'Reliance']);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('provider unavailable');
+        $service->fetch($stock, 'quarterly');
+    }
+
     public function test_nse_is_used_when_yahoo_returns_no_usable_rows(): void
     {
         FundamentalSetting::query()->create(['nse_official_fallback_enabled' => true]);
