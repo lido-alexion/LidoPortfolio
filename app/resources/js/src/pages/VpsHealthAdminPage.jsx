@@ -56,7 +56,17 @@ function MetricCard({ label, value, detail, status = 'unknown', threshold }) {
     const severity = VPS_HEALTH_STATUS[status] ?? VPS_HEALTH_STATUS.unknown;
     return (
         <div className="col-6 col-xl-3">
-            <div className={`card h-100 border-${severity.color}`} title={threshold}>
+            <div
+                className={`card h-100 border-${severity.color}`}
+                title={threshold}
+                style={{
+                    backgroundColor: {
+                        success: 'rgba(var(--bs-success-rgb), 0.045)',
+                        warning: 'rgba(var(--bs-warning-rgb), 0.07)',
+                        danger: 'rgba(var(--bs-danger-rgb), 0.045)',
+                    }[severity.color],
+                }}
+            >
                 <div className="card-body">
                     <div className="d-flex align-items-start justify-content-between gap-2 mb-1">
                         <div className="small text-muted">{label}</div>
@@ -143,6 +153,11 @@ export default function VpsHealthAdminPage() {
     const stale = data?.last_sample_age_seconds == null || data.last_sample_age_seconds > 180;
     const healthStatus = !latest ? 'No data' : stale ? 'Stale data' : latest.status === 'critical' ? 'Critical' : 'Healthy';
     const statusClass = !latest || stale ? 'bg-warning text-dark' : latest.status === 'critical' ? 'bg-danger' : 'bg-success';
+    const summaryTint = !latest || stale
+        ? 'rgba(var(--bs-warning-rgb), 0.07)'
+        : latest.status === 'critical'
+            ? 'rgba(var(--bs-danger-rgb), 0.045)'
+            : 'rgba(var(--bs-success-rgb), 0.045)';
 
     return (
         <div className="container-fluid py-3">
@@ -168,7 +183,7 @@ export default function VpsHealthAdminPage() {
             {error && <div className="alert alert-warning" role="alert">{error}</div>}
             {loading && !data ? <div className="text-muted py-4">Loading VPS health…</div> : (
                 <>
-                    <div className="card mb-3">
+                    <div className="card mb-3" style={{ backgroundColor: summaryTint }}>
                         <div className="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
                             <div>
                                 <span className={`badge ${statusClass} me-2`}>{healthStatus}</span>
