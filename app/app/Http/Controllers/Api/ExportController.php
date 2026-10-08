@@ -34,11 +34,15 @@ class ExportController extends Controller
             'dataset' => ['required', 'string'], 'format' => ['required', 'in:csv,xlsx'], 'scope' => ['required', 'in:current,full,selected'],
             'fields' => ['sometimes', 'array', 'max:'.config('exports.max_fields')], 'fields.*' => ['string'],
             'selected' => ['sometimes', 'array', 'max:'.config('exports.max_rows')], 'selected.*' => ['string', 'max:120'],
+            'filters' => ['sometimes', 'array'], 'filters.range' => ['required_if:scope,current', 'in:90d,180d,365d,all'],
+            'filters.sort_by' => ['required_if:scope,current', 'in:snapshot_date'], 'filters.sort_direction' => ['required_if:scope,current', 'in:asc,desc'],
         ]);
         if (! $this->datasets->supportsScope($data['dataset'], $data['scope'])) return response()->json(['message' => 'This dataset does not support the selected scope. Choose a supported scope.'], 422);
         $profile = \activePortfolio();
         $this->datasets->assertAuthorized($data['dataset'], $profile, (int) $request->user()->id);
-        $resolved = $this->datasets->resolve($data['dataset'], $profile);
+        if ($data['scope'] === 'current' && ! in_array($data['dataset'], ['portfolio-growth', 'portfolio-snapshots'], true)) return response()->json(['message' => 'Current scope requires supported snapshot filters.'], 422);
+        $filters = $data['scope'] === 'current' ? ['range' => $data['filters']['range'], 'sort_by' => $data['filters']['sort_by'], 'sort_direction' => $data['filters']['sort_direction']] : [];
+        $resolved = $this->datasets->resolve($data['dataset'], $profile, $filters);
         if ($data['scope'] === 'selected') {
             $selected = $data['selected'] ?? [];
             if ($selected === [] || ! isset($resolved['identities'])) return response()->json(['message' => 'This dataset does not expose stable selected-row identities.'], 422);
@@ -60,7 +64,7 @@ class ExportController extends Controller
         $definition['metadata'] = ['dataset' => $data['dataset'], 'scope' => $data['scope'], 'exported_at' => now()->toIso8601String(), ...($resolved['metadata'] ?? [])];
         if ($isBackground) dispatch(new GenerateExportArtifact($artifact->id, [
             'dataset' => $data['dataset'], 'profile_id' => $profile->id, 'scope' => $data['scope'],
-            'selected' => $data['selected'] ?? [], 'columns' => $columns, 'metadata' => $definition['metadata'],
+            'selected' => $data['selected'] ?? [], 'filters' => $filters, 'columns' => $columns, 'metadata' => $definition['metadata'],
         ]));
         else {
             try {
@@ -115,8 +119,13 @@ class ExportController extends Controller
             'items.*.fields' => ['sometimes', 'array', 'max:'.config('exports.max_fields')], 'items.*.fields.*' => ['string'],
             'items.*.scope' => ['sometimes', 'in:current,full,selected'],
             'items.*.selected' => ['sometimes', 'array', 'max:'.config('exports.max_rows')], 'items.*.selected.*' => ['string', 'max:120'],
+            'items.*.filters' => ['sometimes', 'array'], 'items.*.filters.range' => ['required_if:items.*.scope,current', 'in:90d,180d,365d,all'],
+            'items.*.filters.sort_by' => ['required_if:items.*.scope,current', 'in:snapshot_date'], 'items.*.filters.sort_direction' => ['required_if:items.*.scope,current', 'in:asc,desc'],
         ]);
         foreach ($data['items'] as $item) if (! is_array($item) || empty($item['dataset'])) return response()->json(['message' => 'Each basket item needs a dataset.'], 422);
+        foreach ($data['items'] as $item) {
+            if (($item['scope'] ?? 'full') === 'current' && (! in_array($item['dataset'], ['portfolio-growth', 'portfolio-snapshots'], true) || ! in_array($item['filters']['range'] ?? null, ['90d', '180d', '365d', 'all'], true) || ($item['filters']['sort_by'] ?? null) !== 'snapshot_date' || ! in_array($item['filters']['sort_direction'] ?? null, ['asc', 'desc'], true))) return response()->json(['message' => 'A current-scope basket item needs valid snapshot filters and sort.'], 422);
+        }
         $basket = ExportBasket::updateOrCreate(['user_id' => $request->user()->id], ['items' => $data['items']]);
         return response()->json(['data' => $basket]);
     }
@@ -130,9 +139,11 @@ class ExportController extends Controller
         $totalRows = 0;
         $totalFields = 0;
         foreach ($basket->items as $index => $item) {
-            try { $profile = \activePortfolio(); $this->datasets->assertAuthorized((string) ($item['dataset'] ?? ''), $profile, (int) $request->user()->id); $resolved = $this->datasets->resolve((string) ($item['dataset'] ?? ''), $profile); }
-            catch (\Throwable) { return response()->json(['message' => 'The export basket contains an unavailable dataset. Refresh it and try again.'], 422); }
             $scope = $item['scope'] ?? 'full';
+            if ($scope === 'current' && (! in_array($item['dataset'] ?? '', ['portfolio-growth', 'portfolio-snapshots'], true) || ! in_array($item['filters']['range'] ?? null, ['90d', '180d', '365d', 'all'], true) || ($item['filters']['sort_by'] ?? null) !== 'snapshot_date' || ! in_array($item['filters']['sort_direction'] ?? null, ['asc', 'desc'], true))) return response()->json(['message' => 'A current-scope basket item needs valid snapshot filters and sort.'], 422);
+            $filters = $scope === 'current' ? ['range' => $item['filters']['range'], 'sort_by' => $item['filters']['sort_by'], 'sort_direction' => $item['filters']['sort_direction']] : [];
+            try { $profile = \activePortfolio(); $this->datasets->assertAuthorized((string) ($item['dataset'] ?? ''), $profile, (int) $request->user()->id); $resolved = $this->datasets->resolve((string) ($item['dataset'] ?? ''), $profile, $filters); }
+            catch (\Throwable) { return response()->json(['message' => 'The export basket contains an unavailable dataset. Refresh it and try again.'], 422); }
             if (! $this->datasets->supportsScope($item['dataset'], $scope)) return response()->json(['message' => 'A basket item has an unsupported scope. Edit the item and try again.'], 422);
             $requestedFields = $item['fields'] ?? $resolved['columns'];
             if (! is_array($requestedFields) || array_diff($requestedFields, $resolved['columns'])) return response()->json(['message' => 'The export basket contains unavailable fields. Review the item and try again.'], 422);

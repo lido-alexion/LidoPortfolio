@@ -33,7 +33,7 @@ class GenerateExportArtifact implements ShouldQueue
             $userId = $artifact->user_id;
             $profile = PortfolioProfile::query()->where('user_id', $userId)->findOrFail($this->definition['profile_id']);
             $datasets->assertAuthorized($this->definition['dataset'], $profile, (int) $userId);
-            $resolved = $datasets->resolve($this->definition['dataset'], $profile);
+            $resolved = $datasets->resolve($this->definition['dataset'], $profile, $this->definition['filters'] ?? []);
             $columns = $this->definition['columns'];
             if (array_diff($columns, $resolved['columns'])) throw new \RuntimeException('An export field is no longer available.');
             $rows = $resolved['rows'];

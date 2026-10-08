@@ -4,6 +4,14 @@
 **Feature baseline commit:** `72a5c6d4` (`feat(v9): build export framework baseline`)
 **Status:** INCOMPLETE — do not mark IMPLEMENTED / VERIFIED. This audit covers the current feature branch and verification performed on 2026-10-08.
 
+## Focused Portfolio Snapshots slice (2026-10-08)
+
+- Portfolio growth and snapshots catalog entries now advertise `current` and `full`; only the table snapshots entry advertises `selected`. Current scope requires a supported 90/180/365/all range and `snapshot_date` with `asc`/`desc` sort.
+- Provider resolution performs account-scoped date filtering, range row caps, and ordering in SQL. Sync, worker, and basket resolution receive current filters; full resolution deliberately receives no filters. Filter and sort choices are written to export metadata.
+- The snapshots API returns stable snapshot IDs. The table uses accessible per-row checkboxes, sends IDs directly for selected exports, hides selected scope with an empty selection, and clears selection when portfolio or date range changes.
+- Added focused catalog, provider resolution/identity, API identity/filter validation, and lightweight UI wiring tests. The database-backed feature tests have not been run locally; no MySQL-dependent suite is claimed.
+- Remaining limits: current scope is implemented only for these snapshot datasets; basket filter configuration is accepted/stored through its API, while the basket panel does not yet offer a filter editor. The entire DATA-001 acceptance criteria and integration evidence remain incomplete.
+
 ## Acceptance criteria
 
 | # | Frozen requirement | Current evidence | Result |
@@ -11,12 +19,12 @@
 | 1 | Reusable provider contract: authorization, scopes, fields, labels/canonical values, estimates | `ExportDatasetProvider` contract is implemented by the registry; catalog exposes field descriptions, capabilities and estimates; account/profile check is server-side. Registry remains a switch implementation and does not yet offer independently registered adapters. | **Partial** |
 | 2 | CSV | Shared writer emits canonical values, metadata and formula-safe text. | Partial; focused tests pass; no full API feature test. |
 | 3 | XLSX | Shared values-only writer with safe unique names; synchronous and asynchronous exports embed metadata in their single data sheet. | Partial; focused writer tests pass. |
-| 4 | Current/full/selected scope | Current scope is rejected because registered surfaces expose no exact current filtered/sorted query. Supported scopes are explicit. Selected API and worker use stable provider identities and reject stale identities. | **Partial** — no page supports true selected-row interaction; UI offers full only. |
+| 4 | Current/full/selected scope | Portfolio growth and snapshots expose server-resolved current/full scopes; table snapshots also expose selected. API and worker use stable provider identities. | **Partial** — current scope and selected table interaction now exist only on the snapshots surface; broader provider and integration evidence remains incomplete. |
 | 5 | Field/series selection | Export button accepts field selection; provider fields are allow-listed. Basket UI does not yet expose field/series configuration. | Partial |
 | 6 | Full matching results beyond pagination | Snapshot provider queries its full authorized dataset rather than browser page rows. | Partial — only the registered portfolio datasets are supported. |
 | 7 | Raw precision | Values are serialized without display rounding or float conversion in the writer. | Partial; DB/model precision behavior has not had a feature test. |
 | 8 | Friendly labels and canonical values | Catalog describes labels and canonical forms; rows retain canonical metric/date/amount values. | Partial — labels are provenance descriptions, not a dual label/value column for every dataset. |
-| 9 | Complete metadata/provenance | Dataset, scope, fields, timestamp, source/profile, cadence and field labels are included where available; XLSX metadata is in the data sheet and CSV includes metadata rows. | Partial — no filters/sort/date-range exist on these current adapters. |
+| 9 | Complete metadata/provenance | Dataset, scope, fields, timestamp, source/profile, cadence, field labels, and current-scope range/sort are included where available. | Partial — broader provenance remains incomplete. |
 | 10 | XLSX multiple sheets | Writer supports multiple sheets; basket outputs exactly one sheet per item with metadata in that sheet. | Partial |
 | 11 | Persistent private basket | One basket row is keyed by user; API queries/upserts by authenticated owner. | Partial — account-isolation feature test pending. |
 | 12 | Basket stores configuration only | Basket JSON stores item configuration only. | Pass by inspection |
@@ -51,13 +59,15 @@
 
 ## Surface and capability limits
 
-Registered datasets remain dashboard summary, portfolio growth chart data, and daily portfolio snapshots. Current filtered/sorted exports, general analytical/fundamental providers, basket field/filter configuration, and a selectable-row UI are not implemented. The UI exposes only the full scope for current surfaces; server-side `selected` requests require stable provider IDs and reject stale IDs. No current-view scope is advertised.
+Registered datasets remain dashboard summary, portfolio growth chart data, and daily portfolio snapshots. True current filtered/sorted scope and selected-row UI are now implemented for the portfolio snapshot surfaces only. General analytical/fundamental providers and a basket filter editor are not implemented. Current scope is advertised only on the two snapshot datasets; selected is advertised only for the table snapshots dataset.
 
 ## Remaining unsupported acceptance criteria
 
-The current implementation does not support true current filtered/sorted scope, general analytics or fundamental datasets, basket field/filter configuration in the UI, or selectable-row interaction (criteria 4–6). It does not provide dual display-label/value columns for every dataset (8), full provenance for filters/sort/date ranges that current providers do not expose (9), a general hidden-field policy test (20), chart-specific metadata evidence (31), or strict process-level memory/runtime ceilings before provider and XML materialization (35). These are implementation limitations, not verified passes.
+The current implementation does not support general analytics or fundamental datasets, or basket field/filter configuration in the UI (criteria 4–6). It does not provide dual display-label/value columns for every dataset (8), complete provenance across all providers (9), a general hidden-field policy test (20), chart-specific metadata evidence (31), or strict process-level memory/runtime ceilings before provider and XML materialization (35). These are implementation limitations, not verified passes.
 
 Additional acceptance evidence remains incomplete for provider adapter registration, API/ownership/expiry security, selected-scope UI behavior, database precision, background worker and cancellation races, notifications/preferences/retries, artifact retention and purge, aggregate basket API boundaries, and basket integration (criteria 1–2, 7, 11, 13–15, 17–30, 32–39). Criteria 12 and 29 remain pass by inspection; no new claim of full implementation or verification is made.
+
+Focused slice verification on 2026-10-08: PHP syntax checks passed for the changed controllers, job, provider, and PHP tests. `vendor/bin/phpunit tests/Unit/Export` passed (12 tests, 31 assertions). `npm run test:js:unit` passed (212 tests), including `portfolioSnapshotExport.test.mjs`. `php artisan openapi:v1 --check` passed (221 operations); `git diff --check` passed. Database-backed feature tests for API identity, validation, and provider range resolution were added but not run; this audit does not claim MySQL-backed or end-to-end validation. PHP/OpenTelemetry emitted a shutdown exporter connection warning after PHPUnit/OpenAPI despite successful exit statuses.
 
 ## Verification evidence
 
