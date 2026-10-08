@@ -10,7 +10,7 @@ import {
     YAxis,
 } from 'recharts';
 import api from '../api';
-import { getVpsFpmStatus, getVpsHealthMetricStatus, VPS_HEALTH_STATUS } from './vpsHealthMetricStatus';
+import { formatVpsSampleAge, getVpsFpmStatus, getVpsHealthMetricStatus, getVpsSampleAgeStatus, VPS_HEALTH_STATUS } from './vpsHealthMetricStatus';
 
 const RANGE_OPTIONS = [
     { hours: 1, label: '1 hour' },
@@ -36,16 +36,6 @@ function formatTime(value) {
     return `${part('day')}-${part('month')}-${part('year')} ${part('hour')}:${part('minute')}:${part('second')} ${part('dayPeriod').toUpperCase()}`;
 }
 
-function formatAge(seconds) {
-    if (seconds === null || seconds === undefined) return 'No samples yet';
-    const roundedSeconds = Math.ceil(seconds);
-    if (roundedSeconds < 60) {
-        const unit = roundedSeconds === 1 ? 'second' : 'seconds';
-        return `${roundedSeconds} ${unit} ago`;
-    }
-    return `${Math.floor(roundedSeconds / 60)}m ago`;
-}
-
 function number(value, digits = 1) {
     return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))
         ? Number(value).toFixed(digits)
@@ -56,13 +46,23 @@ function MetricCard({ label, value, detail, status = 'unknown', threshold }) {
     const severity = VPS_HEALTH_STATUS[status] ?? VPS_HEALTH_STATUS.unknown;
     return (
         <div className="col-6 col-xl-3">
-            <div className={`card h-100 border-${severity.color}`} title={threshold}>
+            <div
+                className={`card h-100 border-${severity.color}`}
+                title={threshold}
+                style={{
+                    backgroundColor: {
+                        success: 'rgba(var(--bs-success-rgb), 0.045)',
+                        warning: 'rgba(var(--bs-warning-rgb), 0.07)',
+                        danger: 'rgba(var(--bs-danger-rgb), 0.045)',
+                    }[severity.color],
+                }}
+            >
                 <div className="card-body">
                     <div className="d-flex align-items-start justify-content-between gap-2 mb-1">
                         <div className="small text-muted">{label}</div>
                         <span className={`badge text-bg-${severity.color}`}>{severity.label}</span>
                     </div>
-                    <div className={`fs-4 fw-semibold text-${severity.color}`}>{value}</div>
+                    <div className={`fs-4 fw-semibold ${severity.color === 'warning' ? 'text-warning-emphasis' : `text-${severity.color}`}`}>{value}</div>
                     {detail && <div className="small text-muted mt-1">{detail}</div>}
                 </div>
             </div>
@@ -143,6 +143,14 @@ export default function VpsHealthAdminPage() {
     const stale = data?.last_sample_age_seconds == null || data.last_sample_age_seconds > 180;
     const healthStatus = !latest ? 'No data' : stale ? 'Stale data' : latest.status === 'critical' ? 'Critical' : 'Healthy';
     const statusClass = !latest || stale ? 'bg-warning text-dark' : latest.status === 'critical' ? 'bg-danger' : 'bg-success';
+    const summaryBorder = !latest || stale ? 'warning' : latest.status === 'critical' ? 'danger' : 'success';
+    const sampleAgeStatus = getVpsSampleAgeStatus(data?.last_sample_age_seconds);
+    const sampleAgeClass = sampleAgeStatus === 'normal' ? 'text-success' : sampleAgeStatus === 'critical' ? 'text-danger' : 'text-muted';
+    const summaryTint = !latest || stale
+        ? 'rgba(var(--bs-warning-rgb), 0.07)'
+        : latest.status === 'critical'
+            ? 'rgba(var(--bs-danger-rgb), 0.045)'
+            : 'rgba(var(--bs-success-rgb), 0.045)';
 
     return (
         <div className="container-fluid py-3">
@@ -168,11 +176,11 @@ export default function VpsHealthAdminPage() {
             {error && <div className="alert alert-warning" role="alert">{error}</div>}
             {loading && !data ? <div className="text-muted py-4">Loading VPS health…</div> : (
                 <>
-                    <div className="card mb-3">
+                    <div className={`card mb-3 border-${summaryBorder}`} style={{ backgroundColor: summaryTint }}>
                         <div className="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
                             <div>
                                 <span className={`badge ${statusClass} me-2`}>{healthStatus}</span>
-                                <span className="text-muted small">Last sample: {formatTime(latest?.sampled_at)} · {formatAge(data?.last_sample_age_seconds)}</span>
+                                <span className="text-muted small">Last sample: {formatTime(latest?.sampled_at)} · <span className={sampleAgeClass} title={latest?.sampled_at ? formatTime(latest.sampled_at) : undefined}>{formatVpsSampleAge(data?.last_sample_age_seconds)}</span></span>
                             </div>
                             <span className="text-muted small">Auto-refreshes every minute · {data?.sample_count ?? 0} samples shown</span>
                         </div>
@@ -189,11 +197,6 @@ export default function VpsHealthAdminPage() {
                                 </div>
                             )}
 
-                            <div className="small d-flex flex-wrap gap-2 mb-2" aria-label="Metric color legend">
-                                <span className="badge text-bg-success">Green: normal</span>
-                                <span className="badge text-bg-warning">Amber: attention</span>
-                                <span className="badge text-bg-danger">Red: action needed</span>
-                            </div>
                             <div className="row g-3 mb-2">
                                 <MetricCard label="Load per core" value={number(metrics.load_per_core, 2)} status={getVpsHealthMetricStatus('loadPerCore', metrics.load_per_core)} threshold="Green <1.0 · Amber 1.0–<2.0 · Red ≥2.0" detail={`1 min ${number(metrics.load1, 2)} · ${metrics.cpus ?? '—'} CPUs`} />
                                 <MetricCard label="Available RAM" value={`${number(metrics.ram_available_percent)}%`} status={getVpsHealthMetricStatus('ramAvailable', metrics.ram_available_percent)} threshold="Green ≥20% · Amber 10–<20% · Red <10%" detail={`${number(metrics.ram_available_bytes == null ? null : metrics.ram_available_bytes / (1024 ** 3), 2)} GiB available`} />
