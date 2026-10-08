@@ -65,6 +65,27 @@ class ExportFileWriterTest extends TestCase
         $this->assertStringContainsString('scope', $sheet);
     }
 
+    public function test_csv_enforces_file_size_limit_for_headers_and_metadata_without_data_rows(): void
+    {
+        config(['exports.max_file_bytes' => 12]);
+        $path = tempnam(sys_get_temp_dir(), 'stox-export-');
+        try {
+            app(ExportFileWriter::class)->csv(['a-header-longer-than-the-limit'], [], $path);
+            $this->fail('Expected the header-only CSV to exceed the file size limit.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('maximum file size', $exception->getMessage());
+        }
+
+        try {
+            app(ExportFileWriter::class)->csv(['a'], [], $path, ['source' => str_repeat('metadata', 8)]);
+            $this->fail('Expected metadata-only CSV content to exceed the file size limit.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('maximum file size', $exception->getMessage());
+        } finally {
+            @unlink($path);
+        }
+    }
+
     public function test_writer_enforces_the_configured_row_limit(): void
     {
         config(['exports.max_rows' => 1]);

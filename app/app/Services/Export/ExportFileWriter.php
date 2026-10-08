@@ -14,16 +14,22 @@ class ExportFileWriter
         $handle = fopen($path, 'wb');
         if ($handle === false) throw new RuntimeException('Unable to create export file.');
         try {
+            $writeRecord = function (array $record) use ($handle): void {
+                if (fputcsv($handle, $record) === false) throw new RuntimeException('Unable to write export file.');
+                $position = ftell($handle);
+                if ($position === false || $position > config('exports.max_file_bytes', 52428800)) {
+                    throw new RuntimeException('Export exceeds the maximum file size. Narrow the scope and try again.');
+                }
+            };
             if ($metadata !== []) {
-                fputcsv($handle, ['# StoX export metadata']);
-                foreach ($metadata as $key => $value) fputcsv($handle, ['# '.$key, $this->safeCell(is_scalar($value) || $value === null ? $value : json_encode($value, JSON_UNESCAPED_SLASHES))]);
-                fputcsv($handle, []);
+                $writeRecord(['# StoX export metadata']);
+                foreach ($metadata as $key => $value) $writeRecord(['# '.$key, $this->safeCell(is_scalar($value) || $value === null ? $value : json_encode($value, JSON_UNESCAPED_SLASHES))]);
+                $writeRecord([]);
             }
-            fputcsv($handle, $columns);
+            $writeRecord($columns);
             foreach ($rows as $row) {
                 if ($shouldCancel && $shouldCancel()) throw new ExportCancelledException('Export was cancelled.');
-                fputcsv($handle, array_map(fn ($column) => $this->safeCell(data_get($row, $column)), $columns));
-                if (ftell($handle) > config('exports.max_file_bytes', 52428800)) throw new RuntimeException('Export exceeds the maximum file size. Narrow the scope and try again.');
+                $writeRecord(array_map(fn ($column) => $this->safeCell(data_get($row, $column)), $columns));
                 $this->assertRuntime($started);
             }
         } finally { fclose($handle); }
