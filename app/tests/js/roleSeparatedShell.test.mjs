@@ -8,6 +8,7 @@ const src = join(dirname(fileURLToPath(import.meta.url)), '../../resources/js/sr
 const app = readFileSync(join(src, 'App.jsx'), 'utf8');
 const header = readFileSync(join(src, 'components/AppHeader.jsx'), 'utf8');
 const sidebar = readFileSync(join(src, 'components/sidebar/Sidebar.jsx'), 'utf8');
+const adminCatalog = readFileSync(join(src, 'navigation/adminSidebarCatalog.js'), 'utf8');
 const pageHistoryCss = readFileSync(join(src, 'styles/lido-app.css'), 'utf8');
 
 test('authenticated shell selects a distinct route set by account role', () => {
@@ -18,10 +19,10 @@ test('authenticated shell selects a distinct route set by account role', () => {
 });
 
 test('Admin shell exposes only administrative and shared account navigation', () => {
-    assert.match(sidebar, /if \(!user\?\.is_admin\)/);
-    assert.match(sidebar, /'users'/);
-    assert.match(sidebar, /'data-quality'/);
-    assert.match(sidebar, /'profile'/);
+    assert.match(sidebar, /buildAdminSidebarCatalog\(navigationRegistry\.getCatalog\(\)\)/);
+    assert.match(adminCatalog, /'users'/);
+    assert.match(adminCatalog, /'data-quality'/);
+    assert.match(adminCatalog, /'profile'/);
     assert.match(sidebar, /!user\?\.is_admin && <SidebarFavourites/);
     assert.match(sidebar, /!user\?\.is_admin && <SidebarQuickActions/);
     assert.doesNotMatch(
