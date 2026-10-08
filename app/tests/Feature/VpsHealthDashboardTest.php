@@ -87,7 +87,7 @@ class VpsHealthDashboardTest extends TestCase
             'time' => now()->toIso8601String(),
             'status' => 'ok',
             'issues' => [],
-            'metrics' => [],
+            'metrics' => ['load1' => 0],
         ]);
 
         $this->assertDatabaseMissing('portfolio_vps_health_samples', ['id' => $expired->id]);
