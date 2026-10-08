@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Models\PortfolioSnapshot;
 use App\Models\User;
 use App\Services\Export\ExportDatasetRegistry;
-use App\Services\PortfolioCalculationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -21,7 +20,7 @@ class PortfolioSnapshotApiTest extends TestCase
         foreach ([now()->subDays(4), now()->subDays(2), now()->subDays(1)] as $date) {
             PortfolioSnapshot::query()->create(['profile_id' => $profile->id, 'snapshot_date' => $date->toDateString(), 'portfolio_value' => '123.456789', 'invested_value' => '100.000001', 'created_at' => now()]);
         }
-        $registry = new ExportDatasetRegistry($this->createMock(PortfolioCalculationService::class));
+        $registry = app(ExportDatasetRegistry::class);
         $resolved = $registry->resolve('portfolio-snapshots', $profile, ['range' => '90d', 'sort_by' => 'snapshot_date', 'sort_direction' => 'desc']);
         $this->assertSame([now()->subDays(1)->toDateString(), now()->subDays(2)->toDateString(), now()->subDays(4)->toDateString()], array_column($resolved['rows'], 'snapshot_date'));
         $this->assertCount(3, array_unique($resolved['identities']));

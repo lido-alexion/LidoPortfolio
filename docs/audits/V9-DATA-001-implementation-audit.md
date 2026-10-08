@@ -1,6 +1,6 @@
 # V9-DATA-001 Implementation Audit
 
-**Audit base:** `af65b7e5` (`origin/master` at latest reconciliation)
+**Audit base:** `2b73f2eb` (`origin/master` at latest reconciliation)
 **Feature baseline commit:** `72a5c6d4` (`feat(v9): build export framework baseline`)
 **Status:** INCOMPLETE — do not mark IMPLEMENTED / VERIFIED. This audit covers the current feature branch and verification performed on 2026-10-08.
 
@@ -17,7 +17,7 @@
 
 | # | Frozen requirement | Current evidence | Result |
 |---:|---|---|---|
-| 1 | Reusable provider contract: authorization, scopes, fields, labels/canonical values, estimates | `ExportDatasetProvider` contract is implemented by the registry; catalog exposes field descriptions, capabilities and estimates; account/profile check is server-side. Registry remains a switch implementation and does not yet offer independently registered adapters. | **Partial** |
+| 1 | Reusable provider contract: authorization, scopes, fields, labels/canonical values, estimates | A tagged `ExportDatasetProvider` adapter contract supplies catalog, fresh resolution, authorization, scope support and estimates. The registry merges uniquely identified providers; dashboard summary and portfolio snapshots are separate adapters. | **Partial** — independent registration is tested, but only the three existing datasets are implemented. |
 | 2 | CSV | Shared writer emits canonical values, metadata and formula-safe text. | Partial; focused tests pass; no full API feature test. |
 | 3 | XLSX | Shared values-only writer with safe unique names; synchronous and asynchronous exports embed metadata in their single data sheet. | Partial; focused writer tests pass. |
 | 4 | Current/full/selected scope | Portfolio growth and snapshots expose server-resolved current/full scopes; table snapshots also expose selected. API and worker use stable provider identities. | **Partial** — current scope and selected table interaction now exist only on the snapshots surface; broader provider and integration evidence remains incomplete. |
@@ -30,13 +30,13 @@
 | 11 | Persistent private basket | One basket row is keyed by user; API queries/upserts by authenticated owner. Focused feature tests now cover persistence across requests, account isolation, and configuration-only storage. | Partial — feature tests use the local SQLite test configuration; MySQL-backed CI result is pending. |
 | 12 | Basket stores configuration only | Basket JSON stores item configuration only; focused feature test confirms no row/data snapshot is persisted. | Partial — local SQLite feature test passed; MySQL-backed CI result pending. |
 | 13 | Fresh worker resolution | Feature test creates authorized rows after queueing and verifies the worker resolves fresh account-scoped data at execution time. | Partial — focused local SQLite test passes; full MySQL worker suite remains pending. |
-| 14 | Basket stale/incompatible validation | Export validates provider, permissions, fields, scope and selected identities at execution request time. UI derives field/scope controls from catalog metadata and validates current filter/selected-ID configuration before save/export. | Partial — server remains authoritative for stale IDs/permissions; feature tests pending. |
-| 15 | One sheet per basket item and rename | Safe unique sheet names; metadata appended within each item sheet. | Partial — basket integration test pending. |
+| 14 | Basket stale/incompatible validation | Export validates provider, permissions, fields, scope and selected identities at execution request time. UI derives field/scope controls from catalog metadata and validates current filter/selected-ID configuration before save/export. Single and basket API tests reject stale/foreign selected IDs and hidden fields. | Partial — user-facing stale-item correction and queued stale-ID handling remain open; MySQL-backed tests are pending. |
+| 15 | One sheet per basket item and rename | Safe unique sheet names; metadata appended within each item sheet. A basket API integration test verifies two configured items, metadata/value placement and duplicate-name normalization. | Partial — local SQLite integration passes; MySQL-backed acceptance remains pending. |
 | 16 | Safe names | Writer strips invalid characters, trims apostrophes, truncates to 31 chars and de-duplicates case-insensitively. | Partial; unit test passes. |
 | 17 | Basket item hard limit | Configured maximum 10; request validation enforces it. Feature test verifies an over-limit update is rejected without overwriting the saved basket. | Partial — MySQL-backed CI result is pending. |
 | 18 | Server-side authorization | API provider check verifies profile ownership; queued worker repeats profile ownership check before fresh resolution. Feature test confirms basket read/write/export endpoints require authentication. | Partial — ownership-revocation and MySQL-backed API verification remain pending. |
 | 19 | Download ownership/expiry | Focused feature tests verify owner-only status/download, expired and missing-expiry rejection, no stale download link, and exact owner/token/format path checks. The status endpoint now advertises a link only while a ready artifact has a future expiry; download also fails closed when expiry is absent. | Partial — focused local SQLite tests pass; MySQL-backed full suite remains deferred to master CI. |
-| 20 | Restricted fields unavailable | Caller fields must be in provider's allow-listed columns; only currently registered public fields are exposed. | Partial — no provider-specific hidden-field policy test. |
+| 20 | Restricted fields unavailable | Caller fields must be in provider's allow-listed columns; single and basket API tests reject internal fields before snapshot values are selected. | Partial — local SQLite tests pass; additional dataset-specific hidden-field policies and MySQL verification remain pending. |
 | 21 | Synchronous small export | Configurable default 1,000-row threshold; single and basket requests estimate authorized row counts before resolving row values, and large exports queue without request-side row selection. | Partial — query-listener tests cover both request paths; MySQL verification remains pending. |
 | 22 | Background large export | Large single-dataset and basket requests queue from scoped counts before row selection; worker resolves fresh data at execution and writes the basket workbook. Feature tests cover fresh resolution, workbook output, terminal state and notifications. | Partial — focused local SQLite tests pass; production queue/MySQL verification remains pending. |
 | 23 | Cancellation | Owner-scoped cancellation sets a one-day retention expiry, removes partial files, and feature tests cover cancellation before worker start and after file write but before ready promotion. | Partial — focused race test passes; production queue concurrency remains unverified. |
@@ -50,7 +50,7 @@
 | 31 | Chart data only | Chart dataset exports snapshot values; no image route or format. | Partial — no chart-specific metadata test. |
 | 32 | Maximum rows | Configured 50,000 default; writer and request enforce. | Partial; unit limit test passes. |
 | 33 | Maximum file bytes | CSV checks while writing; XLSX caps streamed worksheet XML temporary storage and checks final archive size after close, removing worksheet/archive temporary files on failure. | **Partial** — ZIP assembly and final archive bytes coexist before the final size check. |
-| 34 | Sheets/fields/cells | Configured limits: 10 sheets, 100 aggregate fields, 50,000 aggregate rows and 500,000 workbook cells; basket limit shares sheet cap. | Partial; aggregate row rejection and cancellation cleanup have focused unit coverage; aggregate field/cell boundaries and basket API behavior lack integration coverage. |
+| 34 | Sheets/fields/cells | Configured limits: 10 sheets, 100 aggregate fields, 50,000 aggregate rows and 500,000 workbook cells; basket limit shares sheet cap. Writer tests cover aggregate field/cell limits; basket API integration rejects aggregate row/field overflow before row selection. | Partial — MySQL-backed basket boundary verification remains pending. |
 | 35 | Runtime/memory | Single and basket requests estimate before row resolution; XLSX streams rows to bounded worksheet temporary files without a second row array/XML string. | **Partial** — workers still materialize provider and multi-sheet row arrays, so this is not a strict process memory ceiling. |
 | 36 | Deterministic safe file names | Download name uses a dataset slug; internal path is owner/UUID/format-derived. Feature test asserts the deterministic download name. | Partial — focused local SQLite test passes; additional dataset-name edge cases remain pending. |
 | 37 | Formula injection | Formula-like text with leading whitespace/control is neutralized; numeric negatives remain numeric. | Partial; writer tests pass. |
@@ -64,9 +64,9 @@ Registered datasets remain dashboard summary, portfolio growth chart data, and d
 
 ## Remaining unsupported acceptance criteria
 
-The current implementation does not support general analytics or fundamental datasets (criteria 4–6). It does not provide dual display-label/value columns for every dataset (8), complete provenance across all providers (9), a general hidden-field policy test (20), chart-specific metadata evidence (31), or strict process-level memory/runtime ceilings before provider materialization (35). These are implementation limitations, not verified passes.
+The current implementation does not support general analytics or fundamental datasets (criteria 4–6). It does not provide dual display-label/value columns for every dataset (8), complete provenance across all providers (9), chart-specific metadata evidence (31), or strict process-level memory/runtime ceilings before provider materialization (35). These are implementation limitations, not verified passes.
 
-Additional acceptance evidence remains incomplete for provider adapter registration, API/ownership/expiry security, selected-ID stale-item correction, database precision, background worker and cancellation races, notifications/preferences/retries, artifact retention and purge, aggregate basket API boundaries, and basket integration (criteria 1–2, 7, 11, 13–15, 17–30, 32–39). Criteria 12 and 29 remain pass by inspection; no new claim of full implementation or verification is made.
+Additional acceptance evidence remains incomplete for broader dataset coverage, API/ownership/expiry security, user-facing correction of stale selected IDs, database precision, background worker and cancellation races, notifications/preferences/retries, artifact retention and purge, aggregate cell/row limit integration, and MySQL acceptance (criteria 1–2, 7, 11, 13–15, 17–30, 32–39). Criteria 12 and 29 remain pass by inspection; no new claim of full implementation or verification is made.
 
 Focused basket UI slice verification on 2026-10-08: `node --test tests/js/portfolioSnapshotExport.test.mjs` passed, including catalog-driven field/scope and current/selected configuration contract assertions. `npm run test:js:unit` passed (54 test files, including the expanded export contract test). The canonical `./scripts/verify-ci.sh --frontend` passed JS tests (214), Vitest (177), TypeScript checking, and its hosted-path production build; it stopped at Playwright OS dependency installation because that step required elevated authorization. After installing the cached Chromium browser binaries without system package changes, `npm run test:e2e:journeys` passed: 59 tests passed, 56 skipped by the configured device matrix, 0 failed. `git diff --check` passed. Only `ExportBasketPanel.jsx`, `portfolioSnapshotExport.test.mjs`, and this audit changed for this slice; no PHP/API/OpenAPI changes were made. Database-dependent feature tests were not run. The API continues fresh resolution at export time. Earlier focused slice verification is recorded below; no full DATA-001 completion or DB-backed evidence is claimed.
 
@@ -74,9 +74,9 @@ Focused basket UI slice verification on 2026-10-08: `node --test tests/js/portfo
 
 | Command | Result |
 |---|---|
-| Branch reconciliation | `codex/v9-data001-completion` is reconciled with `origin/master` at `af65b7e5`; no history was rewritten. |
+| Branch reconciliation | `codex/v9-data001-completion` is reconciled with `origin/master` at `2b73f2eb`; no history was rewritten. |
 | PHP syntax checks for changed export controllers, jobs, providers, writer and exception | Passed for all checked PHP files. |
-| `vendor/bin/phpunit tests/Unit/Export` (from `app/`) | Latest run passed: 13 tests, 34 assertions; PHPUnit reported 2 existing notices. |
+| `vendor/bin/phpunit tests/Unit/Export` (from `app/`) | Latest run passed: 16 tests, 41 assertions; the combined export/API focused suite passed 48 tests, 218 assertions. |
 | `php artisan openapi:v1 --check` (from `app/`) | Passed: OpenAPI document is current (221 operations). |
 | `npm run docs:static:check` (from `app/`) | Passed: static documentation contract current (53 topics). |
 | `git diff --check` (repository root) | Passed after the current test and audit changes. |
@@ -115,3 +115,10 @@ The XLSX writer now streams one row at a time into private temporary worksheet X
 ## Queue-before-resolution slice (2026-10-08)
 
 Single-dataset and basket requests now estimate authorized, scope-limited row counts before resolving row values. Large requests create a queued artifact and dispatch only dataset/profile/scope/filter/field configuration; the worker freshly resolves each dataset and writes one workbook sheet per basket item. Provider estimates match current-range and all-range caps. DB query listener tests confirm neither request path selects snapshot values before dispatch, and a worker test verifies basket workbook output. Focused verification passed: export unit and basket/access/retention/worker/outbox suites (31 tests, 143 assertions, 2 existing PHPUnit notices), `php artisan openapi:v1 --check` (221 operations), PHP syntax, and `git diff --check`. MySQL and production queue verification remain pending.
+
+
+## Independent provider adapter slice (2026-10-08)
+
+Refactored `ExportDatasetRegistry` to compose tagged `ExportDatasetProvider` adapters instead of owning a dataset switch. Dashboard summary and portfolio snapshots now live in separate provider classes; each owns its catalog, fresh resolution, authorization, supported scopes and estimates. App container registration tags both adapters, and the registry rejects missing or duplicate dataset IDs. A unit test verifies an independently implemented provider can be registered and delegated to; a second test verifies duplicate IDs fail closed.
+
+Focused verification passed: `vendor/bin/phpunit tests/Unit/Export` (16 tests, 41 assertions), the combined export/API focused suite (48 tests, 218 assertions), `php artisan openapi:v1 --check` (221 operations), changed-file PHP lint, and `git diff --check`. Tests use in-memory SQLite. This is an extensibility refactor only: the catalog still contains three datasets; general analytics/fundamental adapters, MySQL acceptance and strict worker memory ceilings remain incomplete.
