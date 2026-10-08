@@ -111,7 +111,7 @@ class ExportController extends Controller
                 if ($data['format'] === 'csv') $this->writer->csv($columns, $resolved['rows'], $path, $definition['metadata']);
                 else $this->writer->xlsx([['name' => 'Data', 'columns' => $columns, 'rows' => $resolved['rows'], 'metadata' => $definition['metadata']]], $path);
             } catch (\Throwable $error) {
-                $artifact->update(['status' => 'failed']);
+                $artifact->update(['status' => 'failed', 'expires_at' => now()->addDay()]);
                 if (Storage::disk('local')->exists($relative)) Storage::disk('local')->delete($relative);
                 if ($error instanceof \RuntimeException && str_contains($error->getMessage(), 'exceeds')) return response()->json(['message' => $error->getMessage()], 422);
                 throw $error;
