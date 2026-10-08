@@ -2885,6 +2885,21 @@
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "hours",
+                        "in": "query",
+                        "required": false,
+                        "description": "History range in hours (default 24). Supported values: 1, 6, 24, and 72.",
+                        "schema": {
+                            "type": "integer",
+                            "enum": [
+                                1,
+                                6,
+                                24,
+                                72
+                            ]
+                        }
                     }
                 ],
                 "responses": {
