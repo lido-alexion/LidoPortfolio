@@ -189,11 +189,6 @@ export default function VpsHealthAdminPage() {
                                 </div>
                             )}
 
-                            <div className="small d-flex flex-wrap gap-2 mb-2" aria-label="Metric color legend">
-                                <span className="badge text-bg-success">Green: normal</span>
-                                <span className="badge text-bg-warning">Amber: attention</span>
-                                <span className="badge text-bg-danger">Red: action needed</span>
-                            </div>
                             <div className="row g-3 mb-2">
                                 <MetricCard label="Load per core" value={number(metrics.load_per_core, 2)} status={getVpsHealthMetricStatus('loadPerCore', metrics.load_per_core)} threshold="Green <1.0 · Amber 1.0–<2.0 · Red ≥2.0" detail={`1 min ${number(metrics.load1, 2)} · ${metrics.cpus ?? '—'} CPUs`} />
                                 <MetricCard label="Available RAM" value={`${number(metrics.ram_available_percent)}%`} status={getVpsHealthMetricStatus('ramAvailable', metrics.ram_available_percent)} threshold="Green ≥20% · Amber 10–<20% · Red <10%" detail={`${number(metrics.ram_available_bytes == null ? null : metrics.ram_available_bytes / (1024 ** 3), 2)} GiB available`} />
