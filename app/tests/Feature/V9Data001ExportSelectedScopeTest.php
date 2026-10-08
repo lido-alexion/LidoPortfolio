@@ -6,6 +6,7 @@ use App\Models\ExportArtifact;
 use App\Models\PortfolioSnapshot;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -53,6 +54,48 @@ class V9Data001ExportSelectedScopeTest extends TestCase
 
         $this->assertDatabaseCount('portfolio_export_artifacts', 0);
         $this->assertSame([], Storage::disk('local')->allFiles());
+    }
+
+    public function test_single_dataset_export_rejects_internal_fields_before_resolving_rows(): void
+    {
+        Storage::fake('local');
+        [$owner, $profile] = $this->ownerAndProfile();
+        $this->snapshot($profile->id);
+        $queries = [];
+        DB::listen(function ($query) use (&$queries): void {
+            $queries[] = strtolower($query->sql);
+        });
+
+        $this->actingAs($owner)->withProfileHeader($owner, $profile)->postJson('/api/exports', [
+            'dataset' => 'portfolio-snapshots',
+            'format' => 'csv',
+            'scope' => 'full',
+            'fields' => ['snapshot_date', 'user_id'],
+        ])->assertUnprocessable()->assertJsonPath('message', 'One or more selected fields are unavailable for export.');
+
+        $this->assertFalse(collect($queries)->contains(fn (string $sql) => str_contains($sql, 'portfolio_snapshots') && str_contains($sql, 'snapshot_date')));
+        $this->assertDatabaseCount('portfolio_export_artifacts', 0);
+    }
+
+    public function test_basket_export_rejects_internal_fields_before_resolving_rows(): void
+    {
+        Storage::fake('local');
+        [$owner, $profile] = $this->ownerAndProfile();
+        $this->snapshot($profile->id);
+        $this->actingAs($owner)->putJson('/api/exports/basket', [
+            'items' => [['dataset' => 'portfolio-snapshots', 'scope' => 'full', 'fields' => ['snapshot_date', 'user_id']]],
+        ])->assertOk();
+        $queries = [];
+        DB::listen(function ($query) use (&$queries): void {
+            $queries[] = strtolower($query->sql);
+        });
+
+        $this->actingAs($owner)->withProfileHeader($owner, $profile)->postJson('/api/exports/basket/export')
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'The export basket contains unavailable fields. Review the item and try again.');
+
+        $this->assertFalse(collect($queries)->contains(fn (string $sql) => str_contains($sql, 'portfolio_snapshots') && str_contains($sql, 'snapshot_date')));
+        $this->assertDatabaseCount('portfolio_export_artifacts', 0);
     }
 
     private function ownerAndProfile(): array
