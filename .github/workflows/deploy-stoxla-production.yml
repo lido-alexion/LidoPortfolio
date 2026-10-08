@@ -56,7 +56,7 @@ jobs:
             [[ -n "$file" ]] || continue
 
             case "$file" in
-              app/app/*|app/bootstrap/*|app/config/*|app/database/*|app/routes/*|app/scripts/**|app/deploy/**|app/tests/*.php|app/tests/**/*.php|app/composer.json|app/composer.lock|app/phpunit.xml|shared/**|deploy/**|.github/workflows/*.yml|.github/workflows/*.yaml)
+              app/app/*|app/bootstrap/*|app/config/*|app/database/*|app/routes/*|app/scripts/**|app/deploy/**|app/tests/*.php|app/tests/**/*.php|app/composer.json|app/composer.lock|app/phpunit.xml|app/openapi/**|app/public/docs/openapi-v1.json|shared/**|deploy/**|.github/workflows/*.yml|.github/workflows/*.yaml)
                 backend=true
                 deployable=true
                 ;;

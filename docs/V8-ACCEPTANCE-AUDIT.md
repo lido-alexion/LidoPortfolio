@@ -4,12 +4,12 @@
 
 Authoritative specs: `docs/archive/specs/LidoPortfolio-V8-Wishlist.md`. Implementation ledger: `docs/V8-IMPLEMENTATION-LEDGER.md`. Requirement-level gaps: [V8-GAP-AUDIT.md](V8-GAP-AUDIT.md).
 
-Status key: **COMPLETE** | **REVIEW** | **IN PROGRESS** | **NOT STARTED** | **N/A** | **RETIRED**
+Status key: **IMPLEMENTED / FUNCTIONAL ACCEPTANCE OPEN** | **COMPLETE** | **REVIEW** | **IN PROGRESS** | **NOT STARTED** | **N/A** | **RETIRED**
 
 | Epic | Status | Evidence |
 |------|--------|----------|
 | FEAT-052 OpenTelemetry / LidoTelemetry | REVIEW | Production Collector transform now strips the observed URL/query attributes; a fresh synthetic trace reached LidoTelemetry with correct parentage and no marker in either received span. Broader privacy, propagation, metrics and fail-open acceptance remain open |
-| FEAT-054 Historical fundamentals | REVIEW | Three-stock production bootstrap stored 530 Yahoo facts without rejected rows; deployed SBIN Basic/Advanced/history slice verified. Targeted-scope guard passed CI and reached production at `ac6602ae`; official NSE/BSE feeds, broad coverage, and remaining provider/UI acceptance remain open |
+| FEAT-054 Historical fundamentals | IMPLEMENTED / FUNCTIONAL ACCEPTANCE OPEN | PO stock/field coverage criteria pass: 4,696/5,148 overall; 497 current-fact stocks in the production Nifty cache (above the 490 minimum); all 25 non-exempt fields pass. Broader deployed provider/runtime acceptance remains open; see 2026-10-07 reconciliation below |
 | FEAT-055 Access requests | REVIEW | Local §FEAT-055 checklist (055-01–055-10) + `AccessRequestWorkflowTest`; real Turnstile/mail/deployed multi-worker validation remains external |
 | FEAT-056 ML lifecycle | REVIEW | Drift trigger, promotion review, SSE, cancel, retries, notifications, retention API + lifecycle tick gate, and stale-run recovery; deployed lifecycle worker/runtime remains external |
 | FEAT-057 ML feature engineering / training | REVIEW | Registry `v8-registry-11`, 50/50 implemented features; calibration, chronological validation, durable candidate archive, bounded same-architecture 1m/3m/6m training, partition coverage and artifact reload/contribution evidence; production/browser acceptance remains external |
@@ -139,3 +139,16 @@ The CI and production deployment gates for the FEAT-054 guard are now satisfied.
 ### FEAT-052 Collector reconciliation — 2026-10-02
 
 The root-owned Collector privacy transform was deployed and validated after the historical FAILED query-attribute finding. A fresh synthetic HTTP trace produced two received spans without the marker or four URL/query keys; the per-epic audit holds the backup, processor order, trace ID and bounded proof. This clears the **observed LidoTelemetry sink leak for the tested HTTP path**. FEAT-052 stays **REVIEW**, and the V8 release gate remains open for broader privacy and propagation/fail-open evidence.
+
+
+## FEAT-054 PO coverage reconciliation — 2026-10-07
+
+Read-only check of stored facts; no NSE/BSE request, external refresh, or data fetch was made.
+
+| PO criterion | Result | Evidence |
+|---|---|---|
+| At least 98% of Nifty 500 stocks covered | Pass against production cache | Cache held 501 symbols at `2026-10-03T21:00:09Z`; 497 matched active stocks had current facts. 497 exceeds the 490-stock minimum. Four cache symbols were unmapped. |
+| At least 50% of all eligible stocks covered | Pass | 4,696 / 5,148 = 91.2% in the persisted-fact report snapshot dated 2026-10-05. |
+| No non-exempt field empty; each at least 50% among covered stocks | Pass | All 25 non-exempt canonical facts pass both tests in the 2026-10-05 persisted-fact report. The 15 exceptions are the PO-approved list in the decision document. |
+
+The cache was within its seven-day freshness window when checked. The Nifty check uses the production application's cached constituents, as required for a read-only check; no separate exchange refresh was performed. This closes the PO coverage thresholds. It does not close the broader provider and deployed-runtime checks tracked for FEAT-054.

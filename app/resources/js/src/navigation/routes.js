@@ -52,6 +52,7 @@ export const ROUTES = Object.freeze({
     SETTINGS_FUNDAMENTALS: '/settings/fundamentals',
     SETTINGS_ML_SCORING: '/settings/ml-scoring',
     SETTINGS_FORWARD_DATA: '/settings/forward-data',
+    SETTINGS_VPS_HEALTH: '/settings/vps-health',
     SETTINGS_SCREENER_REGISTRY: '/settings/screener-registry',
     SETTINGS_STRATEGY_REGISTRY: '/settings/strategy-registry',
     NOTIFICATION_HISTORY: '/notification-history',

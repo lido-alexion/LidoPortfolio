@@ -17,7 +17,7 @@ class ComboChartPreferenceController extends Controller
 
     public function show(Request $request): JsonResponse
     {
-        $value = DB::table('portfolio_user_settings')
+        $value = DB::table('portfolio_account_settings')
             ->where('user_id', $request->user()->id)
             ->where('setting_key', self::KEY)
             ->value('setting_value');
@@ -30,7 +30,7 @@ class ComboChartPreferenceController extends Controller
         $validated = $request->validate([
             'default_preset_id' => ['required', 'string', Rule::in(self::PRESETS)],
         ]);
-        DB::table('portfolio_user_settings')->updateOrInsert(
+        DB::table('portfolio_account_settings')->updateOrInsert(
             ['user_id' => $request->user()->id, 'setting_key' => self::KEY],
             ['setting_value' => $validated['default_preset_id'], 'updated_at' => now()],
         );

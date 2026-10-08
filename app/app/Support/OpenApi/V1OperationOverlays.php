@@ -51,6 +51,47 @@ final class V1OperationOverlays
         ];
 
         return V1AcceptanceOverlays::all() + [
+            'GET /api/v1/admin/vps-health' => [
+                'summary' => 'Read aggregate VPS health samples',
+                'description' => 'Returns recent aggregate VPS health samples. Requires admin access.',
+                'parameters' => [[
+                    'name' => 'hours',
+                    'in' => 'query',
+                    'required' => false,
+                    'description' => 'History range in hours (default 24). Supported values: 1, 6, 24, and 72.',
+                    'schema' => ['type' => 'integer', 'enum' => [1, 6, 24, 72]],
+                ]],
+                'noBody' => true,
+            ],
+            'GET /api/v1/stock-details/combo-chart-preference' => [
+                'summary' => 'GET account combo chart preference',
+                'description' => "Returns the authenticated user's account-wide Stock Details combo chart default, or null when no explicit default is set.",
+                'operationId' => 'get_stock_details_combo_chart_preference',
+                'successDescription' => 'Envelope containing default_preset_id and account scope.',
+                'noBody' => true,
+            ],
+            'PUT /api/v1/stock-details/combo-chart-preference' => [
+                'summary' => 'PUT account combo chart preference',
+                'description' => "Sets one catalogue preset as the authenticated user's account-wide default.",
+                'operationId' => 'put_stock_details_combo_chart_preference',
+                'successDescription' => 'Envelope containing the stored default_preset_id and account scope.',
+                'requestBody' => $json([
+                    'type' => 'object',
+                    'required' => ['default_preset_id'],
+                    'properties' => [
+                        'default_preset_id' => [
+                            'type' => 'string',
+                            'enum' => ['price-volume', 'price-pe', 'price-pb', 'price-ps', 'price-eps', 'price-revenue', 'price-net-profit'],
+                        ],
+                    ],
+                ]),
+                'responses' => [
+                    '422' => [
+                        'description' => 'Preset ID is not in the frozen catalogue.',
+                        'content' => ['application/json' => ['schema' => ['$ref' => '#/components/schemas/ErrorOrValidation']]],
+                    ],
+                ],
+            ],
             'GET /api/v1/dataset/status' => [
                 'summary' => 'Dataset / daily-sync inspection status',
                 'description' => 'Returns DataEngine datasetStatus(). `dataset_version` is the current immutable version_key (V4-FEAT-023) or `none`. `published` / `daily_sync.synced_today` mean successfully synced today in cron_timezone. Freshness for the decision pipeline uses `daily_sync.synced_at` (V4-FEAT-022), not `published`.',

@@ -28,8 +28,8 @@ Use this plan to complete FEAT-064 production acceptance after the build is stab
 
 ## Gate 2 — code and CI
 
-- [ ] Refresh open PR [#72](https://github.com/lido-alexion/LidoPortfolio/pull/72) on current master and review all changes.
-- [ ] Required backend and frontend CI passes.
+- [x] PR [#72](https://github.com/lido-alexion/LidoPortfolio/pull/72) is merged; its PHP 8.4 backend CI job passed. The guard and regression tests are in master.
+- [ ] Required backend and frontend CI passes for any follow-up code changes; production deployment remains gated on safe exact-pin adoption.
 - [ ] Regression coverage proves unresolved pins block readiness/execution before stale recommendation cancellation or generation.
 - [ ] Regression coverage proves explicit adoption writes a new immutable Strategy version and leaves historical versions, bindings, runs, recommendations and transactions resolvable.
 - [ ] Verify no guard or migration weakens readiness, changes ordinary CRUD or affects resolved unrelated Strategies.

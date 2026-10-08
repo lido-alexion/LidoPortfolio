@@ -2874,6 +2874,65 @@
                 "x-stox-admin": true
             }
         },
+        "/api/v1/admin/vps-health": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Read aggregate VPS health samples",
+                "description": "Returns recent aggregate VPS health samples. Requires admin access.",
+                "operationId": "get_admin_vps-health",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "hours",
+                        "in": "query",
+                        "required": false,
+                        "description": "History range in hours (default 24). Supported values: 1, 6, 24, and 72.",
+                        "schema": {
+                            "type": "integer",
+                            "enum": [
+                                1,
+                                6,
+                                24,
+                                72
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
         "/api/v1/analytics/dashboard": {
             "get": {
                 "tags": [
@@ -10547,9 +10606,9 @@
                 "tags": [
                     "stock-details"
                 ],
-                "summary": "GET show",
-                "description": "Live route: `GET /api/v1/stock-details/combo-chart-preference`. Action: `App\\Http\\Controllers\\Api\\V1\\ComboChartPreferenceController@show`.",
-                "operationId": "get_stock-details_combo-chart-preference",
+                "summary": "GET account combo chart preference",
+                "description": "Returns the authenticated user's account-wide Stock Details combo chart default, or null when no explicit default is set.",
+                "operationId": "get_stock_details_combo_chart_preference",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/XProfileId"
@@ -10557,7 +10616,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Envelope `{success: true, data, meta}`.",
+                        "description": "Envelope containing default_preset_id and account scope.",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -10585,9 +10644,9 @@
                 "tags": [
                     "stock-details"
                 ],
-                "summary": "PUT update",
-                "description": "Live route: `PUT /api/v1/stock-details/combo-chart-preference`. Action: `App\\Http\\Controllers\\Api\\V1\\ComboChartPreferenceController@update`.",
-                "operationId": "put_stock-details_combo-chart-preference",
+                "summary": "PUT account combo chart preference",
+                "description": "Sets one catalogue preset as the authenticated user's account-wide default.",
+                "operationId": "put_stock_details_combo_chart_preference",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/XProfileId"
@@ -10595,7 +10654,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Envelope `{success: true, data, meta}`.",
+                        "description": "Envelope containing the stored default_preset_id and account scope.",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -10608,7 +10667,7 @@
                         "description": "Unauthenticated (Sanctum session missing or expired)."
                     },
                     "422": {
-                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "description": "Preset ID is not in the frozen catalogue.",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -10619,13 +10678,28 @@
                     }
                 },
                 "requestBody": {
-                    "required": false,
+                    "required": true,
                     "content": {
                         "application/json": {
                             "schema": {
                                 "type": "object",
-                                "additionalProperties": true,
-                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                                "required": [
+                                    "default_preset_id"
+                                ],
+                                "properties": {
+                                    "default_preset_id": {
+                                        "type": "string",
+                                        "enum": [
+                                            "price-volume",
+                                            "price-pe",
+                                            "price-pb",
+                                            "price-ps",
+                                            "price-eps",
+                                            "price-revenue",
+                                            "price-net-profit"
+                                        ]
+                                    }
+                                }
                             }
                         }
                     }
