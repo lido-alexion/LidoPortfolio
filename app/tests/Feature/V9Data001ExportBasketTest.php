@@ -141,6 +141,44 @@ class V9Data001ExportBasketTest extends TestCase
         );
     }
 
+    public function test_basket_aggregate_row_and_field_limits_reject_before_resolving_rows(): void
+    {
+        Storage::fake('local');
+        Queue::fake();
+        config(['exports.sync_rows' => 100, 'exports.max_rows' => 1, 'exports.max_fields' => 3]);
+        $owner = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($owner);
+        PortfolioSnapshot::query()->create([
+            'profile_id' => $profile->id,
+            'snapshot_date' => '2026-10-07',
+            'portfolio_value' => '12345.6700',
+            'invested_value' => '10000.0000',
+        ]);
+        $items = [
+            ['dataset' => 'portfolio-snapshots', 'scope' => 'full', 'fields' => ['snapshot_date', 'portfolio_value']],
+            ['dataset' => 'portfolio-growth', 'scope' => 'full', 'fields' => ['snapshot_date', 'portfolio_value']],
+        ];
+        $this->actingAs($owner)->putJson('/api/exports/basket', ['items' => $items])->assertOk();
+        $queries = [];
+        DB::listen(function ($query) use (&$queries): void {
+            $queries[] = strtolower($query->sql);
+        });
+
+        $response = $this->actingAs($owner)->withProfileHeader($owner, $profile)->postJson('/api/exports/basket/export');
+
+        $response->assertUnprocessable()->assertJsonPath('message', 'The export basket exceeds the maximum row count. Remove items or narrow the scope.');
+        $this->assertFalse(
+            collect($queries)->contains(fn (string $sql) => str_contains($sql, 'portfolio_snapshots') && str_contains($sql, 'snapshot_date')),
+            'Basket aggregate limits should be checked from counts before selecting snapshot values.',
+        );
+        $this->assertDatabaseCount('portfolio_export_artifacts', 0);
+
+        config(['exports.max_rows' => 10]);
+        $response = $this->actingAs($owner)->withProfileHeader($owner, $profile)->postJson('/api/exports/basket/export');
+        $response->assertUnprocessable()->assertJsonPath('message', 'The export basket exceeds the maximum field count. Remove items or select fewer fields.');
+        $this->assertDatabaseCount('portfolio_export_artifacts', 0);
+    }
+
     public function test_basket_read_write_and_export_endpoints_require_authentication(): void
     {
         $this->getJson('/api/exports/basket')->assertUnauthorized();
