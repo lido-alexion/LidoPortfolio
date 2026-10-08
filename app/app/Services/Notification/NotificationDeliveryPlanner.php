@@ -147,6 +147,7 @@ class NotificationDeliveryPlanner
         $preferences = (array) ($configuration['optional_email_preferences'] ?? []);
         if (! ($preferences['enabled'] ?? false)) return ['allowed' => false, 'digest' => false, 'preferences' => $preferences];
         $category = match (true) {
+            str_starts_with($type, 'export.') => 'export',
             str_contains($type, 'recommend') => 'recommendation',
             str_contains($type, 'order'), str_contains($type, 'execution') => 'order_execution',
             str_contains($type, 'connection'), str_contains($type, 'kite'), str_contains($type, 'broker') => 'connection',

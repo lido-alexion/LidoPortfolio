@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import PortfolioSnapshotGrowthChart from '../components/portfolio/PortfolioSnapshotGrowthChart';
+import ExportDataButton from '../components/ExportDataButton';
 import useApiGet from '../hooks/useApiGet';
 import usePortfolioChanged from '../hooks/usePortfolioChanged';
 import { ROUTES } from '../navigation/routes';
@@ -229,9 +230,10 @@ export default function PortfolioSnapshotsPage() {
             <div className="card mb-3">
                 <div className="card-header py-2 fw-semibold small d-flex justify-content-between align-items-center gap-2">
                     <span>Portfolio growth</span>
-                    <span className="text-muted fw-normal">
-                        {loading ? 'Loading…' : `${data?.meta?.count ?? 0} snapshot(s)`}
-                    </span>
+                    <div className="d-flex align-items-center gap-2">
+                        <span className="text-muted fw-normal">{loading ? 'Loading…' : `${data?.meta?.count ?? 0} snapshot(s)`}</span>
+                        <ExportDataButton dataset="portfolio-growth" label="Export chart data" fields={['snapshot_date', 'portfolio_value', 'invested_value']} scopes={['full']} />
+                    </div>
                 </div>
                 <div className="card-body">
                     {loading ? (
@@ -243,7 +245,10 @@ export default function PortfolioSnapshotsPage() {
             </div>
 
             <section className="card">
-                <div className="card-header py-2 fw-semibold small">Daily snapshots</div>
+                <div className="card-header py-2 fw-semibold small d-flex justify-content-between align-items-center gap-2">
+                    <span>Daily snapshots</span>
+                    <ExportDataButton dataset="portfolio-snapshots" label="Export table data" fields={['snapshot_date', 'portfolio_value', 'invested_value']} scopes={['full']} />
+                </div>
                 <div className="card-body p-0">
                     <div className="table-responsive">
                         <table className="table table-sm align-middle mb-0">

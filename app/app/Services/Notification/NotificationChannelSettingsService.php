@@ -20,6 +20,7 @@ class NotificationChannelSettingsService
         'order_execution' => 'Order and execution updates',
         'connection' => 'Broker connection issues',
         'operations' => 'Scheduled job and data issues',
+        'export' => 'Data export completion and failure',
     ];
 
     public function __construct(private LegacyTelegramChannelMigrator $legacyTelegram) {}

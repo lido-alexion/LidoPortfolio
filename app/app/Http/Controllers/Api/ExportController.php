@@ -17,38 +17,59 @@ class ExportController extends Controller
 {
     public function __construct(private ExportDatasetRegistry $datasets, private ExportFileWriter $writer) {}
 
-    public function catalog(): JsonResponse { return response()->json(['data' => $this->datasets->catalog()]); }
+    public function catalog(): JsonResponse
+    {
+        $profile = \activePortfolio();
+        $data = array_map(function (array $dataset) use ($profile) {
+            $this->datasets->assertAuthorized($dataset['id'], $profile, (int) auth()->id());
+            $dataset['estimate'] = $this->datasets->estimate($dataset['id'], $profile);
+            return $dataset;
+        }, $this->datasets->catalog());
+        return response()->json(['data' => $data]);
+    }
 
     public function store(Request $request): JsonResponse
     {
-        $data = $request->validate(['dataset' => ['required', 'string'], 'format' => ['required', 'in:csv,xlsx'], 'scope' => ['required', 'in:current,full,selected'], 'fields' => ['sometimes', 'array'], 'selected' => ['sometimes', 'array']]);
-        $resolved = $this->datasets->resolve($data['dataset'], \activePortfolio());
+        $data = $request->validate([
+            'dataset' => ['required', 'string'], 'format' => ['required', 'in:csv,xlsx'], 'scope' => ['required', 'in:current,full,selected'],
+            'fields' => ['sometimes', 'array', 'max:'.config('exports.max_fields')], 'fields.*' => ['string'],
+            'selected' => ['sometimes', 'array', 'max:'.config('exports.max_rows')], 'selected.*' => ['string', 'max:120'],
+        ]);
+        if (! $this->datasets->supportsScope($data['dataset'], $data['scope'])) return response()->json(['message' => 'This dataset does not support the selected scope. Choose a supported scope.'], 422);
+        $profile = \activePortfolio();
+        $this->datasets->assertAuthorized($data['dataset'], $profile, (int) $request->user()->id);
+        $resolved = $this->datasets->resolve($data['dataset'], $profile);
         if ($data['scope'] === 'selected') {
             $selected = $data['selected'] ?? [];
-            if ($selected === [] || collect($selected)->contains(fn ($index) => filter_var($index, FILTER_VALIDATE_INT) === false || (int) $index < 0)) {
-                return response()->json(['message' => 'Selected exports require one or more valid row indexes.'], 422);
-            }
-            $rows = collect($resolved['rows'])->values();
-            $resolved['rows'] = collect($selected)->map(fn ($index) => $rows->get((int) $index))->filter(fn ($row) => $row !== null)->values()->all();
+            if ($selected === [] || ! isset($resolved['identities'])) return response()->json(['message' => 'This dataset does not expose stable selected-row identities.'], 422);
+            if (array_diff($selected, $resolved['identities'])) return response()->json(['message' => 'One or more selected rows are stale or unavailable. Refresh the selection and try again.'], 422);
+            $identityRows = array_combine($resolved['identities'], $resolved['rows']);
+            $resolved['rows'] = array_map(fn ($identity) => $identityRows[$identity], $selected);
             if ($resolved['rows'] === []) return response()->json(['message' => 'None of the selected rows are available for export.'], 422);
         }
-        $columns = array_values(array_intersect($data['fields'] ?? $resolved['columns'], $resolved['columns']));
+        $requestedFields = $data['fields'] ?? $resolved['columns'];
+        if (array_diff($requestedFields, $resolved['columns'])) return response()->json(['message' => 'One or more selected fields are unavailable for export.'], 422);
+        $columns = array_values(array_intersect($requestedFields, $resolved['columns']));
         if ($columns === []) return response()->json(['message' => 'Select at least one export field.'], 422);
-        if (count($resolved['rows']) > 50000) return response()->json(['message' => 'This export is too large. Narrow the scope before exporting.'], 422);
+        if (count($columns) > config('exports.max_fields') || count($resolved['rows']) > config('exports.max_rows')) return response()->json(['message' => 'This export exceeds a safety limit. Narrow the scope or select fewer fields.'], 422);
         $token = (string) Str::uuid(); $relative = 'exports/'.$request->user()->id.'/'.$token.'.'.$data['format']; Storage::disk('local')->makeDirectory(dirname($relative));
         $path = Storage::disk('local')->path($relative);
-        $isBackground = count($resolved['rows']) > 1000;
+        $isBackground = count($resolved['rows']) > config('exports.sync_rows');
         $artifact = ExportArtifact::create(['user_id' => $request->user()->id, 'token' => $token, 'dataset' => $data['dataset'], 'format' => $data['format'], 'path' => $relative, 'status' => $isBackground ? 'queued' : 'ready', 'expires_at' => $isBackground ? null : now()->addDay(), 'metadata' => ['scope' => $data['scope'], 'fields' => $columns, ...($resolved['metadata'] ?? [])]]);
         $definition = ['columns' => $columns, 'rows' => $resolved['rows']];
         $definition['metadata'] = ['dataset' => $data['dataset'], 'scope' => $data['scope'], 'exported_at' => now()->toIso8601String(), ...($resolved['metadata'] ?? [])];
-        if ($isBackground) dispatch(new GenerateExportArtifact($artifact->id, $definition));
+        if ($isBackground) dispatch(new GenerateExportArtifact($artifact->id, [
+            'dataset' => $data['dataset'], 'profile_id' => $profile->id, 'scope' => $data['scope'],
+            'selected' => $data['selected'] ?? [], 'columns' => $columns, 'metadata' => $definition['metadata'],
+        ]));
         else {
             try {
-                if ($data['format'] === 'csv') $this->writer->csv($columns, $resolved['rows'], $path);
-                else $this->writer->xlsx([['name' => 'Data', 'columns' => $columns, 'rows' => $resolved['rows']], ['name' => 'Metadata', 'columns' => ['field', 'value'], 'rows' => collect($definition['metadata'])->map(fn ($value, $field) => ['field' => $field, 'value' => is_scalar($value) ? $value : json_encode($value)])->values()->all()]], $path);
+                if ($data['format'] === 'csv') $this->writer->csv($columns, $resolved['rows'], $path, $definition['metadata']);
+                else $this->writer->xlsx([['name' => 'Data', 'columns' => $columns, 'rows' => $resolved['rows'], 'metadata' => $definition['metadata']]], $path);
             } catch (\Throwable $error) {
                 $artifact->update(['status' => 'failed']);
                 if (Storage::disk('local')->exists($relative)) Storage::disk('local')->delete($relative);
+                if ($error instanceof \RuntimeException && str_contains($error->getMessage(), 'exceeds')) return response()->json(['message' => $error->getMessage()], 422);
                 throw $error;
             }
         }
@@ -64,16 +85,19 @@ class ExportController extends Controller
     public function cancel(Request $request, string $token): JsonResponse
     {
         $artifact = ExportArtifact::query()->where('user_id', $request->user()->id)->where('token', $token)->firstOrFail();
-        if (in_array($artifact->status, ['queued', 'running'], true)) $artifact->update(['status' => 'cancelled', 'cancelled_at' => now()]);
-        if ($artifact->path && Storage::disk('local')->exists($artifact->path)) Storage::disk('local')->delete($artifact->path);
+        $cancelled = ExportArtifact::query()->whereKey($artifact->id)->whereIn('status', ['queued', 'running'])->whereNull('cancelled_at')->update(['status' => 'cancelled', 'cancelled_at' => now()]) === 1;
+        if ($cancelled && $artifact->path) {
+            foreach ([$artifact->path, $artifact->path.'.partial'] as $path) if (Storage::disk('local')->exists($path)) Storage::disk('local')->delete($path);
+        }
         return response()->json(['data' => ['status' => $artifact->fresh()->status]]);
     }
 
     public function download(Request $request, string $token)
     {
         $artifact = ExportArtifact::query()->where('user_id', $request->user()->id)->where('token', $token)->firstOrFail();
+        abort_unless($artifact->path === 'exports/'.$artifact->user_id.'/'.$artifact->token.'.'.$artifact->format, 404);
         abort_if($artifact->status !== 'ready' || $artifact->expires_at?->isPast() || ! Storage::disk('local')->exists($artifact->path), 410);
-        return Storage::disk('local')->download($artifact->path, 'stox-'.$artifact->dataset.'.'.$artifact->format);
+        return Storage::disk('local')->download($artifact->path, 'stox-'.(\Illuminate\Support\Str::slug($artifact->dataset) ?: 'data').'.'.$artifact->format);
     }
 
     public function basket(Request $request): JsonResponse
@@ -84,7 +108,14 @@ class ExportController extends Controller
 
     public function updateBasket(Request $request): JsonResponse
     {
-        $data = $request->validate(['items' => ['required', 'array', 'max:10']]);
+        $data = $request->validate([
+            'items' => ['required', 'array', 'max:'.config('exports.max_basket_items')],
+            'items.*' => ['required', 'array'], 'items.*.dataset' => ['required', 'string', 'max:120'],
+            'items.*.sheet_name' => ['nullable', 'string', 'max:255'],
+            'items.*.fields' => ['sometimes', 'array', 'max:'.config('exports.max_fields')], 'items.*.fields.*' => ['string'],
+            'items.*.scope' => ['sometimes', 'in:current,full,selected'],
+            'items.*.selected' => ['sometimes', 'array', 'max:'.config('exports.max_rows')], 'items.*.selected.*' => ['string', 'max:120'],
+        ]);
         foreach ($data['items'] as $item) if (! is_array($item) || empty($item['dataset'])) return response()->json(['message' => 'Each basket item needs a dataset.'], 422);
         $basket = ExportBasket::updateOrCreate(['user_id' => $request->user()->id], ['items' => $data['items']]);
         return response()->json(['data' => $basket]);
@@ -94,17 +125,42 @@ class ExportController extends Controller
     {
         $basket = ExportBasket::query()->where('user_id', $request->user()->id)->first();
         if (! $basket || count($basket->items ?? []) === 0) return response()->json(['message' => 'Add at least one dataset to the export basket.'], 422);
+        if (count($basket->items) > config('exports.max_sheets')) return response()->json(['message' => 'The export basket exceeds the workbook sheet limit. Remove some items and try again.'], 422);
         $sheets = [];
+        $totalRows = 0;
+        $totalFields = 0;
         foreach ($basket->items as $index => $item) {
-            try { $resolved = $this->datasets->resolve((string) ($item['dataset'] ?? ''), \activePortfolio()); }
+            try { $profile = \activePortfolio(); $this->datasets->assertAuthorized((string) ($item['dataset'] ?? ''), $profile, (int) $request->user()->id); $resolved = $this->datasets->resolve((string) ($item['dataset'] ?? ''), $profile); }
             catch (\Throwable) { return response()->json(['message' => 'The export basket contains an unavailable dataset. Refresh it and try again.'], 422); }
-            $columns = array_values(array_intersect($item['fields'] ?? $resolved['columns'], $resolved['columns']));
+            $scope = $item['scope'] ?? 'full';
+            if (! $this->datasets->supportsScope($item['dataset'], $scope)) return response()->json(['message' => 'A basket item has an unsupported scope. Edit the item and try again.'], 422);
+            $requestedFields = $item['fields'] ?? $resolved['columns'];
+            if (! is_array($requestedFields) || array_diff($requestedFields, $resolved['columns'])) return response()->json(['message' => 'The export basket contains unavailable fields. Review the item and try again.'], 422);
+            $columns = array_values(array_intersect($requestedFields, $resolved['columns']));
             if ($columns === []) return response()->json(['message' => 'The export basket contains an item with no valid fields.'], 422);
+            if ($scope === 'selected') {
+                $selected = collect($item['selected'] ?? []);
+                if ($selected->isEmpty() || ! isset($resolved['identities'])) return response()->json(['message' => 'A selected-scope basket item has no valid stable row identities. Edit the item and try again.'], 422);
+                if ($selected->diff($resolved['identities'])->isNotEmpty()) return response()->json(['message' => 'A selected-scope basket item is stale. Edit or remove it and try again.'], 422);
+                $identityRows = array_combine($resolved['identities'], $resolved['rows']);
+                $resolved['rows'] = $selected->map(fn ($identity) => $identityRows[$identity])->all();
+                if ($resolved['rows'] === []) return response()->json(['message' => 'A selected-scope basket item is stale. Edit or remove it and try again.'], 422);
+            }
+            $totalRows += count($resolved['rows']);
+            $totalFields += count($columns);
+            if ($totalRows > config('exports.max_rows')) return response()->json(['message' => 'The export basket exceeds the maximum row count. Remove items or narrow the scope.'], 422);
+            if ($totalFields > config('exports.max_fields')) return response()->json(['message' => 'The export basket exceeds the maximum field count. Remove items or select fewer fields.'], 422);
             $name = preg_replace('/[\\\/\?\*\[\]:]/', '-', (string) ($item['sheet_name'] ?? $item['dataset'] ?? 'Dataset '.($index + 1)));
-            $sheets[] = ['name' => substr($name ?: 'Dataset '.($index + 1), 0, 31), 'columns' => $columns, 'rows' => $resolved['rows']];
+            $metadata = ['dataset' => $item['dataset'], 'scope' => $scope, 'fields' => $columns, 'exported_at' => now()->toIso8601String(), ...($resolved['metadata'] ?? [])];
+            $sheets[] = ['name' => $name ?: 'Dataset '.($index + 1), 'columns' => $columns, 'rows' => $resolved['rows'], 'metadata' => $metadata];
         }
         $token = (string) Str::uuid(); $relative = 'exports/'.$request->user()->id.'/'.$token.'.xlsx'; Storage::disk('local')->makeDirectory(dirname($relative));
-        $this->writer->xlsx($sheets, Storage::disk('local')->path($relative));
+        try { $this->writer->xlsx($sheets, Storage::disk('local')->path($relative)); }
+        catch (\Throwable $error) {
+            if (Storage::disk('local')->exists($relative)) Storage::disk('local')->delete($relative);
+            if ($error instanceof \RuntimeException && str_contains($error->getMessage(), 'exceeds')) return response()->json(['message' => $error->getMessage()], 422);
+            throw $error;
+        }
         $artifact = ExportArtifact::create(['user_id' => $request->user()->id, 'token' => $token, 'dataset' => 'basket', 'format' => 'xlsx', 'path' => $relative, 'status' => 'ready', 'expires_at' => now()->addDay(), 'metadata' => ['item_count' => count($sheets), 'datasets' => array_column($basket->items, 'dataset')]]);
         return response()->json(['data' => ['token' => $artifact->token, 'status' => 'ready', 'download_url' => route('api.exports.download', $artifact->token), 'expires_at' => $artifact->expires_at]]);
     }
