@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getVpsFpmStatus, getVpsHealthMetricStatus } from '../../../resources/js/src/pages/vpsHealthMetricStatus';
+import { formatVpsSampleAge, getVpsFpmStatus, getVpsHealthMetricStatus, getVpsSampleAgeStatus } from '../../../resources/js/src/pages/vpsHealthMetricStatus';
 
 describe('VPS health metric severity thresholds', () => {
     it.each([
@@ -32,5 +32,16 @@ describe('VPS health metric severity thresholds', () => {
         expect(getVpsFpmStatus({ queue: 0, active: 3, maxChildren: 5 })).toBe('normal');
         expect(getVpsFpmStatus({ queue: 0, active: 5, maxChildren: 5 })).toBe('warning');
         expect(getVpsFpmStatus({ queue: 1, active: 1, maxChildren: 5 })).toBe('critical');
+    });
+});
+
+describe('VPS health sample age', () => {
+    it('formats rounded ages and keeps the color boundary at two minutes', () => {
+        expect(formatVpsSampleAge(27.43923)).toBe('28 seconds ago');
+        expect(formatVpsSampleAge(119.999)).toBe('1m ago');
+        expect(formatVpsSampleAge(120)).toBe('2m ago');
+        expect(getVpsSampleAgeStatus(119.999)).toBe('normal');
+        expect(getVpsSampleAgeStatus(120)).toBe('critical');
+        expect(getVpsSampleAgeStatus(null)).toBe('unknown');
     });
 });
