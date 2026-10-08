@@ -17,6 +17,7 @@ import {
 import NavGroup from './NavGroup';
 import SidebarFavourites from './SidebarFavourites';
 import SidebarQuickActions from './SidebarQuickActions';
+import { buildAdminSidebarCatalog } from '../../navigation/adminSidebarCatalog';
 
 ensureNavigationBootstrapped();
 
@@ -108,30 +109,7 @@ export default function Sidebar() {
             return buildSidebarNavigation(undefined, accessCtx);
         }
 
-        const adminIds = new Set([
-            'stocks-admin',
-            'users',
-            'sync-logs',
-            'data-quality',
-            'indicator-registry',
-            'fundamental-data',
-            'ml-scoring',
-            'admin-alerts',
-            'audit-explorer',
-            'universe-price-sync',
-            'notification-history',
-            'notification-settings',
-            'profile',
-        ]);
-        const catalog = navigationRegistry.getCatalog()
-            .filter((item) => item.id === 'group-administration' || adminIds.has(item.id))
-            .map((item) => item.kind === 'page' ? {
-                ...item,
-                group: 'group-administration',
-                parent: 'group-administration',
-                showInSidebar: true,
-                favouriteEligible: false,
-            } : item);
+        const catalog = buildAdminSidebarCatalog(navigationRegistry.getCatalog());
 
         return buildSidebarNavigation(catalog, accessCtx);
     }, [accessCtx, user?.is_admin]);
