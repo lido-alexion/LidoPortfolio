@@ -2879,8 +2879,8 @@
                 "tags": [
                     "admin"
                 ],
-                "summary": "GET index",
-                "description": "Live route: `GET /api/v1/admin/vps-health`. Action: `App\\Http\\Controllers\\Api\\VpsHealthController@index`. Requires admin (`is_admin`).",
+                "summary": "Read aggregate VPS health samples",
+                "description": "Returns recent aggregate VPS health samples. Requires admin access.",
                 "operationId": "get_admin_vps-health",
                 "parameters": [
                     {
