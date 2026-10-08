@@ -65,6 +65,31 @@ class ExportFileWriterTest extends TestCase
         $this->assertStringContainsString('scope', $sheet);
     }
 
+    public function test_memory_limit_uses_export_growth_not_memory_retained_by_a_long_lived_worker(): void
+    {
+        if (! class_exists(\ZipArchive::class)) $this->markTestSkipped('ZipArchive is unavailable.');
+
+        config(['exports.max_memory_bytes' => 1024 * 1024]);
+        $writer = app(ExportFileWriter::class);
+        $retainedMemory = str_repeat('x', 2 * 1024 * 1024);
+        $this->assertGreaterThan(config('exports.max_memory_bytes'), memory_get_usage(false));
+
+        $csvPath = tempnam(sys_get_temp_dir(), 'stox-export-');
+        $xlsxPath = tempnam(sys_get_temp_dir(), 'stox-export-');
+        @unlink($xlsxPath);
+
+        try {
+            $writer->csv(['value'], [['value' => 'ok']], $csvPath);
+            $writer->xlsx([['columns' => ['value'], 'rows' => [['value' => 'ok']]]], $xlsxPath);
+            $this->assertFileExists($csvPath);
+            $this->assertFileExists($xlsxPath);
+        } finally {
+            @unlink($csvPath);
+            @unlink($xlsxPath);
+            unset($retainedMemory);
+        }
+    }
+
     public function test_csv_enforces_file_size_limit_for_headers_and_metadata_without_data_rows(): void
     {
         config(['exports.max_file_bytes' => 12]);

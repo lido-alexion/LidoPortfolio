@@ -10,6 +10,7 @@ class ExportFileWriter
     public function csv(array $columns, iterable $rows, string $path, array $metadata = [], ?callable $shouldCancel = null, ?int $expectedRows = null): void
     {
         $started = hrtime(true);
+        $memoryBaseline = memory_get_usage(false);
         $this->assertLimits($columns, $expectedRows ?? (is_array($rows) ? count($rows) : null));
         $writtenRows = 0;
         $handle = fopen($path, 'wb');
@@ -32,7 +33,7 @@ class ExportFileWriter
                 if ($shouldCancel && $shouldCancel()) throw new ExportCancelledException('Export was cancelled.');
                 if (++$writtenRows > config('exports.max_rows', 50000)) throw new RuntimeException('Export exceeds the maximum row count. Narrow the scope and try again.');
                 $writeRecord(array_map(fn ($column) => $this->safeCell(data_get($row, $column)), $columns));
-                $this->assertRuntime($started);
+                $this->assertRuntime($started, $memoryBaseline);
             }
         } finally { fclose($handle); }
     }
@@ -40,6 +41,7 @@ class ExportFileWriter
     public function xlsx(array $sheets, string $path, ?callable $shouldCancel = null): void
     {
         $started = hrtime(true);
+        $memoryBaseline = memory_get_usage(false);
         if (count($sheets) > config('exports.max_sheets', 10)) throw new RuntimeException('Export exceeds the maximum workbook sheet count. Narrow the scope and try again.');
         if (! class_exists(ZipArchive::class)) throw new RuntimeException('XLSX export is unavailable on this runtime.');
         $temporaryPath = $path.'.'.bin2hex(random_bytes(8)).'.partial';
@@ -77,7 +79,7 @@ class ExportFileWriter
             try {
                 $this->writeWorksheetChunk($worksheet, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>', $temporaryBytes);
                 $rowIndex = 0;
-                $writeRow = function (array $row, bool $isData = false) use ($worksheet, &$temporaryBytes, &$rowIndex, &$writtenRows, &$writtenCells, $shouldCancel, $started): void {
+                $writeRow = function (array $row, bool $isData = false) use ($worksheet, &$temporaryBytes, &$rowIndex, &$writtenRows, &$writtenCells, $shouldCancel, $started, $memoryBaseline): void {
                     if ($shouldCancel && $shouldCancel()) throw new ExportCancelledException('Export was cancelled.');
                     if ($isData && ++$writtenRows > config('exports.max_rows', 50000)) throw new RuntimeException('Export exceeds the maximum row count. Narrow the scope and try again.');
                     $writtenCells += count($row);
@@ -92,7 +94,7 @@ class ExportFileWriter
                     }
                     $this->writeWorksheetChunk($worksheet, $xml.'</row>', $temporaryBytes);
                     $rowIndex++;
-                    $this->assertRuntime($started);
+                    $this->assertRuntime($started, $memoryBaseline);
                 };
                 $writeRow($sheet['columns']);
                 foreach ($sheet['rows'] as $sourceRow) {
@@ -163,10 +165,10 @@ class ExportFileWriter
         if ($rowCount !== null && $rowCount > config('exports.max_rows', 50000)) throw new RuntimeException('Export exceeds the maximum row count. Narrow the scope and try again.');
     }
 
-    private function assertRuntime(int $started): void
+    private function assertRuntime(int $started, int $memoryBaseline): void
     {
         if ((hrtime(true) - $started) / 1_000_000_000 > config('exports.max_runtime_seconds', 120)) throw new RuntimeException('Export exceeded the maximum generation time. Narrow the scope and try again.');
-        if (memory_get_usage(false) > config('exports.max_memory_bytes', 268435456)) throw new RuntimeException('Export exceeded the maximum memory use. Narrow the scope and try again.');
+        if (memory_get_usage(false) - $memoryBaseline > config('exports.max_memory_bytes', 268435456)) throw new RuntimeException('Export exceeded the maximum memory use. Narrow the scope and try again.');
     }
 
     private function uniqueSheetName(string $name, array &$used, int $number): string
