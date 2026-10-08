@@ -254,7 +254,7 @@ class ExportController extends Controller
             $totalFields += count($columns);
             if ($totalRows > config('exports.max_rows')) return response()->json(['message' => 'The export basket exceeds the maximum row count. Remove items or narrow the scope.'], 422);
             if ($totalFields > config('exports.max_fields')) return response()->json(['message' => 'The export basket exceeds the maximum field count. Remove items or select fewer fields.'], 422);
-            $name = preg_replace('/[\\\/\?\*\[\]:]/', '-', (string) ($item['sheet_name'] ?? $item['dataset'] ?? 'Dataset '.($index + 1)));
+            $name = (string) ($item['sheet_name'] ?? $item['dataset'] ?? 'Dataset '.($index + 1));
             $metadata = ['dataset' => $item['dataset'], 'scope' => $scope, 'fields' => $columns, 'exported_at' => now()->toIso8601String(), ...($resolved['metadata'] ?? [])];
             $sheets[] = ['name' => $name ?: 'Dataset '.($index + 1), 'columns' => $columns, 'rows' => $resolved['rows'], 'metadata' => $metadata];
         }
