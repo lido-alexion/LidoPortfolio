@@ -163,7 +163,22 @@ class ScreenerBacktestService
      */
     public function matrixForScreener(Screener $screener): array
     {
-        $version = app(ScreenerVersioningService::class)->ensureCurrentVersion($screener);
+        $version = $screener->versions()
+            ->where('version', max(1, (int) ($screener->artifact_version ?? 1)))
+            ->first();
+
+        // A page-load GET must not repair or manufacture immutable history.
+        // Without an exact current snapshot, no cached rows can safely be
+        // presented as belonging to the current definition.
+        if ($version === null) {
+            return [
+                'columns' => [],
+                'rows' => [],
+                'run_count' => 0,
+                'stock_count' => 0,
+            ];
+        }
+
         $datesQuery = ScreenerBacktestDay::query()
             ->where('screener_id', $screener->id)
             ->where('screener_version_id', $version->id);
