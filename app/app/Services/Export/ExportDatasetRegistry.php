@@ -43,13 +43,20 @@ class ExportDatasetRegistry implements ExportDatasetProvider
         abort_unless(collect($this->catalog())->contains('id', $dataset), 404);
     }
 
-    public function estimate(string $dataset, PortfolioProfile $profile): array
+    public function estimate(string $dataset, PortfolioProfile $profile, array $filters = []): array
     {
         $definition = collect($this->catalog())->firstWhere('id', $dataset);
         if (! $definition) throw new \InvalidArgumentException('This dataset is not available for export.');
         if ($dataset === 'dashboard-summary') return ['rows' => 6, 'exact' => true];
-        $count = PortfolioSnapshot::query()->where('profile_id', $profile->id)->count();
-        return ['rows' => $count, 'exact' => true];
+        $query = PortfolioSnapshot::query()->where('profile_id', $profile->id);
+        $range = $filters['range'] ?? null;
+        if ($range && $range !== 'all') {
+            $days = ['90d' => 90, '180d' => 180, '365d' => 365][$range];
+            $query->where('snapshot_date', '>=', now()->subDays($days)->toDateString());
+            return ['rows' => min($query->count(), $days), 'exact' => true];
+        }
+        $count = $query->count();
+        return ['rows' => $range === 'all' ? min($count, 2000) : $count, 'exact' => true];
     }
 
     private function summary(PortfolioProfile $profile): array

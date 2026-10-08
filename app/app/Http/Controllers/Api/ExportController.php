@@ -42,6 +42,46 @@ class ExportController extends Controller
         $this->datasets->assertAuthorized($data['dataset'], $profile, (int) $request->user()->id);
         if ($data['scope'] === 'current' && ! in_array($data['dataset'], ['portfolio-growth', 'portfolio-snapshots'], true)) return response()->json(['message' => 'Current scope requires supported snapshot filters.'], 422);
         $filters = $data['scope'] === 'current' ? ['range' => $data['filters']['range'], 'sort_by' => $data['filters']['sort_by'], 'sort_direction' => $data['filters']['sort_direction']] : [];
+        $catalogDefinition = collect($this->datasets->catalog())->firstWhere('id', $data['dataset']);
+        if (! $catalogDefinition) return response()->json(['message' => 'This dataset is not available for export.'], 404);
+        $preflightColumns = $data['fields'] ?? $catalogDefinition['fields'];
+        if ($preflightColumns === [] || array_diff($preflightColumns, $catalogDefinition['fields'])) return response()->json(['message' => 'One or more selected fields are unavailable for export.'], 422);
+        $estimatedRows = $data['scope'] === 'selected'
+            ? count($data['selected'] ?? [])
+            : $this->datasets->estimate($data['dataset'], $profile, $filters)['rows'];
+        if ($estimatedRows > config('exports.max_rows')) return response()->json(['message' => 'This export exceeds a safety limit. Narrow the scope or select fewer fields.'], 422);
+        if ($estimatedRows > config('exports.sync_rows')) {
+            $token = (string) Str::uuid();
+            $relative = 'exports/'.$request->user()->id.'/'.$token.'.'.$data['format'];
+            Storage::disk('local')->makeDirectory(dirname($relative));
+            $metadata = [
+                'dataset' => $data['dataset'],
+                'scope' => $data['scope'],
+                'fields' => array_values($preflightColumns),
+                'field_labels' => array_map(fn ($field) => $field['label'], array_intersect_key($catalogDefinition['field_metadata'], array_flip($preflightColumns))),
+                ...($filters ? ['filters' => ['range' => $filters['range']], 'sort' => ['by' => $filters['sort_by'], 'direction' => $filters['sort_direction']]] : []),
+            ];
+            $artifact = ExportArtifact::create([
+                'user_id' => $request->user()->id,
+                'token' => $token,
+                'dataset' => $data['dataset'],
+                'format' => $data['format'],
+                'path' => $relative,
+                'status' => 'queued',
+                'expires_at' => null,
+                'metadata' => $metadata,
+            ]);
+            dispatch(new GenerateExportArtifact($artifact->id, [
+                'dataset' => $data['dataset'],
+                'profile_id' => $profile->id,
+                'scope' => $data['scope'],
+                'selected' => $data['selected'] ?? [],
+                'filters' => $filters,
+                'columns' => array_values($preflightColumns),
+                'metadata' => $metadata,
+            ]));
+            return response()->json(['data' => ['id' => $artifact->id, 'token' => $artifact->token, 'status' => $artifact->status, 'download_url' => route('api.exports.download', $artifact->token), 'expires_at' => null]], 202);
+        }
         $resolved = $this->datasets->resolve($data['dataset'], $profile, $filters);
         if ($data['scope'] === 'selected') {
             $selected = $data['selected'] ?? [];

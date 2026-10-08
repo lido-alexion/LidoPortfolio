@@ -2,9 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\GenerateExportArtifact;
 use App\Models\ExportBasket;
+use App\Models\PortfolioSnapshot;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class V9Data001ExportBasketTest extends TestCase
@@ -70,6 +75,39 @@ class V9Data001ExportBasketTest extends TestCase
             ->assertJsonValidationErrors('items');
 
         $this->assertEquals($savedItems, ExportBasket::query()->where('user_id', $user->id)->firstOrFail()->items);
+    }
+
+    public function test_large_export_queues_before_loading_dataset_rows_into_the_request(): void
+    {
+        Storage::fake('local');
+        Queue::fake();
+        config(['exports.sync_rows' => 0]);
+        $owner = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($owner);
+        PortfolioSnapshot::query()->create([
+            'profile_id' => $profile->id,
+            'snapshot_date' => '2026-10-07',
+            'portfolio_value' => '12345.6700',
+            'invested_value' => '10000.0000',
+        ]);
+        $queries = [];
+        DB::listen(function ($query) use (&$queries): void {
+            $queries[] = strtolower($query->sql);
+        });
+
+        $response = $this->actingAs($owner)->withProfileHeader($owner, $profile)->postJson('/api/exports', [
+            'dataset' => 'portfolio-snapshots',
+            'format' => 'csv',
+            'scope' => 'full',
+            'fields' => ['snapshot_date', 'portfolio_value'],
+        ]);
+
+        $response->assertAccepted()->assertJsonPath('data.status', 'queued');
+        Queue::assertPushed(GenerateExportArtifact::class);
+        $this->assertFalse(
+            collect($queries)->contains(fn (string $sql) => str_contains($sql, 'portfolio_snapshots') && str_contains($sql, 'snapshot_date')),
+            'The request should estimate count and dispatch work without selecting snapshot rows.',
+        );
     }
 
     public function test_basket_read_write_and_export_endpoints_require_authentication(): void

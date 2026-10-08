@@ -11,7 +11,7 @@ interface ExportDatasetProvider
     public function catalog(): array;
 
     /** Resolve freshly authorized canonical values, stable row identities, and provenance. */
-    public function resolve(string $dataset, PortfolioProfile $profile): array;
+    public function resolve(string $dataset, PortfolioProfile $profile, array $filters = []): array;
 
     /** Enforce the normal account data boundary for this dataset and profile. */
     public function assertAuthorized(string $dataset, PortfolioProfile $profile, int $userId): void;
@@ -20,5 +20,5 @@ interface ExportDatasetProvider
     public function supportsScope(string $dataset, string $scope): bool;
 
     /** @return array{rows:int,exact:bool} */
-    public function estimate(string $dataset, PortfolioProfile $profile): array;
+    public function estimate(string $dataset, PortfolioProfile $profile, array $filters = []): array;
 }
