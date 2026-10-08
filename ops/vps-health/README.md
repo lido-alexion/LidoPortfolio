@@ -2,6 +2,8 @@
 
 Python 3 standard-library monitor for bounded, read-only host checks. Each timer run also stores one aggregate sample in StoX for the admin dashboard; it never changes host services or configuration. Configured email receives a rolling 30-minute digest, and Telegram/email receive critical and recovery notices. Alerts describe evidence of a possible bottleneck, not proof of its cause.
 
+For the admin dashboard, color thresholds, setup steps, and routine service commands, see [Dashboard and operations](DASHBOARD-OPERATIONS.md).
+
 ## Paths and configuration
 
 The runtime program is `app/scripts/vps-health/monitor.py` in this repository and is packaged as `/var/www/stoxla/current/scripts/vps-health/monitor.py`. Operator docs and systemd templates are under the repository root `ops/vps-health`; that root directory is not in the application release archive. A merge to `master` that changes the packaged `app/` content invokes the normal production deploy workflow. It does not install or change the root-owned timer, EnvironmentFile, or PHP-FPM pool configuration. Those one-time setup tasks remain administrator actions. State and timestamped diagnostic snapshots default to systemd-managed `/var/lib/vps-health` (`0750`, files `0640`; snapshots older than 14 days are removed). Override the state path with `VPS_HEALTH_STATE_DIR` for manual runs. Other configurable paths default to `/var/log/nginx/access.log`, `/var/log/nginx/error.log`, `/var/log/php8.4-fpm-slow.log`; access/error/slow byte caps default to 1 MiB/256 KiB/16 KiB. Reads and subprocesses are bounded. Paths omit URL query strings.

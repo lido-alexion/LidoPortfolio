@@ -10,6 +10,7 @@ import {
     YAxis,
 } from 'recharts';
 import api from '../api';
+import { getVpsFpmStatus, getVpsHealthMetricStatus, VPS_HEALTH_STATUS } from './vpsHealthMetricStatus';
 
 const RANGE_OPTIONS = [
     { hours: 1, label: '1 hour' },
@@ -51,14 +52,17 @@ function number(value, digits = 1) {
         : '—';
 }
 
-function MetricCard({ label, value, detail, status = 'normal' }) {
-    const accent = status === 'danger' ? 'border-danger' : status === 'warning' ? 'border-warning' : '';
+function MetricCard({ label, value, detail, status = 'unknown', threshold }) {
+    const severity = VPS_HEALTH_STATUS[status] ?? VPS_HEALTH_STATUS.unknown;
     return (
         <div className="col-6 col-xl-3">
-            <div className={`card h-100 ${accent}`}>
+            <div className={`card h-100 border-${severity.color}`} title={threshold}>
                 <div className="card-body">
-                    <div className="small text-muted mb-1">{label}</div>
-                    <div className="fs-4 fw-semibold">{value}</div>
+                    <div className="d-flex align-items-start justify-content-between gap-2 mb-1">
+                        <div className="small text-muted">{label}</div>
+                        <span className={`badge text-bg-${severity.color}`}>{severity.label}</span>
+                    </div>
+                    <div className={`fs-4 fw-semibold text-${severity.color}`}>{value}</div>
                     {detail && <div className="small text-muted mt-1">{detail}</div>}
                 </div>
             </div>
@@ -185,14 +189,31 @@ export default function VpsHealthAdminPage() {
                                 </div>
                             )}
 
-                            <div className="row g-3 mb-3">
-                                <MetricCard label="Load per core" value={number(metrics.load_per_core, 2)} detail={`1 min ${number(metrics.load1, 2)} · ${metrics.cpus ?? '—'} CPUs`} />
-                                <MetricCard label="Available RAM" value={`${number(metrics.ram_available_percent)}%`} detail={`${number(metrics.ram_available_bytes == null ? null : metrics.ram_available_bytes / (1024 ** 3), 2)} GiB available`} />
-                                <MetricCard label="Root disk used" value={`${number(metrics.root_used_percent)}%`} />
-                                <MetricCard label="Swap used" value={`${number(metrics.swap_used_percent)}%`} />
-                                <MetricCard label="FPM workers" value={`${fpm['active processes'] ?? '—'} / ${fpm['max children'] ?? '—'}`} detail={`Idle ${fpm['idle processes'] ?? '—'} · Queue ${fpm['listen queue'] ?? '—'}`} />
-                                <MetricCard label="Nginx errors (5 min)" value={(nginx['502'] ?? 0) + (nginx['503'] ?? 0) + (nginx['504'] ?? 0)} detail={`499 client closes: ${nginx['499'] ?? 0}`} />
+                            <div className="small d-flex flex-wrap gap-2 mb-2" aria-label="Metric color legend">
+                                <span className="badge text-bg-success">Green: normal</span>
+                                <span className="badge text-bg-warning">Amber: attention</span>
+                                <span className="badge text-bg-danger">Red: action needed</span>
                             </div>
+                            <div className="row g-3 mb-2">
+                                <MetricCard label="Load per core" value={number(metrics.load_per_core, 2)} status={getVpsHealthMetricStatus('loadPerCore', metrics.load_per_core)} threshold="Green <1.0 · Amber 1.0–<2.0 · Red ≥2.0" detail={`1 min ${number(metrics.load1, 2)} · ${metrics.cpus ?? '—'} CPUs`} />
+                                <MetricCard label="Available RAM" value={`${number(metrics.ram_available_percent)}%`} status={getVpsHealthMetricStatus('ramAvailable', metrics.ram_available_percent)} threshold="Green ≥20% · Amber 10–<20% · Red <10%" detail={`${number(metrics.ram_available_bytes == null ? null : metrics.ram_available_bytes / (1024 ** 3), 2)} GiB available`} />
+                                <MetricCard label="Root disk used" value={`${number(metrics.root_used_percent)}%`} status={getVpsHealthMetricStatus('rootDiskUsed', metrics.root_used_percent)} threshold="Green <80% · Amber 80–<90% · Red ≥90%" />
+                                <MetricCard label="Swap used" value={`${number(metrics.swap_used_percent)}%`} status={getVpsHealthMetricStatus('swapUsed', metrics.swap_used_percent)} threshold="Green <50% · Amber 50–80% · Red >80%" />
+                                <MetricCard label="FPM workers" value={`${fpm['active processes'] ?? '—'} / ${fpm['max children'] ?? '—'}`} status={getVpsFpmStatus({ queue: fpm['listen queue'], active: fpm['active processes'], maxChildren: fpm['max children'] })} threshold="Green: queue 0 and workers below 90% capacity · Amber: queue 0 and workers ≥90% · Red: any queued request" detail={`Idle ${fpm['idle processes'] ?? '—'} · Queue ${fpm['listen queue'] ?? '—'}`} />
+                                <MetricCard label="Nginx errors (5 min)" value={(nginx['502'] ?? 0) + (nginx['503'] ?? 0) + (nginx['504'] ?? 0)} status={getVpsHealthMetricStatus('nginx5xx', (nginx['502'] ?? 0) + (nginx['503'] ?? 0) + (nginx['504'] ?? 0))} threshold="Green 0 · Amber 1–4 · Red ≥5" detail={`499 client closes: ${nginx['499'] ?? 0}`} />
+                            </div>
+                            <details className="small text-muted mb-3">
+                                <summary>Color thresholds</summary>
+                                <ul className="mt-2 mb-1">
+                                    <li>Load per core: green below 1.0; amber from 1.0 to below 2.0; red at 2.0 or higher.</li>
+                                    <li>Available RAM: green at 20% or more; amber from 10% to below 20%; red below 10%.</li>
+                                    <li>Root disk used: green below 80%; amber from 80% to below 90%; red at 90% or more.</li>
+                                    <li>Swap used: green below 50%; amber from 50% through 80%; red above 80%.</li>
+                                    <li>FPM: green with no queue and workers below 90% of capacity; amber with no queue and workers at 90% or more; red if any request is queued.</li>
+                                    <li>Nginx 5xx errors in 5 minutes: green at 0; amber from 1–4; red at 5 or more.</li>
+                                </ul>
+                                <div>Colors reflect the latest sample. Load and worker-saturation alerts require repeated checks before the monitor raises a critical alert.</div>
+                            </details>
 
                             <div className="row g-3 mb-3">
                                 <div className="col-xl-6">
