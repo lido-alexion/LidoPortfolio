@@ -150,4 +150,35 @@ class ScreenerBacktestVersionTest extends TestCase
             ->assertJsonPath('data.run_count', 1)
             ->assertJsonPath('data.columns.0.id', '2026-01-02');
     }
+
+    public function test_matrix_get_hides_cache_when_current_snapshot_hash_mismatches(): void
+    {
+        $user = User::factory()->create();
+        $this->defaultPortfolioFor($user);
+        $created = $this->actingAs($user)->postJson('/api/screeners', [
+            'name' => 'Mismatched snapshot',
+            'scope' => 'holdings',
+            'definition_json' => ['root' => ['type' => 'condition', 'left' => ['indicator' => 'close'], 'operator' => 'gt', 'right' => ['type' => 'constant', 'value' => 0]]],
+        ])->assertCreated()->json('data');
+
+        $screenerId = (int) $created['id'];
+        $version = ScreenerVersion::query()->where('screener_id', $screenerId)->where('version', 1)->firstOrFail();
+        ScreenerBacktestDay::query()->create([
+            'screener_id' => $screenerId,
+            'screener_version_id' => $version->id,
+            'as_of_date' => '2026-01-02',
+            'scanned' => 10,
+            'matched' => 2,
+        ]);
+
+        // Simulate a corrupt or stale immutable snapshot at the current version number.
+        $version->forceFill(['definition_hash' => str_repeat('b', 64)])->save();
+
+        $this->actingAs($user)->getJson("/api/screeners/{$screenerId}/backtest/matrix")
+            ->assertOk()
+            ->assertJsonPath('data.columns', [])
+            ->assertJsonPath('data.rows', [])
+            ->assertJsonPath('data.run_count', 0)
+            ->assertJsonPath('data.stock_count', 0);
+    }
 }
