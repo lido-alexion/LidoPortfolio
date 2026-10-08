@@ -21,6 +21,9 @@ it('exports actual Axios XHR span IDs matching the single wire traceparent throu
     try {
         vi.stubEnv('VITE_LIDO_TELEMETRY_ENABLED', 'true');
         vi.stubEnv('VITE_LIDO_TELEMETRY_OTLP_TRACES_ENDPOINT', '/api/telemetry/otlp/traces');
+        // The test runner may set a 1% sampler for its own telemetry. Pin this
+        // integration test to always-on so its two expected spans are stable.
+        vi.stubEnv('OTEL_TRACES_SAMPLER', 'always_on');
         const { default: api } = await import('../../../resources/js/src/api');
         const { registerBrowserOpenTelemetry } = await import('../../../resources/js/src/telemetry/otelBrowser');
         const fallback = await api.get('/watchlists', {

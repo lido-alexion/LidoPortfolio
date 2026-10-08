@@ -183,6 +183,8 @@ class LidoTelemetryHttpTest extends TestCase
 
     public function test_browser_otlp_relay_rejects_non_json_and_malformed_payloads(): void
     {
+        config(['lido_telemetry.enabled' => true]);
+
         $this->withHeaders(['Content-Type' => 'text/plain'])
             ->call('POST', '/api/telemetry/otlp/v1/traces', [], [], [], [], 'not-json')
             ->assertStatus(415);

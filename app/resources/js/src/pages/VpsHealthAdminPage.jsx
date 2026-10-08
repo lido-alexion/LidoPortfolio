@@ -19,6 +19,84 @@ const RANGE_OPTIONS = [
     { hours: 72, label: '3 days' },
 ];
 
+const METRIC_TIPS = {
+    load: {
+        title: 'Load per core',
+        summary: 'Load shows how many tasks are running or waiting for CPU. Compare it with the CPU count and look for a sustained rise across samples.',
+        steps: [
+            'Check the current load and number of CPU cores.',
+            'If load remains high, inspect the busiest CPU processes before changing or restarting anything.',
+        ],
+        commands: [
+            { label: 'Load and CPU count', command: 'uptime; nproc' },
+            { label: 'Processes using the most CPU', command: 'ps -eo pid,comm,%cpu,%mem --sort=-%cpu | head -n 12' },
+        ],
+    },
+    ram: {
+        title: 'Available RAM',
+        summary: 'Linux uses spare RAM for file cache. The “available” value is more useful than the “free” value for judging memory headroom.',
+        steps: [
+            'Check available memory and swap together.',
+            'If available RAM stays low, inspect the largest resident processes and correlate with swap activity.',
+        ],
+        commands: [
+            { label: 'Memory and swap summary', command: 'free -h' },
+            { label: 'Processes using the most RAM', command: 'ps -eo pid,comm,rss --sort=-rss | head -n 12' },
+        ],
+    },
+    disk: {
+        title: 'Root disk used',
+        summary: 'A high root filesystem percentage means less room for database growth, logs, backups, and deployments. Find the largest directories before deleting anything.',
+        steps: [
+            'Check filesystem capacity and the largest top-level directories.',
+            'Review the results and retention needs before removing files. Do not delete active application, database, or backup data based only on size.',
+        ],
+        commands: [
+            { label: 'Filesystem capacity', command: 'df -h /' },
+            { label: 'Largest directories on the root filesystem', command: 'sudo du -xhd1 /var /home /tmp 2>/dev/null | sort -h' },
+        ],
+    },
+    swap: {
+        title: 'Swap used',
+        summary: 'Swap can stay occupied after an earlier memory spike even when RAM is available again. Check active swap-in and swap-out before treating the percentage as a current problem.',
+        steps: [
+            'Check available RAM and which swap device is enabled.',
+            'Watch the `si` and `so` columns in vmstat. Sustained non-zero values are stronger evidence of active swapping than swap used by itself.',
+            'To clear old swap pages, only proceed during a quiet period after confirming available RAM comfortably exceeds swap in use. This moves pages into RAM and can cause an outage if memory pressure returns.',
+        ],
+        commands: [
+            { label: 'Memory and enabled swap', command: 'free -h; swapon --show' },
+            { label: 'Live swap-in and swap-out (10 seconds)', command: 'vmstat -w 1 10' },
+            { label: 'Optional: move swap pages back into RAM', command: 'sudo swapoff /swapfile && sudo swapon /swapfile' },
+        ],
+        warning: 'Before using the optional reset command, confirm `swapon --show` lists `/swapfile` and run `free -h` again. Do not run it when RAM is tight or the server is under heavy load. If your swap device has a different path, use that exact path in both commands.',
+    },
+    fpm: {
+        title: 'PHP-FPM workers',
+        summary: 'A full worker pool or a non-zero listen queue can mean PHP requests are waiting. Check the service journal and recent trend before considering a reload or configuration change.',
+        steps: [
+            'Check whether the PHP-FPM service is active.',
+            'Review recent service messages for worker saturation or errors. These commands inspect status and logs; they do not restart the service.',
+        ],
+        commands: [
+            { label: 'PHP-FPM service status', command: 'sudo systemctl status php8.4-fpm --no-pager' },
+            { label: 'Recent PHP-FPM messages', command: 'sudo journalctl -u php8.4-fpm -n 100 --no-pager' },
+        ],
+    },
+    nginx: {
+        title: 'Nginx errors (5 min)',
+        summary: 'The card counts recent 502, 503, and 504 responses separately from 499 client disconnects. A count is a clue to investigate, not proof of the cause.',
+        steps: [
+            'Check that the current Nginx configuration passes its syntax test.',
+            'Review recent Nginx error messages and compare their timestamps with the chart and application logs.',
+        ],
+        commands: [
+            { label: 'Test Nginx configuration (does not reload)', command: 'sudo nginx -t' },
+            { label: 'Recent Nginx error messages', command: 'sudo tail -n 100 /var/log/nginx/error.log' },
+        ],
+    },
+};
+
 function formatTime(value) {
     if (!value) return '—';
     const date = new Date(value);
@@ -42,7 +120,7 @@ function number(value, digits = 1) {
         : '—';
 }
 
-function MetricCard({ label, value, detail, status = 'unknown', threshold }) {
+function MetricCard({ label, value, detail, status = 'unknown', threshold, tipId, onShowTips }) {
     const severity = VPS_HEALTH_STATUS[status] ?? VPS_HEALTH_STATUS.unknown;
     return (
         <div className="col-6 col-xl-3">
@@ -64,6 +142,87 @@ function MetricCard({ label, value, detail, status = 'unknown', threshold }) {
                     </div>
                     <div className={`fs-4 fw-semibold ${severity.color === 'warning' ? 'text-warning-emphasis' : `text-${severity.color}`}`}>{value}</div>
                     {detail && <div className="small text-muted mt-1">{detail}</div>}
+                    <button type="button" className="btn btn-sm btn-link px-0 pb-0 mt-2" onClick={() => onShowTips(tipId)} aria-haspopup="dialog" aria-label={`Tips for ${label}`}>
+                        Tips
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function CommandBlock({ label, command, onCopy }) {
+    return (
+        <div className="border rounded p-2 mb-3">
+            <div className="d-flex align-items-center justify-content-between gap-2 mb-2">
+                <div className="small fw-semibold">{label}</div>
+                <button type="button" className="btn btn-sm btn-outline-secondary flex-shrink-0" onClick={() => onCopy(command)}>
+                    Copy command
+                </button>
+            </div>
+            <pre className="mb-0 small text-break" style={{ whiteSpace: 'pre-wrap' }}><code>{command}</code></pre>
+        </div>
+    );
+}
+
+function MetricTipsModal({ tip, onClose }) {
+    const [copyMessage, setCopyMessage] = useState('');
+
+    useEffect(() => {
+        if (!tip) return undefined;
+        const onKeyDown = (event) => {
+            if (event.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [tip, onClose]);
+
+    if (!tip) return null;
+
+    const copyCommand = async (command) => {
+        try {
+            if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
+            await navigator.clipboard.writeText(command);
+            setCopyMessage('Command copied.');
+        } catch {
+            const field = document.createElement('textarea');
+            field.value = command;
+            field.setAttribute('readonly', '');
+            field.style.position = 'fixed';
+            field.style.opacity = '0';
+            document.body.appendChild(field);
+            field.select();
+            let copied = false;
+            try {
+                copied = document.execCommand('copy');
+            } catch {
+                copied = false;
+            }
+            field.remove();
+            setCopyMessage(copied ? 'Command copied.' : 'Copy failed. Select the command text to copy it.');
+        }
+    };
+
+    return (
+        <div className="modal d-block" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }} role="dialog" aria-modal="true" aria-labelledby="vps-health-tip-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+            <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                <div className="modal-content">
+                    <div className="modal-header">
+                        <h2 className="modal-title fs-5" id="vps-health-tip-title">{tip.title} tips</h2>
+                        <button type="button" className="btn-close" aria-label="Close tips" onClick={onClose} autoFocus />
+                    </div>
+                    <div className="modal-body">
+                        <p>{tip.summary}</p>
+                        <h3 className="h6">Steps</h3>
+                        <ol className="mb-3">{tip.steps.map((step) => <li key={step} className="mb-1">{step}</li>)}</ol>
+                        <h3 className="h6">Commands</h3>
+                        {tip.commands.map((item) => <CommandBlock key={item.label} {...item} onCopy={copyCommand} />)}
+                        {tip.warning && <div className="alert alert-warning small mb-0">{tip.warning}</div>}
+                        <div className="small text-muted mt-2" role="status" aria-live="polite">{copyMessage}</div>
+                    </div>
+                    <div className="modal-footer">
+                        <button type="button" className="btn btn-secondary" onClick={onClose}>Close</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -100,6 +259,7 @@ export default function VpsHealthAdminPage() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState('');
+    const [activeTip, setActiveTip] = useState(null);
 
     const load = useCallback(async (quiet = false) => {
         if (quiet) setRefreshing(true);
@@ -198,12 +358,12 @@ export default function VpsHealthAdminPage() {
                             )}
 
                             <div className="row g-3 mb-2">
-                                <MetricCard label="Load per core" value={number(metrics.load_per_core, 2)} status={getVpsHealthMetricStatus('loadPerCore', metrics.load_per_core)} threshold="Green <1.0 · Amber 1.0–<2.0 · Red ≥2.0" detail={`1 min ${number(metrics.load1, 2)} · ${metrics.cpus ?? '—'} CPUs`} />
-                                <MetricCard label="Available RAM" value={`${number(metrics.ram_available_percent)}%`} status={getVpsHealthMetricStatus('ramAvailable', metrics.ram_available_percent)} threshold="Green ≥20% · Amber 10–<20% · Red <10%" detail={`${number(metrics.ram_available_bytes == null ? null : metrics.ram_available_bytes / (1024 ** 3), 2)} GiB available`} />
-                                <MetricCard label="Root disk used" value={`${number(metrics.root_used_percent)}%`} status={getVpsHealthMetricStatus('rootDiskUsed', metrics.root_used_percent)} threshold="Green <80% · Amber 80–<90% · Red ≥90%" />
-                                <MetricCard label="Swap used" value={`${number(metrics.swap_used_percent)}%`} status={getVpsHealthMetricStatus('swapUsed', metrics.swap_used_percent)} threshold="Green <50% · Amber 50–80% · Red >80%" />
-                                <MetricCard label="FPM workers" value={`${fpm['active processes'] ?? '—'} / ${fpm['max children'] ?? '—'}`} status={getVpsFpmStatus({ queue: fpm['listen queue'], active: fpm['active processes'], maxChildren: fpm['max children'] })} threshold="Green: queue 0 and workers below 90% capacity · Amber: queue 0 and workers ≥90% · Red: any queued request" detail={`Idle ${fpm['idle processes'] ?? '—'} · Queue ${fpm['listen queue'] ?? '—'}`} />
-                                <MetricCard label="Nginx errors (5 min)" value={(nginx['502'] ?? 0) + (nginx['503'] ?? 0) + (nginx['504'] ?? 0)} status={getVpsHealthMetricStatus('nginx5xx', (nginx['502'] ?? 0) + (nginx['503'] ?? 0) + (nginx['504'] ?? 0))} threshold="Green 0 · Amber 1–4 · Red ≥5" detail={`499 client closes: ${nginx['499'] ?? 0}`} />
+                                <MetricCard tipId="load" onShowTips={setActiveTip} label="Load per core" value={number(metrics.load_per_core, 2)} status={getVpsHealthMetricStatus('loadPerCore', metrics.load_per_core)} threshold="Green <1.0 · Amber 1.0–<2.0 · Red ≥2.0" detail={`1 min ${number(metrics.load1, 2)} · ${metrics.cpus ?? '—'} CPUs`} />
+                                <MetricCard tipId="ram" onShowTips={setActiveTip} label="Available RAM" value={`${number(metrics.ram_available_percent)}%`} status={getVpsHealthMetricStatus('ramAvailable', metrics.ram_available_percent)} threshold="Green ≥20% · Amber 10–<20% · Red <10%" detail={`${number(metrics.ram_available_bytes == null ? null : metrics.ram_available_bytes / (1024 ** 3), 2)} GiB available`} />
+                                <MetricCard tipId="disk" onShowTips={setActiveTip} label="Root disk used" value={`${number(metrics.root_used_percent)}%`} status={getVpsHealthMetricStatus('rootDiskUsed', metrics.root_used_percent)} threshold="Green <80% · Amber 80–<90% · Red ≥90%" />
+                                <MetricCard tipId="swap" onShowTips={setActiveTip} label="Swap used" value={`${number(metrics.swap_used_percent)}%`} status={getVpsHealthMetricStatus('swapUsed', metrics.swap_used_percent)} threshold="Green <50% · Amber 50–80% · Red >80%" />
+                                <MetricCard tipId="fpm" onShowTips={setActiveTip} label="FPM workers" value={`${fpm['active processes'] ?? '—'} / ${fpm['max children'] ?? '—'}`} status={getVpsFpmStatus({ queue: fpm['listen queue'], active: fpm['active processes'], maxChildren: fpm['max children'] })} threshold="Green: queue 0 and workers below 90% capacity · Amber: queue 0 and workers ≥90% · Red: any queued request" detail={`Idle ${fpm['idle processes'] ?? '—'} · Queue ${fpm['listen queue'] ?? '—'}`} />
+                                <MetricCard tipId="nginx" onShowTips={setActiveTip} label="Nginx errors (5 min)" value={(nginx['502'] ?? 0) + (nginx['503'] ?? 0) + (nginx['504'] ?? 0)} status={getVpsHealthMetricStatus('nginx5xx', (nginx['502'] ?? 0) + (nginx['503'] ?? 0) + (nginx['504'] ?? 0))} threshold="Green 0 · Amber 1–4 · Red ≥5" detail={`499 client closes: ${nginx['499'] ?? 0}`} />
                             </div>
                             <details className="small text-muted mb-3">
                                 <summary>Color thresholds</summary>
@@ -248,6 +408,7 @@ export default function VpsHealthAdminPage() {
                     )}
                 </>
             )}
+            <MetricTipsModal tip={METRIC_TIPS[activeTip]} onClose={() => setActiveTip(null)} />
         </div>
     );
 }
