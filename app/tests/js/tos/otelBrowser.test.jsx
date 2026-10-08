@@ -88,6 +88,18 @@ describe('browser OpenTelemetry failure hooks', () => {
     });
 });
 
+it('resolves relative same-origin OTLP endpoints before constructing the exporter', async () => {
+    vi.stubEnv('VITE_LIDO_TELEMETRY_ENABLED', 'true');
+    vi.stubEnv('VITE_LIDO_TELEMETRY_OTLP_TRACES_ENDPOINT', '/api/telemetry/otlp/v1/traces');
+
+    const { registerBrowserOpenTelemetry } = await import('../../../resources/js/src/telemetry/otelBrowser.js?relative-endpoint');
+
+    expect(registerBrowserOpenTelemetry()).toBe(true);
+    expect(exporter).toHaveBeenCalledWith({
+        url: new URL('/api/telemetry/otlp/v1/traces', window.location.origin).toString(),
+    });
+});
+
 it('removes query values, credentials, headers, events and status messages at export', async () => {
     const { privacySafeBrowserSpan } = await import('../../../resources/js/src/telemetry/otelBrowser.js');
     const span = {
