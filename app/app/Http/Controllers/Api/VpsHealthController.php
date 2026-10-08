@@ -12,7 +12,7 @@ class VpsHealthController extends Controller
     public function index(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'hours' => ['sometimes', 'integer', 'in:1,6,24'],
+            'hours' => ['sometimes', 'integer', 'in:1,6,24,72'],
         ]);
         $hours = (int) ($validated['hours'] ?? 24);
         $since = now()->subHours($hours);

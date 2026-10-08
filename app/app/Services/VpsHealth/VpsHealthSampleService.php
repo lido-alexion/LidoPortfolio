@@ -29,7 +29,7 @@ class VpsHealthSampleService
         ]);
 
         if ($sampledAt->minute === 0) {
-            VpsHealthSample::query()->where('sampled_at', '<', now()->subDays(14))->delete();
+            VpsHealthSample::query()->where('sampled_at', '<', now()->subHours(96))->delete();
         }
 
         return $sample;

@@ -47,13 +47,51 @@ class VpsHealthDashboardTest extends TestCase
             ->assertJsonPath('data.latest.metrics.private_token', null);
     }
 
+    public function test_admin_can_request_three_day_health_history(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        $this->actingAs($admin)->getJson('/api/v1/admin/vps-health?hours=72')
+            ->assertOk()
+            ->assertJsonPath('data.range_hours', 72);
+    }
+
     public function test_health_samples_api_is_admin_only_and_rejects_unsupported_ranges(): void
     {
         $member = User::factory()->create(['is_admin' => false]);
+        $admin = User::factory()->admin()->create();
 
         $this->getJson('/api/v1/admin/vps-health')->assertUnauthorized();
         $this->actingAs($member)->getJson('/api/v1/admin/vps-health')->assertForbidden();
-        $this->actingAs(User::factory()->admin()->create())->getJson('/api/v1/admin/vps-health?hours=7')
-            ->assertUnprocessable();
+        $this->actingAs($admin)->getJson('/api/v1/admin/vps-health?hours=7')->assertUnprocessable();
+        $this->actingAs($admin)->getJson('/api/v1/admin/vps-health?hours=96')->assertUnprocessable();
+    }
+
+    public function test_old_samples_are_pruned_after_96_hours(): void
+    {
+        $this->travelTo(now()->startOfHour());
+        $expired = VpsHealthSample::query()->create([
+            'sampled_at' => now()->subHours(97),
+            'status' => 'ok',
+            'issues' => [],
+            'metrics' => [],
+        ]);
+        $boundary = VpsHealthSample::query()->create([
+            'sampled_at' => now()->subHours(96),
+            'status' => 'ok',
+            'issues' => [],
+            'metrics' => [],
+        ]);
+
+        app(VpsHealthSampleService::class)->record([
+            'time' => now()->toIso8601String(),
+            'status' => 'ok',
+            'issues' => [],
+            'metrics' => [],
+        ]);
+
+        $this->assertDatabaseMissing('portfolio_vps_health_samples', ['id' => $expired->id]);
+        $this->assertDatabaseHas('portfolio_vps_health_samples', ['id' => $boundary->id]);
+        $this->travelBack();
     }
 }

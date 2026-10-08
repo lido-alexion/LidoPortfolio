@@ -51,6 +51,18 @@ final class V1OperationOverlays
         ];
 
         return V1AcceptanceOverlays::all() + [
+            'GET /api/v1/admin/vps-health' => [
+                'summary' => 'Read aggregate VPS health samples',
+                'description' => 'Returns recent aggregate VPS health samples. Requires admin access.',
+                'parameters' => [[
+                    'name' => 'hours',
+                    'in' => 'query',
+                    'required' => false,
+                    'description' => 'History range in hours (default 24). Supported values: 1, 6, 24, and 72.',
+                    'schema' => ['type' => 'integer', 'enum' => [1, 6, 24, 72]],
+                ]],
+                'noBody' => true,
+            ],
             'GET /api/v1/stock-details/combo-chart-preference' => [
                 'summary' => 'GET account combo chart preference',
                 'description' => "Returns the authenticated user's account-wide Stock Details combo chart default, or null when no explicit default is set.",

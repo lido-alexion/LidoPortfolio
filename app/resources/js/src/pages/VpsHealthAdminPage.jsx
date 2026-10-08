@@ -15,18 +15,34 @@ const RANGE_OPTIONS = [
     { hours: 1, label: '1 hour' },
     { hours: 6, label: '6 hours' },
     { hours: 24, label: '24 hours' },
+    { hours: 72, label: '3 days' },
 ];
 
 function formatTime(value) {
     if (!value) return '—';
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+    if (Number.isNaN(date.getTime())) return String(value);
+    const parts = new Intl.DateTimeFormat('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true,
+    }).formatToParts(date);
+    const part = (type) => parts.find((item) => item.type === type)?.value ?? '';
+    return `${part('day')}-${part('month')}-${part('year')} ${part('hour')}:${part('minute')}:${part('second')} ${part('dayPeriod').toUpperCase()}`;
 }
 
 function formatAge(seconds) {
     if (seconds === null || seconds === undefined) return 'No samples yet';
-    if (seconds < 60) return `${seconds}s ago`;
-    return `${Math.floor(seconds / 60)}m ago`;
+    const roundedSeconds = Math.ceil(seconds);
+    if (roundedSeconds < 60) {
+        const unit = roundedSeconds === 1 ? 'second' : 'seconds';
+        return `${roundedSeconds} ${unit} ago`;
+    }
+    return `${Math.floor(roundedSeconds / 60)}m ago`;
 }
 
 function number(value, digits = 1) {
@@ -59,7 +75,7 @@ function TrendChart({ title, data, lines, ySuffix = '' }) {
                     <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={data} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
                             <CartesianGrid stroke="var(--bs-border-color)" strokeDasharray="3 3" />
-                            <XAxis dataKey="time" minTickGap={32} tickFormatter={(value) => new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} tick={{ fontSize: 11, fill: 'var(--bs-secondary-color)' }} />
+                            <XAxis dataKey="time" minTickGap={32} tickFormatter={formatTime} tick={{ fontSize: 11, fill: 'var(--bs-secondary-color)' }} />
                             <YAxis width={48} tick={{ fontSize: 11, fill: 'var(--bs-secondary-color)' }} tickFormatter={(value) => `${value}${ySuffix}`} />
                             <Tooltip labelFormatter={(value) => formatTime(value)} formatter={(value, name) => [`${number(value)}${ySuffix}`, name]} />
                             <Legend />
@@ -203,7 +219,7 @@ export default function VpsHealthAdminPage() {
                                     ]} />
                                 </div>
                             </div>
-                            <div className="small text-muted">Samples are retained for 14 days. Detailed process and log excerpts remain on the VPS and are not exposed in this dashboard.</div>
+                            <div className="small text-muted">Samples are retained for 96 hours (4 days). Detailed process and log excerpts remain on the VPS and are not exposed in this dashboard.</div>
                         </>
                     )}
                 </>
