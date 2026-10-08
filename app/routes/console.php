@@ -67,7 +67,7 @@ Artisan::command('portfolio:daily-sync', function () {
 
 Artisan::command('portfolio:purge-export-artifacts', function () {
     $removed = 0;
-    ExportArtifact::query()->where('expires_at', '<', now())->chunkById(100, function ($artifacts) use (&$removed) {
+    ExportArtifact::query()->where('expires_at', '<=', now())->chunkById(100, function ($artifacts) use (&$removed) {
         foreach ($artifacts as $artifact) {
             if ($artifact->path && \Storage::disk('local')->exists($artifact->path)) \Storage::disk('local')->delete($artifact->path);
             $artifact->delete(); $removed++;

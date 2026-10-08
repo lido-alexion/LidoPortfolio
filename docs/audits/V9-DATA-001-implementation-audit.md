@@ -43,8 +43,8 @@
 | 24 | No downloadable partial output | Conditional ready transition and final-path cleanup prevent cancelled worker promotion. | Partial — concurrent cancellation race untested. |
 | 25 | COMM-001 completion/failure notice | Job uses `NotificationPublisher` event path. | Partial — notification assertions and retry behavior untested. |
 | 26 | Optional email obeys preference | Export is categorized under existing optional-email preferences; it is disabled by default and uses planner gating. | Partial — end-to-end preference delivery test pending. |
-| 27 | 24-hour retention | Ready artifacts set expiry to `now()->addDay()`. | Partial; boundary test pending. |
-| 28 | Expiry cleanup | Existing scheduled purge removes expired artifacts/files. | Partial; command test pending. |
+| 27 | 24-hour retention | Synchronous-ready and background-ready artifacts set expiry to `now()->addDay()`. Access tests cover expired and missing-expiry behavior. | Partial — exact 24-hour generation boundary and MySQL-backed CI remain pending. |
+| 28 | Expiry cleanup | Hourly scheduled purge removes artifact rows and files whose expiry is at or before the current instant. Feature test verifies exact-cutoff deletion and preservation of unexpired/queued artifacts. | Partial — focused local SQLite test passes; MySQL-backed CI remains pending. |
 | 29 | No user-facing history | No list/history endpoint added. | Pass by inspection |
 | 30 | Protected, non-guessable file access | Local private storage, UUID token, authenticated owner-scoped route and exact path check; feature tests verify other-account 404s and reject a mismatched artifact path. | Partial — focused local SQLite tests pass; broader security review and MySQL CI remain pending. |
 | 31 | Chart data only | Chart dataset exports snapshot values; no image route or format. | Partial — no chart-specific metadata test. |
@@ -92,3 +92,8 @@ Added `tests/Feature/V9Data001ExportBasketTest.php` to verify that basket config
 ## Artifact access and expiry verification slice (2026-10-08)
 
 Added focused feature coverage for owner-only artifact status/download, deterministic download filenames, expired artifacts, artifacts missing expiry, and strict owner/token/format path matching. The tests exposed that `status()` advertised expired artifacts and `download()` allowed a ready artifact with no expiry. The controller now withholds links unless expiry is in the future and rejects downloads when expiry is absent or no longer future. `php -l` passed; the combined focused run passed: `vendor/bin/phpunit tests/Feature/V9Data001ExportArtifactAccessTest.php tests/Feature/V9Data001ExportBasketTest.php tests/Unit/Export` (19 tests, 74 assertions; 2 existing PHPUnit notices). MySQL-backed acceptance remains pending under the feature-branch CI policy.
+
+
+## Artifact retention and purge verification slice (2026-10-08)
+
+Added a feature test that freezes time at the expiry boundary and checks both database rows and private files. It exposed an exclusive `< now()` purge comparison that left an artifact expiring exactly at the run cutoff until a later hourly pass; the command now uses `<= now()`. The test verifies expired and exact-cutoff artifacts are purged while an unexpired artifact and a queued artifact with no expiry remain. Focused local verification passed: `vendor/bin/phpunit tests/Feature/V9Data001ExportRetentionTest.php tests/Feature/V9Data001ExportArtifactAccessTest.php tests/Feature/V9Data001ExportBasketTest.php` (8 tests, 52 assertions). In-memory SQLite is supplemental; feature-branch CI defers MySQL to master.
