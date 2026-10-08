@@ -1,6 +1,6 @@
 # V9-DATA-001 Implementation Audit
 
-**Audit base:** `ffa9dbcadf3cefacca14ce47b563c674d27b95e2` (`origin/master`)
+**Audit base:** `af65b7e5` (`origin/master` at latest reconciliation)
 **Feature baseline commit:** `72a5c6d4` (`feat(v9): build export framework baseline`)
 **Status:** INCOMPLETE — do not mark IMPLEMENTED / VERIFIED. This audit covers the current feature branch and verification performed on 2026-10-08.
 
@@ -27,14 +27,14 @@
 | 8 | Friendly labels and canonical values | Catalog describes labels and canonical forms; rows retain canonical metric/date/amount values. | Partial — labels are provenance descriptions, not a dual label/value column for every dataset. |
 | 9 | Complete metadata/provenance | Dataset, scope, fields, timestamp, source/profile, cadence, field labels, and current-scope range/sort are included where available. | Partial — broader provenance remains incomplete. |
 | 10 | XLSX multiple sheets | Writer supports multiple sheets; basket outputs exactly one sheet per item with metadata in that sheet. | Partial |
-| 11 | Persistent private basket | One basket row is keyed by user; API queries/upserts by authenticated owner. | Partial — account-isolation feature test pending. |
-| 12 | Basket stores configuration only | Basket JSON stores item configuration only. | Pass by inspection |
+| 11 | Persistent private basket | One basket row is keyed by user; API queries/upserts by authenticated owner. Focused feature tests now cover persistence across requests, account isolation, and configuration-only storage. | Partial — feature tests use the local SQLite test configuration; MySQL-backed CI result is pending. |
+| 12 | Basket stores configuration only | Basket JSON stores item configuration only; focused feature test confirms no row/data snapshot is persisted. | Partial — local SQLite feature test passed; MySQL-backed CI result pending. |
 | 13 | Fresh worker resolution | Background payload carries profile/dataset/scope/fields/identity configuration; worker reloads authorized profile and resolves rows at execution time. | Partial — worker integration test pending. |
 | 14 | Basket stale/incompatible validation | Export validates provider, permissions, fields, scope and selected identities at execution request time. UI derives field/scope controls from catalog metadata and validates current filter/selected-ID configuration before save/export. | Partial — server remains authoritative for stale IDs/permissions; feature tests pending. |
 | 15 | One sheet per basket item and rename | Safe unique sheet names; metadata appended within each item sheet. | Partial — basket integration test pending. |
 | 16 | Safe names | Writer strips invalid characters, trims apostrophes, truncates to 31 chars and de-duplicates case-insensitively. | Partial; unit test passes. |
-| 17 | Basket item hard limit | Configured maximum 10; request validation enforces it. | Partial; boundary feature test pending. |
-| 18 | Server-side authorization | API provider check verifies profile ownership; queued worker repeats profile ownership check before fresh resolution. | Partial — permission revocation and endpoint feature tests pending. |
+| 17 | Basket item hard limit | Configured maximum 10; request validation enforces it. Feature test verifies an over-limit update is rejected without overwriting the saved basket. | Partial — MySQL-backed CI result is pending. |
+| 18 | Server-side authorization | API provider check verifies profile ownership; queued worker repeats profile ownership check before fresh resolution. Feature test confirms basket read/write/export endpoints require authentication. | Partial — ownership-revocation and MySQL-backed API verification remain pending. |
 | 19 | Download ownership/expiry | Authenticated owner-scoped query, ready/expiry check, exact owner/token/format path check. | Partial; endpoint tests pending. |
 | 20 | Restricted fields unavailable | Caller fields must be in provider's allow-listed columns; only currently registered public fields are exposed. | Partial — no provider-specific hidden-field policy test. |
 | 21 | Synchronous small export | Configurable default 1,000-row threshold. | Partial; feature test pending. |
@@ -74,12 +74,16 @@ Focused basket UI slice verification on 2026-10-08: `node --test tests/js/portfo
 
 | Command | Result |
 |---|---|
-| `git status --short --branch`, `git rev-parse HEAD`, `git rev-parse origin/master`, `git merge-base HEAD origin/master` | Branch `codex/v9-data001-completion`; HEAD `ac3bffe6` includes feature commit `72a5c6d4`; merge base equals latest `origin/master` `ffa9dbcadf3cefacca14ce47b563c674d27b95e2`. |
+| Branch reconciliation | `codex/v9-data001-completion` is reconciled with `origin/master` at `af65b7e5`; no history was rewritten. |
 | PHP syntax checks for changed export controllers, jobs, providers, writer and exception | Passed for all checked PHP files. |
 | `vendor/bin/phpunit tests/Unit/Export` (from `app/`) | Passed: 12 tests, 31 assertions; PHPUnit reported 2 notices. |
 | `php artisan openapi:v1 --check` (from `app/`) | Passed: OpenAPI document is current (221 operations). |
 | `npm run docs:static:check` (from `app/`) | Passed: static documentation contract current (53 topics). |
-| `git diff --check` (repository root) | Passed after merging latest master. |
-| Database-dependent, full-suite and frontend checks | Not run. No MySQL-backed export feature suite, browser suite, notification integration suite, or full CI pass is claimed. |
+| `git diff --check` (repository root) | Passed after the current test and audit changes. |
+| Database-backed backend gate | Current basket API feature test passed locally on the PHPUnit in-memory SQLite test configuration; MySQL-backed feature/full-suite verification is pending on the current PR head. Earlier PR runs skipped PHPUnit/frontend by change-area detection. |
 
 The feature baseline and basket configuration slice are committed on `codex/v9-data001-completion`, based on current `master`; the V9 wishlist remains FROZEN / IMPLEMENTATION-READY because the acceptance evidence and unsupported capabilities listed above are incomplete.
+
+## Basket API verification slice (2026-10-08)
+
+Added `tests/Feature/V9Data001ExportBasketTest.php` to verify that basket configuration persists across requests, is isolated per account, contains configuration rather than row snapshots, rejects item counts above the configured maximum without mutating the previously saved basket, and requires authentication for read/write/export endpoints. Focused local verification passed: `vendor/bin/phpunit tests/Feature/V9Data001ExportBasketTest.php` (3 tests, 28 assertions). The repository PHPUnit configuration uses in-memory SQLite locally; this is supplemental only. MySQL-backed parity is delegated to the PR backend CI job. `git diff --check` passed. No production DB or deployment was touched.
