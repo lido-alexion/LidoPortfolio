@@ -27,16 +27,32 @@ class DataCompletenessService
         }
         $membership = $this->memberships->coverageForDates($dates);
         $eligible = Stock::query()->effectivelyActive()->where('exchange', 'NSE')->where('is_benchmark', false)->count();
-        $priceCount = StockPrice::query()->whereDate('price_date', $lastSession->toDateString())->whereHas('stock', fn ($q) => $q->where('exchange', 'NSE')->where('is_benchmark', false))->distinct('stock_id')->count('stock_id');
-        $fundamentalChecks = DB::table('stox_fundamental_provider_checks')->where('last_successful_check_at', '>=', $asOf->copy()->subMonths(15))->distinct('stock_id')->count('stock_id');
+        $eligibleStock = fn ($query) => $query->effectivelyActive()->where('exchange', 'NSE')->where('is_benchmark', false);
+        $priceCount = StockPrice::query()
+            ->whereDate('price_date', $lastSession->toDateString())
+            ->whereHas('stock', $eligibleStock)
+            ->distinct('stock_id')
+            ->count('stock_id');
+        $latestPriceDate = StockPrice::query()->whereHas('stock', $eligibleStock)->max('price_date');
+        $fundamentalScope = DB::table('stox_fundamental_provider_checks')
+            ->join('portfolio_stocks', 'portfolio_stocks.id', '=', 'stox_fundamental_provider_checks.stock_id')
+            ->where('portfolio_stocks.is_active', true)
+            ->where('portfolio_stocks.admin_deactivated', false)
+            ->where('portfolio_stocks.exchange', 'NSE')
+            ->where('portfolio_stocks.is_benchmark', false);
+        $fundamentalChecks = (clone $fundamentalScope)
+            ->where('stox_fundamental_provider_checks.last_successful_check_at', '>=', $asOf->copy()->subMonths(15))
+            ->distinct('stox_fundamental_provider_checks.stock_id')
+            ->count('stox_fundamental_provider_checks.stock_id');
+        $latestFundamentalCheck = (clone $fundamentalScope)->max('stox_fundamental_provider_checks.last_successful_check_at');
         $latestCorporate = DataQualityIssue::query()->where('issue_type', 'corporate_action')->max('detected_at');
 
         return [
             'as_of' => $asOf->toIso8601String(),
             'datasets' => [
                 'nse_membership' => ['freshness' => $membership['missing_dates'] === [] ? 'complete' : 'incomplete', 'coverage' => $membership['coverage_percentage'], 'backlog' => count($membership['missing_dates']), 'last_successful_ingestion' => DB::table('stox_ml_universe_snapshot_boundaries')->max('updated_at')],
-                'daily_prices' => ['freshness' => $priceCount >= $eligible ? 'complete' : 'incomplete', 'coverage' => $eligible ? round($priceCount / $eligible * 100, 4) : 0.0, 'backlog' => max(0, $eligible - $priceCount), 'last_successful_ingestion' => $lastSession->toDateString()],
-                'fundamentals' => ['freshness' => $fundamentalChecks >= $eligible ? 'complete' : 'incomplete', 'coverage' => $eligible ? round($fundamentalChecks / $eligible * 100, 4) : 0.0, 'backlog' => max(0, $eligible - $fundamentalChecks), 'last_successful_ingestion' => DB::table('stox_fundamental_provider_checks')->max('last_successful_check_at')],
+                'daily_prices' => ['freshness' => $priceCount >= $eligible ? 'complete' : 'incomplete', 'coverage' => $eligible ? round($priceCount / $eligible * 100, 4) : 0.0, 'backlog' => max(0, $eligible - $priceCount), 'last_successful_ingestion' => $latestPriceDate],
+                'fundamentals' => ['freshness' => $fundamentalChecks >= $eligible ? 'complete' : 'incomplete', 'coverage' => $eligible ? round($fundamentalChecks / $eligible * 100, 4) : 0.0, 'backlog' => max(0, $eligible - $fundamentalChecks), 'last_successful_ingestion' => $latestFundamentalCheck],
                 'corporate_actions' => ['freshness' => $latestCorporate !== null ? 'observed' : 'unknown', 'coverage' => null, 'backlog' => null, 'last_successful_ingestion' => $latestCorporate],
             ],
         ];
