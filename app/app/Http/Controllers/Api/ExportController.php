@@ -176,6 +176,58 @@ class ExportController extends Controller
         $basket = ExportBasket::query()->where('user_id', $request->user()->id)->first();
         if (! $basket || count($basket->items ?? []) === 0) return response()->json(['message' => 'Add at least one dataset to the export basket.'], 422);
         if (count($basket->items) > config('exports.max_sheets')) return response()->json(['message' => 'The export basket exceeds the workbook sheet limit. Remove some items and try again.'], 422);
+        $profile = \activePortfolio();
+        $normalizedItems = [];
+        $estimatedRows = 0;
+        $estimatedFields = 0;
+        foreach ($basket->items as $item) {
+            $dataset = (string) ($item['dataset'] ?? '');
+            $scope = $item['scope'] ?? 'full';
+            $catalogDefinition = collect($this->datasets->catalog())->firstWhere('id', $dataset);
+            if (! $catalogDefinition || ! $this->datasets->supportsScope($dataset, $scope)) return response()->json(['message' => 'The export basket contains an unavailable dataset or scope. Refresh it and try again.'], 422);
+            try { $this->datasets->assertAuthorized($dataset, $profile, (int) $request->user()->id); }
+            catch (\Throwable) { return response()->json(['message' => 'The export basket contains an unavailable dataset. Refresh it and try again.'], 422); }
+            if ($scope === 'current' && (! in_array($dataset, ['portfolio-growth', 'portfolio-snapshots'], true) || ! in_array($item['filters']['range'] ?? null, ['90d', '180d', '365d', 'all'], true) || ($item['filters']['sort_by'] ?? null) !== 'snapshot_date' || ! in_array($item['filters']['sort_direction'] ?? null, ['asc', 'desc'], true))) return response()->json(['message' => 'A current-scope basket item needs valid snapshot filters and sort.'], 422);
+            $filters = $scope === 'current' ? ['range' => $item['filters']['range'], 'sort_by' => $item['filters']['sort_by'], 'sort_direction' => $item['filters']['sort_direction']] : [];
+            $fields = $item['fields'] ?? $catalogDefinition['fields'];
+            if (! is_array($fields) || $fields === [] || array_diff($fields, $catalogDefinition['fields'])) return response()->json(['message' => 'The export basket contains unavailable fields. Review the item and try again.'], 422);
+            $selected = $item['selected'] ?? [];
+            if ($scope === 'selected' && (! is_array($selected) || $selected === [])) return response()->json(['message' => 'A selected-scope basket item has no selected rows. Edit the item and try again.'], 422);
+            $rows = $scope === 'selected' ? count($selected) : $this->datasets->estimate($dataset, $profile, $filters)['rows'];
+            $estimatedRows += $rows;
+            $estimatedFields += count($fields);
+            if ($estimatedRows > config('exports.max_rows')) return response()->json(['message' => 'The export basket exceeds the maximum row count. Remove items or narrow the scope.'], 422);
+            if ($estimatedFields > config('exports.max_fields')) return response()->json(['message' => 'The export basket exceeds the maximum field count. Remove items or select fewer fields.'], 422);
+            $normalizedItems[] = [
+                'dataset' => $dataset,
+                'scope' => $scope,
+                'filters' => $filters,
+                'selected' => $selected,
+                'fields' => array_values($fields),
+                'sheet_name' => $item['sheet_name'] ?? $dataset,
+            ];
+        }
+        if ($estimatedRows > config('exports.sync_rows')) {
+            $token = (string) Str::uuid();
+            $relative = 'exports/'.$request->user()->id.'/'.$token.'.xlsx';
+            Storage::disk('local')->makeDirectory(dirname($relative));
+            $artifact = ExportArtifact::create([
+                'user_id' => $request->user()->id,
+                'token' => $token,
+                'dataset' => 'basket',
+                'format' => 'xlsx',
+                'path' => $relative,
+                'status' => 'queued',
+                'expires_at' => null,
+                'metadata' => ['item_count' => count($normalizedItems), 'datasets' => array_column($normalizedItems, 'dataset')],
+            ]);
+            dispatch(new GenerateExportArtifact($artifact->id, [
+                'profile_id' => $profile->id,
+                'basket_items' => $normalizedItems,
+                'metadata' => ['item_count' => count($normalizedItems), 'datasets' => array_column($normalizedItems, 'dataset')],
+            ]));
+            return response()->json(['data' => ['token' => $artifact->token, 'status' => 'queued', 'download_url' => route('api.exports.download', $artifact->token), 'expires_at' => null]], 202);
+        }
         $sheets = [];
         $totalRows = 0;
         $totalFields = 0;

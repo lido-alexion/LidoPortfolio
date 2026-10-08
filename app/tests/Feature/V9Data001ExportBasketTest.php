@@ -110,6 +110,37 @@ class V9Data001ExportBasketTest extends TestCase
         );
     }
 
+    public function test_large_basket_is_queued_without_resolving_rows_in_the_request(): void
+    {
+        Storage::fake('local');
+        Queue::fake();
+        config(['exports.sync_rows' => 0]);
+        $owner = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($owner);
+        PortfolioSnapshot::query()->create([
+            'profile_id' => $profile->id,
+            'snapshot_date' => '2026-10-07',
+            'portfolio_value' => '12345.6700',
+            'invested_value' => '10000.0000',
+        ]);
+        $this->actingAs($owner)->putJson('/api/exports/basket', [
+            'items' => [['dataset' => 'portfolio-snapshots', 'scope' => 'full', 'fields' => ['snapshot_date', 'portfolio_value']]],
+        ])->assertOk();
+        $queries = [];
+        DB::listen(function ($query) use (&$queries): void {
+            $queries[] = strtolower($query->sql);
+        });
+
+        $response = $this->actingAs($owner)->withProfileHeader($owner, $profile)->postJson('/api/exports/basket/export');
+
+        $response->assertAccepted()->assertJsonPath('data.status', 'queued');
+        Queue::assertPushed(GenerateExportArtifact::class);
+        $this->assertFalse(
+            collect($queries)->contains(fn (string $sql) => str_contains($sql, 'portfolio_snapshots') && str_contains($sql, 'snapshot_date')),
+            'A large basket should queue without selecting snapshot rows in the request.',
+        );
+    }
+
     public function test_basket_read_write_and_export_endpoints_require_authentication(): void
     {
         $this->getJson('/api/exports/basket')->assertUnauthorized();

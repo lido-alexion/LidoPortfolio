@@ -74,6 +74,47 @@ class V9Data001ExportWorkerTest extends TestCase
         }
     }
 
+    public function test_worker_resolves_basket_items_and_writes_one_xlsx_sheet_per_dataset(): void
+    {
+        if (! class_exists(\ZipArchive::class)) $this->markTestSkipped('ZipArchive is unavailable.');
+        Storage::fake('local');
+        $owner = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($owner);
+        PortfolioSnapshot::query()->create([
+            'profile_id' => $profile->id,
+            'snapshot_date' => '2026-10-07',
+            'portfolio_value' => '12345.6700',
+            'invested_value' => '10000.0000',
+        ]);
+        $artifact = $this->queuedArtifact($owner);
+        $artifact->update(['dataset' => 'basket', 'format' => 'xlsx', 'path' => str_replace('.csv', '.xlsx', $artifact->path)]);
+        $job = new GenerateExportArtifact($artifact->id, [
+            'profile_id' => $profile->id,
+            'basket_items' => [[
+                'dataset' => 'portfolio-snapshots',
+                'scope' => 'full',
+                'filters' => [],
+                'selected' => [],
+                'fields' => ['snapshot_date', 'portfolio_value'],
+                'sheet_name' => 'Recent snapshots',
+            ]],
+            'metadata' => ['item_count' => 1],
+        ]);
+
+        $job->handle(app(ExportFileWriter::class), app(ExportDatasetRegistry::class));
+
+        $this->assertSame('ready', $artifact->fresh()->status);
+        $path = Storage::disk('local')->path($artifact->path);
+        $zip = new \ZipArchive();
+        $this->assertTrue($zip->open($path));
+        $workbook = $zip->getFromName('xl/workbook.xml');
+        $sheet = $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+        $this->assertStringContainsString('Recent snapshots', $workbook);
+        $this->assertStringContainsString('12345.6700', $sheet);
+        $this->assertDatabaseHas('portfolio_export_notification_outbox', ['artifact_id' => $artifact->id, 'event_type' => 'completed']);
+    }
+
     public function test_worker_failure_marks_artifact_failed_and_publishes_durable_failure_notice(): void
     {
         Storage::fake('local');

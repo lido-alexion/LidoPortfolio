@@ -38,22 +38,48 @@ class GenerateExportArtifact implements ShouldQueue
         try {
             $userId = $artifact->user_id;
             $profile = PortfolioProfile::query()->where('user_id', $userId)->findOrFail($this->definition['profile_id']);
-            $datasets->assertAuthorized($this->definition['dataset'], $profile, (int) $userId);
-            $resolved = $datasets->resolve($this->definition['dataset'], $profile, $this->definition['filters'] ?? []);
-            $columns = $this->definition['columns'];
-            if (array_diff($columns, $resolved['columns'])) throw new \RuntimeException('An export field is no longer available.');
-            $rows = $resolved['rows'];
-            if (($this->definition['scope'] ?? null) === 'selected') {
-                $selected = $this->definition['selected'] ?? [];
-                if (! isset($resolved['identities']) || array_diff($selected, $resolved['identities'])) throw new \RuntimeException('Selected export rows are stale or unavailable.');
-                $identityRows = array_combine($resolved['identities'], $rows);
-                $rows = array_map(fn ($identity) => $identityRows[$identity], $selected);
-            }
-            if (count($rows) > config('exports.max_rows')) throw new \RuntimeException('Export exceeds the maximum row count.');
-            $metadata = [...($this->definition['metadata'] ?? []), ...($resolved['metadata'] ?? []), 'exported_at' => now()->toIso8601String()];
             $shouldCancel = fn () => ! ExportArtifact::query()->whereKey($artifact->id)->where('status', 'running')->whereNull('cancelled_at')->exists();
-            if ($artifact->format === 'csv') $writer->csv($columns, $rows, $path, $metadata, $shouldCancel);
-            else $writer->xlsx([['name' => 'Data', 'columns' => $columns, 'rows' => $rows, 'metadata' => $metadata]], $path, $shouldCancel);
+            if (isset($this->definition['basket_items'])) {
+                $sheets = [];
+                $totalRows = 0;
+                $totalFields = 0;
+                foreach ($this->definition['basket_items'] as $item) {
+                    $datasets->assertAuthorized($item['dataset'], $profile, (int) $userId);
+                    $resolved = $datasets->resolve($item['dataset'], $profile, $item['filters'] ?? []);
+                    $columns = $item['fields'];
+                    if (array_diff($columns, $resolved['columns'])) throw new \RuntimeException('An export field is no longer available.');
+                    $rows = $resolved['rows'];
+                    if (($item['scope'] ?? null) === 'selected') {
+                        $selected = $item['selected'] ?? [];
+                        if (! $selected || ! isset($resolved['identities']) || array_diff($selected, $resolved['identities'])) throw new \RuntimeException('Selected export rows are stale or unavailable.');
+                        $identityRows = array_combine($resolved['identities'], $rows);
+                        $rows = array_map(fn ($identity) => $identityRows[$identity], $selected);
+                    }
+                    $totalRows += count($rows);
+                    $totalFields += count($columns);
+                    if ($totalRows > config('exports.max_rows')) throw new \RuntimeException('Export exceeds the maximum row count.');
+                    if ($totalFields > config('exports.max_fields')) throw new \RuntimeException('Export exceeds the maximum field count.');
+                    $metadata = [...($this->definition['metadata'] ?? []), ...($resolved['metadata'] ?? []), 'scope' => $item['scope'], 'fields' => $columns, 'exported_at' => now()->toIso8601String()];
+                    $sheets[] = ['name' => $item['sheet_name'] ?? $item['dataset'], 'columns' => $columns, 'rows' => $rows, 'metadata' => $metadata];
+                }
+                $writer->xlsx($sheets, $path, $shouldCancel);
+            } else {
+                $datasets->assertAuthorized($this->definition['dataset'], $profile, (int) $userId);
+                $resolved = $datasets->resolve($this->definition['dataset'], $profile, $this->definition['filters'] ?? []);
+                $columns = $this->definition['columns'];
+                if (array_diff($columns, $resolved['columns'])) throw new \RuntimeException('An export field is no longer available.');
+                $rows = $resolved['rows'];
+                if (($this->definition['scope'] ?? null) === 'selected') {
+                    $selected = $this->definition['selected'] ?? [];
+                    if (! isset($resolved['identities']) || array_diff($selected, $resolved['identities'])) throw new \RuntimeException('Selected export rows are stale or unavailable.');
+                    $identityRows = array_combine($resolved['identities'], $rows);
+                    $rows = array_map(fn ($identity) => $identityRows[$identity], $selected);
+                }
+                if (count($rows) > config('exports.max_rows')) throw new \RuntimeException('Export exceeds the maximum row count.');
+                $metadata = [...($this->definition['metadata'] ?? []), ...($resolved['metadata'] ?? []), 'exported_at' => now()->toIso8601String()];
+                if ($artifact->format === 'csv') $writer->csv($columns, $rows, $path, $metadata, $shouldCancel);
+                else $writer->xlsx([['name' => 'Data', 'columns' => $columns, 'rows' => $rows, 'metadata' => $metadata]], $path, $shouldCancel);
+            }
             clearstatcache(true, $path);
             if (! rename($path, $finalPath)) throw new \RuntimeException('Unable to finalize export artifact.');
 
