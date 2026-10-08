@@ -166,7 +166,7 @@ class ExportFileWriter
     private function assertRuntime(int $started): void
     {
         if ((hrtime(true) - $started) / 1_000_000_000 > config('exports.max_runtime_seconds', 120)) throw new RuntimeException('Export exceeded the maximum generation time. Narrow the scope and try again.');
-        if (memory_get_usage(true) > config('exports.max_memory_bytes', 268435456)) throw new RuntimeException('Export exceeded the maximum memory use. Narrow the scope and try again.');
+        if (memory_get_usage(false) > config('exports.max_memory_bytes', 268435456)) throw new RuntimeException('Export exceeded the maximum memory use. Narrow the scope and try again.');
     }
 
     private function uniqueSheetName(string $name, array &$used, int $number): string
