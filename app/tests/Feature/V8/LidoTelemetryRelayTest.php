@@ -14,10 +14,20 @@ class LidoTelemetryRelayTest extends TestCase
     {
         parent::setUp();
         config([
-            'lido_telemetry.enabled' => false,
+            'lido_telemetry.enabled' => true,
             'lido_telemetry.browser_relay_upstream' => 'http://collector.test/v1/traces',
         ]);
         Http::preventStrayRequests();
+    }
+
+    public function test_disabled_telemetry_returns_empty_no_content_without_forwarding(): void
+    {
+        config(['lido_telemetry.enabled' => false]);
+        Http::fake();
+
+        $this->postJson('/api/telemetry/otlp/v1/traces', $this->payload())
+            ->assertNoContent();
+        Http::assertNothingSent();
     }
 
     public static function upstreamStatuses(): array
