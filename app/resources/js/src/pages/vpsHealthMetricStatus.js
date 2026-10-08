@@ -48,3 +48,22 @@ export function getVpsFpmStatus({ queue, active, maxChildren }) {
     }
     return 'normal';
 }
+
+export function formatVpsSampleAge(ageSeconds) {
+    const seconds = numericValue(ageSeconds);
+    if (seconds === null) return 'No samples yet';
+
+    const roundedSeconds = Math.ceil(seconds);
+    if (roundedSeconds < 60) {
+        const unit = roundedSeconds === 1 ? 'second' : 'seconds';
+        return `${roundedSeconds} ${unit} ago`;
+    }
+    if (seconds < 120) return '1m ago';
+    return `${Math.floor(roundedSeconds / 60)}m ago`;
+}
+
+export function getVpsSampleAgeStatus(ageSeconds) {
+    const seconds = numericValue(ageSeconds);
+    if (seconds === null) return 'unknown';
+    return seconds < 120 ? 'normal' : 'critical';
+}
