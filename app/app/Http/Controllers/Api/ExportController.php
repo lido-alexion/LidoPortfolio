@@ -83,7 +83,7 @@ class ExportController extends Controller
     public function status(Request $request, string $token): JsonResponse
     {
         $artifact = ExportArtifact::query()->where('user_id', $request->user()->id)->where('token', $token)->firstOrFail();
-        return response()->json(['data' => ['token' => $artifact->token, 'status' => $artifact->status, 'expires_at' => $artifact->expires_at, 'download_url' => $artifact->status === 'ready' ? route('api.exports.download', $artifact->token) : null]]);
+        return response()->json(['data' => ['token' => $artifact->token, 'status' => $artifact->status, 'expires_at' => $artifact->expires_at, 'download_url' => ($artifact->status === 'ready' && $artifact->expires_at?->isFuture()) ? route('api.exports.download', $artifact->token) : null]]);
     }
 
     public function cancel(Request $request, string $token): JsonResponse
@@ -100,7 +100,8 @@ class ExportController extends Controller
     {
         $artifact = ExportArtifact::query()->where('user_id', $request->user()->id)->where('token', $token)->firstOrFail();
         abort_unless($artifact->path === 'exports/'.$artifact->user_id.'/'.$artifact->token.'.'.$artifact->format, 404);
-        abort_if($artifact->status !== 'ready' || $artifact->expires_at?->isPast() || ! Storage::disk('local')->exists($artifact->path), 410);
+        $expiresAt = $artifact->expires_at;
+        abort_if($artifact->status !== 'ready' || ! $expiresAt || ! $expiresAt->isFuture() || ! Storage::disk('local')->exists($artifact->path), 410);
         return Storage::disk('local')->download($artifact->path, 'stox-'.(\Illuminate\Support\Str::slug($artifact->dataset) ?: 'data').'.'.$artifact->format);
     }
 

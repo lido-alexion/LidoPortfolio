@@ -35,7 +35,7 @@
 | 16 | Safe names | Writer strips invalid characters, trims apostrophes, truncates to 31 chars and de-duplicates case-insensitively. | Partial; unit test passes. |
 | 17 | Basket item hard limit | Configured maximum 10; request validation enforces it. Feature test verifies an over-limit update is rejected without overwriting the saved basket. | Partial — MySQL-backed CI result is pending. |
 | 18 | Server-side authorization | API provider check verifies profile ownership; queued worker repeats profile ownership check before fresh resolution. Feature test confirms basket read/write/export endpoints require authentication. | Partial — ownership-revocation and MySQL-backed API verification remain pending. |
-| 19 | Download ownership/expiry | Authenticated owner-scoped query, ready/expiry check, exact owner/token/format path check. | Partial; endpoint tests pending. |
+| 19 | Download ownership/expiry | Focused feature tests verify owner-only status/download, expired and missing-expiry rejection, no stale download link, and exact owner/token/format path checks. The status endpoint now advertises a link only while a ready artifact has a future expiry; download also fails closed when expiry is absent. | Partial — focused local SQLite tests pass; MySQL-backed full suite remains deferred to master CI. |
 | 20 | Restricted fields unavailable | Caller fields must be in provider's allow-listed columns; only currently registered public fields are exposed. | Partial — no provider-specific hidden-field policy test. |
 | 21 | Synchronous small export | Configurable default 1,000-row threshold. | Partial; feature test pending. |
 | 22 | Background large export | Queue job writes protected `.partial`, promotes only when state remains running and uncancelled. | Partial; queue lifecycle tests pending. |
@@ -46,13 +46,13 @@
 | 27 | 24-hour retention | Ready artifacts set expiry to `now()->addDay()`. | Partial; boundary test pending. |
 | 28 | Expiry cleanup | Existing scheduled purge removes expired artifacts/files. | Partial; command test pending. |
 | 29 | No user-facing history | No list/history endpoint added. | Pass by inspection |
-| 30 | Protected, non-guessable file access | Local private storage, UUID token, authenticated owner-scoped route and exact path check. | Partial; endpoint/security tests pending. |
+| 30 | Protected, non-guessable file access | Local private storage, UUID token, authenticated owner-scoped route and exact path check; feature tests verify other-account 404s and reject a mismatched artifact path. | Partial — focused local SQLite tests pass; broader security review and MySQL CI remain pending. |
 | 31 | Chart data only | Chart dataset exports snapshot values; no image route or format. | Partial — no chart-specific metadata test. |
 | 32 | Maximum rows | Configured 50,000 default; writer and request enforce. | Partial; unit limit test passes. |
 | 33 | Maximum file bytes | CSV checks while writing; XLSX checks archive size after close and removes failed temporary/output files. | **Partial** — XLSX temporary generation can exceed the configured cap before rejection. |
 | 34 | Sheets/fields/cells | Configured limits: 10 sheets, 100 aggregate fields, 50,000 aggregate rows and 500,000 workbook cells; basket limit shares sheet cap. | Partial; aggregate row rejection and cancellation cleanup have focused unit coverage; aggregate field/cell boundaries and basket API behavior lack integration coverage. |
 | 35 | Runtime/memory | Configured 120-second and 256 MiB checks during writer loops. | **Partial** — providers materialize result rows and XLSX XML in memory before all checks; not a strict process-level ceiling. |
-| 36 | Deterministic safe file names | Download name uses a dataset slug; internal path is owner/UUID/format-derived. | Partial; endpoint test pending. |
+| 36 | Deterministic safe file names | Download name uses a dataset slug; internal path is owner/UUID/format-derived. Feature test asserts the deterministic download name. | Partial — focused local SQLite test passes; additional dataset-name edge cases remain pending. |
 | 37 | Formula injection | Formula-like text with leading whitespace/control is neutralized; numeric negatives remain numeric. | Partial; writer tests pass. |
 | 38 | Values only | XLSX emits inline strings and numeric `<v>` values; no formula element generation. | Partial; writer test passes. |
 | 39 | Retry-safe work/notifications | Atomic queued claim, terminal state checks and guarded promotion reduce duplicate artifacts. | **Open** — failure between ready transition and notification can lose the notification; no durable notification outbox/idempotency proof. |
@@ -86,4 +86,9 @@ The feature baseline and basket configuration slice are committed on `codex/v9-d
 
 ## Basket API verification slice (2026-10-08)
 
-Added `tests/Feature/V9Data001ExportBasketTest.php` to verify that basket configuration persists across requests, is isolated per account, contains configuration rather than row snapshots, rejects item counts above the configured maximum without mutating the previously saved basket, and requires authentication for read/write/export endpoints. Focused local verification passed: `vendor/bin/phpunit tests/Feature/V9Data001ExportBasketTest.php` (3 tests, 28 assertions). The repository PHPUnit configuration uses in-memory SQLite locally; this is supplemental only. MySQL-backed parity is delegated to the PR backend CI job. `git diff --check` passed. No production DB or deployment was touched.
+Added `tests/Feature/V9Data001ExportBasketTest.php` to verify that basket configuration persists across requests, is isolated per account, contains configuration rather than row snapshots, rejects item counts above the configured maximum without mutating the previously saved basket, and requires authentication for read/write/export endpoints. Focused local verification passed: `vendor/bin/phpunit tests/Feature/V9Data001ExportBasketTest.php` (3 tests, 28 assertions). CI run 37790260359 passed its enabled jobs; PHPUnit and frontend jobs were intentionally skipped by the current feature-branch CI policy and remain deferred to master. The repository PHPUnit configuration uses in-memory SQLite locally; this is supplemental only. `git diff --check` passed. No production DB or deployment was touched.
+
+
+## Artifact access and expiry verification slice (2026-10-08)
+
+Added focused feature coverage for owner-only artifact status/download, deterministic download filenames, expired artifacts, artifacts missing expiry, and strict owner/token/format path matching. The tests exposed that `status()` advertised expired artifacts and `download()` allowed a ready artifact with no expiry. The controller now withholds links unless expiry is in the future and rejects downloads when expiry is absent or no longer future. `php -l` passed; the combined focused run passed: `vendor/bin/phpunit tests/Feature/V9Data001ExportArtifactAccessTest.php tests/Feature/V9Data001ExportBasketTest.php tests/Unit/Export` (19 tests, 74 assertions; 2 existing PHPUnit notices). MySQL-backed acceptance remains pending under the feature-branch CI policy.
