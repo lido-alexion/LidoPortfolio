@@ -35,6 +35,15 @@ class ExportDatasetRegistry
         return $this->providerFor($dataset)->resolve($dataset, $profile, $filters);
     }
 
+    public function resolveForWorker(string $dataset, PortfolioProfile $profile, array $filters = [], array $selectedIds = []): array
+    {
+        $provider = $this->providerFor($dataset);
+
+        return $provider instanceof StreamingExportDatasetProvider
+            ? $provider->stream($dataset, $profile, $filters, $selectedIds)
+            : $provider->resolve($dataset, $profile, $filters);
+    }
+
     public function supportsScope(string $dataset, string $scope): bool
     {
         return isset($this->datasets[$dataset]) && $this->datasets[$dataset]['provider']->supportsScope($dataset, $scope);

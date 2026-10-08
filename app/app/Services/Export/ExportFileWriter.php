@@ -7,10 +7,11 @@ use ZipArchive;
 
 class ExportFileWriter
 {
-    public function csv(array $columns, array $rows, string $path, array $metadata = [], ?callable $shouldCancel = null): void
+    public function csv(array $columns, iterable $rows, string $path, array $metadata = [], ?callable $shouldCancel = null, ?int $expectedRows = null): void
     {
         $started = hrtime(true);
-        $this->assertLimits($columns, $rows);
+        $this->assertLimits($columns, $expectedRows ?? (is_array($rows) ? count($rows) : null));
+        $writtenRows = 0;
         $handle = fopen($path, 'wb');
         if ($handle === false) throw new RuntimeException('Unable to create export file.');
         try {
@@ -29,6 +30,7 @@ class ExportFileWriter
             $writeRecord($columns);
             foreach ($rows as $row) {
                 if ($shouldCancel && $shouldCancel()) throw new ExportCancelledException('Export was cancelled.');
+                if (++$writtenRows > config('exports.max_rows', 50000)) throw new RuntimeException('Export exceeds the maximum row count. Narrow the scope and try again.');
                 $writeRecord(array_map(fn ($column) => $this->safeCell(data_get($row, $column)), $columns));
                 $this->assertRuntime($started);
             }
@@ -49,17 +51,25 @@ class ExportFileWriter
         $temporaryBytes = 0;
         try {
         $usedNames = [];
-        $cellCount = 0;
-        $rowCount = 0;
+        $estimatedRows = 0;
         $fieldCount = 0;
-        foreach (array_values($sheets) as $index => $sheet) {
-            $this->assertLimits($sheet['columns'], $sheet['rows']);
-            $rowCount += count($sheet['rows']);
+        $estimatedCells = 0;
+        foreach (array_values($sheets) as $sheet) {
+            $sheetRows = $sheet['row_count'] ?? (is_array($sheet['rows']) ? count($sheet['rows']) : null);
+            $this->assertLimits($sheet['columns'], $sheetRows);
+            if ($sheetRows !== null) {
+                $estimatedRows += $sheetRows;
+                $estimatedCells += ($sheetRows + 1) * count($sheet['columns']);
+            }
             $fieldCount += count($sheet['columns']);
-            if ($rowCount > config('exports.max_rows', 50000)) throw new RuntimeException('Export exceeds the maximum row count. Narrow the scope and try again.');
-            if ($fieldCount > config('exports.max_fields', 100)) throw new RuntimeException('Export exceeds the maximum field count. Narrow the selected fields.');
-            $cellCount += (count($sheet['rows']) + 1) * count($sheet['columns']) + (count($sheet['metadata'] ?? []) * 2) + (empty($sheet['metadata']) ? 0 : 4);
-            if ($cellCount > config('exports.max_workbook_cells', 500000)) throw new RuntimeException('Export exceeds the maximum workbook complexity. Remove sheets or fields and try again.');
+            $estimatedCells += (count($sheet['metadata'] ?? []) * 2) + (empty($sheet['metadata']) ? 0 : 4);
+        }
+        if ($estimatedRows > config('exports.max_rows', 50000)) throw new RuntimeException('Export exceeds the maximum row count. Narrow the scope and try again.');
+        if ($fieldCount > config('exports.max_fields', 100)) throw new RuntimeException('Export exceeds the maximum field count. Narrow the selected fields.');
+        if ($estimatedCells > config('exports.max_workbook_cells', 500000)) throw new RuntimeException('Export exceeds the maximum workbook complexity. Remove sheets or fields and try again.');
+        $writtenRows = 0;
+        $writtenCells = 0;
+        foreach (array_values($sheets) as $index => $sheet) {
             $worksheetPath = $temporaryPath.'.sheet'.($index + 1).'.xml';
             $worksheet = fopen($worksheetPath, 'xb');
             if ($worksheet === false) throw new RuntimeException('Unable to create XLSX worksheet temporary file.');
@@ -67,8 +77,11 @@ class ExportFileWriter
             try {
                 $this->writeWorksheetChunk($worksheet, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>', $temporaryBytes);
                 $rowIndex = 0;
-                $writeRow = function (array $row) use ($worksheet, &$temporaryBytes, &$rowIndex, $shouldCancel, $started): void {
+                $writeRow = function (array $row, bool $isData = false) use ($worksheet, &$temporaryBytes, &$rowIndex, &$writtenRows, &$writtenCells, $shouldCancel, $started): void {
                     if ($shouldCancel && $shouldCancel()) throw new ExportCancelledException('Export was cancelled.');
+                    if ($isData && ++$writtenRows > config('exports.max_rows', 50000)) throw new RuntimeException('Export exceeds the maximum row count. Narrow the scope and try again.');
+                    $writtenCells += count($row);
+                    if ($writtenCells > config('exports.max_workbook_cells', 500000)) throw new RuntimeException('Export exceeds the maximum workbook complexity. Remove sheets or fields and try again.');
                     $xml = '<row r="'.($rowIndex + 1).'">';
                     foreach ($row as $columnIndex => $value) {
                         $numeric = is_int($value) || is_float($value) || (is_string($value) && is_numeric($value) && ! preg_match('/^0\\d/', $value));
@@ -85,7 +98,7 @@ class ExportFileWriter
                 foreach ($sheet['rows'] as $sourceRow) {
                     $row = [];
                     foreach ($sheet['columns'] as $column) $row[] = data_get($sourceRow, $column);
-                    $writeRow($row);
+                    $writeRow($row, true);
                 }
                 if (! empty($sheet['metadata'])) {
                     $writeRow([]);
@@ -144,10 +157,10 @@ class ExportFileWriter
         return ! $numeric && preg_match('/^[\s\x00-\x20]*[=+\-@]/', $value) ? "'".$value : $value;
     }
 
-    private function assertLimits(array $columns, array $rows): void
+    private function assertLimits(array $columns, ?int $rowCount): void
     {
         if (count($columns) > config('exports.max_fields', 100)) throw new RuntimeException('Export exceeds the maximum field count. Narrow the selected fields.');
-        if (count($rows) > config('exports.max_rows', 50000)) throw new RuntimeException('Export exceeds the maximum row count. Narrow the scope and try again.');
+        if ($rowCount !== null && $rowCount > config('exports.max_rows', 50000)) throw new RuntimeException('Export exceeds the maximum row count. Narrow the scope and try again.');
     }
 
     private function assertRuntime(int $started): void

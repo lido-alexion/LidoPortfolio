@@ -6,6 +6,8 @@ use App\Models\PortfolioProfile;
 use App\Services\Export\ExportDatasetProvider;
 use App\Services\Export\ExportDatasetRegistry;
 use App\Services\Export\PortfolioSnapshotExportProvider;
+use App\Services\Export\PortfolioAnalyticsExportProvider;
+use App\Services\Analytics\PortfolioAnalyticsService;
 use LogicException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
@@ -16,6 +18,9 @@ class ExportDatasetRegistryTest extends TestCase
     {
         $registry = app(ExportDatasetRegistry::class);
         $snapshot = collect($registry->catalog())->firstWhere('id', 'portfolio-snapshots');
+        $datasetIds = array_column($registry->catalog(), 'id');
+        $this->assertContains('portfolio-analytics', $datasetIds);
+        $this->assertContains('portfolio-fundamental-facts', $datasetIds);
 
         $this->assertSame(['current', 'full', 'selected'], $snapshot['scopes']);
         $this->assertSame('stored amount', $snapshot['field_metadata']['portfolio_value']['canonical']);
@@ -66,6 +71,33 @@ class ExportDatasetRegistryTest extends TestCase
         } catch (LogicException $exception) {
             $this->assertStringContainsString('present and unique', $exception->getMessage());
         }
+    }
+
+    public function test_portfolio_analytics_provider_exports_only_allowlisted_metrics(): void
+    {
+        $profile = new PortfolioProfile(['id' => 71, 'user_id' => 8]);
+        $service = $this->createMock(PortfolioAnalyticsService::class);
+        $service->expects($this->once())
+            ->method('forProfile')
+            ->with($profile, false)
+            ->willReturn([
+                'portfolio_value' => 123.45,
+                'number_of_positions' => 3,
+                'allocation' => [['symbol' => 'SECRET', 'market_value' => 42]],
+                'market_context' => ['market_phase' => 'private-detail'],
+                'computed_at' => '2026-10-08T00:00:00Z',
+            ]);
+
+        $provider = new PortfolioAnalyticsExportProvider($service);
+        $resolved = $provider->resolve('portfolio-analytics', $profile);
+
+        $this->assertSame(['metric', 'value'], $resolved['columns']);
+        $this->assertSame([
+            ['metric' => 'portfolio_value', 'value' => 123.45],
+            ['metric' => 'number_of_positions', 'value' => 3],
+        ], $resolved['rows']);
+        $this->assertSame(['portfolio_value', 'number_of_positions'], $resolved['identities']);
+        $this->assertSame(['full'], $provider->catalog()[0]['scopes']);
     }
 
     public function test_provider_authorization_rejects_a_profile_owned_by_another_account(): void

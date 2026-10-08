@@ -13,6 +13,8 @@ use App\Services\AccessRequest\TurnstileHumanVerificationService;
 use App\Services\Export\DashboardSummaryExportProvider;
 use App\Services\Export\ExportDatasetRegistry;
 use App\Services\Export\PortfolioSnapshotExportProvider;
+use App\Services\Export\PortfolioAnalyticsExportProvider;
+use App\Services\Export\PortfolioFundamentalsExportProvider;
 use App\Services\Fundamentals\FundamentalDataProvider;
 use App\Services\Fundamentals\YahooFundamentalDataProvider;
 use App\Services\Indicators\IndicatorRegistry;
@@ -45,7 +47,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->tag([DashboardSummaryExportProvider::class, PortfolioSnapshotExportProvider::class], 'export.dataset.providers');
+        $this->app->tag([
+            DashboardSummaryExportProvider::class,
+            PortfolioSnapshotExportProvider::class,
+            PortfolioAnalyticsExportProvider::class,
+            PortfolioFundamentalsExportProvider::class,
+        ], 'export.dataset.providers');
         $this->app->singleton(ExportDatasetRegistry::class, fn ($app) => new ExportDatasetRegistry($app->tagged('export.dataset.providers')));
 
         $this->app->bind(HumanVerificationService::class, function () {

@@ -123,7 +123,7 @@ class ExportController extends Controller
     public function status(Request $request, string $token): JsonResponse
     {
         $artifact = ExportArtifact::query()->where('user_id', $request->user()->id)->where('token', $token)->firstOrFail();
-        return response()->json(['data' => ['token' => $artifact->token, 'status' => $artifact->status, 'expires_at' => $artifact->expires_at, 'download_url' => ($artifact->status === 'ready' && $artifact->expires_at?->isFuture()) ? route('api.exports.download', $artifact->token) : null]]);
+        return response()->json(['data' => ['token' => $artifact->token, 'status' => $artifact->status, 'expires_at' => $artifact->expires_at, 'download_url' => ($artifact->status === 'ready' && $artifact->expires_at?->isFuture()) ? route('api.exports.download', $artifact->token) : null, ...($artifact->status === 'failed' ? ['failure' => $artifact->metadata['failure'] ?? ['code' => 'generation_failed', 'message' => 'Export could not be generated. Refresh the data and try again.']] : [])]]);
     }
 
     public function cancel(Request $request, string $token): JsonResponse

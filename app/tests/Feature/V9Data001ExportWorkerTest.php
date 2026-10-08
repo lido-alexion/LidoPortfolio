@@ -11,6 +11,7 @@ use App\Models\PortfolioSnapshot;
 use App\Models\User;
 use App\Services\Export\ExportDatasetRegistry;
 use App\Services\Export\ExportFileWriter;
+use App\Services\Export\ExportStaleSelectionException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -122,7 +123,7 @@ class V9Data001ExportWorkerTest extends TestCase
         $profile = $this->defaultPortfolioFor($owner);
         $artifact = $this->queuedArtifact($owner);
         $failingWriter = new class extends ExportFileWriter {
-            public function csv(array $columns, array $rows, string $path, array $metadata = [], ?callable $shouldCancel = null): void
+            public function csv(array $columns, iterable $rows, string $path, array $metadata = [], ?callable $shouldCancel = null, ?int $expectedRows = null): void
             {
                 throw new \RuntimeException('simulated writer failure');
             }
@@ -169,7 +170,7 @@ class V9Data001ExportWorkerTest extends TestCase
         $cancellingWriter = new class($artifact->id) extends ExportFileWriter {
             public function __construct(private int $artifactId) {}
 
-            public function csv(array $columns, array $rows, string $path, array $metadata = [], ?callable $shouldCancel = null): void
+            public function csv(array $columns, iterable $rows, string $path, array $metadata = [], ?callable $shouldCancel = null, ?int $expectedRows = null): void
             {
                 file_put_contents($path, "finished data\n");
                 ExportArtifact::query()->whereKey($this->artifactId)->update(['status' => 'cancelled', 'cancelled_at' => now()]);
@@ -197,6 +198,48 @@ class V9Data001ExportWorkerTest extends TestCase
         Storage::disk('local')->assertMissing($artifact->path);
         $this->assertSame('cancelled', $artifact->fresh()->status);
         $this->assertDatabaseMissing('portfolio_notification_sources', ['notification_type' => 'export.completed']);
+    }
+
+    public function test_queued_selection_that_goes_stale_fails_with_a_correction_message(): void
+    {
+        Storage::fake('local');
+        $owner = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($owner);
+        $snapshot = PortfolioSnapshot::query()->create([
+            'profile_id' => $profile->id,
+            'snapshot_date' => '2026-10-07',
+            'portfolio_value' => '12345.6700',
+            'invested_value' => '10000.0000',
+        ]);
+        $artifact = $this->queuedArtifact($owner);
+        $job = new GenerateExportArtifact($artifact->id, [
+            'dataset' => 'portfolio-snapshots',
+            'profile_id' => $profile->id,
+            'scope' => 'selected',
+            'selected' => [(string) $snapshot->id],
+            'filters' => [],
+            'columns' => ['snapshot_date', 'portfolio_value'],
+            'metadata' => ['scope' => 'selected'],
+        ]);
+
+        $snapshot->delete();
+        try {
+            $job->handle(app(ExportFileWriter::class), app(ExportDatasetRegistry::class));
+            $this->fail('Expected stale selected identities to stop the queued export.');
+        } catch (ExportStaleSelectionException) {
+            $this->assertSame('failed', $artifact->fresh()->status);
+        }
+
+        $failure = $artifact->fresh()->metadata['failure'];
+        $this->assertSame('selected_rows_stale', $failure['code']);
+        Storage::disk('local')->assertMissing($artifact->path);
+        Storage::disk('local')->assertMissing($artifact->path.'.partial');
+
+        $this->actingAs($owner)->getJson('/api/exports/'.$artifact->token)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'failed')
+            ->assertJsonPath('data.failure.code', 'selected_rows_stale')
+            ->assertJsonPath('data.failure.message', 'Some selected rows are no longer available. Update the selection and start a new export.');
     }
 
     private function queuedArtifact(User $user, string $status = 'queued'): ExportArtifact

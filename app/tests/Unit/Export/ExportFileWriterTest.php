@@ -187,4 +187,29 @@ class ExportFileWriterTest extends TestCase
             $this->assertFileDoesNotExist($path);
         } finally { @unlink($path); foreach (glob($path.'.*.partial') ?: [] as $partial) @unlink($partial); }
     }
+
+    public function test_csv_and_xlsx_consume_generator_rows_with_runtime_bounds(): void
+    {
+        $csvPath = tempnam(sys_get_temp_dir(), 'stox-export-');
+        $csvRows = (function () { yield ['value' => 'first']; yield ['value' => 'second']; })();
+        app(ExportFileWriter::class)->csv(['value'], $csvRows, $csvPath, [], null, 2);
+        $this->assertStringContainsString('second', file_get_contents($csvPath));
+        @unlink($csvPath);
+
+        if (! class_exists(\ZipArchive::class)) $this->markTestSkipped('ZipArchive is unavailable.');
+        $xlsxPath = tempnam(sys_get_temp_dir(), 'stox-export-');
+        @unlink($xlsxPath);
+        config(['exports.max_rows' => 1]);
+        $xlsxRows = (function () { yield ['value' => 'first']; yield ['value' => 'second']; })();
+        try {
+            app(ExportFileWriter::class)->xlsx([['columns' => ['value'], 'rows' => $xlsxRows]], $xlsxPath);
+            $this->fail('Expected a streamed workbook to enforce the row limit.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('maximum row count', $exception->getMessage());
+            $this->assertFileDoesNotExist($xlsxPath);
+        } finally {
+            @unlink($xlsxPath);
+            foreach (glob($xlsxPath.'.*.partial*') ?: [] as $partial) @unlink($partial);
+        }
+    }
 }
