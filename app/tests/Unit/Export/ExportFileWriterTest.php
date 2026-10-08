@@ -10,9 +10,10 @@ class ExportFileWriterTest extends TestCase
     public function test_csv_preserves_precision_and_sanitizes_formula_cells(): void
     {
         $path = tempnam(sys_get_temp_dir(), 'stox-export-');
-        app(ExportFileWriter::class)->csv(['symbol', 'value'], [['symbol' => 'ABC', 'value' => '123.4567890123'], ['symbol' => '=BAD()', 'value' => 0]], $path);
+        app(ExportFileWriter::class)->csv(['symbol', 'value'], [['symbol' => 'ABC', 'value' => '123.4567890123'], ['symbol' => '=BAD()', 'value' => 0]], $path, ['field_labels' => ['symbol' => 'Ticker', 'value' => 'Amount']]);
         $contents = file_get_contents($path);
         @unlink($path);
+        $this->assertStringContainsString('Ticker,Amount', $contents);
         $this->assertStringContainsString('123.4567890123', $contents);
         $this->assertStringContainsString("'=BAD()", $contents);
     }
@@ -52,13 +53,14 @@ class ExportFileWriterTest extends TestCase
         $path = tempnam(sys_get_temp_dir(), 'stox-export-');
         app(ExportFileWriter::class)->xlsx([[
             'name' => 'Daily snapshots', 'columns' => ['snapshot_date'], 'rows' => [['snapshot_date' => '2026-10-07']],
-            'metadata' => ['dataset' => 'portfolio-snapshots', 'scope' => 'full', 'source' => 'portfolio snapshots'],
+            'metadata' => ['dataset' => 'portfolio-snapshots', 'scope' => 'full', 'source' => 'portfolio snapshots', 'field_labels' => ['snapshot_date' => 'Snapshot date']],
         ]], $path);
         $zip = new \ZipArchive(); $zip->open($path);
         $sheet = $zip->getFromName('xl/worksheets/sheet1.xml');
         $workbook = $zip->getFromName('xl/workbook.xml');
         $zip->close(); @unlink($path);
         $this->assertStringContainsString('portfolio-snapshots', $sheet);
+        $this->assertStringContainsString('Snapshot date', $sheet);
         $this->assertStringContainsString('Daily snapshots', $workbook);
         $this->assertSame(1, substr_count($workbook, '<sheet '));
         $this->assertStringContainsString('Metadata', $sheet);

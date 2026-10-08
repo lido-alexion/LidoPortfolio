@@ -28,7 +28,8 @@ class ExportFileWriter
                 foreach ($metadata as $key => $value) $writeRecord(['# '.$key, $this->safeCell(is_scalar($value) || $value === null ? $value : json_encode($value, JSON_UNESCAPED_SLASHES))]);
                 $writeRecord([]);
             }
-            $writeRecord($columns);
+            $fieldLabels = $metadata['field_labels'] ?? [];
+            $writeRecord(array_map(fn ($column) => $fieldLabels[$column] ?? $column, $columns));
             foreach ($rows as $row) {
                 if ($shouldCancel && $shouldCancel()) throw new ExportCancelledException('Export was cancelled.');
                 if (++$writtenRows > config('exports.max_rows', 50000)) throw new RuntimeException('Export exceeds the maximum row count. Narrow the scope and try again.');
@@ -96,7 +97,8 @@ class ExportFileWriter
                     $rowIndex++;
                     $this->assertRuntime($started, $memoryBaseline);
                 };
-                $writeRow($sheet['columns']);
+                $fieldLabels = $sheet['metadata']['field_labels'] ?? [];
+                $writeRow(array_map(fn ($column) => $fieldLabels[$column] ?? $column, $sheet['columns']));
                 foreach ($sheet['rows'] as $sourceRow) {
                     $row = [];
                     foreach ($sheet['columns'] as $column) $row[] = data_get($sourceRow, $column);

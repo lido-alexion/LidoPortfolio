@@ -93,8 +93,10 @@ class V9Data001ExportProviderCoverageTest extends TestCase
         $resolved = $registry->resolve('portfolio-fundamental-facts', $profile);
 
         $this->assertSame(['rows' => 1, 'exact' => true], $estimate);
-        $this->assertSame(['symbol', 'exchange', 'statement_type', 'cadence', 'statement_basis', 'fact_key', 'period_start', 'period_end', 'reported_period', 'value', 'currency', 'availability_date', 'source_provider'], $resolved['columns']);
+        $this->assertSame(['symbol', 'exchange', 'statement_type', 'cadence', 'statement_basis', 'fact_key', 'fact_label', 'period_start', 'period_end', 'reported_period', 'value', 'currency', 'availability_date', 'source_provider'], $resolved['columns']);
         $this->assertSame('OWNED', $resolved['rows'][0]['symbol']);
+        $this->assertSame('revenue', $resolved['rows'][0]['fact_key']);
+        $this->assertSame('Revenue', $resolved['rows'][0]['fact_label']);
         if (DB::getDriverName() === 'sqlite') {
             $this->assertEqualsWithDelta(123456.789123, (float) $resolved['rows'][0]['value'], 0.0000001);
         } else {
@@ -114,7 +116,11 @@ class V9Data001ExportProviderCoverageTest extends TestCase
             'fields' => ['symbol', 'value'],
         ])->assertOk()->assertJsonPath('data.status', 'ready');
         $artifact = ExportArtifact::query()->where('token', $response->json('data.token'))->firstOrFail();
+        $this->assertSame(['symbol', 'value'], $artifact->metadata['fields']);
+        $this->assertSame(['symbol' => 'Symbol', 'value' => 'Value'], $artifact->metadata['field_labels']);
+        $this->assertNotEmpty($artifact->metadata['exported_at']);
         $csv = Storage::disk('local')->get($artifact->path);
+        $this->assertStringContainsString('Symbol,Value', $csv);
         $this->assertStringContainsString('OWNED', $csv);
         $this->assertStringContainsString('123456.789123', $csv);
         $this->assertStringNotContainsString('OTHER', $csv);

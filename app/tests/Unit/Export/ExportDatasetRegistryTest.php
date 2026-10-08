@@ -8,6 +8,8 @@ use App\Services\Export\ExportDatasetRegistry;
 use App\Services\Export\PortfolioSnapshotExportProvider;
 use App\Services\Export\PortfolioAnalyticsExportProvider;
 use App\Services\Analytics\PortfolioAnalyticsService;
+use App\Services\Export\DashboardSummaryExportProvider;
+use App\Services\PortfolioCalculationService;
 use LogicException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
@@ -91,13 +93,35 @@ class ExportDatasetRegistryTest extends TestCase
         $provider = new PortfolioAnalyticsExportProvider($service);
         $resolved = $provider->resolve('portfolio-analytics', $profile);
 
-        $this->assertSame(['metric', 'value'], $resolved['columns']);
+        $this->assertSame(['metric_key', 'metric', 'value'], $resolved['columns']);
         $this->assertSame([
-            ['metric' => 'portfolio_value', 'value' => 123.45],
-            ['metric' => 'number_of_positions', 'value' => 3],
+            ['metric_key' => 'portfolio_value', 'metric' => 'Portfolio value', 'value' => 123.45],
+            ['metric_key' => 'number_of_positions', 'metric' => 'Number of positions', 'value' => 3],
         ], $resolved['rows']);
         $this->assertSame(['portfolio_value', 'number_of_positions'], $resolved['identities']);
         $this->assertSame(['full'], $provider->catalog()[0]['scopes']);
+    }
+
+    public function test_dashboard_summary_keeps_metric_keys_and_exports_readable_labels(): void
+    {
+        $profile = new PortfolioProfile(['id' => 72, 'user_id' => 8]);
+        $service = $this->createMock(PortfolioCalculationService::class);
+        $service->expects($this->once())->method('calculateForProfile')->with($profile)->willReturn([
+            'portfolio_value' => 150.0,
+            'invested_value' => 100.0,
+            'total_gain_loss' => 50.0,
+            'unrelated_private_value' => 999,
+        ]);
+
+        $resolved = (new DashboardSummaryExportProvider($service))->resolve('dashboard-summary', $profile);
+
+        $this->assertSame(['field_key', 'field', 'value'], $resolved['columns']);
+        $this->assertSame([
+            ['field_key' => 'portfolio_value', 'field' => 'Portfolio value', 'value' => 150.0],
+            ['field_key' => 'invested_value', 'field' => 'Invested value', 'value' => 100.0],
+            ['field_key' => 'total_gain_loss', 'field' => 'Total gain/loss', 'value' => 50.0],
+        ], $resolved['rows']);
+        $this->assertSame(['portfolio_value', 'invested_value', 'total_gain_loss'], $resolved['identities']);
     }
 
     public function test_provider_authorization_rejects_a_profile_owned_by_another_account(): void

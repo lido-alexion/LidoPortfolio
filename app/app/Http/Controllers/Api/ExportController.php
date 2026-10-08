@@ -99,9 +99,31 @@ class ExportController extends Controller
         $token = (string) Str::uuid(); $relative = 'exports/'.$request->user()->id.'/'.$token.'.'.$data['format']; Storage::disk('local')->makeDirectory(dirname($relative));
         $path = Storage::disk('local')->path($relative);
         $isBackground = count($resolved['rows']) > config('exports.sync_rows');
-        $artifact = ExportArtifact::create(['user_id' => $request->user()->id, 'token' => $token, 'dataset' => $data['dataset'], 'format' => $data['format'], 'path' => $relative, 'status' => $isBackground ? 'queued' : 'ready', 'expires_at' => $isBackground ? null : now()->addDay(), 'metadata' => ['scope' => $data['scope'], 'fields' => $columns, ...($resolved['metadata'] ?? [])]]);
         $definition = ['columns' => $columns, 'rows' => $resolved['rows']];
-        $definition['metadata'] = ['dataset' => $data['dataset'], 'scope' => $data['scope'], 'exported_at' => now()->toIso8601String(), ...($resolved['metadata'] ?? [])];
+        $fieldLabels = array_map(
+            fn ($field) => $field['label'],
+            array_intersect_key($catalogDefinition['field_metadata'], array_flip($columns)),
+        );
+        $definition['metadata'] = [
+            'dataset' => $data['dataset'],
+            'scope' => $data['scope'],
+            'fields' => $columns,
+            'field_labels' => $fieldLabels,
+            'exported_at' => now()->toIso8601String(),
+            ...($resolved['metadata'] ?? []),
+            'fields' => $columns,
+            'field_labels' => $fieldLabels,
+        ];
+        $artifact = ExportArtifact::create([
+            'user_id' => $request->user()->id,
+            'token' => $token,
+            'dataset' => $data['dataset'],
+            'format' => $data['format'],
+            'path' => $relative,
+            'status' => $isBackground ? 'queued' : 'ready',
+            'expires_at' => $isBackground ? null : now()->addDay(),
+            'metadata' => $definition['metadata'],
+        ]);
         if ($isBackground) dispatch(new GenerateExportArtifact($artifact->id, [
             'dataset' => $data['dataset'], 'profile_id' => $profile->id, 'scope' => $data['scope'],
             'selected' => $data['selected'] ?? [], 'filters' => $filters, 'columns' => $columns, 'metadata' => $definition['metadata'],

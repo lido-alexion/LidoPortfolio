@@ -40,9 +40,10 @@ class PortfolioAnalyticsExportProvider implements ExportDatasetProvider
         return [[
             'id' => 'portfolio-analytics',
             'label' => 'Portfolio analytics',
-            'fields' => ['metric', 'value'],
+            'fields' => ['metric_key', 'metric', 'value'],
             'field_metadata' => [
-                'metric' => ['label' => 'Metric', 'canonical' => 'metric_key'],
+                'metric_key' => ['label' => 'Metric key', 'canonical' => 'metric_key'],
+                'metric' => ['label' => 'Metric', 'canonical' => 'friendly label'],
                 'value' => ['label' => 'Value', 'canonical' => 'calculated_value'],
             ],
             'scopes' => ['full'],
@@ -56,22 +57,22 @@ class PortfolioAnalyticsExportProvider implements ExportDatasetProvider
         $this->assertDataset($dataset);
         $payload = $this->analytics->forProfile($profile, false);
         $rows = [];
-        foreach (self::FIELDS as $key => $_label) {
+        foreach (self::FIELDS as $key => $label) {
             if (array_key_exists($key, $payload)) {
-                $rows[] = ['metric' => $key, 'value' => $payload[$key]];
+                $rows[] = ['metric_key' => $key, 'metric' => $label, 'value' => $payload[$key]];
             }
         }
 
         return [
-            'columns' => ['metric', 'value'],
+            'columns' => ['metric_key', 'metric', 'value'],
             'rows' => $rows,
-            'identities' => array_column($rows, 'metric'),
+            'identities' => array_column($rows, 'metric_key'),
             'metadata' => [
                 'dataset' => $dataset,
                 'profile_id' => $profile->id,
                 'source' => 'portfolio analytics',
                 'computed_at' => $payload['computed_at'] ?? null,
-                'field_labels' => ['metric' => 'Metric', 'value' => 'Value'],
+                'field_labels' => ['metric_key' => 'Metric key', 'metric' => 'Metric', 'value' => 'Value']
             ],
         ];
     }
