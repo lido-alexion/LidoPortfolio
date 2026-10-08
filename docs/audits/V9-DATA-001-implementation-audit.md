@@ -1,7 +1,8 @@
 # V9-DATA-001 Implementation Audit
 
-**Audit base:** `463ccd4ee751cba30e6dab83a79adb5a83dc69da` (`origin/master`)
-**Status:** INCOMPLETE — do not mark IMPLEMENTED / VERIFIED. This audit covers the current worktree changes and the verification performed on 2026-10-07.
+**Audit base:** `ffa9dbcadf3cefacca14ce47b563c674d27b95e2` (`origin/master`)
+**Feature baseline commit:** `72a5c6d4` (`feat(v9): build export framework baseline`)
+**Status:** INCOMPLETE — do not mark IMPLEMENTED / VERIFIED. This audit covers the current feature branch and verification performed on 2026-10-08.
 
 ## Acceptance criteria
 
@@ -62,12 +63,12 @@ Additional acceptance evidence remains incomplete for provider adapter registrat
 
 | Command | Result |
 |---|---|
-| `git status --short --branch`, `git rev-parse HEAD`, `git rev-parse origin/master`, `git merge-base HEAD origin/master` | Branch `codex/v9-data001-completion`; HEAD and `origin/master` both `463ccd4ee751cba30e6dab83a79adb5a83dc69da`; merge base equals both. |
-| `php -l app/Services/Export/ExportFileWriter.php && php -l app/Http/Controllers/Api/ExportController.php && php -l app/Jobs/GenerateExportArtifact.php && php -l tests/Unit/Export/ExportFileWriterTest.php` (from `app/`) | Passed: all four files have no syntax errors. |
-| `vendor/bin/phpunit tests/Unit/Export` (from `app/`) | Passed: 12 tests, 31 assertions. OpenTelemetry logged connection errors to unavailable local collector `127.0.0.1:4318`; PHPUnit exit was 0. |
-| `php artisan openapi:v1 --check` (from `app/`) | Passed: OpenAPI document is current (220 operations). |
+| `git status --short --branch`, `git rev-parse HEAD`, `git rev-parse origin/master`, `git merge-base HEAD origin/master` | Branch `codex/v9-data001-completion`; HEAD `ac3bffe6` includes feature commit `72a5c6d4`; merge base equals latest `origin/master` `ffa9dbcadf3cefacca14ce47b563c674d27b95e2`. |
+| PHP syntax checks for changed export controllers, jobs, providers, writer and exception | Passed for all checked PHP files. |
+| `vendor/bin/phpunit tests/Unit/Export` (from `app/`) | Passed: 12 tests, 31 assertions; PHPUnit reported 2 notices. |
+| `php artisan openapi:v1 --check` (from `app/`) | Passed: OpenAPI document is current (221 operations). |
 | `npm run docs:static:check` (from `app/`) | Passed: static documentation contract current (53 topics). |
-| `git diff --check` (repository root) | Passed. |
-| Database-dependent checks | Not run, as requested. No MySQL command, migration, frontend suite, commit, push, or deploy was run. |
+| `git diff --check` (repository root) | Passed after merging latest master. |
+| Database-dependent, full-suite and frontend checks | Not run. No MySQL-backed export feature suite, browser suite, notification integration suite, or full CI pass is claimed. |
 
-No full backend CI, browser suite, notification integration suite, migration gate, or complete frontend suite pass is claimed. The canonical V9 wishlist remains FROZEN / IMPLEMENTATION-READY because acceptance evidence is incomplete.
+The feature baseline is committed locally and based on current `master`; it has not been pushed yet. The canonical V9 wishlist remains FROZEN / IMPLEMENTATION-READY because the acceptance evidence and unsupported capabilities listed above are incomplete.
