@@ -19,6 +19,8 @@ function json(route, body, status = 200) {
  */
 export async function installTosApiMocks(page, {
     recommendations = [OPEN_BUY_RECOMMENDATION],
+    pipelineRecommendations = null,
+    pipelineStages = { discovery: { candidates: 0 }, evaluation: { results: 0 }, recommendation: { count: 0 } },
     user = TEST_USER,
 } = {}) {
     let recs = recommendations.map((r) => ({ ...r }));
@@ -58,6 +60,10 @@ export async function installTosApiMocks(page, {
         }
         if (path.endsWith('/api/v1/protections') && method === 'GET') {
             return json(route, apiEnvelope({ protections: [] }));
+        }
+        if (path.endsWith('/api/v1/pipeline/run') && method === 'POST') {
+            if (pipelineRecommendations) recs = pipelineRecommendations.map((r) => ({ ...r }));
+            return json(route, apiEnvelope({ stages: pipelineStages }));
         }
         if (path.endsWith('/api/v1/recommendations') && method === 'GET') {
             return json(route, apiEnvelope(recs));
