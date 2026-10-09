@@ -11,13 +11,25 @@ function json(route, body, status = 200) {
 const SCREENER_META = {
     max_conditions: 40,
     indicators: [
+        { id: 'close', label: 'Close', params: [] },
+        {
+            id: 'sma',
+            label: 'SMA',
+            params: [{ id: 'period', label: 'Period', default: 20, min: 1, max: 400 }],
+        },
         {
             id: 'ema',
             label: 'EMA',
-            params: [{ id: 'period', label: 'Period', default: 50, min: 2, max: 400 }],
+            params: [{ id: 'period', label: 'Period', default: 50, min: 1, max: 400 }],
         },
     ],
-    operators: [{ id: 'gt', label: '>' }],
+    operators: [
+        { id: 'gt', label: '>' },
+        { id: 'gte', label: '≥' },
+        { id: 'lt', label: '<' },
+        { id: 'lte', label: '≤' },
+        { id: 'eq', label: '=' },
+    ],
     scopes: [{ id: 'holdings', label: 'Holdings' }],
     indexes: [],
 };
@@ -27,6 +39,7 @@ const SCREENER_META = {
  */
 export async function installInvestorWorkflowApiMocks(page, options = {}) {
     let nextScreenerId = 99;
+    const screeners = [];
     let authenticated = !options.initiallyUnauthenticated;
     let remainingLoginFailures = options.failedLoginAttempts ?? 0;
     const fundamentalInsights = options.fundamentalInsights ?? {
@@ -264,7 +277,7 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
             return json(route, { data: { watchlist_ids: [] } });
         }
         if (path.endsWith('/api/screeners') && method === 'GET') {
-            return json(route, { data: [], count: 0 });
+            return json(route, { data: screeners, count: screeners.length });
         }
         if (path.endsWith('/api/screeners') && method === 'POST') {
             const payload = request.postDataJSON();
@@ -276,15 +289,17 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
                 definition_json: payload?.definition_json,
                 is_enabled: true,
                 description: payload?.description ?? null,
-                watchlist_id: null,
-                index_symbol: null,
+                watchlist_id: payload?.watchlist_id ?? null,
+                index_symbol: payload?.index_symbol ?? null,
             };
+            screeners.push(created);
             return json(route, { data: created }, 201);
         }
         const screenerMatch = path.match(/\/api\/screeners\/(\d+)$/);
         if (screenerMatch && method === 'GET') {
+            const found = screeners.find((item) => item.id === Number(screenerMatch[1]));
             return json(route, {
-                data: {
+                data: found ?? {
                     id: Number(screenerMatch[1]),
                     name: 'E2E ROC Gate',
                     scope: 'holdings',
