@@ -3,10 +3,12 @@ import test from 'node:test';
 import { JOURNEY_TOPICS, normalizeHelpQuery, searchJourneyTopics } from '../../resources/js/src/data/journeyMetadata.js';
 
 test('journey metadata has stable IDs and actionable contracts', () => {
-    assert.equal(JOURNEY_TOPICS.length, 69);
+    assert.equal(JOURNEY_TOPICS.length, 71);
     assert.equal(new Set(JOURNEY_TOPICS.map((topic) => topic.id)).size, JOURNEY_TOPICS.length);
+    assert.deepEqual(JOURNEY_TOPICS.filter((topic) => topic.id.startsWith('AUTH-')).map((topic) => topic.id), ['AUTH-01', 'AUTH-02']);
+    assert.equal(JOURNEY_TOPICS.find((topic) => topic.id === 'AUTH-01').route, '/screeners');
     for (const topic of JOURNEY_TOPICS) {
-        assert.match(topic.id, /^(SCR|STR|REC|EXE|E2E|AI)-\d+$/);
+        assert.match(topic.id, /^(AUTH|SCR|STR|REC|EXE|E2E|AI)-\d+$/);
         assert.ok(topic.route && topic.guide && Array.isArray(topic.steps));
     }
 });

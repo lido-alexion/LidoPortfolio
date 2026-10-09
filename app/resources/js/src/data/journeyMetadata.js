@@ -240,6 +240,63 @@ export const JOURNEY_TOPICS = Object.freeze([
     "warnings": []
   },
   {
+    "id": "AUTH-01",
+    "title": "How do I sign in and return to the requested page?",
+    "aliases": [
+      "Sign in and return to the requested page",
+      "auth-01"
+    ],
+    "keywords": [
+      "sign",
+      "and",
+      "return",
+      "the",
+      "requested",
+      "page"
+    ],
+    "synonyms": [],
+    "category": "Account access",
+    "route": "/screeners",
+    "guide": "/docs/journeys/00-account-entry.html#auth-01-sign-in-and-return-to-the-requested-page",
+    "steps": [
+      "Open a protected destination such as `/screeners` while signed out.",
+      "StoX displays the Login form and keeps the requested destination for after authentication.",
+      "Enter the account email and password. Choose whether to remember the session on this device.",
+      "Select Login.",
+      "If authentication succeeds, StoX opens the protected destination that was requested."
+    ],
+    "prerequisites": [],
+    "warnings": [
+      "Public documentation can be opened without signing in. New accounts are invite-only; an invitation setup link is separate from the normal sign-in flow."
+    ]
+  },
+  {
+    "id": "AUTH-02",
+    "title": "How do I recover from rejected credentials?",
+    "aliases": [
+      "Recover from rejected credentials",
+      "auth-02"
+    ],
+    "keywords": [
+      "recover",
+      "from",
+      "rejected",
+      "credentials"
+    ],
+    "synonyms": [],
+    "category": "Account access",
+    "route": "/login",
+    "guide": "/docs/journeys/00-account-entry.html#auth-02-recover-from-rejected-credentials",
+    "steps": [
+      "Open a protected page while signed out, or open `/login` directly.",
+      "Enter an incorrect email/password combination and select Login.",
+      "Read the sign-in error and correct the credentials.",
+      "Select Login again."
+    ],
+    "prerequisites": [],
+    "warnings": []
+  },
+  {
     "id": "E2E-01",
     "title": "How do I new idea to first BUY?",
     "aliases": [

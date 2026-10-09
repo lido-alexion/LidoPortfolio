@@ -40,6 +40,13 @@ UI labels can evolve. The route and user intent are more important than minor wo
 
 ## Scenario index
 
+### Account entry
+
+| ID | Scenario | Detail |
+| --- | --- | --- |
+| AUTH-01 | Sign in and return to the requested page | [Account entry](00-account-entry.md#auth-01--sign-in-and-return-to-the-requested-page) |
+| AUTH-02 | Recover from rejected credentials | [Account entry](00-account-entry.md#auth-02--recover-from-rejected-credentials) |
+
 ### A. Screeners
 
 | ID | Scenario | Detail |

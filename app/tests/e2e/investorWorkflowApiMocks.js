@@ -27,6 +27,8 @@ const SCREENER_META = {
  */
 export async function installInvestorWorkflowApiMocks(page, options = {}) {
     let nextScreenerId = 99;
+    let authenticated = !options.initiallyUnauthenticated;
+    let remainingLoginFailures = options.failedLoginAttempts ?? 0;
     const fundamentalInsights = options.fundamentalInsights ?? {
         as_of: '2026-09-25',
         freshness: { status: 'fresh' },
@@ -105,6 +107,17 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
             return json(route, { token: 'e2e-csrf' });
         }
         if (path.endsWith('/api/auth/me') && method === 'GET') {
+            if (!authenticated) {
+                return json(route, { message: 'Unauthenticated.' }, 401);
+            }
+            return json(route, { user: options.user ?? TEST_USER });
+        }
+        if (path.endsWith('/api/auth/login') && method === 'POST') {
+            if (remainingLoginFailures > 0) {
+                remainingLoginFailures -= 1;
+                return json(route, { message: options.loginErrorMessage ?? 'Email or password is incorrect.' }, 422);
+            }
+            authenticated = true;
             return json(route, { user: options.user ?? TEST_USER });
         }
         if (path.endsWith('/api/portfolios') && method === 'GET') {

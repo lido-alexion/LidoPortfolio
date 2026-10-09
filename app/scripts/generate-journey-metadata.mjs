@@ -5,18 +5,18 @@ const root = new URL('../../docs/user-journeys/', import.meta.url);
 const output = new URL('../resources/js/src/data/journeyMetadata.js', import.meta.url);
 const publicJourneyRoot = new URL('../public/docs/journeys/', import.meta.url);
 const categories = {
-  '01-screeners.md': 'Screeners', '02-strategies.md': 'Strategies',
+  '00-account-entry.md': 'Account access', '01-screeners.md': 'Screeners', '02-strategies.md': 'Strategies',
   '03-recommendations-review.md': 'Recommendations', '04-execution-transactions.md': 'Execution',
   '05-end-to-end.md': 'End-to-end journeys',
 };
-const routeByCategory = { Screeners: '/screeners', Strategies: '/strategy', Recommendations: '/recommendations', Execution: '/transactions/pending', 'End-to-end journeys': '/' };
+const routeByCategory = { 'Account access': '/login', Screeners: '/screeners', Strategies: '/strategy', Recommendations: '/recommendations', Execution: '/transactions/pending', 'End-to-end journeys': '/' };
 const files = (await readdir(root)).filter((file) => /^\d{2}-.*\.md$/.test(file) || file === 'README.md').sort();
 await mkdir(publicJourneyRoot, { recursive: true });
 const topics = [];
 for (const file of files) {
   const source = await readFile(new URL(file, root), 'utf8');
   const category = categories[file] || 'StoX';
-  const headings = [...source.matchAll(/^##\s+((?:SCR|STR|REC|EXE|E2E|AI)-\d+)\s+—\s+(.+)$/gm)];
+  const headings = [...source.matchAll(/^##\s+((?:AUTH|SCR|STR|REC|EXE|E2E|AI)-\d+)\s+—\s+(.+)$/gm)];
   headings.forEach((heading, index) => {
     const id = heading[1]; const titleText = heading[2].trim();
     const body = source.slice(heading.index + heading[0].length, headings[index + 1]?.index || source.length);

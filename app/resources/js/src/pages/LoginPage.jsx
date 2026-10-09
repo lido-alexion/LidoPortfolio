@@ -67,9 +67,10 @@ export default function LoginPage() {
                 )}
                 <form onSubmit={submit}>
                     <div className="mb-3">
-                        <label className="form-label">Email</label>
+                        <label className="form-label" htmlFor="login-email">Email</label>
                         <input
                             type="email"
+                            id="login-email"
                             className="form-control"
                             required
                             autoComplete="email"
@@ -78,9 +79,10 @@ export default function LoginPage() {
                         />
                     </div>
                     <div className="mb-3">
-                        <label className="form-label">Password</label>
+                        <label className="form-label" htmlFor="login-password">Password</label>
                         <input
                             type="password"
+                            id="login-password"
                             className="form-control"
                             required
                             autoComplete="current-password"
@@ -100,7 +102,7 @@ export default function LoginPage() {
                             Remember me on this device
                         </label>
                     </div>
-                    {message && <div className="alert alert-danger py-2">{message}</div>}
+                    {message && <div className="alert alert-danger py-2" role="alert">{message}</div>}
                     <button className="btn btn-info w-100" type="submit" disabled={submitting}>
                         {submitting ? 'Please wait…' : 'Login'}
                     </button>
