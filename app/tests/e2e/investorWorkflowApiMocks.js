@@ -55,6 +55,7 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
     let reusableScreenerArchived = false;
     const screenerRun = options.screenerRun ?? null;
     let hasScreenerRun = false;
+    let createdInvestorStrategy = null;
     let remainingScreenerValidationFailures = options.invalidScreenerAttempts ?? 0;
     let authenticated = !options.initiallyUnauthenticated;
     let remainingLoginFailures = options.failedLoginAttempts ?? 0;
@@ -251,6 +252,37 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
                 active_orders: 0,
             }));
         }
+        if (path.endsWith('/api/v1/strategies') && method === 'POST') {
+            const payload = request.postDataJSON();
+            const config = {
+                eligibility_sources: [],
+                indicators: [{ key: 'momentum_score', label: 'Momentum', enabled: true, weight: 100 }],
+                thresholds: {},
+                portfolio_rules: { horizon_calendar_days: null, first_entry_pct: 50, max_holdings: 10 },
+                capital_allocation: { strategy: 'proportional', tie_break: 'highest_score', score_bands: [] },
+                exit_strategy: { enabled: true, mode: 'any', rules: [] },
+                market_gates: { enabled: false, min_sentiment: 45, allowed_phases: ['Strong Bull', 'Bull'], max_risk_raw: 70 },
+                recommendation_behaviour: {},
+                weakest_position_window_days: null,
+            };
+            createdInvestorStrategy = {
+                id: 8, strategy_id: 8, name: payload.name, description: payload.description, status: 'draft',
+                is_enabled: false, setup_required: true, readiness: { requirements: [{ code: 'eligibility_source_required', message: 'Add at least one eligibility Screener.' }] },
+                config, eligibility_sources: [], indicators: config.indicators, thresholds: config.thresholds,
+                portfolio_rules: config.portfolio_rules, capital_allocation: config.capital_allocation,
+                exit_strategy: config.exit_strategy, market_gates: config.market_gates,
+            };
+            return json(route, { data: createdInvestorStrategy }, 201);
+        }
+        if (path.endsWith('/api/v1/strategy') && method === 'GET' && createdInvestorStrategy) {
+            return json(route, { data: createdInvestorStrategy });
+        }
+        if (path.endsWith('/api/v1/strategy') && method === 'PUT' && createdInvestorStrategy) {
+            const payload = request.postDataJSON();
+            createdInvestorStrategy = { ...createdInvestorStrategy, ...payload, config: payload.config,
+                eligibility_sources: payload.config?.eligibility_sources ?? [] };
+            return json(route, { data: createdInvestorStrategy });
+        }
         if (path.endsWith('/api/v1/strategy') && method === 'GET') {
             return json(route, {
                 data: {
@@ -278,7 +310,9 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
             return json(route, { data: { strategy_id: 7, id: 7, name: 'Incomplete E2E Strategy', setup_required: true } });
         }
         if (path.endsWith('/api/v1/strategy-registry') && method === 'GET') {
-            return json(route, { data: [{ strategy_id: 7, id: 7, name: 'Incomplete E2E Strategy', status: 'draft', is_enabled: false, setup_required: true }] });
+            const data = [{ strategy_id: 7, id: 7, name: 'Incomplete E2E Strategy', status: 'draft', is_enabled: false, setup_required: true }];
+            if (createdInvestorStrategy) data.push({ id: createdInvestorStrategy.id, name: createdInvestorStrategy.name, status: 'draft', is_enabled: false, setup_required: true });
+            return json(route, { data });
         }
         if (path.endsWith('/api/indexes') && method === 'GET') {
             return json(route, { data: { indexes: [] } });
