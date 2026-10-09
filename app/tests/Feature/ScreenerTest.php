@@ -213,6 +213,13 @@ class ScreenerTest extends TestCase
         $run->assertJsonPath('data.stats.matched', 0);
         $run->assertJsonPath('data.stats.skipped_insufficient_data', 1);
         $run->assertJsonPath('data.stats.scanned', 1);
+
+        $runId = $run->json('data.id');
+        $this->getJson("/api/screener-runs/{$runId}")
+            ->assertOk()
+            ->assertJsonPath('data.diagnostics.total', 1)
+            ->assertJsonPath('data.diagnostics.data.0.outcome', 'skipped')
+            ->assertJsonPath('data.diagnostics.data.0.reason', 'insufficient_data');
     }
 
     public function test_shared_list_and_import(): void

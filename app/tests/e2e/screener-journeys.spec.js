@@ -245,6 +245,43 @@ test.describe('V9-UX-001 screener journeys', () => {
             await expect(page.getByRole('button', { name: /Run ID 501 · Manual · completed/ })).toBeVisible();
             expect(observedRequests.some((path) => /\/orders(?:\/|$)/.test(path))).toBe(false);
         });
+        test('SCR-09 explains non-matches and unavailable inputs from the saved run snapshot (' + viewport.name + ')', async ({ page }, testInfo) => {
+            journeyId(testInfo, 'SCR-09');
+            await seedDeterministicJourney(page, 'screener-scr09-' + viewport.name);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installInvestorWorkflowApiMocks(page, {
+                initialScreeners: [{ id: 41, name: 'Price Above MA200', scope: 'holdings', is_enabled: true,
+                    definition_json: { root: { type: 'group', op: 'AND', children: [{ type: 'condition',
+                        left: { indicator: 'close', params: {} }, operator: 'gt', weight_factor: 1,
+                        right: { indicator: 'sma', params: { period: 200 } },
+                    }] } }, description: 'Deterministic run fixture.', watchlist_id: null, index_symbol: null }],
+                screenerRun: {
+                    id: 502, screener_id: 41, status: 'completed', triggered_by: 'manual',
+                    started_at: '2026-10-09T09:00:00Z', finished_at: '2026-10-09T09:00:02Z',
+                    progress_pct: 100, error_message: null,
+                    stats: { scanned: 2, matched: 0, skipped_insufficient_data: 1, errors: 0, warnings: [] },
+                    hits: { data: [], current_page: 1, last_page: 1, total: 0 },
+                    diagnostics: { data: [
+                        { id: 701, symbol: 'TCS', exchange: 'NSE', name: 'Tata Consultancy Services',
+                            outcome: 'non_match', reason: null, metrics: [{ left: 'Close', left_value: 9,
+                                operator: 'gt', weight_factor: 1, right: 'SMA(200)', right_value: 10,
+                                right_scaled: 10, condition_matched: false }] },
+                        { id: 702, symbol: 'INFY', exchange: 'NSE', name: 'Infosys',
+                            outcome: 'skipped', reason: 'insufficient_data', metrics: [] },
+                    ], current_page: 1, last_page: 1, total: 2 },
+                },
+            });
+            await page.goto('/screeners/41');
+            await page.getByRole('button', { name: 'Run now' }).click();
+            await page.getByText('Evaluation diagnostics (2)').click();
+            await expect(page.getByText('Evaluation diagnostics (2)')).toBeVisible();
+            await expect(page.getByText('TCS · NSE')).toBeVisible();
+            await expect(page.getByText('Close=9.00 > SMA(200) · failed')).toBeVisible();
+            await expect(page.getByText('INFY · NSE')).toBeVisible();
+            await expect(page.getByText('insufficient data', { exact: true })).toBeVisible();
+            await expect(page.getByText('No predicates evaluated; required input was unavailable.')).toBeVisible();
+            await expect(page.getByText(/snapshots from this run/)).toBeVisible();
+        });
         test('SCR-07 imports a shared screener as an active-portfolio copy (' + viewport.name + ')', async ({ page }, testInfo) => {
             journeyId(testInfo, 'SCR-07');
             await seedDeterministicJourney(page, 'screener-scr07-' + viewport.name);

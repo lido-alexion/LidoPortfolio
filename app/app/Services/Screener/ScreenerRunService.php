@@ -10,6 +10,7 @@ use App\Models\Screener;
 use App\Models\ScreenerBacktestDay;
 use App\Models\ScreenerBacktestHit;
 use App\Models\ScreenerRun;
+use App\Models\ScreenerRunDiagnostic;
 use App\Models\ScreenerRunHit;
 use App\Models\Stock;
 use App\Models\StockPrice;
@@ -160,6 +161,10 @@ class ScreenerRunService
                 $stock = $stocks->get($stockId);
                 if ($stock === null) {
                     $stats['errors'] = ((int) ($stats['errors'] ?? 0)) + 1;
+                    ScreenerRunDiagnostic::query()->updateOrCreate(
+                        ['run_id' => $run->id, 'symbol' => 'ID-'.$stockId],
+                        ['outcome' => 'processing_error', 'reason' => 'stock_unavailable'],
+                    );
                     $cursor++;
 
                     continue;
@@ -169,6 +174,9 @@ class ScreenerRunService
                     $bars = $this->loadBars((int) $stockId, $fetchLimit);
                     $result = $this->evaluation->evaluateStock($definition, $bars, $entityBars, $stock);
                     $stats['scanned'] = ((int) ($stats['scanned'] ?? 0)) + 1;
+                    $outcome = $result['skipped']
+                        ? 'skipped'
+                        : ($result['matched'] ? 'matched' : 'non_match');
 
                     if ($result['skipped']) {
                         $stats['skipped_insufficient_data'] = ((int) ($stats['skipped_insufficient_data'] ?? 0)) + 1;
@@ -183,8 +191,31 @@ class ScreenerRunService
                             'metrics_json' => $result['metrics'],
                         ]);
                     }
+
+                    ScreenerRunDiagnostic::query()->updateOrCreate(
+                        ['run_id' => $run->id, 'stock_id' => $stock->id],
+                        [
+                            'symbol' => $stock->symbol,
+                            'exchange' => $stock->exchange,
+                            'name' => $stock->name,
+                            'outcome' => $outcome,
+                            'reason' => $result['skip_reason'],
+                            'metrics_json' => $result['metrics'],
+                        ],
+                    );
                 } catch (Throwable $e) {
                     $stats['errors'] = ((int) ($stats['errors'] ?? 0)) + 1;
+                    ScreenerRunDiagnostic::query()->updateOrCreate(
+                        ['run_id' => $run->id, 'stock_id' => $stock->id],
+                        [
+                            'symbol' => $stock->symbol,
+                            'exchange' => $stock->exchange,
+                            'name' => $stock->name,
+                            'outcome' => 'processing_error',
+                            'reason' => 'evaluation_error',
+                            'metrics_json' => null,
+                        ],
+                    );
                     Log::warning('Screener stock evaluation failed', [
                         'run_id' => $run->id,
                         'stock_id' => $stockId,
@@ -607,7 +638,7 @@ class ScreenerRunService
     /**
      * @return array<string,mixed>
      */
-    public function formatRun(ScreenerRun $run, bool $withHits = false, int $hitPage = 1, int $perPage = 100): array
+    public function formatRun(ScreenerRun $run, bool $withHits = false, int $hitPage = 1, int $perPage = 100, int $diagnosticsPage = 1): array
     {
         $stats = $run->stats_json ?? [];
         $data = [
@@ -640,6 +671,10 @@ class ScreenerRunService
                 ->where('run_id', $run->id)
                 ->orderBy('symbol')
                 ->paginate($perPage, ['*'], 'page', $hitPage);
+            $diagnostics = ScreenerRunDiagnostic::query()
+                ->where('run_id', $run->id)
+                ->orderBy('symbol')
+                ->paginate($perPage, ['*'], 'diagnostics_page', $diagnosticsPage);
 
             $data['hits'] = [
                 'data' => $paginator->getCollection()->map(fn (ScreenerRunHit $h) => [
@@ -653,6 +688,21 @@ class ScreenerRunService
                 'current_page' => $paginator->currentPage(),
                 'last_page' => $paginator->lastPage(),
                 'total' => $paginator->total(),
+            ];
+            $data['diagnostics'] = [
+                'data' => $diagnostics->getCollection()->map(fn (ScreenerRunDiagnostic $d) => [
+                    'id' => $d->id,
+                    'stock_id' => $d->stock_id,
+                    'symbol' => $d->symbol,
+                    'exchange' => $d->exchange,
+                    'name' => $d->name,
+                    'outcome' => $d->outcome,
+                    'reason' => $d->reason,
+                    'metrics' => $d->metrics_json,
+                ])->values(),
+                'current_page' => $diagnostics->currentPage(),
+                'last_page' => $diagnostics->lastPage(),
+                'total' => $diagnostics->total(),
             ];
         }
 
