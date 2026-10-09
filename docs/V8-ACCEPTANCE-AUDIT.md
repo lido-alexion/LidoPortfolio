@@ -1,6 +1,6 @@
 **Retirement update (2026-10-06): FEAT-063, FEAT-065 and V9-DATA-002 are retired from the active repository. The dated evidence and checks below are historical records and do not indicate current operation or acceptance work.**
 
-# StoX V8 acceptance audit (historical snapshot; updated 2026-10-06)
+# StoX V8 acceptance audit (historical snapshot; updated 2026-10-09)
 
 Authoritative specs: `docs/archive/specs/LidoPortfolio-V8-Wishlist.md`. Implementation ledger: `docs/V8-IMPLEMENTATION-LEDGER.md`. Requirement-level gaps: [V8-GAP-AUDIT.md](V8-GAP-AUDIT.md).
 
@@ -9,7 +9,7 @@ Status key: **IMPLEMENTED / FUNCTIONAL ACCEPTANCE OPEN** | **COMPLETE** | **REVI
 | Epic | Status | Evidence |
 |------|--------|----------|
 | FEAT-052 OpenTelemetry / LidoTelemetry | REVIEW | Production Collector transform now strips the observed URL/query attributes; a fresh synthetic trace reached LidoTelemetry with correct parentage and no marker in either received span. Broader privacy, propagation, metrics and fail-open acceptance remain open |
-| FEAT-054 Historical fundamentals | IMPLEMENTED / FUNCTIONAL ACCEPTANCE OPEN | PO stock/field coverage criteria pass: 4,696/5,148 overall; 497 current-fact stocks in the production Nifty cache (above the 490 minimum); all 25 non-exempt fields pass. Broader deployed provider/runtime acceptance remains open; see 2026-10-07 reconciliation below |
+| FEAT-054 Historical fundamentals | IMPLEMENTED / FUNCTIONAL ACCEPTANCE OPEN | PO-approved relaxed stock/field coverage criteria pass: 4,696/5,148 overall; 497/501 cached Nifty symbols have current facts, above the 490 minimum; all 25 non-exempt fields pass. The PO accepted the cached constituent view without an independent official-list refresh. Broader deployed provider/runtime acceptance remains open; see 2026-10-07 reconciliation below |
 | FEAT-055 Access requests | REVIEW | Local §FEAT-055 checklist (055-01–055-10) + `AccessRequestWorkflowTest`; real Turnstile/mail/deployed multi-worker validation remains external |
 | FEAT-056 ML lifecycle | REVIEW | Drift trigger, promotion review, SSE, cancel, retries, notifications, retention API + lifecycle tick gate, and stale-run recovery; deployed lifecycle worker/runtime remains external |
 | FEAT-057 ML feature engineering / training | REVIEW | Registry `v8-registry-11`, 50/50 implemented features; calibration, chronological validation, durable candidate archive, bounded same-architecture 1m/3m/6m training, partition coverage and artifact reload/contribution evidence; production/browser acceptance remains external |
@@ -151,4 +151,4 @@ Read-only check of stored facts; no NSE/BSE request, external refresh, or data f
 | At least 50% of all eligible stocks covered | Pass | 4,696 / 5,148 = 91.2% in the persisted-fact report snapshot dated 2026-10-05. |
 | No non-exempt field empty; each at least 50% among covered stocks | Pass | All 25 non-exempt canonical facts pass both tests in the 2026-10-05 persisted-fact report. The 15 exceptions are the PO-approved list in the decision document. |
 
-The cache was within its seven-day freshness window when checked. The Nifty check uses the production application's cached constituents, as required for a read-only check; no separate exchange refresh was performed. This closes the PO coverage thresholds. It does not close the broader provider and deployed-runtime checks tracked for FEAT-054.
+The cache was within its seven-day freshness window when checked. The Nifty check uses the production application's cached constituents; no NSE/BSE request, external refresh, or data fetch was made. Following explicit PO consideration, this cached constituent view was accepted under the relaxed 98% criterion: 497/501 cached symbols with current facts exceeds the accepted 490-stock minimum, despite four unmapped cache symbols. This closes the PO-approved stock/field coverage gate and supports **IMPLEMENTED / FUNCTIONAL ACCEPTANCE OPEN**. Broader provider and deployed-runtime checks remain open.
