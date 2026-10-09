@@ -108,7 +108,7 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
             'historical_identity_mapped_count' => $historicalIdentityCount,
             'unmapped_reason_counts' => $reasons,
         ];
-        foreach (['archive_sha256', 'archive_url'] as $key) {
+        foreach (['archive_sha256', 'archive_url', 'source_id'] as $key) {
             if (isset($file[$key])) {
                 $diagnostics[$key] = $file[$key];
             }
@@ -182,11 +182,28 @@ class NseHistoricalUniverseArchiveProvider implements MlHistoricalUniverseProvid
 
         // Cached CSVs must pass the same date checks as newly staged evidence.
         $validated = $this->findSourceFile($date, $csvPath, 'nse_cash_bhavcopy');
+        if (! is_file($archivePath)) {
+            $payload = $bootstrap->downloadOfficial($descriptor);
+            $temporary = $archivePath.'.'.bin2hex(random_bytes(6)).'.tmp';
+            if (file_put_contents($temporary, $payload, LOCK_EX) !== strlen($payload)) {
+                @unlink($temporary);
+                throw new MlHistoricalUniverseProviderException('Official NSE archive could not be staged.', true);
+            }
+            $contents = app(MlAcceptanceSourceService::class)->safeContents($temporary, $descriptor['filename'], $date);
+            if (! hash_equals(hash_file('sha256', $csvPath) ?: '', hash('sha256', $contents))) {
+                @unlink($temporary);
+                throw new MlHistoricalUniverseProviderException('Cached NSE CSV differs from the current official archive.', false);
+            }
+            chmod($temporary, 0400);
+            rename($temporary, $archivePath);
+        }
+        $sealedSource = app(MlAcceptanceSourceService::class)->sealOfficialAcquisition($archivePath, $descriptor, $date);
 
         return [
             ...$validated,
-            'archive_sha256' => $archiveSha ?: hash('sha256', (string) file_get_contents($csvPath)),
+            'archive_sha256' => $archiveSha ?: (hash_file('sha256', $archivePath) ?: null),
             'archive_url' => $descriptor['url'],
+            'source_id' => $sealedSource->id,
         ];
     }
 
