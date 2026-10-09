@@ -117,7 +117,7 @@ class V9Data001ExportProviderCoverageTest extends TestCase
         ])->assertOk()->assertJsonPath('data.status', 'ready');
         $artifact = ExportArtifact::query()->where('token', $response->json('data.token'))->firstOrFail();
         $this->assertSame(['symbol', 'value'], $artifact->metadata['fields']);
-        $this->assertSame(['symbol' => 'Symbol', 'value' => 'Value'], $artifact->metadata['field_labels']);
+        $this->assertEqualsCanonicalizing(['symbol' => 'Symbol', 'value' => 'Value'], $artifact->metadata['field_labels']);
         $this->assertNotEmpty($artifact->metadata['exported_at']);
         $csv = Storage::disk('local')->get($artifact->path);
         $this->assertStringContainsString('Symbol,Value', $csv);

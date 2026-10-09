@@ -109,7 +109,9 @@ class PortfolioSnapshotExportProvider implements StreamingExportDatasetProvider
                 ->orderByDesc('snapshot_date')
                 ->orderByDesc('id')
                 ->limit($limit);
-            $query = PortfolioSnapshot::query()->whereIn('id', $latestIds);
+            $query = PortfolioSnapshot::query()
+                ->joinSub($latestIds, 'latest_snapshot_ids', fn ($join) => $join->on('portfolio_portfolio_snapshots.id', '=', 'latest_snapshot_ids.id'))
+                ->select('portfolio_portfolio_snapshots.*');
         }
 
         $direction = ($filters['sort_direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
