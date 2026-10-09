@@ -91,7 +91,7 @@ test.describe('V9-UX-001 recommendation journeys', () => {
             await expect(dialog.getByRole('heading', { name: 'Factor breakdown' })).toBeVisible();
             await expect(dialog).toContainText('trend_up');
             await expect(dialog.getByRole('heading', { name: 'Execution plan' })).toBeVisible();
-            await dialog.getByRole('button', { name: 'Close' }).click();
+            await dialog.getByRole('button', { name: 'Close' }).last().click();
             await expect(dialog).toHaveCount(0);
         });
 
@@ -241,6 +241,76 @@ test.describe('V9-UX-001 recommendation journeys', () => {
             await expect(dialog).toContainText('Partially funded — execute ₹0 of ₹50,000.');
             await expect(dialog.getByRole('row').filter({ hasText: 'Actual execution amount' })).toContainText('₹0');
             await expect(dialog.getByRole('row').filter({ hasText: 'Unresolved' })).toContainText('₹50,000');
+            expect(observedRequests.some((path) => /\/orders(?:\/|$)/.test(path))).toBe(false);
+        });
+
+        test('REC-12 routes superseded intent to its replacement (' + viewport.name + ')', async ({ page }, testInfo) => {
+            journeyId(testInfo, 'REC-12');
+            await seedDeterministicJourney(page, 'recommendation-rec12-' + viewport.name);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            const superseded = {
+                ...OPEN_BUY_RECOMMENDATION,
+                id: 712,
+                strategy_name: 'Momentum Core',
+                status: 'superseded',
+                lifecycle_status: 'superseded',
+                review_status: 'superseded',
+                can_review: false,
+                superseded_by_id: 713,
+                target_amount: 50000,
+            };
+            const replacement = {
+                ...OPEN_BUY_RECOMMENDATION,
+                id: 713,
+                strategy_name: 'Momentum Core',
+                strategy_version: 2,
+                position_target_amount: 75000,
+                status: 'pending_review',
+                lifecycle_status: 'pending_review',
+                review_status: 'pending_review',
+                can_review: true,
+                target_amount: 75000,
+                suggested_quantity: 5,
+                suggested_investment_amount: 37500,
+                reasoning: 'Replacement after the strategy target changed.',
+                evidence: {
+                    ...OPEN_BUY_RECOMMENDATION.evidence,
+                    strategy_version: 2,
+                },
+            };
+            await installTosApiMocks(page, { recommendations: [superseded, replacement] });
+            const observedRequests = [];
+            page.on('request', (request) => observedRequests.push(new URL(request.url()).pathname));
+            await page.goto('/recommendations');
+            const oldRow = page.getByRole('row').filter({ hasText: 'Momentum Core' }).filter({ hasText: 'superseded' });
+            await expect(oldRow).toHaveCount(0);
+            const historyRequest = page.waitForRequest((request) => (
+                request.method() === 'GET'
+                && new URL(request.url()).pathname.endsWith('/api/v1/recommendations')
+                && new URL(request.url()).searchParams.get('all') === '1'
+            ));
+            await page.getByLabel('Include closed history').check();
+            await historyRequest;
+            await expect(oldRow).toBeVisible();
+            await oldRow.getByRole('button', { name: 'Review' }).click();
+            let dialog = page.getByRole('dialog');
+            await expect(dialog).toContainText('superseded');
+            await expect(dialog).toContainText('no longer a current execution instruction');
+            await expect(dialog.getByRole('button', { name: 'View replacement recommendation' })).toBeVisible();
+            await expect(dialog.getByRole('button', { name: 'Approve' })).toHaveCount(0);
+            const replacementRequest = page.waitForRequest((request) => (
+                request.method() === 'GET' && new URL(request.url()).pathname.endsWith('/api/v1/recommendations/713')
+            ));
+            await dialog.getByRole('button', { name: 'View replacement recommendation' }).click();
+            await replacementRequest;
+            dialog = page.getByRole('dialog');
+            await expect(dialog).toContainText('Open INFY');
+            await expect(dialog).toContainText('pending_review');
+            await expect(dialog).toContainText('Momentum Core');
+            await expect(dialog).toContainText('Target ₹75000');
+            await expect(dialog).toContainText('Version 2');
+            await expect(dialog).toContainText('5 shares');
+            await expect(dialog).toContainText('Replacement after the strategy target changed.');
             expect(observedRequests.some((path) => /\/orders(?:\/|$)/.test(path))).toBe(false);
         });
 

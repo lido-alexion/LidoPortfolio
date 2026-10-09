@@ -55,6 +55,7 @@ test.describe('V9-UX-001 strategy journeys', () => {
             expect(payload.config).toHaveProperty('exit_strategy');
             expect(payload.config).toHaveProperty('market_gates');
             await expect(page.getByRole('button', { name: 'Enable', exact: true })).toBeDisabled();
+        });
         test('STR-02 builds a screener first, then uses it in a new strategy (' + viewport.name + ')', async ({ page }, testInfo) => {
             journeyId(testInfo, 'STR-02');
             await seedDeterministicJourney(page, 'strategy-str02-' + viewport.name);
@@ -450,7 +451,6 @@ test.describe('V9-UX-001 strategy journeys', () => {
             expect(confirmationAccepted).toBe(true);
             await expect(page.getByRole('row', { name: /momentum-core.*Momentum Core/ })).toContainText('archived');
             await expect(page.getByRole('row', { name: /quality-core.*Quality Core/ })).toContainText('active');
-        });
         });
     }
 });

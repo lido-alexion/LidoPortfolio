@@ -67,7 +67,10 @@ export async function installTosApiMocks(page, {
             return json(route, apiEnvelope({ stages: pipelineStages }));
         }
         if (path.endsWith('/api/v1/recommendations') && method === 'GET') {
-            return json(route, apiEnvelope(recs));
+            const visibleRecs = url.searchParams.get('all') === '1'
+                ? recs
+                : recs.filter((r) => r.status !== 'superseded');
+            return json(route, apiEnvelope(visibleRecs));
         }
         const recMatch = path.match(/\/api\/v1\/recommendations\/(\d+)$/);
         if (recMatch && method === 'GET') {
