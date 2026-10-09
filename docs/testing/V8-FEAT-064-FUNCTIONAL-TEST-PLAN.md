@@ -16,15 +16,27 @@ Use this plan to complete FEAT-064 production acceptance after the build is stab
 - [ ] Confirm no deployment or configuration change is in progress.
 - [ ] Re-read active Strategies 3, 4, 5, 7 and bindings 42, 43, 44, 47; record current versions and enabled state.
 - [ ] Re-read Screener 4 and 5 current definitions, artifact versions, semantic hashes and every immutable version row/hash.
-- [ ] Stop and refresh this plan's evidence if identities differ from the 2026-10-06 observation.
+- [ ] Stop and refresh this plan's evidence if identities differ from the 2026-10-09 read-only observation.
 
 ## Gate 1 — immutable Screener snapshot reconciliation
 
 - [ ] Trace definition history/audit records to establish the intended semantics of current versions for Screeners 4 and 5.
-- [ ] Implement and test an idempotent recovery for the missing current immutable snapshot; do not change existing v1 rows or assign their hashes to current definitions.
-- [ ] Verify monotonically increasing version identifiers, exact semantic hash match, safe retry, and unchanged historical run/backtest resolution.
-- [ ] Record resulting Screener version IDs, hashes and migration/repair evidence.
-- [ ] If the intended v2 definitions cannot be established, stop; do not adopt or fabricate a version.
+- [ ] Implement and test an idempotent recovery for missing immutable snapshots; do not change existing v1 rows or assign their hashes to current definitions.
+- [ ] For the known reconciled production state, restore Screener 4 v2 with expected hash `sha256:d3edf5394abd4066e1e894e73abbbe55057c69e0f0ee3915cf116028ffc9bae4`, using its exact immutable v3 snapshot as proof; preserve v1 and v3.
+- [ ] Restore Screener 5 v2 with expected hash `sha256:59d3e174bc606b42e291ff06c24301de334356d5175a9a74a5ab7b59245d6cdb`, using published same-lineage Screener artifact-version row 39 as proof; preserve v1.
+- [ ] Run each repair with `--dry-run` first. If a proof/hash check fails or a conflicting row exists, stop and refresh the evidence; do not call generic `ensureCurrentVersion()` to fill a version gap, because it can increment the current version.
+- [ ] Verify exact semantic hash match, safe retry, and unchanged historical run/backtest resolution.
+- [ ] Record resulting Screener version IDs, hashes and repair evidence.
+- [ ] If either proof/hash check fails or a conflicting target row exists, stop; do not adopt or fabricate a version.
+
+After Gate 0 reconfirms the same IDs and hashes, run these one at a time in the deployed `current` release. First run with `--dry-run`; proceed only on the exact success message, then repeat without `--dry-run`:
+
+```bash
+php artisan v8:repair-screener-version-snapshot --screener=4 --version=2 --expected-hash=sha256:d3edf5394abd4066e1e894e73abbbe55057c69e0f0ee3915cf116028ffc9bae4 --proof-version=3 --change-notes='Reconstructed approved v2; exact match to immutable v3 and PO-accepted definition' --dry-run
+php artisan v8:repair-screener-version-snapshot --screener=5 --version=2 --expected-hash=sha256:59d3e174bc606b42e291ff06c24301de334356d5175a9a74a5ab7b59245d6cdb --proof-artifact-version=39 --change-notes='Reconstructed v2 from same-lineage published Screener artifact evidence' --dry-run
+```
+
+Repeat the corresponding command without `--dry-run` only after the dry run validates the exact current production state. The command is idempotent and writes no Screeners, Strategies, runs, recommendations or transactions beyond the missing immutable snapshot row.
 
 ## Gate 2 — code and CI
 
