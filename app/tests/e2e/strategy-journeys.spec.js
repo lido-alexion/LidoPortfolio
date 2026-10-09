@@ -286,6 +286,23 @@ test.describe('V9-UX-001 strategy journeys', () => {
             expect(config.market_gates).toMatchObject({ enabled: true, min_sentiment: 60, max_risk_raw: 55, allowed_phases: ['Bear'] });
             expect(requests.some((path) => path.endsWith('/api/v1/recommendations/run'))).toBe(false);
         });
+        test('STR-10 edits an existing strategy in place without running the pipeline (' + viewport.name + ')', async ({ page }, testInfo) => {
+            journeyId(testInfo, 'STR-10');
+            await seedDeterministicJourney(page, 'strategy-str10-' + viewport.name);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installInvestorWorkflowApiMocks(page);
+            const requests = [];
+            page.on('request', (request) => requests.push(new URL(request.url()).pathname));
+            await page.goto('/strategy?strategy_id=7');
+            await page.locator('#strat-name').fill('Reviewed Momentum Policy');
+            const saveRequest = page.waitForRequest((request) => (
+                request.method() === 'PUT' && new URL(request.url()).pathname.endsWith('/api/v1/strategy')
+            ));
+            await page.getByRole('button', { name: 'Save', exact: true }).click();
+            const payload = (await saveRequest).postDataJSON();
+            expect(payload).toMatchObject({ strategy_id: 7, name: 'Reviewed Momentum Policy' });
+            expect(requests.some((path) => path.endsWith('/api/v1/recommendations/run'))).toBe(false);
+        });
         });
     }
 });
