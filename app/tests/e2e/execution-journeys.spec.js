@@ -228,3 +228,119 @@ test.describe('V9-UX-001 broker cancellation lifecycle', () => {
         });
     }
 });
+
+
+test.describe('V9-UX-001 actual transaction recording', () => {
+    for (const viewport of VIEWPORTS) {
+        test(`EXE-02 records actual fill details in the ledger (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'EXE-02');
+            await seedDeterministicJourney(page, `execution-exe02-${viewport.name}`);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installTosApiMocks(page);
+            let savedTransaction = null;
+            await page.route('**/api/stocks/validate', (route) => route.fulfill({
+                json: { source: 'test fixture', data: { id: 42, symbol: 'INFY', name: 'Infosys Limited', exchange: 'NSE' }, meta: { cached: false } },
+            }));
+            await page.route('**/api/settings', (route) => route.fulfill({ json: { data: { fee_components: [] } } }));
+            await page.route('**/api/transactions*', async (route) => {
+                if (route.request().method() === 'POST') {
+                    savedTransaction = route.request().postDataJSON();
+                    await route.fulfill({ json: { message: 'Transaction saved', data: { id: 420 } } });
+                    return;
+                }
+                await route.fulfill({ json: { data: [] } });
+            });
+
+            await page.goto('/transactions');
+            await page.getByLabel('Stock symbol').fill('INFY');
+            await page.getByRole('button', { name: 'Validate symbol' }).click();
+            await expect(page.getByText(/Validated via test fixture/)).toBeVisible();
+            await page.getByLabel('Quantity').fill('2');
+            await page.getByLabel('Price').fill('3500');
+            await page.getByRole('button', { name: 'Save Transaction' }).click();
+            await expect(page.getByText('Transaction saved')).toBeVisible();
+            expect(savedTransaction).toMatchObject({
+                stock_id: 42,
+                type: 'buy',
+                quantity: 2,
+                price: 3500,
+                transaction_date: expect.any(String),
+            });
+        });
+    }
+});
+
+
+async function installSemiAutomaticMocks(page, recommendation) {
+    await installTosApiMocks(page, { recommendations: [] });
+    await page.route('**/api/v1/execution/mode', (route) => route.fulfill({
+        json: { success: true, data: {
+            execution_mode: 'semi_automatic',
+            execution_code_label: 'StoX execution code — Microsoft Authenticator',
+            blockers: [],
+            can_submit_semi_automatic: true,
+            can_submit_automatic: false,
+        } },
+    }));
+    await page.route('**/api/v1/recommendations/pending-execution', (route) => route.fulfill({
+        json: { success: true, data: [recommendation], meta: { cash: { cash_balance: 50000, reserved_cash: 17500, available_investable_cash: 32500 } } },
+    }));
+}
+
+test.describe('V9-UX-001 semi-automatic authorization', () => {
+    for (const viewport of VIEWPORTS) {
+        test(`EXE-03 submits only the selected approved intent after explicit authorization (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'EXE-03');
+            await seedDeterministicJourney(page, `execution-exe03-${viewport.name}`);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            const recommendation = {
+                ...OPEN_BUY_RECOMMENDATION,
+                id: 903,
+                status: 'pending_execution',
+                execution_status: 'pending',
+                order_side: 'buy',
+                suggested_quantity: 5,
+                suggested_investment_amount: 17500,
+                reserved_amount: 17500,
+            };
+            await installSemiAutomaticMocks(page, recommendation);
+            let submitPayload = null;
+            await page.route('**/api/v1/execution/submit-selected', async (route) => {
+                submitPayload = route.request().postDataJSON();
+                await route.fulfill({ json: { success: true, data: { submitted: 1, blocked: 0, skipped: 0, results: [] } } });
+            });
+
+            await page.goto('/transactions/pending');
+            await page.getByLabel('Select INFY').check();
+            await page.getByLabel('StoX execution code — Microsoft Authenticator').fill('123456');
+            await page.getByRole('button', { name: 'Accept / Execute Selected' }).click();
+            await expect(page.getByText('Submitted to broker')).toBeVisible();
+            expect(submitPayload).toEqual({ recommendation_ids: [903], totp: '123456' });
+        });
+
+        test(`EXE-04 identifies the StoX authenticator code and separates it from recovery codes (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'EXE-04');
+            await seedDeterministicJourney(page, `execution-exe04-${viewport.name}`);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            const recommendation = {
+                ...OPEN_BUY_RECOMMENDATION,
+                id: 904,
+                status: 'pending_execution',
+                execution_status: 'pending',
+                order_side: 'buy',
+            };
+            await installSemiAutomaticMocks(page, recommendation);
+            let submitCalls = 0;
+            await page.route('**/api/v1/execution/submit-selected', async (route) => {
+                submitCalls++;
+                await route.fulfill({ json: { success: true, data: { submitted: 0, blocked: 1, skipped: 0, results: [] } } });
+            });
+
+            await page.goto('/transactions/pending');
+            await expect(page.getByLabel('StoX execution code — Microsoft Authenticator')).toBeVisible();
+            await expect(page.getByText(/recovery codes are one-time backups and are not accepted here/)).toBeVisible();
+            await expect(page.getByRole('button', { name: 'Accept / Execute Selected' })).toBeDisabled();
+            expect(submitCalls).toBe(0);
+        });
+    }
+});

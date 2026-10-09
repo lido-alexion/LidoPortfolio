@@ -17,3 +17,11 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - name: Run canonical journey verification
         run: ./scripts/verify-ci.sh --journeys
+      - name: Preserve nightly journey failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-journey-evidence-${{ github.run_id }}
+          path: app/tests/e2e/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
