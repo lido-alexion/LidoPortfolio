@@ -291,6 +291,7 @@ test.describe('V9-UX-001 semi-automatic authorization', () => {
     for (const viewport of VIEWPORTS) {
         test(`EXE-03 submits only the selected approved intent after explicit authorization (${viewport.name})`, async ({ page }, testInfo) => {
             journeyId(testInfo, 'EXE-03');
+            journeyId(testInfo, 'EXE-06');
             await seedDeterministicJourney(page, `execution-exe03-${viewport.name}`);
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
             const recommendation = {
@@ -341,6 +342,104 @@ test.describe('V9-UX-001 semi-automatic authorization', () => {
             await expect(page.getByText(/recovery codes are one-time backups and are not accepted here/)).toBeVisible();
             await expect(page.getByRole('button', { name: 'Accept / Execute Selected' })).toBeDisabled();
             expect(submitCalls).toBe(0);
+        });
+    }
+});
+
+
+test.describe('V9-UX-001 strategy-owned SELL execution', () => {
+    for (const viewport of VIEWPORTS) {
+        test(`EXE-07 submits only the strategy-owned EXIT quantity (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'EXE-07');
+            await seedDeterministicJourney(page, `execution-exe07-${viewport.name}`);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            const recommendation = {
+                ...OPEN_BUY_RECOMMENDATION,
+                id: 907,
+                status: 'pending_execution',
+                execution_status: 'pending',
+                order_side: 'sell',
+                portfolio_action: 'EXIT',
+                ui_label: 'EXIT',
+                strategy_id: 17,
+                strategy_name: 'Momentum Core',
+                holding_episode_id: 'momentum-core-lot-17',
+                suggested_quantity: 10,
+                suggested_investment_amount: 35000,
+                reference_price: 3500,
+            };
+            await installSemiAutomaticMocks(page, recommendation);
+            let submitPayload = null;
+            await page.route('**/api/v1/execution/submit-selected', async (route) => {
+                submitPayload = route.request().postDataJSON();
+                await route.fulfill({ json: { success: true, data: { submitted: 1, blocked: 0, skipped: 0, results: [] } } });
+            });
+
+            await page.goto('/transactions/pending');
+            const row = page.getByRole('row').filter({ hasText: 'INFY' });
+            await expect(row).toContainText('Momentum Core');
+            await expect(row).toContainText('EXIT');
+            await expect(row).toContainText('10');
+            await row.getByLabel('Select INFY').check();
+            await page.getByLabel('StoX execution code — Microsoft Authenticator').fill('123456');
+            await page.getByRole('button', { name: 'Accept / Execute Selected' }).click();
+            await expect(page.getByText('Submitted to broker')).toBeVisible();
+            expect(submitPayload).toEqual({ recommendation_ids: [907], totp: '123456' });
+        });
+    }
+});
+
+
+test.describe('V9-UX-001 broker final and partial outcomes', () => {
+    for (const viewport of VIEWPORTS) {
+        test(`EXE-10 does not record a transaction for a final unfilled cancellation (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'EXE-10');
+            await seedDeterministicJourney(page, `execution-exe10-${viewport.name}`);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installTosApiMocks(page);
+            const order = { id: 910, symbol: 'INFY', side: 'buy', quantity: 5, status: 'pending', broker_status: 'cancelled', filled_quantity: 0 };
+            await page.route('**/api/v1/review/dashboard', (route) => route.fulfill({ json: { success: true, data: { portfolio: {}, actionable_counts: {}, informational_counts: {}, outcomes: [], informational_outcomes: [], recent_reviews: [] } } }));
+            await page.route('**/api/v1/orders', (route) => route.fulfill({ json: { success: true, data: [order] } }));
+
+            await page.goto('/review');
+            const row = page.getByRole('row').filter({ hasText: 'INFY' });
+            await expect(row).toContainText('cancelled');
+            await expect(row).toContainText('0');
+            await expect(row.getByRole('button', { name: 'Add transaction' })).toHaveCount(0);
+        });
+
+        test(`EXE-11 shows a partial fill and remaining in-flight state without a duplicate ledger action (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'EXE-11');
+            await seedDeterministicJourney(page, `execution-exe11-${viewport.name}`);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installTosApiMocks(page);
+            const order = { id: 911, symbol: 'INFY', side: 'buy', quantity: 5, status: 'pending', broker_status: 'partial', filled_quantity: 2, average_fill_price: 3499 };
+            await page.route('**/api/v1/review/dashboard', (route) => route.fulfill({ json: { success: true, data: { portfolio: {}, actionable_counts: {}, informational_counts: {}, outcomes: [], informational_outcomes: [], recent_reviews: [] } } }));
+            await page.route('**/api/v1/orders', (route) => route.fulfill({ json: { success: true, data: [order] } }));
+
+            await page.goto('/review');
+            const row = page.getByRole('row').filter({ hasText: 'INFY' });
+            await expect(row).toContainText('partial');
+            await expect(row).toContainText('2');
+            await expect(row.getByRole('button', { name: 'Reconcile' })).toBeVisible();
+            await expect(row.getByRole('button', { name: 'Add transaction' })).toHaveCount(0);
+        });
+
+        test(`EXE-12 reports broker rejection reason and does not create a transaction (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'EXE-12');
+            await seedDeterministicJourney(page, `execution-exe12-${viewport.name}`);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installTosApiMocks(page);
+            const order = { id: 912, symbol: 'INFY', side: 'buy', quantity: 5, status: 'pending', broker_status: 'rejected', broker_error_message: 'Insufficient funds', filled_quantity: 0 };
+            await page.route('**/api/v1/review/dashboard', (route) => route.fulfill({ json: { success: true, data: { portfolio: {}, actionable_counts: {}, informational_counts: {}, outcomes: [], informational_outcomes: [], recent_reviews: [] } } }));
+            await page.route('**/api/v1/orders', (route) => route.fulfill({ json: { success: true, data: [order] } }));
+
+            await page.goto('/review');
+            const row = page.getByRole('row').filter({ hasText: 'INFY' });
+            await expect(row).toContainText('rejected');
+            await expect(row).toContainText('Insufficient funds');
+            await expect(row).toContainText('0');
+            await expect(row.getByRole('button', { name: 'Add transaction' })).toHaveCount(0);
         });
     }
 });

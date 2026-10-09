@@ -237,6 +237,7 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
                                 <tr>
                                     {isSemi && <th />}
                                     <th>Stock</th>
+                                    <th>Strategy</th>
                                     <th>Action</th>
                                     <th className="text-end">Qty</th>
                                     <th className="text-end">Sugg. amt</th>
@@ -268,6 +269,7 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
                                             <strong>{r.symbol}</strong>
                                             <div className="small text-muted text-truncate" style={{ maxWidth: 140 }}>{r.name}</div>
                                         </td>
+                                        <td>{r.strategy_name || '—'}</td>
                                         <td>{r.ui_label || r.portfolio_action}</td>
                                         <td className="text-end">{r.suggested_quantity != null ? Math.round(Number(r.suggested_quantity)) : '—'}</td>
                                         <td className="text-end">{money(r.suggested_investment_amount)}</td>

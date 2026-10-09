@@ -18,6 +18,13 @@ function fmtNum(v) {
     return Number(v).toFixed(2);
 }
 
+const IN_FLIGHT_BROKER_STATUSES = new Set(['submitted', 'open', 'partial', 'unknown']);
+const FINAL_NO_FILL_BROKER_STATUSES = new Set(['rejected', 'cancelled', 'canceled']);
+
+function brokerStatusOf(order) {
+    return String(order.broker_status || '').toLowerCase();
+}
+
 export default function ReviewDashboardPage() {
     const [reconcilingOrderId, setReconcilingOrderId] = useState(null);
     const { data, loading, reload: load } = useApiGet({
@@ -242,13 +249,14 @@ export default function ReviewDashboardPage() {
                                     <th>Qty</th>
                                     <th>Status</th>
                                     <th>Broker status</th>
+                                    <th>Broker note</th>
                                     <th className="text-end">Filled</th>
                                     <th />
                                 </tr>
                             </thead>
                             <tbody>
                                 {orders.length === 0 ? (
-                                    <tr><td colSpan={8} className="text-muted">No orders.</td></tr>
+                                    <tr><td colSpan={9} className="text-muted">No orders.</td></tr>
                                 ) : orders.map((o) => (
                                     <tr key={o.id}>
                                         <td>{o.id}</td>
@@ -257,9 +265,10 @@ export default function ReviewDashboardPage() {
                                         <td>{o.quantity}</td>
                                         <td>{o.status}</td>
                                         <td>{o.broker_status || '—'}</td>
+                                        <td>{o.broker_error_message || '—'}</td>
                                         <td className="text-end">{o.filled_quantity ?? '—'}</td>
                                         <td className="text-nowrap">
-                                            {o.status === 'pending' && ['submitted', 'open', 'partial', 'unknown'].includes(o.broker_status) && (
+                                            {o.status === 'pending' && IN_FLIGHT_BROKER_STATUSES.has(brokerStatusOf(o)) && (
                                                 <button
                                                     type="button"
                                                     className="btn btn-link btn-sm px-0 me-2"
@@ -271,7 +280,7 @@ export default function ReviewDashboardPage() {
                                             )}
                                             {o.status === 'pending' && (
                                                 <>
-                                                    {!['submitted', 'open', 'partial', 'unknown'].includes(o.broker_status) && (
+                                                    {!IN_FLIGHT_BROKER_STATUSES.has(brokerStatusOf(o)) && !FINAL_NO_FILL_BROKER_STATUSES.has(brokerStatusOf(o)) && (
                                                         <button type="button" className="btn btn-link btn-sm px-0 me-2" onClick={() => executePending(o.id)}>Add transaction</button>
                                                     )}
                                                     <button type="button" className="btn btn-link btn-sm px-0 text-danger" onClick={() => cancelPending(o.id)}>Cancel</button>
