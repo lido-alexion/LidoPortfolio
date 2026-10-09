@@ -97,6 +97,12 @@ class V9Data001ExportProviderCoverageTest extends TestCase
         $this->assertSame('OWNED', $resolved['rows'][0]['symbol']);
         $this->assertSame('revenue', $resolved['rows'][0]['fact_key']);
         $this->assertSame('Revenue', $resolved['rows'][0]['fact_label']);
+        $this->assertSame('portfolio-fundamental-facts', $resolved['metadata']['dataset']);
+        $this->assertSame($profile->id, $resolved['metadata']['profile_id']);
+        $this->assertSame('current point-in-time fundamental fact revisions', $resolved['metadata']['source']);
+        $this->assertSame(now()->toDateString(), $resolved['metadata']['as_of_date']);
+        $this->assertSame('Metric key', $resolved['metadata']['field_labels']['fact_key']);
+        $this->assertSame('Metric', $resolved['metadata']['field_labels']['fact_label']);
         if (DB::getDriverName() === 'sqlite') {
             $this->assertEqualsWithDelta(123456.789123, (float) $resolved['rows'][0]['value'], 0.0000001);
         } else {

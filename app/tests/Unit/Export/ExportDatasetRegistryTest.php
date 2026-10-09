@@ -77,7 +77,8 @@ class ExportDatasetRegistryTest extends TestCase
 
     public function test_portfolio_analytics_provider_exports_only_allowlisted_metrics(): void
     {
-        $profile = new PortfolioProfile(['id' => 71, 'user_id' => 8]);
+        $profile = new PortfolioProfile(['user_id' => 8]);
+        $profile->id = 71;
         $service = $this->createMock(PortfolioAnalyticsService::class);
         $service->expects($this->once())
             ->method('forProfile')
@@ -99,12 +100,17 @@ class ExportDatasetRegistryTest extends TestCase
             ['metric_key' => 'number_of_positions', 'metric' => 'Number of positions', 'value' => 3],
         ], $resolved['rows']);
         $this->assertSame(['portfolio_value', 'number_of_positions'], $resolved['identities']);
+        $this->assertSame('portfolio analytics', $resolved['metadata']['source']);
+        $this->assertSame(71, $resolved['metadata']['profile_id']);
+        $this->assertSame('2026-10-08T00:00:00Z', $resolved['metadata']['computed_at']);
+        $this->assertSame(['metric_key' => 'Metric key', 'metric' => 'Metric', 'value' => 'Value'], $resolved['metadata']['field_labels']);
         $this->assertSame(['full'], $provider->catalog()[0]['scopes']);
     }
 
     public function test_dashboard_summary_keeps_metric_keys_and_exports_readable_labels(): void
     {
-        $profile = new PortfolioProfile(['id' => 72, 'user_id' => 8]);
+        $profile = new PortfolioProfile(['user_id' => 8]);
+        $profile->id = 72;
         $service = $this->createMock(PortfolioCalculationService::class);
         $service->expects($this->once())->method('calculateForProfile')->with($profile)->willReturn([
             'portfolio_value' => 150.0,
@@ -122,6 +128,9 @@ class ExportDatasetRegistryTest extends TestCase
             ['field_key' => 'total_gain_loss', 'field' => 'Total gain/loss', 'value' => 50.0],
         ], $resolved['rows']);
         $this->assertSame(['portfolio_value', 'invested_value', 'total_gain_loss'], $resolved['identities']);
+        $this->assertSame('portfolio calculation', $resolved['metadata']['source']);
+        $this->assertSame(72, $resolved['metadata']['profile_id']);
+        $this->assertSame(['field_key' => 'Metric key', 'field' => 'Metric', 'value' => 'Value'], $resolved['metadata']['field_labels']);
     }
 
     public function test_provider_authorization_rejects_a_profile_owned_by_another_account(): void
