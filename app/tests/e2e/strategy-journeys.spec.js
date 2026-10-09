@@ -303,6 +303,36 @@ test.describe('V9-UX-001 strategy journeys', () => {
             expect(payload).toMatchObject({ strategy_id: 7, name: 'Reviewed Momentum Policy' });
             expect(requests.some((path) => path.endsWith('/api/v1/recommendations/run'))).toBe(false);
         });
+        test('STR-11 replaces an entry screener while retaining the strategy identity and other policy (' + viewport.name + ')', async ({ page }, testInfo) => {
+            journeyId(testInfo, 'STR-11');
+            await seedDeterministicJourney(page, 'strategy-str11-' + viewport.name);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installInvestorWorkflowApiMocks(page, {
+                initialScreeners: [
+                    { id: 41, name: 'Original Entry Screen', scope: 'holdings', is_enabled: true, definition_json: { root: { type: 'group', op: 'AND', children: [] } }, description: 'Existing entry rule.' },
+                    { id: 42, name: 'Revised Entry Screen', scope: 'holdings', is_enabled: true, definition_json: { root: { type: 'group', op: 'AND', children: [] } }, description: 'Replacement entry rule.' },
+                ],
+                initialStrategyEligibility: [{ screener_id: 41, screener_name: 'Original Entry Screen', description: 'Existing entry rule.', enabled: true, priority: 1, display_order: 0, condition_count: 1 }],
+            });
+            await page.goto('/strategy?strategy_id=7');
+            await page.getByRole('button', { name: 'Eligibility Sources' }).click();
+            await page.locator('select').filter({ has: page.locator('option[value="42"]') }).selectOption('42');
+            await page.getByRole('button', { name: 'Add', exact: true }).click();
+            const oldRow = page.getByRole('row', { name: /Original Entry Screen/ });
+            await oldRow.getByRole('button', { name: 'Remove' }).click();
+            await expect(page.getByRole('row', { name: /Revised Entry Screen/ })).toBeVisible();
+            const saveRequest = page.waitForRequest((request) => (
+                request.method() === 'PUT' && new URL(request.url()).pathname.endsWith('/api/v1/strategy')
+            ));
+            await page.getByRole('button', { name: 'Save', exact: true }).click();
+            const payload = (await saveRequest).postDataJSON();
+            expect(payload.strategy_id).toBe(7);
+            expect(payload.config.eligibility_sources).toEqual([
+                expect.objectContaining({ screener_id: 42, screener_name: 'Revised Entry Screen', enabled: true }),
+            ]);
+            expect(payload.config.exit_strategy.rules).toHaveLength(4);
+            expect(payload.config.indicators).toEqual(expect.arrayContaining([expect.objectContaining({ key: 'momentum_score', enabled: true, weight: 100 })]));
+        });
         });
     }
 });

@@ -56,6 +56,7 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
     const screenerRun = options.screenerRun ?? null;
     let hasScreenerRun = false;
     let createdInvestorStrategy = null;
+    const initialStrategyEligibility = options.initialStrategyEligibility ?? [];
     let remainingScreenerValidationFailures = options.invalidScreenerAttempts ?? 0;
     let authenticated = !options.initiallyUnauthenticated;
     let remainingLoginFailures = options.failedLoginAttempts ?? 0;
@@ -306,7 +307,7 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
                     { key: 'momentum_score', category: 'Momentum', display_name: 'Momentum', label: 'Momentum', enabled: true, weight: 100 },
                     { key: 'rsi_score', category: 'Momentum', display_name: 'RSI', label: 'RSI', enabled: false, weight: 0 },
                 ],
-                    eligibility_sources: [],
+                    eligibility_sources: initialStrategyEligibility,
                     portfolio_rules: { horizon_calendar_days: null, first_entry_pct: 50, max_holdings: 10 },
                     exit_strategy: { enabled: true, mode: 'any', rules: [
                         { key: 'trend_weakening', display_name: 'Trend Weakening', description: 'Trend score falls below threshold.', enabled: true, value: 40 },
