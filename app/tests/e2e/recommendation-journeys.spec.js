@@ -153,5 +153,58 @@ test.describe('V9-UX-001 recommendation journeys', () => {
             expect(observedRequests.some((path) => path.endsWith('/api/v1/recommendations/run'))).toBe(false);
             expect(observedRequests.some((path) => path.includes('/orders'))).toBe(false);
         });
+        test('REC-08 rejects an actionable recommendation with a note and keeps it out of the review queue (' + viewport.name + ')', async ({ page }, testInfo) => {
+            journeyId(testInfo, 'REC-08');
+            await seedDeterministicJourney(page, 'recommendation-rec08-' + viewport.name);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installTosApiMocks(page, { recommendations: [{ ...OPEN_BUY_RECOMMENDATION, id: 708, strategy_name: 'Momentum Core' }] });
+            await page.goto('/recommendations');
+            const row = page.getByRole('row').filter({ hasText: 'Momentum Core' });
+            await row.getByRole('button', { name: 'Review' }).click();
+            const dialog = page.getByRole('dialog');
+            await dialog.getByLabel('Review notes (optional)').fill('Reject until the price trend improves.');
+            const reviewRequest = page.waitForRequest((request) => (
+                request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/api/v1/recommendations/708/review')
+            ));
+            await dialog.getByRole('button', { name: 'Reject' }).click();
+            expect((await reviewRequest).postDataJSON()).toMatchObject({
+                decision: 'rejected',
+                notes: 'Reject until the price trend improves.',
+            });
+            await expect(dialog).toHaveCount(0);
+            await expect(page.getByText('No trade recommendations are actionable in the current view.')).toBeVisible();
+        });
+
+        test('REC-09 defers a recommendation and reopens it for review later (' + viewport.name + ')', async ({ page }, testInfo) => {
+            journeyId(testInfo, 'REC-09');
+            await seedDeterministicJourney(page, 'recommendation-rec09-' + viewport.name);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installTosApiMocks(page, { recommendations: [{ ...OPEN_BUY_RECOMMENDATION, id: 709, strategy_name: 'Momentum Core' }] });
+            await page.goto('/recommendations');
+            let row = page.getByRole('row').filter({ hasText: 'Momentum Core' });
+            await row.getByRole('button', { name: 'Review' }).click();
+            let dialog = page.getByRole('dialog');
+            await dialog.getByLabel('Review notes (optional)').fill('Wait for the next earnings update.');
+            const deferRequest = page.waitForRequest((request) => (
+                request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/api/v1/recommendations/709/review')
+            ));
+            await dialog.getByRole('button', { name: 'Defer' }).click();
+            expect((await deferRequest).postDataJSON()).toMatchObject({
+                decision: 'deferred',
+                notes: 'Wait for the next earnings update.',
+            });
+            await expect(dialog).toHaveCount(0);
+            row = page.getByRole('row').filter({ hasText: 'Momentum Core' });
+            await expect(row).toContainText('deferred');
+            await row.getByRole('button', { name: 'Review' }).click();
+            dialog = page.getByRole('dialog');
+            const reopenRequest = page.waitForRequest((request) => (
+                request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/api/v1/recommendations/709/reopen')
+            ));
+            await dialog.getByRole('button', { name: 'Undo decision — reopen for review' }).click();
+            await reopenRequest;
+            await expect(dialog).toContainText('pending_review');
+            await expect(dialog.getByRole('button', { name: 'Undo decision — reopen for review' })).toHaveCount(0);
+        });
     }
 });

@@ -81,8 +81,20 @@ export async function installTosApiMocks(page, {
         }
         const reviewMatch = path.match(/\/api\/v1\/recommendations\/(\d+)\/review$/);
         if (reviewMatch && method === 'POST') {
+            const decision = request.postDataJSON()?.decision;
+            const rec = recs.find((r) => String(r.id) === reviewMatch[1]);
+            if (decision === 'deferred' && rec) {
+                Object.assign(rec, { status: 'deferred', lifecycle_status: 'deferred', review_status: 'deferred', can_review: false, can_reopen: true });
+                return json(route, apiEnvelope({ status: 'deferred' }));
+            }
             recs = recs.filter((r) => String(r.id) !== reviewMatch[1]);
-            return json(route, apiEnvelope({ status: 'pending_execution' }));
+            return json(route, apiEnvelope({ status: decision === 'rejected' ? 'rejected' : 'pending_execution' }));
+        }
+        const reopenMatch = path.match(/\/api\/v1\/recommendations\/(\d+)\/reopen$/);
+        if (reopenMatch && method === 'POST') {
+            const rec = recs.find((r) => String(r.id) === reopenMatch[1]);
+            if (rec) Object.assign(rec, { status: 'pending_review', lifecycle_status: 'pending_review', review_status: 'pending_review', can_review: true, can_reopen: false });
+            return json(route, apiEnvelope(rec || null));
         }
         if (path.endsWith('/api/logs/frontend')) {
             return json(route, { ok: true });
