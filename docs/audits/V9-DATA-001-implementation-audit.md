@@ -145,3 +145,8 @@ Added an XLSX final-archive size regression test with randomized worksheet data.
 
 
 Provider metadata regression coverage was expanded for portfolio analytics, dashboard summary, and current-holdings fundamentals, including source, profile, computation/as-of timestamps, and human field labels. The combined focused suite `php artisan test tests/Unit/Export tests/Feature/V9Data001Export*.php tests/Feature/PortfolioSnapshotApiTest.php` passed (57 tests, 293 assertions).
+
+
+## Post-merge frontend gate (2026-10-09)
+
+The production workflow enabled the frontend gate and found one stale static assertion: it searched `ExportDatasetRegistry.php` for provider catalog definitions, although those definitions live in the provider classes. The assertion now reads `DashboardSummaryExportProvider.php` and `PortfolioSnapshotExportProvider.php` directly. The complete `npm run test:js` suite passed locally (214 Node tests and 180 Vitest tests). The production workflow for merge SHA `a3758c51` remains blocked by this frontend failure; production deployment and live queue/resource evidence are still pending.

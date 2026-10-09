@@ -8,7 +8,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '../../resources/js/s
 const page = readFileSync(join(root, 'pages/PortfolioSnapshotsPage.jsx'), 'utf8');
 const button = readFileSync(join(root, 'components/ExportDataButton.jsx'), 'utf8');
 const basket = readFileSync(join(root, 'components/ExportBasketPanel.jsx'), 'utf8');
-const registry = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../app/Services/Export/ExportDatasetRegistry.php'), 'utf8');
+const dashboardProvider = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../app/Services/Export/DashboardSummaryExportProvider.php'), 'utf8');
+const snapshotProvider = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../app/Services/Export/PortfolioSnapshotExportProvider.php'), 'utf8');
 
 test('snapshot selection sends stable IDs and resets when portfolio or range changes', () => {
     assert.match(page, /aria-label=\{`Select snapshot \$\{row\.snapshot_date\}`\}/);
@@ -24,9 +25,9 @@ test('basket field and scope controls are derived from registered catalog metada
     assert.match(basket, /scopes\.map\(\(scope\)/);
     assert.match(basket, /fields\.map\(\(field\)/);
     assert.match(basket, /!dataset\.scopes\?\.includes\(item\.scope\)/);
-    assert.match(registry, /'dashboard-summary'.*'scopes' => \['full'\]/);
-    assert.match(registry, /'portfolio-growth'.*'scopes' => \['current', 'full'\]/);
-    assert.match(registry, /'portfolio-snapshots'.*'scopes' => \['current', 'full', 'selected'\]/);
+    assert.match(dashboardProvider, /'id' => 'dashboard-summary',[\s\S]*?'scopes' => \['full'\]/);
+    assert.match(snapshotProvider, /'id' => 'portfolio-growth',[\s\S]*?'scopes' => \['current', 'full'\]/);
+    assert.match(snapshotProvider, /'id' => 'portfolio-snapshots',[\s\S]*?'scopes' => \['current', 'full', 'selected'\]/);
 });
 
 test('basket current filters and selected stable IDs follow their scope contracts', () => {
