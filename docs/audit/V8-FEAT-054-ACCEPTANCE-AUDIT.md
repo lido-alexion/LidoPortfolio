@@ -1,9 +1,21 @@
 # V8 FEAT-054 Acceptance Audit
 
-Date: 2026-09-28
-Status: **REVIEW — local implementation and automated verification complete; browser/provider runtime evidence pending**
+Date: 2026-10-09
+Status: **IMPLEMENTED / FUNCTIONAL ACCEPTANCE OPEN — PO-approved implementation and coverage gates pass; broader provider/deployed-runtime acceptance remains open**
 
 Authoritative contract: `docs/archive/specs/V8-Historical-Fundamentals-Bootstrap-Specification.md`.
+
+## PO-approved coverage disposition
+
+The PO explicitly considered and relaxed the FEAT-054 acceptance criteria. For this disposition, the production application's cached Nifty constituents are accepted as the read-only coverage basis; an independent official constituent refresh is not required to satisfy the 98% gate. This records the accepted interpretation and does not claim that the official 500-member roster was independently refreshed.
+
+| Coverage criterion | Result | Evidence |
+|---|---|---|
+| Nifty coverage | PASS under PO-approved relaxed criterion | Cache held 501 symbols at `2026-10-03T21:00:09Z`; 497 matched active stocks had current facts, exceeding the accepted 490-stock minimum. Four cache symbols were unmapped. |
+| All eligible stocks | PASS | 4,696 / 5,148 = 91.2% in the persisted-fact report snapshot dated 2026-10-05. |
+| Non-exempt fields | PASS | All 25 non-exempt canonical facts have at least one value and at least 50% coverage; 15 PO-approved exceptions are excluded. |
+
+The 2026-10-07 reconciliation was read-only: no NSE/BSE request, external refresh, or data fetch was made. These results satisfy the PO-approved coverage gate. Broader provider and deployed-runtime acceptance remains open, so the epic is **IMPLEMENTED / FUNCTIONAL ACCEPTANCE OPEN**, not COMPLETE.
 
 ## Requirement matrix
 
@@ -34,9 +46,9 @@ Authoritative contract: `docs/archive/specs/V8-Historical-Fundamentals-Bootstrap
 - JS fundamentals display/preference tests pass; typecheck passes.
 - Existing source-priority, Screener, bootstrap, historical API, and metric correctness tests pass.
 
-## Status decision
+## Historical status decision (2026-09-28)
 
-FEAT-054 is **REVIEW** rather than COMPLETE because the repository evidence and focused desktop/mobile Chromium journeys are complete for the deterministic implementation, but real provider and deployed bootstrap runtime validation remain external.
+At that point, FEAT-054 was **REVIEW** because real-provider and deployed-bootstrap validation remained external. This historical disposition is superseded by the current **IMPLEMENTED / FUNCTIONAL ACCEPTANCE OPEN** status above; those broader acceptance checks remain open.
 
 
 ## Closure continuation — 2026-10-01 (production build `ef66133c`)
