@@ -82,5 +82,57 @@ test.describe('V9-UX-001 screener journeys', () => {
             });
             await expect(page).toHaveURL(/\/screeners\/\d+$/);
         });
+
+        test(`SCR-03 saves an AND group with nested momentum alternatives (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'SCR-03');
+            await seedDeterministicJourney(page, `screener-scr03-${viewport.name}`);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installInvestorWorkflowApiMocks(page);
+            await page.goto('/screeners/new');
+            await page.getByLabel('Name').fill('Trend with Momentum Alternatives');
+
+            const groups = page.locator('.lido-screener-group');
+            const leaves = page.locator('.lido-screener-leaf');
+            const trend = leaves.nth(0);
+            await trend.getByLabel('left indicator').selectOption('close');
+            await trend.getByLabel('right indicator').selectOption('sma');
+            await trend.getByLabel('Period').fill('200');
+            await groups.nth(0).getByRole('button', { name: '+ Group' }).click();
+
+            const alternatives = groups.nth(1);
+            const rsi = leaves.nth(1);
+            await rsi.getByLabel('left indicator').selectOption('rsi');
+            await rsi.getByLabel('Comparator').selectOption('lt');
+            await rsi.getByLabel('right constant').fill('70');
+            await alternatives.getByRole('button', { name: '+ Condition' }).click();
+
+            const roc = leaves.nth(2);
+            await roc.getByLabel('left indicator').selectOption('roc');
+            await roc.getByLabel('Comparator').selectOption('gt');
+            await roc.getByLabel('right constant').fill('0');
+
+            const saveRequest = page.waitForRequest((request) => (
+                request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/api/screeners')
+            ));
+            await page.getByRole('button', { name: 'Save' }).click();
+            const payload = (await saveRequest).postDataJSON();
+            const root = payload.definition_json.root;
+            expect(root).toMatchObject({ type: 'group', op: 'AND' });
+            expect(root.children).toHaveLength(2);
+            expect(root.children[0]).toMatchObject({
+                type: 'condition', left: { indicator: 'close' }, operator: 'gt',
+                right: { indicator: 'sma', params: { period: 200 } },
+            });
+            expect(root.children[1]).toMatchObject({ type: 'group', op: 'OR' });
+            expect(root.children[1].children).toHaveLength(2);
+            expect(root.children[1].children[0]).toMatchObject({
+                type: 'condition', left: { indicator: 'rsi', params: { period: 14 } }, operator: 'lt',
+                right: { type: 'constant', value: 70 },
+            });
+            expect(root.children[1].children[1]).toMatchObject({
+                type: 'condition', left: { indicator: 'roc', params: { period: 12 } }, operator: 'gt',
+                right: { type: 'constant', value: 0 },
+            });
+        });
     }
 });

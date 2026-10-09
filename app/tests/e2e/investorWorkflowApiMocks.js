@@ -27,6 +27,11 @@ const SCREENER_META = {
             label: 'RSI',
             params: [{ id: 'period', label: 'Period', default: 14, min: 1, max: 200 }],
         },
+        {
+            id: 'roc',
+            label: 'ROC %',
+            params: [{ id: 'period', label: 'Period', default: 12, min: 1, max: 400 }],
+        },
     ],
     operators: [
         { id: 'gt', label: '>' },
