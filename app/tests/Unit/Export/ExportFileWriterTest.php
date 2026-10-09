@@ -125,6 +125,28 @@ class ExportFileWriterTest extends TestCase
         } finally { @unlink($path); }
     }
 
+    public function test_xlsx_enforces_final_archive_size_limit_and_removes_partial_files(): void
+    {
+        if (! class_exists(\ZipArchive::class)) $this->markTestSkipped('ZipArchive is unavailable.');
+        config(['exports.max_file_bytes' => 256]);
+        $path = tempnam(sys_get_temp_dir(), 'stox-export-');
+        @unlink($path);
+        try {
+            app(ExportFileWriter::class)->xlsx([[
+                'columns' => ['value'],
+                'rows' => [['value' => bin2hex(random_bytes(4096))]],
+            ]], $path);
+            $this->fail('Expected the finalized XLSX archive to exceed the file size limit.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('maximum file size', $exception->getMessage());
+            $this->assertFileDoesNotExist($path);
+            $this->assertSame([], glob($path.'.*.partial*') ?: []);
+        } finally {
+            @unlink($path);
+            foreach (glob($path.'.*.partial*') ?: [] as $partial) @unlink($partial);
+        }
+    }
+
     public function test_xlsx_closes_and_removes_output_when_cancelled(): void
     {
         if (! class_exists(\ZipArchive::class)) $this->markTestSkipped('ZipArchive is unavailable.');
