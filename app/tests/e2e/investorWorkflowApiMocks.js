@@ -49,7 +49,8 @@ const SCREENER_META = {
  */
 export async function installInvestorWorkflowApiMocks(page, options = {}) {
     let nextScreenerId = 99;
-    const screeners = [];
+    const screeners = [...(options.initialScreeners ?? [])];
+    let remainingScreenerValidationFailures = options.invalidScreenerAttempts ?? 0;
     let authenticated = !options.initiallyUnauthenticated;
     let remainingLoginFailures = options.failedLoginAttempts ?? 0;
     const fundamentalInsights = options.fundamentalInsights ?? {
@@ -291,6 +292,13 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
         }
         if (path.endsWith('/api/screeners') && method === 'POST') {
             const payload = request.postDataJSON();
+            if (remainingScreenerValidationFailures > 0) {
+                remainingScreenerValidationFailures -= 1;
+                return json(route, {
+                    message: 'The given data was invalid.',
+                    errors: { definition_json: ['Param period out of range for sma.'] },
+                }, 422);
+            }
             const id = nextScreenerId++;
             const created = {
                 id,
@@ -306,6 +314,14 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
             return json(route, { data: created }, 201);
         }
         const screenerMatch = path.match(/\/api\/screeners\/(\d+)$/);
+        if (screenerMatch && method === 'PUT') {
+            const id = Number(screenerMatch[1]);
+            const existing = screeners.find((item) => item.id === id);
+            const updated = { ...(existing ?? {}), ...request.postDataJSON(), id };
+            if (existing) Object.assign(existing, updated);
+            else screeners.push(updated);
+            return json(route, { data: updated });
+        }
         if (screenerMatch && method === 'GET') {
             const found = screeners.find((item) => item.id === Number(screenerMatch[1]));
             return json(route, {

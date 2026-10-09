@@ -83,6 +83,80 @@ test.describe('V9-UX-001 screener journeys', () => {
             await expect(page).toHaveURL(/\/screeners\/\d+$/);
         });
 
+
+
+        test(`SCR-05 reports an invalid parameter and recovers after correction (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'SCR-05');
+            await seedDeterministicJourney(page, `screener-scr05-${viewport.name}`);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installInvestorWorkflowApiMocks(page, { invalidScreenerAttempts: 1 });
+            await page.goto('/screeners/new');
+            await page.getByLabel('Name').fill('SMA Parameter Recovery');
+            await page.getByLabel('left indicator').selectOption('close');
+            await page.getByLabel('right indicator').selectOption('sma');
+            await page.getByLabel('Period').fill('401');
+
+            const invalidResponse = page.waitForResponse((response) => (
+                response.request().method() === 'POST'
+                && new URL(response.url()).pathname.endsWith('/api/screeners')
+            ));
+            await page.getByRole('button', { name: 'Save' }).click();
+            expect((await invalidResponse).status()).toBe(422);
+            await expect(page.getByText('Param period out of range for sma.')).toBeVisible();
+            await expect(page).toHaveURL(/\/screeners\/new$/);
+
+            await page.getByLabel('Period').fill('200');
+            const validRequest = page.waitForRequest((request) => (
+                request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/api/screeners')
+            ));
+            await page.getByRole('button', { name: 'Save' }).click();
+            const payload = (await validRequest).postDataJSON();
+            expect(payload.definition_json.root.children[0].right).toMatchObject({
+                indicator: 'sma', params: { period: 200 },
+            });
+            await expect(page).toHaveURL(/\/screeners\/\d+$/);
+        });
+        test(`SCR-04 edits the selected screener and saves a revised rule (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'SCR-04');
+            await seedDeterministicJourney(page, `screener-scr04-${viewport.name}`);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installInvestorWorkflowApiMocks(page, {
+                initialScreeners: [{
+                    id: 41,
+                    name: 'Quarterly Price Gate',
+                    scope: 'holdings',
+                    is_enabled: true,
+                    definition_json: { root: { type: 'group', op: 'AND', children: [{
+                        type: 'condition', left: { indicator: 'close', params: {} }, operator: 'gt',
+                        weight_factor: 1, right: { type: 'constant', value: 0 },
+                    }] } },
+                    description: 'Starting rule for editing.',
+                    watchlist_id: null,
+                    index_symbol: null,
+                }],
+            });
+            await page.goto('/screeners');
+            await page.getByRole('link', { name: 'Quarterly Price Gate' }).click();
+            await expect(page.getByRole('heading', { name: 'Edit screener' })).toBeVisible();
+
+            const condition = page.locator('.lido-screener-leaf').nth(0);
+            await condition.getByRole('button', { name: 'Indicator' }).nth(1).click();
+            await condition.getByLabel('right indicator').selectOption('sma');
+            await condition.getByLabel('Period').fill('200');
+
+            const updateRequest = page.waitForRequest((request) => (
+                request.method() === 'PUT' && new URL(request.url()).pathname.endsWith('/api/screeners/41')
+            ));
+            await page.getByRole('button', { name: 'Save' }).click();
+            const payload = (await updateRequest).postDataJSON();
+            expect(payload.name).toBe('Quarterly Price Gate');
+            expect(payload.definition_json.root.children[0]).toMatchObject({
+                type: 'condition', left: { indicator: 'close' }, operator: 'gt',
+                right: { indicator: 'sma', params: { period: 200 } },
+            });
+            await expect(page).toHaveURL(/\/screeners\/41$/);
+            await expect(page.getByText('Screener "Quarterly Price Gate" updated successfully.')).toBeVisible();
+        });
         test(`SCR-03 saves an AND group with nested momentum alternatives (${viewport.name})`, async ({ page }, testInfo) => {
             journeyId(testInfo, 'SCR-03');
             await seedDeterministicJourney(page, `screener-scr03-${viewport.name}`);
