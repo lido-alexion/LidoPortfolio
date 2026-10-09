@@ -50,6 +50,11 @@ const SCREENER_META = {
 export async function installInvestorWorkflowApiMocks(page, options = {}) {
     let nextScreenerId = 99;
     const screeners = [...(options.initialScreeners ?? [])];
+    const sharedScreeners = [...(options.sharedScreeners ?? [])];
+    const reusableScreenerArtifact = options.reusableScreenerArtifact ?? null;
+    let reusableScreenerArchived = false;
+    const screenerRun = options.screenerRun ?? null;
+    let hasScreenerRun = false;
     let remainingScreenerValidationFailures = options.invalidScreenerAttempts ?? 0;
     let authenticated = !options.initiallyUnauthenticated;
     let remainingLoginFailures = options.failedLoginAttempts ?? 0;
@@ -281,6 +286,13 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
         if (path.endsWith('/api/screeners/meta') && method === 'GET') {
             return json(route, { data: SCREENER_META });
         }
+        if (reusableScreenerArtifact && path.endsWith(`/api/v1/artifact-library/${reusableScreenerArtifact.artifact_uuid}`) && method === 'GET') {
+            return json(route, { data: { ...reusableScreenerArtifact, archived_at: reusableScreenerArchived ? '2026-10-09T10:00:00Z' : null } });
+        }
+        if (reusableScreenerArtifact && path.endsWith(`/api/v1/artifact-library/${reusableScreenerArtifact.artifact_uuid}/archive`) && method === 'POST') {
+            reusableScreenerArchived = true;
+            return json(route, { data: { ...reusableScreenerArtifact, archived_at: '2026-10-09T10:00:00Z' } });
+        }
         if (path.endsWith('/api/watchlists') && method === 'GET') {
             return json(route, { data: [] });
         }
@@ -289,6 +301,17 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
         }
         if (path.endsWith('/api/screeners') && method === 'GET') {
             return json(route, { data: screeners, count: screeners.length });
+        }
+        if (path.endsWith('/api/screeners/shared') && method === 'GET') {
+            return json(route, { data: sharedScreeners });
+        }
+        const sharedScreenerImportMatch = path.match(/\/api\/screeners\/shared\/(\d+)\/import$/);
+        if (sharedScreenerImportMatch && method === 'POST') {
+            const source = sharedScreeners.find((item) => item.id === Number(sharedScreenerImportMatch[1]));
+            if (!source) return json(route, { message: 'Shared screener not found.' }, 404);
+            const imported = { ...source, id: nextScreenerId++, is_shared: false };
+            screeners.push(imported);
+            return json(route, { data: imported }, 201);
         }
         if (path.endsWith('/api/screeners') && method === 'POST') {
             const payload = request.postDataJSON();
@@ -337,9 +360,21 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
                 },
             });
         }
+        const screenerRunMatch = path.match(/\/api\/screeners\/(\d+)\/run$/);
+        if (screenerRunMatch && method === 'POST' && screenerRun) {
+            hasScreenerRun = true;
+            const { hits, ...summary } = screenerRun;
+            return json(route, { data: { ...summary, screener_id: Number(screenerRunMatch[1]) } }, 201);
+        }
+        const screenerRunDetailMatch = path.match(/\/api\/screener-runs\/(\d+)$/);
+        if (screenerRunDetailMatch && method === 'GET' && screenerRun) {
+            return json(route, { data: screenerRun });
+        }
         const runsMatch = path.match(/\/api\/screeners\/(\d+)\/runs$/);
         if (runsMatch && method === 'GET') {
-            return json(route, { data: [] });
+            if (!screenerRun || !hasScreenerRun) return json(route, { data: [] });
+            const { hits, ...summary } = screenerRun;
+            return json(route, { data: [summary], total: 1, limit: 30 });
         }
         const backtestMatrixMatch = path.match(/\/api\/screeners\/(\d+)\/backtest\/matrix$/);
         if (backtestMatrixMatch && method === 'GET') {
