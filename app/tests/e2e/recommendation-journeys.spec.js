@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installTosApiMocks } from './tosApiMocks.js';
+import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 import { HOLD_INSIGHT, OPEN_BUY_RECOMMENDATION, WATCH_INSIGHT } from '../js/tos/fixtures/tosApi.js';
 
 const VIEWPORTS = [
@@ -133,6 +134,24 @@ test.describe('V9-UX-001 recommendation journeys', () => {
             await expect(watch).toContainText('Watch');
             await expect(hold.getByRole('button', { name: 'Review' })).toHaveCount(0);
             await expect(watch.getByRole('button', { name: 'Review' })).toHaveCount(0);
+        });
+        test('REC-06 previews one stock for the selected strategy without persisting a recommendation (' + viewport.name + ')', async ({ page }, testInfo) => {
+            journeyId(testInfo, 'REC-06');
+            await seedDeterministicJourney(page, 'recommendation-rec06-' + viewport.name);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installInvestorWorkflowApiMocks(page);
+            const observedRequests = [];
+            page.on('request', (request) => observedRequests.push(new URL(request.url()).pathname));
+            await page.goto('/watchlist/TCS');
+            const previewRequest = page.waitForRequest((request) => (
+                request.method() === 'GET' && new URL(request.url()).pathname.endsWith('/api/v1/analytics/stocks/42/recommendation-preview')
+            ));
+            await page.getByRole('button', { name: 'Recommendation Preview' }).click();
+            const request = await previewRequest;
+            expect(new URL(request.url()).searchParams.get('strategy_id')).toBe('7');
+            await expect(page.getByText('Recommendation is not executable for this stock under the selected strategy.')).toBeVisible();
+            expect(observedRequests.some((path) => path.endsWith('/api/v1/recommendations/run'))).toBe(false);
+            expect(observedRequests.some((path) => path.includes('/orders'))).toBe(false);
         });
     }
 });
