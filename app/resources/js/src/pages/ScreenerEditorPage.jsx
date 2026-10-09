@@ -22,7 +22,7 @@ const NAME_MAX_LENGTH = 120;
 const DESCRIPTION_MAX_LENGTH = 500;
 const DEFAULT_EXPLORER_BENCHMARK = 'NIFTY50';
 const BACKTEST_SESSION_KEY = 'lido_screener_backtest_session';
-const NAME_ALLOWED_RE = /^[\p{L}\p{N}\s\-._,&()\/:+#%'"]+$/u;
+const NAME_ALLOWED_RE = /^[\p{L}\p{N}\s\-\u2013\u2014._,&()\/:+#%'"]+$/u;
 const DESCRIPTION_ALLOWED_RE = /^[\p{L}\p{N}\s\-._,&()\/:+#%'"?!]*$/u;
 
 function getOrCreateBacktestSessionToken() {

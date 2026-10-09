@@ -326,6 +326,12 @@ class ScreenerTest extends TestCase
             'scope' => 'holdings',
             'definition_json' => $definition,
         ])->assertStatus(422)->assertJsonValidationErrors(['description']);
+
+        $this->postJson('/api/screeners', [
+            'name' => 'Momentum Entry — MA200 + RSI',
+            'scope' => 'holdings',
+            'definition_json' => $definition,
+        ])->assertCreated()->assertJsonPath('data.name', 'Momentum Entry — MA200 + RSI');
     }
 
     public function test_list_reports_watchlist_issue_and_last_run_warnings(): void

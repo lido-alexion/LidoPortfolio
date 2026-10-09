@@ -15,7 +15,7 @@ Frontend CI is configured to run the canonical frontend verifier on pull request
 
 ## Screener foundation slice
 
-SCR-01 now has browser coverage at 390×844 and 1440×900. The scenario creates a screener named “Price Above MA200,” selects Close > SMA(200), saves it, and asserts the exact definition sent to the validated create endpoint. The screener test mock now persists created definitions so the detail route reflects the saved rule. SCR-02 now covers the documented AND combination of Close > SMA(200) and RSI(14) < 70, with assertions on the persisted condition tree at both viewports. The source corpus remains at 71 topics; SCR-03 also verifies nested AND/OR grouping for a trend condition with RSI and ROC alternatives. The source corpus remains at 71 topics; eight IDs are annotated (AUTH-01/02, SCR-01/02/03, and AI-01/02/03).
+SCR-01 now has browser coverage at 390×844 and 1440×900. The scenario creates a screener named “Price Above MA200,” selects Close > SMA(200), saves it, and asserts the exact definition sent to the validated create endpoint. The screener test mock now persists created definitions so the detail route reflects the saved rule. SCR-02 now covers the documented AND combination of Close > SMA(200) and RSI(14) < 70, with assertions on the persisted condition tree at both viewports. SCR-03 also verifies nested AND/OR grouping for a trend condition with RSI and ROC alternatives. Hosted CI exposed that the documented em dash was rejected by both name validators; the UI and backend now accept en/em dashes, with API coverage for the documented SCR-02 name. The source corpus remains at 71 topics; eight IDs are annotated (AUTH-01/02, SCR-01/02/03, and AI-01/02/03).
 
 ## Completion criteria snapshot
 
