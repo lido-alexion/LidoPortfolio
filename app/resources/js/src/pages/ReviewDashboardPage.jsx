@@ -73,10 +73,13 @@ export default function ReviewDashboardPage() {
             ), { errorFallback: 'Order reconciliation failed' });
             if (ok) {
                 const status = response?.data?.data?.broker_status || 'unknown';
+                const inFlight = ['submitted', 'open', 'partial'].includes(status);
                 showToast(
                     status === 'unknown'
                         ? 'Broker status remains unknown. Do not retry this order yet.'
-                        : `Latest broker status: ${status}. Do not submit a duplicate while it is in flight.`,
+                        : inFlight
+                            ? `Latest broker status: ${status}. Do not submit a duplicate while it is in flight.`
+                            : `Broker confirms ${status}. Check the filled quantity before retrying.`,
                     status === 'unknown' ? 'warning' : 'info',
                 );
                 await load();
