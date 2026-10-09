@@ -31,6 +31,33 @@ function fmtDate(iso) {
     }
 }
 
+const BROKER_IN_FLIGHT = new Set(['submitted', 'open', 'partial', 'unknown']);
+const BROKER_FINAL_NO_FILL = new Set(['cancelled', 'canceled', 'rejected']);
+
+function ordersForRecommendation(orders, recommendationId) {
+    return orders
+        .filter((order) => Number(order.recommendation_id) === Number(recommendationId))
+        .sort((a, b) => {
+            const aDate = Date.parse(a.created_at || a.updated_at || '') || 0;
+            const bDate = Date.parse(b.created_at || b.updated_at || '') || 0;
+            return bDate - aDate || Number(b.id) - Number(a.id);
+        });
+}
+
+function latestOrderFor(orders, recommendationId) {
+    return ordersForRecommendation(orders, recommendationId)[0] || null;
+}
+
+function isRetryBlocked(orders, recommendationId, ordersKnown) {
+    if (!ordersKnown) return true;
+    return ordersForRecommendation(orders, recommendationId).some((order) => {
+        const status = String(order.broker_status || '').toLowerCase();
+        return BROKER_IN_FLIGHT.has(status)
+            || Number(order.filled_quantity || 0) > 0
+            || !BROKER_FINAL_NO_FILL.has(status);
+    });
+}
+
 /**
  * Pending Execution queue — approved recommendations awaiting a ledger fill.
  */
@@ -47,20 +74,25 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
     const { data, loading, reload: load } = useApiGet({
         errorFallback: 'Failed to load pending execution',
         request: async () => {
-            const [response, modeRes] = await Promise.all([
+            const [response, modeRes, ordersRes] = await Promise.all([
                 api.get('/v1/recommendations/pending-execution', { skipErrorToast: true }),
                 api.get('/v1/execution/mode', { skipErrorToast: true }).catch(() => null),
+                api.get('/v1/orders', { skipErrorToast: true }).catch(() => null),
             ]);
             return {
                 rows: tosList(response),
                 cash: tosMeta(response).cash || null,
                 mode: modeRes ? tosData(modeRes) : null,
+                orders: ordersRes ? tosList(ordersRes) : [],
+                ordersKnown: Boolean(ordersRes),
             };
         },
     });
     const rows = data?.rows ?? [];
     const cash = data?.cash ?? null;
     const modeSnap = data?.mode ?? null;
+    const orders = data?.orders ?? [];
+    const ordersKnown = data?.ordersKnown ?? false;
     const isSemi = modeSnap?.execution_mode === 'semi_automatic';
     const isAutomatic = modeSnap?.execution_mode === 'automatic';
     const blockers = modeSnap?.blockers || [];
@@ -99,6 +131,7 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
     };
 
     const selectedIds = Object.entries(selected).filter(([, on]) => on).map(([id]) => Number(id));
+    const selectedRetryBlocked = selectedIds.some((id) => isRetryBlocked(orders, id, ordersKnown));
 
     const toggleSelected = (id) => {
         setSelected((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -208,7 +241,7 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
                     <button
                         type="button"
                         className="btn btn-primary btn-sm"
-                        disabled={executingSelected || selectedIds.length === 0 || blockers.length > 0}
+                        disabled={executingSelected || selectedIds.length === 0 || blockers.length > 0 || selectedRetryBlocked}
                         onClick={executeSelected}
                     >
                         Accept / Execute Selected
@@ -260,6 +293,7 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
                                                     type="checkbox"
                                                     className="form-check-input"
                                                     checked={Boolean(selected[r.id])}
+                                                    disabled={isRetryBlocked(orders, r.id, ordersKnown)}
                                                     onChange={() => toggleSelected(r.id)}
                                                     aria-label={`Select ${r.symbol || r.id}`}
                                                 />
@@ -268,6 +302,19 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
                                         <td>
                                             <strong>{r.symbol}</strong>
                                             <div className="small text-muted text-truncate" style={{ maxWidth: 140 }}>{r.name}</div>
+                                            {latestOrderFor(orders, r.id) && (() => {
+                                                const attempts = ordersForRecommendation(orders, r.id);
+                                                const previousOrder = attempts[0];
+                                                const totalFilled = attempts.reduce((sum, order) => sum + Number(order.filled_quantity || 0), 0);
+                                                const retryBlocked = isRetryBlocked(orders, r.id, ordersKnown);
+                                                return (
+                                                    <div className={retryBlocked ? 'small text-warning' : 'small text-muted'}>
+                                                        Previous order: {previousOrder.broker_status || previousOrder.status}; filled across attempts {totalFilled}/{previousOrder.quantity}
+                                                        {retryBlocked ? ' — reconcile fills or wait for broker confirmation before retrying.' : ' — safe to retry this recommendation.'}
+                                                    </div>
+                                                );
+                                            })()}
+                                            {!ordersKnown && <div className="small text-warning">Order status unavailable; broker submission is disabled.</div>}
                                         </td>
                                         <td>{r.strategy_name || '—'}</td>
                                         <td>{r.ui_label || r.portfolio_action}</td>

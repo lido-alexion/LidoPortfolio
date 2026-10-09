@@ -19,6 +19,7 @@ function json(route, body, status = 200) {
  */
 export async function installTosApiMocks(page, {
     recommendations = [OPEN_BUY_RECOMMENDATION],
+    orders = [],
     pipelineRecommendations = null,
     pipelineStages = { discovery: { candidates: 0 }, evaluation: { results: 0 }, recommendation: { count: 0 } },
     capitalResolution = CAPITAL_RESOLUTION,
@@ -133,6 +134,9 @@ export async function installTosApiMocks(page, {
                 broker_connected: false,
                 active_orders: 0,
             }));
+        }
+        if (path.endsWith('/api/v1/orders') && method === 'GET') {
+            return json(route, apiEnvelope(orders));
         }
         if (path.endsWith('/api/v1/recommendations/pending-execution') && method === 'GET') {
             return json(route, apiEnvelope(recs.filter((r) => r.status === 'pending_execution' || r.can_execute_manually), {

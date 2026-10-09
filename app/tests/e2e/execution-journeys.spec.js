@@ -443,3 +443,84 @@ test.describe('V9-UX-001 broker final and partial outcomes', () => {
         });
     }
 });
+
+
+test.describe('V9-UX-001 safe retry after final no-fill outcome', () => {
+    for (const viewport of VIEWPORTS) {
+        test(`EXE-14 retries the existing recommendation only after confirmed cancellation with zero fill (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'EXE-14');
+            await seedDeterministicJourney(page, `execution-exe14-${viewport.name}`);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            const recommendation = {
+                ...OPEN_BUY_RECOMMENDATION,
+                id: 914,
+                status: 'pending_execution',
+                execution_status: 'pending',
+                order_side: 'buy',
+                strategy_name: 'Momentum Core',
+                suggested_quantity: 5,
+                suggested_investment_amount: 17500,
+                reserved_amount: 17500,
+            };
+            await installSemiAutomaticMocks(page, recommendation);
+            const previousOrder = { id: 814, recommendation_id: 914, symbol: 'INFY', side: 'buy', quantity: 5, status: 'pending', broker_status: 'cancelled', filled_quantity: 0 };
+            await page.route('**/api/v1/orders', (route) => route.fulfill({ json: { success: true, data: [previousOrder] } }));
+            let retryPayload = null;
+            await page.route('**/api/v1/execution/submit-selected', async (route) => {
+                retryPayload = route.request().postDataJSON();
+                await route.fulfill({ json: { success: true, data: { submitted: 1, blocked: 0, skipped: 0, results: [] } } });
+            });
+
+            await page.goto('/transactions/pending');
+            const row = page.getByRole('row').filter({ hasText: 'INFY' });
+            await expect(row).toContainText('Previous order: cancelled; filled across attempts 0/5');
+            await row.getByLabel('Select INFY').check();
+            await page.getByLabel('StoX execution code — Microsoft Authenticator').fill('123456');
+            await page.getByRole('button', { name: 'Accept / Execute Selected' }).click();
+            await expect(page.getByText('Submitted to broker')).toBeVisible();
+            expect(retryPayload).toEqual({ recommendation_ids: [914], totp: '123456' });
+        });
+
+        test(`EXE-13 blocks broker submission when order history cannot be verified (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'EXE-13');
+            await seedDeterministicJourney(page, `execution-exe13-history-fail-${viewport.name}`);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            const recommendation = { ...OPEN_BUY_RECOMMENDATION, id: 913, status: 'pending_execution', execution_status: 'pending' };
+            await installSemiAutomaticMocks(page, recommendation);
+            await page.route('**/api/v1/orders', (route) => route.fulfill({ status: 503, json: { success: false, error: { message: 'Unavailable' } } }));
+            let submitCalls = 0;
+            await page.route('**/api/v1/execution/submit-selected', async (route) => {
+                submitCalls++;
+                await route.fulfill({ json: { success: true, data: { submitted: 0 } } });
+            });
+
+            await page.goto('/transactions/pending');
+            await expect(page.getByText('Order status unavailable; broker submission is disabled.')).toBeVisible();
+            await expect(page.getByLabel('Select INFY')).toBeDisabled();
+            expect(submitCalls).toBe(0);
+        });
+    }
+});
+
+
+test.describe('V9-UX-001 retry after an earlier partial fill', () => {
+    for (const viewport of VIEWPORTS) {
+        test(`EXE-11 prevents retry when an earlier attempt already filled shares (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'EXE-11');
+            await seedDeterministicJourney(page, `execution-exe11-retry-${viewport.name}`);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            const recommendation = { ...OPEN_BUY_RECOMMENDATION, id: 911, status: 'pending_execution', execution_status: 'pending' };
+            await installSemiAutomaticMocks(page, recommendation);
+            await page.route('**/api/v1/orders', (route) => route.fulfill({ json: { success: true, data: [
+                { id: 811, recommendation_id: 911, symbol: 'INFY', quantity: 5, broker_status: 'partial', filled_quantity: 2, created_at: '2026-10-08T10:00:00Z' },
+                { id: 812, recommendation_id: 911, symbol: 'INFY', quantity: 5, broker_status: 'cancelled', filled_quantity: 0, created_at: '2026-10-08T11:00:00Z' },
+            ] } }));
+
+            await page.goto('/transactions/pending');
+            const row = page.getByRole('row').filter({ hasText: 'INFY' });
+            await expect(row).toContainText('filled across attempts 2/5');
+            await expect(row).toContainText('reconcile fills or wait for broker confirmation before retrying');
+            await expect(row.getByLabel('Select INFY')).toBeDisabled();
+        });
+    }
+});
