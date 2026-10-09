@@ -382,6 +382,7 @@ class NseHistoricalUniverseArchiveProviderTest extends TestCase
         $this->assertSame($sourceId, $again['diagnostics']['source_id']);
         $this->assertDatabaseCount('stox_ml_acceptance_sources', 1);
         Http::assertSentCount(1);
+        File::deleteDirectory(storage_path('app/private/ml-acceptance/sources/'.$sourceId));
         File::deleteDirectory($directory);
     }
 
