@@ -162,6 +162,35 @@ test.describe('V9-UX-001 strategy journeys', () => {
             expect(config.portfolio_rules.horizon_calendar_days).toBe(180);
             await expect(page.getByRole('button', { name: 'Enable', exact: true })).toBeDisabled();
         });
+        test('STR-05 keeps entry and exit screener definitions separate (' + viewport.name + ')', async ({ page }, testInfo) => {
+            journeyId(testInfo, 'STR-05');
+            await seedDeterministicJourney(page, 'strategy-str05-' + viewport.name);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installInvestorWorkflowApiMocks(page, {
+                initialScreeners: [
+                    { id: 41, name: 'Momentum Entry Screen', scope: 'holdings', is_enabled: true, definition_json: { root: { type: 'group', op: 'AND', children: [] } }, description: 'Entry rule.' },
+                    { id: 42, name: 'Protective Exit Screen', scope: 'holdings', is_enabled: true, definition_json: { root: { type: 'group', op: 'AND', children: [] } }, description: 'Exit rule.' },
+                ],
+            });
+            await page.goto('/strategy?strategy_id=7');
+            await page.getByRole('button', { name: 'Eligibility Sources' }).click();
+            await page.locator('select').filter({ has: page.locator('option[value="41"]') }).selectOption('41');
+            await page.getByRole('button', { name: 'Add', exact: true }).click();
+            await page.getByRole('button', { name: 'Exit Strategy' }).click();
+            await page.getByLabel('Enable Screener Exit').check();
+            await page.getByLabel('Exit screener').selectOption('42');
+            const saveRequest = page.waitForRequest((request) => (
+                request.method() === 'PUT' && new URL(request.url()).pathname.endsWith('/api/v1/strategy')
+            ));
+            await page.getByRole('button', { name: 'Save', exact: true }).click();
+            const config = (await saveRequest).postDataJSON().config;
+            expect(config.eligibility_sources).toEqual(expect.arrayContaining([
+                expect.objectContaining({ screener_id: 41, screener_name: 'Momentum Entry Screen', enabled: true }),
+            ]));
+            const exitRule = config.exit_strategy.rules.find((rule) => rule.key === 'screener_exit');
+            expect(exitRule).toMatchObject({ enabled: true, screener_id: 42, screener_name: 'Protective Exit Screen' });
+            expect(exitRule.screener_id).not.toBe(config.eligibility_sources[0].screener_id);
+        });
         });
     }
 });
