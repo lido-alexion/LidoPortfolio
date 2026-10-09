@@ -175,6 +175,75 @@ test.describe('V9-UX-001 recommendation journeys', () => {
             await expect(page.getByText('No trade recommendations are actionable in the current view.')).toBeVisible();
         });
 
+        test('REC-10 shows the actual execution amount when capital is partially funded (' + viewport.name + ')', async ({ page }, testInfo) => {
+            journeyId(testInfo, 'REC-10');
+            await seedDeterministicJourney(page, 'recommendation-rec10-' + viewport.name);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installTosApiMocks(page, {
+                recommendations: [{ ...OPEN_BUY_RECOMMENDATION, id: 710, strategy_name: 'Momentum Core', can_review: false }],
+                capitalResolution: {
+                    capital_resolution_state: 'closed_at_actual_with_shortfall',
+                    requested_investment_amount: 50000,
+                    own_capital_used: 20000,
+                    recalled_capital_requested: 30000,
+                    recalled_capital_received: 10000,
+                    bridge_capital_used: 0,
+                    total_immediately_available: 30000,
+                    actual_execution_amount: 30000,
+                    unresolved_amount: 20000,
+                },
+            });
+            const observedRequests = [];
+            page.on('request', (request) => observedRequests.push(new URL(request.url()).pathname));
+            await page.goto('/recommendations');
+            const row = page.getByRole('row').filter({ hasText: 'Momentum Core' });
+            await row.getByRole('button', { name: 'Review' }).click();
+            const dialog = page.getByRole('dialog');
+            await expect(dialog.getByRole('heading', { name: 'Capital resolution' })).toBeVisible();
+            await expect(dialog).toContainText('Open INFY');
+            await expect(dialog).toContainText('Closed at actual (shortfall remains)');
+            await expect(dialog.getByRole('button', { name: 'Approve' })).toHaveCount(0);
+            await expect(dialog).toContainText('Partially funded — execute ₹30,000 of ₹50,000.');
+            const actualAmount = dialog.getByRole('row').filter({ hasText: 'Actual execution amount' });
+            await expect(actualAmount).toContainText('₹30,000');
+            await expect(dialog.getByRole('row').filter({ hasText: 'Unresolved' })).toContainText('₹20,000');
+            expect(observedRequests.some((path) => /\/orders(?:\/|$)/.test(path))).toBe(false);
+        });
+
+        test('REC-11 explains an unfunded recommendation without presenting a positive execution amount (' + viewport.name + ')', async ({ page }, testInfo) => {
+            journeyId(testInfo, 'REC-11');
+            await seedDeterministicJourney(page, 'recommendation-rec11-' + viewport.name);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installTosApiMocks(page, {
+                recommendations: [{ ...OPEN_BUY_RECOMMENDATION, id: 711, strategy_name: 'Momentum Core', can_review: false }],
+                capitalResolution: {
+                    capital_resolution_state: 'unfunded',
+                    requested_investment_amount: 50000,
+                    own_capital_used: 0,
+                    recalled_capital_requested: 0,
+                    recalled_capital_received: 0,
+                    bridge_capital_used: 0,
+                    total_immediately_available: 0,
+                    actual_execution_amount: 0,
+                    unresolved_amount: 50000,
+                },
+            });
+            const observedRequests = [];
+            page.on('request', (request) => observedRequests.push(new URL(request.url()).pathname));
+            await page.goto('/recommendations');
+            const row = page.getByRole('row').filter({ hasText: 'Momentum Core' });
+            await row.getByRole('button', { name: 'Review' }).click();
+            const dialog = page.getByRole('dialog');
+            await expect(dialog.getByRole('heading', { name: 'Capital resolution' })).toBeVisible();
+            await expect(dialog).toContainText('Open INFY');
+            await expect(dialog).toContainText('Unfunded');
+            await expect(dialog.getByRole('button', { name: 'Approve' })).toHaveCount(0);
+            await expect(dialog).toContainText('Partially funded — execute ₹0 of ₹50,000.');
+            await expect(dialog.getByRole('row').filter({ hasText: 'Actual execution amount' })).toContainText('₹0');
+            await expect(dialog.getByRole('row').filter({ hasText: 'Unresolved' })).toContainText('₹50,000');
+            expect(observedRequests.some((path) => /\/orders(?:\/|$)/.test(path))).toBe(false);
+        });
+
         test('REC-09 defers a recommendation and reopens it for review later (' + viewport.name + ')', async ({ page }, testInfo) => {
             journeyId(testInfo, 'REC-09');
             await seedDeterministicJourney(page, 'recommendation-rec09-' + viewport.name);

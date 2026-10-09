@@ -21,6 +21,7 @@ export async function installTosApiMocks(page, {
     recommendations = [OPEN_BUY_RECOMMENDATION],
     pipelineRecommendations = null,
     pipelineStages = { discovery: { candidates: 0 }, evaluation: { results: 0 }, recommendation: { count: 0 } },
+    capitalResolution = CAPITAL_RESOLUTION,
     user = TEST_USER,
 } = {}) {
     let recs = recommendations.map((r) => ({ ...r }));
@@ -77,7 +78,7 @@ export async function installTosApiMocks(page, {
             return json(route, apiEnvelope(rec));
         }
         if (/\/api\/v1\/recommendations\/\d+\/capital-resolution$/.test(path) && method === 'GET') {
-            return json(route, apiEnvelope(CAPITAL_RESOLUTION));
+            return json(route, apiEnvelope(capitalResolution));
         }
         const reviewMatch = path.match(/\/api\/v1\/recommendations\/(\d+)\/review$/);
         if (reviewMatch && method === 'POST') {
