@@ -256,7 +256,10 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
             const payload = request.postDataJSON();
             const config = {
                 eligibility_sources: [],
-                indicators: [{ key: 'momentum_score', label: 'Momentum', enabled: true, weight: 100 }],
+                indicators: [
+                    { key: 'momentum_score', category: 'Momentum', display_name: 'Momentum', label: 'Momentum', enabled: true, weight: 100 },
+                    { key: 'rsi_score', category: 'Momentum', display_name: 'RSI', label: 'RSI', enabled: false, weight: 0 },
+                ],
                 thresholds: {},
                 portfolio_rules: { horizon_calendar_days: null, first_entry_pct: 50, max_holdings: 10 },
                 capital_allocation: { strategy: 'proportional', tie_break: 'highest_score', score_bands: [] },
@@ -299,7 +302,10 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
                             { code: 'eligibility_source_required', message: 'Add at least one eligibility Screener.' },
                         ],
                     },
-                    indicators: [{ key: 'momentum_score', label: 'Momentum', enabled: true, weight: 100 }],
+                    indicators: [
+                    { key: 'momentum_score', category: 'Momentum', display_name: 'Momentum', label: 'Momentum', enabled: true, weight: 100 },
+                    { key: 'rsi_score', category: 'Momentum', display_name: 'RSI', label: 'RSI', enabled: false, weight: 0 },
+                ],
                     eligibility_sources: [],
                     portfolio_rules: { horizon_calendar_days: null, first_entry_pct: 50, max_holdings: 10 },
                     exit_strategy: { enabled: true, mode: 'any', rules: [

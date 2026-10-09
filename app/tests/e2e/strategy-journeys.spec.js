@@ -191,6 +191,34 @@ test.describe('V9-UX-001 strategy journeys', () => {
             expect(exitRule).toMatchObject({ enabled: true, screener_id: 42, screener_name: 'Protective Exit Screen' });
             expect(exitRule.screener_id).not.toBe(config.eligibility_sources[0].screener_id);
         });
+        test('STR-06 configures factor weights and ordered score thresholds (' + viewport.name + ')', async ({ page }, testInfo) => {
+            journeyId(testInfo, 'STR-06');
+            await seedDeterministicJourney(page, 'strategy-str06-' + viewport.name);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installInvestorWorkflowApiMocks(page);
+            await page.goto('/strategy?strategy_id=7');
+            await page.getByRole('button', { name: 'Scoring Model' }).click();
+            await expect(page.getByRole('row', { name: /Momentum/ })).toBeVisible();
+            await page.getByLabel('Enable RSI').check();
+            await page.getByLabel('Weight for Momentum').fill('80');
+            await page.getByLabel('Weight for RSI').fill('20');
+            await expect(page.getByText(/Enabled weight total: 100/)).toBeVisible();
+            await page.getByRole('button', { name: 'Recommendation Thresholds' }).click();
+            const thresholdInputs = page.getByRole('spinbutton');
+            for (const [index, value] of [35, 70, 80, 40, 25, 55].entries()) {
+                await thresholdInputs.nth(index).fill(String(value));
+            }
+            const saveRequest = page.waitForRequest((request) => (
+                request.method() === 'PUT' && new URL(request.url()).pathname.endsWith('/api/v1/strategy')
+            ));
+            await page.getByRole('button', { name: 'Save', exact: true }).click();
+            const config = (await saveRequest).postDataJSON().config;
+            expect(config.indicators).toEqual(expect.arrayContaining([
+                expect.objectContaining({ key: 'momentum_score', enabled: true, weight: 80 }),
+                expect.objectContaining({ key: 'rsi_score', enabled: true, weight: 20 }),
+            ]));
+            expect(config.thresholds).toMatchObject({ minimum_overall_score: 35, open_position: 70, increase_position: 80, reduce_position: 40, exit_position: 25, watch: 55 });
+        });
         });
     }
 });
