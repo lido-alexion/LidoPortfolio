@@ -384,6 +384,28 @@ test.describe('V9-UX-001 strategy journeys', () => {
             await expect(page.getByRole('row', { name: /quality-core.*Quality Core/ })).toContainText('active');
             await expect(page.getByRole('row', { name: /quality-core.*Quality Core/ }).getByRole('button', { name: 'Enable' })).toHaveCount(0);
         });
+        test('STR-15 keeps multiple enabled strategies independently identifiable (' + viewport.name + ')', async ({ page }, testInfo) => {
+            journeyId(testInfo, 'STR-15');
+            await seedDeterministicJourney(page, 'strategy-str15-' + viewport.name);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installInvestorWorkflowApiMocks(page, {
+                strategyRegistryRows: [
+                    { artifact_id: 'momentum-core', slug: 'momentum-core', name: 'Momentum Core', artifact_version: '1.0.0', metadata: { legacy_id: 7, status: 'active', is_enabled: true, allocation_pct: 50 } },
+                    { artifact_id: 'quality-core', slug: 'quality-core', name: 'Quality Core', artifact_version: '2.1.0', metadata: { legacy_id: 8, status: 'active', is_enabled: true, allocation_pct: 50 } },
+                ],
+            });
+            await page.goto('/strategy/registry');
+            const momentum = page.getByRole('row', { name: /momentum-core.*Momentum Core/ });
+            const quality = page.getByRole('row', { name: /quality-core.*Quality Core/ });
+            await expect(momentum).toContainText('active');
+            await expect(momentum).toContainText('1.0.0');
+            await expect(momentum).toContainText('50.00%');
+            await expect(quality).toContainText('active');
+            await expect(quality).toContainText('2.1.0');
+            await expect(quality).toContainText('50.00%');
+            await expect(momentum.getByRole('button', { name: 'Enable' })).toHaveCount(0);
+            await expect(quality.getByRole('button', { name: 'Enable' })).toHaveCount(0);
+        });
         test('STR-14 archives one strategy and retains its active sibling (' + viewport.name + ')', async ({ page }, testInfo) => {
             journeyId(testInfo, 'STR-14');
             await seedDeterministicJourney(page, 'strategy-str14-' + viewport.name);
