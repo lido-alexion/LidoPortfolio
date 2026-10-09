@@ -190,3 +190,41 @@ test.describe('V9-UX-001 broker reconciliation', () => {
         });
     }
 });
+
+
+test.describe('V9-UX-001 broker cancellation lifecycle', () => {
+    for (const viewport of VIEWPORTS) {
+        test(`EXE-09 keeps cancellation requested distinct from broker-confirmed cancellation (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'EXE-09');
+            await seedDeterministicJourney(page, `execution-exe09-${viewport.name}`);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installTosApiMocks(page);
+            let cancellationCalls = 0;
+            const submittedOrder = {
+                id: 909,
+                symbol: 'INFY',
+                side: 'buy',
+                quantity: 5,
+                status: 'pending',
+                broker_status: 'open',
+                filled_quantity: 0,
+            };
+            await page.route('**/api/v1/review/dashboard', (route) => route.fulfill({
+                json: { success: true, data: { portfolio: {}, actionable_counts: {}, informational_counts: {}, outcomes: [], informational_outcomes: [], recent_reviews: [] } },
+            }));
+            await page.route('**/api/v1/orders', (route) => route.fulfill({ json: { success: true, data: [submittedOrder] } }));
+            await page.route('**/api/v1/orders/909/cancel', async (route) => {
+                cancellationCalls++;
+                await route.fulfill({ json: { success: true, data: { cancellation_status: 'pending' } } });
+            });
+
+            await page.goto('/review');
+            const row = page.getByRole('row').filter({ hasText: 'INFY' });
+            await expect(row).toContainText('open');
+            await row.getByRole('button', { name: 'Cancel' }).click();
+            await expect(page.getByText('Cancellation requested; waiting for Kite confirmation.')).toBeVisible();
+            await expect(row).toContainText('open');
+            expect(cancellationCalls).toBe(1);
+        });
+    }
+});
