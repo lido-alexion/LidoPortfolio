@@ -141,3 +141,52 @@ test.describe('V9-UX-001 cancellation before broker submission', () => {
         });
     }
 });
+
+
+test.describe('V9-UX-001 broker reconciliation', () => {
+    for (const viewport of VIEWPORTS) {
+        test(`EXE-13 reconciles an uncertain broker order before any retry (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'EXE-13');
+            await seedDeterministicJourney(page, `execution-exe13-${viewport.name}`);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installTosApiMocks(page);
+            let reconcileCalls = 0;
+            const order = {
+                id: 813,
+                symbol: 'INFY',
+                side: 'buy',
+                quantity: 5,
+                status: 'pending',
+                broker_status: 'unknown',
+                filled_quantity: 0,
+                broker_order_id: 'mock-order-813',
+            };
+            await page.route('**/api/v1/review/dashboard', (route) => route.fulfill({
+                json: { success: true, data: { portfolio: {}, actionable_counts: {}, informational_counts: {}, outcomes: [], informational_outcomes: [], decisions: [] } },
+            }));
+            await page.route('**/api/v1/orders', (route) => route.fulfill({ json: { success: true, data: [order] } }));
+            await page.route('**/api/v1/orders/813/reconcile', async (route) => {
+                reconcileCalls++;
+                await route.fulfill({ json: { success: true, data: order } });
+            });
+            const unsafeRequests = [];
+            page.on('request', (request) => {
+                const path = new URL(request.url()).pathname;
+                if (path.endsWith('/api/v1/execution/submit-selected') || path.endsWith('/api/v1/orders/813/execute')) {
+                    unsafeRequests.push(path);
+                }
+            });
+
+            await page.goto('/review');
+            const orderRow = page.getByRole('row').filter({ hasText: 'INFY' });
+            await expect(orderRow).toContainText('unknown');
+            await expect(orderRow).toContainText('0');
+            await expect(orderRow.getByRole('button', { name: 'Reconcile' })).toBeVisible();
+            await expect(orderRow.getByRole('button', { name: 'Add transaction' })).toHaveCount(0);
+            await orderRow.getByRole('button', { name: 'Reconcile' }).click();
+            await expect(page.getByText('Broker status remains unknown. Do not retry this order yet.')).toBeVisible();
+            expect(reconcileCalls).toBe(1);
+            expect(unsafeRequests).toEqual([]);
+        });
+    }
+});

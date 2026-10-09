@@ -1,4 +1,4 @@
-import React from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ROUTES } from '../navigation/routes';
 import api from '../api';
@@ -19,6 +19,7 @@ function fmtNum(v) {
 }
 
 export default function ReviewDashboardPage() {
+    const [reconcilingOrderId, setReconcilingOrderId] = useState(null);
     const { data, loading, reload: load } = useApiGet({
         errorFallback: 'Failed to load review dashboard',
         request: async () => {
@@ -54,6 +55,27 @@ export default function ReviewDashboardPage() {
             const outcome = response?.data?.data?.cancellation_status;
             showToast(outcome === 'pending' ? 'Cancellation requested; waiting for Kite confirmation.' : 'Order cancellation confirmed.', 'success');
             await load();
+        }
+    };
+
+    const reconcileOrder = async (orderId) => {
+        setReconcilingOrderId(orderId);
+        try {
+            const { ok, data: response } = await runApiMutation(async () => (
+                await api.post(`/v1/orders/${orderId}/reconcile`, null, { skipErrorToast: true })
+            ), { errorFallback: 'Order reconciliation failed' });
+            if (ok) {
+                const status = response?.data?.data?.broker_status || 'unknown';
+                showToast(
+                    status === 'unknown'
+                        ? 'Broker status remains unknown. Do not retry this order yet.'
+                        : `Latest broker status: ${status}. Do not submit a duplicate while it is in flight.`,
+                    status === 'unknown' ? 'warning' : 'info',
+                );
+                await load();
+            }
+        } finally {
+            setReconcilingOrderId(null);
         }
     };
 
@@ -219,12 +241,14 @@ export default function ReviewDashboardPage() {
                                     <th>Side</th>
                                     <th>Qty</th>
                                     <th>Status</th>
+                                    <th>Broker status</th>
+                                    <th className="text-end">Filled</th>
                                     <th />
                                 </tr>
                             </thead>
                             <tbody>
                                 {orders.length === 0 ? (
-                                    <tr><td colSpan={6} className="text-muted">No orders.</td></tr>
+                                    <tr><td colSpan={8} className="text-muted">No orders.</td></tr>
                                 ) : orders.map((o) => (
                                     <tr key={o.id}>
                                         <td>{o.id}</td>
@@ -232,10 +256,24 @@ export default function ReviewDashboardPage() {
                                         <td>{o.side}</td>
                                         <td>{o.quantity}</td>
                                         <td>{o.status}</td>
+                                        <td>{o.broker_status || '—'}</td>
+                                        <td className="text-end">{o.filled_quantity ?? '—'}</td>
                                         <td className="text-nowrap">
+                                            {o.status === 'pending' && ['submitted', 'open', 'partial', 'unknown'].includes(o.broker_status) && (
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-link btn-sm px-0 me-2"
+                                                    disabled={reconcilingOrderId === o.id}
+                                                    onClick={() => reconcileOrder(o.id)}
+                                                >
+                                                    {reconcilingOrderId === o.id ? 'Reconciling…' : 'Reconcile'}
+                                                </button>
+                                            )}
                                             {o.status === 'pending' && (
                                                 <>
-                                                    <button type="button" className="btn btn-link btn-sm px-0 me-2" onClick={() => executePending(o.id)}>Add transaction</button>
+                                                    {!['submitted', 'open', 'partial', 'unknown'].includes(o.broker_status) && (
+                                                        <button type="button" className="btn btn-link btn-sm px-0 me-2" onClick={() => executePending(o.id)}>Add transaction</button>
+                                                    )}
                                                     <button type="button" className="btn btn-link btn-sm px-0 text-danger" onClick={() => cancelPending(o.id)}>Cancel</button>
                                                 </>
                                             )}
