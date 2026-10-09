@@ -100,6 +100,43 @@ test.describe('V9-UX-001 strategy journeys', () => {
                 expect.objectContaining({ screener_id: 99, screener_name: 'Momentum Entry — MA200 + RSI', enabled: true }),
             ]));
         });
+        test('STR-03 saves entry criteria, market gates, scoring thresholds, and portfolio limits (' + viewport.name + ')', async ({ page }, testInfo) => {
+            journeyId(testInfo, 'STR-03');
+            await seedDeterministicJourney(page, 'strategy-str03-' + viewport.name);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installInvestorWorkflowApiMocks(page, {
+                initialScreeners: [{ id: 41, name: 'Momentum Entry', scope: 'holdings', is_enabled: true,
+                    definition_json: { root: { type: 'group', op: 'AND', children: [] } }, description: 'Entry eligibility source.' }],
+            });
+            await page.goto('/strategy?strategy_id=7');
+            await page.getByRole('button', { name: 'Eligibility Sources' }).click();
+            await page.locator('select').filter({ has: page.locator('option[value="41"]') }).selectOption('41');
+            await page.getByRole('button', { name: 'Add', exact: true }).click();
+            await page.getByRole('button', { name: 'Recommendation Thresholds' }).click();
+            const thresholdInputs = page.getByRole('spinbutton');
+            for (const [index, value] of [35, 70, 80, 40, 25, 55].entries()) {
+                await thresholdInputs.nth(index).fill(String(value));
+            }
+            await page.getByRole('button', { name: 'Market Gates' }).click();
+            await page.getByLabel('Enable market gates').check();
+            await page.getByLabel('Min sentiment').fill('55');
+            await page.getByLabel('Max risk (raw)').fill('65');
+            await page.getByRole('button', { name: 'Portfolio Rules' }).click();
+            await page.getByLabel('Hard maximum holdings').fill('8');
+            await page.getByLabel('First entry %').fill('40');
+            const saveRequest = page.waitForRequest((request) => (
+                request.method() === 'PUT' && new URL(request.url()).pathname.endsWith('/api/v1/strategy')
+            ));
+            await page.getByRole('button', { name: 'Save', exact: true }).click();
+            const config = (await saveRequest).postDataJSON().config;
+            expect(config.eligibility_sources).toEqual(expect.arrayContaining([
+                expect.objectContaining({ screener_id: 41, enabled: true }),
+            ]));
+            expect(config.thresholds).toMatchObject({ minimum_overall_score: 35, open_position: 70, increase_position: 80, reduce_position: 40, exit_position: 25, watch: 55 });
+            expect(config.market_gates).toMatchObject({ enabled: true, min_sentiment: 55, max_risk_raw: 65 });
+            expect(config.portfolio_rules).toMatchObject({ max_holdings: 8, first_entry_pct: 40 });
+            await expect(page.getByRole('button', { name: 'Enable', exact: true })).toBeDisabled();
+        });
         });
     }
 });
