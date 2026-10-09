@@ -1,6 +1,6 @@
 # FEAT-056 ML Lifecycle Functional Acceptance Plan
 
-**Implementation state:** IMPLEMENTED (local lifecycle tests and backend CI passed).  
+**Implementation state:** IMPLEMENTED (local lifecycle tests and backend CI passed).
 **Functional acceptance state:** OPEN — deployed runtime checks remain deferred until FEAT-057 qualification.
 
 ## Ownership and boundaries

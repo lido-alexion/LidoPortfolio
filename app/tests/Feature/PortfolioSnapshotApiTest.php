@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\PortfolioSnapshot;
 use App\Models\User;
+use App\Services\Export\ExportDatasetRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -11,6 +12,36 @@ use Tests\TestCase;
 class PortfolioSnapshotApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_export_provider_resolves_current_range_in_requested_sort_order_with_stable_ids(): void
+    {
+        $user = User::query()->create(['name' => 'Snapshot Export User', 'email' => 'snap-export-'.Str::random(8).'@example.com', 'password' => 'password123']);
+        $profile = $this->defaultPortfolioFor($user);
+        foreach ([now()->subDays(4), now()->subDays(2), now()->subDays(1)] as $date) {
+            PortfolioSnapshot::query()->create(['profile_id' => $profile->id, 'snapshot_date' => $date->toDateString(), 'portfolio_value' => '123.456789', 'invested_value' => '100.000001', 'created_at' => now()]);
+        }
+        $registry = app(ExportDatasetRegistry::class);
+        $resolved = $registry->resolve('portfolio-snapshots', $profile, ['range' => '90d', 'sort_by' => 'snapshot_date', 'sort_direction' => 'desc']);
+        $this->assertSame([now()->subDays(1)->toDateString(), now()->subDays(2)->toDateString(), now()->subDays(4)->toDateString()], array_column($resolved['rows'], 'snapshot_date'));
+        $this->assertCount(3, array_unique($resolved['identities']));
+        $this->assertSame('desc', $resolved['metadata']['sort']['direction']);
+
+        $ascending = $registry->resolve('portfolio-growth', $profile, ['range' => '90d', 'sort_by' => 'snapshot_date', 'sort_direction' => 'asc']);
+        $this->assertSame(array_reverse(array_column($resolved['rows'], 'snapshot_date')), array_column($ascending['rows'], 'snapshot_date'));
+        $this->assertSame($resolved['identities'], array_reverse($ascending['identities']));
+    }
+
+    public function test_current_export_rejects_missing_or_unsupported_filters_and_sort(): void
+    {
+        $user = User::query()->create(['name' => 'Snapshot Export Validation', 'email' => 'snap-export-validation-'.Str::random(8).'@example.com', 'password' => 'password123']);
+        $profile = $this->defaultPortfolioFor($user);
+        $this->actingAs($user)->withHeader('X-Profile-Id', (string) $profile->id)
+            ->postJson('/api/exports', ['dataset' => 'portfolio-snapshots', 'format' => 'csv', 'scope' => 'current'])
+            ->assertUnprocessable();
+        $this->actingAs($user)->withHeader('X-Profile-Id', (string) $profile->id)
+            ->postJson('/api/exports', ['dataset' => 'portfolio-snapshots', 'format' => 'csv', 'scope' => 'current', 'filters' => ['range' => '90d', 'sort_by' => 'portfolio_value', 'sort_direction' => 'desc']])
+            ->assertUnprocessable();
+    }
 
     public function test_snapshots_endpoint_requires_auth(): void
     {
@@ -78,6 +109,8 @@ class PortfolioSnapshotApiTest extends TestCase
 
         $dates = collect($response->json('snapshots'))->pluck('snapshot_date')->all();
         $this->assertSame(['2026-02-01', '2026-02-02', '2026-02-03'], $dates);
+        $this->assertNotEmpty($response->json('snapshots.0.id'));
+        $this->assertCount(3, collect($response->json('snapshots'))->pluck('id')->unique());
     }
 
     public function test_snapshots_support_from_date_filter(): void

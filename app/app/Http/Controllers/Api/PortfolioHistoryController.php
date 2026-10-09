@@ -38,10 +38,11 @@ class PortfolioHistoryController extends Controller
         $limit = (int) ($validated['limit'] ?? 365);
         $rows = $query
             ->limit($limit)
-            ->get(['snapshot_date', 'portfolio_value', 'invested_value'])
+            ->get(['id', 'snapshot_date', 'portfolio_value', 'invested_value'])
             ->sortBy('snapshot_date')
             ->values()
             ->map(fn (PortfolioSnapshot $row) => [
+                'id' => (string) $row->id,
                 'snapshot_date' => $row->snapshot_date->toDateString(),
                 'portfolio_value' => (string) $row->portfolio_value,
                 'invested_value' => (string) $row->invested_value,

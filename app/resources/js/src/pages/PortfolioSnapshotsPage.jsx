@@ -1,7 +1,8 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import PortfolioSnapshotGrowthChart from '../components/portfolio/PortfolioSnapshotGrowthChart';
+import ExportDataButton from '../components/ExportDataButton';
 import useApiGet from '../hooks/useApiGet';
 import usePortfolioChanged from '../hooks/usePortfolioChanged';
 import { ROUTES } from '../navigation/routes';
@@ -26,6 +27,7 @@ function subtractDays(dateString, days) {
 
 function normalizeSnapshotRows(payload) {
     return (payload?.snapshots || []).map((row) => ({
+        id: String(row.id),
         snapshot_date: String(row.snapshot_date).slice(0, 10),
         portfolio_value: Number(row.portfolio_value || 0),
         invested_value: Number(row.invested_value || 0),
@@ -43,9 +45,13 @@ export default function PortfolioSnapshotsPage() {
     const { activePortfolio } = usePortfolio();
     const profileId = activePortfolio?.id;
     const [rangeId, setRangeId] = useState('365d');
+    const [selectedIds, setSelectedIds] = useState([]);
     const [rebuilding, setRebuilding] = useState(false);
 
     const range = RANGE_OPTIONS.find((opt) => opt.id === rangeId) || RANGE_OPTIONS[2];
+    const tableExportFilters = { range: rangeId, sort_by: 'snapshot_date', sort_direction: 'desc' };
+    const chartExportFilters = { ...tableExportFilters, sort_direction: 'asc' };
+    useEffect(() => setSelectedIds([]), [profileId, rangeId]);
 
     const loadSnapshots = useCallback(async () => {
         const params = { limit: range.limit };
@@ -229,9 +235,10 @@ export default function PortfolioSnapshotsPage() {
             <div className="card mb-3">
                 <div className="card-header py-2 fw-semibold small d-flex justify-content-between align-items-center gap-2">
                     <span>Portfolio growth</span>
-                    <span className="text-muted fw-normal">
-                        {loading ? 'Loading…' : `${data?.meta?.count ?? 0} snapshot(s)`}
-                    </span>
+                    <div className="d-flex align-items-center gap-2">
+                        <span className="text-muted fw-normal">{loading ? 'Loading…' : `${data?.meta?.count ?? 0} snapshot(s)`}</span>
+                        <ExportDataButton dataset="portfolio-growth" label="Export chart data" fields={['snapshot_date', 'portfolio_value', 'invested_value']} scopes={['current', 'full']} filters={chartExportFilters} />
+                    </div>
                 </div>
                 <div className="card-body">
                     {loading ? (
@@ -243,13 +250,17 @@ export default function PortfolioSnapshotsPage() {
             </div>
 
             <section className="card">
-                <div className="card-header py-2 fw-semibold small">Daily snapshots</div>
+                <div className="card-header py-2 fw-semibold small d-flex justify-content-between align-items-center gap-2">
+                    <span>Daily snapshots</span>
+                    <ExportDataButton dataset="portfolio-snapshots" label="Export table data" fields={['snapshot_date', 'portfolio_value', 'invested_value']} scopes={selectedIds.length ? ['current', 'full', 'selected'] : ['current', 'full']} filters={tableExportFilters} selectedIds={selectedIds} />
+                </div>
                 <div className="card-body p-0">
                     <div className="table-responsive">
                         <table className="table table-sm align-middle mb-0">
                             <thead>
                                 <tr>
-                                    <th>Date</th>
+                                    <th scope="col"><span className="visually-hidden">Select row</span></th>
+                                    <th scope="col">Date</th>
                                     <th className="text-end">Portfolio</th>
                                     <th className="text-end">Invested</th>
                                     <th className="text-end">Unrealized P/L</th>
@@ -259,13 +270,13 @@ export default function PortfolioSnapshotsPage() {
                             <tbody>
                                 {loading ? (
                                     <tr>
-                                        <td colSpan={5} className="text-muted small p-3">
+                                        <td colSpan={6} className="text-muted small p-3">
                                             Loading snapshots…
                                         </td>
                                     </tr>
                                 ) : tableRows.length === 0 ? (
                                     <tr>
-                                        <td colSpan={5} className="text-muted small p-4 text-center">
+                                        <td colSpan={6} className="text-muted small p-4 text-center">
                                             No portfolio snapshots yet. History is built from your transactions
                                             and stock price data. Use <strong>Rebuild history</strong> to populate
                                             daily rows.
@@ -274,6 +285,7 @@ export default function PortfolioSnapshotsPage() {
                                 ) : (
                                     tableRows.map((row) => (
                                         <tr key={row.snapshot_date}>
+                                            <td><input type="checkbox" className="form-check-input" aria-label={`Select snapshot ${row.snapshot_date}`} checked={selectedIds.includes(row.id)} onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, row.id] : current.filter((id) => id !== row.id))} /></td>
                                             <td className="small">
                                                 {formatTransactionDateDisplay(row.snapshot_date)}
                                             </td>
