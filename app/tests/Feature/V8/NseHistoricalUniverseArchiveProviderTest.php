@@ -6,6 +6,7 @@ use App\Exceptions\MlHistoricalUniverseProviderException;
 use App\Models\Stock;
 use App\Models\V8\MlUniverseSnapshotBackfillRun;
 use App\Models\V8\MlUniverseSnapshotBoundary;
+use App\Models\V8\MlAcceptanceSource;
 use App\Services\ML\MlHistoricalUniverseMembershipService;
 use App\Services\ML\NseHistoricalUniverseArchiveProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -363,6 +364,23 @@ class NseHistoricalUniverseArchiveProviderTest extends TestCase
         $this->assertSame('nse_cash_bhavcopy', $snapshot['source']);
         $this->assertSame('https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_20240830_F_0000.csv.zip', $snapshot['diagnostics']['archive_url']);
         $this->assertSame(hash('sha256', $payload), $snapshot['diagnostics']['archive_sha256']);
+        $sourceId = $snapshot['diagnostics']['source_id'];
+        $sealed = MlAcceptanceSource::query()->findOrFail($sourceId);
+        $this->assertSame('sealed', $sealed->status);
+        $this->assertSame('nse_cash_bhavcopy', $sealed->manifest['source']);
+        $this->assertSame('2024-08-30', $sealed->manifest['date']);
+        $this->assertSame(hash('sha256', $payload), $sealed->manifest['sha256']);
+        $this->assertSame('system_official_source_sealed', $sealed->history[0]['action']);
+        $this->assertSame(0, $sealed->actor_id);
+        $materialized = app(MlHistoricalUniverseMembershipService::class)
+            ->backfillHistoricalSnapshots([$snapshot], 'forward_official_nse');
+        $this->assertSame('completed', $materialized['status']);
+        $boundary = MlUniverseSnapshotBoundary::query()->whereDate('effective_from', '2024-08-30')->firstOrFail();
+        $this->assertSame($sourceId, $boundary->quality_diagnostics['source_id']);
+
+        $again = app(NseHistoricalUniverseArchiveProvider::class)->snapshotForDate('2024-08-30');
+        $this->assertSame($sourceId, $again['diagnostics']['source_id']);
+        $this->assertDatabaseCount('stox_ml_acceptance_sources', 1);
         Http::assertSentCount(1);
         File::deleteDirectory($directory);
     }

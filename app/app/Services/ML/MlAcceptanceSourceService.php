@@ -174,6 +174,71 @@ class MlAcceptanceSourceService
         }
     }
 
+    /**
+     * Seal an automatically downloaded official NSE archive as immutable
+     * acceptance evidence for the campaign-independent forward collector.
+     * Actor 0 is the reserved system actor; no human identity is fabricated.
+     */
+    public function sealOfficialAcquisition(string $archivePath, array $descriptor, string $date): MlAcceptanceSource
+    {
+        $filename = (string) ($descriptor['filename'] ?? '');
+        $url = (string) ($descriptor['url'] ?? '');
+        $this->require(preg_match('/\A(?:cm\d{2}[A-Za-z]{3}\d{4}bhav\.csv\.zip|BhavCopy_NSE_CM_0_0_0_\d{8}_F_0000\.csv\.zip)\z/i', $filename) === 1, 'Unsupported official archive filename.');
+        $this->require(parse_url($url, PHP_URL_SCHEME) === 'https', 'Official source URL must use HTTPS.');
+        $this->require(is_file($archivePath) && filesize($archivePath) > 0 && filesize($archivePath) <= self::MAX_BYTES, 'Official archive size is invalid.');
+        $sha256 = hash_file('sha256', $archivePath);
+        $this->require(is_string($sha256) && preg_match('/\A[a-f0-9]{64}\z/', $sha256) === 1, 'Official archive hash is invalid.');
+
+        $existing = MlAcceptanceSource::query()
+            ->where('manifest->sha256', $sha256)
+            ->where('manifest->date', $date)
+            ->where('manifest->source', 'nse_cash_bhavcopy')
+            ->first();
+        if ($existing !== null) {
+            $this->require($existing->status === 'sealed', 'Existing official source is not sealed.');
+            return $existing;
+        }
+
+        $contents = $this->safeContents($archivePath, $filename, $date);
+        $id = (string) Str::uuid();
+        $directory = storage_path('app/private/ml-acceptance/sources/'.$id);
+        File::ensureDirectoryExists($directory, 0700, true);
+        $storedArchive = $directory.'/payload';
+        $storedCsvName = preg_replace('/\.zip$/i', '', $filename);
+        $storedCsv = $directory.'/'.$storedCsvName;
+        $this->require(copy($archivePath, $storedArchive), 'Official archive could not be retained.');
+        $this->require(file_put_contents($storedCsv, $contents, LOCK_EX) === strlen($contents), 'Official CSV could not be retained.');
+        try {
+            $snapshot = app(NseHistoricalUniverseArchiveProvider::class)->stagedSnapshot($storedCsv, 'nse_cash_bhavcopy', $date);
+            chmod($storedArchive, 0400);
+            chmod($storedCsv, 0400);
+            return MlAcceptanceSource::query()->create([
+                'id' => $id,
+                'actor_id' => 0,
+                'status' => 'sealed',
+                'manifest' => [
+                    'version' => 1, 'source' => 'nse_cash_bhavcopy', 'date' => $date,
+                    'filename' => $filename, 'bytes' => filesize($storedArchive), 'sha256' => $sha256,
+                ],
+                'received' => filesize($storedArchive),
+                'evidence' => [
+                    'filename' => $storedCsvName, 'expanded_bytes' => strlen($contents),
+                    'content_sha256' => hash('sha256', $contents),
+                    'validated_date' => $snapshot['diagnostics']['source_validated_date'],
+                    'format_version' => $snapshot['diagnostics']['format_version'],
+                    'parser_version' => NseHistoricalUniverseArchiveProvider::PARSER_VERSION,
+                    'archive_url' => $url, 'archive_sha256' => $sha256,
+                ],
+                'history' => app(MlAcceptanceRuntime::class)->history([], 'system_official_source_sealed', null),
+            ]);
+        } catch (\Throwable $error) {
+            @unlink($storedArchive);
+            @unlink($storedCsv);
+            @rmdir($directory);
+            throw $error;
+        }
+    }
+
     public function snapshot(MlAcceptanceSource $source): array
     {
         $this->require($source->status === 'sealed', 'Source is not sealed.');
