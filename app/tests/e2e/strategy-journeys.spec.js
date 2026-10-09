@@ -219,6 +219,33 @@ test.describe('V9-UX-001 strategy journeys', () => {
             ]));
             expect(config.thresholds).toMatchObject({ minimum_overall_score: 35, open_position: 70, increase_position: 80, reduce_position: 40, exit_position: 25, watch: 55 });
         });
+        test('STR-07 configures portfolio sizing, concentration limits, and allocation (' + viewport.name + ')', async ({ page }, testInfo) => {
+            journeyId(testInfo, 'STR-07');
+            await seedDeterministicJourney(page, 'strategy-str07-' + viewport.name);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installInvestorWorkflowApiMocks(page);
+            await page.goto('/strategy?strategy_id=7');
+            await page.getByRole('button', { name: 'Portfolio Rules' }).click();
+            const sizingInputs = page.getByRole('spinbutton');
+            for (const [index, value] of [10, 2, 3, 12, 5, 8, 90, 40].entries()) {
+                await sizingInputs.nth(index).fill(String(value));
+            }
+            await page.getByRole('button', { name: 'Capital Allocation' }).click();
+            await page.locator('select').filter({ has: page.locator('option[value="equal_weight"]') }).selectOption('equal_weight');
+            await page.locator('select').filter({ has: page.locator('option[value="highest_relative_strength"]') }).selectOption('highest_relative_strength');
+            const saveRequest = page.waitForRequest((request) => (
+                request.method() === 'PUT' && new URL(request.url()).pathname.endsWith('/api/v1/strategy')
+            ));
+            await page.getByRole('button', { name: 'Save', exact: true }).click();
+            const config = (await saveRequest).postDataJSON().config;
+            expect(config.portfolio_rules).toMatchObject({
+                max_position_size_pct: 10, min_position_size_pct: 2, max_new_positions_per_cycle: 3,
+                max_exposure_per_stock_pct: 12, recommended_minimum_holdings: 5, max_holdings: 8, first_entry_pct: 40,
+            });
+            expect(config.weakest_position_window_days).toBe(90);
+            expect(config.capital_allocation).toMatchObject({ strategy: 'equal_weight', tie_break: 'highest_relative_strength' });
+            expect(config.portfolio_rules.max_position_size_pct).toBeGreaterThan(0);
+        });
         });
     }
 });
