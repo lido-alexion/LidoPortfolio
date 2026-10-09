@@ -57,6 +57,7 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
     let hasScreenerRun = false;
     let createdInvestorStrategy = null;
     const initialStrategyEligibility = options.initialStrategyEligibility ?? [];
+    const strategyRegistryRows = [...(options.strategyRegistryRows ?? [])];
     let remainingScreenerValidationFailures = options.invalidScreenerAttempts ?? 0;
     let authenticated = !options.initiallyUnauthenticated;
     let remainingLoginFailures = options.failedLoginAttempts ?? 0;
@@ -322,7 +323,20 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
         if (path.endsWith('/api/v1/strategy') && method === 'PUT') {
             return json(route, { data: { strategy_id: 7, id: 7, name: 'Incomplete E2E Strategy', setup_required: true } });
         }
+        if (path.endsWith('/api/v1/strategy-registry/meta') && method === 'GET') {
+            const statuses = strategyRegistryRows.map((row) => row.metadata?.status);
+            return json(route, { data: { counts: { total: statuses.length, active: statuses.filter((value) => value === 'active').length, draft: statuses.filter((value) => value === 'draft').length, archived: statuses.filter((value) => value === 'archived').length } } });
+        }
+        const strategyLifecycleMatch = path.match(/\/api\/v1\/strategy-registry\/([^/]+)\/(activate|archive)$/);
+        if (strategyLifecycleMatch && method === 'POST') {
+            const [, encodedId, action] = strategyLifecycleMatch;
+            const row = strategyRegistryRows.find((item) => String(item.artifact_id || item.slug) === decodeURIComponent(encodedId));
+            if (!row) return json(route, { message: 'Strategy not found.' }, 404);
+            row.metadata = { ...row.metadata, status: action === 'activate' ? 'active' : 'archived', is_enabled: action === 'activate' };
+            return json(route, { data: row });
+        }
         if (path.endsWith('/api/v1/strategy-registry') && method === 'GET') {
+            if (strategyRegistryRows.length) return json(route, { data: strategyRegistryRows });
             const data = [{ strategy_id: 7, id: 7, name: 'Incomplete E2E Strategy', status: 'draft', is_enabled: false, setup_required: true }];
             if (createdInvestorStrategy) data.push({ id: createdInvestorStrategy.id, name: createdInvestorStrategy.name, status: 'draft', is_enabled: false, setup_required: true });
             return json(route, { data });

@@ -260,7 +260,7 @@ test.describe('V9-UX-001 screener journeys', () => {
                 }],
             });
             await page.goto('/screeners?tab=shared');
-            await expect(page.getByRole('heading', { name: 'Shared screens' })).toBeVisible();
+            await expect(page.getByRole('tab', { name: 'Shared screens' })).toHaveAttribute('aria-selected', 'true');
             await expect(page.getByText('Shared Momentum Gate')).toBeVisible();
             const importResponse = page.waitForResponse((response) => (
                 response.request().method() === 'POST'

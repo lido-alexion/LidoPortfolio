@@ -28,7 +28,7 @@ test.describe('V9-UX-001 strategy journeys', () => {
             expect(created.status()).toBe(201);
             expect((await created.json()).data).toMatchObject({ id: 8, name: 'Momentum Core', version: 1, version_label: '1.0', version_status: 'draft' });
             await expect(page).toHaveURL(/\/strategy\?strategy_id=8$/);
-            await expect(page.getByText('Momentum Core', { exact: true }).first()).toBeVisible();
+            await expect(page.locator('#strat-name')).toHaveValue('Momentum Core');
 
             await page.getByRole('button', { name: 'Eligibility Sources' }).click();
             await page.locator('select').filter({ has: page.locator('option[value="41"]') }).selectOption('41');
@@ -360,6 +360,50 @@ test.describe('V9-UX-001 strategy journeys', () => {
                 expect.objectContaining({ key: 'screener_exit', enabled: true, screener_id: 42, screener_name: 'New Exit Screen' }),
             ]));
             expect(config.indicators).toEqual(expect.arrayContaining([expect.objectContaining({ key: 'momentum_score', enabled: true, weight: 100 })]));
+        });
+        test('STR-13 enables a draft strategy while keeping another strategy active (' + viewport.name + ')', async ({ page }, testInfo) => {
+            journeyId(testInfo, 'STR-13');
+            await seedDeterministicJourney(page, 'strategy-str13-' + viewport.name);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installInvestorWorkflowApiMocks(page, {
+                strategyRegistryRows: [
+                    { artifact_id: 'momentum-core', slug: 'momentum-core', name: 'Momentum Core', artifact_version: '1.0.0', metadata: { legacy_id: 7, status: 'draft', is_enabled: false } },
+                    { artifact_id: 'quality-core', slug: 'quality-core', name: 'Quality Core', artifact_version: '1.0.0', metadata: { legacy_id: 8, status: 'active', is_enabled: true, allocation_pct: 50 } },
+                ],
+            });
+            let confirmationAccepted = false;
+            page.on('dialog', async (dialog) => { confirmationAccepted = true; await dialog.accept(); });
+            await page.goto('/strategy/registry');
+            const row = page.getByRole('row', { name: /momentum-core.*Momentum Core/ });
+            await expect(row).toBeVisible();
+            const activateRequest = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/momentum-core/activate'));
+            await row.getByRole('button', { name: 'Enable' }).click();
+            await activateRequest;
+            expect(confirmationAccepted).toBe(true);
+            await expect(page.getByRole('row', { name: /momentum-core.*Momentum Core/ })).toContainText('active');
+            await expect(page.getByRole('row', { name: /quality-core.*Quality Core/ })).toContainText('active');
+            await expect(page.getByRole('row', { name: /quality-core.*Quality Core/ }).getByRole('button', { name: 'Enable' })).toHaveCount(0);
+        });
+        test('STR-14 archives one strategy and retains its active sibling (' + viewport.name + ')', async ({ page }, testInfo) => {
+            journeyId(testInfo, 'STR-14');
+            await seedDeterministicJourney(page, 'strategy-str14-' + viewport.name);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installInvestorWorkflowApiMocks(page, {
+                strategyRegistryRows: [
+                    { artifact_id: 'momentum-core', slug: 'momentum-core', name: 'Momentum Core', artifact_version: '1.0.0', metadata: { legacy_id: 7, status: 'active', is_enabled: true, allocation_pct: 50 } },
+                    { artifact_id: 'quality-core', slug: 'quality-core', name: 'Quality Core', artifact_version: '1.0.0', metadata: { legacy_id: 8, status: 'active', is_enabled: true, allocation_pct: 50 } },
+                ],
+            });
+            let confirmationAccepted = false;
+            page.on('dialog', async (dialog) => { confirmationAccepted = true; await dialog.accept(); });
+            await page.goto('/strategy/registry');
+            const row = page.getByRole('row', { name: /momentum-core.*Momentum Core/ });
+            const archiveRequest = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/momentum-core/archive'));
+            await row.getByRole('button', { name: 'Archive' }).click();
+            await archiveRequest;
+            expect(confirmationAccepted).toBe(true);
+            await expect(page.getByRole('row', { name: /momentum-core.*Momentum Core/ })).toContainText('archived');
+            await expect(page.getByRole('row', { name: /quality-core.*Quality Core/ })).toContainText('active');
         });
         });
     }
