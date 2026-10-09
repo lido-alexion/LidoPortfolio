@@ -22,6 +22,11 @@ const SCREENER_META = {
             label: 'EMA',
             params: [{ id: 'period', label: 'Period', default: 50, min: 1, max: 400 }],
         },
+        {
+            id: 'rsi',
+            label: 'RSI',
+            params: [{ id: 'period', label: 'Period', default: 14, min: 1, max: 200 }],
+        },
     ],
     operators: [
         { id: 'gt', label: '>' },

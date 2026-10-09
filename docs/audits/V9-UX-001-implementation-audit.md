@@ -15,16 +15,16 @@ Frontend CI is configured to run the canonical frontend verifier on pull request
 
 ## Screener foundation slice
 
-SCR-01 now has browser coverage at 390×844 and 1440×900. The scenario creates a screener named “Price Above MA200,” selects Close > SMA(200), saves it, and asserts the exact definition sent to the validated create endpoint. The screener test mock now persists created definitions so the detail route reflects the saved rule. The source corpus remains at 71 topics; six IDs are now annotated (AUTH-01/02, SCR-01, and AI-01/02/03).
+SCR-01 now has browser coverage at 390×844 and 1440×900. The scenario creates a screener named “Price Above MA200,” selects Close > SMA(200), saves it, and asserts the exact definition sent to the validated create endpoint. The screener test mock now persists created definitions so the detail route reflects the saved rule. SCR-02 now covers the documented AND combination of Close > SMA(200) and RSI(14) < 70, with assertions on the persisted condition tree at both viewports. The source corpus remains at 71 topics; seven IDs are annotated (AUTH-01/02, SCR-01/02, and AI-01/02/03).
 
 ## Completion criteria snapshot
 
 | Requirement | Current evidence | Status |
 |---|---|---|
 | Journey inventory and stable IDs | 71 source topics generated; annotation validator rejects missing/invalid source IDs. | Partial — discovered-workflow review remains open. |
-| Traceability from automation to source | AUTH-01/AUTH-02, SCR-01, and AI-01/AI-02/AI-03 carry stable annotations. | Partial — only 6 of 71 IDs are currently annotated; core investor flows remain unmapped or uncovered. |
+| Traceability from automation to source | AUTH-01/AUTH-02, SCR-01, and AI-01/AI-02/AI-03 carry stable annotations. | Partial — only 7 of 71 IDs are currently annotated; core investor flows remain unmapped or uncovered. |
 | Auth/account-entry prerequisite | AUTH-01/AUTH-02 desktop/mobile browser scenarios; labels, alert semantics, and axe checks. | In progress — hosted E2E gate pending. |
-| Screener, strategy, recommendation, execution, and end-to-end journeys | SCR-01 is mapped and asserts the documented rule in mobile and desktop; remaining screener journeys and all strategy/recommendation/execution/end-to-end coverage remain incomplete. | In progress. |
+| Screener, strategy, recommendation, execution, and end-to-end journeys | SCR-01/02 are mapped and assert the documented rules in mobile and desktop; remaining screener journeys and all strategy/recommendation/execution/end-to-end coverage remain incomplete. | In progress. |
 | Deterministic data, isolation, and broker simulation | Existing harness includes a seed hook and broker-related mocks in selected tests. | Open — audit per scenario and close missing lifecycle/recovery cases. |
 | Chromium desktop and representative mobile | Playwright Chromium and mobile projects exist; auth slice covers both target viewports. | Partial — all major journeys must meet the viewport standard. |
 | Blocking CI and nightly regression | PR frontend verifier and scheduled nightly workflow are configured. | In progress — validate the PR gate in hosted CI and expand the full nightly suite. |
