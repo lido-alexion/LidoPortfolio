@@ -246,6 +246,25 @@ test.describe('V9-UX-001 strategy journeys', () => {
             expect(config.capital_allocation).toMatchObject({ strategy: 'equal_weight', tie_break: 'highest_relative_strength' });
             expect(config.portfolio_rules.max_position_size_pct).toBeGreaterThan(0);
         });
+        test('STR-08 configures an explicit ATR based exit safeguard (' + viewport.name + ')', async ({ page }, testInfo) => {
+            journeyId(testInfo, 'STR-08');
+            await seedDeterministicJourney(page, 'strategy-str08-' + viewport.name);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installInvestorWorkflowApiMocks(page);
+            await page.goto('/strategy?strategy_id=7');
+            await page.getByRole('button', { name: 'Exit Strategy' }).click();
+            await page.getByLabel('Enable ATR Stop').check();
+            await page.getByLabel('Value for ATR Stop').fill('3');
+            const saveRequest = page.waitForRequest((request) => (
+                request.method() === 'PUT' && new URL(request.url()).pathname.endsWith('/api/v1/strategy')
+            ));
+            await page.getByRole('button', { name: 'Save', exact: true }).click();
+            const config = (await saveRequest).postDataJSON().config;
+            expect(config.exit_strategy.enabled).toBe(true);
+            expect(config.exit_strategy.rules).toEqual(expect.arrayContaining([
+                expect.objectContaining({ key: 'atr_stop', enabled: true, atr_multiple: 3 }),
+            ]));
+        });
         });
     }
 });
