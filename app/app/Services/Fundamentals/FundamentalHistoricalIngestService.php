@@ -8,6 +8,8 @@ use App\Services\Fundamentals\Historical\FundamentalHistoricalSource;
 use App\Services\Fundamentals\Historical\NseOfficialFundamentalHistoricalSource;
 use App\Services\Fundamentals\Historical\YahooFundamentalHistoricalSource;
 use App\Services\Nifty500ConstituentService;
+use App\Services\Fundamentals\Historical\ExchangeRequestDeferred;
+use Throwable;
 
 class FundamentalHistoricalIngestService
 {
@@ -33,6 +35,7 @@ class FundamentalHistoricalIngestService
     {
         $this->lastProviderChecked = null;
         $rejectedRows = [];
+        $lastSourceError = null;
         foreach ($this->sources as $source) {
             if (! $source->supports($stock)) {
                 continue;
@@ -51,7 +54,18 @@ class FundamentalHistoricalIngestService
 
             $this->lastProviderChecked = $source->id();
             $rowsByIdentity = [];
-            foreach ($source->fetch($stock, $cadence) as $row) {
+            try {
+                $sourceRows = $source->fetch($stock, $cadence);
+            } catch (ExchangeRequestDeferred $deferred) {
+                throw $deferred;
+            } catch (Throwable $error) {
+                // Continue only through the already-authorized source order. If
+                // every source fails, surface an error so the job cannot record success.
+                $lastSourceError = $error;
+                continue;
+            }
+
+            foreach ($sourceRows as $row) {
                 $identity = $this->identityKey($row);
                 if ($identity === '') {
                     continue;
@@ -75,8 +89,12 @@ class FundamentalHistoricalIngestService
             }
         }
 
-        // Preserve malformed numeric candidates for the bootstrap quality gate
-        // when no primary or fallback provider could supply usable facts.
+        if ($lastSourceError !== null) {
+            throw $lastSourceError;
+        }
+
+        // Preserve malformed numeric candidates when providers returned rows,
+        // but none passed the quality gate.
         return $rejectedRows;
     }
 
