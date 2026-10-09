@@ -524,3 +524,69 @@ test.describe('V9-UX-001 retry after an earlier partial fill', () => {
         });
     }
 });
+
+
+test.describe('V9-UX-001 post-execution reconciliation', () => {
+    for (const viewport of VIEWPORTS) {
+        test(`EXE-15 verifies the recorded transaction and resulting strategy-owned holding (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'EXE-15');
+            await seedDeterministicJourney(page, `execution-exe15-${viewport.name}`);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installTosApiMocks(page);
+            let ledger = [];
+            const holding = {
+                id: 1501,
+                stock_id: 42,
+                stock: { id: 42, symbol: 'INFY', name: 'Infosys Limited' },
+                strategy_id: 17,
+                strategy_name: 'Momentum Core',
+                owner_key: 'strategy:17',
+                quantity: 2,
+                avg_buy_price: 3500,
+                invested_amount: 7000,
+                unrealized_profit: 0,
+                summary: { quantity: 2, latest_close: 3500, highest_close_since_buy: 3500, first_buy_date: '2026-10-09', has_price_history: true },
+            };
+            await page.route('**/api/stocks/validate', (route) => route.fulfill({
+                json: { source: 'test fixture', data: { id: 42, symbol: 'INFY', name: 'Infosys Limited', exchange: 'NSE' }, meta: { cached: false } },
+            }));
+            await page.route('**/api/settings', (route) => route.fulfill({ json: { data: { fee_components: [] } } }));
+            await page.route('**/api/transactions*', async (route) => {
+                if (route.request().method() === 'POST') {
+                    const payload = route.request().postDataJSON();
+                    const transaction = {
+                        id: 1502,
+                        ...payload,
+                        stock: { id: 42, symbol: 'INFY', name: 'Infosys Limited' },
+                        recommendation_id: 1503,
+                        strategy_id: 17,
+                        strategy_name: 'Momentum Core',
+                        source: 'recommendation',
+                    };
+                    ledger = [transaction];
+                    await route.fulfill({ json: { message: 'Transaction saved', data: transaction } });
+                    return;
+                }
+                await route.fulfill({ json: { data: ledger } });
+            });
+            await page.route('**/api/holdings', (route) => route.fulfill({ json: { data: [holding] } }));
+
+            await page.goto('/transactions');
+            await page.getByLabel('Stock symbol').fill('INFY');
+            await page.getByRole('button', { name: 'Validate symbol' }).click();
+            await expect(page.getByText(/Validated via test fixture/)).toBeVisible();
+            await page.getByLabel('Quantity').fill('2');
+            await page.getByLabel('Price').fill('3500');
+            await page.getByRole('button', { name: 'Save Transaction' }).click();
+            await expect(page.getByRole('row').filter({ hasText: 'INFY' })).toContainText('3500');
+            expect(ledger[0]).toMatchObject({ type: 'buy', quantity: 2, price: 3500, recommendation_id: 1503, strategy_id: 17 });
+
+            await page.goto('/holdings');
+            await expect(page.getByRole('heading', { name: 'Portfolio' })).toBeVisible();
+            const holdingRow = page.getByRole('row').filter({ hasText: 'INFY' });
+            await expect(holdingRow).toContainText('2');
+            await expect(holdingRow).toContainText('3,500');
+            expect(holding.owner_key).toBe('strategy:17');
+        });
+    }
+});
