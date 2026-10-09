@@ -22,6 +22,7 @@ export async function installTosApiMocks(page, {
     pipelineRecommendations = null,
     pipelineStages = { discovery: { candidates: 0 }, evaluation: { results: 0 }, recommendation: { count: 0 } },
     capitalResolution = CAPITAL_RESOLUTION,
+    retainApprovedRecommendations = false,
     user = TEST_USER,
 } = {}) {
     let recs = recommendations.map((r) => ({ ...r }));
@@ -90,6 +91,19 @@ export async function installTosApiMocks(page, {
             if (decision === 'deferred' && rec) {
                 Object.assign(rec, { status: 'deferred', lifecycle_status: 'deferred', review_status: 'deferred', can_review: false, can_reopen: true });
                 return json(route, apiEnvelope({ status: 'deferred' }));
+            }
+            if (decision === 'approved' && rec && retainApprovedRecommendations) {
+                Object.assign(rec, {
+                    status: 'pending_execution',
+                    lifecycle_status: 'pending_execution',
+                    review_status: 'approved',
+                    execution_status: 'pending',
+                    can_review: false,
+                    can_execute_manually: true,
+                    reserved_amount: rec.suggested_investment_amount ?? rec.execution_plan?.this_cycle_amount ?? 0,
+                    reservation_status: 'reserved',
+                });
+                return json(route, apiEnvelope({ status: 'pending_execution' }));
             }
             recs = recs.filter((r) => String(r.id) !== reviewMatch[1]);
             return json(route, apiEnvelope({ status: decision === 'rejected' ? 'rejected' : 'pending_execution' }));

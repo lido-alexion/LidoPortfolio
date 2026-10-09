@@ -153,6 +153,54 @@ test.describe('V9-UX-001 recommendation journeys', () => {
             expect(observedRequests.some((path) => path.endsWith('/api/v1/recommendations/run'))).toBe(false);
             expect(observedRequests.some((path) => path.includes('/orders'))).toBe(false);
         });
+        test('REC-07 approves a capital-ready recommendation into pending execution without placing an order (' + viewport.name + ')', async ({ page }, testInfo) => {
+            journeyId(testInfo, 'REC-07');
+            await seedDeterministicJourney(page, 'recommendation-rec07-' + viewport.name);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installTosApiMocks(page, {
+                recommendations: [{
+                    ...OPEN_BUY_RECOMMENDATION,
+                    id: 707,
+                    strategy_name: 'Momentum Core',
+                    capital_allocation_status: 'funded',
+                    can_review: true,
+                    suggested_quantity: 10,
+                    suggested_investment_amount: 50000,
+                }],
+                retainApprovedRecommendations: true,
+            });
+            const observedRequests = [];
+            page.on('request', (request) => observedRequests.push({
+                method: request.method(),
+                path: new URL(request.url()).pathname,
+            }));
+            await page.goto('/recommendations');
+            let row = page.getByRole('row').filter({ hasText: 'Momentum Core' });
+            await row.getByRole('button', { name: 'Review' }).click();
+            let dialog = page.getByRole('dialog');
+            await expect(dialog).toContainText('Momentum Core');
+            await expect(dialog).toContainText('Funded');
+            await expect(dialog).toContainText('Resolved at actual amount');
+            await expect(dialog).toContainText('10 shares');
+            await expect(dialog).toContainText('₹50000');
+            await dialog.getByLabel('Review notes (optional)').fill('Capital readiness verified.');
+            const approvalRequest = page.waitForRequest((request) => (
+                request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/api/v1/recommendations/707/review')
+            ));
+            await dialog.getByRole('button', { name: 'Approve' }).click();
+            expect((await approvalRequest).postDataJSON()).toMatchObject({
+                decision: 'approved',
+                notes: 'Capital readiness verified.',
+            });
+            await expect(dialog).toHaveCount(0);
+            row = page.getByRole('row').filter({ hasText: 'Momentum Core' });
+            await expect(row).toContainText('pending_execution');
+            await row.getByRole('button', { name: 'Review' }).click();
+            dialog = page.getByRole('dialog');
+            await expect(dialog.getByRole('link', { name: 'Go to Pending Execution' })).toHaveAttribute('href', '/transactions/pending');
+            expect(observedRequests.some(({ method, path }) => method === 'POST' && /\/orders(?:\/|$)/.test(path))).toBe(false);
+        });
+
         test('REC-08 rejects an actionable recommendation with a note and keeps it out of the review queue (' + viewport.name + ')', async ({ page }, testInfo) => {
             journeyId(testInfo, 'REC-08');
             await seedDeterministicJourney(page, 'recommendation-rec08-' + viewport.name);
