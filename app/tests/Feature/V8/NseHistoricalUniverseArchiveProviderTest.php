@@ -338,6 +338,44 @@ class NseHistoricalUniverseArchiveProviderTest extends TestCase
         $this->assertSame([], app(MlHistoricalUniverseMembershipService::class)->stockIdsForDate('2020-01-01'));
     }
 
+    public function test_valid_cached_csv_requires_matching_official_archive_before_it_can_be_sealed(): void
+    {
+        Stock::query()->create(['symbol' => 'CACHE', 'exchange' => 'NSE', 'isin' => 'INE000000001', 'name' => 'Cached']);
+        $directory = storage_path('framework/testing/cached-forward-nse-'.bin2hex(random_bytes(4)));
+        File::makeDirectory($directory, 0700, true);
+        $filename = 'BhavCopy_NSE_CM_0_0_0_20240830_F_0000.csv.zip';
+        $csvName = preg_replace('/\.zip$/i', '', $filename);
+        $contents = "SYMBOL,SERIES,ISIN\nCACHE,EQ,INE000000001\n";
+        File::put($directory.'/'.$csvName, $contents);
+        $zipPath = $directory.'/fixture.zip';
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE));
+        $zip->addFromString($csvName, $contents);
+        $zip->close();
+        $payload = File::get($zipPath);
+        File::delete($zipPath);
+        Http::fake(['https://nsearchives.nseindia.com/*' => Http::response($payload, 200, ['Content-Type' => 'application/zip'])]);
+        config([
+            'ml.historical_universe.mii_path' => '',
+            'ml.historical_universe.bhavcopy_path' => '',
+            'forward_data.official_source_enabled' => true,
+            'forward_data.official_source_base_url' => 'https://nsearchives.nseindia.com',
+            'forward_data.official_source_directory' => $directory,
+        ]);
+
+        $snapshot = app(NseHistoricalUniverseArchiveProvider::class)->snapshotForDate('2024-08-30');
+
+        $this->assertSame(hash('sha256', $contents), $snapshot['diagnostics']['source_sha256']);
+        $this->assertSame(hash('sha256', $payload), $snapshot['diagnostics']['archive_sha256']);
+        $this->assertDatabaseHas('stox_ml_acceptance_sources', [
+            'id' => $snapshot['diagnostics']['source_id'],
+            'status' => 'sealed',
+        ]);
+        Http::assertSentCount(1);
+        File::deleteDirectory(storage_path('app/private/ml-acceptance/sources/'.$snapshot['diagnostics']['source_id']));
+        File::deleteDirectory($directory);
+    }
+
     public function test_official_archive_path_reuses_supported_downloader_and_records_archive_provenance(): void
     {
         Stock::query()->create(['symbol' => 'OFFICIAL', 'exchange' => 'NSE', 'isin' => 'INE000000001', 'name' => 'Official']);
