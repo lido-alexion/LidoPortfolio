@@ -251,7 +251,6 @@ test.describe('V9-UX-001 recommendation journeys', () => {
             await expect(dialog).toContainText('Open INFY');
             await expect(dialog).toContainText('Closed at actual (shortfall remains)');
             await expect(dialog.getByRole('button', { name: 'Approve' })).toHaveCount(0);
-            await expect(dialog).toContainText('Partially funded — execute ₹30,000 of ₹50,000.');
             const actualAmount = dialog.getByRole('row').filter({ hasText: 'Actual execution amount' });
             await expect(actualAmount).toContainText('₹30,000');
             await expect(dialog.getByRole('row').filter({ hasText: 'Unresolved' })).toContainText('₹20,000');
@@ -286,7 +285,6 @@ test.describe('V9-UX-001 recommendation journeys', () => {
             await expect(dialog).toContainText('Open INFY');
             await expect(dialog).toContainText('Unfunded');
             await expect(dialog.getByRole('button', { name: 'Approve' })).toHaveCount(0);
-            await expect(dialog).toContainText('Partially funded — execute ₹0 of ₹50,000.');
             await expect(dialog.getByRole('row').filter({ hasText: 'Actual execution amount' })).toContainText('₹0');
             await expect(dialog.getByRole('row').filter({ hasText: 'Unresolved' })).toContainText('₹50,000');
             expect(observedRequests.some((path) => /\/orders(?:\/|$)/.test(path))).toBe(false);

@@ -116,7 +116,7 @@ test.describe('V9-UX-001 strategy journeys', () => {
             await page.locator('select').filter({ has: page.locator('option[value="41"]') }).selectOption('41');
             await page.getByRole('button', { name: 'Add', exact: true }).click();
             await page.getByRole('button', { name: 'Recommendation Thresholds' }).click();
-            const thresholdInputs = page.getByRole('spinbutton');
+            const thresholdInputs = page.locator('.lido-number-input-field');
             for (const [index, value] of [35, 70, 80, 40, 25, 55].entries()) {
                 await thresholdInputs.nth(index).fill(String(value));
             }
@@ -207,7 +207,7 @@ test.describe('V9-UX-001 strategy journeys', () => {
             await page.getByLabel('Weight for RSI').fill('20');
             await expect(page.getByText(/Enabled weight total: 100/)).toBeVisible();
             await page.getByRole('button', { name: 'Recommendation Thresholds' }).click();
-            const thresholdInputs = page.getByRole('spinbutton');
+            const thresholdInputs = page.locator('.lido-number-input-field');
             for (const [index, value] of [35, 70, 80, 40, 25, 55].entries()) {
                 await thresholdInputs.nth(index).fill(String(value));
             }
@@ -229,7 +229,7 @@ test.describe('V9-UX-001 strategy journeys', () => {
             await installInvestorWorkflowApiMocks(page);
             await page.goto('/strategy?strategy_id=7');
             await page.getByRole('button', { name: 'Portfolio Rules' }).click();
-            const sizingInputs = page.getByRole('spinbutton');
+            const sizingInputs = page.locator('.lido-number-input-field');
             for (const [index, value] of [10, 2, 3, 12, 5, 8, 90, 40].entries()) {
                 await sizingInputs.nth(index).fill(String(value));
             }
