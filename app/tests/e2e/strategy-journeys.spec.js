@@ -137,6 +137,31 @@ test.describe('V9-UX-001 strategy journeys', () => {
             expect(config.portfolio_rules).toMatchObject({ max_holdings: 8, first_entry_pct: 40 });
             await expect(page.getByRole('button', { name: 'Enable', exact: true })).toBeDisabled();
         });
+        test('STR-04 configures a screener-backed exit and horizon for existing holdings (' + viewport.name + ')', async ({ page }, testInfo) => {
+            journeyId(testInfo, 'STR-04');
+            await seedDeterministicJourney(page, 'strategy-str04-' + viewport.name);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installInvestorWorkflowApiMocks(page, {
+                initialScreeners: [{ id: 41, name: 'Protective Exit Screen', scope: 'holdings', is_enabled: true,
+                    definition_json: { root: { type: 'group', op: 'AND', children: [] } }, description: 'Exit evidence source.' }],
+            });
+            await page.goto('/strategy?strategy_id=7');
+            await page.getByRole('button', { name: 'Exit Strategy' }).click();
+            await page.getByLabel('Enable Screener Exit').check();
+            await page.getByLabel('Exit screener').selectOption('41');
+            await page.getByLabel('Horizon (calendar days)').fill('180');
+            const saveRequest = page.waitForRequest((request) => (
+                request.method() === 'PUT' && new URL(request.url()).pathname.endsWith('/api/v1/strategy')
+            ));
+            await page.getByRole('button', { name: 'Save', exact: true }).click();
+            const config = (await saveRequest).postDataJSON().config;
+            expect(config.exit_strategy).toMatchObject({ enabled: true, mode: 'any' });
+            expect(config.exit_strategy.rules).toEqual(expect.arrayContaining([
+                expect.objectContaining({ key: 'screener_exit', enabled: true, screener_id: 41, screener_name: 'Protective Exit Screen' }),
+            ]));
+            expect(config.portfolio_rules.horizon_calendar_days).toBe(180);
+            await expect(page.getByRole('button', { name: 'Enable', exact: true })).toBeDisabled();
+        });
         });
     }
 });

@@ -302,7 +302,12 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
                     indicators: [{ key: 'momentum_score', label: 'Momentum', enabled: true, weight: 100 }],
                     eligibility_sources: [],
                     portfolio_rules: { horizon_calendar_days: null, first_entry_pct: 50, max_holdings: 10 },
-                    exit_strategy: { enabled: true, mode: 'any', rules: [] },
+                    exit_strategy: { enabled: true, mode: 'any', rules: [
+                        { key: 'trend_weakening', display_name: 'Trend Weakening', description: 'Trend score falls below threshold.', enabled: true, value: 40 },
+                        { key: 'score_exit', display_name: 'Overall Score Exit', description: 'Strategy score at or below exit threshold.', enabled: true, value: 20 },
+                        { key: 'atr_stop', display_name: 'ATR Stop', description: 'Unrealized loss exceeds N × ATR%.', enabled: false, atr_multiple: 2 },
+                        { key: 'screener_exit', display_name: 'Screener Exit', description: 'Exit when the holding appears in the selected screener latest completed results.', enabled: false, screener_id: null, screener_name: null },
+                    ] },
                     market_gates: [],
                 },
             });
