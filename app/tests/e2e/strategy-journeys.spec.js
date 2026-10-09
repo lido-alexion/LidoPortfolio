@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { installTosApiMocks } from './tosApiMocks.js';
+import { HOLD_INSIGHT, OPEN_BUY_RECOMMENDATION } from '../js/tos/fixtures/tosApi.js';
 
 const VIEWPORTS = [
     { name: 'mobile', width: 390, height: 844 },
@@ -405,6 +407,28 @@ test.describe('V9-UX-001 strategy journeys', () => {
             await expect(quality).toContainText('50.00%');
             await expect(momentum.getByRole('button', { name: 'Enable' })).toHaveCount(0);
             await expect(quality.getByRole('button', { name: 'Enable' })).toHaveCount(0);
+        });
+        test('STR-16 keeps same-stock recommendations separately attributable (' + viewport.name + ')', async ({ page }, testInfo) => {
+            journeyId(testInfo, 'STR-16');
+            await seedDeterministicJourney(page, 'strategy-str16-' + viewport.name);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installTosApiMocks(page, {
+                recommendations: [
+                    { ...OPEN_BUY_RECOMMENDATION, id: 201, recommendation_type: 'EXIT_POSITION', portfolio_action: 'EXIT_POSITION', ui_label: 'Exit', strategy_name: 'Momentum Core', current_allocation_pct: 5, target_allocation_pct: 0, suggested_allocation_pct: 0 },
+                    { ...HOLD_INSIGHT, id: 202, symbol: 'INFY', name: 'Infosys Limited', strategy_name: 'Quality Core', current_allocation_pct: 7, target_allocation_pct: 7, suggested_allocation_pct: 7 },
+                ],
+            });
+            await page.goto('/recommendations');
+            await page.getByLabel('Show HOLD insights').check();
+            const sameStockRows = page.getByRole('row').filter({ hasText: 'INFY' });
+            await expect(sameStockRows).toHaveCount(2);
+            const momentumExit = page.getByRole('row').filter({ hasText: 'Momentum Core' });
+            const qualityHold = page.getByRole('row').filter({ hasText: 'Quality Core' });
+            await expect(momentumExit).toContainText('INFY');
+            await expect(momentumExit).toContainText('Exit');
+            await expect(qualityHold).toContainText('INFY');
+            await expect(qualityHold).toContainText('Hold');
+            await expect(qualityHold.getByRole('button', { name: 'Review' })).toHaveCount(0);
         });
         test('STR-14 archives one strategy and retains its active sibling (' + viewport.name + ')', async ({ page }, testInfo) => {
             journeyId(testInfo, 'STR-14');
