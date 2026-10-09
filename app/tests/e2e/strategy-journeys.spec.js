@@ -20,7 +20,13 @@ test.describe('V9-UX-001 strategy journeys', () => {
             await page.goto('/strategy');
             await page.getByRole('button', { name: 'Create Strategy', exact: true }).click();
             await page.locator('#create-strategy-name').fill('Momentum Core');
+            const createResponse = page.waitForResponse((response) => (
+                response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith('/api/v1/strategies')
+            ));
             await page.getByRole('button', { name: 'Create Strategy', exact: true }).last().click();
+            const created = await createResponse;
+            expect(created.status()).toBe(201);
+            expect((await created.json()).data).toMatchObject({ id: 8, name: 'Momentum Core', version: 1, version_label: '1.0', version_status: 'draft' });
             await expect(page).toHaveURL(/\/strategy\?strategy_id=8$/);
             await expect(page.getByText('Momentum Core', { exact: true }).first()).toBeVisible();
 
@@ -73,7 +79,13 @@ test.describe('V9-UX-001 strategy journeys', () => {
             await page.goto('/strategy');
             await page.getByRole('button', { name: 'Create Strategy', exact: true }).click();
             await page.locator('#create-strategy-name').fill('Momentum Core');
+            const createResponse = page.waitForResponse((response) => (
+                response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith('/api/v1/strategies')
+            ));
             await page.getByRole('button', { name: 'Create Strategy', exact: true }).last().click();
+            const created = await createResponse;
+            expect(created.status()).toBe(201);
+            expect((await created.json()).data).toMatchObject({ id: 8, name: 'Momentum Core', version: 1, version_label: '1.0', version_status: 'draft' });
             await expect(page).toHaveURL(/\/strategy\?strategy_id=8$/);
             await page.getByRole('button', { name: 'Eligibility Sources' }).click();
             await page.locator('select').filter({ has: page.locator('option[value="99"]') }).selectOption('99');

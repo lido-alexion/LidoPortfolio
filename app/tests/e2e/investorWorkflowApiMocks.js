@@ -267,6 +267,7 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
             };
             createdInvestorStrategy = {
                 id: 8, strategy_id: 8, name: payload.name, description: payload.description, status: 'draft',
+                version: 1, version_label: '1.0', version_id: 81, version_status: 'draft',
                 is_enabled: false, setup_required: true, readiness: { requirements: [{ code: 'eligibility_source_required', message: 'Add at least one eligibility Screener.' }] },
                 config, eligibility_sources: [], indicators: config.indicators, thresholds: config.thresholds,
                 portfolio_rules: config.portfolio_rules, capital_allocation: config.capital_allocation,
