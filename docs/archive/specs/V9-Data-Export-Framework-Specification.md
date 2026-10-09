@@ -4,7 +4,8 @@
 |---|---|
 | **Epic** | `V9-DATA-001` — Data Export Framework |
 | **Version target** | V9 |
-| **Status** | FROZEN — implementation-ready |
+| **Status** | IMPLEMENTED / VERIFIED — scope remains frozen |
+| **Implementation audit** | [V9-DATA-001 acceptance audit](../../audits/V9-DATA-001-implementation-audit.md) |
 | **Owner** | Product / Architecture |
 | **Parent register** | `docs/archive/specs/LidoPortfolio-V9-Wishlist.md` |
 
