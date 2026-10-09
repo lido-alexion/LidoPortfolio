@@ -265,6 +265,27 @@ test.describe('V9-UX-001 strategy journeys', () => {
                 expect.objectContaining({ key: 'atr_stop', enabled: true, atr_multiple: 3 }),
             ]));
         });
+        test('STR-09 saves restrictive market entry gates without running recommendations (' + viewport.name + ')', async ({ page }, testInfo) => {
+            journeyId(testInfo, 'STR-09');
+            await seedDeterministicJourney(page, 'strategy-str09-' + viewport.name);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            await installInvestorWorkflowApiMocks(page);
+            const requests = [];
+            page.on('request', (request) => requests.push(new URL(request.url()).pathname));
+            await page.goto('/strategy?strategy_id=7');
+            await page.getByRole('button', { name: 'Market Gates' }).click();
+            await page.getByLabel('Enable market gates').check();
+            await page.getByLabel('Min sentiment').fill('60');
+            await page.getByLabel('Max risk (raw)').fill('55');
+            await page.getByLabel('Bear').check();
+            const saveRequest = page.waitForRequest((request) => (
+                request.method() === 'PUT' && new URL(request.url()).pathname.endsWith('/api/v1/strategy')
+            ));
+            await page.getByRole('button', { name: 'Save', exact: true }).click();
+            const config = (await saveRequest).postDataJSON().config;
+            expect(config.market_gates).toMatchObject({ enabled: true, min_sentiment: 60, max_risk_raw: 55, allowed_phases: ['Bear'] });
+            expect(requests.some((path) => path.endsWith('/api/v1/recommendations/run'))).toBe(false);
+        });
         });
     }
 });
