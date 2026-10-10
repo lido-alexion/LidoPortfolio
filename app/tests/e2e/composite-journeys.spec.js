@@ -77,6 +77,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
     for (const viewport of VIEWPORTS) {
         for (const journey of ['E2E-01', 'E2E-02']) {
             test(`${journey} carries screener provenance into strategy-owned recommendation; approval stays non-executing (${viewport.name})`, async ({ page }, testInfo) => {
+                test.setTimeout(90_000);
                 journeyId(testInfo, journey);
                 await seedDeterministicJourney(page, `${journey.toLowerCase()}-source-chain-${viewport.name}`);
                 await page.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -215,6 +216,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                     await page.getByLabel('left indicator').selectOption('close');
                     await page.getByLabel('right indicator').selectOption('sma');
                     await page.getByLabel('Period').fill('200');
+                    await expect(page.locator('.lido-screener-tree .lido-screener-group').first()).toHaveScreenshot(`e2e-01-screener-rule-${viewport.name}.png`, { animations: 'disabled', caret: 'hide' });
                     const createResponse = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith('/api/screeners'));
                     await page.getByRole('button', { name: 'Save' }).click();
                     expect(await (await createResponse).json()).toMatchObject({ data: { id: sourceScreenerId, version: sourceVersion } });
@@ -225,6 +227,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                     await page.goto('/screeners');
                     await expect(page.getByRole('link', { name: 'Price Above MA200' })).toBeVisible();
                     await expect.poll(() => screenerPayloads.find(({ method }) => method === 'GET')?.body?.data?.find(({ id }) => id === sourceScreenerId)?.version).toBe(sourceVersion);
+                    await expect(page.locator('.screeners-page')).toHaveScreenshot(`e2e-02-screener-list-${viewport.name}.png`, { animations: 'disabled', caret: 'hide' });
                 }
 
                 await page.goto('/strategy');
@@ -235,6 +238,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                 await page.getByRole('button', { name: 'Eligibility Sources' }).click();
                 await page.locator('select').filter({ has: page.locator(`option[value="${sourceScreenerId}"]`) }).selectOption(String(sourceScreenerId));
                 await page.getByRole('button', { name: 'Add', exact: true }).click();
+                await expect(page.locator('#strategy-editor-select')).toHaveScreenshot(`e2e-${journey}-strategy-editor-${viewport.name}.png`, { animations: 'disabled', caret: 'hide' });
                 const strategySave = page.waitForRequest((request) => request.method() === 'PUT' && new URL(request.url()).pathname.endsWith('/api/v1/strategy'));
                 await page.getByRole('button', { name: 'Save', exact: true }).click();
                 const strategyPayload = (await strategySave).postDataJSON();
@@ -267,6 +271,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                 await expect(dialog).toContainText('Momentum Core');
                 await expect(dialog.getByTestId('recommendation-provenance')).toContainText(`Source screener #${sourceScreenerId} · Version ${sourceVersion}`);
                 await expect(dialog.getByTestId('recommendation-provenance')).toContainText('Strategy #8 · Strategy version #81');
+                await expect(dialog).toHaveScreenshot(`e2e-${journey}-recommendation-review-${viewport.name}.png`, { animations: 'disabled', caret: 'hide' });
                 const requestsBeforeApproval = observedRequests.length;
                 await dialog.getByRole('button', { name: 'Approve' }).click();
                 expect((await reviewRequest).postDataJSON()).toMatchObject({ decision: 'approved' });
@@ -280,6 +285,10 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                 await expect(page.getByText(`Recording actual broker fill for recommendation #${generated.id}.`)).toBeVisible();
                 await page.getByRole('button', { name: 'Validate symbol' }).click();
                 await expect(page.getByText(/Validated via test fixture/)).toBeVisible();
+                await page.getByLabel('Transaction date').fill('09-Oct-2026');
+                await page.getByLabel('Transaction date').blur();
+                await page.evaluate(() => window.scrollTo(0, 0));
+                await expect(page.locator('form').first()).toHaveScreenshot(`e2e-${journey}-actual-fill-form-${viewport.name}.png`, { animations: 'disabled', caret: 'hide' });
                 await page.getByRole('button', { name: 'Save Transaction' }).click();
                 await expect.poll(() => savedTransaction).toMatchObject({ recommendation_id: generated.id, strategy_id: 8, strategy_name: 'Momentum Core', type: 'buy', quantity: 10, price: 3500 });
                 expect(transactionPayload).toMatchObject({ recommendation_id: generated.id, source: 'recommendation', type: 'buy', quantity: 10, price: 3500 });
@@ -397,6 +406,10 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                 await expect(page.getByLabel('Quantity')).toHaveValue('10');
                 await page.getByRole('button', { name: 'Validate symbol' }).click();
                 await expect(page.getByText(/Validated via test fixture/)).toBeVisible();
+                await page.getByLabel('Transaction date').fill('09-Oct-2026');
+                await page.getByLabel('Transaction date').blur();
+                await page.evaluate(() => window.scrollTo(0, 0));
+                await expect(page.locator('form').first()).toHaveScreenshot(`e2e-${journey}-actual-fill-form-${viewport.name}.png`, { animations: 'disabled', caret: 'hide' });
                 await page.getByRole('button', { name: 'Save Transaction' }).click();
                 await expect.poll(() => savedTransaction).toMatchObject({ recommendation_id: recommendationId, strategy_id: 17, type: 'sell', quantity: 10, price: 3500 });
                 expect(transactionPayload).toMatchObject({ recommendation_id: recommendationId, source: 'recommendation', type: 'sell', quantity: 10, price: 3500 });
