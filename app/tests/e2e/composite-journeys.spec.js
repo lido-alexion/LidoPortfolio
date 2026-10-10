@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { TEST_USER } from '../js/tos/fixtures/tosApi.js';
+import { OPEN_BUY_RECOMMENDATION, TEST_USER } from '../js/tos/fixtures/tosApi.js';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
+import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { installTosApiMocks } from './tosApiMocks.js';
 
 const VIEWPORTS = [
     { name: 'mobile', width: 390, height: 844 },
@@ -72,6 +74,103 @@ async function installAdminMlMocks(page) {
 }
 
 test.describe('V9-UX-001 composite journey coverage', () => {
+    for (const viewport of VIEWPORTS) {
+        for (const journey of ['E2E-01', 'E2E-02']) {
+            test(`${journey} carries screener provenance into strategy-owned recommendation; approval stays non-executing (${viewport.name})`, async ({ page }, testInfo) => {
+                journeyId(testInfo, journey);
+                await seedDeterministicJourney(page, `${journey.toLowerCase()}-source-chain-${viewport.name}`);
+                await page.setViewportSize({ width: viewport.width, height: viewport.height });
+                const sourceScreenerId = journey === 'E2E-01' ? 99 : 41;
+                const sourceVersion = journey === 'E2E-01' ? 1 : 3;
+                const sourceDefinition = { root: { type: 'group', op: 'AND', children: [{
+                    type: 'condition', left: { indicator: 'close' }, operator: 'gt',
+                    right: { indicator: 'sma', params: { period: 200 } },
+                }] } };
+                await installInvestorWorkflowApiMocks(page, { initialScreeners: [{
+                    id: 41, name: 'Price Above MA200', version: sourceVersion, scope: 'holdings', is_enabled: true,
+                    definition_json: sourceDefinition, description: 'Validated source screener.',
+                }] });
+                const generated = {
+                    ...OPEN_BUY_RECOMMENDATION,
+                    id: journey === 'E2E-01' ? 801 : 802,
+                    strategy_id: 8,
+                    strategy_name: 'Momentum Core',
+                    strategy_version_id: 81,
+                    strategy_version: 1,
+                    source_screener_id: sourceScreenerId,
+                    source_screener_version: sourceVersion,
+                    status: 'pending_review',
+                    capital_allocation_status: 'funded',
+                    can_review: true,
+                    suggested_quantity: 10,
+                    suggested_investment_amount: 50000,
+                    evidence: { ...OPEN_BUY_RECOMMENDATION.evidence, screener_id: sourceScreenerId, screener_version: sourceVersion },
+                };
+                const observedRequests = [];
+                const recommendationPayloads = [];
+                page.on('request', (request) => observedRequests.push({ method: request.method(), path: new URL(request.url()).pathname }));
+                page.on('response', async (response) => {
+                    if (new URL(response.url()).pathname.endsWith('/api/v1/recommendations')) {
+                        try { recommendationPayloads.push(await response.json()); } catch { /* non-JSON response */ }
+                    }
+                });
+                await installTosApiMocks(page, { recommendations: [], pipelineRecommendations: [generated], retainApprovedRecommendations: true, fallbackUnmocked: true });
+
+                if (journey === 'E2E-01') {
+                    await page.goto('/screeners/new');
+                    await page.getByLabel('Name').fill('Price Above MA200');
+                    await page.getByLabel('left indicator').selectOption('close');
+                    await page.getByLabel('right indicator').selectOption('sma');
+                    await page.getByLabel('Period').fill('200');
+                    await page.getByRole('button', { name: 'Save' }).click();
+                    await expect(page).toHaveURL(/\/screeners\/99$/);
+                    const create = observedRequests.find(({ method, path }) => method === 'POST' && path.endsWith('/api/screeners'));
+                    expect(create).toBeTruthy();
+                } else {
+                    await page.goto('/screeners');
+                    await expect(page.getByRole('link', { name: 'Price Above MA200' })).toBeVisible();
+                }
+
+                await page.goto('/strategy');
+                await page.getByRole('button', { name: 'Create Strategy', exact: true }).click();
+                await page.locator('#create-strategy-name').fill('Momentum Core');
+                await page.getByRole('button', { name: 'Create Strategy', exact: true }).last().click();
+                await expect(page).toHaveURL(/\/strategy\?strategy_id=8$/);
+                await page.getByRole('button', { name: 'Eligibility Sources' }).click();
+                await page.locator('select').filter({ has: page.locator(`option[value="${sourceScreenerId}"]`) }).selectOption(String(sourceScreenerId));
+                await page.getByRole('button', { name: 'Add', exact: true }).click();
+                const strategySave = page.waitForRequest((request) => request.method() === 'PUT' && new URL(request.url()).pathname.endsWith('/api/v1/strategy'));
+                await page.getByRole('button', { name: 'Save', exact: true }).click();
+                const strategyPayload = (await strategySave).postDataJSON();
+                expect(strategyPayload.config.eligibility_sources).toEqual(expect.arrayContaining([
+                    expect.objectContaining({ screener_id: sourceScreenerId, enabled: true }),
+                ]));
+
+                await page.goto('/recommendations');
+                await page.getByRole('button', { name: 'Run decision pipeline' }).click();
+                const row = page.getByRole('row').filter({ hasText: 'Momentum Core' });
+                await expect(row).toContainText('INFY');
+                await expect(row).toContainText('pending_review');
+                await expect.poll(() => recommendationPayloads.flatMap((payload) => payload?.data?.data ?? payload?.data ?? [])
+                    .find((recommendation) => recommendation.id === generated.id)).toMatchObject({
+                    strategy_id: 8, strategy_version_id: 81, source_screener_id: sourceScreenerId,
+                    source_screener_version: sourceVersion,
+                });
+                const reviewRequest = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname.endsWith(`/api/v1/recommendations/${generated.id}/review`));
+                await row.getByRole('button', { name: 'Review' }).click();
+                const dialog = page.getByRole('dialog');
+                await expect(dialog).toContainText('Momentum Core');
+                await dialog.getByRole('button', { name: 'Approve' }).click();
+                expect((await reviewRequest).postDataJSON()).toMatchObject({ decision: 'approved' });
+                await expect(page.getByRole('row').filter({ hasText: 'Momentum Core' })).toContainText('pending_execution');
+
+                expect(observedRequests.some(({ method, path }) => method === 'POST' && /\/orders(?:\/|$)/.test(path))).toBe(false);
+                expect(observedRequests.some(({ method, path }) => method === 'POST' && /\/execution\/(?:submit|submit-selected)/.test(path))).toBe(false);
+                expect(observedRequests.some(({ path }) => /kite|broker/i.test(path))).toBe(false);
+            });
+        }
+    }
+
     for (const viewport of VIEWPORTS) {
         test(`E2E-08 uses production ML acceptance preflight and explicit training controls (${viewport.name})`, async ({ page }, testInfo) => {
             journeyId(testInfo, 'E2E-08');

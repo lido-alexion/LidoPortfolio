@@ -25,6 +25,7 @@ export async function installTosApiMocks(page, {
     capitalResolution = CAPITAL_RESOLUTION,
     retainApprovedRecommendations = false,
     user = TEST_USER,
+    fallbackUnmocked = false,
 } = {}) {
     let recs = recommendations.map((r) => ({ ...r }));
 
@@ -144,6 +145,7 @@ export async function installTosApiMocks(page, {
             }));
         }
 
+        if (fallbackUnmocked) return route.fallback();
         return json(route, { success: false, error: { code: 'UNMOCKED', message: `${method} ${path}` } }, 501);
     });
 }
