@@ -47,12 +47,12 @@ export default function ScreenerMyScreensTab() {
 
     usePortfolioChanged(load);
 
-    const deleteScreener = useCallback(async (id) => {
-        if (!window.confirm('Delete this screener and its run history?')) return;
+    const archiveScreener = useCallback(async (id) => {
+        if (!window.confirm('Archive this screener? Its run history will be preserved.')) return;
         setDeletingId(id);
         try {
             await api.delete(`/screeners/${id}`);
-            showToast('Screener deleted');
+            showToast('Screener archived. Run history was preserved.');
             await load();
         } catch (error) {
             showToast(validationMessage(error), 'danger');
@@ -115,7 +115,9 @@ export default function ScreenerMyScreensTab() {
                     <Link to={`/screeners/${row.original.id}`} className="fw-semibold text-decoration-none">
                         {row.original.name}
                     </Link>
-                    {!row.original.is_enabled && (
+                    {row.original.artifact_status === 'archived' ? (
+                        <span className="badge text-bg-secondary ms-2">Archived</span>
+                    ) : !row.original.is_enabled && (
                         <span className="badge text-bg-secondary ms-2">Off</span>
                     )}
                     {row.original.is_shared && (
@@ -182,7 +184,7 @@ export default function ScreenerMyScreensTab() {
                         <button
                             type="button"
                             className="btn btn-sm btn-outline-primary me-1"
-                            disabled={runningId === screenerId}
+                            disabled={runningId === screenerId || row.original.artifact_status === 'archived'}
                             onClick={() => runNow(screenerId)}
                         >
                             {runningId === screenerId ? 'Running…' : 'Run'}
@@ -191,22 +193,22 @@ export default function ScreenerMyScreensTab() {
                             to={`/screeners/${screenerId}`}
                             className="btn btn-sm btn-outline-secondary me-1"
                         >
-                            {row.original.compatibility_read_only ? 'Inspect' : 'Edit'}
+                            {row.original.compatibility_read_only || row.original.artifact_status === 'archived' ? 'Inspect' : 'Edit'}
                         </Link>
                         <button
                             type="button"
                             className="btn btn-sm btn-outline-danger"
-                            disabled={deletingId === screenerId || row.original.compatibility_read_only}
-                            title={row.original.compatibility_read_only ? 'Managed by the Artifact Library' : 'Delete screener'}
-                            onClick={() => deleteScreener(screenerId)}
+                            disabled={deletingId === screenerId || row.original.compatibility_read_only || row.original.artifact_status === 'archived'}
+                            title={row.original.compatibility_read_only ? 'Managed by the Artifact Library' : 'Archive screener'}
+                            onClick={() => archiveScreener(screenerId)}
                         >
-                            Delete
+                            {row.original.artifact_status === 'archived' ? 'Archived' : 'Archive'}
                         </button>
                     </div>
                 );
             },
         },
-    ], [deleteScreener, deletingId, runNow, runningId]);
+    ], [archiveScreener, deletingId, runNow, runningId]);
 
     return (
         <DataTableCard

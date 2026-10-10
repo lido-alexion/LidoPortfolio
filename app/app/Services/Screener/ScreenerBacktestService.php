@@ -10,6 +10,7 @@ use App\Models\ScreenerBacktestHit;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Services\Artifacts\ArtifactRuntimeBindingResolver;
+use App\Services\Artifacts\ArtifactStatus;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -29,6 +30,12 @@ class ScreenerBacktestService
      */
     public function start(Screener $screener, string $rangeKey, string $sessionToken): array
     {
+        if ($screener->artifact_status === ArtifactStatus::ARCHIVED) {
+            throw ValidationException::withMessages([
+                'screener' => 'Archived screeners cannot start new backtests. Historical evidence remains available.',
+            ]);
+        }
+
         $rangeKey = $this->normalizeRangeKey($rangeKey);
         $sessionToken = $this->normalizeSessionToken($sessionToken);
 

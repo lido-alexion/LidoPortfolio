@@ -9,11 +9,15 @@ use App\Models\ScreenerBacktestHit;
 use App\Models\ScreenerVersion;
 use App\Models\ScreenerRun;
 use App\Models\ScreenerRunHit;
+use App\Models\StrategyScreener;
 use App\Models\Setting;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\User;
 use App\Services\Screener\ScreenerService;
+use App\Services\StrategyConfigurationService;
+use App\Services\StrategyEligibilityService;
+use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -135,10 +139,57 @@ class ScreenerTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data');
 
+        $activeStrategyVersion = app(StrategyConfigurationService::class)->ensureActive($profile);
+        StrategyScreener::query()->create([
+            'strategy_version_id' => $activeStrategyVersion->id,
+            'screener_id' => $id,
+            'enabled' => true,
+        ]);
         $this->deleteJson("/api/screeners/{$id}")
-            ->assertOk();
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('screener');
+        StrategyScreener::query()->where('strategy_version_id', $activeStrategyVersion->id)
+            ->where('screener_id', $id)->delete();
 
-        $this->assertDatabaseMissing('portfolio_screeners', ['id' => $id]);
+        $this->deleteJson("/api/screeners/{$id}")
+            ->assertOk()
+            ->assertJsonPath('message', 'Screener archived. Run history was preserved.');
+
+        $this->assertDatabaseHas('portfolio_screeners', [
+            'id' => $id,
+            'artifact_status' => 'archived',
+            'is_enabled' => false,
+            'schedule_enabled' => false,
+        ]);
+        $this->assertDatabaseHas('portfolio_screener_runs', ['id' => $runId, 'screener_id' => $id]);
+        $this->assertGreaterThanOrEqual(1, ScreenerRunHit::query()->where('run_id', $runId)->count());
+        $this->getJson("/api/screeners/{$id}/runs")
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+        $this->postJson("/api/screeners/{$id}/run")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('screener');
+        $this->putJson("/api/screeners/{$id}", ['name' => 'Attempt archived edit'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('screener');
+        $this->postJson("/api/screeners/{$id}/backtest", [
+            'range' => '1y',
+            'session_token' => 'archived-screener-test',
+        ])->assertUnprocessable()->assertJsonValidationErrors('screener');
+
+        StrategyScreener::query()->where('strategy_version_id', $activeStrategyVersion->id)->delete();
+        try {
+            app(StrategyEligibilityService::class)->syncStrategyScreeners($activeStrategyVersion, [[
+                'screener_id' => $id,
+                'enabled' => true,
+            ]]);
+            $this->fail('Expected archived screeners to be rejected as Strategy eligibility sources.');
+        } catch (ValidationException $exception) {
+            $this->assertStringContainsString(
+                'Archived screeners cannot be added to an enabled Strategy.',
+                $exception->errors()['eligibility_sources'][0],
+            );
+        }
     }
 
     public function test_insufficient_history_is_skipped_not_matched(): void

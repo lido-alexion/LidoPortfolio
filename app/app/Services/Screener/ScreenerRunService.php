@@ -17,6 +17,7 @@ use App\Models\StockPrice;
 use App\Models\Watchlist;
 use App\Models\WatchlistItem;
 use App\Services\Artifacts\ArtifactRuntimeBindingResolver;
+use App\Services\Artifacts\ArtifactStatus;
 use App\Services\Artifacts\ArtifactType;
 use App\Services\DataQualityGuardService;
 use App\Services\EquityUniverseService;
@@ -24,6 +25,7 @@ use App\Services\IndexCatalogService;
 use App\Services\IndexConstituentService;
 use App\Services\Notification\NotificationPublisher;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class ScreenerRunService
@@ -45,6 +47,12 @@ class ScreenerRunService
      */
     public function start(Screener $screener, string $triggeredBy = 'manual'): array
     {
+        if ($screener->artifact_status === ArtifactStatus::ARCHIVED) {
+            throw ValidationException::withMessages([
+                'screener' => 'Archived screeners cannot be run. Historical run evidence remains available.',
+            ]);
+        }
+
         $runtimeSelection = $this->artifactRuntime->forScreener($screener);
         if ($screener->reusable_artifact_id !== null && $runtimeSelection === null) {
             throw new DomainException(
