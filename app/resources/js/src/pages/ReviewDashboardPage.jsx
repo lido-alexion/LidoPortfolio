@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ROUTES } from '../navigation/routes';
 import api from '../api';
@@ -181,13 +181,7 @@ export default function ReviewDashboardPage() {
                         <table className="table table-sm align-middle">
                             <thead>
                                 <tr>
-                                    <th>Symbol</th>
-                                    <th>Type</th>
-                                    <th>Status</th>
-                                    <th>Ref</th>
-                                    <th>Current</th>
-                                    <th>P/L</th>
-                                    <th>P/L %</th>
+                                    <th>Symbol</th><th>Type</th><th>Status</th><th>Ref</th><th>Current</th><th>P/L</th><th>P/L %</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -195,11 +189,8 @@ export default function ReviewDashboardPage() {
                                     <tr><td colSpan={7} className="text-muted">No actionable outcomes yet.</td></tr>
                                 ) : outcomes.map((o) => (
                                     <tr key={o.recommendation_id}>
-                                        <td><strong>{o.symbol}</strong></td>
-                                        <td>{o.recommendation_type}</td>
-                                        <td>{o.status}</td>
-                                        <td>{fmtNum(o.reference_price)}</td>
-                                        <td>{fmtNum(o.current_price)}</td>
+                                        <td><strong>{o.symbol}</strong></td><td>{o.recommendation_type}</td><td>{o.status}</td>
+                                        <td>{fmtNum(o.reference_price)}</td><td>{fmtNum(o.current_price)}</td>
                                         <td className={o.gain_loss > 0 ? 'text-success' : o.gain_loss < 0 ? 'text-danger' : ''}>{fmtNum(o.gain_loss)}</td>
                                         <td className={o.gain_loss_pct > 0 ? 'text-success' : o.gain_loss_pct < 0 ? 'text-danger' : ''}>{fmtPct(o.gain_loss_pct)}</td>
                                     </tr>
@@ -214,13 +205,7 @@ export default function ReviewDashboardPage() {
                         <table className="table table-sm align-middle">
                             <thead>
                                 <tr>
-                                    <th>Symbol</th>
-                                    <th>Type</th>
-                                    <th>Status</th>
-                                    <th>Ref</th>
-                                    <th>Current</th>
-                                    <th>P/L</th>
-                                    <th>P/L %</th>
+                                    <th>Symbol</th><th>Type</th><th>Status</th><th>Ref</th><th>Current</th><th>P/L</th><th>P/L %</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -228,11 +213,8 @@ export default function ReviewDashboardPage() {
                                     <tr><td colSpan={7} className="text-muted">No insight outcomes yet.</td></tr>
                                 ) : infoOutcomes.map((o) => (
                                     <tr key={o.recommendation_id}>
-                                        <td><strong>{o.symbol}</strong></td>
-                                        <td>{o.recommendation_type}</td>
-                                        <td>{o.status}</td>
-                                        <td>{fmtNum(o.reference_price)}</td>
-                                        <td>{fmtNum(o.current_price)}</td>
+                                        <td><strong>{o.symbol}</strong></td><td>{o.recommendation_type}</td><td>{o.status}</td>
+                                        <td>{fmtNum(o.reference_price)}</td><td>{fmtNum(o.current_price)}</td>
                                         <td className={o.gain_loss > 0 ? 'text-success' : o.gain_loss < 0 ? 'text-danger' : ''}>{fmtNum(o.gain_loss)}</td>
                                         <td className={o.gain_loss_pct > 0 ? 'text-success' : o.gain_loss_pct < 0 ? 'text-danger' : ''}>{fmtPct(o.gain_loss_pct)}</td>
                                     </tr>
@@ -246,15 +228,7 @@ export default function ReviewDashboardPage() {
                         <table className="table table-sm align-middle">
                             <thead>
                                 <tr>
-                                    <th>ID</th>
-                                    <th>Symbol</th>
-                                    <th>Side</th>
-                                    <th>Qty</th>
-                                    <th>Status</th>
-                                    <th>Broker status</th>
-                                    <th>Broker note</th>
-                                    <th className="text-end">Filled</th>
-                                    <th />
+                                    <th>ID</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Status</th><th>Broker status</th><th>Broker note</th><th className="text-end">Filled</th><th />
                                 </tr>
                             </thead>
                             <tbody>
@@ -262,22 +236,11 @@ export default function ReviewDashboardPage() {
                                     <tr><td colSpan={9} className="text-muted">No orders.</td></tr>
                                 ) : orders.map((o) => (
                                     <tr key={o.id}>
-                                        <td>{o.id}</td>
-                                        <td>{o.security?.symbol || o.symbol || '—'}</td>
-                                        <td>{o.side}</td>
-                                        <td>{o.quantity}</td>
-                                        <td>{o.status}</td>
-                                        <td>{o.broker_status || '—'}</td>
-                                        <td>{o.broker_error_message || '—'}</td>
-                                        <td className="text-end">{o.filled_quantity ?? '—'}</td>
+                                        <td>{o.id}</td><td>{o.security?.symbol || o.symbol || '—'}</td><td>{o.side}</td><td>{o.quantity}</td><td>{o.status}</td>
+                                        <td>{o.broker_status || '—'}</td><td>{o.broker_error_message || '—'}</td><td className="text-end">{o.filled_quantity ?? '—'}</td>
                                         <td className="text-nowrap">
                                             {o.status === 'pending' && IN_FLIGHT_BROKER_STATUSES.has(brokerStatusOf(o)) && (
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-link btn-sm px-0 me-2"
-                                                    disabled={reconcilingOrderId === o.id}
-                                                    onClick={() => reconcileOrder(o.id)}
-                                                >
+                                                <button type="button" className="btn btn-link btn-sm px-0 me-2" disabled={reconcilingOrderId === o.id} onClick={() => reconcileOrder(o.id)}>
                                                     {reconcilingOrderId === o.id ? 'Reconciling…' : 'Reconcile'}
                                                 </button>
                                             )}
@@ -301,17 +264,7 @@ export default function ReviewDashboardPage() {
                         {(dash.recent_reviews || []).length === 0 && <li className="text-muted">None yet.</li>}
                         {(dash.recent_reviews || []).map((r) => (
                             <li key={r.id}>
-                                {r.symbol}
-                                {' '}
-                                —
-                                {' '}
-                                <strong>{r.decision}</strong>
-                                {' '}
-                                by
-                                {' '}
-                                {r.user || 'user'}
-                                {' '}
-                                {r.created_at ? new Date(r.created_at).toLocaleString() : ''}
+                                {r.symbol} {' '} — {' '} <strong>{r.decision}</strong> {' '} by {' '} {r.user || 'user'} {' '} {r.created_at ? new Date(r.created_at).toLocaleString() : ''}
                             </li>
                         ))}
                     </ul>
