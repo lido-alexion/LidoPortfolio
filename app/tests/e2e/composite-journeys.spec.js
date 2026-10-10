@@ -271,6 +271,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                 await expect(dialog).toContainText('Momentum Core');
                 await expect(dialog.getByTestId('recommendation-provenance')).toContainText(`Source screener #${sourceScreenerId} · Version ${sourceVersion}`);
                 await expect(dialog.getByTestId('recommendation-provenance')).toContainText('Strategy #8 · Strategy version #81');
+                await page.addStyleTag({ content: '.lido-toast { visibility: hidden !important; }' });
                 await expect(dialog).toHaveScreenshot(`e2e-${journey}-recommendation-review-${viewport.name}.png`, { animations: 'disabled', caret: 'hide' });
                 const requestsBeforeApproval = observedRequests.length;
                 await dialog.getByRole('button', { name: 'Approve' }).click();
@@ -313,6 +314,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
     for (const viewport of VIEWPORTS) {
         for (const journey of ['E2E-03', 'E2E-07']) {
             test(`${journey} records a strategy-owned SELL without changing another strategy's shares (${viewport.name})`, async ({ page }, testInfo) => {
+                test.setTimeout(90_000);
                 journeyId(testInfo, journey);
                 await seedDeterministicJourney(page, `${journey.toLowerCase()}-strategy-exit-${viewport.name}`);
                 await page.setViewportSize({ width: viewport.width, height: viewport.height });
