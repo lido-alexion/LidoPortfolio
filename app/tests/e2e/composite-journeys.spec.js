@@ -110,6 +110,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                     evidence: { ...OPEN_BUY_RECOMMENDATION.evidence, screener_id: sourceScreenerId, screener_version: sourceVersion },
                 };
                 const observedRequests = [];
+                const externalRequests = [];
                 const recommendationPayloads = [];
                 const screenerPayloads = [];
                 let strategyEnabled = false;
@@ -127,7 +128,11 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                 });
                 await installTosApiMocks(page, { recommendations: [], pipelineRecommendations: [generated], retainApprovedRecommendations: true, fallbackUnmocked: true });
                 await page.route('**/*', async (route) => {
-                    if (new URL(route.request().url()).origin !== allowedOrigin) return route.abort();
+                    const requestUrl = route.request().url();
+                    if (new URL(requestUrl).origin !== allowedOrigin) {
+                        externalRequests.push(requestUrl);
+                        return route.abort();
+                    }
                     return route.fallback();
                 });
 
@@ -250,7 +255,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                 expect(observedRequests.some(({ method, path }) => method === 'POST' && /\/orders(?:\/|$)/.test(path))).toBe(false);
                 expect(observedRequests.some(({ method, path }) => method === 'POST' && /\/execution\/(?:submit|submit-selected)/.test(path))).toBe(false);
                 expect(observedRequests.some(({ path }) => /kite|broker/i.test(path))).toBe(false);
-                expect(observedRequests.every(({ path }) => !/^(?!\/api\/|\/sanctum\/)/.test(path))).toBe(true);
+                expect(externalRequests).toEqual([]);
             });
         }
     }
