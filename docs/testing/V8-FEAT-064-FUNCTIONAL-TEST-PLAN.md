@@ -8,7 +8,7 @@ Closure sequence: [V8 register §8](../archive/specs/LidoPortfolio-V8-Wishlist.m
 
 ## Purpose
 
-Implementation and exact-pin production adoption are complete on build 493. This plan records completed production gates and remaining broader two-account, membership-change, recommendation-resume, and deployed accessibility checks.
+Implementation and exact-pin production adoption are complete on build 493. This plan records completed production gates and remaining broader two-account, membership-change, and deployed accessibility checks.
 
 ## Gate 0 — stable target
 

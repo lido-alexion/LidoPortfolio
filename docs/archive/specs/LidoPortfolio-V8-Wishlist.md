@@ -202,11 +202,11 @@ The canonical implementation spec is [V8-Core-Investor-Workflow-UX-Simplificatio
 2. PRs #122 and #123 added guarded Screener snapshot recovery and corrected the Artisan option to --target-version; both are merged. PR #123 CI passed and production build 493 (commit b06f3fa7001f2848867de53dba60a92c15776f75) is live with no pending migrations.
 3. Screener 4 v2 is immutable row 10, hash sha256:d3edf5394abd4066e1e894e73abbbe55057c69e0f0ee3915cf116028ffc9bae4, proven by exact immutable v3 row 9; v1 row 4 remains intact. Screener 5 v2 is immutable row 11, semantic hash sha256:092a4e0ad9d00d5796f0e97de6d4760e2e7db6c59e30c8ab42cf35a542271e02, proven by same-lineage published artifact version 39; v1 row 5 remains intact. The prior sha256:59d3e174bc606b42e291ff06c24301de334356d5175a9a74a5ab7b59245d6cdb was an artifact-envelope hash, not the semantic definition hash.
 4. Supported binding upgrades created revisions 57, 58, 59, and 60 for bindings 42, 43, 44, and 47. Active Strategy versions 34, 35, 36, and 37 now pin respectively to Screener 4 v3 row 9, Screener 5 v2 row 11, Screener 4 v3 row 9, and Screener 4 v3 row 9. Earlier immutable Strategy version configuration and hashes, Screener v1 rows, and historical run/recommendation/transaction provenance were preserved.
-5. Production read-only readiness checks passed for all four active Strategy versions; deployed runtime exact-pin execution evidence is in the acceptance audit.
+5. Production readiness passed for all four active Strategy versions; exact-pinned Screener runs fed all four active Strategies, and controlled production decision-pipeline run 57 published 392 recommendations against the exact pins. No transaction or order was created; evidence is in the acceptance audit.
 
 ### Remaining functional acceptance
 
-Keep the implemented disposition while tracking these broader checks as open: two-account privacy and definition-copy workflow; controlled membership-drift behavior against the deployed universe provider; recommendation-resume observation in a controlled workflow; and deployed-device keyboard/screen-reader acceptance. Do not change real holdings or create unintended trades.
+Keep the implemented disposition while tracking these broader checks as open: two-account privacy and definition-copy workflow; controlled membership-drift behavior against the deployed universe provider; and deployed-device keyboard/screen-reader acceptance. Do not change real holdings or create unintended trades.
 
 Update the audit and this register with results when those checks are completed. Do not downgrade implementation status solely because broader functional acceptance remains open.
 ## 10. Boundary
