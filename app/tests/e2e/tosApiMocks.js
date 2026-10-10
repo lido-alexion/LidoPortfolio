@@ -63,7 +63,10 @@ export async function installTosApiMocks(page, {
             return json(route, apiEnvelope([]));
         }
         if (path.endsWith('/api/v1/protections') && method === 'GET') {
-            return json(route, apiEnvelope({ protections: [] }));
+            return json(route, apiEnvelope([]));
+        }
+        if (['/api/v1/capital/recalls', '/api/v1/capital/bridge-loans', '/api/v1/capital/pending-sale-proceeds'].includes(path) && method === 'GET') {
+            return json(route, apiEnvelope([]));
         }
         if (path.endsWith('/api/v1/pipeline/run') && method === 'POST') {
             if (pipelineRecommendations) recs = pipelineRecommendations.map((r) => ({ ...r }));

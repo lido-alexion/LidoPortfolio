@@ -84,7 +84,7 @@ test.describe('V9-UX-001 manual execution journeys', () => {
             await expect(page.getByText('Recording actual broker fill for recommendation #801.')).toBeVisible();
             await expect(page.locator('#stock-symbol-input')).toHaveValue('INFY');
             await expect(page.getByLabel('Quantity')).toHaveValue('5');
-            await expect(page.getByLabel('Price')).toHaveValue('3500');
+            await expect(page.locator('#tx-price')).toHaveValue('3500');
             expect(ledgerWrites).toBe(0);
         });
     }
@@ -241,6 +241,7 @@ test.describe('V9-UX-001 actual transaction recording', () => {
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
             await installTosApiMocks(page);
             let savedTransaction = null;
+            await page.route('**/api/stocks/search**', (route) => route.fulfill({ json: { data: [] } }));
             await page.route('**/api/stocks/validate', (route) => route.fulfill({
                 json: { source: 'test fixture', data: { id: 42, symbol: 'INFY', name: 'Infosys Limited', exchange: 'NSE' }, meta: { cached: false } },
             }));
@@ -259,7 +260,7 @@ test.describe('V9-UX-001 actual transaction recording', () => {
             await page.getByRole('button', { name: 'Validate symbol' }).click();
             await expect(page.getByText(/Validated via test fixture/)).toBeVisible();
             await page.getByLabel('Quantity').fill('2');
-            await page.getByLabel('Price').fill('3500');
+            await page.locator('#tx-price').fill('3500');
             await page.getByRole('button', { name: 'Save Transaction' }).click();
             await expect(page.getByText('Transaction saved')).toBeVisible();
             expect(savedTransaction).toMatchObject({
@@ -550,6 +551,7 @@ test.describe('V9-UX-001 post-execution reconciliation', () => {
                 unrealized_profit: 0,
                 summary: { quantity: 2, latest_close: 3500, highest_close_since_buy: 3500, first_buy_date: '2026-10-09', has_price_history: true },
             };
+            await page.route('**/api/stocks/search**', (route) => route.fulfill({ json: { data: [] } }));
             await page.route('**/api/stocks/validate', (route) => route.fulfill({
                 json: { source: 'test fixture', data: { id: 42, symbol: 'INFY', name: 'Infosys Limited', exchange: 'NSE' }, meta: { cached: false } },
             }));
@@ -579,9 +581,9 @@ test.describe('V9-UX-001 post-execution reconciliation', () => {
             await page.getByRole('button', { name: 'Validate symbol' }).click();
             await expect(page.getByText(/Validated via test fixture/)).toBeVisible();
             await page.getByLabel('Quantity').fill('2');
-            await page.getByLabel('Price').fill('3500');
+            await page.locator('#tx-price').fill('3500');
             await page.getByRole('button', { name: 'Save Transaction' }).click();
-            await expect(page.getByRole('row').filter({ hasText: 'INFY' })).toContainText('3500');
+            await expect(page.getByRole('row').filter({ hasText: 'INFY' })).toContainText('3,500');
             expect(ledger[0]).toMatchObject({ type: 'buy', quantity: 2, price: 3500, recommendation_id: 1503, strategy_id: 17 });
 
             await page.goto('/holdings');
