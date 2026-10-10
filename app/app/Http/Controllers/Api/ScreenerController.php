@@ -78,9 +78,9 @@ class ScreenerController extends Controller
 
     public function destroy(Screener $screener): JsonResponse
     {
-        $this->screeners->delete($screener);
+        $this->screeners->archive($screener);
 
-        return response()->json(['message' => 'Screener deleted.']);
+        return response()->json(['message' => 'Screener archived. Run history was preserved.']);
     }
 
     public function run(Screener $screener): JsonResponse

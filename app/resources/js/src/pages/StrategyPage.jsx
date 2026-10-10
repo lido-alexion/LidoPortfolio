@@ -245,7 +245,7 @@ export default function StrategyPage() {
             const list = Array.isArray(screenersRes?.data?.data)
                 ? screenersRes.data.data
                 : (Array.isArray(screenersRes?.data) ? screenersRes.data : []);
-            setAvailableScreeners(list);
+            setAvailableScreeners(list.filter((screener) => screener.artifact_status !== 'archived'));
             setBenchmarkIndexes(indexesRes?.data?.data?.indexes || []);
 
             const effectiveStrategyId = strategyId || String(data?.data?.strategy_id ?? data?.data?.id ?? '');

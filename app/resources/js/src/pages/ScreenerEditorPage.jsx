@@ -637,6 +637,7 @@ export default function ScreenerEditorPage() {
                 max_lookback: data.max_lookback,
                 reusable_artifact_uuid: data.reusable_artifact_uuid,
                 compatibility_read_only: Boolean(data.compatibility_read_only),
+                artifact_status: data.artifact_status || 'active',
             });
             setHistory(runsRes.data?.data ?? []);
             setHistoryTotal(runsRes.data?.total ?? runsRes.data?.data?.length ?? 0);
@@ -713,6 +714,10 @@ export default function ScreenerEditorPage() {
     });
 
     const save = async () => {
+        if (form.artifact_status === 'archived') {
+            showToast('Archived screeners are read-only. Create a new screener to make changes.', 'warning');
+            return false;
+        }
         if (form.compatibility_read_only) {
             showToast('This Screener is bound to a published library artifact. Open the artifact to publish an upgrade, or copy it as a new Screener.', 'warning');
             return false;
@@ -772,6 +777,10 @@ export default function ScreenerEditorPage() {
 
     const runNow = async () => {
         if (isNew) return;
+        if (form.artifact_status === 'archived') {
+            showToast('Archived screeners cannot be run.', 'warning');
+            return;
+        }
         setSubmitted(true);
         if (hasValidationErrors) {
             const firstError = Object.values(validationErrors)[0];
@@ -853,6 +862,10 @@ export default function ScreenerEditorPage() {
 
     const runBacktest = async (rangeKey = backtestRange) => {
         if (isNew) return;
+        if (form.artifact_status === 'archived') {
+            showToast('Archived screeners cannot be backtested.', 'warning');
+            return;
+        }
         setSubmitted(true);
         if (hasValidationErrors) {
             const firstError = Object.values(validationErrors)[0];
@@ -961,6 +974,7 @@ export default function ScreenerEditorPage() {
     }
 
     const configSection = (
+        <fieldset disabled={form.artifact_status === 'archived'} className="border-0 p-0 m-0">
         <>
             <div className="mb-3">
                 <label className="form-label" htmlFor="screener-name">Name</label>
@@ -1156,10 +1170,11 @@ export default function ScreenerEditorPage() {
                 Tree needs ≥ <strong>{lookbackHint}</strong> OHLCV sessions (recomputed on save).
             </p>
         </>
+        </fieldset>
     );
 
     const conditionsSection = (
-        <div className="lido-screener-tree">
+        <fieldset disabled={form.artifact_status === 'archived'} className="lido-screener-tree border-0 p-0 m-0">
             <ConditionNode
                 node={form.definition_json?.root}
                 meta={meta}
@@ -1169,14 +1184,14 @@ export default function ScreenerEditorPage() {
                     max_lookback: form.max_lookback,
                 })}
             />
-        </div>
+        </fieldset>
     );
 
     return (
         <div className="container-fluid py-3 pb-5">
             <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
                 <Link to="/screeners" className="btn btn-sm btn-outline-secondary">← Screeners</Link>
-                <h1 className="h3 mb-0">{isNew ? 'New screener' : 'Edit screener'}</h1>
+                <h1 className="h3 mb-0">{isNew ? 'New screener' : form.artifact_status === 'archived' ? 'Archived screener' : 'Edit screener'}</h1>
                 {strategyReturnActive ? (
                     <button
                         type="button"
@@ -1204,6 +1219,11 @@ export default function ScreenerEditorPage() {
                         Open the library entry to create a draft, publish an upgrade, and bind it to this portfolio.
                     </span>
                     {form.reusable_artifact_uuid ? <Link className="btn btn-sm btn-primary" to={`/artifact-library/${form.reusable_artifact_uuid}`}>Open artifact</Link> : null}
+                </div>
+            ) : null}
+            {form.artifact_status === 'archived' ? (
+                <div className="alert alert-secondary" role="status">
+                    This screener is archived and cannot be run or edited. Its run history remains available below.
                 </div>
             ) : null}
 
@@ -1548,7 +1568,7 @@ export default function ScreenerEditorPage() {
                         <button
                             type="button"
                             className="btn btn-outline-primary"
-                            disabled={running || backtesting || saving || hasValidationErrors}
+                            disabled={running || backtesting || saving || hasValidationErrors || form.artifact_status === 'archived'}
                             onClick={runNow}
                         >
                             {running ? 'Running…' : 'Run now'}
@@ -1558,8 +1578,10 @@ export default function ScreenerEditorPage() {
                                 ? 'Backtesting…'
                                 : `Backtest · ${selectedBacktestRange?.label || '1 year'}`}
                             variant="outline-secondary"
-                            disabled={running || backtesting || saving || hasValidationErrors || !backtestAllowed}
-                            title={backtestAllowed
+                            disabled={running || backtesting || saving || hasValidationErrors || !backtestAllowed || form.artifact_status === 'archived'}
+                            title={form.artifact_status === 'archived'
+                                ? 'Archived screeners cannot be backtested'
+                                : backtestAllowed
                                 ? 'Walk weekdays as-of and stack hits (dropdown picks another window)'
                                 : 'Backtest is not available for this scope'}
                             onPrimaryClick={() => {

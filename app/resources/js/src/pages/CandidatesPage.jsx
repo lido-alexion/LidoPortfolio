@@ -226,7 +226,9 @@ export default function CandidatesPage() {
             return response.data?.data ?? [];
         },
     });
-    const screeners = Array.isArray(screenerData) ? screenerData : [];
+    const screeners = Array.isArray(screenerData)
+        ? screenerData.filter((screener) => screener.artifact_status !== 'archived')
+        : [];
     const defaultScreener = screeners.find((row) => row.factory_key === 'minervini_trend_template')
         || screeners.find((row) => row.is_factory)
         || null;
