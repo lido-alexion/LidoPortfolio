@@ -82,6 +82,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                 await page.setViewportSize({ width: viewport.width, height: viewport.height });
                 const sourceScreenerId = journey === 'E2E-01' ? 99 : 41;
                 const sourceVersion = journey === 'E2E-01' ? 1 : 3;
+                const allowedOrigin = 'http://127.0.0.1:4177';
                 const sourceDefinition = { root: { type: 'group', op: 'AND', children: [{
                     type: 'condition', left: { indicator: 'close' }, operator: 'gt',
                     right: { indicator: 'sma', params: { period: 200 } },
@@ -93,6 +94,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                 const generated = {
                     ...OPEN_BUY_RECOMMENDATION,
                     id: journey === 'E2E-01' ? 801 : 802,
+                    stock_id: 42,
                     strategy_id: 8,
                     strategy_name: 'Momentum Core',
                     strategy_version_id: 81,
@@ -104,17 +106,66 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                     can_review: true,
                     suggested_quantity: 10,
                     suggested_investment_amount: 50000,
+                    reference_price: 3500,
                     evidence: { ...OPEN_BUY_RECOMMENDATION.evidence, screener_id: sourceScreenerId, screener_version: sourceVersion },
                 };
                 const observedRequests = [];
                 const recommendationPayloads = [];
+                const screenerPayloads = [];
+                let strategyEnabled = false;
+                let savedTransaction = null;
+                let transactionPayload = null;
+                let cashBalance = 100000;
                 page.on('request', (request) => observedRequests.push({ method: request.method(), path: new URL(request.url()).pathname }));
                 page.on('response', async (response) => {
+                    if (new URL(response.url()).pathname.endsWith('/api/screeners')) {
+                        try { screenerPayloads.push({ method: response.request().method(), body: await response.json() }); } catch { /* non-JSON response */ }
+                    }
                     if (new URL(response.url()).pathname.endsWith('/api/v1/recommendations')) {
                         try { recommendationPayloads.push(await response.json()); } catch { /* non-JSON response */ }
                     }
                 });
                 await installTosApiMocks(page, { recommendations: [], pipelineRecommendations: [generated], retainApprovedRecommendations: true, fallbackUnmocked: true });
+                await page.route('**/*', async (route) => {
+                    if (new URL(route.request().url()).origin !== allowedOrigin) return route.abort();
+                    return route.fallback();
+                });
+
+                // These route guards are deliberately scoped to the mock app origin. Every API
+                // request in this scenario is intercepted; unexpected paths fail closed.
+                await page.route('**/api/v1/strategy-registry**', async (route) => {
+                    const { pathname } = new URL(route.request().url());
+                    if (pathname.endsWith('/api/v1/strategy-registry') && route.request().method() === 'GET') {
+                        return route.fulfill({ json: { data: [{ artifact_id: '8', id: 8, name: 'Momentum Core', metadata: { status: strategyEnabled ? 'active' : 'draft', is_enabled: strategyEnabled } }] } });
+                    }
+                    if (pathname.endsWith('/api/v1/strategy-registry/meta')) {
+                        return route.fulfill({ json: { data: { counts: { total: 1, active: strategyEnabled ? 1 : 0, draft: strategyEnabled ? 0 : 1, archived: 0 } } } });
+                    }
+                    if (pathname.endsWith('/api/v1/strategy-registry/8/activate') && route.request().method() === 'POST') {
+                        strategyEnabled = true;
+                        return route.fulfill({ json: { data: { artifact_id: '8', metadata: { status: 'active', is_enabled: true } } } });
+                    }
+                    return route.fulfill({ status: 501, json: { error: 'Unmocked strategy registry request' } });
+                });
+                await page.route('**/api/transactions**', async (route) => {
+                    const request = route.request();
+                    if (request.method() === 'GET') return route.fulfill({ json: { data: savedTransaction ? [savedTransaction] : [] } });
+                    if (request.method() === 'POST') {
+                        const payload = request.postDataJSON();
+                        transactionPayload = payload;
+                        savedTransaction = { ...payload, id: 9001, stock: { id: payload.stock_id || 42, symbol: 'INFY', name: 'Infosys' }, symbol: 'INFY', stock_name: 'Infosys', strategy_id: 8, strategy_name: 'Momentum Core', recommendation_id: generated.id };
+                        cashBalance -= Number(payload.quantity) * Number(payload.price) + Number(payload.fees || 0);
+                        return route.fulfill({ json: { success: true, data: savedTransaction, message: 'Transaction saved' }, status: 201 });
+                    }
+                    return route.fulfill({ status: 501, json: { error: 'Unexpected transaction method' } });
+                });
+                await page.route('**/api/holdings**', (route) => route.fulfill({ json: { data: savedTransaction ? [{ id: 9101, stock_id: savedTransaction.stock_id || 42, stock: { id: savedTransaction.stock_id || 42, symbol: 'INFY', name: 'Infosys' }, quantity: 10, avg_buy_price: 3500, summary: { first_buy_date: '2026-10-09', latest_close: 3500 }, strategy_id: 8, strategy_name: 'Momentum Core', recommendation_id: generated.id }] : [] } }));
+                await page.route('**/api/settings', (route) => route.fulfill({ json: { data: { fee_components: [] } } }));
+                await page.route('**/api/cash*', (route) => {
+                    const { pathname } = new URL(route.request().url());
+                    if (pathname.endsWith('/cash/statement')) return route.fulfill({ json: { data: { entries: [] }, meta: { current_page: 1, last_page: 1 } } });
+                    return route.fulfill({ json: { data: { cash_balance: cashBalance, reserved_cash: 0, available_investable_cash: cashBalance, available_physical_cash: cashBalance } } });
+                });
 
                 if (journey === 'E2E-01') {
                     await page.goto('/screeners/new');
@@ -122,13 +173,16 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                     await page.getByLabel('left indicator').selectOption('close');
                     await page.getByLabel('right indicator').selectOption('sma');
                     await page.getByLabel('Period').fill('200');
+                    const createResponse = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith('/api/screeners'));
                     await page.getByRole('button', { name: 'Save' }).click();
+                    expect(await (await createResponse).json()).toMatchObject({ data: { id: sourceScreenerId, version: sourceVersion } });
                     await expect(page).toHaveURL(/\/screeners\/99$/);
                     const create = observedRequests.find(({ method, path }) => method === 'POST' && path.endsWith('/api/screeners'));
                     expect(create).toBeTruthy();
                 } else {
                     await page.goto('/screeners');
                     await expect(page.getByRole('link', { name: 'Price Above MA200' })).toBeVisible();
+                    await expect.poll(() => screenerPayloads.find(({ method }) => method === 'GET')?.body?.data?.find(({ id }) => id === sourceScreenerId)?.version).toBe(sourceVersion);
                 }
 
                 await page.goto('/strategy');
@@ -146,8 +200,15 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                     expect.objectContaining({ screener_id: sourceScreenerId, enabled: true }),
                 ]));
 
+                page.on('dialog', (dialog) => dialog.accept());
+                await page.getByRole('button', { name: 'Enable', exact: true }).click();
+                await expect(page.getByText('enabled', { exact: true }).first()).toBeVisible();
+                expect(strategyEnabled).toBe(true);
+
                 await page.goto('/recommendations');
+                const pipelineRequest = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/api/v1/pipeline/run'));
                 await page.getByRole('button', { name: 'Run decision pipeline' }).click();
+                await pipelineRequest;
                 const row = page.getByRole('row').filter({ hasText: 'Momentum Core' });
                 await expect(row).toContainText('INFY');
                 await expect(row).toContainText('pending_review');
@@ -160,13 +221,36 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                 await row.getByRole('button', { name: 'Review' }).click();
                 const dialog = page.getByRole('dialog');
                 await expect(dialog).toContainText('Momentum Core');
+                await expect(dialog.getByTestId('recommendation-provenance')).toContainText(`Source screener #${sourceScreenerId} · Version ${sourceVersion}`);
+                await expect(dialog.getByTestId('recommendation-provenance')).toContainText('Strategy #8 · Strategy version #81');
+                const requestsBeforeApproval = observedRequests.length;
                 await dialog.getByRole('button', { name: 'Approve' }).click();
                 expect((await reviewRequest).postDataJSON()).toMatchObject({ decision: 'approved' });
                 await expect(page.getByRole('row').filter({ hasText: 'Momentum Core' })).toContainText('pending_execution');
+                expect(observedRequests.slice(requestsBeforeApproval).some(({ method, path }) => method === 'POST' && /\/orders(?:\/|$)|\/execution\/(?:submit|submit-selected)/.test(path))).toBe(false);
+
+                await page.goto('/transactions/pending');
+                const pendingRow = page.getByRole('row').filter({ hasText: 'INFY' });
+                await pendingRow.getByRole('button', { name: 'Execute manually' }).click();
+                await expect(page).toHaveURL('/transactions');
+                await expect(page.getByText(`Recording actual broker fill for recommendation #${generated.id}.`)).toBeVisible();
+                await page.getByRole('button', { name: /Save Transaction|Save/ }).click();
+                await expect.poll(() => savedTransaction).toMatchObject({ recommendation_id: generated.id, strategy_id: 8, strategy_name: 'Momentum Core', type: 'buy', quantity: 10, price: 3500 });
+                expect(transactionPayload).toMatchObject({ recommendation_id: generated.id, source: 'recommendation', type: 'buy', quantity: 10, price: 3500 });
+                await expect(page.getByRole('row').filter({ hasText: 'INFY' })).toContainText('10');
+                expect(savedTransaction.source).toBe('recommendation');
+
+                await page.goto('/holdings');
+                await expect(page.getByRole('row').filter({ hasText: 'INFY' })).toContainText('Momentum Core');
+                await expect(page.getByRole('row').filter({ hasText: 'INFY' })).toContainText('10');
+
+                await page.goto('/cash');
+                await expect(page.getByText('65,000')).toBeVisible();
 
                 expect(observedRequests.some(({ method, path }) => method === 'POST' && /\/orders(?:\/|$)/.test(path))).toBe(false);
                 expect(observedRequests.some(({ method, path }) => method === 'POST' && /\/execution\/(?:submit|submit-selected)/.test(path))).toBe(false);
                 expect(observedRequests.some(({ path }) => /kite|broker/i.test(path))).toBe(false);
+                expect(observedRequests.every(({ path }) => !/^(?!\/api\/|\/sanctum\/)/.test(path))).toBe(true);
             });
         }
     }

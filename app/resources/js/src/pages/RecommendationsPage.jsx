@@ -534,6 +534,15 @@ export default function RecommendationsPage() {
                                     {selected.strategy_name ? ` · ${selected.strategy_name}` : ''}
                                     {selected.strategy_version != null ? ` · Version ${selected.strategy_version}` : ''}
                                 </p>
+                                {(selected.source_screener_id ?? selected.evidence?.screener_id) != null ? (
+                                    <p className="small text-muted mb-2" data-testid="recommendation-provenance">
+                                        Source screener #{selected.source_screener_id ?? selected.evidence?.screener_id}
+                                        {(selected.source_screener_version ?? selected.evidence?.screener_version) != null
+                                            ? ` · Version ${selected.source_screener_version ?? selected.evidence?.screener_version}` : ''}
+                                        {selected.strategy_id != null ? ` · Strategy #${selected.strategy_id}` : ''}
+                                        {selected.strategy_version_id != null ? ` · Strategy version #${selected.strategy_version_id}` : ''}
+                                    </p>
+                                ) : null}
 
                                 {(selected.factor_breakdown || selected.evidence?.factor_breakdown)?.length ? (
                                     <>

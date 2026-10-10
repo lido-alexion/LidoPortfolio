@@ -387,6 +387,7 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
             const created = {
                 id,
                 name: payload?.name ?? 'E2E Screener',
+                version: 1,
                 scope: payload?.scope ?? 'holdings',
                 definition_json: payload?.definition_json,
                 is_enabled: true,
