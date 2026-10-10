@@ -18,6 +18,10 @@ test.describe('V9-UX-001 account entry', () => {
 
             await page.goto('/screeners?source=auth-entry');
             await expect(page.getByRole('heading', { name: 'Login' })).toBeVisible();
+            await expect(page.locator('.login-card')).toHaveScreenshot(`auth-login-${viewport.name}.png`, {
+                animations: 'disabled',
+                caret: 'hide',
+            });
             const accessibility = await new AxeBuilder({ page }).include('.login-card').withTags(['wcag2a', 'wcag2aa']).analyze();
             expect(accessibility.violations).toEqual([]);
             await page.getByLabel('Email').fill('investor@example.test');
@@ -43,6 +47,10 @@ test.describe('V9-UX-001 account entry', () => {
             await page.getByRole('button', { name: 'Login' }).click();
 
             await expect(page.getByRole('alert')).toHaveText('Email or password is incorrect.');
+            await expect(page.locator('.login-card')).toHaveScreenshot(`auth-login-error-${viewport.name}.png`, {
+                animations: 'disabled',
+                caret: 'hide',
+            });
             await expect(page).toHaveURL(/\/screeners\?source=auth-retry$/);
             await expect(page.getByRole('button', { name: 'Login' })).toBeEnabled();
 
