@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ROUTES } from '../navigation/routes';
 import api from '../api';
@@ -18,7 +18,15 @@ function fmtNum(v) {
     return Number(v).toFixed(2);
 }
 
+const IN_FLIGHT_BROKER_STATUSES = new Set(['submitted', 'open', 'partial', 'unknown']);
+const FINAL_NO_FILL_BROKER_STATUSES = new Set(['rejected', 'cancelled', 'canceled']);
+
+function brokerStatusOf(order) {
+    return String(order.broker_status || '').toLowerCase();
+}
+
 export default function ReviewDashboardPage() {
+    const [reconcilingOrderId, setReconcilingOrderId] = useState(null);
     const { data, loading, reload: load } = useApiGet({
         errorFallback: 'Failed to load review dashboard',
         request: async () => {
@@ -54,6 +62,30 @@ export default function ReviewDashboardPage() {
             const outcome = response?.data?.data?.cancellation_status;
             showToast(outcome === 'pending' ? 'Cancellation requested; waiting for Kite confirmation.' : 'Order cancellation confirmed.', 'success');
             await load();
+        }
+    };
+
+    const reconcileOrder = async (orderId) => {
+        setReconcilingOrderId(orderId);
+        try {
+            const { ok, data: response } = await runApiMutation(async () => (
+                await api.post(`/v1/orders/${orderId}/reconcile`, null, { skipErrorToast: true })
+            ), { errorFallback: 'Order reconciliation failed' });
+            if (ok) {
+                const status = response?.data?.data?.broker_status || 'unknown';
+                const inFlight = ['submitted', 'open', 'partial'].includes(status);
+                showToast(
+                    status === 'unknown'
+                        ? 'Broker status remains unknown. Do not retry this order yet.'
+                        : inFlight
+                            ? `Latest broker status: ${status}. Do not submit a duplicate while it is in flight.`
+                            : `Broker confirms ${status}. Check the filled quantity before retrying.`,
+                    status === 'unknown' ? 'warning' : 'info',
+                );
+                await load();
+            }
+        } finally {
+            setReconcilingOrderId(null);
         }
     };
 
@@ -219,12 +251,15 @@ export default function ReviewDashboardPage() {
                                     <th>Side</th>
                                     <th>Qty</th>
                                     <th>Status</th>
+                                    <th>Broker status</th>
+                                    <th>Broker note</th>
+                                    <th className="text-end">Filled</th>
                                     <th />
                                 </tr>
                             </thead>
                             <tbody>
                                 {orders.length === 0 ? (
-                                    <tr><td colSpan={6} className="text-muted">No orders.</td></tr>
+                                    <tr><td colSpan={9} className="text-muted">No orders.</td></tr>
                                 ) : orders.map((o) => (
                                     <tr key={o.id}>
                                         <td>{o.id}</td>
@@ -232,10 +267,25 @@ export default function ReviewDashboardPage() {
                                         <td>{o.side}</td>
                                         <td>{o.quantity}</td>
                                         <td>{o.status}</td>
+                                        <td>{o.broker_status || '—'}</td>
+                                        <td>{o.broker_error_message || '—'}</td>
+                                        <td className="text-end">{o.filled_quantity ?? '—'}</td>
                                         <td className="text-nowrap">
+                                            {o.status === 'pending' && IN_FLIGHT_BROKER_STATUSES.has(brokerStatusOf(o)) && (
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-link btn-sm px-0 me-2"
+                                                    disabled={reconcilingOrderId === o.id}
+                                                    onClick={() => reconcileOrder(o.id)}
+                                                >
+                                                    {reconcilingOrderId === o.id ? 'Reconciling…' : 'Reconcile'}
+                                                </button>
+                                            )}
                                             {o.status === 'pending' && (
                                                 <>
-                                                    <button type="button" className="btn btn-link btn-sm px-0 me-2" onClick={() => executePending(o.id)}>Add transaction</button>
+                                                    {!IN_FLIGHT_BROKER_STATUSES.has(brokerStatusOf(o)) && !FINAL_NO_FILL_BROKER_STATUSES.has(brokerStatusOf(o)) && (
+                                                        <button type="button" className="btn btn-link btn-sm px-0 me-2" onClick={() => executePending(o.id)}>Add transaction</button>
+                                                    )}
                                                     <button type="button" className="btn btn-link btn-sm px-0 text-danger" onClick={() => cancelPending(o.id)}>Cancel</button>
                                                 </>
                                             )}

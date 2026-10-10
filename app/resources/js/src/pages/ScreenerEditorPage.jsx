@@ -22,7 +22,7 @@ const NAME_MAX_LENGTH = 120;
 const DESCRIPTION_MAX_LENGTH = 500;
 const DEFAULT_EXPLORER_BENCHMARK = 'NIFTY50';
 const BACKTEST_SESSION_KEY = 'lido_screener_backtest_session';
-const NAME_ALLOWED_RE = /^[\p{L}\p{N}\s\-._,&()\/:+#%'"]+$/u;
+const NAME_ALLOWED_RE = /^[\p{L}\p{N}\s\-\u2013\u2014._,&()\/:+#%'"]+$/u;
 const DESCRIPTION_ALLOWED_RE = /^[\p{L}\p{N}\s\-._,&()\/:+#%'"?!]*$/u;
 
 function getOrCreateBacktestSessionToken() {
@@ -810,9 +810,10 @@ export default function ScreenerEditorPage() {
         }
     };
 
-    const loadRun = async (runId) => {
+    const loadRun = async (runId, diagnosticsPage = 1) => {
         try {
-            const res = await api.get(`/screener-runs/${runId}`);
+            const query = diagnosticsPage > 1 ? `?diagnostics_page=${diagnosticsPage}` : '';
+            const res = await api.get(`/screener-runs/${runId}${query}`);
             setRunResult(res.data?.data ?? null);
             navigate(`/screeners/${id}?run=${runId}`, { replace: true });
         } catch (error) {
@@ -1267,6 +1268,50 @@ export default function ScreenerEditorPage() {
                                         style={{ width: `${runResult.progress_pct || 0}%` }}
                                     />
                                 </div>
+                            )}
+                            {(runResult.diagnostics?.data || []).length > 0 && (
+                                <details className="mb-3">
+                                    <summary className="small fw-semibold">
+                                        Evaluation diagnostics ({runResult.diagnostics.total})
+                                    </summary>
+                                    <p className="form-text mt-2">
+                                        These values are snapshots from this run. AND/OR groups stop after a decisive condition, so only evaluated predicates are listed.
+                                    </p>
+                                    <div className="table-responsive">
+                                        <table className="table table-sm align-middle">
+                                            <thead>
+                                                <tr><th>Security</th><th>Outcome</th><th>Reason</th><th>Evaluated conditions</th></tr>
+                                            </thead>
+                                            <tbody>
+                                                {runResult.diagnostics.data.map((item) => (
+                                                    <tr key={item.id}>
+                                                        <td>{item.symbol}{item.exchange ? ` · ${item.exchange}` : ''}</td>
+                                                        <td>{item.outcome === 'non_match' ? 'No match' : item.outcome.replaceAll('_', ' ')}</td>
+                                                        <td>{item.reason ? item.reason.replaceAll('_', ' ') : '—'}</td>
+                                                        <td className="small">
+                                                            {(item.metrics || []).map((m, i) => (
+                                                                <div key={i}>
+                                                                    {m.left}={m.left_value != null ? Number(m.left_value).toFixed(2) : 'unavailable'}
+                                                                    {' '}{operatorLabel(m.operator)}{' '}
+                                                                    {m.weight_factor && Number(m.weight_factor) !== 1 ? `${m.weight_factor}×` : ''}{m.right}
+                                                                    {' · '}{m.condition_matched ? 'passed' : (m.left_value == null || m.right_value == null ? 'input unavailable' : 'failed')}
+                                                                </div>
+                                                            ))}
+                                                            {(item.metrics || []).length === 0 && 'No predicates evaluated; required input was unavailable.'}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    {runResult.diagnostics.last_page > 1 && (
+                                        <div className="d-flex align-items-center gap-2 mt-2">
+                                            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={runResult.diagnostics.current_page <= 1} onClick={() => loadRun(runResult.id, runResult.diagnostics.current_page - 1)}>Previous diagnostics</button>
+                                            <span className="form-text mb-0">Page {runResult.diagnostics.current_page} of {runResult.diagnostics.last_page} · {runResult.diagnostics.total} securities</span>
+                                            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={runResult.diagnostics.current_page >= runResult.diagnostics.last_page} onClick={() => loadRun(runResult.id, runResult.diagnostics.current_page + 1)}>Next diagnostics</button>
+                                        </div>
+                                    )}
+                                </details>
                             )}
                             <div className="table-responsive">
                                 <table className="table table-sm mb-0">

@@ -1079,9 +1079,11 @@ export default function TransactionsPage() {
 
                                 <div>
 
-                                    <label className="form-label">Stock</label>
+                                    <label className="form-label" htmlFor="tx-stock-display">Stock</label>
 
                                     <input
+
+                                        id="tx-stock-display"
 
                                         className="form-control"
 

@@ -499,6 +499,15 @@ class ScreenerEvaluationService
         $right = $this->evaluateExprValue($rightExpr, 'stock', $engines);
         $scaledRight = $right === null ? null : $right * $weightFactor;
 
+        $conditionMatched = $left !== null && $scaledRight !== null && match ($operator) {
+            'gt' => $left > $scaledRight,
+            'gte' => $left >= $scaledRight,
+            'lt' => $left < $scaledRight,
+            'lte' => $left <= $scaledRight,
+            'eq' => TechnicalIndicatorService::floatsEqual($left, $scaledRight),
+            default => false,
+        };
+
         $metrics[] = [
             'left' => $this->describeExpr($leftExpr),
             'left_entity' => $leftEntity,
@@ -508,22 +517,12 @@ class ScreenerEvaluationService
             'right' => $this->describeExpr($rightExpr),
             'right_value' => $right,
             'right_scaled' => $scaledRight,
+            'condition_matched' => $conditionMatched,
         ];
 
-        if ($left === null || $scaledRight === null) {
-            // Indicator could not be produced → treat as skip at stock level only when
-            // entire tree can't run; for a leaf, false (division-by-zero style).
-            return false;
-        }
-
-        return match ($operator) {
-            'gt' => $left > $scaledRight,
-            'gte' => $left >= $scaledRight,
-            'lt' => $left < $scaledRight,
-            'lte' => $left <= $scaledRight,
-            'eq' => TechnicalIndicatorService::floatsEqual($left, $scaledRight),
-            default => false,
-        };
+        // Indicator could not be produced → false at this leaf; the run snapshot
+        // preserves null operand values so the UI can distinguish missing input.
+        return $conditionMatched;
     }
 
     private function normalizeWeightFactor(mixed $weight): float

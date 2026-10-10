@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 
 const response = { summary: 'Price evidence is available.', technical_price_context: 'Recent prices are supplied.', fundamental_context: 'Fundamental interpretation is unavailable.', positive_signals: 'No additional signal asserted.', risks_watch_items: 'Review incomplete history.', what_to_check_next: 'Check the next financial report.', data_limitations: 'Historical data incomplete.' };
@@ -6,7 +7,10 @@ const result = { status: 'ready', fingerprint: 'f'.repeat(64), response, data_as
 const holding = { id: 1, stock_id: 42, stock: { id: 42, symbol: 'TCS', name: 'Tata Consultancy Services' }, quantity: 2, avg_buy_price: 3000, invested_amount: 6000, is_unmanaged: true, summary: { latest_close: 3500, market_value: 7000, invested_amount: 6000, unrealized_profit: 1000, quantity: 2, first_buy_date: '2026-09-01' } };
 
 for (const width of [390, 1440, 2560]) {
-    test(`AI-003 stock recovery and responsive presentation at ${width}px`, async ({ page }) => {
+    test(`AI-07 and AI-08 stock insight and recovery at ${width}px`, async ({ page }, testInfo) => {
+        journeyId(testInfo, 'AI-07');
+        journeyId(testInfo, 'AI-08');
+        await seedDeterministicJourney(page, `embedded-ai07-ai08-${width}`);
         await page.setViewportSize({ width, height: 900 });
         await installInvestorWorkflowApiMocks(page);
         let calls = 0;
@@ -41,7 +45,10 @@ for (const width of [390, 1440, 2560]) {
     });
 }
 
-test('AI-003 selected watchlist stock opens inline and fails safely', async ({ page }) => {
+test('AI-07 and AI-08 selected watchlist stock opens inline and fails safely', async ({ page }, testInfo) => {
+    journeyId(testInfo, 'AI-07');
+    journeyId(testInfo, 'AI-08');
+    await seedDeterministicJourney(page, 'embedded-ai07-ai08-watchlist');
     await installInvestorWorkflowApiMocks(page);
     await page.route('**/api/ai/insights/stocks/42', route => route.fulfill({ json: { data: { status: 'unavailable', response: null, degraded: true } } }));
     await page.goto('/watchlist/TCS');
@@ -54,7 +61,9 @@ test('AI-003 selected watchlist stock opens inline and fails safely', async ({ p
     await expect(page.getByRole('button', { name: 'Fundamentals', exact: true })).toBeEnabled();
 });
 
-test('AI-003 strategy generation is advisory and draft approval is explicit', async ({ page }) => {
+test('AI-09 strategy generation is advisory and draft approval is explicit', async ({ page }, testInfo) => {
+    journeyId(testInfo, 'AI-09');
+    await seedDeterministicJourney(page, 'embedded-ai09-strategy-designer');
     await installInvestorWorkflowApiMocks(page);
     let generations = 0, previews = 0, approvals = 0;
     let stored = null;

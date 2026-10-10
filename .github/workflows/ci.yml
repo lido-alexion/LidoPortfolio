@@ -61,7 +61,7 @@ jobs:
             esac
 
             case "$file" in
-              app/resources/*|app/resources/**/*|app/tests/js/*|app/tests/js/**/*|app/package.json|app/package-lock.json|app/scripts/write-build-info.mjs|app/tsconfig.json|app/vite.config.js|app/vitest.config.js|scripts/**|.github/workflows/*.yml|.github/workflows/*.yaml)
+              app/resources/*|app/resources/**/*|app/tests/js/*|app/tests/js/**/*|app/tests/e2e/**|docs/user-journeys/**|app/package.json|app/package-lock.json|app/scripts/write-build-info.mjs|app/tsconfig.json|app/vite.config.js|app/vitest.config.js|scripts/**|.github/workflows/*.yml|.github/workflows/*.yaml)
                 frontend=true
                 ;;
             esac
@@ -121,8 +121,8 @@ jobs:
     name: Frontend tests and production build (Node 22)
     runs-on: ubuntu-latest
     needs: changes
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && needs.changes.outputs.frontend == 'true'
-    timeout-minutes: 20
+    if: needs.changes.outputs.frontend == 'true' && (github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master'))
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: app
@@ -139,6 +139,14 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - name: Run canonical frontend verification
         run: ../scripts/verify-ci.sh --frontend
+      - name: Upload Playwright failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-journey-evidence-${{ github.run_id }}
+          path: app/tests/e2e/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
 
 
   vps-health:

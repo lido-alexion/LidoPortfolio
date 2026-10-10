@@ -2718,6 +2718,19 @@ html.lido-footer-visible .lido-main {
     color: var(--lido-text-danger);
 }
 
+.contentPane .btn-outline-danger {
+    --bs-btn-color: var(--lido-text-danger);
+    --bs-btn-border-color: var(--lido-text-danger);
+    --bs-btn-hover-color: var(--lido-bg-surface);
+    --bs-btn-hover-bg: var(--lido-text-danger);
+    --bs-btn-hover-border-color: var(--lido-text-danger);
+    --bs-btn-active-color: var(--lido-bg-surface);
+    --bs-btn-active-bg: var(--lido-text-danger);
+    --bs-btn-active-border-color: var(--lido-text-danger);
+    --bs-btn-disabled-color: var(--lido-text-danger);
+    --bs-btn-disabled-border-color: var(--lido-text-danger);
+}
+
 .contentPane .column-tag-picker {
     background-color: color-mix(in srgb, var(--lido-brand) 14%, var(--lido-input-bg));
     border-color: var(--lido-brand);

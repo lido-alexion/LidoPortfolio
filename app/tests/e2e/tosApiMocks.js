@@ -19,7 +19,13 @@ function json(route, body, status = 200) {
  */
 export async function installTosApiMocks(page, {
     recommendations = [OPEN_BUY_RECOMMENDATION],
+    orders = [],
+    pipelineRecommendations = null,
+    pipelineStages = { discovery: { candidates: 0 }, evaluation: { results: 0 }, recommendation: { count: 0 } },
+    capitalResolution = CAPITAL_RESOLUTION,
+    retainApprovedRecommendations = false,
     user = TEST_USER,
+    fallbackUnmocked = false,
 } = {}) {
     let recs = recommendations.map((r) => ({ ...r }));
 
@@ -57,10 +63,20 @@ export async function installTosApiMocks(page, {
             return json(route, apiEnvelope([]));
         }
         if (path.endsWith('/api/v1/protections') && method === 'GET') {
-            return json(route, apiEnvelope({ protections: [] }));
+            return json(route, apiEnvelope([]));
+        }
+        if (['/api/v1/capital/recalls', '/api/v1/capital/bridge-loans', '/api/v1/capital/pending-sale-proceeds'].includes(path) && method === 'GET') {
+            return json(route, apiEnvelope([]));
+        }
+        if (path.endsWith('/api/v1/pipeline/run') && method === 'POST') {
+            if (pipelineRecommendations) recs = pipelineRecommendations.map((r) => ({ ...r }));
+            return json(route, apiEnvelope({ stages: pipelineStages }));
         }
         if (path.endsWith('/api/v1/recommendations') && method === 'GET') {
-            return json(route, apiEnvelope(recs));
+            const visibleRecs = url.searchParams.get('all') === '1'
+                ? recs
+                : recs.filter((r) => r.status !== 'superseded');
+            return json(route, apiEnvelope(visibleRecs));
         }
         const recMatch = path.match(/\/api\/v1\/recommendations\/(\d+)$/);
         if (recMatch && method === 'GET') {
@@ -71,12 +87,37 @@ export async function installTosApiMocks(page, {
             return json(route, apiEnvelope(rec));
         }
         if (/\/api\/v1\/recommendations\/\d+\/capital-resolution$/.test(path) && method === 'GET') {
-            return json(route, apiEnvelope(CAPITAL_RESOLUTION));
+            return json(route, apiEnvelope(capitalResolution));
         }
         const reviewMatch = path.match(/\/api\/v1\/recommendations\/(\d+)\/review$/);
         if (reviewMatch && method === 'POST') {
+            const decision = request.postDataJSON()?.decision;
+            const rec = recs.find((r) => String(r.id) === reviewMatch[1]);
+            if (decision === 'deferred' && rec) {
+                Object.assign(rec, { status: 'deferred', lifecycle_status: 'deferred', review_status: 'deferred', can_review: false, can_reopen: true });
+                return json(route, apiEnvelope({ status: 'deferred' }));
+            }
+            if (decision === 'approved' && rec && retainApprovedRecommendations) {
+                Object.assign(rec, {
+                    status: 'pending_execution',
+                    lifecycle_status: 'pending_execution',
+                    review_status: 'approved',
+                    execution_status: 'pending',
+                    can_review: false,
+                    can_execute_manually: true,
+                    reserved_amount: rec.suggested_investment_amount ?? rec.execution_plan?.this_cycle_amount ?? 0,
+                    reservation_status: 'reserved',
+                });
+                return json(route, apiEnvelope({ status: 'pending_execution' }));
+            }
             recs = recs.filter((r) => String(r.id) !== reviewMatch[1]);
-            return json(route, apiEnvelope({ status: 'pending_execution' }));
+            return json(route, apiEnvelope({ status: decision === 'rejected' ? 'rejected' : 'pending_execution' }));
+        }
+        const reopenMatch = path.match(/\/api\/v1\/recommendations\/(\d+)\/reopen$/);
+        if (reopenMatch && method === 'POST') {
+            const rec = recs.find((r) => String(r.id) === reopenMatch[1]);
+            if (rec) Object.assign(rec, { status: 'pending_review', lifecycle_status: 'pending_review', review_status: 'pending_review', can_review: true, can_reopen: false });
+            return json(route, apiEnvelope(rec || null));
         }
         if (path.endsWith('/api/logs/frontend')) {
             return json(route, { ok: true });
@@ -98,12 +139,16 @@ export async function installTosApiMocks(page, {
                 active_orders: 0,
             }));
         }
+        if (path.endsWith('/api/v1/orders') && method === 'GET') {
+            return json(route, apiEnvelope(orders));
+        }
         if (path.endsWith('/api/v1/recommendations/pending-execution') && method === 'GET') {
             return json(route, apiEnvelope(recs.filter((r) => r.status === 'pending_execution' || r.can_execute_manually), {
                 cash: { cash_balance: 0, reserved_cash: 0, available_investable_cash: 0 },
             }));
         }
 
+        if (fallbackUnmocked) return route.fallback();
         return json(route, { success: false, error: { code: 'UNMOCKED', message: `${method} ${path}` } }, 501);
     });
 }

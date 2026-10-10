@@ -18,9 +18,10 @@ class ScreenerRunController extends Controller
     {
         $page = max(1, (int) $request->query('page', 1));
         $perPage = min(200, max(10, (int) $request->query('per_page', 100)));
+        $diagnosticsPage = max(1, (int) $request->query('diagnostics_page', 1));
 
         return response()->json([
-            'data' => $this->runs->formatRun($screenerRun, true, $page, $perPage),
+            'data' => $this->runs->formatRun($screenerRun, true, $page, $perPage, $diagnosticsPage),
         ]);
     }
 

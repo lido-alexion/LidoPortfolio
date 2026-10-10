@@ -11,22 +11,95 @@ function json(route, body, status = 200) {
 const SCREENER_META = {
     max_conditions: 40,
     indicators: [
+        { id: 'close', label: 'Close', params: [] },
+        {
+            id: 'sma',
+            label: 'SMA',
+            params: [{ id: 'period', label: 'Period', default: 20, min: 1, max: 400 }],
+        },
         {
             id: 'ema',
             label: 'EMA',
-            params: [{ id: 'period', label: 'Period', default: 50, min: 2, max: 400 }],
+            params: [{ id: 'period', label: 'Period', default: 50, min: 1, max: 400 }],
+        },
+        {
+            id: 'rsi',
+            label: 'RSI',
+            params: [{ id: 'period', label: 'Period', default: 14, min: 1, max: 200 }],
+        },
+        {
+            id: 'roc',
+            label: 'ROC %',
+            params: [{ id: 'period', label: 'Period', default: 12, min: 1, max: 400 }],
         },
     ],
-    operators: [{ id: 'gt', label: '>' }],
+    operators: [
+        { id: 'gt', label: '>' },
+        { id: 'gte', label: '≥' },
+        { id: 'lt', label: '<' },
+        { id: 'lte', label: '≤' },
+        { id: 'eq', label: '=' },
+    ],
     scopes: [{ id: 'holdings', label: 'Holdings' }],
     indexes: [],
 };
+
+// Keep the created-strategy fixture aligned with SupportedIndicators::keys() and
+// StrategyReadinessService: the default template has the full catalogue, with
+// momentum as its only enabled indicator.
+const STRATEGY_INDICATOR_KEYS = [
+    'relative_strength', 'momentum_score', 'trend_score', 'breakout_score',
+    'volume_score', 'market_regime', 'sector_strength', 'risk_score', 'ml_score',
+];
+
+function assessStrategyReadiness(config = {}, availableScreeners = []) {
+    const requirements = [];
+    const sources = Array.isArray(config.eligibility_sources) ? config.eligibility_sources : [];
+    const enabledSources = sources.filter((source) => source?.enabled !== false && Number(source?.screener_id) > 0);
+    if (!enabledSources.length) {
+        requirements.push({ code: 'eligibility_missing', message: 'Add at least one enabled screener for eligibility.' });
+    }
+    if (enabledSources.some((source) => {
+        const screener = availableScreeners.find((item) => Number(item.id) === Number(source.screener_id));
+        return !Number(source.screener_version_id || screener?.version);
+    })) {
+        requirements.push({ code: 'screener_version_unresolved', message: 'Save this Strategy to adopt the current Screener version before enabling it.' });
+    }
+
+    const indicators = Array.isArray(config.indicators) ? config.indicators : [];
+    const enabled = indicators.filter((indicator) => indicator?.enabled);
+    if (!enabled.length) {
+        requirements.push({ code: 'indicators_disabled', message: 'Enable at least one scoring indicator with a positive weight.' });
+    } else if (Math.abs(enabled.reduce((sum, indicator) => sum + Number(indicator.weight || 0), 0) - 100) > 0.01) {
+        requirements.push({ code: 'indicator_weights_invalid', message: 'Enabled indicator weights must sum to 100%.' });
+    }
+    if (STRATEGY_INDICATOR_KEYS.some((key) => !indicators.some((indicator) => indicator?.key === key))) {
+        requirements.push({ code: 'indicator_catalogue_incomplete', message: 'Strategy configuration is missing required catalogue indicators.' });
+    }
+
+    return {
+        setup_required: requirements.length > 0,
+        readiness: { ready: requirements.length === 0, status: requirements.length ? 'setup_required' : 'ready', requirements },
+    };
+}
 
 /**
  * Auth + Screeners list/editor mocks for FEAT-064 investor workflow smoke.
  */
 export async function installInvestorWorkflowApiMocks(page, options = {}) {
     let nextScreenerId = 99;
+    const screeners = [...(options.initialScreeners ?? [])];
+    const sharedScreeners = [...(options.sharedScreeners ?? [])];
+    const reusableScreenerArtifact = options.reusableScreenerArtifact ?? null;
+    let reusableScreenerArchived = false;
+    const screenerRun = options.screenerRun ?? null;
+    let hasScreenerRun = false;
+    let createdInvestorStrategy = null;
+    const initialStrategyEligibility = options.initialStrategyEligibility ?? [];
+    const strategyRegistryRows = [...(options.strategyRegistryRows ?? [])];
+    let remainingScreenerValidationFailures = options.invalidScreenerAttempts ?? 0;
+    let authenticated = !options.initiallyUnauthenticated;
+    let remainingLoginFailures = options.failedLoginAttempts ?? 0;
     const fundamentalInsights = options.fundamentalInsights ?? {
         as_of: '2026-09-25',
         freshness: { status: 'fresh' },
@@ -105,6 +178,17 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
             return json(route, { token: 'e2e-csrf' });
         }
         if (path.endsWith('/api/auth/me') && method === 'GET') {
+            if (!authenticated) {
+                return json(route, { message: 'Unauthenticated.' }, 401);
+            }
+            return json(route, { user: options.user ?? TEST_USER });
+        }
+        if (path.endsWith('/api/auth/login') && method === 'POST') {
+            if (remainingLoginFailures > 0) {
+                remainingLoginFailures -= 1;
+                return json(route, { message: options.loginErrorMessage ?? 'Email or password is incorrect.' }, 422);
+            }
+            authenticated = true;
             return json(route, { user: options.user ?? TEST_USER });
         }
         if (path.endsWith('/api/portfolios') && method === 'GET') {
@@ -209,6 +293,42 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
                 active_orders: 0,
             }));
         }
+        if (path.endsWith('/api/v1/strategies') && method === 'POST') {
+            const payload = request.postDataJSON();
+            const config = {
+                eligibility_sources: [],
+                indicators: STRATEGY_INDICATOR_KEYS.map((key) => ({
+                    key, category: 'Momentum', display_name: key, label: key,
+                    enabled: key === 'momentum_score', weight: key === 'momentum_score' ? 100 : 0,
+                })),
+                thresholds: {},
+                portfolio_rules: { horizon_calendar_days: null, first_entry_pct: 50, max_holdings: 10 },
+                capital_allocation: { strategy: 'proportional', tie_break: 'highest_score', score_bands: [] },
+                exit_strategy: { enabled: true, mode: 'any', rules: [] },
+                market_gates: { enabled: false, min_sentiment: 45, allowed_phases: ['Strong Bull', 'Bull'], max_risk_raw: 70 },
+                recommendation_behaviour: {},
+                weakest_position_window_days: null,
+            };
+            createdInvestorStrategy = {
+                id: 8, strategy_id: 8, name: payload.name, description: payload.description, status: 'draft',
+                version: 1, version_label: '1.0', version_id: 81, version_status: 'draft',
+                is_enabled: false, ...assessStrategyReadiness(config, screeners),
+                config, eligibility_sources: [], indicators: config.indicators, thresholds: config.thresholds,
+                portfolio_rules: config.portfolio_rules, capital_allocation: config.capital_allocation,
+                exit_strategy: config.exit_strategy, market_gates: config.market_gates,
+            };
+            return json(route, { data: createdInvestorStrategy }, 201);
+        }
+        if (path.endsWith('/api/v1/strategy') && method === 'GET' && createdInvestorStrategy) {
+            return json(route, { data: createdInvestorStrategy });
+        }
+        if (path.endsWith('/api/v1/strategy') && method === 'PUT' && createdInvestorStrategy) {
+            const payload = request.postDataJSON();
+            const config = payload.config ?? createdInvestorStrategy.config;
+            createdInvestorStrategy = { ...createdInvestorStrategy, ...payload, ...assessStrategyReadiness(config, screeners), config,
+                eligibility_sources: config.eligibility_sources ?? [], indicators: config.indicators ?? [] };
+            return json(route, { data: createdInvestorStrategy });
+        }
         if (path.endsWith('/api/v1/strategy') && method === 'GET') {
             return json(route, {
                 data: {
@@ -224,10 +344,18 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
                             { code: 'eligibility_source_required', message: 'Add at least one eligibility Screener.' },
                         ],
                     },
-                    indicators: [{ key: 'momentum_score', label: 'Momentum', enabled: true, weight: 100 }],
-                    eligibility_sources: [],
+                    indicators: [
+                    { key: 'momentum_score', category: 'Momentum', display_name: 'Momentum', label: 'Momentum', enabled: true, weight: 100 },
+                    { key: 'rsi_score', category: 'Momentum', display_name: 'RSI', label: 'RSI', enabled: false, weight: 0 },
+                ],
+                    eligibility_sources: initialStrategyEligibility,
                     portfolio_rules: { horizon_calendar_days: null, first_entry_pct: 50, max_holdings: 10 },
-                    exit_strategy: { enabled: true, mode: 'any', rules: [] },
+                    exit_strategy: { enabled: true, mode: 'any', rules: [
+                        { key: 'trend_weakening', display_name: 'Trend Weakening', description: 'Trend score falls below threshold.', enabled: true, value: 40 },
+                        { key: 'score_exit', display_name: 'Overall Score Exit', description: 'Strategy score at or below exit threshold.', enabled: true, value: 20 },
+                        { key: 'atr_stop', display_name: 'ATR Stop', description: 'Unrealized loss exceeds N × ATR%.', enabled: false, atr_multiple: 2 },
+                        { key: 'screener_exit', display_name: 'Screener Exit', description: 'Exit when the holding appears in the selected screener latest completed results.', enabled: false, screener_id: null, screener_name: null },
+                    ] },
                     market_gates: [],
                 },
             });
@@ -235,14 +363,36 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
         if (path.endsWith('/api/v1/strategy') && method === 'PUT') {
             return json(route, { data: { strategy_id: 7, id: 7, name: 'Incomplete E2E Strategy', setup_required: true } });
         }
+        if (path.endsWith('/api/v1/strategy-registry/meta') && method === 'GET') {
+            const statuses = strategyRegistryRows.map((row) => row.metadata?.status);
+            return json(route, { data: { counts: { total: statuses.length, active: statuses.filter((value) => value === 'active').length, draft: statuses.filter((value) => value === 'draft').length, archived: statuses.filter((value) => value === 'archived').length } } });
+        }
+        const strategyLifecycleMatch = path.match(/\/api\/v1\/strategy-registry\/([^/]+)\/(activate|archive)$/);
+        if (strategyLifecycleMatch && method === 'POST') {
+            const [, encodedId, action] = strategyLifecycleMatch;
+            const row = strategyRegistryRows.find((item) => String(item.artifact_id || item.slug) === decodeURIComponent(encodedId));
+            if (!row) return json(route, { message: 'Strategy not found.' }, 404);
+            row.metadata = { ...row.metadata, status: action === 'activate' ? 'active' : 'archived', is_enabled: action === 'activate' };
+            return json(route, { data: row });
+        }
         if (path.endsWith('/api/v1/strategy-registry') && method === 'GET') {
-            return json(route, { data: [{ strategy_id: 7, id: 7, name: 'Incomplete E2E Strategy', status: 'draft', is_enabled: false, setup_required: true }] });
+            if (strategyRegistryRows.length) return json(route, { data: strategyRegistryRows });
+            const data = [{ strategy_id: 7, id: 7, name: 'Incomplete E2E Strategy', status: 'draft', is_enabled: false, setup_required: true }];
+            if (createdInvestorStrategy) data.push({ id: createdInvestorStrategy.id, name: createdInvestorStrategy.name, status: 'draft', is_enabled: false, setup_required: true });
+            return json(route, { data });
         }
         if (path.endsWith('/api/indexes') && method === 'GET') {
             return json(route, { data: { indexes: [] } });
         }
         if (path.endsWith('/api/screeners/meta') && method === 'GET') {
             return json(route, { data: SCREENER_META });
+        }
+        if (reusableScreenerArtifact && path.endsWith(`/api/v1/artifact-library/${reusableScreenerArtifact.artifact_uuid}`) && method === 'GET') {
+            return json(route, { data: { ...reusableScreenerArtifact, archived_at: reusableScreenerArchived ? '2026-10-09T10:00:00Z' : null } });
+        }
+        if (reusableScreenerArtifact && path.endsWith(`/api/v1/artifact-library/${reusableScreenerArtifact.artifact_uuid}/archive`) && method === 'POST') {
+            reusableScreenerArchived = true;
+            return json(route, { data: { ...reusableScreenerArtifact, archived_at: '2026-10-09T10:00:00Z' } });
         }
         if (path.endsWith('/api/watchlists') && method === 'GET') {
             return json(route, { data: [] });
@@ -251,27 +401,56 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
             return json(route, { data: { watchlist_ids: [] } });
         }
         if (path.endsWith('/api/screeners') && method === 'GET') {
-            return json(route, { data: [], count: 0 });
+            return json(route, { data: screeners, count: screeners.length });
+        }
+        if (path.endsWith('/api/screeners/shared') && method === 'GET') {
+            return json(route, { data: sharedScreeners });
+        }
+        const sharedScreenerImportMatch = path.match(/\/api\/screeners\/shared\/(\d+)\/import$/);
+        if (sharedScreenerImportMatch && method === 'POST') {
+            const source = sharedScreeners.find((item) => item.id === Number(sharedScreenerImportMatch[1]));
+            if (!source) return json(route, { message: 'Shared screener not found.' }, 404);
+            const imported = { ...source, id: nextScreenerId++, is_shared: false };
+            screeners.push(imported);
+            return json(route, { data: imported }, 201);
         }
         if (path.endsWith('/api/screeners') && method === 'POST') {
             const payload = request.postDataJSON();
+            if (remainingScreenerValidationFailures > 0) {
+                remainingScreenerValidationFailures -= 1;
+                return json(route, {
+                    message: 'The given data was invalid.',
+                    errors: { definition_json: ['Param period out of range for sma.'] },
+                }, 422);
+            }
             const id = nextScreenerId++;
             const created = {
                 id,
                 name: payload?.name ?? 'E2E Screener',
+                version: 1,
                 scope: payload?.scope ?? 'holdings',
                 definition_json: payload?.definition_json,
                 is_enabled: true,
                 description: payload?.description ?? null,
-                watchlist_id: null,
-                index_symbol: null,
+                watchlist_id: payload?.watchlist_id ?? null,
+                index_symbol: payload?.index_symbol ?? null,
             };
+            screeners.push(created);
             return json(route, { data: created }, 201);
         }
         const screenerMatch = path.match(/\/api\/screeners\/(\d+)$/);
+        if (screenerMatch && method === 'PUT') {
+            const id = Number(screenerMatch[1]);
+            const existing = screeners.find((item) => item.id === id);
+            const updated = { ...(existing ?? {}), ...request.postDataJSON(), id };
+            if (existing) Object.assign(existing, updated);
+            else screeners.push(updated);
+            return json(route, { data: updated });
+        }
         if (screenerMatch && method === 'GET') {
+            const found = screeners.find((item) => item.id === Number(screenerMatch[1]));
             return json(route, {
-                data: {
+                data: found ?? {
                     id: Number(screenerMatch[1]),
                     name: 'E2E ROC Gate',
                     scope: 'holdings',
@@ -283,9 +462,21 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
                 },
             });
         }
+        const screenerRunMatch = path.match(/\/api\/screeners\/(\d+)\/run$/);
+        if (screenerRunMatch && method === 'POST' && screenerRun) {
+            hasScreenerRun = true;
+            const { hits, ...summary } = screenerRun;
+            return json(route, { data: { ...summary, screener_id: Number(screenerRunMatch[1]) } }, 201);
+        }
+        const screenerRunDetailMatch = path.match(/\/api\/screener-runs\/(\d+)$/);
+        if (screenerRunDetailMatch && method === 'GET' && screenerRun) {
+            return json(route, { data: screenerRun });
+        }
         const runsMatch = path.match(/\/api\/screeners\/(\d+)\/runs$/);
         if (runsMatch && method === 'GET') {
-            return json(route, { data: [] });
+            if (!screenerRun || !hasScreenerRun) return json(route, { data: [] });
+            const { hits, ...summary } = screenerRun;
+            return json(route, { data: [summary], total: 1, limit: 30 });
         }
         const backtestMatrixMatch = path.match(/\/api\/screeners\/(\d+)\/backtest\/matrix$/);
         if (backtestMatrixMatch && method === 'GET') {

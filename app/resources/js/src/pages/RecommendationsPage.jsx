@@ -503,6 +503,23 @@ export default function RecommendationsPage() {
                                     {selected.reference_price ?? '—'}
                                 </p>
 
+                                {selected.status === 'superseded' ? (
+                                    <div className="alert alert-warning py-2 small mb-3">
+                                        <p className="mb-1">This recommendation has been superseded and is no longer a current execution instruction.</p>
+                                        {selected.superseded_by_id ? (
+                                            <button
+                                                type="button"
+                                                className="btn btn-outline-dark btn-sm"
+                                                onClick={() => openDetail(selected.superseded_by_id)}
+                                            >
+                                                View replacement recommendation
+                                            </button>
+                                        ) : (
+                                            <span>The replacement recommendation is not available.</span>
+                                        )}
+                                    </div>
+                                ) : null}
+
                                 <h6>Market opinion</h6>
                                 <p className="small mb-2">
                                     {opinion?.direction || '—'}
@@ -515,7 +532,17 @@ export default function RecommendationsPage() {
                                     {' · Score '}
                                     {selected.strategy_score ?? selected.score ?? '—'}
                                     {selected.strategy_name ? ` · ${selected.strategy_name}` : ''}
+                                    {selected.strategy_version != null ? ` · Version ${selected.strategy_version}` : ''}
                                 </p>
+                                {(selected.source_screener_id ?? selected.evidence?.screener_id) != null ? (
+                                    <p className="small text-muted mb-2" data-testid="recommendation-provenance">
+                                        Source screener #{selected.source_screener_id ?? selected.evidence?.screener_id}
+                                        {(selected.source_screener_version ?? selected.evidence?.screener_version) != null
+                                            ? ` · Version ${selected.source_screener_version ?? selected.evidence?.screener_version}` : ''}
+                                        {selected.strategy_id != null ? ` · Strategy #${selected.strategy_id}` : ''}
+                                        {selected.strategy_version_id != null ? ` · Strategy version #${selected.strategy_version_id}` : ''}
+                                    </p>
+                                ) : null}
 
                                 {(selected.factor_breakdown || selected.evidence?.factor_breakdown)?.length ? (
                                     <>
@@ -557,6 +584,13 @@ export default function RecommendationsPage() {
                                     {formatAlloc(selected.suggested_allocation_pct)}
                                 </p>
                                 {selected.reasoning ? <p className="small">{selected.reasoning}</p> : null}
+                                {selected.suggested_quantity != null || selected.suggested_investment_amount != null ? (
+                                    <p className="small text-muted">
+                                        Suggested execution
+                                        {selected.suggested_quantity != null ? ` · ${selected.suggested_quantity} shares` : ''}
+                                        {selected.suggested_investment_amount != null ? ` · ₹${selected.suggested_investment_amount}` : ''}
+                                    </p>
+                                ) : null}
 
                                 {selected.execution_anchor_date ? (
                                     <div className="mb-3">

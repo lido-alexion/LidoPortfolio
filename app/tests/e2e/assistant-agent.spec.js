@@ -1,8 +1,12 @@
 import { test, expect } from '@playwright/test';
+import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 
 for (const width of [390, 1440]) {
-    test(`AI-002 governed approval and history at ${width}px`, async ({ page }) => {
+    test(`AI-05 and AI-06 governed approval and history at ${width}px`, async ({ page }, testInfo) => {
+        journeyId(testInfo, 'AI-05');
+        journeyId(testInfo, 'AI-06');
+        await seedDeterministicJourney(page, `assistant-agent-ai05-ai06-${width}`);
         await page.setViewportSize({ width, height: 844 });
         await installInvestorWorkflowApiMocks(page);
         let approved = 0;
@@ -38,3 +42,48 @@ for (const width of [390, 1440]) {
         await expect(drawer.getByText(/Broker trading is unavailable/)).toBeVisible();
     });
 }
+
+
+test('AI-04 answers account questions with traceable read-only evidence', async ({ page }, testInfo) => {
+    journeyId(testInfo, 'AI-04');
+    await seedDeterministicJourney(page, 'assistant-agent-ai04-investigation');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await installInvestorWorkflowApiMocks(page);
+    const run = {
+        id: 'account-investigation-1',
+        profile_id: 1,
+        objective: 'How concentrated are my holdings?',
+        status: 'completed',
+        answer: 'Your largest holding is 18% of the portfolio. Prices for two holdings are unavailable.',
+        trace: [
+            { tool: 'portfolio.holdings', status: 'available', result_summary: '8 holdings' },
+            { tool: 'portfolio.concentration', status: 'available', result_summary: 'Largest holding: 18%' },
+            { tool: 'market.prices', status: 'partial', result_summary: '2 prices unavailable' },
+        ],
+        preview: [],
+    };
+    let orderRequests = 0;
+    await page.route('**/api/ai/assistant/runs**', async (route) => {
+        const request = route.request();
+        if (request.method() === 'POST') {
+            expect(request.postDataJSON()).toEqual({ objective: run.objective });
+        }
+        await route.fulfill({ json: { success: true, data: request.method() === 'GET' ? [run] : run } });
+    });
+    page.on('request', (request) => {
+        if (/\/api\/v1\/(execution\/submit-selected|orders?)(\/|$)/.test(new URL(request.url()).pathname)) orderRequests++;
+    });
+
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Open StoX assistant' }).click();
+    const drawer = page.getByRole('dialog', { name: 'StoX assistant' });
+    await drawer.getByLabel('Assistant mode').selectOption('account');
+    await drawer.getByLabel('Ask about StoX').fill(run.objective);
+    await drawer.getByRole('button', { name: 'Ask', exact: true }).click();
+    await expect(drawer.getByText(/Your largest holding is 18%/)).toBeVisible();
+    await drawer.getByText('Investigation trace').click();
+    await expect(drawer.getByText(/portfolio holdings — available/)).toBeVisible();
+    await expect(drawer.getByText(/market prices — partial/)).toBeVisible();
+    await expect(drawer.getByRole('button', { name: 'Approve changes' })).toHaveCount(0);
+    expect(orderRequests).toBe(0);
+});

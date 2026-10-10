@@ -15,7 +15,7 @@ use InvalidArgumentException;
 
 class ScreenerService
 {
-    private const NAME_ALLOWED_PATTERN = '/^[\pL\pN\s\-\._,\&\(\)\/:\+\#%\'"]+$/u';
+    private const NAME_ALLOWED_PATTERN = '/^[\pL\pN\s\-\x{2013}\x{2014}\._,\&\(\)\/:\+\#%\'"]+$/u';
 
     private const DESCRIPTION_ALLOWED_PATTERN = '/^[\pL\pN\s\-\._,\&\(\)\/:\+\#%\'"\?\!]*$/u';
 

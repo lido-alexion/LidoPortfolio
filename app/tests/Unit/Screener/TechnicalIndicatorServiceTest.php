@@ -143,6 +143,8 @@ class TechnicalIndicatorServiceTest extends TestCase
             ],
         ], $bars);
         $this->assertFalse($withoutWeight['matched']);
+        $this->assertFalse($withoutWeight['metrics'][0]['condition_matched']);
+        $this->assertSame(10.0, $withoutWeight['metrics'][0]['left_value']);
 
         $withHalf = $eval->evaluateStock([
             'root' => [
