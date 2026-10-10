@@ -206,7 +206,9 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                 ]));
 
                 page.on('dialog', (dialog) => dialog.accept());
-                await page.getByRole('button', { name: 'Enable', exact: true }).click();
+                const enableStrategy = page.getByRole('button', { name: 'Enable', exact: true });
+                await expect(enableStrategy).toBeEnabled();
+                await enableStrategy.click();
                 await expect(page.getByText('enabled', { exact: true }).first()).toBeVisible();
                 expect(strategyEnabled).toBe(true);
 

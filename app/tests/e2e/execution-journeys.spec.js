@@ -82,7 +82,7 @@ test.describe('V9-UX-001 manual execution journeys', () => {
             await row.getByRole('button', { name: 'Execute manually' }).click();
             await expect(page).toHaveURL('/transactions');
             await expect(page.getByText('Recording actual broker fill for recommendation #801.')).toBeVisible();
-            await expect(page.getByLabel('Stock symbol')).toHaveValue('INFY');
+            await expect(page.locator('#stock-symbol-input')).toHaveValue('INFY');
             await expect(page.getByLabel('Quantity')).toHaveValue('5');
             await expect(page.getByLabel('Price')).toHaveValue('3500');
             expect(ledgerWrites).toBe(0);
@@ -111,7 +111,7 @@ test.describe('V9-UX-001 cancellation before broker submission', () => {
             };
             let cancelled = false;
             let cancelPayload = null;
-            let brokerRequests = 0;
+            const brokerSubmissionRequests = [];
             await installTosApiMocks(page, { recommendations: [recommendation] });
             await page.route('**/api/v1/recommendations/pending-execution', (route) => route.fulfill({
                 json: {
@@ -126,7 +126,10 @@ test.describe('V9-UX-001 cancellation before broker submission', () => {
                 await route.fulfill({ json: { success: true, data: { status: 'cancelled' } } });
             });
             page.on('request', (request) => {
-                if (/\/api\/v1\/(execution\/submit-selected|orders?)(\/|$)/.test(new URL(request.url()).pathname)) brokerRequests++;
+                const path = new URL(request.url()).pathname;
+                if (request.method() === 'POST' && (/\/api\/v1\/execution\/submit-selected(?:\/|$)/.test(path) || /\/api\/v1\/orders?(?:\/|$)/.test(path))) {
+                    brokerSubmissionRequests.push({ method: request.method(), path });
+                }
             });
 
             await page.goto('/transactions/pending');
@@ -137,7 +140,7 @@ test.describe('V9-UX-001 cancellation before broker submission', () => {
             await expect(page.getByText(/Reserved:\s*0/)).toBeVisible();
             await expect(page.getByText(/Available:\s*17,?500/)).toBeVisible();
             expect(cancelPayload).toMatchObject({ reason: 'other' });
-            expect(brokerRequests).toBe(0);
+            expect(brokerSubmissionRequests).toEqual([]);
         });
     }
 });
@@ -252,7 +255,7 @@ test.describe('V9-UX-001 actual transaction recording', () => {
             });
 
             await page.goto('/transactions');
-            await page.getByLabel('Stock symbol').fill('INFY');
+            await page.locator('#stock-symbol-input').fill('INFY');
             await page.getByRole('button', { name: 'Validate symbol' }).click();
             await expect(page.getByText(/Validated via test fixture/)).toBeVisible();
             await page.getByLabel('Quantity').fill('2');
@@ -572,7 +575,7 @@ test.describe('V9-UX-001 post-execution reconciliation', () => {
             await page.route('**/api/holdings', (route) => route.fulfill({ json: { data: [holding] } }));
 
             await page.goto('/transactions');
-            await page.getByLabel('Stock symbol').fill('INFY');
+            await page.locator('#stock-symbol-input').fill('INFY');
             await page.getByRole('button', { name: 'Validate symbol' }).click();
             await expect(page.getByText(/Validated via test fixture/)).toBeVisible();
             await page.getByLabel('Quantity').fill('2');

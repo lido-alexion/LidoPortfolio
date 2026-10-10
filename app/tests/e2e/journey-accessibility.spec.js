@@ -13,7 +13,7 @@ const VIEWPORTS = [
 async function expectJourneyPageAccessible(page) {
     const results = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa'])
-        .include('main')
+        .include('#app')
         .analyze();
     expect(results.violations).toEqual([]);
 }

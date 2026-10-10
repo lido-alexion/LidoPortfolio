@@ -44,6 +44,45 @@ const SCREENER_META = {
     indexes: [],
 };
 
+// Keep the created-strategy fixture aligned with SupportedIndicators::keys() and
+// StrategyReadinessService: the default template has the full catalogue, with
+// momentum as its only enabled indicator.
+const STRATEGY_INDICATOR_KEYS = [
+    'relative_strength', 'momentum_score', 'trend_score', 'breakout_score',
+    'volume_score', 'market_regime', 'sector_strength', 'risk_score', 'ml_score',
+];
+
+function assessStrategyReadiness(config = {}, availableScreeners = []) {
+    const requirements = [];
+    const sources = Array.isArray(config.eligibility_sources) ? config.eligibility_sources : [];
+    const enabledSources = sources.filter((source) => source?.enabled !== false && Number(source?.screener_id) > 0);
+    if (!enabledSources.length) {
+        requirements.push({ code: 'eligibility_missing', message: 'Add at least one enabled screener for eligibility.' });
+    }
+    if (enabledSources.some((source) => {
+        const screener = availableScreeners.find((item) => Number(item.id) === Number(source.screener_id));
+        return !Number(source.screener_version_id || screener?.version);
+    })) {
+        requirements.push({ code: 'screener_version_unresolved', message: 'Save this Strategy to adopt the current Screener version before enabling it.' });
+    }
+
+    const indicators = Array.isArray(config.indicators) ? config.indicators : [];
+    const enabled = indicators.filter((indicator) => indicator?.enabled);
+    if (!enabled.length) {
+        requirements.push({ code: 'indicators_disabled', message: 'Enable at least one scoring indicator with a positive weight.' });
+    } else if (Math.abs(enabled.reduce((sum, indicator) => sum + Number(indicator.weight || 0), 0) - 100) > 0.01) {
+        requirements.push({ code: 'indicator_weights_invalid', message: 'Enabled indicator weights must sum to 100%.' });
+    }
+    if (STRATEGY_INDICATOR_KEYS.some((key) => !indicators.some((indicator) => indicator?.key === key))) {
+        requirements.push({ code: 'indicator_catalogue_incomplete', message: 'Strategy configuration is missing required catalogue indicators.' });
+    }
+
+    return {
+        setup_required: requirements.length > 0,
+        readiness: { ready: requirements.length === 0, status: requirements.length ? 'setup_required' : 'ready', requirements },
+    };
+}
+
 /**
  * Auth + Screeners list/editor mocks for FEAT-064 investor workflow smoke.
  */
@@ -258,10 +297,10 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
             const payload = request.postDataJSON();
             const config = {
                 eligibility_sources: [],
-                indicators: [
-                    { key: 'momentum_score', category: 'Momentum', display_name: 'Momentum', label: 'Momentum', enabled: true, weight: 100 },
-                    { key: 'rsi_score', category: 'Momentum', display_name: 'RSI', label: 'RSI', enabled: false, weight: 0 },
-                ],
+                indicators: STRATEGY_INDICATOR_KEYS.map((key) => ({
+                    key, category: 'Momentum', display_name: key, label: key,
+                    enabled: key === 'momentum_score', weight: key === 'momentum_score' ? 100 : 0,
+                })),
                 thresholds: {},
                 portfolio_rules: { horizon_calendar_days: null, first_entry_pct: 50, max_holdings: 10 },
                 capital_allocation: { strategy: 'proportional', tie_break: 'highest_score', score_bands: [] },
@@ -273,7 +312,7 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
             createdInvestorStrategy = {
                 id: 8, strategy_id: 8, name: payload.name, description: payload.description, status: 'draft',
                 version: 1, version_label: '1.0', version_id: 81, version_status: 'draft',
-                is_enabled: false, setup_required: true, readiness: { requirements: [{ code: 'eligibility_source_required', message: 'Add at least one eligibility Screener.' }] },
+                is_enabled: false, ...assessStrategyReadiness(config, screeners),
                 config, eligibility_sources: [], indicators: config.indicators, thresholds: config.thresholds,
                 portfolio_rules: config.portfolio_rules, capital_allocation: config.capital_allocation,
                 exit_strategy: config.exit_strategy, market_gates: config.market_gates,
@@ -285,8 +324,9 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
         }
         if (path.endsWith('/api/v1/strategy') && method === 'PUT' && createdInvestorStrategy) {
             const payload = request.postDataJSON();
-            createdInvestorStrategy = { ...createdInvestorStrategy, ...payload, config: payload.config,
-                eligibility_sources: payload.config?.eligibility_sources ?? [] };
+            const config = payload.config ?? createdInvestorStrategy.config;
+            createdInvestorStrategy = { ...createdInvestorStrategy, ...payload, ...assessStrategyReadiness(config, screeners), config,
+                eligibility_sources: config.eligibility_sources ?? [], indicators: config.indicators ?? [] };
             return json(route, { data: createdInvestorStrategy });
         }
         if (path.endsWith('/api/v1/strategy') && method === 'GET') {
