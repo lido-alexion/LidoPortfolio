@@ -33,7 +33,7 @@ SCR-01 now has browser coverage at 390×844 and 1440×900. The scenario creates 
 | Visual regression | Login and rejected-credential card baselines are recorded for mobile and desktop in the current follow-up branch. | Partial — add baselines for the other key journey pages and states. |
 | Accessibility regression | Existing checks cover selected surfaces; auth slice adds a login-card axe check. | Partial — cover other key journey pages/states. |
 | Production smoke | Post-deploy workflow runs Chromium against the public production shell and JavaScript asset; authenticated read-only smoke requires `STOX_SMOKE_EMAIL` and `STOX_SMOKE_PASSWORD`. | Pending hosted deployment run and smoke identity provisioning. |
-| Journey conformance | No full comparison of the application against every approved journey is complete. | Open — resolve all deviations before automating each journey; seek PO decisions for behavior changes. |
+| Journey conformance | PO accepted the documented STR-07/STR-08 behavior differences on 2026-10-10. | Open — complete the full comparison and resolve remaining non-PO deviations. |
 | Failure evidence and safety | PR workflow uploads Playwright results on failure; normal CI uses deterministic mocks in selected suites. | Partial — confirm artifacts in hosted CI and audit all order paths for non-destructive behavior. |
 
 ## Verification for this slice
@@ -96,6 +96,6 @@ The follow-up branch adds targeted visual regression snapshots for the login car
 
 The E2E-03/07 strategy-owned SELL, E2E-04 intent supersession, and E2E-06 capital-shortfall-to-BUY paths now have deterministic mobile and desktop browser coverage. These mocked journeys validate visible stage ordering, payload attribution, and mock-returned holdings/cash evidence; they do not establish live domain persistence or broker execution.
 
-**Remaining PO decisions:** STR-07 documents target allocation under `/cash`, omits minimum actionable amount and whole-share behavior from the Strategy editor, and applies a fixed one-calendar-day BUY cooldown. STR-08 exposes ATR stop configuration on Strategy while classic portfolio stop-loss and trailing-stop settings remain under Settings. Decide whether these documented product behaviors are accepted or should be changed before altering them.
+**PO decisions recorded (2026-10-10):** the PO accepts target allocation under `/cash`, the fixed one-calendar-day BUY cooldown, and keeping minimum actionable amount/whole-share behavior implicit. The PO also accepts ATR stop configuration on Strategy while classic portfolio stop-loss and trailing-stop settings remain under Settings. No behavior-changing conformance work is authorized for these differences.
 
 **Remaining external evidence and access:** completing E2E-08 requires the protected production ML acceptance service and official dated NSE evidence, plus an authorized real acceptance/backfill run. The authenticated post-deploy smoke requires dedicated read-only `STOX_SMOKE_EMAIL` and `STOX_SMOKE_PASSWORD` secrets. Full journey conformance, remaining key-page visual/accessibility coverage, and production smoke evidence are still required before marking V9-UX-001 implemented.
