@@ -50,8 +50,16 @@ class ScreenerVersionSnapshotRepairServiceTest extends TestCase
         ]);
 
         $service = app(ScreenerVersionSnapshotRepairService::class);
-        $dryRun = $service->restoreFromVersion($screener, 2, 3, $hash, 'Approved recovery', true);
-        $this->assertTrue($dryRun['dry_run']);
+        $this->artisan('v8:repair-screener-version-snapshot', [
+            '--screener' => $screener->id,
+            '--target-version' => 2,
+            '--expected-hash' => $hash,
+            '--proof-version' => 3,
+            '--change-notes' => 'Approved recovery',
+            '--dry-run' => true,
+        ])
+            ->expectsOutput('Dry run passed: immutable proof and exact semantic hash match; no row was written.')
+            ->assertSuccessful();
         $this->assertDatabaseMissing('portfolio_screener_versions', ['screener_id' => $screener->id, 'version' => 2]);
 
         $result = $service->restoreFromVersion($screener, 2, 3, $hash, 'Approved recovery');

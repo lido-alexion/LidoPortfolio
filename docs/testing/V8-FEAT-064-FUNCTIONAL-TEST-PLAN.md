@@ -32,9 +32,11 @@ Use this plan to complete FEAT-064 production acceptance after the build is stab
 After Gate 0 reconfirms the same IDs and hashes, run these one at a time in the deployed `current` release. First run with `--dry-run`; proceed only on the exact success message, then repeat without `--dry-run`:
 
 ```bash
-php artisan v8:repair-screener-version-snapshot --screener=4 --version=2 --expected-hash=sha256:d3edf5394abd4066e1e894e73abbbe55057c69e0f0ee3915cf116028ffc9bae4 --proof-version=3 --change-notes='Reconstructed approved v2; exact match to immutable v3 and PO-accepted definition' --dry-run
-php artisan v8:repair-screener-version-snapshot --screener=5 --version=2 --expected-hash=sha256:59d3e174bc606b42e291ff06c24301de334356d5175a9a74a5ab7b59245d6cdb --proof-artifact-version=39 --change-notes='Reconstructed v2 from same-lineage published Screener artifact evidence' --dry-run
+php artisan v8:repair-screener-version-snapshot --screener=4 --target-version=2 --expected-hash=sha256:d3edf5394abd4066e1e894e73abbbe55057c69e0f0ee3915cf116028ffc9bae4 --proof-version=3 --change-notes='Reconstructed approved v2; exact match to immutable v3 and PO-accepted definition' --dry-run
+php artisan v8:repair-screener-version-snapshot --screener=5 --target-version=2 --expected-hash=sha256:59d3e174bc606b42e291ff06c24301de334356d5175a9a74a5ab7b59245d6cdb --proof-artifact-version=39 --change-notes='Reconstructed v2 from same-lineage published Screener artifact evidence' --dry-run
 ```
+
+The target option is named `--target-version` because Artisan reserves `--version` for its own framework version output.
 
 Repeat the corresponding command without `--dry-run` only after the dry run validates the exact current production state. The command is idempotent and writes no Screeners, Strategies, runs, recommendations or transactions beyond the missing immutable snapshot row.
 
