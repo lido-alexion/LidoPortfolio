@@ -11,7 +11,7 @@ final class RepairScreenerVersionSnapshotCommand extends Command
 {
     protected $signature = 'v8:repair-screener-version-snapshot
         {--screener= : Screener id}
-        {--version= : Missing historical semantic version}
+        {--target-version= : Missing historical semantic version}
         {--expected-hash= : Approved semantic SHA-256 hash}
         {--proof-version= : Existing immutable Screener version id in the same lineage}
         {--proof-artifact-version= : Published immutable Screener artifact-version row id}
@@ -38,7 +38,7 @@ final class RepairScreenerVersionSnapshotCommand extends Command
         try {
             $args = [
                 $screener,
-                (int) $this->option('version'),
+                (int) $this->option('target-version'),
                 (string) $this->option('expected-hash'),
                 (string) ($this->option('change-notes') ?? ''),
             ];
