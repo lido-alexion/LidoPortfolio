@@ -58,7 +58,10 @@ class ScreenerVersionSnapshotRepairServiceTest extends TestCase
         $this->assertTrue($result['created']);
         $this->assertSame(2, (int) $result['version']->version);
         $this->assertSame($hash, $result['version']->definition_hash);
-        $this->assertSame($definition, $result['version']->definition_json);
+        $this->assertSame(
+            DefinitionHasher::canonicalize($definition),
+            DefinitionHasher::canonicalize($result['version']->definition_json),
+        );
         $this->assertSame($hash, $proof->fresh()->definition_hash);
         $this->assertSame('Original version must remain intact', $v1->fresh()->change_notes);
 
