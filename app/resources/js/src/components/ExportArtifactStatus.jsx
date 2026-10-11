@@ -50,7 +50,7 @@ export default function ExportArtifactStatus({ artifact }) {
         <div className="d-flex flex-wrap gap-2">
             <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy || !validToken} onClick={() => refresh()}>Refresh export status</button>
             {pending && <button type="button" className="btn btn-sm btn-outline-danger" disabled={busy || !validToken} onClick={() => refresh(true)}>Cancel export</button>}
-            {download && <a className="btn btn-sm btn-primary" href={download} download>Download export</a>}
+            {download && <a className="btn btn-sm btn-primary" href={download}>Download export</a>}
         </div>
     </section>;
 }
