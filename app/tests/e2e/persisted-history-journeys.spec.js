@@ -25,6 +25,7 @@ for (const viewport of VIEWPORTS) test.describe(`Stored history ${viewport.name}
   await safety.seal(); await page.goto('/transactions/closed'); await expect(page.getByRole('row').filter({ hasText: 'TCS' })).toBeVisible();
   await switchTo('Main', 'Long Term'); await expect(page.getByRole('alert').filter({ hasText: 'Squared-off transactions could not be loaded' })).toBeVisible(); await expect(page.getByRole('row').filter({ hasText: 'TCS' })).toHaveCount(0); await expect(page.getByText('No squared-off transactions yet.', { exact: true })).toHaveCount(0); await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
   unavailable = false; await page.getByRole('button', { name: 'Retry squared-off transactions' }).click(); await expect(page.getByRole('row').filter({ hasText: 'INFY' })).toBeVisible(); await expect(page.getByRole('row').filter({ hasText: 'TCS' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Close notification', exact: true }).click();
   await switchTo('Long Term', 'Main'); await expect(page.getByRole('row').filter({ hasText: 'TCS' })).toBeVisible(); await expect(page.getByRole('row').filter({ hasText: 'INFY' })).toHaveCount(0); expect(JSON.stringify([main, other])).toBe(originals); expect(safety.writes).toEqual([]); expect(safety.blocked).toEqual([]);
  });
  test(`E2E-53 distinguishes unavailable evaluation history from zero observations and retries the selected run (${viewport.name})`, async ({ page }, testInfo) => {
