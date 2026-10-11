@@ -20,36 +20,42 @@ function downloadJson(filename, data) {
 export default function StrategyRegistryDetailPage({ adminMode = false }) {
     const { id } = useParams();
     const basePath = adminMode ? '/settings/strategy-registry' : '/strategy/registry';
-    const { env, versions, loading, readError, versionsError, versionsLoading, load, loadVersions } = useRegistryArtifact('strategy', id);
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
+    const { env, versions, loading, readError, versionsError, versionsLoading, load, loadVersions, scopeRef } = useRegistryArtifact('strategy', id, { onScopeChange: () => { setError(''); setBusy(false); } });
 
     const onExport = async () => {
         if (busy) return;
+        const scope = scopeRef.current;
         setBusy(true);
         setError('');
         try {
             const res = await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/export`);
+            if (scope !== scopeRef.current) return;
             const data = res.data?.data;
             downloadJson(`${data?.slug || id}.json`, data);
             showToast('Exported portable JSON (no portfolio-local Screener ids).');
         } catch (err) {
+            if (scope !== scopeRef.current) return;
             setError(getApiErrorMessage(err, 'Export failed'));
-        } finally { setBusy(false); }
+        } finally { if (scope === scopeRef.current) setBusy(false); }
     };
 
     const onActivate = async () => {
         if (!window.confirm(`Enable “${env?.name || id}” for this portfolio? Other enabled strategies stay enabled.`)) return;
+        const scope = scopeRef.current;
         setBusy(true);
         setError('');
         try {
             await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/activate`);
+            if (scope !== scopeRef.current) return;
             showToast('Strategy enabled for this portfolio.');
             await load();
         } catch (err) {
+            if (scope !== scopeRef.current) return;
             setError(getApiErrorMessage(err, 'Selection failed'));
         } finally {
-            setBusy(false);
+            if (scope === scopeRef.current) setBusy(false);
         }
     };
 
@@ -57,16 +63,19 @@ export default function StrategyRegistryDetailPage({ adminMode = false }) {
         if (!window.confirm(
             'Archive this strategy? It will stop generating recommendations. Other enabled strategies stay enabled. Past holdings/recommendations keep their attribution.',
         )) return;
+        const scope = scopeRef.current;
         setBusy(true);
         setError('');
         try {
             await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/archive`);
+            if (scope !== scopeRef.current) return;
             showToast('Strategy archived.');
             await load();
         } catch (err) {
+            if (scope !== scopeRef.current) return;
             setError(getApiErrorMessage(err, 'Archive failed'));
         } finally {
-            setBusy(false);
+            if (scope === scopeRef.current) setBusy(false);
         }
     };
 
@@ -74,7 +83,7 @@ export default function StrategyRegistryDetailPage({ adminMode = false }) {
     const selected = !!meta.is_enabled || !!meta.is_selected || meta.status === 'active';
 
     return (
-        <div className="d-grid gap-3">
+        <div className="contentPane d-grid gap-3">
             <div className="d-flex flex-wrap justify-content-between align-items-start gap-2">
                 <div>
                     <h2 className="h4 mb-1">{env?.name || 'Strategy artifact'}</h2>
@@ -179,7 +188,7 @@ export default function StrategyRegistryDetailPage({ adminMode = false }) {
                     <div className="card">
                         <div className="card-body">
                             <h3 className="h6">Definition (portable — Screener refs only)</h3>
-                            <pre className="bg-light border rounded p-2 small mb-0 overflow-auto" style={{ maxHeight: 420 }}>
+                            <pre className="border rounded p-2 small mb-0 overflow-auto" style={{ maxHeight: 420, backgroundColor: 'var(--lido-bg-surface)', color: 'var(--lido-text)' }}>
                                 {JSON.stringify(env.definition, null, 2)}
                             </pre>
                         </div>

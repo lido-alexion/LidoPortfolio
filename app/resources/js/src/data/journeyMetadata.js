@@ -2492,7 +2492,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "steps": [
       "Open Screener Registry (`/screeners/registry`). Inspect account/shared/factory ownership and filters. An unavailable list offers Retry without reporting that no Screeners match; a failed filtered read retains known rows with an unavailability warning.",
       "Open an owned artifact by its stable identity. An unavailable envelope offers Retry registry artifact and blocks actions requiring that unknown definition.",
-      "Inspect the definition hash and immutable version history. A failed history read retains the known artifact, explains unavailability and offers Retry registry versions without claiming there are no versions.",
+      "Inspect the definition hash and immutable version history. Changing the active Portfolio clears the previous artifact and reads the same identity with the new scope; inaccessible evidence stays unavailable. A failed history read retains the known artifact, explains unavailability and offers Retry registry versions without claiming there are no versions.",
       "Export the reviewed definition as portable JSON. An unconfirmed export explains failure; retry preserves definition and ownership.",
       "Inspect a shared source through its read-only detail view. Open editor is unavailable and private version history is not requested. Import copy creates an account-owned Screener on My screens; a rejected copy keeps the original source visible and unchanged.",
       "Paste Screener registry JSON with the documented condition root. Validate first; a validation failure keeps the JSON and Import disabled. Changing validated JSON invalidates validation.",
@@ -2533,7 +2533,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "steps": [
       "Open Strategy Registry (`/strategy/registry`) and inspect enabled/draft/archived runtime entries. An unavailable list offers Retry without reporting that no Strategies match, and a failed filtered read retains known rows. Open a specific artifact's detail by stable identity.",
       "Recover an unavailable envelope explicitly. Retry preserves the target identity and does not create or enable a Strategy.",
-      "Inspect definition hash, dependencies and portable Screener references. Recover unavailable version history separately; known immutable version evidence is preserved.",
+      "Inspect definition hash, dependencies and portable Screener references. Changing Portfolio clears prior owned evidence and reloads the current scoped identity; prior-scope responses cannot populate the new view. Recover unavailable version history separately; known immutable version evidence is preserved.",
       "Export portable JSON without portfolio-local Screener ids. Failed export retains the artifact and explains the unconfirmed action; retry downloads the reviewed definition.",
       "Enable only after reviewing the intended definition and confirming. Cancelling sends no activation. A rejected activation does not report success or disable another Strategy; review and retry deliberately.",
       "Archive only the intended enabled Strategy after confirmation. Cancelling sends no archive; rejection preserves enabled evidence. Confirmed archive preserves other enabled Strategies and past attribution.",

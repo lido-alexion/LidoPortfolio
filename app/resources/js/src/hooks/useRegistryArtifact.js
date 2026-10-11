@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import api, { getApiErrorMessage } from '../api';
+import usePortfolioChanged from './usePortfolioChanged';
 
 // Read recovery for the legacy registry compatibility views. This does not
 // create, enable, publish, deploy or qualify any artifact.
-export default function useRegistryArtifact(kind, id, { skipSharedVersions = false } = {}) {
+export default function useRegistryArtifact(kind, id, { skipSharedVersions = false, onScopeChange } = {}) {
     const [env, setEnv] = useState(null);
     const [versions, setVersions] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -11,6 +12,9 @@ export default function useRegistryArtifact(kind, id, { skipSharedVersions = fal
     const [versionsError, setVersionsError] = useState('');
     const [versionsLoading, setVersionsLoading] = useState(false);
     const requestRef = useRef(0);
+    const scopeRef = useRef(0);
+    const scopeResetRef = useRef(onScopeChange);
+    scopeResetRef.current = onScopeChange;
     const path = `/v1/${kind}-registry/${encodeURIComponent(id)}`;
     const loadVersions = async (request = requestRef.current) => {
         setVersionsLoading(true);
@@ -42,11 +46,20 @@ export default function useRegistryArtifact(kind, id, { skipSharedVersions = fal
             if (request === requestRef.current) setLoading(false);
         }
     };
+    usePortfolioChanged(() => {
+        scopeRef.current++;
+        requestRef.current++;
+        setEnv(null);
+        setVersions([]);
+        setVersionsLoading(false);
+        scopeResetRef.current?.();
+        load();
+    });
     useEffect(() => {
         setEnv(null);
         setVersions([]);
         load();
-        return () => { requestRef.current++; };
+        return () => { requestRef.current++; scopeRef.current++; };
     }, [kind, id, skipSharedVersions]);
-    return { env, versions, loading, readError, versionsError, versionsLoading, load, loadVersions };
+    return { env, versions, loading, readError, versionsError, versionsLoading, load, loadVersions, scopeRef };
 }

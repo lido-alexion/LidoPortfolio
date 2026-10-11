@@ -30,3 +30,16 @@ for (const [type, Component, route] of [['screener', ScreenerRegistryDetailPage,
   await screen.findByText('Registry version history could not be loaded.'); expect(screen.getByRole('heading', { name: `Reviewed ${type}` })).toBeInTheDocument(); expect(screen.queryByText('No versions recorded yet.')).toBeNull(); unavailable = false; fireEvent.click(screen.getByRole('button', { name: 'Retry registry versions' })); await screen.findByText('Reviewed immutable version'); expect(api.post).not.toHaveBeenCalled();
  });
 }
+
+for (const [type, Component, route] of [['screener', ScreenerRegistryDetailPage, '/screeners/registry/:id'], ['strategy', StrategyRegistryDetailPage, '/strategy/registry/:id']]) {
+ it(`clears the previous Portfolio's ${type} envelope and retries the same identity in the new scope`, async () => {
+  let otherScope = false; api.get.mockImplementation(path => path.endsWith('/versions') ? Promise.resolve({ data: { data: [] } }) : otherScope ? fail() : Promise.resolve({ data: { data: envelope(type) } })); render(<MemoryRouter initialEntries={[route.replace(':id', '69')]}><Routes><Route path={route} element={<Component />} /></Routes></MemoryRouter>);
+  await screen.findByRole('heading', { name: `Reviewed ${type}` }); otherScope = true; fireEvent(window, new CustomEvent('portfolio-changed', { detail: { portfolioId: 2 } })); await screen.findByText('Synthetic registry unavailable.'); expect(screen.queryByRole('heading', { name: `Reviewed ${type}` })).toBeNull(); expect(screen.getByRole('button', { name: 'Export JSON', exact: true })).toBeDisabled(); expect(api.post).not.toHaveBeenCalled();
+ });
+}
+for (const [type, Component] of [['screener', ScreenerRegistryPage], ['strategy', StrategyRegistryPage]]) {
+ it(`clears the previous Portfolio's ${type} list instead of relabelling owned rows after a switch`, async () => {
+  let otherScope = false; api.get.mockImplementation(path => path.endsWith('/meta') ? Promise.resolve({ data: { data: {} } }) : otherScope ? fail() : Promise.resolve({ data: { data: [envelope(type)] } })); render(<MemoryRouter><Component /></MemoryRouter>);
+  await screen.findByText(`Reviewed ${type}`); otherScope = true; fireEvent(window, new CustomEvent('portfolio-changed', { detail: { portfolioId: 2 } })); await screen.findByRole('button', { name: `Retry ${type === 'screener' ? 'Screener' : 'Strategy'} Registry` }); expect(screen.queryByText(`Reviewed ${type}`)).toBeNull(); expect(api.post).not.toHaveBeenCalled();
+ });
+}

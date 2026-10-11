@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api, { getApiErrorMessage } from '../api';
+import usePortfolioChanged from '../hooks/usePortfolioChanged';
 import { appUrl } from '../appBase';
 import ValidationSuccessBanner from '../components/artifacts/ValidationSuccessBanner';
 import { showToast } from '../toast';
@@ -41,6 +42,7 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
     const [error, setError] = useState('');
     const [loadError, setLoadError] = useState('');
     const readRequestRef = useRef(0);
+    const scopeRef = useRef(0);
     const [q, setQ] = useState('');
     const [status, setStatus] = useState('');
     const [ownership, setOwnership] = useState('');
@@ -80,6 +82,15 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [q, status, ownership, origin]);
 
+    useEffect(() => () => { scopeRef.current++; }, []);
+
+    usePortfolioChanged(() => {
+        scopeRef.current++;
+        readRequestRef.current++;
+        setRows([]); setMeta(null); setError(''); setImportText(''); setValidateResult(null); setBusy(false);
+        load();
+    });
+
     const countsLabel = useMemo(() => {
         if (!meta?.counts) return '';
         const c = meta.counts;
@@ -95,21 +106,24 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
     };
 
     const onValidate = async () => {
+        const scope = scopeRef.current;
         setBusy(true);
         setValidateResult(null);
         setError('');
         try {
             const envelope = parseImportPayload();
             const res = await api.post('/v1/screener-registry/validate', envelope);
+            if (scope !== scopeRef.current) return;
             const result = res.data?.data || null;
             setValidateResult(result);
             if (!result?.ok) {
                 showToast('Validation reported issues. See details below.', 'warning');
             }
         } catch (err) {
+            if (scope !== scopeRef.current) return;
             setError(getApiErrorMessage(err, 'Validate failed'));
         } finally {
-            setBusy(false);
+            if (scope === scopeRef.current) setBusy(false);
         }
     };
 
@@ -118,11 +132,13 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
             setError('Validate the JSON successfully before importing.');
             return;
         }
+        const scope = scopeRef.current;
         setBusy(true);
         setError('');
         try {
             const envelope = parseImportPayload();
             const res = await api.post('/v1/screener-registry/import', envelope);
+            if (scope !== scopeRef.current) return;
             const created = res.data?.data;
             showToast(`Imported “${created?.name || 'screener'}” to My screens (slug ${created?.slug || '—'}).`);
             setImportText('');
@@ -130,48 +146,55 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
             const screenerId = created?.artifact_id || created?.metadata?.legacy_id;
             if (screenerId) navigate(`/screeners/${screenerId}`);
         } catch (err) {
+            if (scope !== scopeRef.current) return;
             setError(getApiErrorMessage(err, 'Import failed'));
         } finally {
-            setBusy(false);
+            if (scope === scopeRef.current) setBusy(false);
         }
     };
 
     const onExport = async (row) => {
+        const scope = scopeRef.current;
         setBusy(true);
         setError('');
         try {
             const id = row.artifact_id || row.slug;
             const res = await api.post(`/v1/screener-registry/${encodeURIComponent(id)}/export`);
+            if (scope !== scopeRef.current) return;
             const env = res.data?.data;
             downloadJson(`${env?.slug || 'screener'}.json`, env);
             showToast(`Exported ${env?.slug || id}.`);
         } catch (err) {
+            if (scope !== scopeRef.current) return;
             setError(getApiErrorMessage(err, 'Export failed'));
         } finally {
-            setBusy(false);
+            if (scope === scopeRef.current) setBusy(false);
         }
     };
 
     const onImportShared = async (row) => {
         const sourceId = row.artifact_id || row.metadata?.legacy_id;
         if (!sourceId) return;
+        const scope = scopeRef.current;
         setBusy(true);
         setError('');
         try {
             const res = await api.post(`/v1/screener-registry/shared/${encodeURIComponent(sourceId)}/import`);
+            if (scope !== scopeRef.current) return;
             const created = res.data?.data;
             showToast(`Copied shared Screener to My screens (“${created?.name || 'screener'}”).`);
             const screenerId = created?.artifact_id || created?.metadata?.legacy_id;
             if (screenerId) navigate(`/screeners/${screenerId}`);
         } catch (err) {
+            if (scope !== scopeRef.current) return;
             setError(getApiErrorMessage(err, 'Shared import failed'));
         } finally {
-            setBusy(false);
+            if (scope === scopeRef.current) setBusy(false);
         }
     };
 
     return (
-        <div className="d-grid gap-3">
+        <div className="contentPane d-grid gap-3">
             <div className="d-flex flex-wrap justify-content-between align-items-start gap-2">
                 <div>
                     <h2 className="h4 mb-1">{adminMode ? 'Screener Registry (Admin)' : 'Screener Registry'}</h2>
@@ -378,6 +401,7 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
                     </p>
                     <textarea
                         aria-label="Screener registry JSON"
+                        disabled={busy}
                         className="form-control font-monospace small"
                         rows={10}
                         placeholder='{"schema_version":"1.0","artifact_type":"screener","slug":"...", ...}'
@@ -403,7 +427,7 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
                         </button>
                     </div>
                     {validateResult && (
-                        <pre className="bg-light border rounded p-2 small mb-0 overflow-auto" style={{ maxHeight: 240 }}>
+                        <pre className="border rounded p-2 small mb-0 overflow-auto" style={{ maxHeight: 240, backgroundColor: 'var(--lido-bg-surface)', color: 'var(--lido-text)' }}>
                             {JSON.stringify(validateResult, null, 2)}
                         </pre>
                     )}

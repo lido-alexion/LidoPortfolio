@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { readFile } from 'node:fs/promises';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
+import { TEST_PORTFOLIO } from '../js/tos/fixtures/tosApi.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 
 const VIEWPORTS = [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }];
@@ -14,6 +15,7 @@ async function prepare(page, viewport, name, allowed = () => false) {
     await seedDeterministicJourney(page, `registry-${name}-${viewport.name}`);
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await installInvestorWorkflowApiMocks(page);
+    await page.route('**/api/portfolios', route => route.fulfill({ json: { data: [TEST_PORTFOLIO, { ...TEST_PORTFOLIO, id: 2, name: 'Long Term', is_default: false }] } }));
     const blocked = [], writes = [];
     return { blocked, writes, seal: () => page.route('**/*', route => {
         const request = route.request(), url = new URL(request.url());
@@ -23,6 +25,9 @@ async function prepare(page, viewport, name, allowed = () => false) {
         return route.fallback();
     }) };
 }
+async function switchPortfolio(page, current, next) { await page.getByRole('button', { name: current, exact: true }).click(); await page.getByRole('button', { name: next, exact: true }).click(); await expect(page.locator('.lido-portfolio-switcher')).toHaveText(next); }
+const otherScope = route => route.request().headers()['x-profile-id'] === '2';
+const scopeFailure = route => route.fulfill({ status: 403, json: { message: 'Artifact belongs to a different Portfolio.' } });
 async function nativeAction(page, action, answer) {
     let done; const answered = new Promise(resolve => { done = resolve; });
     page.once('dialog', async dialog => { await dialog[answer](); done(); });
@@ -69,7 +74,7 @@ for (const viewport of VIEWPORTS) test.describe(`Runtime registry compatibility 
         journeyId(testInfo, 'E2E-54'); const safety = await prepare(page, viewport, 'shared-screen', (method, path) => method === 'POST' && path === '/api/v1/screener-registry/shared/70/import');
         const own = screener(69), shared = { ...screener(70), name: 'Shared source screen', slug: 'shared-source-screen', metadata: { ...screener(70).metadata, ownership: 'shared', read_only: true } };
         const original = JSON.stringify(shared); let envelopeFails = true, versionsFail = true, copyFails = true, sharedVersionReads = 0;
-        await page.route('**/api/v1/screener-registry/69', route => envelopeFails ? failure(route) : route.fulfill({ json: { data: own } }));
+        await page.route('**/api/v1/screener-registry/69', route => otherScope(route) ? scopeFailure(route) : envelopeFails ? failure(route) : route.fulfill({ json: { data: own } }));
         await page.route('**/api/v1/screener-registry/69/versions', route => versionsFail ? failure(route) : route.fulfill({ json: { data: [{ version: 2, status: 'active', definition_hash: own.definition_hash, change_notes: 'Reviewed immutable version', created_at: '2026-10-01' }] } }));
         await page.route('**/api/v1/screener-registry/70', route => route.fulfill({ json: { data: shared } }));
         await page.route('**/api/v1/screener-registry/70/versions', route => { sharedVersionReads++; return route.fulfill({ json: { data: [] } }); });
@@ -80,6 +85,7 @@ for (const viewport of VIEWPORTS) test.describe(`Runtime registry compatibility 
         await expect(page.getByRole('button', { name: 'Export JSON', exact: true })).toBeDisabled(); envelopeFails = false; await page.getByRole('button', { name: 'Retry registry artifact' }).click();
         await expect(page.getByRole('heading', { name: own.name })).toBeVisible(); await expect(error(page).filter({ hasText: 'Registry version history could not be loaded' })).toBeVisible(); await expect(page.getByText('No versions recorded yet.', { exact: true })).toHaveCount(0);
         versionsFail = false; await page.getByRole('button', { name: 'Retry registry versions' }).click(); await expect(page.getByRole('cell', { name: 'Reviewed immutable version', exact: true })).toBeVisible(); await accessibleRegistry(page);
+        await switchPortfolio(page, 'Main', 'Long Term'); await expect(error(page).filter({ hasText: 'Artifact belongs to a different Portfolio' })).toBeVisible(); await expect(page.getByRole('heading', { name: own.name })).toHaveCount(0); await expect(page.getByRole('button', { name: 'Export JSON', exact: true })).toBeDisabled(); await switchPortfolio(page, 'Long Term', 'Main'); await expect(page.getByRole('heading', { name: own.name })).toBeVisible();
         await page.goto('/screeners/registry/70'); await expect(page.getByRole('heading', { name: shared.name })).toBeVisible(); await expect(page.getByRole('link', { name: 'Open editor', exact: true })).toHaveCount(0); expect(sharedVersionReads).toBe(0);
         await page.getByRole('link', { name: 'Back to registry', exact: true }).click(); const row = page.getByRole('row').filter({ hasText: shared.name });
         await row.getByRole('button', { name: 'Import copy', exact: true }).click(); await expect(error(page).filter({ hasText: 'Synthetic registry unavailable' })).toBeVisible(); await expect(row).toBeVisible();
@@ -91,9 +97,9 @@ for (const viewport of VIEWPORTS) test.describe(`Runtime registry compatibility 
         journeyId(testInfo, 'E2E-55'); const safety = await prepare(page, viewport, 'strategy-detail', (method, path) => method === 'POST' && /^\/api\/v1\/strategy-registry\/69\/(export|activate|archive)$/.test(path));
         let current = strategy(69), listFails = true, readFails = true, versionsFail = true, exportFails = true, activateFails = true, archiveFails = true;
         const definition = JSON.stringify(current.definition), sibling = { ...strategy(70), name: 'Other enabled strategy', slug: 'other-enabled-strategy', metadata: { status: 'active', is_enabled: true } }, originalSibling = JSON.stringify(sibling);
-        await page.route('**/api/v1/strategy-registry/meta', route => route.fulfill({ json: { data: { counts: { total: 2, active: 1, draft: 1, archived: 0 } } } }));
+        await page.route('**/api/v1/strategy-registry/meta', route => { const statuses = [current, sibling].map(row => row.metadata.status); return route.fulfill({ json: { data: { counts: { total: statuses.length, active: statuses.filter(s => s === 'active').length, draft: statuses.filter(s => s === 'draft').length, archived: statuses.filter(s => s === 'archived').length } } } }); });
         await page.route('**/api/v1/strategy-registry', route => listFails ? failure(route) : route.fulfill({ json: { data: [current, sibling] } }));
-        await page.route('**/api/v1/strategy-registry/69', route => readFails ? failure(route) : route.fulfill({ json: { data: current } }));
+        await page.route('**/api/v1/strategy-registry/69', route => otherScope(route) ? scopeFailure(route) : readFails ? failure(route) : route.fulfill({ json: { data: current } }));
         await page.route('**/api/v1/strategy-registry/69/versions', route => versionsFail ? failure(route) : route.fulfill({ json: { data: [{ version: 3, status: 'draft', definition_hash: current.definition_hash, change_notes: 'Reviewed pinned sources', created_at: '2026-10-01' }] } }));
         await page.route('**/api/v1/strategy-registry/69/export', route => { if (exportFails) { exportFails = false; return failure(route); } return route.fulfill({ json: { data: current } }); });
         await page.route('**/api/v1/strategy-registry/69/activate', route => { if (activateFails) { activateFails = false; return failure(route); } current = { ...current, metadata: { ...current.metadata, status: 'active', is_enabled: true } }; return route.fulfill({ json: { data: current } }); });
@@ -103,6 +109,7 @@ for (const viewport of VIEWPORTS) test.describe(`Runtime registry compatibility 
         await page.goto('/strategy/registry/69'); await expect(error(page).filter({ hasText: 'Synthetic registry unavailable' })).toBeVisible(); await expect(page.getByRole('button', { name: 'Enable', exact: true })).toBeDisabled();
         readFails = false; await page.getByRole('button', { name: 'Retry registry artifact' }).click(); await expect(page.getByRole('heading', { name: current.name })).toBeVisible(); await expect(error(page).filter({ hasText: 'Registry version history could not be loaded' })).toBeVisible(); await expect(page.getByText('No versions recorded yet.', { exact: true })).toHaveCount(0);
         versionsFail = false; await page.getByRole('button', { name: 'Retry registry versions' }).click(); await expect(page.getByRole('cell', { name: 'Reviewed pinned sources', exact: true })).toBeVisible(); await accessibleRegistry(page);
+        await switchPortfolio(page, 'Main', 'Long Term'); await expect(error(page).filter({ hasText: 'Artifact belongs to a different Portfolio' })).toBeVisible(); await expect(page.getByRole('heading', { name: current.name })).toHaveCount(0); await expect(page.getByRole('button', { name: 'Export JSON', exact: true })).toBeDisabled(); await switchPortfolio(page, 'Long Term', 'Main'); await expect(page.getByRole('heading', { name: current.name })).toBeVisible();
         await page.getByRole('button', { name: 'Export JSON', exact: true }).click(); await expect(error(page).filter({ hasText: 'Synthetic registry unavailable' })).toBeVisible();
         const exported = await downloadJson(page, () => page.getByRole('button', { name: 'Export JSON', exact: true }).click()); expect(exported.value).toEqual(current); expect(exported.value.definition.eligibility_sources[0]).not.toHaveProperty('screener_id');
         const enable = () => page.getByRole('button', { name: 'Enable', exact: true }).click(); await nativeAction(page, enable, 'dismiss'); expect(safety.writes.filter(w => w.path.endsWith('/activate'))).toHaveLength(0);

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api, { getApiErrorMessage } from '../api';
+import usePortfolioChanged from '../hooks/usePortfolioChanged';
 import { appUrl } from '../appBase';
 import ValidationSuccessBanner from '../components/artifacts/ValidationSuccessBanner';
 import NumberInput from '../components/NumberInput';
@@ -63,6 +64,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
     const [error, setError] = useState('');
     const [loadError, setLoadError] = useState('');
     const readRequestRef = useRef(0);
+    const scopeRef = useRef(0);
     const [q, setQ] = useState('');
     const [status, setStatus] = useState('');
     const [origin, setOrigin] = useState('');
@@ -75,6 +77,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
     const [allocError, setAllocError] = useState('');
     const [provenanceGate, setProvenanceGate] = useState(null);
     const importValidated = Boolean(validateResult?.ok);
+    const renderScope = scopeRef.current;
 
     const syncAllocDraft = (list) => {
         const enabled = (Array.isArray(list) ? list : []).filter(isEnabledRow);
@@ -107,7 +110,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
             setRows(list);
             setMeta(metaRes.data?.data || null);
             syncAllocDraft(list);
-        } catch {
+        } catch (err) {
             if (request === readRequestRef.current) setLoadError('Strategy Registry could not be loaded.');
         } finally {
             if (request === readRequestRef.current) setLoading(false);
@@ -130,6 +133,15 @@ export default function StrategyRegistryPage({ adminMode = false }) {
             .catch(() => setProvenanceGate(null));
     }, [adminMode]);
 
+    useEffect(() => () => { scopeRef.current++; }, []);
+
+    usePortfolioChanged(() => {
+        scopeRef.current++;
+        readRequestRef.current++;
+        setRows([]); setMeta(null); setError(''); setImportText(''); setValidateResult(null); setBusy(false); setAllocDraft([]); setAllocError(''); setAllocBusy(false); setShowCreate(false);
+        load();
+    });
+
     const countsLabel = useMemo(() => {
         if (!meta?.counts) return '';
         const c = meta.counts;
@@ -150,6 +162,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
             setAllocError(`Allocation % must sum to 100 (currently ${allocSum.toFixed(2)}).`);
             return;
         }
+        const scope = scopeRef.current;
         setAllocBusy(true);
         try {
             await api.put('/v1/capital/allocations', {
@@ -158,10 +171,12 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                     allocation_pct: Number(row.allocation_pct),
                 })),
             });
+            if (scope !== scopeRef.current) return;
             showToast('Strategy allocations saved');
             notifyPortfolioDashboardRefresh();
             await load();
         } catch (err) {
+            if (scope !== scopeRef.current) return;
             const msg = err?.response?.data?.error?.message
                 || err?.response?.data?.message
                 || err.message
@@ -169,7 +184,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
             setAllocError(msg);
             showToast(msg, 'danger');
         } finally {
-            setAllocBusy(false);
+            if (scope === scopeRef.current) setAllocBusy(false);
         }
     };
 
@@ -182,21 +197,24 @@ export default function StrategyRegistryPage({ adminMode = false }) {
     };
 
     const onValidate = async () => {
+        const scope = scopeRef.current;
         setBusy(true);
         setValidateResult(null);
         setError('');
         try {
             const envelope = parseImportPayload();
             const res = await api.post('/v1/strategy-registry/validate', envelope);
+            if (scope !== scopeRef.current) return;
             const result = res.data?.data || null;
             setValidateResult(result);
             if (!result?.ok) {
                 showToast('Validation reported issues. See details below.', 'warning');
             }
         } catch (err) {
+            if (scope !== scopeRef.current) return;
             setError(getApiErrorMessage(err, 'Validate failed'));
         } finally {
-            setBusy(false);
+            if (scope === scopeRef.current) setBusy(false);
         }
     };
 
@@ -205,11 +223,13 @@ export default function StrategyRegistryPage({ adminMode = false }) {
             setError('Validate the JSON successfully before importing.');
             return;
         }
+        const scope = scopeRef.current;
         setBusy(true);
         setError('');
         try {
             const envelope = parseImportPayload();
             const res = await api.post('/v1/strategy-registry/import', envelope);
+            if (scope !== scopeRef.current) return;
             const created = res.data?.data;
             showToast(`Imported “${created?.name || 'strategy'}” (slug ${created?.slug || '—'}). Open the Strategy editor to review.`);
             setImportText('');
@@ -221,41 +241,48 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                 if (path) navigate(path);
             }
         } catch (err) {
+            if (scope !== scopeRef.current) return;
             setError(getApiErrorMessage(err, 'Import failed'));
         } finally {
-            setBusy(false);
+            if (scope === scopeRef.current) setBusy(false);
         }
     };
 
     const onExport = async (row) => {
+        const scope = scopeRef.current;
         setBusy(true);
         setError('');
         try {
             const id = row.artifact_id || row.slug;
             const res = await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/export`);
+            if (scope !== scopeRef.current) return;
             const env = res.data?.data;
             downloadJson(`${env?.slug || 'strategy'}.json`, env);
             showToast(`Exported ${env?.slug || id} (portable Screener/Indicator refs only).`);
         } catch (err) {
+            if (scope !== scopeRef.current) return;
             setError(getApiErrorMessage(err, 'Export failed'));
         } finally {
-            setBusy(false);
+            if (scope === scopeRef.current) setBusy(false);
         }
     };
 
     const onActivate = async (row) => {
         const id = row.artifact_id || row.slug;
         if (!window.confirm(`Enable “${row.name}” for this portfolio? Other enabled strategies stay enabled.`)) return;
+        const scope = scopeRef.current;
         setBusy(true);
         setError('');
         try {
             await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/activate`);
+            if (scope !== scopeRef.current) return;
             showToast(`“${row.name}” is now enabled for this portfolio.`);
             await load();
         } catch (err) {
+            if (scope !== scopeRef.current) return;
             setError(getApiErrorMessage(err, 'Selection failed'));
         } finally {
-            setBusy(false);
+            if (scope === scopeRef.current) setBusy(false);
         }
     };
 
@@ -264,21 +291,24 @@ export default function StrategyRegistryPage({ adminMode = false }) {
         if (!window.confirm(
             'Archive this strategy? It will stop generating recommendations. Other enabled strategies stay enabled. Past holdings/recommendations keep their attribution.',
         )) return;
+        const scope = scopeRef.current;
         setBusy(true);
         setError('');
         try {
             await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/archive`);
+            if (scope !== scopeRef.current) return;
             showToast(`“${row.name}” archived.`);
             await load();
         } catch (err) {
+            if (scope !== scopeRef.current) return;
             setError(getApiErrorMessage(err, 'Archive failed'));
         } finally {
-            setBusy(false);
+            if (scope === scopeRef.current) setBusy(false);
         }
     };
 
     return (
-        <div className="d-grid gap-3">
+        <div className="contentPane d-grid gap-3">
             <div className="d-flex flex-wrap justify-content-between align-items-start gap-2">
                 <div>
                     <h2 className="h4 mb-1">{adminMode ? 'Strategy Registry (Admin)' : 'Strategy Registry'}</h2>
@@ -313,6 +343,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                 disabled={busy}
                 onClose={() => setShowCreate(false)}
                 onCreated={async (created) => {
+                    if (renderScope !== scopeRef.current) return;
                     setShowCreate(false);
                     const path = createdArtifactPath(created);
                     if (path) {
@@ -321,6 +352,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                     }
                     const id = createdStrategyId(created);
                     await load();
+                    if (renderScope !== scopeRef.current) return;
                     if (id) {
                         navigate(`/strategy?strategy_id=${encodeURIComponent(id)}`);
                     }
@@ -590,6 +622,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                     </p>
                     <textarea
                         aria-label="Strategy registry JSON"
+                        disabled={busy}
                         className="form-control font-monospace small"
                         rows={10}
                         placeholder='{"schema_version":"1.0","artifact_type":"strategy","slug":"...", ...}'
@@ -615,7 +648,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                         </button>
                     </div>
                     {validateResult && (
-                        <pre className="bg-light border rounded p-2 small mb-0 overflow-auto" style={{ maxHeight: 240 }}>
+                        <pre className="border rounded p-2 small mb-0 overflow-auto" style={{ maxHeight: 240, backgroundColor: 'var(--lido-bg-surface)', color: 'var(--lido-text)' }}>
                             {JSON.stringify(validateResult, null, 2)}
                         </pre>
                     )}

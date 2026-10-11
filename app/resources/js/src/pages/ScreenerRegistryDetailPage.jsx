@@ -20,29 +20,32 @@ function downloadJson(filename, data) {
 export default function ScreenerRegistryDetailPage({ adminMode = false }) {
     const { id } = useParams();
     const basePath = adminMode ? '/settings/screener-registry' : '/screeners/registry';
-    const { env, versions, loading, readError, versionsError, versionsLoading, load, loadVersions } = useRegistryArtifact('screener', id, { skipSharedVersions: true });
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
+    const { env, versions, loading, readError, versionsError, versionsLoading, load, loadVersions, scopeRef } = useRegistryArtifact('screener', id, { skipSharedVersions: true, onScopeChange: () => { setError(''); setBusy(false); } });
 
     const onExport = async () => {
         if (busy) return;
+        const scope = scopeRef.current;
         setBusy(true);
         setError('');
         try {
             const res = await api.post(`/v1/screener-registry/${encodeURIComponent(id)}/export`);
+            if (scope !== scopeRef.current) return;
             const data = res.data?.data;
             downloadJson(`${data?.slug || id}.json`, data);
             showToast('Exported JSON downloaded.');
         } catch (err) {
+            if (scope !== scopeRef.current) return;
             setError(getApiErrorMessage(err, 'Export failed'));
-        } finally { setBusy(false); }
+        } finally { if (scope === scopeRef.current) setBusy(false); }
     };
 
     const meta = env?.metadata || {};
     const isShared = meta.ownership === 'shared';
 
     return (
-        <div className="d-grid gap-3">
+        <div className="contentPane d-grid gap-3">
             <div className="d-flex flex-wrap justify-content-between align-items-start gap-2">
                 <div>
                     <h2 className="h4 mb-1">{env?.name || 'Screener artifact'}</h2>
@@ -138,7 +141,7 @@ export default function ScreenerRegistryDetailPage({ adminMode = false }) {
                     <div className="card">
                         <div className="card-body">
                             <h3 className="h6">Definition (condition tree)</h3>
-                            <pre className="bg-light border rounded p-2 small mb-0 overflow-auto" style={{ maxHeight: 420 }}>
+                            <pre className="border rounded p-2 small mb-0 overflow-auto" style={{ maxHeight: 420, backgroundColor: 'var(--lido-bg-surface)', color: 'var(--lido-text)' }}>
                                 {JSON.stringify(env.definition, null, 2)}
                             </pre>
                         </div>
