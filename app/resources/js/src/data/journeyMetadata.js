@@ -2283,6 +2283,118 @@ export const JOURNEY_TOPICS = Object.freeze([
     "warnings": []
   },
   {
+    "id": "E2E-49",
+    "title": "How do I customize the local Dashboard safely across devices?",
+    "aliases": [
+      "Customize the local Dashboard safely across devices",
+      "e2e-49"
+    ],
+    "keywords": [
+      "customize",
+      "the",
+      "local",
+      "dashboard",
+      "safely",
+      "across",
+      "devices"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/",
+    "guide": "/docs/journeys/18-dashboard-combo-charts.html#e2e-49-customize-the-local-dashboard-safely-across-devices",
+    "steps": [
+      "Open the Dashboard (`/`) and inspect current portfolio values. Refresh recovery is E2E-14.",
+      "Choose Customize. Mandatory Portfolio Value, Invested Value, Total Gain/Loss and the portfolio summary card remain visible.",
+      "Choose Desktop or Mobile explicitly. Hide optional fields/cards, choose a supported card size and use accessible Up/Down moves. Desktop drag-and-drop is an additional move interaction.",
+      "Confirm changes in one variant preserve the other. Supported cards remain bounded and at least the mandatory summary remains visible.",
+      "Lock layout to prevent accidental edits and persist it locally. Reopen, Unlock and inspect the preserved variant.",
+      "Reset to defaults restores the unnamed local factory definition; it does not delete named dashboards or another account's layout."
+    ],
+    "prerequisites": [
+      "An authenticated Investor and the main Dashboard."
+    ],
+    "warnings": [
+      "Local layouts belong to the current account and browser/device; another account's preferences must not be inherited."
+    ]
+  },
+  {
+    "id": "E2E-50",
+    "title": "How do I maintain named dashboards and portable configuration with recovery?",
+    "aliases": [
+      "Maintain named dashboards and portable configuration with recovery",
+      "e2e-50"
+    ],
+    "keywords": [
+      "maintain",
+      "named",
+      "dashboards",
+      "and",
+      "portable",
+      "configuration",
+      "with",
+      "recovery"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/",
+    "guide": "/docs/journeys/18-dashboard-combo-charts.html#e2e-50-maintain-named-dashboards-and-portable-configuration-with-recovery",
+    "steps": [
+      "Open the Dashboard (`/`). Existing local working preferences take precedence over an account default. An unavailable named list offers Retry without replacing the current local definition.",
+      "Save as named dashboard with an explicit name. Failed creation leaves the existing list and local working layout intact; inspect and repeat deliberately.",
+      "Select a named layout. Edit its variant and inspect Saving, Saved or Failed. Failed autosave keeps the reviewed local definition; Retry named dashboard save submits that exact current definition. Changing layout/account does not silently retry the rejected write.",
+      "Set one account default. A failed update retains the prior indication. Correct/retry explicitly and verify the confirmed default.",
+      "Rename or Duplicate a named dashboard. On failure, the original record remains intact. Duplication creates a separate record; it never replaces a sibling.",
+      "Copy a selected named dashboard to this device to detach the unnamed local working layout. Reopening preserves local precedence.",
+      "Delete only after confirmation. Cancellation produces no delete request; a rejected deletion retains the record for deliberate recovery.",
+      "Import a JSON file within 32 KB. Invalid syntax/size fails before persistence. Compatible fields/card preferences survive; unsupported entries are skipped with a warning and mandatory core visibility is restored.",
+      "A service failure after a valid import is identified as an unconfirmed import, rather than invalid JSON. The original file remains unchanged and can be reselected for deliberate retry.",
+      "Export JSON and inspect schema/version, lock and both variants. It contains no account identifiers, holdings, portfolio values or live data. Data export jobs and basket recovery are separately E2E-18/19."
+    ],
+    "prerequisites": [
+      "An authenticated account with its own main Dashboard and reviewed layout definition."
+    ],
+    "warnings": [
+      "Imported/exported layout JSON is configuration only. An unconfirmed server write is not a confirmed import/save/delete; inspect and deliberately retry. JSON import always creates a new named layout."
+    ]
+  },
+  {
+    "id": "E2E-51",
+    "title": "How do I explore stock combo presets and recover saved defaults?",
+    "aliases": [
+      "Explore stock combo presets and recover saved defaults",
+      "e2e-51"
+    ],
+    "keywords": [
+      "explore",
+      "stock",
+      "combo",
+      "presets",
+      "and",
+      "recover",
+      "saved",
+      "defaults"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/watchlist/TCS",
+    "guide": "/docs/journeys/18-dashboard-combo-charts.html#e2e-51-explore-stock-combo-presets-and-recover-saved-defaults",
+    "steps": [
+      "Open Stock Details (`/watchlist/TCS`). Existing Price + Volume and individual analytical charts remain available; only one combo preset is active.",
+      "Inspect the grouped preset selector. Available explicit account default wins; otherwise use Price + Volume, then the first available preset. A failed saved-preference read is disclosed and is not labelled as a known saved default.",
+      "Retry an unavailable account preference or historical read explicitly. These issue ordinary read requests only; unavailable presets remain visible and disabled until their observations support use.",
+      "Select a preset or use Previous/Next with cyclic wrapping, skipping unavailable entries. No arbitrary metric combination, favorites or custom axes are offered.",
+      "Temporarily show/hide visible series using named legend controls. Inspect range and Daily/Monthly/Quarterly sampling inside the chart. Fundamental values remain on their dated observations, with preserved units/dual axes and aligned visible-series tooltips.",
+      "Choose Set as default deliberately. A failed write retains the selected chart and explains the failure; retry then verify the confirmed account default. A new Stock Details open honors it across devices, while temporary legend/range choices do not override it.",
+      "Use keyboard/touch controls and inspect unavailable reasons; targeted full WCAG checks cover the combo chart. Source/calendar cadence and actual backend persistence remain independent domain contracts."
+    ],
+    "prerequisites": [
+      "Authenticated Stock Details with canonical dated price and metric observations available for supported presets."
+    ],
+    "warnings": [
+      "Insufficient or unavailable history disables the affected preset with a reason. No fabricated observations, fundamental forward filling, provider synchronization or training is authorized by a chart retry."
+    ]
+  },
+  {
     "id": "EXE-01",
     "title": "How do I execute an approved recommendation manually?",
     "aliases": [

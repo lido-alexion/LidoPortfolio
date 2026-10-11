@@ -174,7 +174,27 @@ export default function DashboardLayoutToolbar({ userId, onLayoutChange }) {
             showToast('Dashboard could not be deleted.', 'danger');
         }
     };
-    const importJson = async (event) => { const file = event.target.files?.[0]; if (!file) return; try { if (file.size > 32768) throw new Error('too large'); const raw = JSON.parse(await file.text()); const warnings = inspectDashboardLayoutCompatibility(raw); const imported = migrateDashboardLayout(raw); const name = window.prompt('Name the imported dashboard'); if (!name?.trim()) return; const response = await api.post('/dashboard-layouts', { name: name.trim(), definition: imported }); setNamed((current) => [...current, response.data.data].sort((a, b) => a.name.localeCompare(b.name))); showToast(warnings.length ? `Imported with compatibility adjustments: ${warnings.join(' ')}` : 'Dashboard imported.', warnings.length ? 'warning' : undefined); } catch { showToast('Dashboard JSON is invalid or exceeds the 32 KB limit.', 'danger'); } finally { event.target.value = ''; } };
+    const importJson = async (event) => {
+        const input = event.target;
+        const file = input.files?.[0];
+        if (!file) return;
+        let valid = false;
+        setSaving(true);
+        try {
+            if (file.size > 32768) throw new Error('too large');
+            const raw = JSON.parse(await file.text());
+            const warnings = inspectDashboardLayoutCompatibility(raw);
+            const imported = migrateDashboardLayout(raw);
+            valid = true;
+            const name = window.prompt('Name the imported dashboard');
+            if (!name?.trim()) return;
+            const response = await api.post('/dashboard-layouts', { name: name.trim(), definition: imported });
+            setNamed((current) => [...current, response.data.data].sort((a, b) => a.name.localeCompare(b.name)));
+            showToast(warnings.length ? `Imported with compatibility adjustments: ${warnings.join(' ')}` : 'Dashboard imported.', warnings.length ? 'warning' : undefined);
+        } catch {
+            showToast(valid ? 'Dashboard import could not be confirmed. Your file is unchanged; retry the import.' : 'Dashboard JSON is invalid or exceeds the 32 KB limit.', 'danger');
+        } finally { input.value = ''; setSaving(false); }
+    };
     const exportJson = () => {
         const blob = new Blob([JSON.stringify(layout, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'stox-dashboard-layout.json'; anchor.click(); URL.revokeObjectURL(url);
@@ -189,8 +209,8 @@ export default function DashboardLayoutToolbar({ userId, onLayoutChange }) {
                     <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setEditing((value) => !value)} aria-expanded={editing}>{editing ? 'Done' : 'Customize'}</button>
                     <button type="button" className="btn btn-sm btn-outline-secondary" disabled={layout.locked} onClick={() => { flushSave(); setSelectedNamed(''); selectedRef.current = ''; setSaveStatus('Saved'); update(factoryDashboardLayout()); }}>Reset to defaults</button>
                     <button type="button" className="btn btn-sm btn-outline-secondary" onClick={exportJson}>Export JSON</button>
-                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => importRef.current?.click()}>Import JSON</button>
-                    <input ref={importRef} type="file" accept="application/json,.json" className="d-none" onChange={importJson} />
+                    <button type="button" className="btn btn-sm btn-outline-secondary" disabled={saving} onClick={() => importRef.current?.click()}>Import JSON</button>
+                    <input ref={importRef} aria-label="Dashboard layout JSON file" disabled={saving} type="file" accept="application/json,.json" className="d-none" onChange={importJson} />
                     <ExportDataButton dataset="dashboard-summary" label="Export dashboard data" fields={['field', 'value']} />
                     <ExportBasketPanel />
                     <button type="button" className="btn btn-sm btn-outline-primary" onClick={saveAsNamed} disabled={saving}>{saving ? 'Saving…' : 'Save as named dashboard'}</button>
