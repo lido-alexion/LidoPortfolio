@@ -51,7 +51,7 @@ export default function RequestAccountPage() {
                 captcha_token: token,
             });
             setSuccess(true);
-            setMessage(res.data?.message || 'Check your email for a verification link.');
+            setMessage(res.data?.message || 'If this email is eligible, an administrator can review the access request. If you already use StoX, please use the login page.');
         } catch (error) {
             setMessage(getApiErrorMessage(error, 'Could not submit your request. Please try again.'));
         } finally {
@@ -64,10 +64,10 @@ export default function RequestAccountPage() {
             <div className="login-card shadow p-4">
                 <h2 className="h6 mb-3 text-center">Request an account</h2>
                 <p className="text-muted small">
-                    StoX is invite-only. Submit your name and email to request access. You must verify your email before an administrator can review your request.
+                    StoX is invite-only. Submit your name and email to request access. Email verification helps establish ownership; an administrator can review your request before verification.
                 </p>
                 {success ? (
-                    <div className="alert alert-success py-2">{message}</div>
+                    <div className="alert alert-success py-2" role="status">{message}</div>
                 ) : (
                     <form onSubmit={submit}>
                         <div className="mb-3">
@@ -104,9 +104,9 @@ export default function RequestAccountPage() {
                                 Human verification is not configured in this environment.
                             </p>
                         ) : null}
-                        {!success && message && <div className="alert alert-danger py-2">{message}</div>}
+                        {!success && message && <div className="alert alert-danger py-2" role="alert">{message}</div>}
                         <button className="btn btn-primary w-100" type="submit" disabled={submitting}>
-                            {submitting ? 'Please wait…' : 'Send verification email'}
+                            {submitting ? 'Please wait…' : 'Submit access request'}
                         </button>
                     </form>
                 )}

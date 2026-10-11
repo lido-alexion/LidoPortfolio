@@ -40,3 +40,15 @@ These journeys describe existing investor behavior discovered during the V9-UX-0
 5. For a non-system policy, choose Delete. Cancelling the confirmation preserves the policy; confirming removes it. System policies do not expose Delete.
 
 **Expected result:** saved policies and evaluation outcomes are visible, and failed save/evaluation operations remain recoverable. A suggested action is advisory; evaluating or deleting a policy does not authorize trading.
+
+## E2E-17 — Save optional product-email preferences and recover a failed update
+
+- Requires: an authenticated investor using `/settings/notifications`.
+- Search synonyms: optional emails, email digest, quiet hours.
+
+1. Inspect Optional product emails, which are off by default while account/security messages remain enabled.
+2. Enable optional emails, choose categories and Immediate or Daily digest delivery, then set quiet hours, digest time and timezone.
+3. Save email preferences. A failed update retains the form; correct invalid inputs or retry after recovery.
+4. Reload the page and confirm the saved preferences. Disabling optional emails leaves account/security messaging enabled.
+
+**Expected result:** account-level preferences persist without changing portfolio ownership or trading permissions. A successful save is not proof of queue processing or inbox receipt; those require separate delivery evidence.
