@@ -5,5 +5,7 @@ export function allowProductionSmokeRequest(method, url, baseUrl, { login = fals
     if (method === 'GET' || method === 'HEAD') return true;
     if (method !== 'POST') return false;
     if (login && target.pathname === '/api/auth/login') return true;
-    return target.pathname === '/api/logs/frontend' || target.pathname === '/api/telemetry';
+    return target.pathname === '/api/logs/frontend'
+        || target.pathname === '/api/telemetry'
+        || target.pathname.startsWith('/api/telemetry/');
 }
