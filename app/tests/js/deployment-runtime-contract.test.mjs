@@ -3,12 +3,32 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 
 async function source(path) {
     return readFile(resolve(repositoryRoot, path), 'utf8');
 }
+
+test('missing mandatory smoke identity blocks activation without exposing configured values', async () => {
+    const workflow = await source('.github/workflows/deploy-stoxla-production.yml');
+    const label = 'Require mandatory production smoke identity before activation';
+    const start = workflow.indexOf(`- name: ${label}`);
+    const end = workflow.indexOf('\n      - name:', start + 1);
+    assert.ok(start > workflow.indexOf('\n  deploy:'));
+    assert.ok(start < workflow.indexOf('- name: Configure SSH'));
+    assert.ok(start < workflow.indexOf('- name: Upload and activate release'));
+    const step = workflow.slice(start, end);
+    const script = step.split('run: |\n')[1].split('\n').map(line => line.replace(/^          /, '')).join('\n');
+    for (const [email, password, status] of [['', '', 1], ['synthetic@example.invalid', '', 1], ['', 'synthetic-password', 1], ['synthetic@example.invalid', 'synthetic-password', 0]]) {
+        const result = spawnSync('bash', ['-c', script], { encoding: 'utf8', env: { PATH: process.env.PATH, STOX_SMOKE_EMAIL: email, STOX_SMOKE_PASSWORD: password } });
+        assert.equal(result.status, status);
+        assert.ok(!(result.stdout + result.stderr).includes('synthetic@example.invalid'));
+        assert.ok(!(result.stdout + result.stderr).includes('synthetic-password'));
+    }
+    assert.ok(workflow.indexOf('- name: Run non-destructive production browser smoke') > workflow.indexOf('- name: Upload and activate release'));
+});
 
 test('release and rollback require a PHP-FPM refresh plus public build identity verification', async () => {
     const [deploy, rollback, health] = await Promise.all([
