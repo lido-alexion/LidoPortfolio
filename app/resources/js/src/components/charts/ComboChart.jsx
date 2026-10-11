@@ -62,7 +62,7 @@ export default function ComboChart({ rows = [], availability = {}, defaultPreset
                     const name = SERIES_LABELS[key];
                     return <label key={key} className={`btn btn-sm ${checked ? 'btn-outline-secondary' : 'btn-outline-secondary opacity-50'}`}>
                         <input className="form-check-input me-1" type="checkbox" checked={checked} onChange={() => toggle(key)} aria-label={`Show ${name}`} />
-                        <span style={{ color: COLORS[key] }}>{name}</span>
+                        <span><span aria-hidden="true" style={{ color: COLORS[key] }}>● </span>{name}</span>
                     </label>;
                 })}
             </div>
