@@ -667,6 +667,10 @@ body {
 }
 
 @media (max-width: 1199.98px) {
+    .lido-shell > .lido-main {
+        padding-bottom: 5.5rem;
+    }
+
     .lido-page-history-rail {
         display: none;
     }
