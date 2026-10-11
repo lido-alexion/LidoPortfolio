@@ -1247,6 +1247,80 @@ export const JOURNEY_TOPICS = Object.freeze([
     ]
   },
   {
+    "id": "E2E-23",
+    "title": "How do I run and review a historical strategy experiment?",
+    "aliases": [
+      "Run and review a historical strategy experiment",
+      "e2e-23"
+    ],
+    "keywords": [
+      "run",
+      "and",
+      "review",
+      "historical",
+      "strategy",
+      "experiment"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/backtests",
+    "guide": "/docs/journeys/11-historical-analysis.html#e2e-23-run-and-review-a-historical-strategy-experiment",
+    "steps": [
+      "Open `/backtests`. If history is unavailable, use Retry backtest history; an operational read failure is not proof that no runs exist.",
+      "Choose New Backtest, review the background-operation notice and enter Name, Period, Initial capital, Execution price, Adverse slippage, optional declared parameter overrides, Notes and Tags. Cancel closes the form without starting a run.",
+      "Choose Start in New Strategy Backtest. A failed submission retains the draft for correction or retry. Review the resulting run's status; processing can continue in bounded background slices after leaving the page.",
+      "Open the run. If the detail read is temporarily unavailable, choose Retry loading backtest. A confirmed missing run instead offers Back to Backtests.",
+      "Inspect strategy/version, dates, assumptions, statistics, simulated trades, transactions and snapshots. Update Name/Notes/Tags using Save name / notes / tags; failure retains the draft and does not change historical economic evidence.",
+      "Return to All backtests. Duplicate creates a separate experiment using stored dates, capital, notes, tags and fill assumptions with the current strategy; it does not copy old results or reinterpret the original run.",
+      "Select two to five runs and Compare selected. Read differing assumptions and unavailable statistics; incompatible evidence must not be labeled compatible.",
+      "For an in-progress run, choose Cancel and review the checkpoint confirmation. Dismissing it sends no cancellation; a failed request leaves the prior state visible. A confirmed cancelled run retains partial evidence and is not completed.",
+      "Use Delete only after reviewing its irreversible confirmation. Dismiss it to preserve the run; retry a failed deletion after verifying the run remains present."
+    ],
+    "prerequisites": [
+      "An owned portfolio, an active published strategy and eligible historical inputs."
+    ],
+    "warnings": [
+      "A historical result is simulated research. Compare execution assumptions, pinned versions and dataset limitations before drawing conclusions; cancellation or failure is not completion."
+    ]
+  },
+  {
+    "id": "E2E-24",
+    "title": "How do I check replay readiness and inspect isolated replay evidence?",
+    "aliases": [
+      "Check replay readiness and inspect isolated replay evidence",
+      "e2e-24"
+    ],
+    "keywords": [
+      "check",
+      "replay",
+      "readiness",
+      "and",
+      "inspect",
+      "isolated",
+      "evidence"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/portfolios",
+    "guide": "/docs/journeys/11-historical-analysis.html#e2e-24-check-replay-readiness-and-inspect-isolated-replay-evidence",
+    "steps": [
+      "Open `/portfolios`, locate Portfolio Replay and choose Starting state, From/To dates, optional Starting cash, Fill method and Slippage.",
+      "Choose Check. Retry an unavailable readiness request. Review blockers and limitations; Start remains disabled for a confirmed blocked assessment.",
+      "Correct inputs and Check again. For Historical branch, inspect historical strategy versions and explicitly review any counterfactual version selection before proceeding.",
+      "Choose Start only after reviewing readiness. A failed request retains the form; retry through the supported action. Confirm the separate queued/running replay and its immutable assumptions.",
+      "Choose Details and inspect status, checkpoint/transaction/recommendation counts, fill assumptions, pinned-world evidence and limitations. A failed read does not claim that evidence was loaded; retry Details.",
+      "Compare selected replay runs and read compatibility/assumption disclosure rather than treating missing statistics as zero.",
+      "Cancel a queued/running replay only deliberately; retry a rejected cancellation while the previous state remains visible. Confirm cancelled status without presenting partial results as completed.",
+      "Delete a replay only after its explicit confirmation; cancelling the confirmation preserves evidence. Successful deletion retains the backend audit tombstone."
+    ],
+    "prerequisites": [
+      "An owned portfolio and authoritative historical inputs for the chosen period."
+    ],
+    "warnings": [
+      "Readiness limitations and missing historical reconstruction are not waived by simulated UI fixtures. Historical replay differs from forward paper simulation and live execution."
+    ]
+  },
+  {
     "id": "EXE-01",
     "title": "How do I execute an approved recommendation manually?",
     "aliases": [
