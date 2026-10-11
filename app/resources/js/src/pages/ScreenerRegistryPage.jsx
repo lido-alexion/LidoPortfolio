@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import api from '../api';
+import api, { getApiErrorMessage } from '../api';
 import { appUrl } from '../appBase';
 import ValidationSuccessBanner from '../components/artifacts/ValidationSuccessBanner';
 import { showToast } from '../toast';
@@ -39,6 +39,8 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
     const [meta, setMeta] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [loadError, setLoadError] = useState('');
+    const readRequestRef = useRef(0);
     const [q, setQ] = useState('');
     const [status, setStatus] = useState('');
     const [ownership, setOwnership] = useState('');
@@ -49,8 +51,9 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
     const importValidated = Boolean(validateResult?.ok);
 
     const load = async () => {
+        const request = ++readRequestRef.current;
         setLoading(true);
-        setError('');
+        setLoadError('');
         try {
             const params = {};
             if (q.trim()) params.q = q.trim();
@@ -61,18 +64,19 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
                 api.get('/v1/screener-registry', { params }),
                 api.get('/v1/screener-registry/meta'),
             ]);
+            if (request !== readRequestRef.current) return;
             setRows(listRes.data?.data || []);
             setMeta(metaRes.data?.data || null);
         } catch (err) {
-            setError(err?.response?.data?.error?.message || err.message || 'Failed to load Screener Registry');
-            setRows([]);
+            if (request === readRequestRef.current) setLoadError('Screener Registry could not be loaded.');
         } finally {
-            setLoading(false);
+            if (request === readRequestRef.current) setLoading(false);
         }
     };
 
     useEffect(() => {
         load();
+        return () => { readRequestRef.current++; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [q, status, ownership, origin]);
 
@@ -103,7 +107,7 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
                 showToast('Validation reported issues. See details below.', 'warning');
             }
         } catch (err) {
-            setError(err?.response?.data?.error?.message || err.message || 'Validate failed');
+            setError(getApiErrorMessage(err, 'Validate failed'));
         } finally {
             setBusy(false);
         }
@@ -126,7 +130,7 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
             const screenerId = created?.artifact_id || created?.metadata?.legacy_id;
             if (screenerId) navigate(`/screeners/${screenerId}`);
         } catch (err) {
-            setError(err?.response?.data?.error?.message || err.message || 'Import failed');
+            setError(getApiErrorMessage(err, 'Import failed'));
         } finally {
             setBusy(false);
         }
@@ -142,7 +146,7 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
             downloadJson(`${env?.slug || 'screener'}.json`, env);
             showToast(`Exported ${env?.slug || id}.`);
         } catch (err) {
-            setError(err?.response?.data?.error?.message || err.message || 'Export failed');
+            setError(getApiErrorMessage(err, 'Export failed'));
         } finally {
             setBusy(false);
         }
@@ -160,7 +164,7 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
             const screenerId = created?.artifact_id || created?.metadata?.legacy_id;
             if (screenerId) navigate(`/screeners/${screenerId}`);
         } catch (err) {
-            setError(err?.response?.data?.error?.message || err.message || 'Shared import failed');
+            setError(getApiErrorMessage(err, 'Shared import failed'));
         } finally {
             setBusy(false);
         }
@@ -260,7 +264,8 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
                 </div>
             </div>
 
-            {error && <div className="alert alert-danger mb-0">{error}</div>}
+            {loadError && <div className="alert alert-danger mb-0" role="alert">{loadError} <button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={load}>Retry Screener Registry</button></div>}
+            {error && <div className="alert alert-danger mb-0" role="alert">{error}</div>}
 
             <div className="card">
                 <div className="table-responsive">
@@ -282,7 +287,7 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
                                     <td colSpan={7} className="text-muted">Loading…</td>
                                 </tr>
                             )}
-                            {!loading && rows.length === 0 && (
+                            {!loading && !loadError && rows.length === 0 && (
                                 <tr>
                                     <td colSpan={7} className="text-muted">No screeners match the filters.</td>
                                 </tr>
@@ -369,9 +374,10 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
                         {' '}
                         — full Indicator + Screener + Strategy + Cookbook pack for AI/offline use.
                         Run <strong>Validate</strong> first — <strong>Import</strong> stays disabled until validation succeeds.
-                        Import creates an Artifact Library Draft; it becomes runnable only after explicit publish and binding.
+                        Import creates an account-owned runtime Screener on My screens. Review its definition in the editor before using it.
                     </p>
                     <textarea
+                        aria-label="Screener registry JSON"
                         className="form-control font-monospace small"
                         rows={10}
                         placeholder='{"schema_version":"1.0","artifact_type":"screener","slug":"...", ...}'

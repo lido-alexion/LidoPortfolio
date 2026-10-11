@@ -2467,6 +2467,86 @@ export const JOURNEY_TOPICS = Object.freeze([
     ]
   },
   {
+    "id": "E2E-54",
+    "title": "How do I recover the Screener compatibility registry and import a reviewed runtime definition?",
+    "aliases": [
+      "Recover the Screener compatibility registry and import a reviewed runtime definition",
+      "e2e-54"
+    ],
+    "keywords": [
+      "recover",
+      "the",
+      "screener",
+      "compatibility",
+      "registry",
+      "and",
+      "import",
+      "reviewed",
+      "runtime",
+      "definition"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/screeners/registry",
+    "guide": "/docs/journeys/20-runtime-registry-compatibility.html#e2e-54-recover-the-screener-compatibility-registry-and-import-a-reviewed-runtime-definition",
+    "steps": [
+      "Open Screener Registry (`/screeners/registry`). Inspect account/shared/factory ownership and filters. An unavailable list offers Retry without reporting that no Screeners match; a failed filtered read retains known rows with an unavailability warning.",
+      "Open an owned artifact by its stable identity. An unavailable envelope offers Retry registry artifact and blocks actions requiring that unknown definition.",
+      "Inspect the definition hash and immutable version history. A failed history read retains the known artifact, explains unavailability and offers Retry registry versions without claiming there are no versions.",
+      "Export the reviewed definition as portable JSON. An unconfirmed export explains failure; retry preserves definition and ownership.",
+      "Inspect a shared source through its read-only detail view. Open editor is unavailable and private version history is not requested. Import copy creates an account-owned Screener on My screens; a rejected copy keeps the original source visible and unchanged.",
+      "Paste Screener registry JSON with the documented condition root. Validate first; a validation failure keeps the JSON and Import disabled. Changing validated JSON invalidates validation.",
+      "Import the exact validated JSON. An unconfirmed import retains the draft for deliberate retry; confirmed import opens the account-owned runtime Screener editor. Inspect its definition before using it."
+    ],
+    "prerequisites": [
+      "An authenticated Investor and access to the account-scoped Screener compatibility registry."
+    ],
+    "warnings": [
+      "A shared source is read-only. Copy/import creates an owned runtime definition; it does not modify the source, execute an order or qualify market data."
+    ]
+  },
+  {
+    "id": "E2E-55",
+    "title": "How do I inspect portable Strategy registry evidence and deliberately enable or archive its runtime instance?",
+    "aliases": [
+      "Inspect portable Strategy registry evidence and deliberately enable or archive its runtime instance",
+      "e2e-55"
+    ],
+    "keywords": [
+      "inspect",
+      "portable",
+      "strategy",
+      "registry",
+      "evidence",
+      "and",
+      "deliberately",
+      "enable",
+      "archive",
+      "its",
+      "runtime",
+      "instance"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/strategy/registry",
+    "guide": "/docs/journeys/20-runtime-registry-compatibility.html#e2e-55-inspect-portable-strategy-registry-evidence-and-deliberately-enable-or-archive-its-runtime-instance",
+    "steps": [
+      "Open Strategy Registry (`/strategy/registry`) and inspect enabled/draft/archived runtime entries. Open a specific artifact's detail by stable identity.",
+      "Recover an unavailable envelope explicitly. Retry preserves the target identity and does not create or enable a Strategy.",
+      "Inspect definition hash, dependencies and portable Screener references. Recover unavailable version history separately; known immutable version evidence is preserved.",
+      "Export portable JSON without portfolio-local Screener ids. Failed export retains the artifact and explains the unconfirmed action; retry downloads the reviewed definition.",
+      "Enable only after reviewing the intended definition and confirming. Cancelling sends no activation. A rejected activation does not report success or disable another Strategy; review and retry deliberately.",
+      "Archive only the intended enabled Strategy after confirmation. Cancelling sends no archive; rejection preserves enabled evidence. Confirmed archive preserves other enabled Strategies and past attribution.",
+      "Paste and validate portable Strategy JSON with eligible Screener references and scoring configuration. Rejected validation/import retains JSON. Successful import creates a runtime Strategy draft and opens its editor for review before explicit enable; a separate Library publish/binding is not required."
+    ],
+    "prerequisites": [
+      "An authenticated Investor with account-owned Strategy definitions and eligible Screener references."
+    ],
+    "warnings": [
+      "Enable changes future recommendation eligibility; archive stops future recommendations for that Strategy. Other enabled Strategies and historical holdings/recommendation attribution remain intact. Neither action places an order."
+    ]
+  },
+  {
     "id": "EXE-01",
     "title": "How do I execute an approved recommendation manually?",
     "aliases": [

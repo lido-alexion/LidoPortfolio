@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import api from '../api';
+import api, { getApiErrorMessage } from '../api';
+import useRegistryArtifact from '../hooks/useRegistryArtifact';
 import { showToast } from '../toast';
 
 function downloadJson(filename, data) {
@@ -19,45 +20,13 @@ function downloadJson(filename, data) {
 export default function ScreenerRegistryDetailPage({ adminMode = false }) {
     const { id } = useParams();
     const basePath = adminMode ? '/settings/screener-registry' : '/screeners/registry';
-    const [env, setEnv] = useState(null);
-    const [versions, setVersions] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const { env, versions, loading, readError, versionsError, versionsLoading, load, loadVersions } = useRegistryArtifact('screener', id, { skipSharedVersions: true });
     const [error, setError] = useState('');
-
-    useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            setLoading(true);
-            setError('');
-            try {
-                const showRes = await api.get(`/v1/screener-registry/${encodeURIComponent(id)}`);
-                if (cancelled) return;
-                const data = showRes.data?.data || null;
-                setEnv(data);
-                const own = data?.metadata?.ownership !== 'shared';
-                if (own) {
-                    try {
-                        const verRes = await api.get(`/v1/screener-registry/${encodeURIComponent(id)}/versions`);
-                        if (!cancelled) setVersions(verRes.data?.data || []);
-                    } catch {
-                        if (!cancelled) setVersions([]);
-                    }
-                } else {
-                    setVersions([]);
-                }
-            } catch (err) {
-                if (!cancelled) {
-                    setError(err?.response?.data?.error?.message || err.message || 'Failed to load screener');
-                    setEnv(null);
-                }
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        })();
-        return () => { cancelled = true; };
-    }, [id]);
+    const [busy, setBusy] = useState(false);
 
     const onExport = async () => {
+        if (busy) return;
+        setBusy(true);
         setError('');
         try {
             const res = await api.post(`/v1/screener-registry/${encodeURIComponent(id)}/export`);
@@ -65,8 +34,8 @@ export default function ScreenerRegistryDetailPage({ adminMode = false }) {
             downloadJson(`${data?.slug || id}.json`, data);
             showToast('Exported JSON downloaded.');
         } catch (err) {
-            setError(err?.response?.data?.error?.message || err.message || 'Export failed');
-        }
+            setError(getApiErrorMessage(err, 'Export failed'));
+        } finally { setBusy(false); }
     };
 
     const meta = env?.metadata || {};
@@ -89,13 +58,15 @@ export default function ScreenerRegistryDetailPage({ adminMode = false }) {
                             Open editor
                         </Link>
                     )}
-                    <button type="button" className="btn btn-primary btn-sm" onClick={onExport} disabled={!env}>
+                    <button type="button" className="btn btn-primary btn-sm" onClick={onExport} disabled={busy || !env || Boolean(readError)}>
                         Export JSON
                     </button>
                 </div>
             </div>
 
-            {error && <div className="alert alert-danger mb-0">{error}</div>}
+            {readError && <div className="alert alert-danger mb-0" role="alert">{readError} <button type="button" className="btn btn-sm btn-outline-primary" disabled={loading || busy} onClick={load}>Retry registry artifact</button></div>}
+            {error && <div className="alert alert-danger mb-0" role="alert">{error}</div>}
+            {versionsError && <div className="alert alert-warning mb-0" role="alert">{versionsError} <button type="button" className="btn btn-sm btn-outline-primary" disabled={versionsLoading || loading || busy} onClick={() => loadVersions()}>Retry registry versions</button></div>}
             {loading && <div className="text-muted">Loading…</div>}
 
             {!loading && env && (
@@ -135,7 +106,7 @@ export default function ScreenerRegistryDetailPage({ adminMode = false }) {
                         <div className="card">
                             <div className="card-body">
                                 <h3 className="h6">Version history</h3>
-                                {versions.length === 0 && <p className="text-muted small mb-0">No versions recorded yet.</p>}
+                                {!versionsError && versions.length === 0 && <p className="text-muted small mb-0">No versions recorded yet.</p>}
                                 {versions.length > 0 && (
                                     <div className="table-responsive">
                                         <table className="table table-sm mb-0">

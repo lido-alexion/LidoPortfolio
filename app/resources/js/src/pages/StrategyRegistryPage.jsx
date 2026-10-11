@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import api from '../api';
+import api, { getApiErrorMessage } from '../api';
 import { appUrl } from '../appBase';
 import ValidationSuccessBanner from '../components/artifacts/ValidationSuccessBanner';
 import NumberInput from '../components/NumberInput';
@@ -104,7 +104,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
             setMeta(metaRes.data?.data || null);
             syncAllocDraft(list);
         } catch (err) {
-            setError(err?.response?.data?.error?.message || err.message || 'Failed to load Strategy Registry');
+            setError(getApiErrorMessage(err, 'Failed to load Strategy Registry'));
             setRows([]);
             setAllocDraft([]);
         } finally {
@@ -191,7 +191,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                 showToast('Validation reported issues. See details below.', 'warning');
             }
         } catch (err) {
-            setError(err?.response?.data?.error?.message || err.message || 'Validate failed');
+            setError(getApiErrorMessage(err, 'Validate failed'));
         } finally {
             setBusy(false);
         }
@@ -218,7 +218,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                 if (path) navigate(path);
             }
         } catch (err) {
-            setError(err?.response?.data?.error?.message || err.message || 'Import failed');
+            setError(getApiErrorMessage(err, 'Import failed'));
         } finally {
             setBusy(false);
         }
@@ -234,7 +234,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
             downloadJson(`${env?.slug || 'strategy'}.json`, env);
             showToast(`Exported ${env?.slug || id} (portable Screener/Indicator refs only).`);
         } catch (err) {
-            setError(err?.response?.data?.error?.message || err.message || 'Export failed');
+            setError(getApiErrorMessage(err, 'Export failed'));
         } finally {
             setBusy(false);
         }
@@ -250,7 +250,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
             showToast(`“${row.name}” is now enabled for this portfolio.`);
             await load();
         } catch (err) {
-            setError(err?.response?.data?.error?.message || err.message || 'Selection failed');
+            setError(getApiErrorMessage(err, 'Selection failed'));
         } finally {
             setBusy(false);
         }
@@ -268,7 +268,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
             showToast(`“${row.name}” archived.`);
             await load();
         } catch (err) {
-            setError(err?.response?.data?.error?.message || err.message || 'Archive failed');
+            setError(getApiErrorMessage(err, 'Archive failed'));
         } finally {
             setBusy(false);
         }
@@ -394,7 +394,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                 </div>
             ) : null}
 
-            {error && <div className="alert alert-danger mb-0">{error}</div>}
+            {error && <div className="alert alert-danger mb-0" role="alert">{error}</div>}
 
             <div className="card">
                 <div className="table-responsive">
@@ -582,9 +582,10 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                         {' '}
                         — full Indicator + Screener + Strategy + Cookbook pack for AI/offline use.
                         Run <strong>Validate</strong> first — <strong>Import</strong> stays disabled until validation succeeds.
-                        Import creates an <strong>Artifact Library Draft</strong>. Review it there, publish an immutable version, then bind it to this Portfolio.
+                        Import creates an account-owned runtime Strategy draft. Review it in the Strategy editor before explicitly enabling it for this Portfolio.
                     </p>
                     <textarea
+                        aria-label="Strategy registry JSON"
                         className="form-control font-monospace small"
                         rows={10}
                         placeholder='{"schema_version":"1.0","artifact_type":"strategy","slug":"...", ...}'

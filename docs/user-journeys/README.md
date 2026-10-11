@@ -279,3 +279,5 @@ If this guide conflicts with an implemented/current product contract, correct th
 Extended existing Dashboard local/lifecycle/portability and Stock Details combo-chart controls/recovery are [E2E-49–51](18-dashboard-combo-charts.md), complementing named layout recovery E2E-48.
 
 Stored squared-off transaction and historical evaluation recovery are [E2E-52–53](19-persisted-history.md), preserving financial/observation identity and explicit deletion confirmation.
+
+Runtime Screener/Strategy registry compatibility, immutable version reads, definition export, owned/shared copy and reviewed runtime JSON imports are [E2E-54–55](20-runtime-registry-compatibility.md). Current V8 FEAT-064 imports do not require Library publication.
