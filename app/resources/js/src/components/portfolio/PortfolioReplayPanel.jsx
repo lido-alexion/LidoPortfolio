@@ -106,7 +106,7 @@ export default function PortfolioReplayPanel({ portfolio }) {
         })()),
     });
 
-    return <div className="card mb-4" role="region" aria-label="Portfolio Replay">
+    return <div className="card mb-4 portfolio-replay-panel" role="region" aria-label="Portfolio Replay">
         <div className="card-body">
             <h3 className="h6 mb-1">Portfolio Replay</h3>
             <p className="small text-muted">Historical, deterministic Portfolio simulation. A Replay is isolated from <strong>{portfolio.name}</strong> and cannot be edited after it starts.</p>
@@ -140,7 +140,7 @@ export default function PortfolioReplayPanel({ portfolio }) {
             {comparison && <div className={`alert mt-3 mb-0 ${comparison.compatible ? 'alert-info' : 'alert-warning'}`} data-testid="replay-comparison">
                 <div className="d-flex justify-content-between"><strong>{comparison.compatible ? 'Compatible Replay comparison' : 'Replay assumptions differ materially'}</strong><button type="button" className="btn-close" aria-label="Close comparison" onClick={() => setComparison(null)} /></div>
                 {comparison.assumption_differences?.length ? <div className="small">Different assumptions: {comparison.assumption_differences.map((item) => item.replaceAll('_', ' ')).join(', ')}</div> : null}
-                <div className="row g-2 mt-1">{comparison.runs?.map((run) => <div className="col-md" key={run.id}><div className="border rounded bg-white p-2 small"><strong>Replay #{run.id}</strong><br />Return: {run.statistics?.return_percent ?? 'Unavailable'}%<br />TWR: {run.statistics?.twr_percent ?? 'Unavailable'}%<br />Drawdown: {run.statistics?.maximum_drawdown_percent ?? 'Unavailable'}%<br />Charges: {run.statistics?.simulated_charges ?? 'Unavailable'}<br />Transactions: {run.statistics?.transaction_count ?? 'Unavailable'}</div></div>)}</div>
+                <div className="row g-2 mt-1">{comparison.runs?.map((run) => <div className="col-md" key={run.id}><div className="border rounded text-bg-light p-2 small"><strong>Replay #{run.id}</strong><br />Return: {run.statistics?.return_percent ?? 'Unavailable'}%<br />TWR: {run.statistics?.twr_percent ?? 'Unavailable'}%<br />Drawdown: {run.statistics?.maximum_drawdown_percent ?? 'Unavailable'}%<br />Charges: {run.statistics?.simulated_charges ?? 'Unavailable'}<br />Transactions: {run.statistics?.transaction_count ?? 'Unavailable'}</div></div>)}</div>
                 <div className="small mt-2">{comparison.disclosure}</div>
             </div>}
             {selected && <div className="border rounded p-3 mt-3" data-testid="replay-evidence-detail">
