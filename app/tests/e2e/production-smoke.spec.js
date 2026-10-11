@@ -22,8 +22,10 @@ test('production smoke is available and non-destructive', async ({ page }) => {
 
 test('dedicated smoke identity can open a read-only investor page', async () => {
     test.setTimeout(70_000);
-    test.skip(!process.env.STOX_SMOKE_EMAIL || !process.env.STOX_SMOKE_PASSWORD,
-        'Configure a dedicated, read-only production smoke identity. Acceptance remains blocked until this runs.');
+    test.skip(!process.env.STOX_E2E_BASE_URL, 'Set STOX_E2E_BASE_URL for controlled production smoke.');
+    if (!process.env.STOX_SMOKE_EMAIL || !process.env.STOX_SMOKE_PASSWORD) {
+        throw new Error('Mandatory authenticated production smoke requires a dedicated read-only identity configured as STOX_SMOKE_EMAIL and STOX_SMOKE_PASSWORD Actions secrets.');
+    }
     // Run outside the test reporter: even untraced page.fill calls retain credential
     // arguments in HTML step metadata. This child prints only allowlisted outcomes.
     try {
