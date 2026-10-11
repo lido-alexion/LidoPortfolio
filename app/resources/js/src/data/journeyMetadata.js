@@ -513,6 +513,111 @@ export const JOURNEY_TOPICS = Object.freeze([
     "warnings": []
   },
   {
+    "id": "AUTH-09",
+    "title": "How do I recover owned session management without losing this device?",
+    "aliases": [
+      "Recover owned session management without losing this device",
+      "auth-09"
+    ],
+    "keywords": [
+      "recover",
+      "owned",
+      "session",
+      "management",
+      "without",
+      "losing",
+      "this",
+      "device"
+    ],
+    "synonyms": [],
+    "category": "Account access",
+    "route": "/settings/account",
+    "guide": "/docs/journeys/00-account-entry.html#auth-09-recover-owned-session-management-without-losing-this-device",
+    "steps": [
+      "Open Settings → Account (`/settings/account`) and inspect Active sessions. Retry active sessions recovers an unavailable list; failure is not a confirmed empty account.",
+      "Identify This device and the intended other device. Revoke the non-current session explicitly. An unconfirmed failure retains its row and permits deliberate retry after inspection.",
+      "Use Log out other devices to revoke the remaining non-current sessions. Failure preserves displayed evidence and provides read recovery before retry.",
+      "Confirm that This device remains active after successful other-session revocation. Foreign account sessions are never available to this workflow."
+    ],
+    "prerequisites": [
+      "An authenticated account."
+    ],
+    "warnings": [
+      "Revoke invalidates the selected non-current session. Log out other devices preserves this device. The current Log out action follows AUTH-03 and clears local authority."
+    ]
+  },
+  {
+    "id": "AUTH-10",
+    "title": "How do I recover StoX execution-code enrollment without broker authority?",
+    "aliases": [
+      "Recover StoX execution-code enrollment without broker authority",
+      "auth-10"
+    ],
+    "keywords": [
+      "recover",
+      "stox",
+      "execution",
+      "code",
+      "enrollment",
+      "without",
+      "broker",
+      "authority"
+    ],
+    "synonyms": [],
+    "category": "Account access",
+    "route": "/settings/account",
+    "guide": "/docs/journeys/00-account-entry.html#auth-10-recover-stox-execution-code-enrollment-without-broker-authority",
+    "steps": [
+      "Open Settings → Account (`/settings/account`) → StoX execution code. If current status is unavailable, Retry execution-code status before changing enrollment; unknown state must not appear unconfigured.",
+      "Set up StoX execution code deliberately. A rejected request preserves existing enrollment state. Retry to provision the pending QR/secret.",
+      "Enter an optional Authenticator app name and current code, then Confirm. Rejected proof retains entered setup fields for correction/retry.",
+      "After confirmed activation, save the newly issued one-time StoX recovery codes. If the follow-up status read fails, codes remain available and Retry execution-code status recovers the authoritative enabled state.",
+      "To Disable, provide the identified current proof and submit deliberately. Rejected proof preserves enabled state and entered draft; confirmed disable clears active/pending state and displayed recovery codes."
+    ],
+    "prerequisites": [
+      "An authenticated account and an authenticator app."
+    ],
+    "warnings": [
+      "A StoX execution code provides sensitive-action proof; it does not grant entitlement, broker readiness or permission to submit an order. Kite login OTPs are entered only on Kite/Zerodha. Recovery codes are separate one-time backups and must be stored privately."
+    ]
+  },
+  {
+    "id": "AUTH-11",
+    "title": "How do I create and revoke personal API tokens with limited scope?",
+    "aliases": [
+      "Create and revoke personal API tokens with limited scope",
+      "auth-11"
+    ],
+    "keywords": [
+      "create",
+      "and",
+      "revoke",
+      "personal",
+      "api",
+      "tokens",
+      "with",
+      "limited",
+      "scope"
+    ],
+    "synonyms": [],
+    "category": "Account access",
+    "route": "/settings/account",
+    "guide": "/docs/journeys/00-account-entry.html#auth-11-create-and-revoke-personal-api-tokens-with-limited-scope",
+    "steps": [
+      "Open Settings → Account (`/settings/account`) → Personal API tokens. Retry personal API tokens recovers an unavailable list; failure is not a confirmed empty list.",
+      "Enter Token name and select abilities deliberately. A blank name or no ability cannot be submitted. A rejected creation retains the name/selection for correction/retry.",
+      "Create token explicitly and save its display-once plaintext. Inspect its persisted metadata/scopes independently of this browser session.",
+      "Cancel Revoke token to preserve it. A rejected confirmed revocation retains the row and warns that the write is unconfirmed; inspect and retry deliberately.",
+      "Confirmed revocation removes only the owned token. Unknown or foreign token IDs are not usable resources."
+    ],
+    "prerequisites": [
+      "An authenticated owner of the account."
+    ],
+    "warnings": [
+      "A personal API token is separate from the browser session. Its abilities never bypass ownership, Admin, entitlement, TOTP or execution-safety checks. Plaintext is shown only at creation; store it privately. Prefer only the abilities needed for the intended integration."
+    ]
+  },
+  {
     "id": "E2E-01",
     "title": "How do I new idea to first BUY?",
     "aliases": [
@@ -2074,6 +2179,115 @@ export const JOURNEY_TOPICS = Object.freeze([
     "warnings": [
       "The note belongs to its owner, route context and active Portfolio where applicable. It is personal research, not shared advice or a trading instruction."
     ]
+  },
+  {
+    "id": "E2E-46",
+    "title": "How do I recover Portfolio settings without overwriting unknown safeguards?",
+    "aliases": [
+      "Recover Portfolio settings without overwriting unknown safeguards",
+      "e2e-46"
+    ],
+    "keywords": [
+      "recover",
+      "portfolio",
+      "settings",
+      "without",
+      "overwriting",
+      "unknown",
+      "safeguards"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/settings/portfolio",
+    "guide": "/docs/journeys/17-account-delivery-settings.html#e2e-46-recover-portfolio-settings-without-overwriting-unknown-safeguards",
+    "steps": [
+      "Open Settings → Portfolio (`/settings/portfolio`). If the current configuration cannot be read, Retry Portfolio settings before saving; failed reads must not expose default-looking editable safeguards.",
+      "Inspect and deliberately edit the intended fields. Leave unrelated limits, notification schedules and daily Kite-readiness reminder settings intact.",
+      "Save portfolio settings explicitly. A rejected/unconfirmed write retains the draft and warns to inspect existing settings before retrying.",
+      "Retry deliberately, then inspect the confirmed values from the refreshed configuration. If the write succeeded but refresh failed, recover the read without assuming the saved state is absent.",
+      "Notification channels are configured through Settings → Notifications at account scope. The separate recall-period override and execution-mode/halt controls retain their existing explicit safeguards."
+    ],
+    "prerequisites": [
+      "An owned active Portfolio."
+    ],
+    "warnings": [
+      "Cash reserve, minimum actionable buy, position limits, lending and recall settings affect policy/capacity; they do not move cash or submit trades. Portfolio stop-loss and trailing-stop fields retain their accepted classic Portfolio meanings; Strategy ATR policy is configured separately."
+    ]
+  },
+  {
+    "id": "E2E-47",
+    "title": "How do I maintain verified notification channels and recipient ownership?",
+    "aliases": [
+      "Maintain verified notification channels and recipient ownership",
+      "e2e-47"
+    ],
+    "keywords": [
+      "maintain",
+      "verified",
+      "notification",
+      "channels",
+      "and",
+      "recipient",
+      "ownership"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/settings/notifications",
+    "guide": "/docs/journeys/17-account-delivery-settings.html#e2e-47-maintain-verified-notification-channels-and-recipient-ownership",
+    "steps": [
+      "Open Settings → Notifications (`/settings/notifications`). An unavailable read offers Retry and hides default-looking channel controls.",
+      "Inspect Telegram, Email and Webhook health. Configure the intended channel explicitly. An existing hidden Telegram bot token is preserved when its replacement field is blank.",
+      "Save a channel. Failure retains the entered destination/settings. While an operation is pending, other channel/recipient mutations remain disabled to avoid overlapping writes.",
+      "Test channel deliberately on the intended authorized destination. Failed verification is distinct from healthy/verified status; inspect and retry. Enable and Save only after the current configuration is eligible.",
+      "Add an additional email recipient. A failed addition retains the address; a confirmed addition remains verification pending until the signed verification flow completes. The account email is retained and cannot be removed here.",
+      "Remove only an optional recipient deliberately. A failed removal retains it for recovery; success preserves the account destination.",
+      "Webhook requires HTTPS. Correct rejected input and retry. Copy the signing secret shown once at the governed creation/test point; later configuration shows only that the secret is configured/hidden.",
+      "Optional product-email preferences are a separate explicit save flow (E2E-17). Failed delivery through one channel does not fabricate success through another."
+    ],
+    "prerequisites": [
+      "An authenticated account with permission to manage its own channels."
+    ],
+    "warnings": [
+      "Test channel may send a real provider message when used in production. Only execute it with an authorized destination. Automated journeys use isolated synthetic localhost responses and qualify no actual delivery. External channels require enabled, verified configuration; in-app history remains available independently."
+    ]
+  },
+  {
+    "id": "E2E-48",
+    "title": "How do I customize, persist and recover a named Dashboard layout?",
+    "aliases": [
+      "Customize, persist and recover a named Dashboard layout",
+      "e2e-48"
+    ],
+    "keywords": [
+      "customize",
+      "persist",
+      "and",
+      "recover",
+      "named",
+      "dashboard",
+      "layout"
+    ],
+    "synonyms": [
+      "customize dashboard",
+      "named dashboard",
+      "default dashboard",
+      "layout recovery."
+    ],
+    "category": "StoX",
+    "route": "/",
+    "guide": "/docs/journeys/08-investor-overview-alerts.html#e2e-48-customize-persist-and-recover-a-named-dashboard-layout",
+    "steps": [
+      "Open the Dashboard at `/` and choose Customize under Dashboard layout. Select the Desktop or Mobile variant, then review which summary fields and cards are visible, their order and supported size.",
+      "Required portfolio summary information cannot be hidden. Save the reviewed configuration as a named dashboard, or choose an existing named dashboard before editing it.",
+      "Named edits save after a short pause. If that save fails, the device-local layout remains available and the toolbar shows Failed. Choose Retry named dashboard save explicitly; do not treat the local copy as confirmed account persistence.",
+      "If the named-dashboard list is unavailable, retry the list read. An unavailable list is not an empty list and blocks selection/default decisions until recovered.",
+      "Choose Set default for the reviewed named layout. If confirmation fails, keep the same selection and retry. Confirm the server-accepted record is labelled default.",
+      "Lock the layout when accidental editing should be prevented. Export/import operates on the layout definition only; compatibility adjustments must be disclosed, and importing never changes portfolio, transaction or broker state."
+    ],
+    "prerequisites": [
+      "an authenticated investor with an active portfolio."
+    ],
+    "warnings": []
   },
   {
     "id": "EXE-01",

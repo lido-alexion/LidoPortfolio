@@ -77,6 +77,12 @@ export default function SettingsPage() {
     const [sessions, setSessions] = useState([]);
     const [status, setStatus] = useState('');
     const [sessionsLoading, setSessionsLoading] = useState(true);
+    const [sessionsError, setSessionsError] = useState('');
+    const [sessionBusy, setSessionBusy] = useState(false);
+    const [settingsLoadError, setSettingsLoadError] = useState('');
+    const [settingsLoading, setSettingsLoading] = useState(true);
+    const [settingsSaveError, setSettingsSaveError] = useState('');
+    const [settingsSaving, setSettingsSaving] = useState(false);
     const [cronTimeTouched, setCronTimeTouched] = useState(false);
     const [scheduleTouched, setScheduleTouched] = useState({});
     const [feeSectionOpen, setFeeSectionOpen] = useState(false);
@@ -117,6 +123,8 @@ export default function SettingsPage() {
     const canSavePortfolio = !notificationSchedulesInvalid;
 
     const loadSettings = async () => {
+        setSettingsLoading(true); setSettingsLoadError('');
+        try {
         const res = await api.get('/settings');
         const data = res.data.data || {};
         const rateRaw = data.opportunity_cost_rate;
@@ -133,6 +141,8 @@ export default function SettingsPage() {
             fee_components: normalizeFeeComponents(data.fee_components),
             external_stock_links: normalizeExternalStockLinks(data.external_stock_links),
         });
+        } catch { setSettingsLoadError('Portfolio settings could not be loaded. Retry before saving.'); }
+        finally { setSettingsLoading(false); }
     };
 
     const loadRecallPeriod = async () => {
@@ -173,11 +183,11 @@ export default function SettingsPage() {
     };
 
     const loadSessions = async () => {
-        setSessionsLoading(true);
+        setSessionsLoading(true); setSessionsError('');
         try {
             const res = await api.get('/auth/sessions');
             setSessions(res.data.data || []);
-        } finally {
+        } catch { setSessionsError('Active sessions could not be loaded. Please retry.'); } finally {
             setSessionsLoading(false);
         }
     };
@@ -246,6 +256,9 @@ export default function SettingsPage() {
             .map((t) => t?.trim())
             .filter((t) => t && isValidCronTime(t));
 
+        if (settingsSaving || settingsLoading || settingsLoadError) return;
+        setSettingsSaving(true); setSettingsSaveError('');
+        try {
         await api.put('/settings', {
             default_stoploss_percent: settings.default_stoploss_percent,
             portfolio_trailing_percent: settings.portfolio_trailing_percent,
@@ -281,12 +294,16 @@ export default function SettingsPage() {
         await loadSettings();
         setStatus('Portfolio settings saved');
         showToast('Portfolio settings saved');
+        } catch { setSettingsSaveError('Portfolio settings could not be confirmed. Review existing settings before retrying.'); }
+        finally { setSettingsSaving(false); }
     };
 
     const logoutOthers = async () => {
-        await api.post('/auth/sessions/logout-others');
-        showToast('Other devices logged out');
-        await loadSessions();
+        if (sessionBusy) return;
+        setSessionBusy(true); setSessionsError('');
+        try { await api.post('/auth/sessions/logout-others'); showToast('Other devices logged out'); await loadSessions(); }
+        catch { setSessionsError('Other-session logout could not be confirmed. Review the current sessions before retrying.'); }
+        finally { setSessionBusy(false); }
     };
 
     const runOpsAlertCheck = async () => {
@@ -314,14 +331,17 @@ export default function SettingsPage() {
     };
 
     const revokeSession = async (sessionId, isCurrent) => {
-        if (isCurrent) {
-            await logout();
-            window.location.href = '/';
-            return;
-        }
-        await api.delete(`/auth/sessions/${sessionId}`);
-        showToast('Session revoked');
-        await loadSessions();
+        if (sessionBusy) return;
+        setSessionBusy(true); setSessionsError('');
+        try {
+            if (isCurrent) {
+                const ended = await logout();
+                if (ended === false) { setSessionsError('Current-session logout could not be confirmed. Please retry.'); return; }
+                window.location.href = '/'; return;
+            }
+            await api.delete(`/auth/sessions/${sessionId}`); showToast('Session revoked'); await loadSessions();
+        } catch { setSessionsError('Session revocation could not be confirmed. Review the current sessions before retrying.'); }
+        finally { setSessionBusy(false); }
     };
 
     const scopeTabs = [
@@ -632,7 +652,7 @@ export default function SettingsPage() {
                 </form>
             )}
 
-            {activeScope === 'portfolio' && (
+            {activeScope === 'portfolio' && (settingsLoading ? <p className="text-muted">Loading Portfolio settings…</p> : settingsLoadError ? <div className="alert alert-danger" role="alert"><p>{settingsLoadError}</p><button type="button" className="btn btn-sm btn-outline-primary" onClick={loadSettings}>Retry Portfolio settings</button></div> : (
                 <>
                     <ExecutionModePanel />
                     <div className="card">
@@ -647,6 +667,7 @@ export default function SettingsPage() {
                         </div>
                     </div>
                     <form className="d-grid gap-3" onSubmit={savePortfolioSettings}>
+                    {settingsSaveError && <div className="alert alert-danger" role="alert">{settingsSaveError}</div>}
                     <div className="card">
                         <div className="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
                             <span>Portfolio settings</span>
@@ -1000,7 +1021,7 @@ export default function SettingsPage() {
                                     </p>
                                 </div>
                                 <div className="col-12">
-                                    <button className="btn btn-primary" type="submit" disabled={!canSavePortfolio}>
+                                    <button className="btn btn-primary" type="submit" disabled={!canSavePortfolio || settingsSaving}>
                                         Save portfolio settings
                                     </button>
                                     {status && activeScope === 'portfolio' && (
@@ -1012,7 +1033,7 @@ export default function SettingsPage() {
                     </div>
                 </form>
                 </>
-            )}
+            ))}
 
             {activeScope === 'account' && (
                 <div className="d-grid gap-3">
@@ -1039,7 +1060,7 @@ export default function SettingsPage() {
                     <div className="card">
                         <div className="card-header d-flex justify-content-between align-items-center">
                             <span>Active sessions</span>
-                            <button type="button" className="btn btn-sm btn-outline-danger" onClick={logoutOthers}>
+                            <button type="button" className="btn btn-sm btn-outline-danger" disabled={sessionBusy || sessionsLoading || Boolean(sessionsError)} onClick={logoutOthers}>
                                 Log out other devices
                             </button>
                         </div>
@@ -1047,9 +1068,10 @@ export default function SettingsPage() {
                             <p className="text-muted small">
                                 Each browser or device keeps its own session. You can stay signed in on laptop and mobile at the same time.
                             </p>
+                            {sessionsError && <div className="alert alert-danger" role="alert"><p>{sessionsError}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={sessionBusy || sessionsLoading} onClick={loadSessions}>Retry active sessions</button></div>}
                             {sessionsLoading ? (
                                 <div className="text-muted">Loading sessions…</div>
-                            ) : sessions.length === 0 ? (
+                            ) : sessions.length === 0 && !sessionsError ? (
                                 <div className="text-muted">No active sessions found.</div>
                             ) : (
                                 <div className="table-responsive">
@@ -1079,6 +1101,7 @@ export default function SettingsPage() {
                                                         <button
                                                             type="button"
                                                             className="btn btn-sm btn-outline-secondary"
+                                                            disabled={sessionBusy || sessionsLoading}
                                                             onClick={() => revokeSession(session.id, session.is_current)}
                                                         >
                                                             {session.is_current ? 'Log out' : 'Revoke'}

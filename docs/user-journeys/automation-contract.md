@@ -25,7 +25,7 @@ production smoke remains non-destructive and separate from deterministic CI.
 | `05-end-to-end.md` | `E2E-*` | `app/tests/e2e/` |
 | `06-assistant.md` | `AI-01`–`AI-09` | `app/tests/e2e/assistant.spec.js`, `assistant-agent.spec.js`, and `embedded-ai.spec.js` |
 | `07-supporting-investor.md` | `E2E-09`–`E2E-13` | `app/tests/e2e/supporting-investor-journeys.spec.js` |
-| `08-investor-overview-alerts.md` | `E2E-14`–`E2E-17` | `app/tests/e2e/investor-overview-journeys.spec.js` and `optional-email-recovery.spec.js` |
+| `08-investor-overview-alerts.md` | `E2E-14`–`E2E-17`, `E2E-48` | `app/tests/e2e/investor-overview-journeys.spec.js` and `optional-email-recovery.spec.js` |
 | `11-historical-analysis.md` | `E2E-23`–`E2E-24` | `app/tests/e2e/historical-analysis-journeys.spec.js` |
 | `10-portfolio-cash.md` | `E2E-20`–`E2E-22` | `app/tests/e2e/portfolio-cash-journeys.spec.js` |
 | `09-data-export.md` | `E2E-18`–`E2E-19` | `app/tests/e2e/export-journeys.spec.js` |
@@ -36,3 +36,7 @@ production smoke remains non-destructive and separate from deterministic CI.
 | `16-personal-knowledge-calendar.md` | `E2E-40`–`E2E-45` | `app/tests/e2e/personal-knowledge-calendar-journeys.spec.js`; API/domain evidence remains separately covered by KnowledgeBoardTest, KnowledgeBoardImageTest, V5WikiFoundationTest, V6ContextualNotesTest and CalendarEventTest |
 
 Personal-knowledge journeys exercise real desktop/mobile controls against strictly bounded localhost fixtures. Synthetic public capabilities, page images, export transport, recurrence occurrences, holidays and reminder settings are UI evidence only; they do not qualify production sharing, ZIP structure, official holiday sources or provider delivery. Failed private reads are never treated as confirmed empty/missing, unknown contextual-note reads block Save, and delayed Wiki responses cannot replace another Portfolio's content.
+
+| `00-account-entry.md`, `17-account-delivery-settings.md` | `AUTH-09`–`AUTH-11`, `E2E-46`–`E2E-47` | `app/tests/e2e/account-channel-journeys.spec.js`; backend ownership/proof/delivery evidence remains independent in AuthSessionTest, TotpFlowTest, V6PersonalApiTokenTest and NotificationSettingsApiTest |
+
+Account authority/delivery journeys use only synthetic localhost sessions, execution codes, recovery codes, tokens, destinations and channel responses. No actual credential is created/revoked, no provider message is sent, and no OTP/token/notification outcome qualifies real trading or provider authority. Display-once values are visibly marked synthetic; real production smoke remains read-only.

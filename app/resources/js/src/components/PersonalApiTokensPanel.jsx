@@ -18,14 +18,19 @@ export default function PersonalApiTokensPanel() {
     const [abilities, setAbilities] = useState(['portfolio:read']);
     const [plainToken, setPlainToken] = useState('');
     const [busy, setBusy] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
+    const [actionError, setActionError] = useState('');
 
     const load = useCallback(async () => {
-        const response = await api.get('/personal-api-tokens');
-        setTokens(response.data?.data || []);
+        setLoading(true); setLoadError('');
+        try { const response = await api.get('/personal-api-tokens'); setTokens(response.data?.data || []); }
+        catch { setLoadError('Personal API tokens could not be loaded. Please retry.'); }
+        finally { setLoading(false); }
     }, []);
 
     useEffect(() => {
-        load().catch(() => {});
+        load();
     }, [load]);
 
     const toggle = (scope) => {
@@ -53,14 +58,18 @@ export default function PersonalApiTokensPanel() {
     };
 
     const revoke = async (token) => {
-        if (!window.confirm(`Revoke "${token.name}"?`)) return;
-        await api.delete(`/personal-api-tokens/${token.id}`);
-        await load();
-        showToast('API token revoked');
+        if (busy || !window.confirm(`Revoke "${token.name}"?`)) return;
+        setBusy(true); setActionError('');
+        try {
+            await api.delete(`/personal-api-tokens/${token.id}`);
+            setTokens(current => current.filter(item => item.id !== token.id));
+            await load(); showToast('API token revoked');
+        } catch { setActionError('Token revocation could not be confirmed. Review the current list before retrying.'); }
+        finally { setBusy(false); }
     };
 
     return (
-        <div className="card">
+        <div className="card" role="region" aria-label="Personal API tokens">
             <div className="card-header d-flex align-items-center gap-2">
                 <KeyRound size={16} />
                 <span>Personal API tokens</span>
@@ -72,8 +81,12 @@ export default function PersonalApiTokensPanel() {
                         <code className="d-block text-break">{plainToken}</code>
                     </div>
                 )}
+                {loading && <p className="text-muted">Loading personal API tokens…</p>}
+                {loadError && <div className="alert alert-danger" role="alert"><p>{loadError}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={busy || loading} onClick={load}>Retry personal API tokens</button></div>}
+                {actionError && <div className="alert alert-danger" role="alert">{actionError}</div>}
                 <form className="d-grid gap-2" onSubmit={create}>
-                    <input className="form-control form-control-sm" placeholder="Token name" value={name} onChange={(event) => setName(event.target.value)} maxLength={80} />
+                    <fieldset disabled={busy || loading || Boolean(loadError)} className="border-0 p-0 m-0 d-grid gap-2">
+                    <input className="form-control form-control-sm" aria-label="Token name" placeholder="Token name" value={name} onChange={(event) => setName(event.target.value)} maxLength={80} />
                     <div className="d-flex flex-wrap gap-2">
                         {SCOPES.map((scope) => (
                             <label key={scope} className="form-check form-check-inline small">
@@ -87,6 +100,7 @@ export default function PersonalApiTokensPanel() {
                             Create token
                         </button>
                     </div>
+                    </fieldset>
                 </form>
                 <div className="table-responsive">
                     <table className="table table-sm align-middle mb-0">
@@ -98,13 +112,13 @@ export default function PersonalApiTokensPanel() {
                                     <td>{(token.abilities || []).join(', ')}</td>
                                     <td>{token.last_used_at ? new Date(token.last_used_at).toLocaleString() : 'Never'}</td>
                                     <td className="text-end">
-                                        <button type="button" className="btn btn-outline-danger btn-sm" title="Revoke token" onClick={() => revoke(token)}>
+                                        <button type="button" className="btn btn-outline-danger btn-sm" aria-label="Revoke token" title="Revoke token" disabled={busy || loading || Boolean(loadError)} onClick={() => revoke(token)}>
                                             <Trash2 size={14} />
                                         </button>
                                     </td>
                                 </tr>
                             ))}
-                            {tokens.length === 0 && <tr><td colSpan="4" className="text-muted">No personal API tokens.</td></tr>}
+                            {!loading && !loadError && tokens.length === 0 && <tr><td colSpan="4" className="text-muted">No personal API tokens.</td></tr>}
                         </tbody>
                     </table>
                 </div>
