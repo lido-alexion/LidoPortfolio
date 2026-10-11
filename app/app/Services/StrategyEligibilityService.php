@@ -10,7 +10,9 @@ use App\Models\ScreenerRunHit;
 use App\Models\ScreenerVersion;
 use App\Models\StrategyScreener;
 use App\Models\TradingStrategyVersion;
+use App\Services\Artifacts\ArtifactStatus;
 use App\Services\Screener\ScreenerVersioningService;
+use Illuminate\Validation\ValidationException;
 
 /**
  * SD-030: Resolve Strategy eligibility exclusively via configured Screeners.
@@ -147,6 +149,11 @@ class StrategyEligibilityService
             }
             $seenScreeners[$screenerId] = true;
             $screener = Screener::query()->find($screenerId);
+            if (($row['enabled'] ?? true) && $screener?->artifact_status === ArtifactStatus::ARCHIVED) {
+                throw ValidationException::withMessages([
+                    'eligibility_sources' => 'Archived screeners cannot be added to an enabled Strategy. Choose an active screener instead.',
+                ]);
+            }
             $screenerVersionId = isset($row['screener_version_id'])
                 ? (int) $row['screener_version_id']
                 : null;
@@ -220,6 +227,15 @@ class StrategyEligibilityService
                 ->where('id', $screenerId)
                 ->ownedOrSameUserShared($profile)
                 ->first();
+
+            if ($screener?->artifact_status === ArtifactStatus::ARCHIVED) {
+                return [
+                    'mode' => 'provenance_unresolved',
+                    'eligible_security_ids' => [],
+                    'screeners' => [],
+                    'lookback_hours' => self::LOOKBACK_HOURS,
+                ];
+            }
 
             $name = $screener?->name ?? (string) ($source['screener_name'] ?? 'Screener #'.$screenerId);
             $run = null;
