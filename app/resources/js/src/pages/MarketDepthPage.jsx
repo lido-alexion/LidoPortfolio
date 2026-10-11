@@ -37,10 +37,12 @@ export default function MarketDepthPage() {
     const [chartSymbol, setChartSymbol] = useState('NIFTY50');
     const [enabledSeries, setEnabledSeries] = useState({});
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
 
     const load = useCallback(async (date, options = {}) => {
         const { updateChart = true } = options;
         setLoading(true);
+        setLoadError('');
         try {
             const params = {};
             if (date) {
@@ -55,6 +57,7 @@ export default function MarketDepthPage() {
                 setChartSymbol(data.chart_symbol || 'NIFTY50');
             }
         } catch (e) {
+            setLoadError('Market breadth could not be loaded.');
             showToast(e?.response?.data?.message || e.message || 'Failed to load market depth', 'error');
             setMatrix(null);
             if (updateChart) {
@@ -89,7 +92,7 @@ export default function MarketDepthPage() {
         });
     }, [chartHistory, valueMode]);
 
-    const seriesKeys = matrix?.columns?.map((c) => c.key) ?? Object.keys(SERIES_COLORS);
+    const seriesKeys = useMemo(() => matrix?.columns?.map((c) => c.key) ?? Object.keys(SERIES_COLORS), [matrix]);
     const visibleSeriesKeys = useMemo(() => {
         if (!seriesKeys.length) {
             return [];
@@ -151,7 +154,7 @@ export default function MarketDepthPage() {
                 </div>
             </div>
 
-            {loading ? (
+            {loadError ? <div className="alert alert-danger" role="alert"><p>{loadError}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={() => load(selectedDate || undefined)}>Retry market breadth</button></div> : loading ? (
                 <div className="text-muted py-4">Loading market breadth…</div>
             ) : (
                 <>
@@ -249,7 +252,7 @@ export default function MarketDepthPage() {
                         <div className="text-muted">
                             No NSE indexes in this snapshot
                             {availableDates.length === 0
-                                ? '. Run cpanel-backfill-market-depth.php, then refresh.'
+                                ? '. Ask an administrator to review source coverage.'
                                 : '.'}
                         </div>
                     )}

@@ -61,7 +61,7 @@ function MetricCard({ title, children }) {
 
 export default function ReviewReportDetailPage() {
     const { id } = useParams();
-    const { data, loading, error } = useApiGet({
+    const { data, loading, error, reload } = useApiGet({
         errorFallback: 'Review report not found',
         deps: [id],
         request: async () => {
@@ -71,7 +71,7 @@ export default function ReviewReportDetailPage() {
     });
 
     const notFound = !loading && Boolean(error) && (
-        error?.response?.status === 404 || !data
+        error?.response?.status === 404
     );
     const report = notFound ? null : data;
     const metrics = metricsByName(report);
@@ -95,6 +95,8 @@ export default function ReviewReportDetailPage() {
 
             {loading && !report ? (
                 <p className="text-muted">Loading…</p>
+            ) : error && !notFound ? (
+                <div className="alert alert-danger" role="alert"><p>Review report could not be loaded. Please retry.</p><button type="button" className="btn btn-sm btn-outline-primary" onClick={reload}>Retry review report</button></div>
             ) : notFound ? (
                 <div data-testid="review-report-not-found">
                     <p className="text-muted">Review report not found.</p>

@@ -236,3 +236,13 @@ If this guide conflicts with an implemented/current product contract, correct th
 | E2E-32 | Optimistic Draft edits, exact dependency publication and forward history | [Versions](14-artifact-library-governance.md#e2e-32--save-and-publish-an-immutable-version-with-exact-dependencies) |
 | E2E-33 | Structural comparison, explicit binding/upgrade/enablement and archive | [Binding](14-artifact-library-governance.md#e2e-33--inspect-differences-and-explicitly-manage-a-portfolio-binding) |
 | E2E-34 | Fork shared source and explicitly confirm a transactional Bundle plan | [Distribution](14-artifact-library-governance.md#e2e-34--fork-shared-versions-and-confirm-a-transactional-bundle-plan) |
+
+### Research and persisted review
+
+| ID | Scenario | Detail |
+| --- | --- | --- |
+| E2E-35 | Read dated prices without sync authority | [Price history](15-research-persisted-review.md#e2e-35--read-dated-stock-price-history-without-sync-authority) |
+| E2E-36 | Recover index/history/constituent reads | [Indices](15-research-persisted-review.md#e2e-36--recover-index-research-and-retain-local-comparison-choices) |
+| E2E-37 | Inspect dated breadth and absent metrics | [Breadth](15-research-persisted-review.md#e2e-37--review-dated-market-breadth-with-unavailable-metrics-disclosed) |
+| E2E-38 | Separate observational review and new reports | [Review](15-research-persisted-review.md#e2e-38--separate-observational-review-from-persisted-report-generation) |
+| E2E-39 | Recover fundamentals and educational patterns | [Research](15-research-persisted-review.md#e2e-39--recover-fundamental-research-and-use-educational-pattern-references) |

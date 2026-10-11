@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import api from '../api';
+import api, { getApiErrorMessage } from '../api';
 import FundamentalInsightsSignals from '../components/FundamentalInsightsSignals';
 import StockAutocomplete from '../components/StockAutocomplete';
 import { ROUTES } from '../navigation/routes';
@@ -22,6 +22,7 @@ export default function FundamentalInsightsPage() {
     const [refreshingAi, setRefreshingAi] = useState(false);
     const [error, setError] = useState(null);
     const [snapshot, setSnapshot] = useState(null);
+    const [retryKey, setRetryKey] = useState(0);
 
     const loadInsights = useCallback(async (stockId) => {
         setLoading(true);
@@ -35,7 +36,7 @@ export default function FundamentalInsightsPage() {
             setSnapshot(res?.data?.data ?? res?.data ?? null);
         } catch (e) {
             setSnapshot(null);
-            setError(e?.response?.data?.error?.message || e.message || 'Failed to load fundamental insights');
+            setError(getApiErrorMessage(e, 'Failed to load fundamental insights'));
         } finally {
             setLoading(false);
             setRefreshingAi(false);
@@ -48,6 +49,7 @@ export default function FundamentalInsightsPage() {
             setSnapshot(null);
             return undefined;
         }
+        setError(null);
         let cancelled = false;
         (async () => {
             try {
@@ -67,12 +69,12 @@ export default function FundamentalInsightsPage() {
                 await loadInsights(match.id);
             } catch (e) {
                 if (!cancelled) {
-                    setError(e?.response?.data?.error?.message || e.message || 'Failed to resolve symbol');
+                    setError(getApiErrorMessage(e, 'Failed to resolve symbol'));
                 }
             }
         })();
         return () => { cancelled = true; };
-    }, [routeSymbol, loadInsights]);
+    }, [routeSymbol, loadInsights, retryKey]);
 
     const onStockPick = (picked) => {
         if (!picked?.symbol) return;
@@ -119,7 +121,7 @@ export default function FundamentalInsightsPage() {
             </div>
 
             {error ? (
-                <div className="alert alert-warning mt-3 py-2 small">{error}</div>
+                <div className="alert alert-warning mt-3 py-2 small" role="alert"><p>{error}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={() => setRetryKey(key => key + 1)}>Retry fundamental insights</button></div>
             ) : null}
 
             {loading && !snapshot ? (

@@ -27,7 +27,7 @@ function brokerStatusOf(order) {
 
 export default function ReviewDashboardPage() {
     const [reconcilingOrderId, setReconcilingOrderId] = useState(null);
-    const { data, loading, reload: load } = useApiGet({
+    const { data, loading, error, reload: load } = useApiGet({
         errorFallback: 'Failed to load review dashboard',
         request: async () => {
             const [d, o] = await Promise.all([
@@ -113,7 +113,7 @@ export default function ReviewDashboardPage() {
                 </div>
             </div>
 
-            {loading || !dash ? (
+            {error ? <div className="alert alert-danger" role="alert">Review dashboard could not be loaded. Use Refresh to retry.</div> : loading || !dash ? (
                 <p className="text-muted">Loading…</p>
             ) : (
                 <>

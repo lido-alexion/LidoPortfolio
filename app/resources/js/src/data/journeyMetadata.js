@@ -1680,6 +1680,179 @@ export const JOURNEY_TOPICS = Object.freeze([
     ]
   },
   {
+    "id": "E2E-35",
+    "title": "How do I read dated stock price history without sync authority?",
+    "aliases": [
+      "Read dated stock price history without sync authority",
+      "e2e-35"
+    ],
+    "keywords": [
+      "read",
+      "dated",
+      "stock",
+      "price",
+      "history",
+      "without",
+      "sync",
+      "authority"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/holdings/42/prices",
+    "guide": "/docs/journeys/15-research-persisted-review.html#e2e-35-read-dated-stock-price-history-without-sync-authority",
+    "steps": [
+      "Open `/holdings/42/prices` for the security being reviewed. A failed read offers Retry price history; unavailable data must not appear fetched.",
+      "Inspect dated OHLCV rows, source, chart, All history from and Since Buy from. All means available instrument history; Since Buy means the current position episode.",
+      "Switch All/Since Buy. A confirmed range with no cached prices stays empty/unavailable instead of inventing zero-priced bars.",
+      "Switch back to inspect the available range. Investors cannot use Force sync historical prices; request source-coverage review from an administrator when needed."
+    ],
+    "prerequisites": [
+      "An authenticated Investor and a known security."
+    ],
+    "warnings": [
+      "Price-history reads do not initiate a provider backfill or change the transaction ledger. Admin source repair is a separate governed action."
+    ]
+  },
+  {
+    "id": "E2E-36",
+    "title": "How do I recover index research and retain local comparison choices?",
+    "aliases": [
+      "Recover index research and retain local comparison choices",
+      "e2e-36"
+    ],
+    "keywords": [
+      "recover",
+      "index",
+      "research",
+      "and",
+      "retain",
+      "local",
+      "comparison",
+      "choices"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/indices",
+    "guide": "/docs/journeys/15-research-persisted-review.html#e2e-36-recover-index-research-and-retain-local-comparison-choices",
+    "steps": [
+      "Open `/indices`. If overview/comparison reads fail, choose Retry index data.",
+      "Use the Broad market/Sector legend to select available relative-performance series; inspect the dated baseline. Selection affects presentation only.",
+      "Expand an index to inspect exchange, latest dated close, cached range, session count and change periods.",
+      "If history is unavailable, choose Retry index history. An authoritative empty response differs from a failed read.",
+      "If constituent lookup fails, choose Retry index constituents. Filter the returned names/symbols; a constituent link leads to Watchlist research.",
+      "Collapse/reopen as needed. Global sync remains an administrator source-coverage responsibility."
+    ],
+    "prerequisites": [
+      "An authenticated Investor and available index master records."
+    ],
+    "warnings": [
+      "Missing benchmark history is not replaced with another index. Comparison selection is a Portfolio-scoped presentation preference, not a strategy or ledger change. VIX is excluded from relative-performance charts."
+    ]
+  },
+  {
+    "id": "E2E-37",
+    "title": "How do I review dated market breadth with unavailable metrics disclosed?",
+    "aliases": [
+      "Review dated market breadth with unavailable metrics disclosed",
+      "e2e-37"
+    ],
+    "keywords": [
+      "review",
+      "dated",
+      "market",
+      "breadth",
+      "with",
+      "unavailable",
+      "metrics",
+      "disclosed"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/market-depth",
+    "guide": "/docs/journeys/15-research-persisted-review.html#e2e-37-review-dated-market-breadth-with-unavailable-metrics-disclosed",
+    "steps": [
+      "Open `/market-depth`. An unavailable read offers Retry market breadth rather than claiming that no snapshots exist.",
+      "Review Date and the snapshot matrix. Choose percent or Count using Values; these are two views of the same observed evidence.",
+      "Choose another available date. Missing metrics display an unavailable dash in both modes, not an invented zero.",
+      "Inspect available history/series independently of the selected matrix date. If no snapshots are authoritatively returned, request administrator source-coverage review."
+    ],
+    "prerequisites": [
+      "An authenticated Investor and cached market-breadth snapshots."
+    ],
+    "warnings": [
+      "Cached market breadth is observational research, not a live execution quote. Investor UI must not instruct users to execute server backfill scripts."
+    ]
+  },
+  {
+    "id": "E2E-38",
+    "title": "How do I separate observational review from persisted report generation?",
+    "aliases": [
+      "Separate observational review from persisted report generation",
+      "e2e-38"
+    ],
+    "keywords": [
+      "separate",
+      "observational",
+      "review",
+      "from",
+      "persisted",
+      "report",
+      "generation"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/review",
+    "guide": "/docs/journeys/15-research-persisted-review.html#e2e-38-separate-observational-review-from-persisted-report-generation",
+    "steps": [
+      "Open `/review`. Failed reads stop loading and offer recovery through Refresh; this observational path does not execute, cancel or reconcile an order.",
+      "Choose Reports to open stored report history. An unavailable list offers Retry rather than claiming no reports exist.",
+      "Open a report and inspect its immutable ID, period, generation/status, persisted metrics and methodology. An unavailable detail offers Retry review report; only an authoritative missing report is labelled not found.",
+      "Return to reports. Enter optional From/To and choose Generate deliberately. Failure retains the chosen period; retry creates/opens the separately identified report.",
+      "Verify the new report period and inspect methodology. Original report/source identity remains intact; browser fixtures do not qualify the actual ReviewEngine calculation."
+    ],
+    "prerequisites": [
+      "An owned Portfolio and permission to read/generate its review reports."
+    ],
+    "warnings": [
+      "Accepted recommendations are not executed transactions. A stored ReviewEngine snapshot is separate from the live Review dashboard; generating a new report must not rewrite old source/report evidence."
+    ]
+  },
+  {
+    "id": "E2E-39",
+    "title": "How do I recover fundamental research and use educational pattern references?",
+    "aliases": [
+      "Recover fundamental research and use educational pattern references",
+      "e2e-39"
+    ],
+    "keywords": [
+      "recover",
+      "fundamental",
+      "research",
+      "and",
+      "use",
+      "educational",
+      "pattern",
+      "references"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/fundamentals/insights/TCS",
+    "guide": "/docs/journeys/15-research-persisted-review.html#e2e-39-recover-fundamental-research-and-use-educational-pattern-references",
+    "steps": [
+      "Open `/fundamentals/insights/TCS` for the intended security. Retry fundamental insights repeats ordinary symbol/evidence reads after a failed resolution or payload read.",
+      "Inspect the security identity, As of date, Freshness, deterministic evidence and any optional AI limitations. Missing insight content is disclosed separately.",
+      "Use Full fundamentals on Watchlist for deeper research. Refresh AI insights is an explicit optional interpretation action, not order execution.",
+      "Open `/patterns`, review the educational notice and select Chart patterns/Candlesticks. Filter names/characteristics and clear an unmatched filter to recover the reference list.",
+      "Reopen the guide to retain the local section choice. Pattern links identify a reference entry; they do not submit a recommendation or transaction."
+    ],
+    "prerequisites": [
+      "An authenticated Investor and a resolvable security symbol."
+    ],
+    "warnings": [
+      "Fundamentals and patterns are research, not investment advice or permission to trade. Deterministic evidence and optional AI interpretation have separate sufficiency/freshness; an absent AI or insight payload does not erase valid evidence or invent a signal."
+    ]
+  },
+  {
     "id": "EXE-01",
     "title": "How do I execute an approved recommendation manually?",
     "aliases": [

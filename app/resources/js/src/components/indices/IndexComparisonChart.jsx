@@ -183,7 +183,7 @@ export default function IndexComparisonChart({ comparison, indexes = [], loading
                     <div className="text-muted small py-4 text-center">Loading comparison chart…</div>
                 ) : chartData.length === 0 && indexes.length === 0 ? (
                     <div className="text-muted small py-4 text-center">
-                        No index price history available yet. Run market index sync in Settings.
+                        No index price history is available. Ask an administrator to review source coverage.
                     </div>
                 ) : (
                     <>
