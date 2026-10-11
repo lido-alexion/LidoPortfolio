@@ -22,7 +22,7 @@ try {
         const request = route.request();
         const method = request.method();
         const url = request.url();
-        if (neutralizeProductionSmokeRequest(method, url, baseURL)) {
+        if (neutralizeProductionSmokeRequest(method, url, baseURL, request.postData())) {
             return route.fulfill({ status: 204 });
         }
         if (!allowProductionSmokeRequest(method, url, baseURL, { login })) {

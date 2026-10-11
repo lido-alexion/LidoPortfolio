@@ -36,13 +36,17 @@ test('production smoke permits actual same-origin telemetry relays without admit
 
 
 test('automatic guided-tour persistence is answered in-browser without admitting a production write', () => {
-    assert.equal(neutralized('PUT', `${base}/api/guided-tour`, base), true);
-    assert.equal(neutralized('PUT', `${base}/api/guided-tour?source=welcome`, base), true);
-    assert.equal(neutralized('GET', `${base}/api/guided-tour`, base), false);
-    assert.equal(neutralized('POST', `${base}/api/guided-tour`, base), false);
-    assert.equal(neutralized('PUT', `${base}/api/guided-tour/reset`, base), false);
-    assert.equal(neutralized('PUT', 'https://broker.example.test/api/guided-tour', base), false);
-    assert.equal(neutralized('PUT', `${base}/api/transactions`, base), false);
+    const welcome = JSON.stringify({ action: 'record_welcome_shown' });
+    assert.equal(neutralized('PUT', `${base}/api/guided-tour`, base, welcome), true);
+    assert.equal(neutralized('PUT', `${base}/api/guided-tour?source=welcome`, base, welcome), true);
+    for (const body of [null, '', '{', 'null', '[]', '{}', JSON.stringify({ action: 'complete' }), JSON.stringify({ action: 'begin' }), JSON.stringify({ action: 'record_welcome_shown', step_id: 'review' })]) {
+        assert.equal(neutralized('PUT', `${base}/api/guided-tour`, base, body), false);
+    }
+    assert.equal(neutralized('GET', `${base}/api/guided-tour`, base, welcome), false);
+    assert.equal(neutralized('POST', `${base}/api/guided-tour`, base, welcome), false);
+    assert.equal(neutralized('PUT', `${base}/api/guided-tour/reset`, base, welcome), false);
+    assert.equal(neutralized('PUT', 'https://broker.example.test/api/guided-tour', base, welcome), false);
+    assert.equal(neutralized('PUT', `${base}/api/transactions`, base, welcome), false);
 });
 
 

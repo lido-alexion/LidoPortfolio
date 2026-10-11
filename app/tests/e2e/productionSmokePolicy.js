@@ -9,12 +9,17 @@ export function allowProductionSmokeRequest(method, url, baseUrl, { login = fals
 }
 
 
-/** Keep automatic preference persistence inside the browser instead of mutating production. */
-export function neutralizeProductionSmokeRequest(method, url, baseUrl) {
+/** Only the known automatic welcome counter is answered locally during smoke setup. */
+export function neutralizeProductionSmokeRequest(method, url, baseUrl, body) {
     const target = new URL(url);
-    return target.origin === new URL(baseUrl).origin
-        && method === 'PUT'
-        && target.pathname === '/api/guided-tour';
+    if (target.origin !== new URL(baseUrl).origin || method !== 'PUT' || target.pathname !== '/api/guided-tour') return false;
+    try {
+        const data = JSON.parse(body);
+        return data !== null && typeof data === 'object' && !Array.isArray(data)
+            && Object.keys(data).length === 1 && data.action === 'record_welcome_shown';
+    } catch {
+        return false;
+    }
 }
 
 
