@@ -117,4 +117,41 @@
 <p>5. Where needed, resend verification for a still-active unverified request, or use Ignore/Reject with an internal reason. Applicant-facing messages must not disclose the internal reason or ban details.</p>
 
 <p>**Expected result:** Admin controls approval, invitation capability and audit history. Verification is advisory, while invitation expiry/single-use, abuse controls and authorization remain authoritative. Queue delivery and actual mailbox receipt need separate runtime evidence.</p>
+<h2 id="auth-09-recover-owned-session-management-without-losing-this-device">AUTH-09 — Recover owned session management without losing this device</h2>
+
+<p>- Requires: An authenticated account.</p>
+<p>- Warning: Revoke invalidates the selected non-current session. Log out other devices preserves this device. The current Log out action follows AUTH-03 and clears local authority.</p>
+
+<p>1. Open Settings → Account (`/settings/account`) and inspect Active sessions. Retry active sessions recovers an unavailable list; failure is not a confirmed empty account.</p>
+<p>2. Identify This device and the intended other device. Revoke the non-current session explicitly. An unconfirmed failure retains its row and permits deliberate retry after inspection.</p>
+<p>3. Use Log out other devices to revoke the remaining non-current sessions. Failure preserves displayed evidence and provides read recovery before retry.</p>
+<p>4. Confirm that This device remains active after successful other-session revocation. Foreign account sessions are never available to this workflow.</p>
+
+<p>**Expected result:** Session recovery preserves user ownership and separates this device from targeted/other-session revocation.</p>
+
+<h2 id="auth-10-recover-stox-execution-code-enrollment-without-broker-authority">AUTH-10 — Recover StoX execution-code enrollment without broker authority</h2>
+
+<p>- Requires: An authenticated account and an authenticator app.</p>
+<p>- Warning: A StoX execution code provides sensitive-action proof; it does not grant entitlement, broker readiness or permission to submit an order. Kite login OTPs are entered only on Kite/Zerodha. Recovery codes are separate one-time backups and must be stored privately.</p>
+
+<p>1. Open Settings → Account (`/settings/account`) → StoX execution code. If current status is unavailable, Retry execution-code status before changing enrollment; unknown state must not appear unconfigured.</p>
+<p>2. Set up StoX execution code deliberately. A rejected request preserves existing enrollment state. Retry to provision the pending QR/secret.</p>
+<p>3. Enter an optional Authenticator app name and current code, then Confirm. Rejected proof retains entered setup fields for correction/retry.</p>
+<p>4. After confirmed activation, save the newly issued one-time StoX recovery codes. If the follow-up status read fails, codes remain available and Retry execution-code status recovers the authoritative enabled state.</p>
+<p>5. To Disable, provide the identified current proof and submit deliberately. Rejected proof preserves enabled state and entered draft; confirmed disable clears active/pending state and displayed recovery codes.</p>
+
+<p>**Expected result:** Enrollment/confirmation/disable failures are recoverable and remain separate from trading authority or broker login.</p>
+
+<h2 id="auth-11-create-and-revoke-personal-api-tokens-with-limited-scope">AUTH-11 — Create and revoke personal API tokens with limited scope</h2>
+
+<p>- Requires: An authenticated owner of the account.</p>
+<p>- Warning: A personal API token is separate from the browser session. Its abilities never bypass ownership, Admin, entitlement, TOTP or execution-safety checks. Plaintext is shown only at creation; store it privately. Prefer only the abilities needed for the intended integration.</p>
+
+<p>1. Open Settings → Account (`/settings/account`) → Personal API tokens. Retry personal API tokens recovers an unavailable list; failure is not a confirmed empty list.</p>
+<p>2. Enter Token name and select abilities deliberately. A blank name or no ability cannot be submitted. A rejected creation retains the name/selection for correction/retry.</p>
+<p>3. Create token explicitly and save its display-once plaintext. Inspect its persisted metadata/scopes independently of this browser session.</p>
+<p>4. Cancel Revoke token to preserve it. A rejected confirmed revocation retains the row and warns that the write is unconfirmed; inspect and retry deliberately.</p>
+<p>5. Confirmed revocation removes only the owned token. Unknown or foreign token IDs are not usable resources.</p>
+
+<p>**Expected result:** Token recovery preserves least-privilege selection, owner boundaries, display-once secret handling and explicit revocation.</p>
 </body></html>

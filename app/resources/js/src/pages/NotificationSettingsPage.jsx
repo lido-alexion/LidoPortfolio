@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import api from '../api';
 import { showToast } from '../toast';
 import DataState from '../components/DataState';
@@ -14,6 +14,9 @@ export default function NotificationSettingsPage() {
     const [forms, setForms] = useState(defaults);
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(null);
+    const busyRef = useRef(null);
+    const beginOperation = key => { if (busyRef.current !== null) return false; busyRef.current = key; setBusy(key); return true; };
+    const endOperation = () => { busyRef.current = null; setBusy(null); };
     const [emailDestinations, setEmailDestinations] = useState([]);
     const [additionalEmail, setAdditionalEmail] = useState('');
     const [loadError, setLoadError] = useState(null);
@@ -42,7 +45,7 @@ export default function NotificationSettingsPage() {
     };
 
     const saveOptionalPreferences = async () => {
-        setBusy('optional-email-preferences');
+        if (!beginOperation('optional-email-preferences')) return;
         try {
             const response = await api.put('/notification-settings/optional-emails', optionalPrefs, { skipErrorToast: true });
             setOptionalPrefs(response.data?.data || optionalPrefs);
@@ -50,13 +53,13 @@ export default function NotificationSettingsPage() {
         } catch (error) {
             showToast(error.response?.data?.message || 'Could not save optional email preferences.', 'danger');
         } finally {
-            setBusy(null);
+            endOperation();
         }
     };
 
     const addEmailDestination = async (event) => {
         event.preventDefault();
-        setBusy('email-destination');
+        if (!beginOperation('email-destination')) return;
         try {
             await api.post('/notification-settings/email-destinations', { email: additionalEmail }, { skipErrorToast: true });
             setAdditionalEmail('');
@@ -65,12 +68,12 @@ export default function NotificationSettingsPage() {
         } catch (error) {
             showToast(error.response?.data?.message || 'Could not add email recipient.', 'danger');
         } finally {
-            setBusy(null);
+            endOperation();
         }
     };
 
     const removeEmailDestination = async (id) => {
-        setBusy(`email-destination-${id}`);
+        if (!beginOperation(`email-destination-${id}`)) return;
         try {
             await api.delete(`/notification-settings/email-destinations/${id}`, { skipErrorToast: true });
             showToast('Email recipient removed.', 'success');
@@ -78,14 +81,14 @@ export default function NotificationSettingsPage() {
         } catch (error) {
             showToast(error.response?.data?.message || 'Could not remove email recipient.', 'danger');
         } finally {
-            setBusy(null);
+            endOperation();
         }
     };
 
     useEffect(() => { load(); }, []);
 
     const save = async (channel) => {
-        setBusy(channel);
+        if (!beginOperation(channel)) return;
         try {
             const payload = { ...forms[channel] };
             if (channel === 'telegram' && !payload.bot_token && channels.find((item) => item.channel === channel)?.bot_token_configured) {
@@ -101,12 +104,12 @@ export default function NotificationSettingsPage() {
         } catch (error) {
             showToast(error.response?.data?.message || `Could not save ${channel} settings.`, 'danger');
         } finally {
-            setBusy(null);
+            endOperation();
         }
     };
 
     const test = async (channel) => {
-        setBusy(`${channel}-test`);
+        if (!beginOperation(`${channel}-test`)) return;
         try {
             const response = await api.post(`/notification-settings/${channel}/test`, null, { skipErrorToast: true });
             showToast(response.data?.data?.message || 'Channel verified.', 'success');
@@ -114,7 +117,7 @@ export default function NotificationSettingsPage() {
         } catch (error) {
             showToast(error.response?.data?.message || 'Channel test failed.', 'danger');
         } finally {
-            setBusy(null);
+            endOperation();
         }
     };
 
@@ -133,6 +136,8 @@ export default function NotificationSettingsPage() {
 
     return (
         <div className="container-fluid py-3">
+            <fieldset disabled={Boolean(busy)} className="border-0 p-0 m-0">
+            <legend className="visually-hidden">Notification delivery settings</legend>
             <h1 className="h3 mb-1">Notification Settings</h1>
             <p className="text-muted small mb-4">Configure account-level delivery channels. In-app notifications are always enabled.</p>
             <section className="card mb-3" aria-labelledby="optional-email-heading">
@@ -156,7 +161,7 @@ export default function NotificationSettingsPage() {
                         </span>)}
                     </div>
                     <form className="d-flex gap-2" onSubmit={addEmailDestination}>
-                        <input type="email" className="form-control" value={additionalEmail} onChange={(event) => setAdditionalEmail(event.target.value)} placeholder="alerts@example.com" required />
+                        <input aria-label="Additional email recipient" type="email" className="form-control" value={additionalEmail} onChange={(event) => setAdditionalEmail(event.target.value)} placeholder="alerts@example.com" required />
                         <button type="submit" className="btn btn-outline-primary" disabled={busy === 'email-destination'}>Add</button>
                     </form>
                 </div>
@@ -171,10 +176,10 @@ export default function NotificationSettingsPage() {
                             : !!(form.url || channel.url);
                     return (
                         <div className="col-12 col-xl-4" key={channel.channel}>
-                            <section className="card h-100">
+                            <section className="card h-100" aria-labelledby={`notification-channel-${channel.channel}`}>
                                 <div className="card-body">
                                     <div className="d-flex justify-content-between align-items-start mb-3">
-                                        <h2 className="h5 text-capitalize mb-0">{channel.channel}</h2>
+                                        <h2 id={`notification-channel-${channel.channel}`} className="h5 text-capitalize mb-0">{channel.channel}</h2>
                                         <span className={`badge ${channel.health_status === 'healthy' ? 'text-bg-success' : 'text-bg-secondary'}`}>{channel.health_status}</span>
                                     </div>
                                     {channel.channel === 'telegram' && <>
@@ -200,6 +205,7 @@ export default function NotificationSettingsPage() {
                     );
                 })}
             </div>
+            </fieldset>
         </div>
     );
 }
