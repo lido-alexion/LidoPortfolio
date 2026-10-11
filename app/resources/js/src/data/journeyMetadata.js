@@ -1005,10 +1005,10 @@ export const JOURNEY_TOPICS = Object.freeze([
       "evaluate alerts."
     ],
     "category": "StoX",
-    "route": "/alert-policies",
+    "route": "/settings/alert-policies",
     "guide": "/docs/journeys/08-investor-overview-alerts.html#e2e-16-maintain-and-evaluate-an-advisory-alert-policy",
     "steps": [
-      "Open Alert policies at `/alert-policies` and choose New policy.",
+      "Open Alert policies at `/settings/alert-policies` and choose New policy.",
       "Name the policy, describe its intent, define its holding-value comparison, message and suggested action, then create it. Correct validation errors or retry a transient failure without losing the form.",
       "Inspect the saved policy, edit its configuration, or disable it with Policy enabled before updating. Reload and confirm the saved enabled state.",
       "Choose Run policies now to evaluate enabled policies against holdings. If evaluation fails, retry after recovery; inspect Last evaluation and its per-holding outcome instead of assuming an alert was generated.",

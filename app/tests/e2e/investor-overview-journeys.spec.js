@@ -120,7 +120,7 @@ for (const viewport of VIEWPORTS) {
                 return route.fulfill({ json: { data: { policies: 0, holdings_checked: 0, generated: 0, skipped: 0, details: [] } } });
             });
             await seal();
-            await page.goto('/alert-policies');
+            await page.goto('/settings/alert-policies');
             await page.getByRole('button', { name: 'New policy', exact: true }).click();
             await page.getByLabel('Alert name', { exact: true }).fill('Close below threshold');
             await page.getByLabel('Alert definition', { exact: true }).fill('Observe a close below 100.');
