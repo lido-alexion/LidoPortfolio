@@ -46,6 +46,9 @@ describe('combo chart preset contracts', () => {
         const onSetDefault = vi.fn();
         render(<ComboChart rows={rows} availability={availability} defaultPresetId="price-volume" onSetDefault={onSetDefault} />);
         const selector = screen.getByLabelText('Combo chart preset');
+        const priceLegend = screen.getByRole('checkbox', { name: 'Show Price' }).closest('label');
+        expect(within(priceLegend).getByText('Price')).not.toHaveAttribute('style');
+        expect(priceLegend.querySelector('[aria-hidden="true"]')).toHaveStyle({ color: '#0d6efd' });
         fireEvent.change(selector, { target: { value: 'price-pe' } });
         expect(selector.value).toBe('price-pe');
         expect(screen.getByRole('checkbox', { name: 'Show P/E' })).toBeChecked();

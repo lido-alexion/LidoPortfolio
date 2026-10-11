@@ -49,7 +49,7 @@ AUTH-08 covers access/invitation administration that enables Investor entry; E2E
 
 ## Qualification still required
 
-- Current merged master CI has a diagnosed Library prompt race; the guarded-answer repair and personal Notes/Calendar fixes require fresh exact-head hosted execution. Cancelled, superseded or failing runs are not accepted.
+- Merged master `75fd81b2377a7390d4d72c7de6fad8ad904978c5` passes canonical CI run 38147157987 after the Library prompt repair. Later personal Notes/Wiki, named Dashboard fixture, combo contrast, scoped registry and mobile capture changes still require exact-head hosted execution. Cancelled, superseded or failing runs are not accepted.
 - The extended Dashboard/Combo, stored-history and runtime-registry suites require actual hosted Chromium execution; local discovery (391 cases in 37 files for the registry extension) is not a pass.
 - A current desktop/mobile nightly must execute the accepted head; the older successful nightly does not qualify later changes.
 - The dedicated read-only identity must be configured as `STOX_SMOKE_EMAIL` and `STOX_SMOKE_PASSWORD` Actions secrets, followed by normal deployment and deployed-SHA/public/authenticated health verification. A missing/skipped mandatory authenticated test is not a pass.

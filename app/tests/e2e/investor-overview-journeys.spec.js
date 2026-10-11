@@ -76,7 +76,6 @@ for (const viewport of VIEWPORTS) {
             await page.route('**/api/dashboard-layouts', route => {
                 expect(route.request().method()).toBe('GET');
                 if (listUnavailable) {
-                    listUnavailable = false;
                     return route.fulfill({ status: 503, json: { message: 'Synthetic named layouts unavailable.' } });
                 }
                 return route.fulfill({ json: { data: [named] } });
@@ -102,6 +101,7 @@ for (const viewport of VIEWPORTS) {
             const toolbar = page.getByTestId('dashboard-layout-toolbar');
             await expect(toolbar.getByRole('alert')).toContainText('Named dashboards could not be loaded');
             await expect(toolbar.getByLabel('Named dashboard')).toHaveCount(0);
+            listUnavailable = false;
             await toolbar.getByRole('button', { name: 'Retry named dashboards' }).click();
             await toolbar.getByLabel('Named dashboard').selectOption('7');
             await toolbar.getByRole('button', { name: 'Customize' }).click();
