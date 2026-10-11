@@ -299,3 +299,10 @@ PR #132 passed [38134603968](https://github.com/lido-alexion/LidoPortfolio/actio
 ### Tax import hosted contrast correction (2026-10-11 11:47 UTC)
 
 Run [38135841734](https://github.com/lido-alexion/LidoPortfolio/actions/runs/38135841734) passed 255 browser cases and failed the mobile E2E-27 full WCAG assertion (57 separately governed skips). The hovered Import validated rows button had contrast 2.05:1 against a required 4.5:1. The tax evidence region now uses the same explicitly contrasting hover/focus/active action colors as Replay. Keep the complete accessibility assertion, all functional retry/import checks and existing visual references unchanged. A new exact-head hosted run is required; this correction does not qualify tax calculations or real CSV imports.
+
+
+### Dividend preview review correction — 2026-10-11
+
+Review of PR #140 head `943b8e26d5fd05eb1a3621fa62921d72ddddb93d` reproduced two gaps in the mandatory preview/import sequence. After one valid preview, a failed explicit re-preview retained the previous valid result and left Import enabled. Also, the file selector remained enabled while a preview request was pending, permitting a different file to inherit the earlier response. Two focused component regressions failed against that exact file blob (`8fd4acb78f1bd894f6a0c289a14cbc2e401d7b23`); the two existing tests passed.
+
+The correction clears prior preview eligibility before every new preview, keeps file selection fixed during an outstanding operation, and guards import against absent/invalid preview state. It preserves the selected-file reset, explicit import action, CSV version and backend financial/idempotency contracts. All four tax-evidence cases plus the two analysis-preference recovery cases pass in an isolated frontend fixture. No production data, identity, financial source or broker action was used. Fresh hosted canonical verification is required on the corrected head; no earlier green/pending result is accepted for it.
