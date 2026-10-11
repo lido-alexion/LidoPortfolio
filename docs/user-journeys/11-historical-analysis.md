@@ -11,7 +11,7 @@ These journeys preserve [Analytics, Review and Backtesting](../current/analytics
 
 1. Open `/backtests`. If history is unavailable, use Retry backtest history; an operational read failure is not proof that no runs exist.
 2. Choose New Backtest, review the background-operation notice and enter Name, Period, Initial capital, Execution price, Adverse slippage, optional declared parameter overrides, Notes and Tags. Cancel closes the form without starting a run.
-3. Choose Start Backtest. A failed submission retains the draft for correction or retry. Review the resulting run's status; processing can continue in bounded background slices after leaving the page.
+3. Choose Start in New Strategy Backtest. A failed submission retains the draft for correction or retry. Review the resulting run's status; processing can continue in bounded background slices after leaving the page.
 4. Open the run. If the detail read is temporarily unavailable, choose Retry loading backtest. A confirmed missing run instead offers Back to Backtests.
 5. Inspect strategy/version, dates, assumptions, statistics, simulated trades, transactions and snapshots. Update Name/Notes/Tags using Save name / notes / tags; failure retains the draft and does not change historical economic evidence.
 6. Return to All backtests. Duplicate creates a separate experiment using stored dates, capital, notes, tags and fill assumptions with the current strategy; it does not copy old results or reinterpret the original run.
