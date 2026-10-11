@@ -1537,6 +1537,149 @@ export const JOURNEY_TOPICS = Object.freeze([
     ]
   },
   {
+    "id": "E2E-31",
+    "title": "How do I recover Library reads and create/import unpublished drafts?",
+    "aliases": [
+      "Recover Library reads and create/import unpublished drafts",
+      "e2e-31"
+    ],
+    "keywords": [
+      "recover",
+      "library",
+      "reads",
+      "and",
+      "create",
+      "import",
+      "unpublished",
+      "drafts"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/artifact-library",
+    "guide": "/docs/journeys/14-artifact-library-governance.html#e2e-31-recover-library-reads-and-create-import-unpublished-drafts",
+    "steps": [
+      "Open `/artifact-library`, filter Search/Type and inspect accessible owned/shared/system provenance. An unavailable read must be reported separately from an empty search; Retry Library after recovery.",
+      "Choose Create Draft, enter its type, slug, name, SemVer and supported Artifact envelope JSON. Closing the form leaves no source mutation.",
+      "Correct JSON/API validation failures without losing the draft, then Create Draft explicitly. Inspect the new unpublished lineage.",
+      "Expand Import validated portable package, paste the package JSON and choose Validate and import as Drafts.",
+      "Correct syntax/checksum/dependency errors while retaining the reviewed package. Confirm imported Drafts and that nothing was published/deployed."
+    ],
+    "prerequisites": [
+      "An authenticated Investor and a supported artifact envelope/package."
+    ],
+    "warnings": [
+      "Creation/import produces Drafts, never automatic publication, enablement or deployment. Actual portable packages require server checksum/dependency validation."
+    ]
+  },
+  {
+    "id": "E2E-32",
+    "title": "How do I save and publish an immutable version with exact dependencies?",
+    "aliases": [
+      "Save and publish an immutable version with exact dependencies",
+      "e2e-32"
+    ],
+    "keywords": [
+      "save",
+      "and",
+      "publish",
+      "immutable",
+      "version",
+      "with",
+      "exact",
+      "dependencies"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/artifact-library/:uuid",
+    "guide": "/docs/journeys/14-artifact-library-governance.html#e2e-32-save-and-publish-an-immutable-version-with-exact-dependencies",
+    "steps": [
+      "Inspect `/artifact-library/:uuid`; retry an unavailable initial detail read or return to Library. Inspect provenance, versions, dependencies and any binding before mutation.",
+      "Edit Draft envelope/documentation/change summary and Save Draft. Syntax or lock/validation errors retain the draft for correction/review; save only against the current reviewed lock version.",
+      "Choose Validate and publish and review the exact dependency array. Cancelling leaves the Draft. Correct publication validation errors before retrying.",
+      "Inspect the published version/hash/dependencies and confirm existing bindings remain pinned. Publication alone does not enable or deploy.",
+      "If sharing is intended, Share only to the intended existing account through the exact published version; cancelled/failed requests do not claim access was granted.",
+      "For later changes choose New version Draft and a forward SemVer. Inspect the separate unpublished version and preserved published history."
+    ],
+    "prerequisites": [
+      "Owner access to an artifact with an editable Draft and its supported schema/dependencies."
+    ],
+    "warnings": [
+      "One active Draft per lineage and optimistic locking prevent lost updates. Published content cannot be edited; later changes require a forward Draft/version. Sharing grants access to an exact published version and dependencies."
+    ]
+  },
+  {
+    "id": "E2E-33",
+    "title": "How do I inspect differences and explicitly manage a Portfolio binding?",
+    "aliases": [
+      "Inspect differences and explicitly manage a Portfolio binding",
+      "e2e-33"
+    ],
+    "keywords": [
+      "inspect",
+      "differences",
+      "and",
+      "explicitly",
+      "manage",
+      "portfolio",
+      "binding"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/",
+    "guide": "/docs/journeys/14-artifact-library-governance.html#e2e-33-inspect-differences-and-explicitly-manage-a-portfolio-binding",
+    "steps": [
+      "Inspect the desired published version and exact dependencies, then Bind to Portfolio explicitly. Failure leaves the existing binding state available for inspection/retry.",
+      "Inspect disabled state and usability reasons. Resolve genuine compatibility conditions before enabling; reload to inspect current readiness/lock version.",
+      "Enable deliberately and verify confirmed binding status. Failed enable/disable retains the previous confirmed status.",
+      "Compare distinct immutable versions and inspect their structural changes/dependency impact. Equal endpoints cannot compare; retry unavailable comparison without inventing changes.",
+      "Choose Upgrade binding on the reviewed version. For a concurrent-update conflict, reload current binding state/lock before retrying. Verify explicit forward activation and unchanged published history.",
+      "Export the intended published version and inspect its portable package. A failed download remains recoverable and does not change binding state.",
+      "Archive only when intended. Dismiss its history/binding warning to preserve state; after successful confirmation published history and valid active bindings remain intact."
+    ],
+    "prerequisites": [
+      "Access to published versions and the intended owned active Portfolio."
+    ],
+    "warnings": [
+      "Bind creates disabled deployment settings; Enable is separate. Blocked usability cannot be enabled. A newly published version never upgrades an existing binding automatically."
+    ]
+  },
+  {
+    "id": "E2E-34",
+    "title": "How do I fork shared versions and confirm a transactional Bundle plan?",
+    "aliases": [
+      "Fork shared versions and confirm a transactional Bundle plan",
+      "e2e-34"
+    ],
+    "keywords": [
+      "fork",
+      "shared",
+      "versions",
+      "and",
+      "confirm",
+      "transactional",
+      "bundle",
+      "plan"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/artifact-library/:uuid",
+    "guide": "/docs/journeys/14-artifact-library-governance.html#e2e-34-fork-shared-versions-and-confirm-a-transactional-bundle-plan",
+    "steps": [
+      "Inspect `/artifact-library/:uuid` source permission and published definition/dependencies. Fork, name the new slug/lineage, and confirm only the intended operation. Cancelled/failed prompts preserve the source.",
+      "Inspect the new local Draft and unchanged immutable source. Modification occurs on the fork, not the shared published version.",
+      "For a published Bundle, choose Deploy Bundle to obtain its server-validated transactional plan. Inspect failure instead of claiming deployment.",
+      "Review the planned member-count confirmation for the active Portfolio. Dismiss to leave deployment unapplied.",
+      "Confirm only the intended validated plan. If application is unconfirmed, inspect existing deployment evidence before retrying; do not assume a transport error proves rollback.",
+      "Inspect confirmed deployed member bindings/provenance independently; the Bundle does not become a trading controller."
+    ],
+    "prerequisites": [
+      "Access to the exact shared/system published source, or a published Bundle and the intended owned Portfolio."
+    ],
+    "warnings": [
+      "Recipients cannot edit/share/publish someone else's source. Fork is a new local unpublished 1.0.0 lineage. Bundle deployment plans are atomic evidence, not perpetual runtime controllers; nested Bundles are unsupported."
+    ]
+  },
+  {
     "id": "EXE-01",
     "title": "How do I execute an approved recommendation manually?",
     "aliases": [

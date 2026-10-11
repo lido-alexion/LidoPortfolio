@@ -155,7 +155,7 @@ export default function ArtifactLibraryDetailPage() {
                 <div><h2 className="h4 mb-1">{artifact?.name || 'Artifact'}</h2><p className="small text-muted mb-0"><code>{artifact?.slug || uuid}</code>{artifact && ` · ${artifact.type} · ${artifact.permission} · ${artifact.origin}`}</p></div>
                 <Link className="btn btn-sm btn-outline-secondary align-self-start" to="/artifact-library">Back to Library</Link>
             </div>
-            {error && <div className="alert alert-danger mb-0">{error}</div>}
+            {error && <div className="alert alert-danger mb-0" role="alert">{error}{!artifact && <button type="button" className="btn btn-sm btn-outline-secondary ms-2" disabled={loading || busy} onClick={load}>Retry artifact</button>}</div>}
             {loading && <div className="text-muted">Loading artifact…</div>}
             {!loading && artifact && <>
                 <div className="card"><div className="card-body">

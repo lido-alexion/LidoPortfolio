@@ -226,3 +226,13 @@ If this guide conflicts with an implemented/current product contract, correct th
 | E2E-28 | Review and retry an idempotent transaction CSV batch | [Bulk import](13-financial-source-lifecycle.md#e2e-28--review-and-import-an-idempotent-transaction-csv-batch) |
 | E2E-29 | Adopt unmanaged holdings without changing sibling ownership | [Adoption](13-financial-source-lifecycle.md#e2e-29--adopt-an-unmanaged-holding-into-one-enabled-strategy) |
 | E2E-30 | Preview/confirm split or bonus financial application | [Corporate actions](13-financial-source-lifecycle.md#e2e-30--preview-and-explicitly-apply-a-split-or-bonus) |
+
+
+### Artifact Library governance
+
+| ID | Scenario | Detail |
+| --- | --- | --- |
+| E2E-31 | Recover Library reads and create/import unpublished Drafts | [Library](14-artifact-library-governance.md#e2e-31--recover-library-reads-and-createimport-unpublished-drafts) |
+| E2E-32 | Optimistic Draft edits, exact dependency publication and forward history | [Versions](14-artifact-library-governance.md#e2e-32--save-and-publish-an-immutable-version-with-exact-dependencies) |
+| E2E-33 | Structural comparison, explicit binding/upgrade/enablement and archive | [Binding](14-artifact-library-governance.md#e2e-33--inspect-differences-and-explicitly-manage-a-portfolio-binding) |
+| E2E-34 | Fork shared source and explicitly confirm a transactional Bundle plan | [Distribution](14-artifact-library-governance.md#e2e-34--fork-shared-versions-and-confirm-a-transactional-bundle-plan) |

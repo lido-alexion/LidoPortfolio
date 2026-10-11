@@ -11,6 +11,7 @@ const badge = (value) => ({
 export default function ArtifactLibraryPage() {
     const [rows, setRows] = useState([]);
     const [q, setQ] = useState('');
+    const [retryKey, setRetryKey] = useState(0);
     const [type, setType] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -34,7 +35,7 @@ export default function ArtifactLibraryPage() {
             }
         }, 180);
         return () => { cancelled = true; clearTimeout(timer); };
-    }, [q, type]);
+    }, [q, type, retryKey]);
 
     const createDraft = async () => {
         setBusy(true); setError('');
@@ -101,9 +102,9 @@ export default function ArtifactLibraryPage() {
                 </div>
             </div></div>
 
-            {error && <div className="alert alert-danger mb-0">{error}</div>}
+            {error && <div className="alert alert-danger mb-0" role="alert">{error}{!showCreate && <button type="button" className="btn btn-sm btn-outline-secondary ms-2" disabled={loading || busy} onClick={() => setRetryKey(value => value + 1)}>Retry Library</button>}</div>}
             {loading && <div className="text-muted">Loading Library…</div>}
-            {!loading && rows.length === 0 && <div className="card"><div className="card-body text-muted">No accessible artifacts match these filters.</div></div>}
+            {!loading && !error && rows.length === 0 && <div className="card"><div className="card-body text-muted">No accessible artifacts match these filters.</div></div>}
             {!loading && rows.length > 0 && (
                 <div className="card"><div className="table-responsive">
                     <table className="table table-hover align-middle mb-0">
@@ -131,7 +132,7 @@ export default function ArtifactLibraryPage() {
 
             <details className="card"><summary className="card-header">Import validated portable package</summary><div className="card-body d-grid gap-2">
                 <p className="small text-muted mb-0">The whole package is checksum- and dependency-validated before any rows are written. Foreign artifacts become local Draft lineages.</p>
-                <textarea className="form-control font-monospace" rows="8" value={packageText} onChange={(event) => setPackageText(event.target.value)} placeholder="Paste stox.reusable_artifacts.v1 JSON" />
+                <textarea aria-label="Portable artifact package JSON" className="form-control font-monospace" rows="8" value={packageText} onChange={(event) => setPackageText(event.target.value)} placeholder="Paste stox.reusable_artifacts.v1 JSON" />
                 <div><button type="button" className="btn btn-sm btn-outline-primary" disabled={busy || !packageText.trim()} onClick={importPackage}>Validate and import as Drafts</button></div>
             </div></details>
         </div>
