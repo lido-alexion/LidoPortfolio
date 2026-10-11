@@ -275,3 +275,5 @@ If this guide conflicts with an implemented/current product contract, correct th
 | ID | Scenario | Detail |
 | --- | --- | --- |
 | E2E-48 | Customize/recover named desktop and mobile layouts | [Dashboard](08-investor-overview-alerts.md#e2e-48--customize-persist-and-recover-a-named-dashboard-layout) |
+
+Extended existing Dashboard local/lifecycle/portability and Stock Details combo-chart controls/recovery are [E2E-49–51](18-dashboard-combo-charts.md), complementing named layout recovery E2E-48.
