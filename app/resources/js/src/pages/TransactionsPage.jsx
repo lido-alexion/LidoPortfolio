@@ -1422,7 +1422,7 @@ export default function TransactionsPage() {
 
 
 
-                            <div>{transactionSaveError && <div className="alert alert-danger py-2" role="alert">{transactionSaveError}</div>}</div>
+                            {transactionSaveError && <div className="alert alert-danger py-2" role="alert">{transactionSaveError}</div>}
                             <button className="btn btn-primary" type="submit" disabled={!canSubmit || submitting}>
 
                                 {submitting
