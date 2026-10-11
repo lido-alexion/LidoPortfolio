@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import api from '../api';
+import api, { getApiErrorMessage } from '../api';
 import FundamentalInsightsSignals from '../components/FundamentalInsightsSignals';
 import StockAutocomplete from '../components/StockAutocomplete';
 import { ROUTES } from '../navigation/routes';
@@ -36,7 +36,7 @@ export default function FundamentalInsightsPage() {
             setSnapshot(res?.data?.data ?? res?.data ?? null);
         } catch (e) {
             setSnapshot(null);
-            setError(e?.response?.data?.error?.message || e.message || 'Failed to load fundamental insights');
+            setError(getApiErrorMessage(e, 'Failed to load fundamental insights'));
         } finally {
             setLoading(false);
             setRefreshingAi(false);
@@ -69,7 +69,7 @@ export default function FundamentalInsightsPage() {
                 await loadInsights(match.id);
             } catch (e) {
                 if (!cancelled) {
-                    setError(e?.response?.data?.error?.message || e.message || 'Failed to resolve symbol');
+                    setError(getApiErrorMessage(e, 'Failed to resolve symbol'));
                 }
             }
         })();
