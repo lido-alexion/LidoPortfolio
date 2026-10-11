@@ -141,7 +141,7 @@ UI labels can evolve. The route and user intent are more important than minor wo
 
 [Supporting investor journeys](07-supporting-investor.md) covers stock research/watchlist membership (`E2E-09`), Kite connection recovery/disconnect (`E2E-10`), and portfolio safeguards (`E2E-11`), notification attention/recovery (`E2E-12`), and per-tab portfolio switching (`E2E-13`). These are mandatory scope under the frozen V9-UX-001 contract.
 
-The final completeness review must still reconcile Dashboard/Stock Explorer, alert lifecycle, invitation/access-request onboarding, and other major workflows introduced by completed V9 epics. Existing responsive or feature tests alone do not establish complete journey conformance. These items are open scope, not a waiver.
+The completed major-workflow reconciliation extends this supporting set through Dashboard/Stock Explorer and alert lifecycle (`E2E-14`–`E2E-17`, `E2E-48`), invitation/access recovery (`AUTH-04`–`AUTH-08`), data export (`E2E-18`–`E2E-19`), Portfolio/cash lifecycle (`E2E-20`–`E2E-22`), historical analysis (`E2E-23`–`E2E-24`), portfolio/tax evidence (`E2E-25`–`E2E-27`), financial-source lifecycle (`E2E-28`–`E2E-30`), Artifact Library governance (`E2E-31`–`E2E-34`), market/research reads (`E2E-35`–`E2E-39`), personal knowledge/Calendar (`E2E-40`–`E2E-45`), and account authority/delivery settings (`AUTH-09`–`AUTH-11`, `E2E-46`–`E2E-47`). Hosted current-head execution and the production, ML and real-Kite gates remain separate acceptance requirements.
 
 ## Documentation rules
 
