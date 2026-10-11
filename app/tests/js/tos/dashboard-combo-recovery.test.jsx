@@ -34,6 +34,6 @@ describe('dashboard and combo chart recovery', () => {
  });
  it('retains the selected chart and shows the canonical error after a rejected account default write', async () => {
   api.get.mockImplementation(path => Promise.resolve({ data: { data: path.endsWith('combo-chart-preference') ? { default_preset_id: 'price-volume' } : { points } } })); api.put.mockImplementation(rejected);
-  render(<StockDetailsComboChart stockId={42} prices={prices} />); fireEvent.change(await screen.findByLabelText('Combo chart preset'), { target: { value: 'price-pe' } }); fireEvent.click(screen.getByRole('button', { name: 'Set as default' })); await screen.findByText('Synthetic service unavailable.'); expect(screen.getByLabelText('Combo chart preset')).toHaveValue('price-pe'); expect(screen.getByRole('button', { name: 'Set as default' })).toBeEnabled();
+  render(<StockDetailsComboChart stockId={42} prices={prices} />); expect(await screen.findByRole('button', { name: 'Default chart' })).toBeDisabled(); const preset = screen.getByLabelText('Combo chart preset'); fireEvent.change(preset, { target: { value: 'price-pe' } }); fireEvent.click(await screen.findByRole('button', { name: 'Set as default' })); await screen.findByText('Synthetic service unavailable.'); expect(screen.getByLabelText('Combo chart preset')).toHaveValue('price-pe'); expect(screen.getByRole('button', { name: 'Set as default' })).toBeEnabled();
  });
 });
