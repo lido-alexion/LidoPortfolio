@@ -5,7 +5,9 @@ namespace App\Services\Screener;
 use App\Models\PortfolioProfile;
 use App\Models\Screener;
 use App\Models\ScreenerRun;
+use App\Models\StrategyScreener;
 use App\Models\Watchlist;
+use App\Services\Artifacts\ArtifactStatus;
 use App\Services\ExternalStockLinkService;
 use App\Services\IndexCatalogService;
 use App\Services\Indicators\IndicatorRegistry;
@@ -84,6 +86,7 @@ class ScreenerService
     {
         return Screener::query()
             ->sharedVisibleTo($profile)
+            ->where('artifact_status', '!=', ArtifactStatus::ARCHIVED)
             ->orderBy('name')
             ->get()
             ->map(fn (Screener $s) => $this->formatShared($s));
@@ -158,6 +161,11 @@ class ScreenerService
     public function update(Screener $screener, array $input): array
     {
         $this->assertLegacyMutable($screener);
+        if ($screener->artifact_status === ArtifactStatus::ARCHIVED) {
+            throw ValidationException::withMessages([
+                'screener' => 'Archived screeners are read-only. Create a new screener to make changes.',
+            ]);
+        }
         $profile = PortfolioProfile::query()->findOrFail($screener->profile_id);
         $previousHash = $screener->definition_hash;
         $data = $this->normalizeInput($profile, $input, $screener);
@@ -175,10 +183,37 @@ class ScreenerService
         return $this->format($screener->fresh(['watchlist:id,name']));
     }
 
-    public function delete(Screener $screener): void
+    public function archive(Screener $screener): void
     {
         $this->assertLegacyMutable($screener);
-        $screener->delete();
+
+        if ($screener->artifact_status === ArtifactStatus::ARCHIVED) {
+            return;
+        }
+
+        $hasActiveStrategyDependency = StrategyScreener::query()
+            ->where('screener_id', $screener->id)
+            ->where('enabled', true)
+            ->whereHas('strategyVersion', fn ($query) => $query
+                ->where('status', 'active')
+                ->whereHas('strategy', fn ($strategy) => $strategy->where('status', 'active')))
+            ->exists();
+
+        if ($hasActiveStrategyDependency) {
+            throw ValidationException::withMessages([
+                'screener' => 'An active Strategy still uses this screener. Update or archive that Strategy before archiving the screener.',
+            ]);
+        }
+
+        $screener->forceFill([
+            'artifact_status' => ArtifactStatus::ARCHIVED,
+            'is_enabled' => false,
+            'schedule_enabled' => false,
+            'schedule_time' => null,
+            'schedule_days' => [],
+            'telegram_enabled' => false,
+            'is_shared' => false,
+        ])->save();
     }
 
     /**

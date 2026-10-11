@@ -207,7 +207,15 @@ class F060SharedScreenerAuthzTest extends TestCase
             ->deleteJson("/api/screeners/{$sharedId}")
             ->assertOk();
 
-        $this->assertFalse(Screener::query()->where('id', $sharedId)->exists());
+        $this->assertTrue(Screener::query()->where('id', $sharedId)->exists());
+        $this->assertSame('archived', Screener::query()->whereKey($sharedId)->value('artifact_status'));
+
+        $this->actingAs($owner)
+            ->withHeader('X-Profile-Id', (string) $other->id)
+            ->getJson('/api/screeners/shared')
+            ->assertOk()
+            ->assertJsonPath('count', 0)
+            ->assertJsonPath('data', []);
     }
 
     public function test_admin_does_not_bypass_same_user_boundary(): void
@@ -390,7 +398,8 @@ class F060SharedScreenerAuthzTest extends TestCase
             ->deleteJson("/api/screeners/{$sharedId}")
             ->assertOk();
 
-        $this->assertFalse(Screener::query()->where('id', $sharedId)->exists());
+        $this->assertTrue(Screener::query()->where('id', $sharedId)->exists());
+        $this->assertSame('archived', Screener::query()->whereKey($sharedId)->value('artifact_status'));
         $this->assertTrue(Screener::query()->whereKey($copyId)->exists());
     }
 
