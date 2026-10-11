@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import { allowProductionSmokeRequest } from './productionSmokePolicy.js';
+import { readOnlyReviewHeading } from './productionSmokeSelectors.js';
 
 let stage = 'configuration';
 let browser;
@@ -34,7 +35,7 @@ try {
     login = false;
     stage = 'review';
     await page.goto('/review');
-    await page.getByRole('heading', { name: 'Review', exact: true }).waitFor({ state: 'visible' });
+    await readOnlyReviewHeading(page).waitFor({ state: 'visible' });
     stage = 'request_safety';
     if (blocked) throw new Error();
     console.log('AUTHENTICATED_SMOKE_PASSED');
