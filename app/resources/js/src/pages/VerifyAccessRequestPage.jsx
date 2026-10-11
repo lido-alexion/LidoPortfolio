@@ -39,7 +39,7 @@ export default function VerifyAccessRequestPage() {
                 {status === 'loading' ? (
                     <p className="text-muted">Verifying your email…</p>
                 ) : (
-                    <div className={`alert ${alertClass} py-2`}>{message}</div>
+                    <div className={`alert ${alertClass} py-2`} role={status === 'error' ? 'alert' : 'status'}>{message}</div>
                 )}
                 <Link to="/login" className="small">Back to login</Link>
             </div>

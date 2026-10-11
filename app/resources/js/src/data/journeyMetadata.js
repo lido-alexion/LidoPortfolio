@@ -392,6 +392,120 @@ export const JOURNEY_TOPICS = Object.freeze([
     ]
   },
   {
+    "id": "AUTH-06",
+    "title": "How do I accept an administrator-issued invitation and recover a rejected submission?",
+    "aliases": [
+      "Accept an administrator-issued invitation and recover a rejected submission",
+      "auth-06"
+    ],
+    "keywords": [
+      "accept",
+      "administrator",
+      "issued",
+      "invitation",
+      "and",
+      "recover",
+      "rejected",
+      "submission"
+    ],
+    "synonyms": [
+      "accept invite",
+      "invitation password",
+      "invite expired."
+    ],
+    "category": "Account access",
+    "route": "/login",
+    "guide": "/docs/journeys/00-account-entry.html#auth-06-accept-an-administrator-issued-invitation-and-recover-a-rejected-submission",
+    "steps": [
+      "Open the issued invitation link and confirm the fixed account email.",
+      "Enter your name and matching new password/confirmation, then create the account and sign in.",
+      "If validation or a transient acceptance error occurs, retain the form and correct/retry without losing the entered values or falsely becoming authenticated.",
+      "After successful acceptance, the application restores the account session and requested protected page, or the Dashboard.",
+      "An invalid, expired, revoked or used invitation offers return to sign-in; it must not create an account or session. Request a new invitation from the administrator."
+    ],
+    "prerequisites": [
+      "a current administrator-issued, single-use invitation link. Start from `/login` if you need to contact the administrator for a link."
+    ],
+    "warnings": []
+  },
+  {
+    "id": "AUTH-07",
+    "title": "How do I request account access and verify email ownership without self-registration?",
+    "aliases": [
+      "Request account access and verify email ownership without self-registration",
+      "auth-07"
+    ],
+    "keywords": [
+      "request",
+      "account",
+      "access",
+      "and",
+      "verify",
+      "email",
+      "ownership",
+      "without",
+      "self",
+      "registration"
+    ],
+    "synonyms": [
+      "request account",
+      "request access",
+      "verify request email."
+    ],
+    "category": "Account access",
+    "route": "/request-account",
+    "guide": "/docs/journeys/00-account-entry.html#auth-07-request-account-access-and-verify-email-ownership-without-self-registration",
+    "steps": [
+      "Enter your full name and email. Complete human verification before submitting the access request.",
+      "If verification is missing/unavailable, stop submission and try later. Correct a validation error or retry a transient request failure while retaining the form.",
+      "A successful eligible request is available for Admin review immediately, with email verification initially advisory. A safe generic response must not claim that a verification email was delivered or disclose whether an existing account exists.",
+      "If an emailed verification link is available, open it to verify ownership of the same pending request. Verification alone does not approve access or create a signed-in account.",
+      "Return to login or wait for the administrator's standard invitation. An expired/used verification link cannot resurrect an expired request; submit a fresh request if necessary."
+    ],
+    "prerequisites": [
+      "a guest using `/request-account` and completing the mandatory human verification."
+    ],
+    "warnings": []
+  },
+  {
+    "id": "AUTH-08",
+    "title": "How do I review an access request and preserve the standard invitation boundary?",
+    "aliases": [
+      "Review an access request and preserve the standard invitation boundary",
+      "auth-08"
+    ],
+    "keywords": [
+      "review",
+      "access",
+      "request",
+      "and",
+      "preserve",
+      "the",
+      "standard",
+      "invitation",
+      "boundary"
+    ],
+    "synonyms": [
+      "approve access request",
+      "unverified request",
+      "create invite."
+    ],
+    "category": "Account access",
+    "route": "/settings/users",
+    "guide": "/docs/journeys/00-account-entry.html#auth-08-review-an-access-request-and-preserve-the-standard-invitation-boundary",
+    "steps": [
+      "Inspect pending Account access requests, their Verified/Unverified indication and observed email delivery state.",
+      "Review the request and choose Create invite. For an unverified request, read the confirmation; cancelling performs no action, while explicit approval records the unverified decision and issues the normal secure invitation.",
+      "If creation fails, preserve the pending request and retry after recovery. Email delivery failure does not invalidate a successfully created invitation.",
+      "Use Show all statuses to inspect the resolved request. Where manual fallback is needed, Copy invitation email/link uses the existing invitation and does not mint another token.",
+      "Where needed, resend verification for a still-active unverified request, or use Ignore/Reject with an internal reason. Applicant-facing messages must not disclose the internal reason or ban details."
+    ],
+    "prerequisites": [
+      "an authorized Admin using `/settings/users`; an investor cannot perform these actions."
+    ],
+    "warnings": []
+  },
+  {
     "id": "E2E-01",
     "title": "How do I new idea to first BUY?",
     "aliases": [
@@ -794,6 +908,343 @@ export const JOURNEY_TOPICS = Object.freeze([
       "An authenticated investor with at least two portfolios."
     ],
     "warnings": []
+  },
+  {
+    "id": "E2E-14",
+    "title": "How do I refresh portfolio overview and recover an unavailable dashboard?",
+    "aliases": [
+      "Refresh portfolio overview and recover an unavailable dashboard",
+      "e2e-14"
+    ],
+    "keywords": [
+      "refresh",
+      "portfolio",
+      "overview",
+      "and",
+      "recover",
+      "unavailable",
+      "dashboard"
+    ],
+    "synonyms": [
+      "portfolio overview",
+      "refresh dashboard",
+      "dashboard unavailable."
+    ],
+    "category": "StoX",
+    "route": "/",
+    "guide": "/docs/journeys/08-investor-overview-alerts.html#e2e-14-refresh-portfolio-overview-and-recover-an-unavailable-dashboard",
+    "steps": [
+      "Open the Dashboard at `/` and inspect Portfolio Value, Invested Value and Total Gain/Loss for the active portfolio.",
+      "Use Refresh dashboard to clear this portfolio's local cache and request current server data.",
+      "If refresh fails after data was displayed, retain the prior values and show the failure. Use Refresh dashboard again after the service recovers.",
+      "Confirm the successful response replaces the displayed values. Reloading or returning to the page may use the labelled local cache; explicitly refresh when current server values are needed.",
+      "If the initial load fails before any data exists, reload the page after the service recovers."
+    ],
+    "prerequisites": [
+      "an authenticated investor with an active portfolio."
+    ],
+    "warnings": []
+  },
+  {
+    "id": "E2E-15",
+    "title": "How do I compare a stock with its benchmark and recover missing price data?",
+    "aliases": [
+      "Compare a stock with its benchmark and recover missing price data",
+      "e2e-15"
+    ],
+    "keywords": [
+      "compare",
+      "stock",
+      "with",
+      "its",
+      "benchmark",
+      "and",
+      "recover",
+      "missing",
+      "price",
+      "data"
+    ],
+    "synonyms": [
+      "relative strength",
+      "stock explorer",
+      "manual relative strength."
+    ],
+    "category": "StoX",
+    "route": "/explorer",
+    "guide": "/docs/journeys/08-investor-overview-alerts.html#e2e-15-compare-a-stock-with-its-benchmark-and-recover-missing-price-data",
+    "steps": [
+      "Open Stock Explorer at `/explorer`, select a stock and benchmark index, and calculate relative strength. A stock/benchmark deep link restores the same analysis context.",
+      "Inspect relative strength for the available 1, 3, 6 and 12 month periods. Analytics use existing universe price history and do not request a new provider price fetch.",
+      "If history is unavailable, use Manual Relative Strength Input with positive stock/index latest and six-month previous close values. The calculate action stays unavailable until all four inputs are positive.",
+      "Calculate the temporary six-month comparison and inspect the resulting difference between stock and benchmark growth. Manual inputs do not persist authoritative market data.",
+      "Retry Calculate relative strength after data is restored. Successful fetched results replace the temporary comparison."
+    ],
+    "prerequisites": [
+      "an authenticated investor and a symbol in the local stock master."
+    ],
+    "warnings": []
+  },
+  {
+    "id": "E2E-16",
+    "title": "How do I maintain and evaluate an advisory alert policy?",
+    "aliases": [
+      "Maintain and evaluate an advisory alert policy",
+      "e2e-16"
+    ],
+    "keywords": [
+      "maintain",
+      "and",
+      "evaluate",
+      "advisory",
+      "alert",
+      "policy"
+    ],
+    "synonyms": [
+      "alert policy",
+      "holdings alert",
+      "evaluate alerts."
+    ],
+    "category": "StoX",
+    "route": "/settings/alert-policies",
+    "guide": "/docs/journeys/08-investor-overview-alerts.html#e2e-16-maintain-and-evaluate-an-advisory-alert-policy",
+    "steps": [
+      "Open Alert policies at `/settings/alert-policies` and choose New policy.",
+      "Name the policy, describe its intent, define its holding-value comparison, message and suggested action, then create it. Correct validation errors or retry a transient failure without losing the form.",
+      "Inspect the saved policy, edit its configuration, or disable it with Policy enabled before updating. Reload and confirm the saved enabled state.",
+      "Choose Run policies now to evaluate enabled policies against holdings. If evaluation fails, retry after recovery; inspect Last evaluation and its per-holding outcome instead of assuming an alert was generated.",
+      "For a non-system policy, choose Delete. Cancelling the confirmation preserves the policy; confirming removes it. System policies do not expose Delete."
+    ],
+    "prerequisites": [
+      "an authenticated investor with an active portfolio."
+    ],
+    "warnings": []
+  },
+  {
+    "id": "E2E-17",
+    "title": "How do I save optional product-email preferences and recover a failed update?",
+    "aliases": [
+      "Save optional product-email preferences and recover a failed update",
+      "e2e-17"
+    ],
+    "keywords": [
+      "save",
+      "optional",
+      "product",
+      "email",
+      "preferences",
+      "and",
+      "recover",
+      "failed",
+      "update"
+    ],
+    "synonyms": [
+      "optional emails",
+      "email digest",
+      "quiet hours."
+    ],
+    "category": "StoX",
+    "route": "/settings/notifications",
+    "guide": "/docs/journeys/08-investor-overview-alerts.html#e2e-17-save-optional-product-email-preferences-and-recover-a-failed-update",
+    "steps": [
+      "Inspect Optional product emails, which are off by default while account/security messages remain enabled.",
+      "Enable optional emails, choose categories and Immediate or Daily digest delivery, then set quiet hours, digest time and timezone.",
+      "Save email preferences. A failed update retains the form; correct invalid inputs or retry after recovery.",
+      "Reload the page and confirm the saved preferences. Disabling optional emails leaves account/security messaging enabled."
+    ],
+    "prerequisites": [
+      "an authenticated investor using `/settings/notifications`."
+    ],
+    "warnings": []
+  },
+  {
+    "id": "E2E-18",
+    "title": "How do I export snapshot data and recover a background export?",
+    "aliases": [
+      "Export snapshot data and recover a background export",
+      "e2e-18"
+    ],
+    "keywords": [
+      "export",
+      "snapshot",
+      "data",
+      "and",
+      "recover",
+      "background"
+    ],
+    "synonyms": [
+      "export CSV",
+      "export chart data",
+      "cancel export",
+      "download snapshots"
+    ],
+    "category": "StoX",
+    "route": "/portfolio/snapshots",
+    "guide": "/docs/journeys/09-data-export.html#e2e-18-export-snapshot-data-and-recover-a-background-export",
+    "steps": [
+      "Open `/portfolio/snapshots`, inspect the date range and choose Export table data or Export chart data.",
+      "Choose CSV or XLSX, an offered scope, and one or more offered fields. Selected scope uses selected stable row IDs; chart export contains underlying values rather than an image.",
+      "Cancel the configuration dialog to leave without creating an export, or correct an invalid field selection before submitting.",
+      "If generation fails, keep the originating data and retry with the intended scope/fields. A small ready export downloads immediately; a queued/running export shows its latest status.",
+      "Use Refresh export status after a failed read or while waiting. Download becomes available only when generation is ready and its retention has not expired.",
+      "To stop a queued/running export, choose Cancel export. If cancellation cannot be confirmed, refresh its status before retrying; confirm the cancelled state has no download.",
+      "Generate a fresh export if the previous job failed or expired. Do not interpret an unavailable status as a completed job."
+    ],
+    "prerequisites": [
+      "sign in as an investor with an active portfolio and available snapshot data."
+    ],
+    "warnings": [
+      "generated downloads expire after 24 hours; cancelled, failed or expired jobs have no downloadable artifact."
+    ]
+  },
+  {
+    "id": "E2E-19",
+    "title": "How do I maintain a private export basket and recover a rejected workbook?",
+    "aliases": [
+      "Maintain a private export basket and recover a rejected workbook",
+      "e2e-19"
+    ],
+    "keywords": [
+      "maintain",
+      "private",
+      "export",
+      "basket",
+      "and",
+      "recover",
+      "rejected",
+      "workbook"
+    ],
+    "synonyms": [
+      "export basket",
+      "combine datasets",
+      "XLSX export",
+      "spreadsheet download"
+    ],
+    "category": "StoX",
+    "route": "/",
+    "guide": "/docs/journeys/09-data-export.html#e2e-19-maintain-a-private-export-basket-and-recover-a-rejected-workbook",
+    "steps": [
+      "Open `/` and expand Export basket. Inspect the saved items and the available dataset catalog.",
+      "Add a supported dataset. If saving fails, retry the addition; do not treat an unsaved item as persisted.",
+      "Set its sheet name, choose fields/scope and provide required snapshot filters or stable selected-row IDs. Correct a highlighted invalid configuration before saving.",
+      "Save item configuration. If saving fails, retain the draft for correction/retry; after success, reopen or reload the basket to verify persistence.",
+      "Add another dataset with its own configuration. Choose Export XLSX to save/revalidate the configurations and request fresh data for each sheet.",
+      "If the server rejects a stale/unavailable dataset, field, selection or permission, review the affected item and retry. Do not reuse the rejected result as a valid workbook.",
+      "Follow the latest export status/download/cancellation controls as in E2E-18. A queued job does not start a download.",
+      "Remove an item when no longer needed. A failed removal keeps the saved item so it can be retried."
+    ],
+    "prerequisites": [
+      "sign in as an investor with an active portfolio and supported export datasets."
+    ],
+    "warnings": [
+      "the basket stores configuration, not a data snapshot; every generation revalidates current access and freshness. The basket is account-private, limited to ten items and not an export history."
+    ]
+  },
+  {
+    "id": "E2E-20",
+    "title": "How do I create, rename, select, default and retire a portfolio?",
+    "aliases": [
+      "Create, rename, select, default and retire a portfolio",
+      "e2e-20"
+    ],
+    "keywords": [
+      "create",
+      "rename",
+      "select",
+      "default",
+      "and",
+      "retire",
+      "portfolio"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/portfolios",
+    "guide": "/docs/journeys/10-portfolio-cash.html#e2e-20-create-rename-select-default-and-retire-a-portfolio",
+    "steps": [
+      "Open `/portfolios` and enter a valid name using letters, numbers, spaces, hyphens or underscores.",
+      "Choose Live and Create. A failed request retains the entered name; correct validation or retry without assuming a new portfolio exists.",
+      "Confirm the new portfolio in the list. Choose Rename, enter its new name and Save. A failed save retains the editor; Cancel preserves the saved name.",
+      "Choose Use in this tab to select an owned portfolio. Selection is per tab, separately from the default preference.",
+      "On another owned portfolio, choose Set default and confirm the Default badge after a successful response. A failed response must not claim the preference changed.",
+      "Delete only an inactive, non-default portfolio while another portfolio exists. Read the irreversible confirmation; dismiss it to keep the portfolio. Retry a failed deletion only after checking that the portfolio remains present.",
+      "Reload and verify the saved names, default and surviving portfolios."
+    ],
+    "prerequisites": [
+      "An authenticated investor who owns the affected portfolios."
+    ],
+    "warnings": [
+      "Deleting a portfolio permanently removes its transactions, holdings, alerts, snapshots and settings. Review the confirmation; cancellation must leave it intact."
+    ]
+  },
+  {
+    "id": "E2E-21",
+    "title": "How do I clone a live portfolio into a distinct paper simulation?",
+    "aliases": [
+      "Clone a live portfolio into a distinct paper simulation",
+      "e2e-21"
+    ],
+    "keywords": [
+      "clone",
+      "live",
+      "portfolio",
+      "into",
+      "distinct",
+      "paper",
+      "simulation"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/portfolios",
+    "guide": "/docs/journeys/10-portfolio-cash.html#e2e-21-clone-a-live-portfolio-into-a-distinct-paper-simulation",
+    "steps": [
+      "Open `/portfolios`, locate the source and choose Clone as Paper.",
+      "Review Paper name, positive Simulated cash, Fill price and Copy holdings. Cancel abandons the form without cloning.",
+      "Choose Clone. A failed request leaves the draft available for correction or retry.",
+      "Confirm a separate PAPER portfolio with the chosen name; the original LIVE portfolio remains present.",
+      "Pause simulation and confirm its action changes to Resume simulation only after success. Retry a rejected pause while the previous state remains visible.",
+      "Resume simulation and verify the active simulation state after reload. Its worker follows effective-session checkpoints and must never submit a live broker order."
+    ],
+    "prerequisites": [
+      "An owned source portfolio."
+    ],
+    "warnings": [
+      "Paper simulation is simulated evidence, not a live order or proof of live execution. Copy holdings is explicit; source ownership and accounting remain intact."
+    ]
+  },
+  {
+    "id": "E2E-22",
+    "title": "How do I record cash evidence and inspect reservations without trading?",
+    "aliases": [
+      "Record cash evidence and inspect reservations without trading",
+      "e2e-22"
+    ],
+    "keywords": [
+      "record",
+      "cash",
+      "evidence",
+      "and",
+      "inspect",
+      "reservations",
+      "without",
+      "trading"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/cash",
+    "guide": "/docs/journeys/10-portfolio-cash.html#e2e-22-record-cash-evidence-and-inspect-reservations-without-trading",
+    "steps": [
+      "Open `/cash`, inspect cash balance, Reserved cash and Available cash. Use See reservation details to inspect recommendation identity and the reserved amount; do not infer a fill from reservation alone.",
+      "Choose Deposit, enter a positive whole-rupee Amount, Transaction date and optional Remarks, then submit. A failed write retains the input and unchanged statement; retry only after checking whether the record exists.",
+      "Confirm the successful entry in Cash account statement with its effective date, running balance and remarks.",
+      "Choose Withdraw. An amount above available cash cannot be recorded. Record a valid withdrawal using the same explicit form, then inspect the statement.",
+      "Choose Adjust, enter a non-zero signed whole-rupee amount and a required reason. Correct rejected input or retry a failed write while the draft remains visible. Confirm a separate adjustment entry rather than rewriting a prior economic event.",
+      "Reload and verify the statement and balances. No order, fill or external transfer should be created by these actions."
+    ],
+    "prerequisites": [
+      "An owned active portfolio and actual accounting evidence for any real cash record."
+    ],
+    "warnings": [
+      "Record cash movement updates the StoX ledger; it does not transfer money at a bank or broker. Available cash and reserved cash differ. A reserve shortfall is a warning, not a second cash account or an independent withdrawal prohibition."
+    ]
   },
   {
     "id": "EXE-01",

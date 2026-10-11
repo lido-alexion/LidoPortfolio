@@ -78,3 +78,42 @@ These journeys cover the authentication prerequisite for using protected investo
 6. To change the profile picture, select a local JPEG or PNG (maximum 5 MB). Unsupported formats are rejected before upload. Confirm the updated picture action, refresh, and use Remove photo when needed.
 
 **Expected result:** Changes apply to the authenticated account only. These actions do not transfer cash, alter holdings, run a decision pipeline or send orders. UI fixtures prove name persistence, rejected-password correction, input clearing and photo lifecycle; backend `ProfileTest` owns actual authorization, file validation and cross-session effects.
+
+## AUTH-06 — Accept an administrator-issued invitation and recover a rejected submission
+
+- Requires: a current administrator-issued, single-use invitation link. Start from `/login` if you need to contact the administrator for a link.
+- Search synonyms: accept invite, invitation password, invite expired.
+
+1. Open the issued invitation link and confirm the fixed account email.
+2. Enter your name and matching new password/confirmation, then create the account and sign in.
+3. If validation or a transient acceptance error occurs, retain the form and correct/retry without losing the entered values or falsely becoming authenticated.
+4. After successful acceptance, the application restores the account session and requested protected page, or the Dashboard.
+5. An invalid, expired, revoked or used invitation offers return to sign-in; it must not create an account or session. Request a new invitation from the administrator.
+
+**Expected result:** account creation stays inside the existing invite capability and Admin-controlled workflow. Credentials are never emailed or placed in the URL.
+
+## AUTH-07 — Request account access and verify email ownership without self-registration
+
+- Requires: a guest using `/request-account` and completing the mandatory human verification.
+- Search synonyms: request account, request access, verify request email.
+
+1. Enter your full name and email. Complete human verification before submitting the access request.
+2. If verification is missing/unavailable, stop submission and try later. Correct a validation error or retry a transient request failure while retaining the form.
+3. A successful eligible request is available for Admin review immediately, with email verification initially advisory. A safe generic response must not claim that a verification email was delivered or disclose whether an existing account exists.
+4. If an emailed verification link is available, open it to verify ownership of the same pending request. Verification alone does not approve access or create a signed-in account.
+5. Return to login or wait for the administrator's standard invitation. An expired/used verification link cannot resurrect an expired request; submit a fresh request if necessary.
+
+**Expected result:** Turnstile and Admin invitation remain mandatory boundaries. The frozen V9 email-resilience rules supersede the earlier V8 requirement to verify before Admin review.
+
+## AUTH-08 — Review an access request and preserve the standard invitation boundary
+
+- Requires: an authorized Admin using `/settings/users`; an investor cannot perform these actions.
+- Search synonyms: approve access request, unverified request, create invite.
+
+1. Inspect pending Account access requests, their Verified/Unverified indication and observed email delivery state.
+2. Review the request and choose Create invite. For an unverified request, read the confirmation; cancelling performs no action, while explicit approval records the unverified decision and issues the normal secure invitation.
+3. If creation fails, preserve the pending request and retry after recovery. Email delivery failure does not invalidate a successfully created invitation.
+4. Use Show all statuses to inspect the resolved request. Where manual fallback is needed, Copy invitation email/link uses the existing invitation and does not mint another token.
+5. Where needed, resend verification for a still-active unverified request, or use Ignore/Reject with an internal reason. Applicant-facing messages must not disclose the internal reason or ban details.
+
+**Expected result:** Admin controls approval, invitation capability and audit history. Verification is advisory, while invitation expiry/single-use, abuse controls and authorization remain authoritative. Queue delivery and actual mailbox receipt need separate runtime evidence.

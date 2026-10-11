@@ -48,6 +48,9 @@ UI labels can evolve. The route and user intent are more important than minor wo
 | AUTH-02 | Recover from rejected credentials | [Account entry](00-account-entry.md#auth-02--recover-from-rejected-credentials) |
 | AUTH-03 | End a session and return through sign-in | [Account entry](00-account-entry.md#auth-03--end-a-session-and-return-through-sign-in) |
 | AUTH-04 | Recover through an administrator-issued reset link | [Account entry](00-account-entry.md#auth-04--recover-a-password-through-an-administrator-issued-link) |
+| AUTH-06 | Accept invitation and recover rejected setup | [Account entry](00-account-entry.md#auth-06--accept-an-administrator-issued-invitation-and-recover-a-rejected-submission) |
+| AUTH-07 | Request/verify access without self-registration | [Account entry](00-account-entry.md#auth-07--request-account-access-and-verify-email-ownership-without-self-registration) |
+| AUTH-08 | Admin reviews a request and issues standard invitation | [Account entry](00-account-entry.md#auth-08--review-an-access-request-and-preserve-the-standard-invitation-boundary) |
 | AUTH-05 | Maintain profile, password and photo | [Account entry](00-account-entry.md#auth-05--maintain-your-profile-and-credentials) |
 
 ### A. Screeners
@@ -173,3 +176,27 @@ If this guide conflicts with an implemented/current product contract, correct th
 | E2E-08 | Stage sources, preview/apply PIT backfill, and record deployed acceptance | [Admin production ML acceptance](05-end-to-end.md#e2e-08--admin-production-ml-acceptance) |
 
 - [Documentation assistant](06-assistant.md) — grounded help, follow-up, feedback and degraded recovery.
+
+### Investor overview and advisory alerts
+
+| ID | Scenario | Detail |
+| --- | --- | --- |
+| E2E-14 | Refresh overview and recover unavailable dashboard | [Overview](08-investor-overview-alerts.md#e2e-14--refresh-portfolio-overview-and-recover-an-unavailable-dashboard) |
+| E2E-15 | Compare relative strength and recover missing history | [Stock Explorer](08-investor-overview-alerts.md#e2e-15--compare-a-stock-with-its-benchmark-and-recover-missing-price-data) |
+| E2E-16 | Maintain/evaluate advisory alert policies | [Alert policies](08-investor-overview-alerts.md#e2e-16--maintain-and-evaluate-an-advisory-alert-policy) |
+| E2E-17 | Save optional product-email preferences and retry failure | [Email preferences](08-investor-overview-alerts.md#e2e-17--save-optional-product-email-preferences-and-recover-a-failed-update) |
+
+### Data export
+
+| ID | Scenario | Detail |
+| --- | --- | --- |
+| E2E-18 | Export scoped snapshot/chart data and recover background status/cancellation | [Data export](09-data-export.md#e2e-18--export-snapshot-data-and-recover-a-background-export) |
+| E2E-19 | Maintain a private export basket and recover workbook generation | [Data export](09-data-export.md#e2e-19--maintain-a-private-export-basket-and-recover-a-rejected-workbook) |
+
+### Portfolio lifecycle and cash
+
+| ID | Scenario | Detail |
+| --- | --- | --- |
+| E2E-20 | Manage owned portfolio lifecycle and confirmed deletion | [Portfolio lifecycle](10-portfolio-cash.md#e2e-20--create-rename-select-default-and-retire-a-portfolio) |
+| E2E-21 | Clone/pause/resume distinct paper simulation | [Paper boundary](10-portfolio-cash.md#e2e-21--clone-a-live-portfolio-into-a-distinct-paper-simulation) |
+| E2E-22 | Record cash evidence and inspect reservations | [Cash](10-portfolio-cash.md#e2e-22--record-cash-evidence-and-inspect-reservations-without-trading) |

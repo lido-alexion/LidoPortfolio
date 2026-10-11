@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api';
 import { showToast } from '../toast';
+import ExportArtifactStatus, { exportDownloadUrl } from './ExportArtifactStatus';
 
 const SNAPSHOT_RANGES = ['90d', '180d', '365d', 'all'];
 const SORT_DIRECTIONS = ['asc', 'desc'];
@@ -28,6 +29,7 @@ export default function ExportBasketPanel() {
     const [items, setItems] = useState([]);
     const [busy, setBusy] = useState(false);
     const [errors, setErrors] = useState({});
+    const [artifact, setArtifact] = useState(null);
 
     useEffect(() => {
         if (!open) return;
@@ -43,6 +45,7 @@ export default function ExportBasketPanel() {
     }, [open]);
 
     const save = async (next, index) => {
+        if (busy) return false;
         const nextErrors = { ...errors };
         if (typeof index === 'number') {
             const item = next[index];
@@ -56,6 +59,7 @@ export default function ExportBasketPanel() {
             delete nextErrors[index];
         }
         setErrors(nextErrors);
+        setBusy(true);
         try {
             await api.put('/exports/basket', { items: next });
             setItems(next);
@@ -64,7 +68,7 @@ export default function ExportBasketPanel() {
         } catch (error) {
             showToast(error?.response?.data?.message || 'Export basket could not be saved.', 'danger');
             return false;
-        }
+        } finally { setBusy(false); }
     };
     const updateItem = (index, changes) => setItems((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item));
     const add = async (datasetId) => {
@@ -73,14 +77,11 @@ export default function ExportBasketPanel() {
         const dataset = catalog.find((entry) => entry.id === datasetId);
         if (!dataset) return;
         const next = [...items, { dataset: datasetId, sheet_name: datasetId, fields: [...(dataset.fields || [])], scope: dataset.scopes?.[0] || 'full', selected: [], filters: { range: '90d', sort_by: 'snapshot_date', sort_direction: 'asc' } }];
-        setItems(next);
-        try { await api.put('/exports/basket', { items: next }); } catch (error) { showToast(error?.response?.data?.message || 'Export basket could not be saved.', 'danger'); }
+        await save(next);
     };
     const remove = async (index) => {
         const next = items.filter((_, itemIndex) => itemIndex !== index);
-        setItems(next);
-        setErrors((current) => Object.fromEntries(Object.entries(current).filter(([key]) => Number(key) !== index).map(([key, value]) => [Number(key) > index ? Number(key) - 1 : Number(key), value])));
-        try { await api.put('/exports/basket', { items: next }); } catch (error) { showToast(error?.response?.data?.message || 'Export basket could not be saved.', 'danger'); }
+        if (await save(next)) setErrors((current) => Object.fromEntries(Object.entries(current).filter(([key]) => Number(key) !== index).map(([key, value]) => [Number(key) > index ? Number(key) - 1 : Number(key), value])));
     };
     const exportBasket = async () => {
         const validationErrors = {};
@@ -95,7 +96,10 @@ export default function ExportBasketPanel() {
             const saved = await api.put('/exports/basket', { items });
             setItems(saved.data?.data?.items || items);
             const response = await api.post('/exports/basket/export');
-            if (response.data?.data?.download_url) window.location.assign(response.data.data.download_url);
+            const next = response.data?.data;
+            setArtifact(next);
+            const download = exportDownloadUrl(next);
+            if (download) window.location.assign(download);
         } catch (error) { showToast(error?.response?.data?.message || 'Basket export failed.', 'danger'); } finally { setBusy(false); }
     };
 
@@ -108,20 +112,21 @@ export default function ExportBasketPanel() {
                 const fields = dataset?.fields || [];
                 const scopes = dataset?.scopes || [];
                 return <section className="border rounded p-2 mb-2" key={`${item.dataset}-${index}`} aria-label={`Configuration for ${dataset?.label || item.dataset}`}>
-                    <div className="d-flex gap-2 mb-2"><input className="form-control form-control-sm" value={item.sheet_name || item.dataset} aria-label={`Sheet name for ${item.dataset}`} onChange={(event) => updateItem(index, { sheet_name: event.target.value })} /><button type="button" className="btn btn-sm btn-outline-danger" onClick={() => remove(index)}>Remove</button></div>
-                    <fieldset className="mb-2"><legend className="small">Included fields</legend>{fields.map((field) => <label className="form-check form-check-inline" key={field}><input className="form-check-input" type="checkbox" checked={(item.fields || []).includes(field)} aria-label={`Include ${dataset?.field_metadata?.[field]?.label || field} in ${dataset?.label || item.dataset}`} onChange={(event) => updateItem(index, { fields: event.target.checked ? [...(item.fields || []), field] : (item.fields || []).filter((value) => value !== field) })} /> <span className="form-check-label">{dataset?.field_metadata?.[field]?.label || field}</span></label>)}</fieldset>
+                    <div className="d-flex gap-2 mb-2"><input disabled={busy} className="form-control form-control-sm" value={item.sheet_name || item.dataset} aria-label={`Sheet name for ${item.dataset}`} onChange={(event) => updateItem(index, { sheet_name: event.target.value })} /><button type="button" className="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => remove(index)}>Remove</button></div>
+                    <fieldset disabled={busy} className="mb-2"><legend className="small">Included fields</legend>{fields.map((field) => <label className="form-check form-check-inline" key={field}><input className="form-check-input" type="checkbox" checked={(item.fields || []).includes(field)} aria-label={`Include ${dataset?.field_metadata?.[field]?.label || field} in ${dataset?.label || item.dataset}`} onChange={(event) => updateItem(index, { fields: event.target.checked ? [...(item.fields || []), field] : (item.fields || []).filter((value) => value !== field) })} /> <span className="form-check-label">{dataset?.field_metadata?.[field]?.label || field}</span></label>)}</fieldset>
                     <label className="form-label small" htmlFor={`basket-scope-${index}`}>Scope</label>
-                    <select id={`basket-scope-${index}`} className="form-select form-select-sm mb-2" value={item.scope || scopes[0] || ''} onChange={(event) => updateItem(index, { scope: event.target.value })}>{scopes.map((scope) => <option key={scope} value={scope}>{scope}</option>)}</select>
+                    <select disabled={busy} id={`basket-scope-${index}`} className="form-select form-select-sm mb-2" value={item.scope || scopes[0] || ''} onChange={(event) => updateItem(index, { scope: event.target.value })}>{scopes.map((scope) => <option key={scope} value={scope}>{scope}</option>)}</select>
                     {dataset?.scopes?.includes('current') && item.scope === 'current' && <div className="d-flex gap-2 mb-2">
-                        <label className="form-label small flex-fill">Snapshot range<select className="form-select form-select-sm" aria-label={`Snapshot range for ${item.dataset}`} value={item.filters?.range || '90d'} onChange={(event) => updateItem(index, { filters: { ...item.filters, range: event.target.value, sort_by: 'snapshot_date' } })}>{SNAPSHOT_RANGES.map((range) => <option key={range} value={range}>{range}</option>)}</select></label>
-                        <label className="form-label small flex-fill">Sort direction<select className="form-select form-select-sm" aria-label={`Snapshot sort direction for ${item.dataset}`} value={item.filters?.sort_direction || 'asc'} onChange={(event) => updateItem(index, { filters: { ...item.filters, sort_by: 'snapshot_date', sort_direction: event.target.value } })}>{SORT_DIRECTIONS.map((direction) => <option key={direction} value={direction}>{direction === 'asc' ? 'Oldest first' : 'Newest first'}</option>)}</select></label>
+                        <label className="form-label small flex-fill">Snapshot range<select disabled={busy} className="form-select form-select-sm" aria-label={`Snapshot range for ${item.dataset}`} value={item.filters?.range || '90d'} onChange={(event) => updateItem(index, { filters: { ...item.filters, range: event.target.value, sort_by: 'snapshot_date' } })}>{SNAPSHOT_RANGES.map((range) => <option key={range} value={range}>{range}</option>)}</select></label>
+                        <label className="form-label small flex-fill">Sort direction<select disabled={busy} className="form-select form-select-sm" aria-label={`Snapshot sort direction for ${item.dataset}`} value={item.filters?.sort_direction || 'asc'} onChange={(event) => updateItem(index, { filters: { ...item.filters, sort_by: 'snapshot_date', sort_direction: event.target.value } })}>{SORT_DIRECTIONS.map((direction) => <option key={direction} value={direction}>{direction === 'asc' ? 'Oldest first' : 'Newest first'}</option>)}</select></label>
                     </div>}
-                    {dataset?.scopes?.includes('selected') && item.scope === 'selected' && <label className="form-label small w-100">Stable selected row IDs<textarea className="form-control form-control-sm" rows="2" aria-label={`Stable selected row IDs for ${item.dataset}`} value={(item.selected || []).join('\n')} onChange={(event) => updateItem(index, { selected: normalizedSelectedIds(event.target.value) })} placeholder="Enter row IDs, separated by commas or lines" /></label>}
+                    {dataset?.scopes?.includes('selected') && item.scope === 'selected' && <label className="form-label small w-100">Stable selected row IDs<textarea disabled={busy} className="form-control form-control-sm" rows="2" aria-label={`Stable selected row IDs for ${item.dataset}`} value={(item.selected || []).join('\n')} onChange={(event) => updateItem(index, { selected: normalizedSelectedIds(event.target.value) })} placeholder="Enter row IDs, separated by commas or lines" /></label>}
                     {errors[index] && <div className="small text-danger" role="alert">{errors[index]}</div>}
-                    <button type="button" className="btn btn-sm btn-outline-primary mt-1" onClick={() => save(items, index)}>Save item configuration</button>
+                    <button type="button" className="btn btn-sm btn-outline-primary mt-1" disabled={busy} onClick={() => save(items, index)}>Save item configuration</button>
                 </section>;
             })}
-            <div className="d-flex flex-wrap gap-2 mt-2">{catalog.filter((dataset) => !items.some((item) => item.dataset === dataset.id)).map((dataset) => <button type="button" className="btn btn-sm btn-outline-secondary" key={dataset.id} onClick={() => add(dataset.id)}>Add {dataset.label}</button>)}<button type="button" className="btn btn-sm btn-primary" disabled={!items.length || busy} onClick={exportBasket}>{busy ? 'Preparing…' : 'Export XLSX'}</button></div>
+            <div className="d-flex flex-wrap gap-2 mt-2">{catalog.filter((dataset) => !items.some((item) => item.dataset === dataset.id)).map((dataset) => <button type="button" className="btn btn-sm btn-outline-secondary" key={dataset.id} disabled={busy} onClick={() => add(dataset.id)}>Add {dataset.label}</button>)}<button type="button" className="btn btn-sm btn-primary" disabled={!items.length || busy} onClick={exportBasket}>{busy ? 'Preparing…' : 'Export XLSX'}</button></div>
         </div>}
+        {artifact && <ExportArtifactStatus key={artifact.token} artifact={artifact} />}
     </>;
 }

@@ -269,6 +269,7 @@ export default function PortfoliosPage() {
                                                     <div style={{ maxWidth: 240 }}>
                                                         <input
                                                             type="text"
+                                                            aria-label={`New name for ${portfolio.name}`}
                                                             className={`form-control form-control-sm${renameNameError ? ' is-invalid' : ''}`}
                                                             value={renameName}
                                                             onChange={(e) => setRenameName(e.target.value)}

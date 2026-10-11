@@ -3,9 +3,9 @@ import test from 'node:test';
 import { JOURNEY_TOPICS, normalizeHelpQuery, searchJourneyTopics } from '../../resources/js/src/data/journeyMetadata.js';
 
 test('journey metadata has stable IDs and actionable contracts', () => {
-    assert.equal(JOURNEY_TOPICS.length, 79);
+    assert.equal(JOURNEY_TOPICS.length, 91);
     assert.equal(new Set(JOURNEY_TOPICS.map((topic) => topic.id)).size, JOURNEY_TOPICS.length);
-    assert.deepEqual(JOURNEY_TOPICS.filter((topic) => topic.id.startsWith('AUTH-')).map((topic) => topic.id), ['AUTH-01', 'AUTH-02', 'AUTH-03', 'AUTH-04', 'AUTH-05']);
+    assert.deepEqual(JOURNEY_TOPICS.filter((topic) => topic.id.startsWith('AUTH-')).map((topic) => topic.id), ['AUTH-01', 'AUTH-02', 'AUTH-03', 'AUTH-04', 'AUTH-05', 'AUTH-06', 'AUTH-07', 'AUTH-08']);
     assert.equal(JOURNEY_TOPICS.find((topic) => topic.id === 'AUTH-01').route, '/screeners');
     for (const topic of JOURNEY_TOPICS) {
         assert.match(topic.id, /^(AUTH|SCR|STR|REC|EXE|E2E|AI)-\d+$/);
