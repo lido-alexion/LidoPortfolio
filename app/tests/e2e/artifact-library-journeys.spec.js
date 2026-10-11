@@ -17,7 +17,7 @@ async function prepare(page, viewport, name, allowed) {
     }) };
 }
 const card = (page, semver) => page.locator('.card-body').filter({ has: page.getByRole('heading', { level: 3, name: new RegExp(`^${semver.replaceAll('.', '\\.')}(?:\\s|$)`) }) });
-const error = page => page.locator('.contentPane [role="alert"]');
+const error = page => page.locator('.contentPane [role="alert"]:not(.lido-toast)');
 for (const viewport of VIEWPORTS) {
     test.describe(`Artifact Library governance ${viewport.name}`, () => {
         test.use({ hasTouch: viewport.name === 'mobile' });
