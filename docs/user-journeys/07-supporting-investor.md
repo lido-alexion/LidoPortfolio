@@ -46,3 +46,30 @@ These existing investor flows were discovered during the V9-UX-001 completeness 
 5. If a save fails, keep the intended values available and retry explicitly before relying on them.
 
 **Expected result:** Only the active portfolio's settings change. Saving does not run the decision pipeline, change execution mode, or submit/cancel an order. Strategy ATR controls remain in the Strategy editor under the existing approved contract.
+
+
+## E2E-12 — Filter notification history and manage attention
+
+**Goal:** Read product activity without confusing attention state with investment decisions.
+
+1. Open `/notification-history`.
+2. Search for the relevant event and apply the filters.
+3. Inspect the matching item. Mark it unread if attention is still needed, or read after review.
+4. Refresh and confirm attention state is retained.
+5. If history cannot load, use Retry rather than treating missing history as an empty result.
+
+**Expected result:** Attention controls change notification state only. They do not approve a recommendation, resolve a broker condition, submit an order, or send an external message.
+
+## E2E-13 — Switch the active portfolio in one tab
+
+**Goal:** Work in the intended portfolio without silently changing another open tab.
+
+- Requires: An authenticated investor with at least two portfolios.
+
+1. Open `/holdings` and confirm the active portfolio name in the header.
+2. Open the portfolio switcher and choose the intended portfolio.
+3. Confirm that holdings are requested for that portfolio and its name appears in the header.
+4. Refresh and confirm the active portfolio remains selected in this tab.
+5. Open StoX in a separate tab and confirm it starts with its own active portfolio selection.
+
+**Expected result:** The active portfolio changes per tab; switching does not move holdings or cash, edit the account's default portfolio, or submit orders. A fresh tab uses its valid stored/default context rather than inheriting a switch from an unrelated tab.

@@ -133,9 +133,9 @@ UI labels can evolve. The route and user intent are more important than minor wo
 
 ## Supporting and remaining inventory
 
-[Supporting investor journeys](07-supporting-investor.md) covers stock research/watchlist membership (`E2E-09`), Kite connection recovery/disconnect (`E2E-10`), and portfolio safeguards (`E2E-11`). These are mandatory scope under the frozen V9-UX-001 contract.
+[Supporting investor journeys](07-supporting-investor.md) covers stock research/watchlist membership (`E2E-09`), Kite connection recovery/disconnect (`E2E-10`), and portfolio safeguards (`E2E-11`), notification attention/recovery (`E2E-12`), and per-tab portfolio switching (`E2E-13`). These are mandatory scope under the frozen V9-UX-001 contract.
 
-The final completeness review must still reconcile Dashboard/Stock Explorer, alerts and notification history, profile and portfolio switching, account/session recovery, and other major workflows introduced by completed V9 epics. Existing responsive or feature tests alone do not establish complete journey conformance. These items are open scope, not a waiver.
+The final completeness review must still reconcile Dashboard/Stock Explorer, alert lifecycle, profile editing and password recovery, and other major workflows introduced by completed V9 epics. Existing responsive or feature tests alone do not establish complete journey conformance. These items are open scope, not a waiver.
 
 ## Documentation rules
 

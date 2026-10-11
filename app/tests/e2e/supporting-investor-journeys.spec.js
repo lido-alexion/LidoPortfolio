@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
+import { TEST_PORTFOLIO, TEST_USER } from '../js/tos/fixtures/tosApi.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 
 const VIEWPORTS = [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }];
@@ -125,5 +126,90 @@ for (const viewport of VIEWPORTS) {
         await expect(stop).toHaveValue('7.00');
         await expect(trailing).toHaveValue('12.00');
         expectNoTrading(evidence);
+    });
+}
+
+for (const viewport of VIEWPORTS) {
+    test(`AUTH-03 ends a session and requires login before restoring protected content (${viewport.name})`, async ({ page }, testInfo) => {
+        journeyId(testInfo, 'AUTH-03');
+        const evidence = await prepare(page, viewport);
+        let signedIn = true;
+        await page.route('**/api/auth/me', route => route.fulfill({ status: signedIn ? 200 : 401, json: signedIn ? { user: TEST_USER } : { message: 'Unauthenticated.' } }));
+        await page.route('**/api/auth/logout', route => { signedIn = false; return route.fulfill({ status: 204, body: '' }); });
+        await page.route('**/api/auth/login', route => { signedIn = true; return route.fulfill({ json: { user: TEST_USER } }); });
+        await page.goto('/screeners');
+        await expect(page.getByRole('heading', { name: 'Screener', exact: true })).toBeVisible();
+        await page.getByRole('button', { name: /Profile menu for/ }).click();
+        await page.getByRole('button', { name: 'Logout', exact: true }).click();
+        await expect(page.getByRole('heading', { name: 'Login', exact: true })).toBeVisible();
+        await page.goto('/screeners?source=ended-session');
+        await expect(page.getByRole('heading', { name: 'Screener', exact: true })).toHaveCount(0);
+        await page.getByLabel('Email').fill('investor@example.test');
+        await page.getByLabel('Password').fill('deterministic-test-password');
+        await page.getByRole('button', { name: 'Login', exact: true }).click();
+        await expect(page).toHaveURL(/screeners\?source=ended-session$/);
+        await expect(page.getByRole('heading', { name: 'Screener', exact: true })).toBeVisible();
+        expectNoTrading(evidence);
+    });
+
+    test(`E2E-12 recovers notification history and persists attention without trading (${viewport.name})`, async ({ page }, testInfo) => {
+        journeyId(testInfo, 'E2E-12');
+        const evidence = await prepare(page, viewport);
+        let attention = 'read';
+        let failHistory = true;
+        await page.route('**/api/notification-center**', route => {
+            const req = route.request();
+            const url = new URL(req.url());
+            if (url.pathname.endsWith('/unread')) { attention = 'unread'; return route.fulfill({ json: { data: { attention_state: attention } } }); }
+            if (req.method() === 'GET' && url.pathname === '/api/notification-center') {
+                // The header summary is not the history page's per_page=50 request.
+                if (url.searchParams.get('per_page') === '50' && failHistory) { failHistory = false; return route.fulfill({ status: 503, json: { message: 'History temporarily unavailable.' } }); }
+                return route.fulfill({ json: { data: [{ id: 17, attention_state: attention, condition_state: 'na', type: 'recommendation.changed', severity: 'info', title: 'Recommendation changed', message: 'A product update is ready.', latest_activity_at: '2026-10-04T10:00:00Z', deliveries: [] }], meta: { unread_count: attention === 'unread' ? 1 : 0, active_critical_count: 0 } } });
+            }
+            return route.fallback();
+        });
+        await page.goto('/notification-history');
+        await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
+        await page.getByRole('button', { name: 'Retry', exact: true }).click();
+        await page.getByLabel('Search notifications').fill('recommendation');
+        const query = page.waitForRequest(r => new URL(r.url()).pathname === '/api/notification-center' && new URL(r.url()).searchParams.get('q') === 'recommendation');
+        await page.getByRole('button', { name: 'Apply filters' }).click();
+        await query;
+        await expect(page.getByText('Recommendation changed', { exact: true })).toBeVisible();
+        await page.getByRole('button', { name: 'Mark unread', exact: true }).click();
+        await expect(page.getByRole('button', { name: 'Mark read', exact: true })).toBeVisible();
+        await page.reload();
+        await expect(page.getByRole('button', { name: 'Mark read', exact: true })).toBeVisible();
+        expect(attention).toBe('unread');
+        expectNoTrading(evidence);
+    });
+
+    test(`E2E-13 switches scoped holdings per tab and retains selection after refresh (${viewport.name})`, async ({ page, context }, testInfo) => {
+        journeyId(testInfo, 'E2E-13');
+        const evidence = await prepare(page, viewport);
+        const second = { id: 2, name: 'Long Term', is_default: false };
+        await page.route('**/api/portfolios', route => route.fulfill({ json: { data: [TEST_PORTFOLIO, second] } }));
+        const scoped = [];
+        await page.route('**/api/holdings', route => { scoped.push(route.request().headers()['x-profile-id']); return route.fulfill({ json: { data: [] } }); });
+        await page.goto('/holdings');
+        const switcher = page.getByRole('button', { name: 'Main', exact: true });
+        await expect(switcher).toBeVisible();
+        await switcher.click();
+        const switched = page.waitForRequest(r => new URL(r.url()).pathname === '/api/holdings' && r.headers()['x-profile-id'] === '2');
+        await page.getByRole('button', { name: 'Long Term', exact: true }).click();
+        await switched;
+        await expect(page.locator('.lido-portfolio-switcher')).toHaveText('Long Term');
+        await page.reload();
+        await expect(page.locator('.lido-portfolio-switcher')).toHaveText('Long Term');
+        expect(scoped.at(-1)).toBe('2');
+        const other = await context.newPage();
+        const otherEvidence = await prepare(other, viewport);
+        await other.route('**/api/portfolios', route => route.fulfill({ json: { data: [TEST_PORTFOLIO, second] } }));
+        await other.goto('/holdings');
+        await expect(other.locator('.lido-portfolio-switcher')).toHaveText('Main');
+        await expect(page.locator('.lido-portfolio-switcher')).toHaveText('Long Term');
+        expectNoTrading(evidence);
+        expectNoTrading(otherEvidence);
+        await other.close();
     });
 }

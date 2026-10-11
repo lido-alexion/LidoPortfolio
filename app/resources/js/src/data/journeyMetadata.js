@@ -297,6 +297,34 @@ export const JOURNEY_TOPICS = Object.freeze([
     "warnings": []
   },
   {
+    "id": "AUTH-03",
+    "title": "How do I end a session and return through sign-in?",
+    "aliases": [
+      "End a session and return through sign-in",
+      "auth-03"
+    ],
+    "keywords": [
+      "end",
+      "session",
+      "and",
+      "return",
+      "through",
+      "sign"
+    ],
+    "synonyms": [],
+    "category": "Account access",
+    "route": "/login",
+    "guide": "/docs/journeys/00-account-entry.html#auth-03-end-a-session-and-return-through-sign-in",
+    "steps": [
+      "Open the profile menu from a protected page and choose Logout.",
+      "Confirm that protected investor content is no longer visible.",
+      "Reopen the intended protected page. If the previous session expired or was ended, sign in again.",
+      "Confirm the intended page is restored only after successful sign-in."
+    ],
+    "prerequisites": [],
+    "warnings": []
+  },
+  {
     "id": "E2E-01",
     "title": "How do I new idea to first BUY?",
     "aliases": [
@@ -637,6 +665,66 @@ export const JOURNEY_TOPICS = Object.freeze([
     ],
     "prerequisites": [
       "An authenticated investor with an active portfolio."
+    ],
+    "warnings": []
+  },
+  {
+    "id": "E2E-12",
+    "title": "How do I filter notification history and manage attention?",
+    "aliases": [
+      "Filter notification history and manage attention",
+      "e2e-12"
+    ],
+    "keywords": [
+      "filter",
+      "notification",
+      "history",
+      "and",
+      "manage",
+      "attention"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/notification-history",
+    "guide": "/docs/journeys/07-supporting-investor.html#e2e-12-filter-notification-history-and-manage-attention",
+    "steps": [
+      "Open `/notification-history`.",
+      "Search for the relevant event and apply the filters.",
+      "Inspect the matching item. Mark it unread if attention is still needed, or read after review.",
+      "Refresh and confirm attention state is retained.",
+      "If history cannot load, use Retry rather than treating missing history as an empty result."
+    ],
+    "prerequisites": [],
+    "warnings": []
+  },
+  {
+    "id": "E2E-13",
+    "title": "How do I switch the active portfolio in one tab?",
+    "aliases": [
+      "Switch the active portfolio in one tab",
+      "e2e-13"
+    ],
+    "keywords": [
+      "switch",
+      "the",
+      "active",
+      "portfolio",
+      "one",
+      "tab"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/holdings",
+    "guide": "/docs/journeys/07-supporting-investor.html#e2e-13-switch-the-active-portfolio-in-one-tab",
+    "steps": [
+      "Open `/holdings` and confirm the active portfolio name in the header.",
+      "Open the portfolio switcher and choose the intended portfolio.",
+      "Confirm that holdings are requested for that portfolio and its name appears in the header.",
+      "Refresh and confirm the active portfolio remains selected in this tab.",
+      "Open StoX in a separate tab and confirm it starts with its own active portfolio selection."
+    ],
+    "prerequisites": [
+      "An authenticated investor with at least two portfolios."
     ],
     "warnings": []
   },
@@ -2171,6 +2259,6 @@ const STOP_WORDS = new Set(['a', 'an', 'and', 'do', 'how', 'i', 'the', 'to']);
 export function normalizeHelpQuery(value) { return String(value || '').toLowerCase().normalize('NFKD').replace(/\p{M}/gu, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
 function tokens(value) { return normalizeHelpQuery(value).split(/\s+/).filter((token) => token && !STOP_WORDS.has(token)); }
 function editDistanceAtMostOne(left, right) { if (Math.abs(left.length - right.length) > 1) return false; let i = 0; let j = 0; let edits = 0; while (i < left.length && j < right.length) { if (left[i] === right[j]) { i++; j++; continue; } if (++edits > 1) return false; if (left.length > right.length) i++; else if (right.length > left.length) j++; else { i++; j++; } } return edits + (i < left.length || j < right.length ? 1 : 0) <= 1; }
-function scoreTopic(topic, query, currentPath = '', history = []) { const normalized = normalizeHelpQuery(query); if (!normalized) return 0; const qTokens = new Set(tokens(normalized)); let score = 0; const titleAliases = [topic.title, ...(topic.aliases || [])]; if (titleAliases.map(normalizeHelpQuery).includes(normalized)) score += 100; for (const token of qTokens) { if (tokens(topic.title).includes(token)) score += 24; if ((topic.aliases || []).some((value) => tokens(value).includes(token))) score += 16; if ((topic.keywords || []).includes(token)) score += 10; if ((topic.synonyms || []).some((value) => tokens(value).includes(token))) score += 7; if (token.length >= 4 && titleAliases.some((value) => tokens(value).some((candidate) => editDistanceAtMostOne(token, candidate)))) score += 5; } if (currentPath && topic.route === currentPath) score += 6; if (history.includes(topic.id)) score += 2; return score; }
+function scoreTopic(topic, query, currentPath = '', history = []) { const normalized = normalizeHelpQuery(query); if (!normalized) return 0; const qTokens = new Set(tokens(normalized)); let score = 0; const titleAliases = [topic.title, ...(topic.aliases || [])]; if (titleAliases.map(normalizeHelpQuery).includes(normalized)) score += 100; if ((topic.synonyms || []).map(normalizeHelpQuery).includes(normalized)) score += 90; for (const token of qTokens) { if (tokens(topic.title).includes(token)) score += 24; if ((topic.aliases || []).some((value) => tokens(value).includes(token))) score += 16; if ((topic.keywords || []).includes(token)) score += 10; if ((topic.synonyms || []).some((value) => tokens(value).includes(token))) score += 7; if (token.length >= 4 && titleAliases.some((value) => tokens(value).some((candidate) => editDistanceAtMostOne(token, candidate)))) score += 5; } if (currentPath && topic.route === currentPath) score += 6; if (history.includes(topic.id)) score += 2; return score; }
 export function searchJourneyTopics(query, { currentPath = '', history = [], limit = 6, exclude = [] } = {}) { return JOURNEY_TOPICS.map((topic) => { const textScore = scoreTopic(topic, query); const score = textScore + (currentPath && topic.route === currentPath ? 6 : 0) + (history.includes(topic.id) ? 2 : 0); return { ...topic, score, textScore }; }).filter((topic) => topic.textScore > 0 && !exclude.includes(topic.id)).sort((a, b) => b.textScore - a.textScore || b.score - a.score || a.id.localeCompare(b.id)).slice(0, limit); }
 export function explainJourneyMatch(topic, query) { const q = new Set(tokens(query)); const matched = [topic.title, ...(topic.aliases || []), ...(topic.keywords || []), ...(topic.synonyms || [])].flatMap(tokens).filter((token) => q.has(token)); return matched.length ? 'Matched ' + [...new Set(matched)].slice(0, 3).join(', ') : 'Related StoX journey'; }

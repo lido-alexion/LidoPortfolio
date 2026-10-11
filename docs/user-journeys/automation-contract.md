@@ -17,7 +17,7 @@ production smoke remains non-destructive and separate from deterministic CI.
 
 | Journey source | Stable IDs | Automation location |
 | --- | --- | --- |
-| `00-account-entry.md` | `AUTH-*` | `app/tests/e2e/auth-entry.spec.js` |
+| `00-account-entry.md` | `AUTH-*` | `app/tests/e2e/auth-entry.spec.js` and `supporting-investor-journeys.spec.js` |
 | `01-screeners.md` | `SCR-*` | `app/tests/e2e/` |
 | `02-strategies.md` | `STR-*` | `app/tests/e2e/` |
 | `03-recommendations-review.md` | `REC-*` | `app/tests/e2e/` |
@@ -26,4 +26,4 @@ production smoke remains non-destructive and separate from deterministic CI.
 
 | `06-assistant.md` | `AI-01`–`AI-09` | `app/tests/e2e/assistant.spec.js` |
 
-| `07-supporting-investor.md` | `E2E-09`–`E2E-11` | `app/tests/e2e/supporting-investor-journeys.spec.js` |
+| `07-supporting-investor.md` | `E2E-09`–`E2E-13` | `app/tests/e2e/supporting-investor-journeys.spec.js` |
