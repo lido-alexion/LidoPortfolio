@@ -427,7 +427,7 @@ export default function ScreenerRegistryPage({ adminMode = false }) {
                         </button>
                     </div>
                     {validateResult && (
-                        <pre className="border rounded p-2 small mb-0 overflow-auto" style={{ maxHeight: 240, backgroundColor: 'var(--lido-bg-surface)', color: 'var(--lido-text)' }}>
+                        <pre tabIndex={0} role="region" aria-label="Screener registry validation JSON" className="border rounded p-2 small mb-0 overflow-auto" style={{ maxHeight: 240, backgroundColor: 'var(--lido-bg-surface)', color: 'var(--lido-text)' }}>
                             {JSON.stringify(validateResult, null, 2)}
                         </pre>
                     )}

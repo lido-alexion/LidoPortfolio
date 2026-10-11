@@ -43,3 +43,20 @@ for (const [type, Component] of [['screener', ScreenerRegistryPage], ['strategy'
   await screen.findByText(`Reviewed ${type}`); otherScope = true; fireEvent(window, new CustomEvent('portfolio-changed', { detail: { portfolioId: 2 } })); await screen.findByRole('button', { name: `Retry ${type === 'screener' ? 'Screener' : 'Strategy'} Registry` }); expect(screen.queryByText(`Reviewed ${type}`)).toBeNull(); expect(api.post).not.toHaveBeenCalled();
  });
 }
+
+for (const [type, Component, route] of [['screener', ScreenerRegistryDetailPage, '/screeners/registry/:id'], ['strategy', StrategyRegistryDetailPage, '/strategy/registry/:id']]) {
+ it(`allows keyboard access to the immutable ${type} version evidence without writes`, async () => {
+  const versions = [{ version: 2, definition_hash: 'synthetic-reviewed-hash', change_notes: 'Reviewed keyboard evidence', status: 'draft' }];
+  const original = JSON.stringify(versions);
+  api.get.mockImplementation(path => Promise.resolve({ data: { data: path.endsWith('/versions') ? versions : envelope(type) } }));
+  render(<MemoryRouter initialEntries={[route.replace(':id', '69')]}><Routes><Route path={route} element={<Component />} /></Routes></MemoryRouter>);
+  await screen.findByText('Reviewed keyboard evidence');
+  const region = screen.getByText('Reviewed keyboard evidence').closest('.table-responsive');
+  region.focus();
+  expect(region).toHaveFocus();
+  fireEvent.keyDown(region, { key: 'ArrowRight' });
+  expect(region).toHaveFocus();
+  expect(JSON.stringify(versions)).toBe(original);
+  expect(api.post).not.toHaveBeenCalled();
+ });
+}

@@ -111,7 +111,7 @@ export default function ScreenerRegistryDetailPage({ adminMode = false }) {
                                 <h3 className="h6">Version history</h3>
                                 {!versionsError && versions.length === 0 && <p className="text-muted small mb-0">No versions recorded yet.</p>}
                                 {versions.length > 0 && (
-                                    <div className="table-responsive">
+                                    <div className="table-responsive" tabIndex={0} role="region" aria-label="Screener version history">
                                         <table className="table table-sm mb-0">
                                             <thead>
                                                 <tr>
@@ -141,7 +141,7 @@ export default function ScreenerRegistryDetailPage({ adminMode = false }) {
                     <div className="card">
                         <div className="card-body">
                             <h3 className="h6">Definition (condition tree)</h3>
-                            <pre className="border rounded p-2 small mb-0 overflow-auto" style={{ maxHeight: 420, backgroundColor: 'var(--lido-bg-surface)', color: 'var(--lido-text)' }}>
+                            <pre tabIndex={0} role="region" aria-label="Screener definition JSON" className="border rounded p-2 small mb-0 overflow-auto" style={{ maxHeight: 420, backgroundColor: 'var(--lido-bg-surface)', color: 'var(--lido-text)' }}>
                                 {JSON.stringify(env.definition, null, 2)}
                             </pre>
                         </div>

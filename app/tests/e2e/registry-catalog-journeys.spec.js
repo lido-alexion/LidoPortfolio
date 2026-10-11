@@ -6,7 +6,7 @@ import { TEST_PORTFOLIO } from '../js/tos/fixtures/tosApi.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 
 const VIEWPORTS = [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }];
-const error = page => page.locator('.contentPane .alert[role="alert"]');
+const error = page => page.locator('.lido-main .contentPane.d-grid .alert[role="alert"]');
 const failure = route => route.fulfill({ status: 503, json: { message: 'Synthetic registry unavailable.' } });
 const screener = id => ({ schema_version: '1.0', artifact_type: 'screener', artifact_id: id, artifact_version: 2, slug: 'reviewed-runtime-screen', name: 'Reviewed runtime screen', definition_hash: 'synthetic-immutable-definition', metadata: { ownership: 'own', status: 'active', origin: 'imported', scope: 'portfolio', universe: 'all_equities' }, definition: { root: { type: 'condition', left: { indicator: 'close' }, operator: 'gt', right: { type: 'constant', value: 0 } } } });
 const strategy = id => ({ schema_version: '1.0', artifact_type: 'strategy', artifact_id: id, artifact_version: 3, slug: 'reviewed-runtime-strategy', name: 'Reviewed runtime strategy', definition_hash: 'synthetic-strategy-definition', metadata: { ownership: 'own', status: 'draft', origin: 'imported', scope: 'portfolio', is_enabled: false }, definition: { eligibility_sources: [{ screener_slug: 'reviewed-runtime-screen', screener_version: 2, enabled: true, priority: 1 }], scoring_model: [{ key: 'relative_strength', weight: 100, enabled: true, minimum: 70, maximum: null, parameters: [] }] }, dependencies: [] });
@@ -105,7 +105,7 @@ for (const viewport of VIEWPORTS) test.describe(`Runtime registry compatibility 
         await page.route('**/api/v1/strategy-registry/69/activate', route => { if (activateFails) { activateFails = false; return failure(route); } current = { ...current, metadata: { ...current.metadata, status: 'active', is_enabled: true } }; return route.fulfill({ json: { data: current } }); });
         await page.route('**/api/v1/strategy-registry/69/archive', route => { if (archiveFails) { archiveFails = false; return failure(route); } current = { ...current, metadata: { ...current.metadata, status: 'archived', is_enabled: false } }; return route.fulfill({ json: { data: current } }); });
         await safety.seal(); await page.goto('/strategy/registry'); await expect(error(page).filter({ hasText: 'Strategy Registry could not be loaded' })).toBeVisible(); await expect(page.getByText('No strategies match the filters.', { exact: true })).toHaveCount(0);
-        listFails = false; await page.getByRole('button', { name: 'Retry Strategy Registry' }).click(); await expect(page.getByRole('row').filter({ hasText: sibling.name })).toBeVisible();
+        listFails = false; await page.getByRole('button', { name: 'Retry Strategy Registry' }).click(); await expect(page.getByRole('row').filter({ has: page.getByRole('link', { name: sibling.slug, exact: true }) })).toBeVisible();
         await page.goto('/strategy/registry/69'); await expect(error(page).filter({ hasText: 'Synthetic registry unavailable' })).toBeVisible(); await expect(page.getByRole('button', { name: 'Enable', exact: true })).toBeDisabled();
         readFails = false; await page.getByRole('button', { name: 'Retry registry artifact' }).click(); await expect(page.getByRole('heading', { name: current.name })).toBeVisible(); await expect(error(page).filter({ hasText: 'Registry version history could not be loaded' })).toBeVisible(); await expect(page.getByText('No versions recorded yet.', { exact: true })).toHaveCount(0);
         versionsFail = false; await page.getByRole('button', { name: 'Retry registry versions' }).click(); await expect(page.getByRole('cell', { name: 'Reviewed pinned sources', exact: true })).toBeVisible(); await accessibleRegistry(page);
@@ -118,7 +118,7 @@ for (const viewport of VIEWPORTS) test.describe(`Runtime registry compatibility 
         const archive = () => page.getByRole('button', { name: 'Archive', exact: true }).click(); await nativeAction(page, archive, 'dismiss'); expect(safety.writes.filter(w => w.path.endsWith('/archive'))).toHaveLength(0);
         await nativeAction(page, archive, 'accept'); await expect(error(page).filter({ hasText: 'Synthetic registry unavailable' })).toBeVisible(); expect(current.metadata.is_enabled).toBe(true);
         await nativeAction(page, archive, 'accept'); await expect(page.getByText('archived · imported · not enabled', { exact: true })).toBeVisible();
-        await page.getByRole('link', { name: 'Back to registry', exact: true }).click(); await expect(page.getByRole('row').filter({ hasText: 'Other enabled strategy' })).toContainText('active');
+        await page.getByRole('link', { name: 'Back to registry', exact: true }).click(); await expect(page.getByRole('row').filter({ has: page.getByRole('link', { name: sibling.slug, exact: true }) })).toContainText('active');
         expect(JSON.stringify(current.definition)).toBe(definition); expect(JSON.stringify(sibling)).toBe(originalSibling); expect(safety.writes).toHaveLength(6); expect(safety.blocked).toEqual([]);
     });
 
