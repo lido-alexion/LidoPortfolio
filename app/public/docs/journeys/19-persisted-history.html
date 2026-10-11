@@ -1,0 +1,32 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>StoX user journeys</title><style>body{font:16px system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5}h1,h2{margin-top:2rem}</style></head><body><h1>Persisted transaction and evaluation history</h1>
+
+<p>These are stored financial/analytical observations. Recovery must distinguish an unavailable read from an authoritative empty result and preserve source identity. Editing/deleting a recorded transaction is distinct from placing/cancelling a broker order.</p>
+
+<h2 id="e2e-52-recover-squared-off-transaction-evidence-and-deliberate-corrections">E2E-52 — Recover squared-off transaction evidence and deliberate corrections</h2>
+
+<p>- Requires: An authenticated Investor with stored squared-off transaction records.</p>
+<p>- Warning: Deleting stored financial evidence affects portfolio calculations. Inspect the intended record and confirm deliberately. An unconfirmed deletion is not success; no broker order is placed or cancelled by this flow.</p>
+
+<p>1. Open Squared-off transactions (`/transactions/closed`). A failed read explains unavailability and offers Retry, without claiming there are no transactions.</p>
+<p>2. Retry the current read and inspect dated transaction type, quantity, price, realization and fees. Search by symbol/name using the current closed scope and pagination.</p>
+<p>3. A failed filtered read retains known rows with an unavailable warning; it does not fabricate an empty result. Retry uses the same filter.</p>
+<p>4. Edit uses the existing Transactions form and its retained-draft safeguards (EXE-16). Inspect the target stored evidence before changing it.</p>
+<p>5. Delete only the intended record after confirmation. Cancelling sends no delete request. A rejected deletion keeps the row and explains the unconfirmed operation.</p>
+<p>6. Inspect/retry deliberately. Confirmed deletion removes only the target, refreshes the current filtered view and invalidates affected dashboard data. Other transactions and strategy attribution remain intact.</p>
+
+<p>**Expected result:** Unavailable, cancelled, unconfirmed and confirmed states are distinct and financial evidence is retained until confirmation.</p>
+
+<h2 id="e2e-53-inspect-a-stored-evaluation-run-and-recover-unavailable-observations">E2E-53 — Inspect a stored evaluation run and recover unavailable observations</h2>
+
+<p>- Requires: An authenticated Investor with access to portfolio discovery/evaluation history.</p>
+<p>- Warning: Stored evaluation scores are observations; opening or retrying history does not create recommendations, run training, place orders or move cash.</p>
+
+<p>1. Open Candidates (`/candidates`). Current discovery failure/retry remains the existing recommendation/discovery journey; historical evaluations are a separate named panel.</p>
+<p>2. An unavailable history list explains the read failure and offers Retry evaluation history. It does not report that no runs exist.</p>
+<p>3. Retry and choose a specific run by its stable identifier/status/result count.</p>
+<p>4. If that run's result read fails, preserve its selection and existing known observations. Explain unavailability rather than declaring no results; Retry selected evaluation run reads the same identity.</p>
+<p>5. Inspect rank, symbol, score, confidence and explanation from the stored result. Source observations remain unchanged.</p>
+<p>6. Select a different run. A successfully read empty run may correctly report no results, while the previous run's values are never relabelled as the new identity.</p>
+
+<p>**Expected result:** Current and stored evaluations remain separate, with accurate empty/error semantics and explicit non-destructive recovery.</p>
+</body></html>

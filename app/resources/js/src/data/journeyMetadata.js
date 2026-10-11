@@ -2395,6 +2395,78 @@ export const JOURNEY_TOPICS = Object.freeze([
     ]
   },
   {
+    "id": "E2E-52",
+    "title": "How do I recover squared-off transaction evidence and deliberate corrections?",
+    "aliases": [
+      "Recover squared-off transaction evidence and deliberate corrections",
+      "e2e-52"
+    ],
+    "keywords": [
+      "recover",
+      "squared",
+      "off",
+      "transaction",
+      "evidence",
+      "and",
+      "deliberate",
+      "corrections"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/transactions/closed",
+    "guide": "/docs/journeys/19-persisted-history.html#e2e-52-recover-squared-off-transaction-evidence-and-deliberate-corrections",
+    "steps": [
+      "Open Squared-off transactions (`/transactions/closed`). A failed read explains unavailability and offers Retry, without claiming there are no transactions.",
+      "Retry the current read and inspect dated transaction type, quantity, price, realization and fees. Search by symbol/name using the current closed scope and pagination.",
+      "A failed filtered read retains known rows with an unavailable warning; it does not fabricate an empty result. Retry uses the same filter.",
+      "Edit uses the existing Transactions form and its retained-draft safeguards (EXE-16). Inspect the target stored evidence before changing it.",
+      "Delete only the intended record after confirmation. Cancelling sends no delete request. A rejected deletion keeps the row and explains the unconfirmed operation.",
+      "Inspect/retry deliberately. Confirmed deletion removes only the target, refreshes the current filtered view and invalidates affected dashboard data. Other transactions and strategy attribution remain intact."
+    ],
+    "prerequisites": [
+      "An authenticated Investor with stored squared-off transaction records."
+    ],
+    "warnings": [
+      "Deleting stored financial evidence affects portfolio calculations. Inspect the intended record and confirm deliberately. An unconfirmed deletion is not success; no broker order is placed or cancelled by this flow."
+    ]
+  },
+  {
+    "id": "E2E-53",
+    "title": "How do I inspect a stored evaluation run and recover unavailable observations?",
+    "aliases": [
+      "Inspect a stored evaluation run and recover unavailable observations",
+      "e2e-53"
+    ],
+    "keywords": [
+      "inspect",
+      "stored",
+      "evaluation",
+      "run",
+      "and",
+      "recover",
+      "unavailable",
+      "observations"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/candidates",
+    "guide": "/docs/journeys/19-persisted-history.html#e2e-53-inspect-a-stored-evaluation-run-and-recover-unavailable-observations",
+    "steps": [
+      "Open Candidates (`/candidates`). Current discovery failure/retry remains the existing recommendation/discovery journey; historical evaluations are a separate named panel.",
+      "An unavailable history list explains the read failure and offers Retry evaluation history. It does not report that no runs exist.",
+      "Retry and choose a specific run by its stable identifier/status/result count.",
+      "If that run's result read fails, preserve its selection and existing known observations. Explain unavailability rather than declaring no results; Retry selected evaluation run reads the same identity.",
+      "Inspect rank, symbol, score, confidence and explanation from the stored result. Source observations remain unchanged.",
+      "Select a different run. A successfully read empty run may correctly report no results, while the previous run's values are never relabelled as the new identity."
+    ],
+    "prerequisites": [
+      "An authenticated Investor with access to portfolio discovery/evaluation history."
+    ],
+    "warnings": [
+      "Stored evaluation scores are observations; opening or retrying history does not create recommendations, run training, place orders or move cash."
+    ]
+  },
+  {
     "id": "EXE-01",
     "title": "How do I execute an approved recommendation manually?",
     "aliases": [
