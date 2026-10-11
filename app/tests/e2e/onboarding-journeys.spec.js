@@ -111,7 +111,7 @@ for (const viewport of VIEWPORTS) {
             page.once('dialog', async dialog => { expect(dialog.message()).toContain('Approve this request anyway?'); await dialog.dismiss(); });
             await row.getByRole('button', { name: 'Create invite', exact: true }).click(); expect(attempts).toBe(0);
             page.once('dialog', dialog => dialog.accept()); await row.getByRole('button', { name: 'Create invite', exact: true }).click();
-            await expect(page.getByRole('alert').filter({ hasText: 'Synthetic invitation creation unavailable.' })).toBeVisible(); await expect(row).toContainText('Pending');
+            await expect(page.getByRole('region', { name: 'Account access requests', exact: true }).getByRole('alert').filter({ hasText: 'Synthetic invitation creation unavailable.' })).toBeVisible(); await expect(row).toContainText('Pending');
             page.once('dialog', dialog => dialog.accept()); await row.getByRole('button', { name: 'Create invite', exact: true }).click();
             await expect(row).toHaveCount(0); await page.getByRole('button', { name: 'Show all statuses', exact: true }).click();
             await expect(row).toContainText('Created'); await expect(row.getByRole('button', { name: 'Copy invitation email', exact: true })).toBeVisible();

@@ -341,7 +341,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     ],
     "synonyms": [],
     "category": "Account access",
-    "route": "/login",
+    "route": "/settings/users",
     "guide": "/docs/journeys/00-account-entry.html#auth-04-recover-a-password-through-an-administrator-issued-link",
     "steps": [
       "Open the administrator-issued reset link and confirm the displayed account.",
@@ -488,17 +488,24 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [
       "approve access request",
       "unverified request",
-      "create invite."
+      "create invite",
+      "resend verification",
+      "ignore request",
+      "reject request",
+      "clear request ban."
     ],
     "category": "Account access",
     "route": "/settings/users",
     "guide": "/docs/journeys/00-account-entry.html#auth-08-review-an-access-request-and-preserve-the-standard-invitation-boundary",
     "steps": [
-      "Inspect pending Account access requests, their Verified/Unverified indication and observed email delivery state.",
+      "Inspect pending Account access requests, their Verified/Unverified indication and observed email delivery state. An unavailable read is not an empty list; use Retry access requests. A failed filter read preserves known rows but requires fresh recovery before another decision. Review loads the selected request’s history/audit; retry that selected detail read if unavailable.",
       "Review the request and choose Create invite. For an unverified request, read the confirmation; cancelling performs no action, while explicit approval records the unverified decision and issues the normal secure invitation.",
       "If creation fails, preserve the pending request and retry after recovery. Email delivery failure does not invalidate a successfully created invitation.",
       "Use Show all statuses to inspect the resolved request. Where manual fallback is needed, Copy invitation email/link uses the existing invitation and does not mint another token.",
-      "Where needed, resend verification for a still-active unverified request, or use Ignore/Reject with an internal reason. Applicant-facing messages must not disclose the internal reason or ban details."
+      "Where needed, resend verification for the same still-active unverified request. A rejected resend preserves the request; retry deliberately. Queued delivery does not mean Verified or actual mailbox receipt.",
+      "Use Ignore/Reject with an optional internal reason. Cancelling performs no action. A rejected decision preserves the pending request and reason for the next prompt; retry explicitly. Confirmed status preserves other requests. Applicant-facing messages must not disclose the internal reason or ban details.",
+      "If an authorized Admin deliberately clears a displayed active request ban, a rejected clear retains that ban; retry after recovery. Successful clearing does not approve a rejected request or issue an invitation.",
+      "To issue a direct standard invitation without a pending request, use Invite new users. An unavailable invitation list blocks creation; Retry user management recovers it, and Refresh user management deliberately refreshes known material. Rejected creation retains its email. Confirmed creation preserves the original expiry; Copy link / Copy invitation email on the pending invitation retrieves that same private capability after refresh. A failed email retry retains the invitation; queued retry and actual mailbox receipt remain separate."
     ],
     "prerequisites": [
       "an authorized Admin using `/settings/users`; an investor cannot perform these actions."
@@ -2392,6 +2399,159 @@ export const JOURNEY_TOPICS = Object.freeze([
     ],
     "warnings": [
       "Insufficient or unavailable history disables the affected preset with a reason. No fabricated observations, fundamental forward filling, provider synchronization or training is authorized by a chart retry."
+    ]
+  },
+  {
+    "id": "E2E-52",
+    "title": "How do I recover squared-off transaction evidence and deliberate corrections?",
+    "aliases": [
+      "Recover squared-off transaction evidence and deliberate corrections",
+      "e2e-52"
+    ],
+    "keywords": [
+      "recover",
+      "squared",
+      "off",
+      "transaction",
+      "evidence",
+      "and",
+      "deliberate",
+      "corrections"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/transactions/closed",
+    "guide": "/docs/journeys/19-persisted-history.html#e2e-52-recover-squared-off-transaction-evidence-and-deliberate-corrections",
+    "steps": [
+      "Open Squared-off transactions (`/transactions/closed`). A failed read explains unavailability and offers Retry, without claiming there are no transactions.",
+      "Retry the current read and inspect dated transaction type, quantity, price, realization and fees. Search by symbol/name using the current closed scope and pagination.",
+      "A failed filtered read retains known rows with an unavailable warning; it does not fabricate an empty result. Retry uses the same filter.",
+      "Edit uses the existing Transactions form and its retained-draft safeguards (EXE-16). Inspect the target stored evidence before changing it.",
+      "Delete only the intended record after confirmation. Cancelling sends no delete request. A rejected deletion keeps the row and explains the unconfirmed operation.",
+      "Inspect/retry deliberately. Confirmed deletion removes only the target, refreshes the current filtered view and invalidates affected dashboard data. Other transactions and strategy attribution remain intact.",
+      "Switch Portfolios using the real selector. The previous Portfolio’s rows and counts clear before the new read; failure never presents those rows as the new Portfolio’s evidence. Retry recovers only the selected Portfolio. A late response to a prior Portfolio’s deletion cannot refresh, notify or replace this view."
+    ],
+    "prerequisites": [
+      "An authenticated Investor with stored squared-off transaction records."
+    ],
+    "warnings": [
+      "Deleting stored financial evidence affects portfolio calculations. Inspect the intended record and confirm deliberately. An unconfirmed deletion is not success; no broker order is placed or cancelled by this flow."
+    ]
+  },
+  {
+    "id": "E2E-53",
+    "title": "How do I inspect a stored evaluation run and recover unavailable observations?",
+    "aliases": [
+      "Inspect a stored evaluation run and recover unavailable observations",
+      "e2e-53"
+    ],
+    "keywords": [
+      "inspect",
+      "stored",
+      "evaluation",
+      "run",
+      "and",
+      "recover",
+      "unavailable",
+      "observations"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/candidates",
+    "guide": "/docs/journeys/19-persisted-history.html#e2e-53-inspect-a-stored-evaluation-run-and-recover-unavailable-observations",
+    "steps": [
+      "Open Candidates (`/candidates`). Current discovery failure/retry remains the existing recommendation/discovery journey; historical evaluations are a separate named panel.",
+      "An unavailable history list explains the read failure and offers Retry evaluation history. It does not report that no runs exist.",
+      "Retry and choose a specific run by its stable identifier/status/result count.",
+      "If that run's result read fails, preserve its selection and existing known observations. Explain unavailability rather than declaring no results; Retry selected evaluation run reads the same identity.",
+      "Inspect rank, symbol, score, confidence and explanation from the stored result. Source observations remain unchanged.",
+      "Select a different run. A successfully read empty run may correctly report no results, while the previous run's values are never relabelled as the new identity."
+    ],
+    "prerequisites": [
+      "An authenticated Investor with access to portfolio discovery/evaluation history."
+    ],
+    "warnings": [
+      "Stored evaluation scores are observations; opening or retrying history does not create recommendations, run training, place orders or move cash."
+    ]
+  },
+  {
+    "id": "E2E-54",
+    "title": "How do I recover the Screener compatibility registry and import a reviewed runtime definition?",
+    "aliases": [
+      "Recover the Screener compatibility registry and import a reviewed runtime definition",
+      "e2e-54"
+    ],
+    "keywords": [
+      "recover",
+      "the",
+      "screener",
+      "compatibility",
+      "registry",
+      "and",
+      "import",
+      "reviewed",
+      "runtime",
+      "definition"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/screeners/registry",
+    "guide": "/docs/journeys/20-runtime-registry-compatibility.html#e2e-54-recover-the-screener-compatibility-registry-and-import-a-reviewed-runtime-definition",
+    "steps": [
+      "Open Screener Registry (`/screeners/registry`). Inspect account/shared/factory ownership and filters. An unavailable list offers Retry without reporting that no Screeners match; a failed filtered read retains known rows with an unavailability warning.",
+      "Open an owned artifact by its stable identity. An unavailable envelope offers Retry registry artifact and blocks actions requiring that unknown definition.",
+      "Inspect the definition hash and immutable version history. Changing the active Portfolio clears the previous artifact and reads the same identity with the new scope; inaccessible evidence stays unavailable. A failed history read retains the known artifact, explains unavailability and offers Retry registry versions without claiming there are no versions.",
+      "Export the reviewed definition as portable JSON. An unconfirmed export explains failure; retry preserves definition and ownership.",
+      "Inspect a shared source through its read-only detail view. Open editor is unavailable and private version history is not requested. Import copy creates an account-owned Screener on My screens; a rejected copy keeps the original source visible and unchanged.",
+      "Paste Screener registry JSON with the documented condition root. Validate first; a validation failure keeps the JSON and Import disabled. Changing validated JSON invalidates validation.",
+      "Import the exact validated JSON. An unconfirmed import retains the draft for deliberate retry; confirmed import opens the account-owned runtime Screener editor. Inspect its definition before using it."
+    ],
+    "prerequisites": [
+      "An authenticated Investor and access to the account-scoped Screener compatibility registry."
+    ],
+    "warnings": [
+      "A shared source is read-only. Copy/import creates an owned runtime definition; it does not modify the source, execute an order or qualify market data."
+    ]
+  },
+  {
+    "id": "E2E-55",
+    "title": "How do I inspect portable Strategy registry evidence and deliberately enable or archive its runtime instance?",
+    "aliases": [
+      "Inspect portable Strategy registry evidence and deliberately enable or archive its runtime instance",
+      "e2e-55"
+    ],
+    "keywords": [
+      "inspect",
+      "portable",
+      "strategy",
+      "registry",
+      "evidence",
+      "and",
+      "deliberately",
+      "enable",
+      "archive",
+      "its",
+      "runtime",
+      "instance"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/strategy/registry",
+    "guide": "/docs/journeys/20-runtime-registry-compatibility.html#e2e-55-inspect-portable-strategy-registry-evidence-and-deliberately-enable-or-archive-its-runtime-instance",
+    "steps": [
+      "Open Strategy Registry (`/strategy/registry`) and inspect enabled/draft/archived runtime entries. An unavailable list offers Retry without reporting that no Strategies match, and a failed filtered read retains known rows. Open a specific artifact's detail by stable identity.",
+      "Recover an unavailable envelope explicitly. Retry preserves the target identity and does not create or enable a Strategy.",
+      "Inspect definition hash, dependencies and portable Screener references. Changing Portfolio clears prior owned evidence and reloads the current scoped identity; prior-scope responses cannot populate the new view. Recover unavailable version history separately; known immutable version evidence is preserved.",
+      "Export portable JSON without portfolio-local Screener ids. Failed export retains the artifact and explains the unconfirmed action; retry downloads the reviewed definition.",
+      "Enable only after reviewing the intended definition and confirming. Cancelling sends no activation. A rejected activation does not report success or disable another Strategy; review and retry deliberately.",
+      "Archive only the intended enabled Strategy after confirmation. Cancelling sends no archive; rejection preserves enabled evidence. Confirmed archive preserves other enabled Strategies and past attribution.",
+      "Paste and validate portable Strategy JSON with eligible Screener references and scoring configuration. Rejected validation/import retains JSON. Successful import creates a runtime Strategy draft and opens its editor for review before explicit enable; a separate Library publish/binding is not required."
+    ],
+    "prerequisites": [
+      "An authenticated Investor with account-owned Strategy definitions and eligible Screener references."
+    ],
+    "warnings": [
+      "Enable changes future recommendation eligibility; archive stops future recommendations for that Strategy. Other enabled Strategies and historical holdings/recommendation attribution remain intact. Neither action places an order."
     ]
   },
   {

@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import api from '../api';
+import api, { getApiErrorMessage } from '../api';
+import usePortfolioChanged from '../hooks/usePortfolioChanged';
 import { appUrl } from '../appBase';
 import ValidationSuccessBanner from '../components/artifacts/ValidationSuccessBanner';
 import NumberInput from '../components/NumberInput';
@@ -61,6 +62,9 @@ export default function StrategyRegistryPage({ adminMode = false }) {
     const [meta, setMeta] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [loadError, setLoadError] = useState('');
+    const readRequestRef = useRef(0);
+    const scopeRef = useRef(0);
     const [q, setQ] = useState('');
     const [status, setStatus] = useState('');
     const [origin, setOrigin] = useState('');
@@ -73,6 +77,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
     const [allocError, setAllocError] = useState('');
     const [provenanceGate, setProvenanceGate] = useState(null);
     const importValidated = Boolean(validateResult?.ok);
+    const renderScope = scopeRef.current;
 
     const syncAllocDraft = (list) => {
         const enabled = (Array.isArray(list) ? list : []).filter(isEnabledRow);
@@ -88,8 +93,9 @@ export default function StrategyRegistryPage({ adminMode = false }) {
     };
 
     const load = async () => {
+        const request = ++readRequestRef.current;
         setLoading(true);
-        setError('');
+        setLoadError('');
         try {
             const params = {};
             if (q.trim()) params.q = q.trim();
@@ -99,21 +105,21 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                 api.get('/v1/strategy-registry', { params }),
                 api.get('/v1/strategy-registry/meta'),
             ]);
+            if (request !== readRequestRef.current) return;
             const list = listRes.data?.data || [];
             setRows(list);
             setMeta(metaRes.data?.data || null);
             syncAllocDraft(list);
         } catch (err) {
-            setError(err?.response?.data?.error?.message || err.message || 'Failed to load Strategy Registry');
-            setRows([]);
-            setAllocDraft([]);
+            if (request === readRequestRef.current) setLoadError('Strategy Registry could not be loaded.');
         } finally {
-            setLoading(false);
+            if (request === readRequestRef.current) setLoading(false);
         }
     };
 
     useEffect(() => {
         load();
+        return () => { readRequestRef.current++; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [q, status, origin]);
 
@@ -126,6 +132,15 @@ export default function StrategyRegistryPage({ adminMode = false }) {
             .then((res) => setProvenanceGate(res.data?.data || null))
             .catch(() => setProvenanceGate(null));
     }, [adminMode]);
+
+    useEffect(() => () => { scopeRef.current++; }, []);
+
+    usePortfolioChanged(() => {
+        scopeRef.current++;
+        readRequestRef.current++;
+        setRows([]); setMeta(null); setError(''); setImportText(''); setValidateResult(null); setBusy(false); setAllocDraft([]); setAllocError(''); setAllocBusy(false); setShowCreate(false);
+        load();
+    });
 
     const countsLabel = useMemo(() => {
         if (!meta?.counts) return '';
@@ -147,6 +162,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
             setAllocError(`Allocation % must sum to 100 (currently ${allocSum.toFixed(2)}).`);
             return;
         }
+        const scope = scopeRef.current;
         setAllocBusy(true);
         try {
             await api.put('/v1/capital/allocations', {
@@ -155,10 +171,12 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                     allocation_pct: Number(row.allocation_pct),
                 })),
             });
+            if (scope !== scopeRef.current) return;
             showToast('Strategy allocations saved');
             notifyPortfolioDashboardRefresh();
             await load();
         } catch (err) {
+            if (scope !== scopeRef.current) return;
             const msg = err?.response?.data?.error?.message
                 || err?.response?.data?.message
                 || err.message
@@ -166,7 +184,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
             setAllocError(msg);
             showToast(msg, 'danger');
         } finally {
-            setAllocBusy(false);
+            if (scope === scopeRef.current) setAllocBusy(false);
         }
     };
 
@@ -179,21 +197,24 @@ export default function StrategyRegistryPage({ adminMode = false }) {
     };
 
     const onValidate = async () => {
+        const scope = scopeRef.current;
         setBusy(true);
         setValidateResult(null);
         setError('');
         try {
             const envelope = parseImportPayload();
             const res = await api.post('/v1/strategy-registry/validate', envelope);
+            if (scope !== scopeRef.current) return;
             const result = res.data?.data || null;
             setValidateResult(result);
             if (!result?.ok) {
                 showToast('Validation reported issues. See details below.', 'warning');
             }
         } catch (err) {
-            setError(err?.response?.data?.error?.message || err.message || 'Validate failed');
+            if (scope !== scopeRef.current) return;
+            setError(getApiErrorMessage(err, 'Validate failed'));
         } finally {
-            setBusy(false);
+            if (scope === scopeRef.current) setBusy(false);
         }
     };
 
@@ -202,11 +223,13 @@ export default function StrategyRegistryPage({ adminMode = false }) {
             setError('Validate the JSON successfully before importing.');
             return;
         }
+        const scope = scopeRef.current;
         setBusy(true);
         setError('');
         try {
             const envelope = parseImportPayload();
             const res = await api.post('/v1/strategy-registry/import', envelope);
+            if (scope !== scopeRef.current) return;
             const created = res.data?.data;
             showToast(`Imported “${created?.name || 'strategy'}” (slug ${created?.slug || '—'}). Open the Strategy editor to review.`);
             setImportText('');
@@ -218,41 +241,48 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                 if (path) navigate(path);
             }
         } catch (err) {
-            setError(err?.response?.data?.error?.message || err.message || 'Import failed');
+            if (scope !== scopeRef.current) return;
+            setError(getApiErrorMessage(err, 'Import failed'));
         } finally {
-            setBusy(false);
+            if (scope === scopeRef.current) setBusy(false);
         }
     };
 
     const onExport = async (row) => {
+        const scope = scopeRef.current;
         setBusy(true);
         setError('');
         try {
             const id = row.artifact_id || row.slug;
             const res = await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/export`);
+            if (scope !== scopeRef.current) return;
             const env = res.data?.data;
             downloadJson(`${env?.slug || 'strategy'}.json`, env);
             showToast(`Exported ${env?.slug || id} (portable Screener/Indicator refs only).`);
         } catch (err) {
-            setError(err?.response?.data?.error?.message || err.message || 'Export failed');
+            if (scope !== scopeRef.current) return;
+            setError(getApiErrorMessage(err, 'Export failed'));
         } finally {
-            setBusy(false);
+            if (scope === scopeRef.current) setBusy(false);
         }
     };
 
     const onActivate = async (row) => {
         const id = row.artifact_id || row.slug;
         if (!window.confirm(`Enable “${row.name}” for this portfolio? Other enabled strategies stay enabled.`)) return;
+        const scope = scopeRef.current;
         setBusy(true);
         setError('');
         try {
             await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/activate`);
+            if (scope !== scopeRef.current) return;
             showToast(`“${row.name}” is now enabled for this portfolio.`);
             await load();
         } catch (err) {
-            setError(err?.response?.data?.error?.message || err.message || 'Selection failed');
+            if (scope !== scopeRef.current) return;
+            setError(getApiErrorMessage(err, 'Selection failed'));
         } finally {
-            setBusy(false);
+            if (scope === scopeRef.current) setBusy(false);
         }
     };
 
@@ -261,21 +291,24 @@ export default function StrategyRegistryPage({ adminMode = false }) {
         if (!window.confirm(
             'Archive this strategy? It will stop generating recommendations. Other enabled strategies stay enabled. Past holdings/recommendations keep their attribution.',
         )) return;
+        const scope = scopeRef.current;
         setBusy(true);
         setError('');
         try {
             await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/archive`);
+            if (scope !== scopeRef.current) return;
             showToast(`“${row.name}” archived.`);
             await load();
         } catch (err) {
-            setError(err?.response?.data?.error?.message || err.message || 'Archive failed');
+            if (scope !== scopeRef.current) return;
+            setError(getApiErrorMessage(err, 'Archive failed'));
         } finally {
-            setBusy(false);
+            if (scope === scopeRef.current) setBusy(false);
         }
     };
 
     return (
-        <div className="d-grid gap-3">
+        <div className="contentPane d-grid gap-3">
             <div className="d-flex flex-wrap justify-content-between align-items-start gap-2">
                 <div>
                     <h2 className="h4 mb-1">{adminMode ? 'Strategy Registry (Admin)' : 'Strategy Registry'}</h2>
@@ -310,6 +343,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                 disabled={busy}
                 onClose={() => setShowCreate(false)}
                 onCreated={async (created) => {
+                    if (renderScope !== scopeRef.current) return;
                     setShowCreate(false);
                     const path = createdArtifactPath(created);
                     if (path) {
@@ -318,6 +352,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                     }
                     const id = createdStrategyId(created);
                     await load();
+                    if (renderScope !== scopeRef.current) return;
                     if (id) {
                         navigate(`/strategy?strategy_id=${encodeURIComponent(id)}`);
                     }
@@ -394,7 +429,8 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                 </div>
             ) : null}
 
-            {error && <div className="alert alert-danger mb-0">{error}</div>}
+            {loadError && <div className="alert alert-danger mb-0" role="alert">{loadError} <button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={load}>Retry Strategy Registry</button></div>}
+            {error && <div className="alert alert-danger mb-0" role="alert">{error}</div>}
 
             <div className="card">
                 <div className="table-responsive">
@@ -416,7 +452,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                                     <td colSpan={7} className="text-muted">Loading…</td>
                                 </tr>
                             )}
-                            {!loading && rows.length === 0 && (
+                            {!loading && !loadError && rows.length === 0 && (
                                 <tr>
                                     <td colSpan={7} className="text-muted">No strategies match the filters.</td>
                                 </tr>
@@ -582,9 +618,11 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                         {' '}
                         — full Indicator + Screener + Strategy + Cookbook pack for AI/offline use.
                         Run <strong>Validate</strong> first — <strong>Import</strong> stays disabled until validation succeeds.
-                        Import creates an <strong>Artifact Library Draft</strong>. Review it there, publish an immutable version, then bind it to this Portfolio.
+                        Import creates an account-owned runtime Strategy draft. Review it in the Strategy editor before explicitly enabling it for this Portfolio.
                     </p>
                     <textarea
+                        aria-label="Strategy registry JSON"
+                        disabled={busy}
                         className="form-control font-monospace small"
                         rows={10}
                         placeholder='{"schema_version":"1.0","artifact_type":"strategy","slug":"...", ...}'
@@ -610,7 +648,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                         </button>
                     </div>
                     {validateResult && (
-                        <pre className="bg-light border rounded p-2 small mb-0 overflow-auto" style={{ maxHeight: 240 }}>
+                        <pre tabIndex={0} role="region" aria-label="Strategy registry validation JSON" className="border rounded p-2 small mb-0 overflow-auto" style={{ maxHeight: 240, backgroundColor: 'var(--lido-bg-surface)', color: 'var(--lido-text)' }}>
                             {JSON.stringify(validateResult, null, 2)}
                         </pre>
                     )}

@@ -89,7 +89,7 @@ function DefaultScreenerCard({ screener, loading, running, onRun }) {
     );
 }
 
-function EvaluationHistory({ runs, loading, selectedRunId, onSelect, results, resultsLoading }) {
+export function EvaluationHistory({ runs, loading, selectedRunId, onSelect, results, resultsLoading, runsError, resultsError, onRetryRuns, onRetryResults }) {
     return (
         <section className="card mb-3" aria-label="Evaluation history">
             <div className="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
@@ -113,10 +113,12 @@ function EvaluationHistory({ runs, loading, selectedRunId, onSelect, results, re
                     ))}
                 </select>
             </div>
-            {runs.length === 0 && !loading ? (
+            {runsError && <div className="card-body py-2 small" role="alert">Evaluation history could not be loaded. Existing runs are retained. <button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={onRetryRuns}>Retry evaluation history</button></div>}
+            {selectedRunId && resultsError && <div className="card-body py-2 small" role="alert">Selected evaluation run could not be loaded. Its identity and existing evidence are retained. <button type="button" className="btn btn-sm btn-outline-primary" disabled={resultsLoading} onClick={onRetryResults}>Retry selected evaluation run</button></div>}
+            {runsError && runs.length === 0 ? null : runs.length === 0 && !loading ? (
                 <div className="card-body small text-muted">No evaluation runs have been recorded yet.</div>
             ) : selectedRunId ? (
-                <div>{resultsLoading ? <div className="p-3 text-muted">Loading run…</div> : results.length === 0 ? (
+                <div>{resultsLoading ? <div className="p-3 text-muted">Loading run…</div> : resultsError && results.length === 0 ? null : results.length === 0 ? (
                     <div className="p-3 text-muted">This run has no results.</div>
                 ) : (
                     <Suspense fallback={<div className="p-3 text-muted">Loading grid…</div>}>
@@ -455,6 +457,10 @@ export default function CandidatesPage() {
                 onSelect={setSelectedRunId}
                 results={historyResults}
                 resultsLoading={historyQuery.isLoading}
+                runsError={runQuery.error}
+                resultsError={historyQuery.error}
+                onRetryRuns={() => runQuery.refetch()}
+                onRetryResults={() => historyQuery.refetch()}
             />
 
             <div className="row g-2 mb-3">

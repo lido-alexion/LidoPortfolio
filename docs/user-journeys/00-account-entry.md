@@ -51,6 +51,8 @@ These journeys cover the authentication prerequisite for using protected investo
 
 **Goal:** Recover access using a valid reset link without changing an unrelated account or session.
 
+**Admin prerequisite:** An authorized Admin uses `/settings/users` → Password reset links, selects the intended existing User and creates the standard 72-hour capability. Recover unavailable lists with Retry user management. Rejected creation retains that User for explicit retry; confirmed creation exposes Copy link / Copy message for private handoff. An Investor cannot issue this capability. Actual token signing, expiry, account/session effects and Admin authorization remain backend requirements.
+
 - Requires: An administrator-issued, unexpired reset link for the intended account.
 - Warning: Use only the intended account's link. An expired, revoked or already-used link requires the administrator to issue a new one. Browser CI uses synthetic tokens and credentials only.
 
@@ -108,13 +110,16 @@ These journeys cover the authentication prerequisite for using protected investo
 ## AUTH-08 — Review an access request and preserve the standard invitation boundary
 
 - Requires: an authorized Admin using `/settings/users`; an investor cannot perform these actions.
-- Search synonyms: approve access request, unverified request, create invite.
+- Search synonyms: approve access request, unverified request, create invite, resend verification, ignore request, reject request, clear request ban.
 
-1. Inspect pending Account access requests, their Verified/Unverified indication and observed email delivery state.
+1. Inspect pending Account access requests, their Verified/Unverified indication and observed email delivery state. An unavailable read is not an empty list; use Retry access requests. A failed filter read preserves known rows but requires fresh recovery before another decision. Review loads the selected request’s history/audit; retry that selected detail read if unavailable.
 2. Review the request and choose Create invite. For an unverified request, read the confirmation; cancelling performs no action, while explicit approval records the unverified decision and issues the normal secure invitation.
 3. If creation fails, preserve the pending request and retry after recovery. Email delivery failure does not invalidate a successfully created invitation.
 4. Use Show all statuses to inspect the resolved request. Where manual fallback is needed, Copy invitation email/link uses the existing invitation and does not mint another token.
-5. Where needed, resend verification for a still-active unverified request, or use Ignore/Reject with an internal reason. Applicant-facing messages must not disclose the internal reason or ban details.
+5. Where needed, resend verification for the same still-active unverified request. A rejected resend preserves the request; retry deliberately. Queued delivery does not mean Verified or actual mailbox receipt.
+6. Use Ignore/Reject with an optional internal reason. Cancelling performs no action. A rejected decision preserves the pending request and reason for the next prompt; retry explicitly. Confirmed status preserves other requests. Applicant-facing messages must not disclose the internal reason or ban details.
+7. If an authorized Admin deliberately clears a displayed active request ban, a rejected clear retains that ban; retry after recovery. Successful clearing does not approve a rejected request or issue an invitation.
+8. To issue a direct standard invitation without a pending request, use Invite new users. An unavailable invitation list blocks creation; Retry user management recovers it, and Refresh user management deliberately refreshes known material. Rejected creation retains its email. Confirmed creation preserves the original expiry; Copy link / Copy invitation email on the pending invitation retrieves that same private capability after refresh. A failed email retry retains the invitation; queued retry and actual mailbox receipt remain separate.
 
 **Expected result:** Admin controls approval, invitation capability and audit history. Verification is advisory, while invitation expiry/single-use, abuse controls and authorization remain authoritative. Queue delivery and actual mailbox receipt need separate runtime evidence.
 ## AUTH-09 — Recover owned session management without losing this device

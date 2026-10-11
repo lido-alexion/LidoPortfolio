@@ -34,8 +34,9 @@ test('Strategy Registry is discoverable in sidebar and editor', () => {
     assert.doesNotMatch(registry, /Select it to make it active/);
     assert.doesNotMatch(registry, /use Select to activate/);
     assert.match(registry, /Create Strategy/);
-    assert.match(registry, /Import creates an .*Artifact Library Draft/);
-    assert.match(registry, /publish an immutable version, then bind it to this Portfolio/);
+    assert.match(registry, /Import creates an account-owned runtime Strategy draft/);
+    assert.match(registry, /review it in the Strategy editor before explicitly enabling it/i);
+    assert.doesNotMatch(registry, /Import creates an .*Artifact Library Draft/);
 });
 
 test('Cash Management reservation controls are absent from Strategy page', () => {

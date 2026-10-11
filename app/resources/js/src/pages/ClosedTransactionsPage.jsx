@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { DataTableCard } from '../components/DataTable';
@@ -18,9 +18,16 @@ export default function ClosedTransactionsPage() {
     const [stockSearch, setStockSearch] = useState('');
     const [searchInput, setSearchInput] = useState('');
     const [loading, setLoading] = useState(true);
+    const [readError, setReadError] = useState('');
+    const [actionError, setActionError] = useState('');
+    const readRequestRef = useRef(0);
+    const deletingRef = useRef(false);
+    const scopeRef = useRef(0);
 
     const load = useCallback(async (pageNum, search) => {
+        const request = ++readRequestRef.current;
         setLoading(true);
+        setReadError('');
         try {
             const txRes = await api.get('/transactions', {
                 params: {
@@ -30,6 +37,7 @@ export default function ClosedTransactionsPage() {
                     search: search || undefined,
                 },
             });
+            if (request !== readRequestRef.current) return;
             setTransactions(txRes.data.data || []);
             setPagination({
                 current_page: txRes.data.current_page,
@@ -38,16 +46,25 @@ export default function ClosedTransactionsPage() {
                 to: txRes.data.to,
                 total: txRes.data.total,
             });
+        } catch {
+            if (request === readRequestRef.current) setReadError('Squared-off transactions could not be loaded. Known evidence is retained only within the current Portfolio.');
         } finally {
-            setLoading(false);
+            if (request === readRequestRef.current) setLoading(false);
         }
     }, []);
 
     useEffect(() => {
         load(page, stockSearch);
+        return () => { readRequestRef.current++; };
     }, [load, page, stockSearch]);
 
+    useEffect(() => () => { scopeRef.current++; }, []);
+
     usePortfolioChanged(() => {
+        scopeRef.current++;
+        setTransactions([]);
+        setPagination(null);
+        setActionError('');
         load(page, stockSearch);
     });
 
@@ -64,13 +81,23 @@ export default function ClosedTransactionsPage() {
     }, [navigate]);
 
     const handleDelete = useCallback(async (id) => {
-        if (!window.confirm('Delete this transaction?')) {
-            return;
+        if (deletingRef.current || !window.confirm('Delete this transaction?')) return;
+        deletingRef.current = true;
+        const scope = scopeRef.current;
+        setActionError('');
+        try {
+            await api.delete(`/transactions/${id}`);
+            if (scope !== scopeRef.current) return;
+            setTransactions(current => current.filter(item => item.id !== id));
+            showToast('Transaction deleted');
+            notifyPortfolioDashboardRefresh();
+            await load(page, stockSearch);
+        } catch {
+            if (scope !== scopeRef.current) return;
+            setActionError('Transaction deletion could not be confirmed. Inspect the stored transaction before retrying.');
+        } finally {
+            deletingRef.current = false;
         }
-        await api.delete(`/transactions/${id}`);
-        showToast('Transaction deleted');
-        await load(page, stockSearch);
-        notifyPortfolioDashboardRefresh();
     }, [load, page, stockSearch]);
 
     const columns = useMemo(
@@ -89,13 +116,15 @@ export default function ClosedTransactionsPage() {
     return (
         <div className="row g-3">
             <div className="col-12">
+                {readError && <div role="alert" className="alert alert-warning py-2 small">{readError} <button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={() => load(page, stockSearch)}>Retry squared-off transactions</button></div>}
+                {actionError && <div role="alert" className="alert alert-warning py-2 small">{actionError}</div>}
                 <DataTableCard
                     title="Squared-off transactions"
                     columns={columns}
                     data={transactions}
                     storageKey="transactions-closed"
                     loading={loading}
-                    emptyMessage={emptyMessage}
+                    emptyMessage={readError ? '' : emptyMessage}
                     headerExtra={(
                         <div className="d-flex align-items-center gap-2">
                             <input
