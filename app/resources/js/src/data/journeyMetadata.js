@@ -392,6 +392,120 @@ export const JOURNEY_TOPICS = Object.freeze([
     ]
   },
   {
+    "id": "AUTH-06",
+    "title": "How do I accept an administrator-issued invitation and recover a rejected submission?",
+    "aliases": [
+      "Accept an administrator-issued invitation and recover a rejected submission",
+      "auth-06"
+    ],
+    "keywords": [
+      "accept",
+      "administrator",
+      "issued",
+      "invitation",
+      "and",
+      "recover",
+      "rejected",
+      "submission"
+    ],
+    "synonyms": [
+      "accept invite",
+      "invitation password",
+      "invite expired."
+    ],
+    "category": "Account access",
+    "route": "/login",
+    "guide": "/docs/journeys/00-account-entry.html#auth-06-accept-an-administrator-issued-invitation-and-recover-a-rejected-submission",
+    "steps": [
+      "Open the issued invitation link and confirm the fixed account email.",
+      "Enter your name and matching new password/confirmation, then create the account and sign in.",
+      "If validation or a transient acceptance error occurs, retain the form and correct/retry without losing the entered values or falsely becoming authenticated.",
+      "After successful acceptance, the application restores the account session and requested protected page, or the Dashboard.",
+      "An invalid, expired, revoked or used invitation offers return to sign-in; it must not create an account or session. Request a new invitation from the administrator."
+    ],
+    "prerequisites": [
+      "a current administrator-issued, single-use invitation link. Start from `/login` if you need to contact the administrator for a link."
+    ],
+    "warnings": []
+  },
+  {
+    "id": "AUTH-07",
+    "title": "How do I request account access and verify email ownership without self-registration?",
+    "aliases": [
+      "Request account access and verify email ownership without self-registration",
+      "auth-07"
+    ],
+    "keywords": [
+      "request",
+      "account",
+      "access",
+      "and",
+      "verify",
+      "email",
+      "ownership",
+      "without",
+      "self",
+      "registration"
+    ],
+    "synonyms": [
+      "request account",
+      "request access",
+      "verify request email."
+    ],
+    "category": "Account access",
+    "route": "/request-account",
+    "guide": "/docs/journeys/00-account-entry.html#auth-07-request-account-access-and-verify-email-ownership-without-self-registration",
+    "steps": [
+      "Enter your full name and email. Complete human verification before submitting the access request.",
+      "If verification is missing/unavailable, stop submission and try later. Correct a validation error or retry a transient request failure while retaining the form.",
+      "A successful eligible request is available for Admin review immediately, with email verification initially advisory. A safe generic response must not claim that a verification email was delivered or disclose whether an existing account exists.",
+      "If an emailed verification link is available, open it to verify ownership of the same pending request. Verification alone does not approve access or create a signed-in account.",
+      "Return to login or wait for the administrator's standard invitation. An expired/used verification link cannot resurrect an expired request; submit a fresh request if necessary."
+    ],
+    "prerequisites": [
+      "a guest using `/request-account` and completing the mandatory human verification."
+    ],
+    "warnings": []
+  },
+  {
+    "id": "AUTH-08",
+    "title": "How do I review an access request and preserve the standard invitation boundary?",
+    "aliases": [
+      "Review an access request and preserve the standard invitation boundary",
+      "auth-08"
+    ],
+    "keywords": [
+      "review",
+      "access",
+      "request",
+      "and",
+      "preserve",
+      "the",
+      "standard",
+      "invitation",
+      "boundary"
+    ],
+    "synonyms": [
+      "approve access request",
+      "unverified request",
+      "create invite."
+    ],
+    "category": "Account access",
+    "route": "/settings/users",
+    "guide": "/docs/journeys/00-account-entry.html#auth-08-review-an-access-request-and-preserve-the-standard-invitation-boundary",
+    "steps": [
+      "Inspect pending Account access requests, their Verified/Unverified indication and observed email delivery state.",
+      "Review the request and choose Create invite. For an unverified request, read the confirmation; cancelling performs no action, while explicit approval records the unverified decision and issues the normal secure invitation.",
+      "If creation fails, preserve the pending request and retry after recovery. Email delivery failure does not invalidate a successfully created invitation.",
+      "Use Show all statuses to inspect the resolved request. Where manual fallback is needed, Copy invitation email/link uses the existing invitation and does not mint another token.",
+      "Where needed, resend verification for a still-active unverified request, or use Ignore/Reject with an internal reason. Applicant-facing messages must not disclose the internal reason or ban details."
+    ],
+    "prerequisites": [
+      "an authorized Admin using `/settings/users`; an investor cannot perform these actions."
+    ],
+    "warnings": []
+  },
+  {
     "id": "E2E-01",
     "title": "How do I new idea to first BUY?",
     "aliases": [
@@ -902,6 +1016,43 @@ export const JOURNEY_TOPICS = Object.freeze([
     ],
     "prerequisites": [
       "an authenticated investor with an active portfolio."
+    ],
+    "warnings": []
+  },
+  {
+    "id": "E2E-17",
+    "title": "How do I save optional product-email preferences and recover a failed update?",
+    "aliases": [
+      "Save optional product-email preferences and recover a failed update",
+      "e2e-17"
+    ],
+    "keywords": [
+      "save",
+      "optional",
+      "product",
+      "email",
+      "preferences",
+      "and",
+      "recover",
+      "failed",
+      "update"
+    ],
+    "synonyms": [
+      "optional emails",
+      "email digest",
+      "quiet hours."
+    ],
+    "category": "StoX",
+    "route": "/settings/notifications",
+    "guide": "/docs/journeys/08-investor-overview-alerts.html#e2e-17-save-optional-product-email-preferences-and-recover-a-failed-update",
+    "steps": [
+      "Inspect Optional product emails, which are off by default while account/security messages remain enabled.",
+      "Enable optional emails, choose categories and Immediate or Daily digest delivery, then set quiet hours, digest time and timezone.",
+      "Save email preferences. A failed update retains the form; correct invalid inputs or retry after recovery.",
+      "Reload the page and confirm the saved preferences. Disabling optional emails leaves account/security messaging enabled."
+    ],
+    "prerequisites": [
+      "an authenticated investor using `/settings/notifications`."
     ],
     "warnings": []
   },

@@ -13,6 +13,7 @@ export default function AcceptInvitePage() {
     const [loading, setLoading] = useState(true);
     const [invite, setInvite] = useState(null);
     const [error, setError] = useState('');
+    const [submissionError, setSubmissionError] = useState('');
     const [form, setForm] = useState({
         name: '',
         password: '',
@@ -27,6 +28,7 @@ export default function AcceptInvitePage() {
         (async () => {
             setLoading(true);
             setError('');
+            setSubmissionError('');
             try {
                 const res = await api.get(`/invites/${token}`, { skipErrorToast: true });
                 if (!cancelled) {
@@ -55,7 +57,7 @@ export default function AcceptInvitePage() {
     const submit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
-        setError('');
+        setSubmissionError('');
         try {
             await ensureCsrfCookie({ force: true });
             await api.post('/invites/accept', {
@@ -69,7 +71,7 @@ export default function AcceptInvitePage() {
             showToast('Account created. Welcome!');
             navigate(consumeRedirectPath() || '/');
         } catch (err) {
-            setError(
+            setSubmissionError(
                 err?.response?.data?.message
                 || err?.response?.data?.errors?.password?.[0]
                 || err?.response?.data?.errors?.token?.[0]
@@ -93,7 +95,7 @@ export default function AcceptInvitePage() {
                     </div>
                 ) : error ? (
                     <div>
-                        <div className="alert alert-warning py-2">{error}</div>
+                        <div className="alert alert-warning py-2" role="alert">{error}</div>
                         <Link className="btn btn-outline-secondary w-100" to="/">
                             Back to sign in
                         </Link>
@@ -101,8 +103,9 @@ export default function AcceptInvitePage() {
                 ) : (
                     <form onSubmit={submit}>
                         <div className="mb-3">
-                            <label className="form-label">Email</label>
+                            <label className="form-label" htmlFor="invite-email">Email</label>
                             <input
+                                id="invite-email"
                                 type="email"
                                 className="form-control"
                                 value={invite?.email || ''}
@@ -111,8 +114,9 @@ export default function AcceptInvitePage() {
                             />
                         </div>
                         <div className="mb-3">
-                            <label className="form-label">Your name</label>
+                            <label className="form-label" htmlFor="invite-name">Your name</label>
                             <input
+                                id="invite-name"
                                 type="text"
                                 className="form-control"
                                 autoComplete="name"
@@ -122,8 +126,9 @@ export default function AcceptInvitePage() {
                             />
                         </div>
                         <div className="mb-3">
-                            <label className="form-label">Password</label>
+                            <label className="form-label" htmlFor="invite-password">Password</label>
                             <input
+                                id="invite-password"
                                 type="password"
                                 className="form-control"
                                 required
@@ -134,8 +139,9 @@ export default function AcceptInvitePage() {
                             />
                         </div>
                         <div className="mb-3">
-                            <label className="form-label">Confirm password</label>
+                            <label className="form-label" htmlFor="invite-confirm-password">Confirm password</label>
                             <input
+                                id="invite-confirm-password"
                                 type="password"
                                 className="form-control"
                                 required
@@ -160,7 +166,7 @@ export default function AcceptInvitePage() {
                                 Remember me on this device
                             </label>
                         </div>
-                        {error && <div className="alert alert-danger py-2">{error}</div>}
+                        {submissionError && <div className="alert alert-danger py-2" role="alert">{submissionError}</div>}
                         <button className="btn btn-info w-100" type="submit" disabled={submitting}>
                             {submitting ? 'Creating account…' : 'Create account & sign in'}
                         </button>
