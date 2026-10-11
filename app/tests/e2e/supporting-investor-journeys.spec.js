@@ -41,6 +41,8 @@ async function settingsMocks(page) {
 }
 
 for (const viewport of VIEWPORTS) {
+  test.describe(`Supporting investor ${viewport.name}`, () => {
+    test.use({ hasTouch: viewport.name === 'mobile' });
     test(`E2E-09 researches a stock, retries failed membership, and removes it without trading (${viewport.name})`, async ({ page }, testInfo) => {
         journeyId(testInfo, 'E2E-09');
         const evidence = await prepare(page, viewport);
@@ -73,6 +75,7 @@ for (const viewport of VIEWPORTS) {
         await page.reload();
         await expect(page.getByRole('button', { name: 'Remove TCS from watchlist', exact: true })).toBeVisible();
         expect(items).toHaveLength(1);
+        if (viewport.name === 'desktop') await page.locator('.lido-watchlist-row').hover();
         await page.getByRole('button', { name: 'Remove TCS from watchlist', exact: true }).click();
         await expect(page.getByRole('button', { name: 'Remove TCS from watchlist', exact: true })).toHaveCount(0);
         expect(items).toEqual([]);
@@ -127,9 +130,12 @@ for (const viewport of VIEWPORTS) {
         await expect(trailing).toHaveValue('12.00');
         expectNoTrading(evidence);
     });
+  });
 }
 
 for (const viewport of VIEWPORTS) {
+  test.describe(`Supporting investor ${viewport.name}`, () => {
+    test.use({ hasTouch: viewport.name === 'mobile' });
     test(`AUTH-03 ends a session and requires login before restoring protected content (${viewport.name})`, async ({ page }, testInfo) => {
         journeyId(testInfo, 'AUTH-03');
         const evidence = await prepare(page, viewport);
@@ -212,4 +218,5 @@ for (const viewport of VIEWPORTS) {
         expectNoTrading(otherEvidence);
         await other.close();
     });
+  });
 }

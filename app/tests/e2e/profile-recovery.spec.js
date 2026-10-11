@@ -25,6 +25,8 @@ async function prepare(page, viewport) {
 function assertSafe(evidence) { expect(evidence.external).toEqual([]); expect(evidence.trading).toEqual([]); }
 
 for (const viewport of VIEWPORTS) {
+  test.describe(`Profile recovery ${viewport.name}`, () => {
+    test.use({ hasTouch: viewport.name === 'mobile' });
     test(`AUTH-05 retries profile-name failure and retains the displayed identity after refresh (${viewport.name})`, async ({ page }, testInfo) => {
         journeyId(testInfo, 'AUTH-05');
         const evidence = await prepare(page, viewport);
@@ -106,10 +108,12 @@ for (const viewport of VIEWPORTS) {
         await expect(page.getByRole('button', { name: 'Change profile picture', exact: true })).toBeVisible();
         await page.reload();
         await expect(page.getByRole('button', { name: 'Change profile picture', exact: true })).toBeVisible();
+        if (viewport.name === 'desktop') await page.locator('.lido-profile-photo-picker').hover();
         await page.getByRole('button', { name: 'Remove photo', exact: true }).click();
         await expect(upload).toBeVisible();
         expect(uploads).toBe(1);
         expect(removes).toBe(1);
         assertSafe(evidence);
     });
+  });
 }

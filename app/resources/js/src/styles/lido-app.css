@@ -1709,10 +1709,10 @@ body {
     .lido-header-actions {
         order: 3;
         flex: 1 1 100%;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        overflow: visible;
+        justify-content: flex-start;
+        overflow-x: auto;
         padding-bottom: 0.1rem;
+        scrollbar-width: thin;
     }
 
     .lido-profile-name {
@@ -2019,7 +2019,8 @@ body {
     transition: opacity 0.15s ease, color 0.15s ease;
 }
 
-.lido-profile-photo-picker:hover .lido-profile-photo-remove {
+.lido-profile-photo-picker:hover .lido-profile-photo-remove,
+.lido-profile-photo-picker:focus-within .lido-profile-photo-remove {
     opacity: 1;
     pointer-events: auto;
 }
