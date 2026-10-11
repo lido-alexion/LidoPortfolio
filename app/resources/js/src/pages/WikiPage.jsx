@@ -129,8 +129,10 @@ export default function WikiPage() {
         setComparison(response.data?.data || null);
     });
     const uploadImage = async (event) => {
-        const file = event.target.files?.[0];
+        const input = event.currentTarget;
+        const file = input.files?.[0];
         if (!file) return;
+        input.value = '';
         const form = new FormData(); form.append('display', file); form.append('full', file); form.append('original_name', file.name);
         await runAction(async (isCurrent) => {
         const upload = await api.post('/knowledge-board/images', form);
@@ -141,7 +143,6 @@ export default function WikiPage() {
         setMarkdown((value) => `${value}${value ? '\n' : ''}![${file.name}](wiki-image:${image.uuid})`);
         showToast('Image attached and inserted; save the page to keep the Markdown change', 'success');
         });
-        event.target.value = '';
     };
     const exportFile = (scope) => runAction(async (isCurrent) => {
         const endpoint = scope === 'wiki' ? '/knowledge-board/wiki/export' : `/knowledge-board/wiki/pages/${pageId}/${scope === 'branch' ? 'export-branch' : 'export'}`;
