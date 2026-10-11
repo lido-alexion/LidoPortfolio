@@ -325,6 +325,73 @@ export const JOURNEY_TOPICS = Object.freeze([
     "warnings": []
   },
   {
+    "id": "AUTH-04",
+    "title": "How do I recover a password through an administrator-issued link?",
+    "aliases": [
+      "Recover a password through an administrator-issued link",
+      "auth-04"
+    ],
+    "keywords": [
+      "recover",
+      "password",
+      "through",
+      "administrator",
+      "issued",
+      "link"
+    ],
+    "synonyms": [],
+    "category": "Account access",
+    "route": "/login",
+    "guide": "/docs/journeys/00-account-entry.html#auth-04-recover-a-password-through-an-administrator-issued-link",
+    "steps": [
+      "Open the administrator-issued reset link and confirm the displayed account.",
+      "Enter and confirm a new password of at least eight characters. Choose whether to remember this device.",
+      "Choose Update password & sign in.",
+      "If the server rejects the submission, read the error, correct the values and retry from the same form.",
+      "After acceptance, confirm the signed-in account is shown and the requested valid destination or Dashboard opens.",
+      "If link validation reports expiry or invalidity, return with Back to sign in and obtain a new administrator-issued link. No reset submission is offered for that invalid link."
+    ],
+    "prerequisites": [
+      "An administrator-issued, unexpired reset link for the intended account."
+    ],
+    "warnings": [
+      "Use only the intended account's link. An expired, revoked or already-used link requires the administrator to issue a new one. Browser CI uses synthetic tokens and credentials only."
+    ]
+  },
+  {
+    "id": "AUTH-05",
+    "title": "How do I maintain your profile and credentials?",
+    "aliases": [
+      "Maintain your profile and credentials",
+      "auth-05"
+    ],
+    "keywords": [
+      "maintain",
+      "your",
+      "profile",
+      "and",
+      "credentials"
+    ],
+    "synonyms": [],
+    "category": "Account access",
+    "route": "/profile",
+    "guide": "/docs/journeys/00-account-entry.html#auth-05-maintain-your-profile-and-credentials",
+    "steps": [
+      "Open `/profile` and confirm the account's read-only Username.",
+      "Edit Display name and choose Save name. Confirm the header identity changes and survives refresh.",
+      "If saving fails, read the error and retry with the intended name retained.",
+      "To change the password, enter Current password, New password and Confirm new password; choose Update password.",
+      "If current-password validation fails, correct it and retry. After acceptance, confirm the success feedback and that credential inputs are cleared. Other devices are signed out; this device remains signed in under the existing security contract.",
+      "To change the profile picture, select a local JPEG or PNG (maximum 5 MB). Unsupported formats are rejected before upload. Confirm the updated picture action, refresh, and use Remove photo when needed."
+    ],
+    "prerequisites": [
+      "An authenticated account. A password change also requires the current password."
+    ],
+    "warnings": [
+      "Enter real credentials only in the account UI. Test automation uses synthetic credentials and local API fixtures only."
+    ]
+  },
+  {
     "id": "E2E-01",
     "title": "How do I new idea to first BUY?",
     "aliases": [
