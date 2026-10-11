@@ -25,3 +25,4 @@ production smoke remains non-destructive and separate from deterministic CI.
 | `05-end-to-end.md` | `E2E-*` | `app/tests/e2e/` |
 | `06-assistant.md` | `AI-01`–`AI-09` | `app/tests/e2e/assistant.spec.js`, `assistant-agent.spec.js`, and `embedded-ai.spec.js` |
 | `07-supporting-investor.md` | `E2E-09`–`E2E-13` | `app/tests/e2e/supporting-investor-journeys.spec.js` |
+| `08-investor-overview-alerts.md` | `E2E-14`–`E2E-16` | `app/tests/e2e/investor-overview-journeys.spec.js` |

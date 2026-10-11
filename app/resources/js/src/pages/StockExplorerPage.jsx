@@ -664,8 +664,9 @@ export default function StockExplorerPage() {
                                 </div>
                             )}
                             <div>
-                                <label className="form-label">Benchmark index</label>
+                                <label className="form-label" htmlFor="explorer-benchmark">Benchmark index</label>
                                 <select
+                                    id="explorer-benchmark"
                                     className="form-select"
                                     value={benchmark}
                                     onChange={(e) => {

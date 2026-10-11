@@ -173,3 +173,11 @@ If this guide conflicts with an implemented/current product contract, correct th
 | E2E-08 | Stage sources, preview/apply PIT backfill, and record deployed acceptance | [Admin production ML acceptance](05-end-to-end.md#e2e-08--admin-production-ml-acceptance) |
 
 - [Documentation assistant](06-assistant.md) — grounded help, follow-up, feedback and degraded recovery.
+
+### Investor overview and advisory alerts
+
+| ID | Scenario | Detail |
+| --- | --- | --- |
+| E2E-14 | Refresh overview and recover unavailable dashboard | [Overview](08-investor-overview-alerts.md#e2e-14--refresh-portfolio-overview-and-recover-an-unavailable-dashboard) |
+| E2E-15 | Compare relative strength and recover missing history | [Stock Explorer](08-investor-overview-alerts.md#e2e-15--compare-a-stock-with-its-benchmark-and-recover-missing-price-data) |
+| E2E-16 | Maintain/evaluate advisory alert policies | [Alert policies](08-investor-overview-alerts.md#e2e-16--maintain-and-evaluate-an-advisory-alert-policy) |
