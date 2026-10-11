@@ -91,3 +91,21 @@ it('retains confirmed invitation material when a later shared refresh fails', as
     expect(screen.getByText('known@example.test')).toBeVisible(); expect(screen.queryByText('No invites yet.')).not.toBeInTheDocument();
     expect(api.post).not.toHaveBeenCalled();
 });
+
+it('keeps the admission filter stable while a reviewed decision is unresolved', async () => {
+    let finishDecision;
+    vi.spyOn(window, 'prompt').mockReturnValue('Reviewed private reason');
+    api.post.mockImplementation(() => new Promise(resolve => { finishDecision = resolve; }));
+    render(<AccessRequestsAdminSection />); await screen.findByText(row().email);
+    fireEvent.click(screen.getByRole('button', { name: 'Ignore', exact: true }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    const filter = screen.getByRole('button', { name: 'Show all statuses', exact: true });
+    expect(filter).toBeDisabled();
+    fireEvent.click(filter);
+    expect(screen.queryByRole('button', { name: 'Show pending only', exact: true })).not.toBeInTheDocument();
+    await act(async () => finishDecision({ data: {} }));
+    await waitFor(() => expect(filter).toBeEnabled());
+    fireEvent.click(filter);
+    expect(await screen.findByRole('button', { name: 'Show pending only', exact: true })).toBeEnabled();
+    expect(api.post).toHaveBeenCalledTimes(1);
+});

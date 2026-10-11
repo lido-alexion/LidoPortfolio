@@ -157,7 +157,7 @@ export default function AccessRequestsAdminSection() {
                         <span className="badge bg-danger ms-2">{pendingCount} pending</span>
                     ) : null}
                 </span>
-                <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setShowAll((v) => !v)}>
+                <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busyId !== null} onClick={() => setShowAll((v) => !v)}>
                     {showAll ? 'Show pending only' : 'Show all statuses'}
                 </button>
             </div>
