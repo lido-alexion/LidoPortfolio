@@ -11,6 +11,10 @@ export default function DashboardLayoutToolbar({ userId, onLayoutChange }) {
     const [saving, setSaving] = useState(false);
     const [saveStatus, setSaveStatus] = useState('Saved');
     const [named, setNamed] = useState([]);
+    const [namedLoading, setNamedLoading] = useState(true);
+    const [namedLoadError, setNamedLoadError] = useState('');
+    const [namedActionError, setNamedActionError] = useState('');
+    const [namedActionBusy, setNamedActionBusy] = useState(false);
     const [selectedNamed, setSelectedNamed] = useState('');
     const [variant, setVariant] = useState(() => (typeof window !== 'undefined' && window.innerWidth < 768 ? 'mobile' : 'desktop'));
     const importRef = useRef(null);
@@ -21,6 +25,7 @@ export default function DashboardLayoutToolbar({ userId, onLayoutChange }) {
     const revisionRef = useRef(0);
     const pendingSaveRef = useRef(null);
     const deletingRecordRef = useRef('');
+    const namedRequestRef = useRef(0);
 
     const flushSave = () => {
         clearTimeout(saveTimer.current);
@@ -45,19 +50,36 @@ export default function DashboardLayoutToolbar({ userId, onLayoutChange }) {
         });
     };
 
+    const loadNamedRecord = (record) => { if (selectedRef.current !== String(record.id)) flushSave(); const next = migrateDashboardLayout(record.definition); setSelectedNamed(String(record.id)); selectedRef.current = String(record.id); setLayout(next); layoutRef.current = next; onLayoutChange?.(next); setSaveStatus('Saved'); };
+
+    const loadNamedRecords = async ({ allowDefault = false } = {}) => {
+        const requestId = ++namedRequestRef.current;
+        setNamedLoading(true);
+        setNamedLoadError('');
+        try {
+            const res = await api.get('/dashboard-layouts', { skipErrorToast: true });
+            if (requestId !== namedRequestRef.current) return;
+            const records = res.data?.data || [];
+            setNamed(records);
+            const fallback = records.find((item) => item.is_default);
+            if (allowDefault && !hasLocalDashboardLayout(userId) && fallback) loadNamedRecord(fallback);
+        } catch {
+            if (requestId === namedRequestRef.current) setNamedLoadError('Named dashboards could not be loaded. Please retry.');
+        } finally {
+            if (requestId === namedRequestRef.current) setNamedLoading(false);
+        }
+    };
+
     useEffect(() => {
         const next = readLocalDashboardLayout(userId);
         setLayout(next);
         layoutRef.current = next;
         onLayoutChange?.(next);
-        let current = true;
         selectedRef.current = '';
         setSelectedNamed('');
-        api.get('/dashboard-layouts', { skipErrorToast: true }).then((res) => { if (!current) return; const records = res.data?.data || []; setNamed(records); const fallback = records.find((item) => item.is_default); if (!hasLocalDashboardLayout(userId) && fallback) loadNamedRecord(fallback); }).catch(() => { if (current) setNamed([]); });
-        return () => { current = false; flushSave(); };
+        loadNamedRecords({ allowDefault: true });
+        return () => { namedRequestRef.current += 1; flushSave(); };
     }, [userId, onLayoutChange]);
-
-    const loadNamedRecord = (record) => { if (selectedRef.current !== String(record.id)) flushSave(); const next = migrateDashboardLayout(record.definition); setSelectedNamed(String(record.id)); selectedRef.current = String(record.id); setLayout(next); layoutRef.current = next; onLayoutChange?.(next); setSaveStatus('Saved'); };
 
     const update = (next) => {
         const migrated = migrateDashboardLayout(next);
@@ -106,7 +128,30 @@ export default function DashboardLayoutToolbar({ userId, onLayoutChange }) {
     const loadNamed = (id) => { const record = named.find((item) => String(item.id) === String(id)); if (record) loadNamedRecord(record); };
     const renameNamed = async () => { const record = named.find((item) => String(item.id) === selectedNamed); if (!record) return; const name = window.prompt('Rename dashboard', record.name); if (!name?.trim() || name.trim() === record.name) return; try { const response = await api.put(`/dashboard-layouts/${record.id}`, { name: name.trim() }); setNamed((current) => current.map((item) => item.id === record.id ? response.data.data : item).sort((a, b) => a.name.localeCompare(b.name))); } catch { showToast('Dashboard could not be renamed.', 'danger'); } };
     const duplicateToLocal = () => { const record = named.find((item) => String(item.id) === selectedNamed); if (!record) return; flushSave(); const next = migrateDashboardLayout(layoutRef.current); setSelectedNamed(''); selectedRef.current = ''; update(next); showToast('Dashboard copied to this device.'); };
-    const setDefault = async () => { const record = named.find((item) => String(item.id) === selectedNamed); if (!record) return; await api.put(`/dashboard-layouts/${record.id}`, { is_default: true }); setNamed((current) => current.map((item) => ({ ...item, is_default: item.id === record.id }))); showToast('Default dashboard updated.'); };
+    const setDefault = async () => {
+        const record = named.find((item) => String(item.id) === selectedNamed);
+        if (!record || namedActionBusy) return;
+        setNamedActionBusy(true);
+        setNamedActionError('');
+        try {
+            const response = await api.put(`/dashboard-layouts/${record.id}`, { is_default: true });
+            const confirmed = response.data?.data;
+            setNamed((current) => current.map((item) => ({ ...item, is_default: item.id === record.id, ...(item.id === record.id && confirmed ? confirmed : {}) })));
+            showToast('Default dashboard updated.');
+        } catch {
+            setNamedActionError('Default dashboard could not be confirmed. Review named dashboards before retrying.');
+        } finally {
+            setNamedActionBusy(false);
+        }
+    };
+    const retryNamedSave = () => {
+        const recordId = selectedRef.current;
+        if (!recordId || deletingRecordRef.current === recordId) return;
+        const revision = ++revisionRef.current;
+        pendingSaveRef.current = { recordId, definition: migrateDashboardLayout(layoutRef.current), revision };
+        setSaveStatus('Saving');
+        flushSave();
+    };
     const duplicateNamed = async () => { const record = named.find((item) => String(item.id) === selectedNamed); if (!record) return; const name = window.prompt('Name the duplicated dashboard', `${record.name} copy`); if (!name?.trim()) return; try { flushSave(); await saveQueue.current; const response = await api.post(`/dashboard-layouts/${record.id}/duplicate`, { name: name.trim() }); setNamed((current) => [...current, response.data.data].sort((a, b) => a.name.localeCompare(b.name))); showToast('Dashboard duplicated.'); } catch { showToast('Dashboard could not be duplicated.', 'danger'); } };
     const deleteNamed = async () => {
         const record = named.find((item) => String(item.id) === selectedNamed);
@@ -137,6 +182,8 @@ export default function DashboardLayoutToolbar({ userId, onLayoutChange }) {
     return (
         <div className="card mb-3" data-testid="dashboard-layout-toolbar">
             <div className="card-body py-2">
+                {namedLoadError && <div className="alert alert-danger py-2" role="alert"><span>{namedLoadError}</span><button type="button" className="btn btn-sm btn-outline-primary ms-2" disabled={namedLoading} onClick={() => loadNamedRecords()}>Retry named dashboards</button></div>}
+                {namedActionError && <div className="alert alert-danger py-2" role="alert">{namedActionError}</div>}
                 <div className="d-flex flex-wrap align-items-center gap-2">
                     <strong className="small">Dashboard layout</strong>
                     <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setEditing((value) => !value)} aria-expanded={editing}>{editing ? 'Done' : 'Customize'}</button>
@@ -147,7 +194,7 @@ export default function DashboardLayoutToolbar({ userId, onLayoutChange }) {
                     <ExportDataButton dataset="dashboard-summary" label="Export dashboard data" fields={['field', 'value']} />
                     <ExportBasketPanel />
                     <button type="button" className="btn btn-sm btn-outline-primary" onClick={saveAsNamed} disabled={saving}>{saving ? 'Saving…' : 'Save as named dashboard'}</button>
-                    {named.length > 0 && <><label className="visually-hidden" htmlFor="named-dashboard-select">Named dashboard</label><select id="named-dashboard-select" className="form-select form-select-sm w-auto" value={selectedNamed} onChange={(event) => loadNamed(event.target.value)}><option value="">Named dashboards</option>{named.map((item) => <option value={item.id} key={item.id}>{item.name}{item.is_default ? ' (default)' : ''}</option>)}</select>{selectedNamed && <><button type="button" className="btn btn-sm btn-outline-secondary" onClick={setDefault}>Set default</button><button type="button" className="btn btn-sm btn-outline-secondary" onClick={renameNamed}>Rename</button><button type="button" className="btn btn-sm btn-outline-secondary" onClick={duplicateNamed}>Duplicate</button><button type="button" className="btn btn-sm btn-outline-secondary" onClick={duplicateToLocal}>Copy to this device</button><button type="button" className="btn btn-sm btn-outline-danger" onClick={deleteNamed}>Delete named</button><span role="status" aria-live="polite" className="small text-muted">{saveStatus}</span></>}</>}
+                    {named.length > 0 && <><label className="visually-hidden" htmlFor="named-dashboard-select">Named dashboard</label><select id="named-dashboard-select" className="form-select form-select-sm w-auto" value={selectedNamed} disabled={namedLoading || namedActionBusy} onChange={(event) => { setNamedActionError(''); loadNamed(event.target.value); }}><option value="">Named dashboards</option>{named.map((item) => <option value={item.id} key={item.id}>{item.name}{item.is_default ? ' (default)' : ''}</option>)}</select>{selectedNamed && <><button type="button" className="btn btn-sm btn-outline-secondary" disabled={namedActionBusy} onClick={setDefault}>Set default</button><button type="button" className="btn btn-sm btn-outline-secondary" disabled={namedActionBusy} onClick={renameNamed}>Rename</button><button type="button" className="btn btn-sm btn-outline-secondary" disabled={namedActionBusy} onClick={duplicateNamed}>Duplicate</button><button type="button" className="btn btn-sm btn-outline-secondary" disabled={namedActionBusy} onClick={duplicateToLocal}>Copy to this device</button><button type="button" className="btn btn-sm btn-outline-danger" disabled={namedActionBusy} onClick={deleteNamed}>Delete named</button><span role="status" aria-live="polite" className="small text-muted">{saveStatus}</span>{saveStatus === 'Failed' && <button type="button" className="btn btn-sm btn-outline-primary" onClick={retryNamedSave}>Retry named dashboard save</button>}</>}</>}
                     <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => update({ ...layout, locked: !layout.locked })}>{layout.locked ? 'Unlock layout' : 'Lock layout'}</button>
                 </div>
                 {editing && !layout.locked && <div className="row g-3 mt-1">

@@ -2245,6 +2245,44 @@ export const JOURNEY_TOPICS = Object.freeze([
     ]
   },
   {
+    "id": "E2E-48",
+    "title": "How do I customize, persist and recover a named Dashboard layout?",
+    "aliases": [
+      "Customize, persist and recover a named Dashboard layout",
+      "e2e-48"
+    ],
+    "keywords": [
+      "customize",
+      "persist",
+      "and",
+      "recover",
+      "named",
+      "dashboard",
+      "layout"
+    ],
+    "synonyms": [
+      "customize dashboard",
+      "named dashboard",
+      "default dashboard",
+      "layout recovery."
+    ],
+    "category": "StoX",
+    "route": "/",
+    "guide": "/docs/journeys/08-investor-overview-alerts.html#e2e-48-customize-persist-and-recover-a-named-dashboard-layout",
+    "steps": [
+      "Open the Dashboard at `/` and choose Customize under Dashboard layout. Select the Desktop or Mobile variant, then review which summary fields and cards are visible, their order and supported size.",
+      "Required portfolio summary information cannot be hidden. Save the reviewed configuration as a named dashboard, or choose an existing named dashboard before editing it.",
+      "Named edits save after a short pause. If that save fails, the device-local layout remains available and the toolbar shows Failed. Choose Retry named dashboard save explicitly; do not treat the local copy as confirmed account persistence.",
+      "If the named-dashboard list is unavailable, retry the list read. An unavailable list is not an empty list and blocks selection/default decisions until recovered.",
+      "Choose Set default for the reviewed named layout. If confirmation fails, keep the same selection and retry. Confirm the server-accepted record is labelled default.",
+      "Lock the layout when accidental editing should be prevented. Export/import operates on the layout definition only; compatibility adjustments must be disclosed, and importing never changes portfolio, transaction or broker state."
+    ],
+    "prerequisites": [
+      "an authenticated investor with an active portfolio."
+    ],
+    "warnings": []
+  },
+  {
     "id": "EXE-01",
     "title": "How do I execute an approved recommendation manually?",
     "aliases": [

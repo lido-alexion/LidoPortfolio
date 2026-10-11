@@ -269,3 +269,9 @@ If this guide conflicts with an implemented/current product contract, correct th
 | AUTH-11 | Create/revoke scoped personal API tokens | [Personal tokens](00-account-entry.md#auth-11--create-and-revoke-personal-api-tokens-with-limited-scope) |
 | E2E-46 | Recover Portfolio safeguards configuration | [Settings](17-account-delivery-settings.md#e2e-46--recover-portfolio-settings-without-overwriting-unknown-safeguards) |
 | E2E-47 | Maintain verified account channels/recipients | [Delivery](17-account-delivery-settings.md#e2e-47--maintain-verified-notification-channels-and-recipient-ownership) |
+
+### Dashboard layout
+
+| ID | Scenario | Detail |
+| --- | --- | --- |
+| E2E-48 | Customize/recover named desktop and mobile layouts | [Dashboard](08-investor-overview-alerts.md#e2e-48--customize-persist-and-recover-a-named-dashboard-layout) |

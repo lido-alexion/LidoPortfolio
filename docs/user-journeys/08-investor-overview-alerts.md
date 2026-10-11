@@ -52,3 +52,17 @@ These journeys describe existing investor behavior discovered during the V9-UX-0
 4. Reload the page and confirm the saved preferences. Disabling optional emails leaves account/security messaging enabled.
 
 **Expected result:** account-level preferences persist without changing portfolio ownership or trading permissions. A successful save is not proof of queue processing or inbox receipt; those require separate delivery evidence.
+
+## E2E-48 — Customize, persist and recover a named Dashboard layout
+
+- Requires: an authenticated investor with an active portfolio.
+- Search synonyms: customize dashboard, named dashboard, default dashboard, layout recovery.
+
+1. Open the Dashboard at `/` and choose Customize under Dashboard layout. Select the Desktop or Mobile variant, then review which summary fields and cards are visible, their order and supported size.
+2. Required portfolio summary information cannot be hidden. Save the reviewed configuration as a named dashboard, or choose an existing named dashboard before editing it.
+3. Named edits save after a short pause. If that save fails, the device-local layout remains available and the toolbar shows Failed. Choose Retry named dashboard save explicitly; do not treat the local copy as confirmed account persistence.
+4. If the named-dashboard list is unavailable, retry the list read. An unavailable list is not an empty list and blocks selection/default decisions until recovered.
+5. Choose Set default for the reviewed named layout. If confirmation fails, keep the same selection and retry. Confirm the server-accepted record is labelled default.
+6. Lock the layout when accidental editing should be prevented. Export/import operates on the layout definition only; compatibility adjustments must be disclosed, and importing never changes portfolio, transaction or broker state.
+
+**Expected result:** desktop/mobile presentation preferences remain scoped to the investor account and local device as labelled. Failed reads and writes are recoverable without claiming unknown state, and layout operations never alter financial evidence or authorize an order.

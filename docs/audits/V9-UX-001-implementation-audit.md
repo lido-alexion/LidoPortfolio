@@ -351,12 +351,6 @@ Local validation: 219 Node and 220 component tests across 53 files pass; typeche
 - Fundamentals now uses the existing canonical API error formatter for symbol and evidence failures. A new actual-formatter regression fails before the fix and passes after it, testing both recovery stages without writes. Existing seven research regressions remain green. Replacement hosted Chromium verification is required; local checks are not a browser pass.
 
 
-### 2026-10-11 13:02 UTC — Library subsequent browser failures
-
-- Replacement run [38140266106](https://github.com/lido-alexion/LidoPortfolio/actions/runs/38140266106), head `ccf04ff720d36b56a2b4405772a97de00508e5c4`, passed 269 browser cases and failed the two E2E-31 cases (57 scope skips). Their exact-label textarea lookup failed: the prefilled JSON was nested inside the implicit label. Give the envelope textarea the explicit accessible name, preserving all visual geometry and the exact user-facing selector. The exact hosted-browser failure establishes this recovery defect; the existing two component recovery checks remain green.
-- E2E-34 mobile initially raced an unfinished cancelled native confirmation, then passed on its allowed retry. Wait for completion of prompt/dismiss handling and the recovered enabled action before installing the next handler. Preserve the exact atomic-plan warning, cancelled-deployment zero-write assertion, failed/final deployment counters and shared-source identity. No extra retries, screenshots, tolerances, provider or domain qualification changes. New exact-head hosted verification remains required.
-
-
 ### 2026-10-11 12:48 UTC — Personal knowledge/Calendar inventory and recovery
 
 - Documented six major Investor workflows E2E-40–45: Notes/autosave/manage/export, tag lifecycle, private Wiki/history/portability, explicit page sharing/revocation and guest boundary, recurring events/global-holiday authority, and personal contextual notes. Frozen V5-FEAT-041 and V5-FEAT-038/current notification contracts were inspected. Bulk Markdown import/bidirectional Wiki sync remain explicitly out of frozen scope.
@@ -366,8 +360,6 @@ Local validation: 219 Node and 220 component tests across 53 files pass; typeche
 - Public capability IDs, images, export payloads/ZIP transport, occurrence/holiday/reminder inputs are synthetic UI fixtures, not official source, provider delivery, actual ZIP integrity or production public-access qualification. Production identity, usable Kite, governed ML acceptance and fresh nightly evidence remain open. Remaining independent scope includes account/delivery-channel controls and final route/traceability reconciliation.
 
 - Local verification at 2026-10-11 12:50 UTC: 219 Node tests and 232 component tests across 54 files pass, including the newly inherited eighth research error-envelope regression. Typecheck, static contract (53 topics), production build, syntax and whitespace pass; metadata contains 115 journey IDs. Chromium discovery finds 355 cases in 33 files; actual hosted execution remains pending. Approved screenshots and tolerances are unchanged.
-
-Canonical route metadata now opens the owning Knowledge Board/Tags/Wiki/Calendar/context surface. The branch-delete test selects the confirmed renamed immutable Wiki Page rather than its old title. Integrate the current Library label and completed-dialog fixes normally; exact-head hosted verification is still mandatory.
 
 
 ### 2026-10-11 13:06 UTC — Account authority and delivery recovery inventory
@@ -379,3 +371,9 @@ Canonical route metadata now opens the owning Knowledge Board/Tags/Wiki/Calendar
 - Latest normal master deployment 38140735491 for `9755295e79db66c45db0f228b7d8114f0b17ad18` failed the mandatory identity preactivation guard; no activation occurred. Read-only production verification at 2026-10-11 12:51 UTC confirmed `/up` and `/api/build-info` HTTP 200 and deployed `420c5b8f9dca57285981fc69cc47124aa820959f`. Dedicated smoke env configuration remains absent; protected ML service remains inactive. These are not waived acceptance gates.
 
 - Local verification: 219 Node tests and 240 components in 57 files pass. Typecheck, static documentation (53 topics), production build, syntax and whitespace pass. Corpus: 120 reviewed IDs. Chromium discovery: 365 cases in 34 files; discovery is not execution. Full WCAG2A/AA is required for the known enabled execution-code panel in both browser viewports; hosted qualification remains pending.
+
+### 2026-10-11 13:16 UTC — Named Dashboard layout recovery inventory
+
+- Added E2E-48 for the applicable Investor Dashboard editing workflow: open a named layout, customize card visibility, persist the reviewed definition, retry an uncertain autosave, and select a default only after server confirmation. The desktop/mobile fixture permits only the exact synthetic named-layout update and default-selection endpoints on localhost. It performs no financial, broker, ledger or provider action.
+- Three focused regressions fail against the prior Dashboard toolbar blob `0001cf4f84624578abf1b2596a3a0662d393c034`: a failed named-layout list read is presented as an authoritative empty list, a rejected default update escapes as an unhandled promise, and a failed named autosave has no explicit retry. All three pass after unavailable-list recovery, caught/retained default selection and an explicit retry that reuses the current reviewed layout definition. Controls remain disabled while the relevant request is unresolved.
+- Local verification: 219 Node tests and the three focused component regressions pass. Typecheck and the 53-topic static-document contract pass; metadata contains 121 reviewed IDs. Syntax and Playwright discovery pass, with 367 cases in 34 files. Discovery is not browser execution. Current-head hosted Chromium, screenshots and accessibility checks remain mandatory, and production identity, current ML qualification, real-Kite evidence and fresh nightly evidence remain open.
