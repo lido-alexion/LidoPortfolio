@@ -261,3 +261,9 @@ Run [38132809062](https://github.com/lido-alexion/LidoPortfolio/actions/runs/381
 
 
 This export branch inherits the mandatory pre-activation identity gate through the normally reconciled onboarding/overview branch. Prior failing export run evidence remains explicit; the integrated current head must pass canonical hosted acceptance.
+
+### Portfolio/cash inventory and deterministic acceptance slice — 2026-10-11
+
+The final route inventory found `/portfolios` lifecycle and `/cash` deposit/withdrawal/adjustment operations outside the golden corpus; per-tab selection and composite trade cash checks do not establish their complete conformance. New E2E-20–22 document existing accepted behavior from `docs/current/portfolio-cash-accounting.md` without changing financial or paper semantics. Desktop/mobile tests exercise invalid-name blocking, create/rename/default/delete failure and retry, rename cancellation, active/default deletion protection, destructive confirmation dismissal, distinct paper cloning with explicit assumptions, rejected pause/retry/resume, reservation identity, whole-rupee cash evidence and invalid withdrawal/reason blocking. A missing accessible name on the rename input is corrected. All scenario traffic is restricted to the local deterministic application and an exact write allowlist; no real account, broker, production simulation or external funds operation is executed.
+
+Local validation: typecheck, 218 Node tests, 202 component tests, static docs (53 topics), production build, syntax and discovery (299 cases / 27 files) pass. Discovery is not browser acceptance; current-head hosted Chromium and unchanged visual references remain required. Metadata now maps exactly 91 stable IDs. Backtests/replay and historical/performance/tax routes still require independent inventory/conformance review; this slice does not close the whole product inventory or external acceptance gates.

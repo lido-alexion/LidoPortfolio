@@ -192,3 +192,11 @@ If this guide conflicts with an implemented/current product contract, correct th
 | --- | --- | --- |
 | E2E-18 | Export scoped snapshot/chart data and recover background status/cancellation | [Data export](09-data-export.md#e2e-18--export-snapshot-data-and-recover-a-background-export) |
 | E2E-19 | Maintain a private export basket and recover workbook generation | [Data export](09-data-export.md#e2e-19--maintain-a-private-export-basket-and-recover-a-rejected-workbook) |
+
+### Portfolio lifecycle and cash
+
+| ID | Scenario | Detail |
+| --- | --- | --- |
+| E2E-20 | Manage owned portfolio lifecycle and confirmed deletion | [Portfolio lifecycle](10-portfolio-cash.md#e2e-20--create-rename-select-default-and-retire-a-portfolio) |
+| E2E-21 | Clone/pause/resume distinct paper simulation | [Paper boundary](10-portfolio-cash.md#e2e-21--clone-a-live-portfolio-into-a-distinct-paper-simulation) |
+| E2E-22 | Record cash evidence and inspect reservations | [Cash](10-portfolio-cash.md#e2e-22--record-cash-evidence-and-inspect-reservations-without-trading) |

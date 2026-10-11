@@ -1,0 +1,49 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>StoX user journeys</title><style>body{font:16px system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5}h1,h2{margin-top:2rem}</style></head><body><h1>StoX User Journeys — Portfolio Lifecycle and Cash</h1>
+
+<p>[Back to journey index](README.md)</p>
+
+<p>These workflows preserve the accepted [portfolio and cash contract](../current/portfolio-cash-accounting.md). Portfolio accounting records are distinct from transfers at a bank or broker. Historical replay and forward paper simulation remain distinguishable from live execution.</p>
+
+<h2 id="e2e-20-create-rename-select-default-and-retire-a-portfolio">E2E-20 — Create, rename, select, default and retire a portfolio</h2>
+
+<p>- Requires: An authenticated investor who owns the affected portfolios.</p>
+<p>- Warning: Deleting a portfolio permanently removes its transactions, holdings, alerts, snapshots and settings. Review the confirmation; cancellation must leave it intact.</p>
+
+<p>1. Open `/portfolios` and enter a valid name using letters, numbers, spaces, hyphens or underscores.</p>
+<p>2. Choose Live and Create. A failed request retains the entered name; correct validation or retry without assuming a new portfolio exists.</p>
+<p>3. Confirm the new portfolio in the list. Choose Rename, enter its new name and Save. A failed save retains the editor; Cancel preserves the saved name.</p>
+<p>4. Choose Use in this tab to select an owned portfolio. Selection is per tab, separately from the default preference.</p>
+<p>5. On another owned portfolio, choose Set default and confirm the Default badge after a successful response. A failed response must not claim the preference changed.</p>
+<p>6. Delete only an inactive, non-default portfolio while another portfolio exists. Read the irreversible confirmation; dismiss it to keep the portfolio. Retry a failed deletion only after checking that the portfolio remains present.</p>
+<p>7. Reload and verify the saved names, default and surviving portfolios.</p>
+
+<p>**Expected result:** Only confirmed changes alter the portfolio list. No broker order or external funds movement follows from portfolio management.</p>
+
+<h2 id="e2e-21-clone-a-live-portfolio-into-a-distinct-paper-simulation">E2E-21 — Clone a live portfolio into a distinct paper simulation</h2>
+
+<p>- Requires: An owned source portfolio.</p>
+<p>- Warning: Paper simulation is simulated evidence, not a live order or proof of live execution. Copy holdings is explicit; source ownership and accounting remain intact.</p>
+
+<p>1. Open `/portfolios`, locate the source and choose Clone as Paper.</p>
+<p>2. Review Paper name, positive Simulated cash, Fill price and Copy holdings. Cancel abandons the form without cloning.</p>
+<p>3. Choose Clone. A failed request leaves the draft available for correction or retry.</p>
+<p>4. Confirm a separate PAPER portfolio with the chosen name; the original LIVE portfolio remains present.</p>
+<p>5. Pause simulation and confirm its action changes to Resume simulation only after success. Retry a rejected pause while the previous state remains visible.</p>
+<p>6. Resume simulation and verify the active simulation state after reload. Its worker follows effective-session checkpoints and must never submit a live broker order.</p>
+
+<p>**Expected result:** The paper portfolio and its simulation state remain distinct from the live source. UI fixtures validate this boundary without starting production simulations.</p>
+
+<h2 id="e2e-22-record-cash-evidence-and-inspect-reservations-without-trading">E2E-22 — Record cash evidence and inspect reservations without trading</h2>
+
+<p>- Requires: An owned active portfolio and actual accounting evidence for any real cash record.</p>
+<p>- Warning: Record cash movement updates the StoX ledger; it does not transfer money at a bank or broker. Available cash and reserved cash differ. A reserve shortfall is a warning, not a second cash account or an independent withdrawal prohibition.</p>
+
+<p>1. Open `/cash`, inspect cash balance, Reserved cash and Available cash. Use See reservation details to inspect recommendation identity and the reserved amount; do not infer a fill from reservation alone.</p>
+<p>2. Choose Deposit, enter a positive whole-rupee Amount, Transaction date and optional Remarks, then submit. A failed write retains the input and unchanged statement; retry only after checking whether the record exists.</p>
+<p>3. Confirm the successful entry in Cash account statement with its effective date, running balance and remarks.</p>
+<p>4. Choose Withdraw. An amount above available cash cannot be recorded. Record a valid withdrawal using the same explicit form, then inspect the statement.</p>
+<p>5. Choose Adjust, enter a non-zero signed whole-rupee amount and a required reason. Correct rejected input or retry a failed write while the draft remains visible. Confirm a separate adjustment entry rather than rewriting a prior economic event.</p>
+<p>6. Reload and verify the statement and balances. No order, fill or external transfer should be created by these actions.</p>
+
+<p>**Expected result:** Confirmed ledger events and reservations remain distinguishable. Browser automation uses a local deterministic ledger, never production cash mutation.</p>
+</body></html>
