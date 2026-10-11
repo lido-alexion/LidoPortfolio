@@ -80,7 +80,7 @@ export default function ArtifactLibraryPage() {
                     <div className="col-md-4"><label className="form-label small">Name<input className="form-control" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label></div>
                     <div className="col-md-2"><label className="form-label small">Version<input className="form-control" value={draft.semver} onChange={(event) => setDraft({ ...draft, semver: event.target.value })} /></label></div>
                 </div>
-                <label className="form-label small mb-0">Artifact envelope JSON<textarea className="form-control font-monospace" rows="10" value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} /></label>
+                <label className="form-label small mb-0">Artifact envelope JSON<textarea aria-label="Artifact envelope JSON" className="form-control font-monospace" rows="10" value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} /></label>
                 <label className="form-check"><input className="form-check-input" type="checkbox" checked={draft.ai_assisted} onChange={(event) => setDraft({ ...draft, ai_assisted: event.target.checked })} /><span className="form-check-label small">AI assisted this Draft (AI cannot publish or deploy it)</span></label>
                 <div><button type="button" className="btn btn-primary btn-sm" onClick={createDraft} disabled={busy || !draft.slug || !draft.name || !draft.content}>Create Draft</button></div>
             </div></div>}

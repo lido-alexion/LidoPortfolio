@@ -9,7 +9,7 @@
 <p>- Requires: An authenticated Investor and an owned Portfolio.</p>
 <p>- Warning: Blank notes are not saved. Autosave and manual Save use the same personal note; a transport failure cannot establish whether a write committed. Inspect the retained note before retrying. Copy/export does not publish a note.</p>
 
-<p>1. Open Knowledge Board. Retry knowledge notes or Retry knowledge tags recovers unavailable reads; a failed read is not a confirmed empty Board.</p>
+<p>1. Open Knowledge Board (`/knowledge-board`). Retry knowledge notes or Retry knowledge tags recovers unavailable reads; a failed read is not a confirmed empty Board.</p>
 <p>2. Choose New note, enter title and research content, and inspect the save status. A rejected save keeps the draft available for manual Save. Close and reopen the confirmed note to verify persistence.</p>
 <p>3. Choose Manage notes. Pin, Duplicate and Archive are explicit actions; a rejected action preserves the original note. Archive removes it from the active list only after confirmation from the service.</p>
 <p>4. Use Show archived, search and tags to find personal research. Duplicating creates a distinct note; editing the copy does not replace its source.</p>
@@ -23,7 +23,7 @@
 <p>- Requires: Owned Portfolio notes and tags.</p>
 <p>- Warning: Merging consolidates the source tag into the selected target. Deleting a tag does not delete its notes.</p>
 
-<p>1. Open Manage tags. Retry knowledge tags recovers an unavailable list.</p>
+<p>1. Open Manage tags (`/knowledge-board/tags`). Retry knowledge tags recovers an unavailable list.</p>
 <p>2. Enter a nonblank New tag name and choose Add. A failed creation retains the name for correction/retry.</p>
 <p>3. Rename a tag. Cancel preserves its original name; a rejected Save keeps the entered name available.</p>
 <p>4. Select distinct Source and Target tags before Merge. On failure, retain both selections and inspect the current list before retrying.</p>
@@ -36,7 +36,7 @@
 <p>- Requires: An owned Portfolio and access to its Wiki.</p>
 <p>- Warning: Markdown is the canonical source. Rendered preview is derived. Moving/renaming preserves immutable page identity and managed links. Restoring creates a new revision; branch deletion requires explicit confirmation of the branch size.</p>
 
-<p>1. Open Wiki; Retry Wiki hierarchy and Retry Wiki Page recover unavailable reads without treating them as a missing page or navigating away silently.</p>
+<p>1. Open Wiki (`/knowledge-board/wiki`); Retry Wiki hierarchy and Retry Wiki Page recover unavailable reads without treating them as a missing page or navigating away silently.</p>
 <p>2. Create a root page or a child beneath the selected parent. Cancelling the prompt creates nothing; rejected creation retains existing hierarchy.</p>
 <p>3. Edit title/Markdown and Insert Wiki Link to a selected page. Preview failure retains source; retry displays safe derived content. Save failure retains the draft; verify confirmed source/history after retry.</p>
 <p>4. Compare a stored revision with current Markdown. Cancel Restore to leave history intact; retry a rejected confirmed restore to create a forward revision while retaining old evidence.</p>
@@ -52,7 +52,7 @@
 <p>- Requires: A page owner for sharing; a current public link for guest reads.</p>
 <p>- Warning: Anyone with the public link may read the shared page and its attached images. Linked private pages, tree, breadcrumbs, revisions and editing remain inaccessible. Regeneration invalidates the old capability; Stop sharing revokes access.</p>
 
-<p>1. On the owned private page choose Share publicly. Failure displays no confirmed link; retry shows the link field after service confirmation. If clipboard access fails, copy the displayed field manually.</p>
+<p>1. On the owned private Wiki Page (`/knowledge-board/wiki`) choose Share publicly. Failure displays no confirmed link; retry shows the link field after service confirmation. If clipboard access fails, copy the displayed field manually.</p>
 <p>2. Regenerate link explicitly. Failure preserves the current confirmed link; success supplies a replacement. Private Markdown/history is unchanged.</p>
 <p>3. Open the link as a guest. An unavailable read offers Retry shared Wiki Page. An authoritative invalid/revoked link shows a generic unavailable message.</p>
 <p>4. Inspect only the shared page and its attached images. Private hierarchy, revision history, linked-page content and personal contextual notes are absent.</p>
@@ -65,7 +65,7 @@
 <p>- Requires: An authenticated Investor and an owned Portfolio.</p>
 <p>- Warning: Global Trade Holidays are administrator-owned and shown on every Portfolio. An Investor cannot edit/delete them. Recurrence uses one event series; reminders use the account's enabled, verified notification channels and do not prove provider delivery.</p>
 
-<p>1. Open Calendar. Retry calendar recovers an unavailable year/occurrence read.</p>
+<p>1. Open Calendar (`/calendar`). Retry calendar recovers an unavailable year/occurrence read.</p>
 <p>2. Open New event. Cancel makes no changes. Enter Title, Anchor date and Repeat; inspect the conditional recurrence fields and optional Repeat until.</p>
 <p>3. For a monthly event on day 31, shorter months use the existing clamping rule. Select Event reminder and reminder offsets deliberately; custom offsets extend the selected list.</p>
 <p>4. Save explicitly. A failure retains the entered event and an uncertain-write explanation. Inspect and retry; open a displayed occurrence to edit the underlying series.</p>
@@ -80,7 +80,7 @@
 <p>- Requires: An authenticated Investor and a contextual-note surface.</p>
 <p>- Warning: The note belongs to its owner, route context and active Portfolio where applicable. It is personal research, not shared advice or a trading instruction.</p>
 
-<p>1. Open contextual notes on a supported route. If the existing note cannot be read, Retry contextual note first; Save remains disabled to prevent overwriting unknown content.</p>
+<p>1. Open contextual notes on a supported route, such as Screeners (`/screeners`). If the existing note cannot be read, Retry contextual note first; Save remains disabled to prevent overwriting unknown content.</p>
 <p>2. Enter a private note after a confirmed empty read and Save. Failure retains entered text; retry and reopen the pane to inspect the confirmed note in the same context.</p>
 <p>3. Edit and Save deliberately. A rejected update retains the entered draft and existing record for recovery.</p>
 <p>4. Cancel Delete to preserve the note. A rejected confirmed deletion retains it; retry clears only the current personal contextual note.</p>

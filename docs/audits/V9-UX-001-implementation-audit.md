@@ -351,6 +351,12 @@ Local validation: 219 Node and 220 component tests across 53 files pass; typeche
 - Fundamentals now uses the existing canonical API error formatter for symbol and evidence failures. A new actual-formatter regression fails before the fix and passes after it, testing both recovery stages without writes. Existing seven research regressions remain green. Replacement hosted Chromium verification is required; local checks are not a browser pass.
 
 
+### 2026-10-11 13:02 UTC — Library subsequent browser failures
+
+- Replacement run [38140266106](https://github.com/lido-alexion/LidoPortfolio/actions/runs/38140266106), head `ccf04ff720d36b56a2b4405772a97de00508e5c4`, passed 269 browser cases and failed the two E2E-31 cases (57 scope skips). Their exact-label textarea lookup failed: the prefilled JSON was nested inside the implicit label. Give the envelope textarea the explicit accessible name, preserving all visual geometry and the exact user-facing selector. The exact hosted-browser failure establishes this recovery defect; the existing two component recovery checks remain green.
+- E2E-34 mobile initially raced an unfinished cancelled native confirmation, then passed on its allowed retry. Wait for completion of prompt/dismiss handling and the recovered enabled action before installing the next handler. Preserve the exact atomic-plan warning, cancelled-deployment zero-write assertion, failed/final deployment counters and shared-source identity. No extra retries, screenshots, tolerances, provider or domain qualification changes. New exact-head hosted verification remains required.
+
+
 ### 2026-10-11 12:48 UTC — Personal knowledge/Calendar inventory and recovery
 
 - Documented six major Investor workflows E2E-40–45: Notes/autosave/manage/export, tag lifecycle, private Wiki/history/portability, explicit page sharing/revocation and guest boundary, recurring events/global-holiday authority, and personal contextual notes. Frozen V5-FEAT-041 and V5-FEAT-038/current notification contracts were inspected. Bulk Markdown import/bidirectional Wiki sync remain explicitly out of frozen scope.
@@ -360,3 +366,5 @@ Local validation: 219 Node and 220 component tests across 53 files pass; typeche
 - Public capability IDs, images, export payloads/ZIP transport, occurrence/holiday/reminder inputs are synthetic UI fixtures, not official source, provider delivery, actual ZIP integrity or production public-access qualification. Production identity, usable Kite, governed ML acceptance and fresh nightly evidence remain open. Remaining independent scope includes account/delivery-channel controls and final route/traceability reconciliation.
 
 - Local verification at 2026-10-11 12:50 UTC: 219 Node tests and 232 component tests across 54 files pass, including the newly inherited eighth research error-envelope regression. Typecheck, static contract (53 topics), production build, syntax and whitespace pass; metadata contains 115 journey IDs. Chromium discovery finds 355 cases in 33 files; actual hosted execution remains pending. Approved screenshots and tolerances are unchanged.
+
+Canonical route metadata now opens the owning Knowledge Board/Tags/Wiki/Calendar/context surface. The branch-delete test selects the confirmed renamed immutable Wiki Page rather than its old title. Integrate the current Library label and completed-dialog fixes normally; exact-head hosted verification is still mandatory.
