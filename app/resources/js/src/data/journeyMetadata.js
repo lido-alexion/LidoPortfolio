@@ -1321,6 +1321,119 @@ export const JOURNEY_TOPICS = Object.freeze([
     ]
   },
   {
+    "id": "E2E-25",
+    "title": "How do I inspect historical holdings, compare dates and recover derived snapshots?",
+    "aliases": [
+      "Inspect historical holdings, compare dates and recover derived snapshots",
+      "e2e-25"
+    ],
+    "keywords": [
+      "inspect",
+      "historical",
+      "holdings",
+      "compare",
+      "dates",
+      "and",
+      "recover",
+      "derived",
+      "snapshots"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/portfolio/historical-holdings",
+    "guide": "/docs/journeys/12-portfolio-analysis-tax.html#e2e-25-inspect-historical-holdings-compare-dates-and-recover-derived-snapshots",
+    "steps": [
+      "Open `/portfolio/historical-holdings`, choose As-of date and inspect quantity, cost basis, dated price, market value and completeness warnings. Refresh after an unavailable read; preserve unavailable price/value distinctions.",
+      "Follow Compare dates to `/portfolio/compare`, choose Date A before Date B with neither in the future, and Compare. Invalid dates cannot be submitted.",
+      "Inspect dated cash/holdings totals, external deposits/withdrawals/adjustments, holdings differences and transaction evidence in `(A, B]`. Retry a failed comparison without changing the requested dates.",
+      "Open `/portfolio/snapshots`, choose the history range and inspect the latest date, growth chart and daily values. Refresh a failed read; a failed refresh must not manufacture values or financial events.",
+      "If source corrections require rebuilding derived history, choose Rebuild history and review its confirmation. Dismiss to keep the existing derived state. A failed rebuild reports failure; check existing results before retrying.",
+      "Confirm successful rebuild and refreshed dated rows. Source ledger and live order state remain distinct from the recalculated presentation."
+    ],
+    "prerequisites": [
+      "An owned active portfolio with dated financial source evidence."
+    ],
+    "warnings": [
+      "Historical holdings are an as-of reconstruction, snapshots are rebuildable derived views, and value change between dates is not investment return or causal attribution. Missing prices are not zero."
+    ]
+  },
+  {
+    "id": "E2E-26",
+    "title": "How do I review performance/tax scope, save preferences and preserve calculation evidence?",
+    "aliases": [
+      "Review performance/tax scope, save preferences and preserve calculation evidence",
+      "e2e-26"
+    ],
+    "keywords": [
+      "review",
+      "performance",
+      "tax",
+      "scope",
+      "save",
+      "preferences",
+      "and",
+      "preserve",
+      "calculation",
+      "evidence"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/portfolio/performance-tax",
+    "guide": "/docs/journeys/12-portfolio-analysis-tax.html#e2e-26-review-performance-tax-scope-save-preferences-and-preserve-calculation-evidence",
+    "steps": [
+      "Open `/portfolio/performance-tax`, choose Performance from/to and Tax financial year, then Calculate. Correct invalid/future ranges; retry an unavailable calculation with the same reviewed inputs.",
+      "Inspect portfolio/account metrics, primary benchmark, attribution residual and tax completeness/limitations. Incomplete or unavailable values are not zero.",
+      "Review Analysis settings: Primary benchmark, comparison benchmarks, risk-free rate, annualization days and independent account performance/tax inclusion. Save settings. Failure retains the draft for retry; confirmed changes appear after reloading.",
+      "If needed, review and Save Account overrides separately; these are account analytics preferences, not a portfolio cash movement.",
+      "Enable What-if portfolio selection and choose owned portfolios. Inspect the resulting scope without changing the configured inclusion preferences; disable it to return to configured reporting.",
+      "Choose Preserve evidence for the intended portfolio performance, account performance or account tax calculation. Retry a failed preservation explicitly; do not claim immutable evidence was stored before success.",
+      "Export the desired tax dataset. A failed CSV export reports failure; retry and verify the selected dataset/financial-year scope and attachment. Downloading a report does not change financial sources."
+    ],
+    "prerequisites": [
+      "An owned active portfolio and the financial/benchmark evidence required by the chosen calculation."
+    ],
+    "warnings": [
+      "Account results are independently aggregated, not averaged portfolio percentages. What-if selection does not change configured inclusion. Tax estimates are not certified advice, and incomplete inputs must remain disclosed."
+    ]
+  },
+  {
+    "id": "E2E-27",
+    "title": "How do I record tax inputs and preview a dividend CSV before import?",
+    "aliases": [
+      "Record tax inputs and preview a dividend CSV before import",
+      "e2e-27"
+    ],
+    "keywords": [
+      "record",
+      "tax",
+      "inputs",
+      "and",
+      "preview",
+      "dividend",
+      "csv",
+      "before",
+      "import"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/portfolio/performance-tax",
+    "guide": "/docs/journeys/12-portfolio-analysis-tax.html#e2e-27-record-tax-inputs-and-preview-a-dividend-csv-before-import",
+    "steps": [
+      "In Record tax evidence on `/portfolio/performance-tax`, enter Manual dividend date, positive amount and source reference, then Record dividend. Failure retains the draft and reports that the write was not confirmed.",
+      "For Tax loss, choose term/status, enter a positive amount and the required evidence/reason for Confirmed carry-forward; Record loss. Do not confuse a calculated loss with confirmed carry-forward.",
+      "For Opening tax lot, select the stock, acquired date, positive quantity, cost basis and required source reason, then Record opening lot. These inputs supplement tax reconstruction; they do not place a trade.",
+      "Choose the supported Dividend CSV (`generic-dividend-csv.v1`) and Preview. Inspect validity, candidate rows and duplicates. A failed/invalid preview cannot enable Import validated rows.",
+      "Changing the file invalidates its prior preview; preview the corrected file again. Only then deliberately choose Import validated rows and inspect imported/duplicate counts.",
+      "After a failed write/import, inspect existing evidence before retrying. After success, verify refreshed reporting; a preview alone must not change reports or claim rows were imported."
+    ],
+    "prerequisites": [
+      "An owned portfolio and actual documentary evidence for any real tax input."
+    ],
+    "warnings": [
+      "These are source-evidence writes. Inspect existing records after an uncertain response before retrying. A browser fixture cannot certify tax rules, filing eligibility or real import persistence."
+    ]
+  },
+  {
     "id": "EXE-01",
     "title": "How do I execute an approved recommendation manually?",
     "aliases": [

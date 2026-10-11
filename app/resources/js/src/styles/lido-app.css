@@ -6342,7 +6342,8 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
 .lido-developer-options-modal { z-index: 2302; }
 
 /* Keep Replay actions readable in hovered/focused dark-theme states. */
-.portfolio-replay-panel .btn-outline-primary:is(:hover, :focus-visible, :active) {
+.portfolio-replay-panel .btn-outline-primary:is(:hover, :focus-visible, :active),
+.tax-evidence-panel .btn-outline-primary:is(:hover, :focus-visible, :active) {
     color: #fff;
     background-color: var(--lido-a11y-brand-bg);
     border-color: var(--lido-a11y-brand-bg);

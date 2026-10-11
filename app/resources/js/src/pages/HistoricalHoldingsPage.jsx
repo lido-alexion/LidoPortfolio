@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../api';
+import api, { getApiErrorMessage } from '../api';
 import TransactionDateInput from '../components/TransactionDateInput';
 import useApiGet from '../hooks/useApiGet';
 import usePortfolioChanged from '../hooks/usePortfolioChanged';
@@ -206,8 +206,8 @@ export default function HistoricalHoldingsPage() {
             )}
 
             {error && (
-                <div className="alert alert-danger py-2 small">
-                    {typeof error === 'string' ? error : 'Could not load historical holdings.'}
+                <div className="alert alert-danger py-2 small" role="alert">
+                    {getApiErrorMessage(error, 'Could not load historical holdings.')}
                 </div>
             )}
 
