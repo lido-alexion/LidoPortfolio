@@ -46,6 +46,7 @@ UI labels can evolve. The route and user intent are more important than minor wo
 | --- | --- | --- |
 | AUTH-01 | Sign in and return to the requested page | [Account entry](00-account-entry.md#auth-01--sign-in-and-return-to-the-requested-page) |
 | AUTH-02 | Recover from rejected credentials | [Account entry](00-account-entry.md#auth-02--recover-from-rejected-credentials) |
+| AUTH-03 | End a session and return through sign-in | [Account entry](00-account-entry.md#auth-03--end-a-session-and-return-through-sign-in) |
 
 ### A. Screeners
 

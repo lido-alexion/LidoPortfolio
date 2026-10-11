@@ -1,0 +1,47 @@
+import { chromium } from 'playwright';
+import { allowProductionSmokeRequest } from './productionSmokePolicy.js';
+
+let stage = 'configuration';
+let browser;
+try {
+    const baseURL = process.env.STOX_E2E_BASE_URL;
+    const email = process.env.STOX_SMOKE_EMAIL;
+    const password = process.env.STOX_SMOKE_PASSWORD;
+    if (!baseURL || !email || !password || new URL(baseURL).protocol !== 'https:') throw new Error();
+    stage = 'browser_launch';
+    browser = await chromium.launch({ headless: true });
+    // No Playwright Test reporter/instrumentation, tracing, HAR, video or screenshot.
+    const context = await browser.newContext({ baseURL, serviceWorkers: 'block' });
+    const page = await context.newPage();
+    page.setDefaultTimeout(20_000);
+    let login = true;
+    let blocked = false;
+    await page.route('**/*', async route => {
+        const request = route.request();
+        if (!allowProductionSmokeRequest(request.method(), request.url(), baseURL, { login })) {
+            blocked = true;
+            return route.abort();
+        }
+        return route.continue();
+    });
+    stage = 'login';
+    const response = await page.goto('/login');
+    if (!response?.ok()) throw new Error();
+    await page.getByLabel('Email').fill(email);
+    await page.getByLabel('Password').fill(password);
+    await page.getByRole('button', { name: 'Login', exact: true }).click();
+    await page.getByRole('heading', { name: 'Login', exact: true }).waitFor({ state: 'hidden', timeout: 30_000 });
+    login = false;
+    stage = 'review';
+    await page.goto('/review');
+    await page.getByRole('heading', { name: 'Review', exact: true }).waitFor({ state: 'visible' });
+    stage = 'request_safety';
+    if (blocked) throw new Error();
+    console.log('AUTHENTICATED_SMOKE_PASSED');
+} catch {
+    // Never print Playwright errors: fill arguments or network bodies may contain secrets.
+    console.log(`AUTHENTICATED_SMOKE_FAILED:${stage}`);
+    process.exitCode = 1;
+} finally {
+    if (browser) await browser.close().catch(() => {});
+}
