@@ -258,3 +258,14 @@ If this guide conflicts with an implemented/current product contract, correct th
 | E2E-43 | Share one page and revoke public capability | [Sharing](16-personal-knowledge-calendar.md#e2e-43--share-one-wiki-page-and-revoke-its-public-capability) |
 | E2E-44 | Maintain recurring events without holiday authority | [Calendar](16-personal-knowledge-calendar.md#e2e-44--maintain-recurring-calendar-events-without-holiday-authority) |
 | E2E-45 | Recover personal contextual notes without unknown overwrite | [Contextual notes](16-personal-knowledge-calendar.md#e2e-45--recover-route-scoped-contextual-notes-without-overwriting-unknown-content) |
+
+
+### Account authority and delivery settings
+
+| ID | Scenario | Detail |
+| --- | --- | --- |
+| AUTH-09 | Recover owned session management | [Sessions](00-account-entry.md#auth-09--recover-owned-session-management-without-losing-this-device) |
+| AUTH-10 | Recover execution-code setup/confirmation/disable | [Execution code](00-account-entry.md#auth-10--recover-stox-execution-code-enrollment-without-broker-authority) |
+| AUTH-11 | Create/revoke scoped personal API tokens | [Personal tokens](00-account-entry.md#auth-11--create-and-revoke-personal-api-tokens-with-limited-scope) |
+| E2E-46 | Recover Portfolio safeguards configuration | [Settings](17-account-delivery-settings.md#e2e-46--recover-portfolio-settings-without-overwriting-unknown-safeguards) |
+| E2E-47 | Maintain verified account channels/recipients | [Delivery](17-account-delivery-settings.md#e2e-47--maintain-verified-notification-channels-and-recipient-ownership) |

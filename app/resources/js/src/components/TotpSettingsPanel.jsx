@@ -11,15 +11,22 @@ export default function TotpSettingsPanel() {
     const [code, setCode] = useState('');
     const [appName, setAppName] = useState('');
     const [busy, setBusy] = useState(false);
+    const [statusLoading, setStatusLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
 
     const load = async () => {
-        const res = await api.get('/v1/totp', { skipErrorToast: true });
-        setStatus(tosData(res) || res.data?.data || null);
+        setStatusLoading(true);
+        setLoadError('');
+        try {
+            const res = await api.get('/v1/totp', { skipErrorToast: true });
+            setStatus(tosData(res) || res.data?.data || null);
+        } catch {
+            setStatus(null);
+            setLoadError('Execution-code status could not be loaded. Retry before changing setup.');
+        } finally { setStatusLoading(false); }
     };
 
-    React.useEffect(() => {
-        load().catch(() => setStatus({ enabled: false, pending: false, authenticator_app_name: 'Authenticator app' }));
-    }, []);
+    React.useEffect(() => { load(); }, []);
 
     const begin = async () => {
         setBusy(true);
@@ -84,7 +91,7 @@ export default function TotpSettingsPanel() {
     const setupCodeLabel = `StoX execution code — ${appName.trim() || 'Authenticator app'}`;
 
     return (
-        <div className="card">
+        <div className="card" role="region" aria-label="StoX execution code">
             <div className="card-header">StoX execution code</div>
             <div className="card-body">
                 <p className="text-muted small">
@@ -92,7 +99,9 @@ export default function TotpSettingsPanel() {
                     Supported apps include Google Authenticator and Microsoft Authenticator; you may enter another display name.
                     StoX recovery codes are separate, one-time backup codes. Kite login OTPs are entered only on Kite/Zerodha.
                 </p>
-                {enabled ? (
+                {statusLoading && <p className="text-muted">Loading execution-code status…</p>}
+                {loadError && <div className="alert alert-danger" role="alert"><p>{loadError}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={busy || statusLoading} onClick={load}>Retry execution-code status</button></div>}
+                {status && !statusLoading && (enabled ? (
                     <form className="row g-2 align-items-end" onSubmit={disable}>
                         <div className="col-12">
                             <span className="badge text-bg-success">Enabled</span>
@@ -166,7 +175,7 @@ export default function TotpSettingsPanel() {
                             </form>
                         )}
                     </>
-                )}
+                ))}
                 {Array.isArray(recoveryCodes) && recoveryCodes.length > 0 && (
                     <div className="alert alert-warning mt-3 mb-0">
                         <strong>StoX recovery codes (save these one-time backup codes now):</strong>
