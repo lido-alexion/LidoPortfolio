@@ -44,12 +44,14 @@ describe('combo chart preset contracts', () => {
         const availability = Object.fromEntries(COMBO_CHART_PRESETS.map(({ id }) => [id, { available: true }]));
         const rows = [{ date: '2025-01-01', price: 10, volume: 100, pe: 2 }, { date: '2025-02-01', price: 11, volume: 120, pe: 3 }];
         const onSetDefault = vi.fn();
-        render(<ComboChart rows={rows} availability={availability} defaultPresetId="price-volume" onSetDefault={onSetDefault} />);
+        const { rerender } = render(<ComboChart rows={rows} availability={availability} defaultPresetId="price-volume" onSetDefault={onSetDefault} />);
         const selector = screen.getByLabelText('Combo chart preset');
         const priceLegend = screen.getByRole('checkbox', { name: 'Show Price' }).closest('label');
         expect(within(priceLegend).getByText('Price')).not.toHaveAttribute('style');
         expect(priceLegend.querySelector('[aria-hidden="true"]')).toHaveStyle({ color: '#0d6efd' });
         fireEvent.change(selector, { target: { value: 'price-pe' } });
+        expect(selector.value).toBe('price-pe');
+        rerender(<ComboChart rows={rows} availability={{ ...availability }} defaultPresetId="price-volume" onSetDefault={onSetDefault} />);
         expect(selector.value).toBe('price-pe');
         expect(screen.getByRole('checkbox', { name: 'Show P/E' })).toBeChecked();
         fireEvent.click(screen.getByRole('checkbox', { name: 'Show P/E' }));
