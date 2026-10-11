@@ -17,3 +17,10 @@ it('retries an unavailable artifact without enabling any mutation before a confi
     render(<MemoryRouter initialEntries={['/artifact-library/synthetic-uuid']}><Routes><Route path="/artifact-library/:uuid" element={<ArtifactLibraryDetailPage />} /></Routes></MemoryRouter>);
     expect(await screen.findByRole('alert')).toHaveTextContent('Synthetic artifact unavailable.'); expect(apiMock.post).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole('button', { name: 'Retry artifact', exact: true })); expect(await screen.findByRole('heading', { name: 'Confirmed artifact' })).toBeVisible(); expect(apiMock.post).not.toHaveBeenCalled();
 });
+it('associates the prefilled Draft envelope with its exact field label', async () => {
+    apiMock.get.mockResolvedValue({ data: { data: [] } });
+    render(<MemoryRouter><ArtifactLibraryPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Create Draft', exact: true }));
+    expect(screen.getByLabelText('Artifact envelope JSON', { exact: true })).toHaveValue(expect.stringContaining('schema_version'));
+    expect(apiMock.post).not.toHaveBeenCalled();
+});
