@@ -796,6 +796,116 @@ export const JOURNEY_TOPICS = Object.freeze([
     "warnings": []
   },
   {
+    "id": "E2E-14",
+    "title": "How do I refresh portfolio overview and recover an unavailable dashboard?",
+    "aliases": [
+      "Refresh portfolio overview and recover an unavailable dashboard",
+      "e2e-14"
+    ],
+    "keywords": [
+      "refresh",
+      "portfolio",
+      "overview",
+      "and",
+      "recover",
+      "unavailable",
+      "dashboard"
+    ],
+    "synonyms": [
+      "portfolio overview",
+      "refresh dashboard",
+      "dashboard unavailable."
+    ],
+    "category": "StoX",
+    "route": "/",
+    "guide": "/docs/journeys/08-investor-overview-alerts.html#e2e-14-refresh-portfolio-overview-and-recover-an-unavailable-dashboard",
+    "steps": [
+      "Open the Dashboard at `/` and inspect Portfolio Value, Invested Value and Total Gain/Loss for the active portfolio.",
+      "Use Refresh dashboard to clear this portfolio's local cache and request current server data.",
+      "If refresh fails after data was displayed, retain the prior values and show the failure. Use Refresh dashboard again after the service recovers.",
+      "Confirm the successful response replaces the displayed values. Reloading or returning to the page may use the labelled local cache; explicitly refresh when current server values are needed.",
+      "If the initial load fails before any data exists, reload the page after the service recovers."
+    ],
+    "prerequisites": [
+      "an authenticated investor with an active portfolio."
+    ],
+    "warnings": []
+  },
+  {
+    "id": "E2E-15",
+    "title": "How do I compare a stock with its benchmark and recover missing price data?",
+    "aliases": [
+      "Compare a stock with its benchmark and recover missing price data",
+      "e2e-15"
+    ],
+    "keywords": [
+      "compare",
+      "stock",
+      "with",
+      "its",
+      "benchmark",
+      "and",
+      "recover",
+      "missing",
+      "price",
+      "data"
+    ],
+    "synonyms": [
+      "relative strength",
+      "stock explorer",
+      "manual relative strength."
+    ],
+    "category": "StoX",
+    "route": "/explorer",
+    "guide": "/docs/journeys/08-investor-overview-alerts.html#e2e-15-compare-a-stock-with-its-benchmark-and-recover-missing-price-data",
+    "steps": [
+      "Open Stock Explorer at `/explorer`, select a stock and benchmark index, and calculate relative strength. A stock/benchmark deep link restores the same analysis context.",
+      "Inspect relative strength for the available 1, 3, 6 and 12 month periods. Analytics use existing universe price history and do not request a new provider price fetch.",
+      "If history is unavailable, use Manual Relative Strength Input with positive stock/index latest and six-month previous close values. The calculate action stays unavailable until all four inputs are positive.",
+      "Calculate the temporary six-month comparison and inspect the resulting difference between stock and benchmark growth. Manual inputs do not persist authoritative market data.",
+      "Retry Calculate relative strength after data is restored. Successful fetched results replace the temporary comparison."
+    ],
+    "prerequisites": [
+      "an authenticated investor and a symbol in the local stock master."
+    ],
+    "warnings": []
+  },
+  {
+    "id": "E2E-16",
+    "title": "How do I maintain and evaluate an advisory alert policy?",
+    "aliases": [
+      "Maintain and evaluate an advisory alert policy",
+      "e2e-16"
+    ],
+    "keywords": [
+      "maintain",
+      "and",
+      "evaluate",
+      "advisory",
+      "alert",
+      "policy"
+    ],
+    "synonyms": [
+      "alert policy",
+      "holdings alert",
+      "evaluate alerts."
+    ],
+    "category": "StoX",
+    "route": "/settings/alert-policies",
+    "guide": "/docs/journeys/08-investor-overview-alerts.html#e2e-16-maintain-and-evaluate-an-advisory-alert-policy",
+    "steps": [
+      "Open Alert policies at `/settings/alert-policies` and choose New policy.",
+      "Name the policy, describe its intent, define its holding-value comparison, message and suggested action, then create it. Correct validation errors or retry a transient failure without losing the form.",
+      "Inspect the saved policy, edit its configuration, or disable it with Policy enabled before updating. Reload and confirm the saved enabled state.",
+      "Choose Run policies now to evaluate enabled policies against holdings. If evaluation fails, retry after recovery; inspect Last evaluation and its per-holding outcome instead of assuming an alert was generated.",
+      "For a non-system policy, choose Delete. Cancelling the confirmation preserves the policy; confirming removes it. System policies do not expose Delete."
+    ],
+    "prerequisites": [
+      "an authenticated investor with an active portfolio."
+    ],
+    "warnings": []
+  },
+  {
     "id": "EXE-01",
     "title": "How do I execute an approved recommendation manually?",
     "aliases": [
