@@ -51,6 +51,8 @@ These journeys cover the authentication prerequisite for using protected investo
 
 **Goal:** Recover access using a valid reset link without changing an unrelated account or session.
 
+**Admin prerequisite:** An authorized Admin uses `/settings/users` → Password reset links, selects the intended existing User and creates the standard 72-hour capability. Recover unavailable lists with Retry user management. Rejected creation retains that User for explicit retry; confirmed creation exposes Copy link / Copy message for private handoff. An Investor cannot issue this capability. Actual token signing, expiry, account/session effects and Admin authorization remain backend requirements.
+
 - Requires: An administrator-issued, unexpired reset link for the intended account.
 - Warning: Use only the intended account's link. An expired, revoked or already-used link requires the administrator to issue a new one. Browser CI uses synthetic tokens and credentials only.
 

@@ -341,7 +341,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     ],
     "synonyms": [],
     "category": "Account access",
-    "route": "/login",
+    "route": "/settings/users",
     "guide": "/docs/journeys/00-account-entry.html#auth-04-recover-a-password-through-an-administrator-issued-link",
     "steps": [
       "Open the administrator-issued reset link and confirm the displayed account.",
