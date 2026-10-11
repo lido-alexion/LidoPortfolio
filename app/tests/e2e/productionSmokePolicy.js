@@ -9,6 +9,20 @@ export function allowProductionSmokeRequest(method, url, baseUrl, { login = fals
 }
 
 
+/** Only the known automatic welcome counter is answered locally during smoke setup. */
+export function neutralizeProductionSmokeRequest(method, url, baseUrl, body) {
+    const target = new URL(url);
+    if (target.origin !== new URL(baseUrl).origin || method !== 'PUT' || target.pathname !== '/api/guided-tour') return false;
+    try {
+        const data = JSON.parse(body);
+        return data !== null && typeof data === 'object' && !Array.isArray(data)
+            && Object.keys(data).length === 1 && data.action === 'record_welcome_shown';
+    } catch {
+        return false;
+    }
+}
+
+
 // Diagnostics are fixed categories, never URLs, query strings, headers or bodies.
 const BLOCK_REASONS = ['cross_origin', 'guided_tour_write', 'late_login_write', 'other_write'];
 export function productionSmokeBlockReason(method, url, baseUrl) {
