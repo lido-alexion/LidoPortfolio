@@ -1,9 +1,10 @@
 import { chromium } from 'playwright';
-import { allowProductionSmokeRequest } from './productionSmokePolicy.js';
+import { allowProductionSmokeRequest, productionSmokeBlockReason } from './productionSmokePolicy.js';
 import { readOnlyReviewHeading } from './productionSmokeSelectors.js';
 
 let stage = 'configuration';
 let browser;
+const blockedReasons = new Set();
 try {
     const baseURL = process.env.STOX_E2E_BASE_URL;
     const email = process.env.STOX_SMOKE_EMAIL;
@@ -21,6 +22,7 @@ try {
         const request = route.request();
         if (!allowProductionSmokeRequest(request.method(), request.url(), baseURL, { login })) {
             blocked = true;
+            blockedReasons.add(productionSmokeBlockReason(request.method(), request.url(), baseURL));
             return route.abort();
         }
         return route.continue();
@@ -41,6 +43,7 @@ try {
     console.log('AUTHENTICATED_SMOKE_PASSED');
 } catch {
     // Never print Playwright errors: fill arguments or network bodies may contain secrets.
+    if (blockedReasons.size) console.log(`AUTHENTICATED_SMOKE_BLOCKED:${[...blockedReasons].sort().join(',')}`);
     console.log(`AUTHENTICATED_SMOKE_FAILED:${stage}`);
     process.exitCode = 1;
 } finally {

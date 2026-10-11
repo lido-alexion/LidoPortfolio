@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { summarizeProductionSmokeBlocks } from './productionSmokePolicy.js';
 const run = promisify(execFile);
 
 test('production smoke is available and non-destructive', async ({ page }) => {
@@ -35,6 +36,7 @@ test('dedicated smoke identity can open a read-only investor page', async () => 
         expect(stdout.trim()).toBe('AUTHENTICATED_SMOKE_PASSED');
     } catch (error) {
         const stage = String(error.stdout || '').match(/AUTHENTICATED_SMOKE_FAILED:([a-z_]+)/)?.[1] || 'child_execution';
-        throw new Error(`Authenticated production smoke failed at ${stage}; credentials and provider responses are omitted.`);
+        const blocked = summarizeProductionSmokeBlocks(error.stdout);
+        throw new Error(`Authenticated production smoke failed at ${stage}${blocked.length ? ` (blocked categories: ${blocked.join(', ')})` : ''}; credentials and provider responses are omitted.`);
     }
 });

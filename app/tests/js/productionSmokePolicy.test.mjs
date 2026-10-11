@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { allowProductionSmokeRequest as allowed } from '../e2e/productionSmokePolicy.js';
+import { allowProductionSmokeRequest as allowed, productionSmokeBlockReason, summarizeProductionSmokeBlocks } from '../e2e/productionSmokePolicy.js';
 const base = 'https://stox.example.test';
 test('production smoke permits only same-origin reads and narrow login/telemetry POSTs', () => {
     assert.equal(allowed('GET', `${base}/api/v1/recommendations`, base), true);
@@ -20,4 +20,27 @@ test('production smoke permits only same-origin reads and narrow login/telemetry
     assert.equal(allowed('POST', `${base}/api/telemetry-unrelated`, base), false);
     assert.equal(allowed('GET', 'https://broker.example.test/orders', base), false);
     assert.equal(allowed('POST', 'https://broker.example.test/api/auth/login', base, { login: true }), false);
+});
+
+
+test('production smoke permits actual same-origin telemetry relays without admitting sibling writes', () => {
+    for (const path of ['/api/telemetry/route-view', '/api/telemetry/otlp/v1/traces']) {
+        assert.equal(allowed('POST', `${base}${path}`, base), true);
+        for (const method of ['PUT', 'PATCH', 'DELETE']) assert.equal(allowed(method, `${base}${path}`, base), false);
+        assert.equal(allowed('POST', `${base}${path}/orders`, base), false);
+        assert.equal(allowed('POST', `https://broker.example.test${path}`, base), false);
+    }
+    assert.equal(allowed('POST', `${base}/api/telemetry/orders`, base), false);
+    assert.equal(allowed('PUT', `${base}/api/guided-tour`, base), false);
+});
+
+
+test('blocked production diagnostics discard private request values and unknown output', () => {
+    assert.equal(productionSmokeBlockReason('PUT', `${base}/api/guided-tour?private_token=do_not_report`, base), 'guided_tour_write');
+    assert.equal(productionSmokeBlockReason('GET', 'https://broker.example.test/private-capability?secret=do_not_report', base), 'cross_origin');
+    assert.equal(productionSmokeBlockReason('POST', `${base}/api/auth/login`, base), 'late_login_write');
+    assert.equal(productionSmokeBlockReason('DELETE', `${base}/api/v1/orders/1`, base), 'other_write');
+    const stdout = 'private email password URL body\nAUTHENTICATED_SMOKE_BLOCKED:other_write,cross_origin,secret_value,other_write\nAUTHENTICATED_SMOKE_FAILED:request_safety';
+    assert.deepEqual(summarizeProductionSmokeBlocks(stdout), ['cross_origin', 'other_write']);
+    assert.deepEqual(summarizeProductionSmokeBlocks('untrusted private output'), []);
 });
