@@ -68,7 +68,14 @@ class KiteReadOnlySmokeCommand extends Command
             });
             Http::globalResponseMiddleware(function (ResponseInterface $response) use (&$responses): ResponseInterface {
                 $body = json_decode((string) $response->getBody(), true);
-                $responses[] = $response->getStatusCode() === 200 && ($body['status'] ?? null) === 'success';
+                $data = $body['data'] ?? null;
+                $shape = match (self::PATHS[count($responses)] ?? null) {
+                    '/portfolio/holdings' => is_array($data),
+                    '/portfolio/positions' => is_array($data) && is_array($data['net'] ?? null),
+                    '/user/margins/equity' => is_array($data) && is_numeric(data_get($data, 'available.live_balance', $data['net'] ?? null)),
+                    default => false,
+                };
+                $responses[] = $response->getStatusCode() === 200 && ($body['status'] ?? null) === 'success' && $shape;
                 return $response;
             });
             $report['stage'] = 'provider_reads';

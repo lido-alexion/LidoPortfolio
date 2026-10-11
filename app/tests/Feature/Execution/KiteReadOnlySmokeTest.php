@@ -32,11 +32,11 @@ class KiteReadOnlySmokeTest extends TestCase
         return $user;
     }
 
-    private function providerResponses(int $positionsStatus = 200): void
+    private function providerResponses(int $positionsStatus = 200, bool $malformedPositions = false): void
     {
         Http::fake([
             'https://api.kite.trade/portfolio/holdings' => Http::response(['status' => 'success', 'data' => []]),
-            'https://api.kite.trade/portfolio/positions' => Http::response(['status' => $positionsStatus === 200 ? 'success' : 'error', 'data' => ['net' => []]], $positionsStatus),
+            'https://api.kite.trade/portfolio/positions' => Http::response(['status' => $positionsStatus === 200 ? 'success' : 'error', 'data' => $malformedPositions ? [] : ['net' => []]], $positionsStatus),
             'https://api.kite.trade/user/margins/equity' => Http::response(['status' => 'success', 'data' => ['available' => ['live_balance' => 100]]]),
         ]);
     }
@@ -76,6 +76,14 @@ class KiteReadOnlySmokeTest extends TestCase
     {
         $user = $this->connectedUser();
         $this->providerResponses(500);
+        $this->artisan('stox:kite-read-only-smoke', ['user_id' => $user->id])->expectsOutputToContain('"passed":false')->assertFailed();
+        Http::assertSentCount(3);
+    }
+
+    public function test_success_status_with_malformed_positions_cannot_be_qualified(): void
+    {
+        $user = $this->connectedUser();
+        $this->providerResponses(malformedPositions: true);
         $this->artisan('stox:kite-read-only-smoke', ['user_id' => $user->id])->expectsOutputToContain('"passed":false')->assertFailed();
         Http::assertSentCount(3);
     }
