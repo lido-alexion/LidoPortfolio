@@ -17,7 +17,7 @@ vi.mock('../../../resources/js/src/toast', () => ({ showToast: vi.fn() }));
 vi.mock('../../../resources/js/src/components/charts/PriceVolumeChart', () => ({ default: () => null }));
 vi.mock('../../../resources/js/src/components/indices/IndexComparisonChart', () => ({ default: () => null }));
 beforeEach(() => { cleanup(); vi.clearAllMocks(); });
-const unavailable = () => ({ response: { status: 503 }, message: 'Synthetic unavailable' });
+const unavailable = () => ({ response: { status: 503, data: { message: 'Synthetic unavailable' } }, message: 'Request failed with status code 503' });
 function at(path, route, component) { return render(<MemoryRouter initialEntries={[path]}><Routes><Route path={route} element={component} /></Routes></MemoryRouter>); }
 
 it('recovers unavailable price reads without Investor sync authority', async () => {
