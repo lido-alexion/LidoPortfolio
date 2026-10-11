@@ -484,3 +484,9 @@ The Note menu is now controlled by React, reports `aria-expanded`, closes after 
 Focused local verification passes 11 personal recovery component cases, TypeScript checking, E2E syntax and whitespace checks. Exact-head hosted Chromium remains mandatory before PR #144 can merge; stacked child results cannot qualify the updated parent head.
 
 Mobile visual follow-up retains every customization, isolation and lock/recovery assertion. No image is fabricated or cropped. The initial incorrect mobile reference is left to fail against the new faithful viewport capture until its retained hosted artifact is reviewed and accepted.
+
+### 2026-10-11 — Notes export close selector
+
+Exact-head hosted CI 38149069909 now passes the prior Notes/Wiki recovery steps but both E2E-40 viewports fail at Export close: the accessible dialog legitimately has a header close icon and footer Close button. Use the uniquely labelled header control and explicitly assert the dialog disappears before the cancellation/delete flow. No product behavior, selector strictness, write boundary or assertion is removed; fresh exact-head hosted acceptance is required.
+
+Master CI 38147157987 passes with one retried AUTH-03 desktop failure: protected-route navigation raced `ProfileMenu`'s intentional hard redirect after `logout()` clears user state. The fixture now waits for the existing `/` document navigation to finish while clicking Logout, before asserting Login and opening the protected route. Session denial, redirect-query restoration, authenticated content and zero trading requests remain required; neither product behavior nor retry policy changes.
