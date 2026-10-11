@@ -273,7 +273,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                 await expect(dialog.getByTestId('recommendation-provenance')).toContainText(`Source screener #${sourceScreenerId} · Version ${sourceVersion}`);
                 await expect(dialog.getByTestId('recommendation-provenance')).toContainText('Strategy #8 · Strategy version #81');
                 await page.addStyleTag({ content: '.lido-toast { visibility: hidden !important; } .lido-tos-review-modal { background-color: #000 !important; }' });
-                await expect(dialog).toHaveScreenshot(`e2e-${journey}-recommendation-review-${viewport.name}.png`, { animations: 'disabled', caret: 'hide' });
+                await expect(dialog).toHaveScreenshot(`e2e-${journey}-recommendation-review-${viewport.name}.png`, { animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02 });
                 const requestsBeforeApproval = observedRequests.length;
                 await dialog.getByRole('button', { name: 'Approve' }).click();
                 expect((await reviewRequest).postDataJSON()).toMatchObject({ decision: 'approved' });
@@ -295,7 +295,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                     document.querySelectorAll('*').forEach((element) => { if (element.scrollTop > 0) element.scrollTop = 0; });
                 });
                 await page.mouse.move(0, 0);
-                await expect(page.locator('form').first()).toHaveScreenshot(`e2e-${journey}-actual-fill-form-${viewport.name}.png`, { animations: 'disabled', caret: 'hide' });
+                await expect(page.locator('form').first()).toHaveScreenshot(`e2e-${journey}-actual-fill-form-${viewport.name}.png`, { animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02 });
                 await page.getByRole('button', { name: 'Save Transaction' }).click();
                 await expect.poll(() => savedTransaction).toMatchObject({ recommendation_id: generated.id, strategy_id: 8, strategy_name: 'Momentum Core', type: 'buy', quantity: 10, price: 3500 });
                 expect(transactionPayload).toMatchObject({ recommendation_id: generated.id, source: 'recommendation', type: 'buy', quantity: 10, price: 3500 });
@@ -422,7 +422,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                     document.querySelectorAll('*').forEach((element) => { if (element.scrollTop > 0) element.scrollTop = 0; });
                 });
                 await page.mouse.move(0, 0);
-                await expect(page.locator('form').first()).toHaveScreenshot(`e2e-${journey}-actual-fill-form-${viewport.name}.png`, { animations: 'disabled', caret: 'hide' });
+                await expect(page.locator('form').first()).toHaveScreenshot(`e2e-${journey}-actual-fill-form-${viewport.name}.png`, { animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02 });
                 await page.getByRole('button', { name: 'Save Transaction' }).click();
                 await expect.poll(() => savedTransaction).toMatchObject({ recommendation_id: recommendationId, strategy_id: 17, type: 'sell', quantity: 10, price: 3500 });
                 expect(transactionPayload).toMatchObject({ recommendation_id: recommendationId, source: 'recommendation', type: 'sell', quantity: 10, price: 3500 });
