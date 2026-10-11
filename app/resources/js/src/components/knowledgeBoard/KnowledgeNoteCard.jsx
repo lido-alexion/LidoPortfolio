@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { formatTransactionDateDisplay } from '../../utils/transactionDate';
@@ -45,6 +45,7 @@ function KnowledgeNoteCardBody({
     onDelete,
     onChangePalette,
 }) {
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const createdLabel = formatTransactionDateDisplay(note.created_at) || '—';
     const updatedLabel = formatTransactionDateDisplay(note.updated_at) || '—';
     const dateTooltip = `Created: ${createdLabel}\nUpdated: ${updatedLabel}`;
@@ -61,6 +62,11 @@ function KnowledgeNoteCardBody({
     const runAction = (event, action) => {
         event.stopPropagation();
         action?.(note);
+    };
+
+    const runMobileAction = (event, action) => {
+        setMobileMenuOpen(false);
+        runAction(event, action);
     };
 
     const tags = note.tags?.length ? (
@@ -181,31 +187,34 @@ function KnowledgeNoteCardBody({
                             <button
                                 type="button"
                                 className="lido-knowledge-card-icon-btn lido-knowledge-card-icon-btn--menu"
-                                data-bs-toggle="dropdown"
                                 aria-label="Note actions"
-                                onClick={(e) => e.stopPropagation()}
+                                aria-expanded={mobileMenuOpen}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    setMobileMenuOpen((open) => !open);
+                                }}
                             >
                                 <IconMenu />
                             </button>
-                            <ul className="dropdown-menu dropdown-menu-end shadow-sm">
+                            <ul className={`dropdown-menu dropdown-menu-end shadow-sm${mobileMenuOpen ? ' show' : ''}`}>
                                 <li><span className="dropdown-item-text small text-muted">Created {createdLabel}</span></li>
                                 <li><span className="dropdown-item-text small text-muted">Updated {updatedLabel}</span></li>
                                 <li><hr className="dropdown-divider" /></li>
                                 <li>
-                                    <button type="button" className="dropdown-item" onClick={(e) => runAction(e, onEdit)}>Edit</button>
+                                    <button type="button" className="dropdown-item" onClick={(e) => runMobileAction(e, onEdit)}>Edit</button>
                                 </li>
                                 <li>
-                                    <button type="button" className="dropdown-item" onClick={(e) => runAction(e, onDuplicate)}>Duplicate</button>
+                                    <button type="button" className="dropdown-item" onClick={(e) => runMobileAction(e, onDuplicate)}>Duplicate</button>
                                 </li>
                                 <li>
-                                    <button type="button" className="dropdown-item" onClick={(e) => runAction(e, onArchive)}>Archive</button>
+                                    <button type="button" className="dropdown-item" onClick={(e) => runMobileAction(e, onArchive)}>Archive</button>
                                 </li>
                                 <li>
-                                    <button type="button" className="dropdown-item text-danger" onClick={(e) => runAction(e, onDelete)}>Delete</button>
+                                    <button type="button" className="dropdown-item text-danger" onClick={(e) => runMobileAction(e, onDelete)}>Delete</button>
                                 </li>
                                 <li><hr className="dropdown-divider" /></li>
                                 <li>
-                                    <button type="button" className="dropdown-item" onClick={(e) => runAction(e, onTogglePin)}>
+                                    <button type="button" className="dropdown-item" onClick={(e) => runMobileAction(e, onTogglePin)}>
                                         {note.is_pinned ? 'Unpin' : 'Pin'}
                                     </button>
                                 </li>
