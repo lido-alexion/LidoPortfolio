@@ -22,7 +22,7 @@ The current V8 FEAT-064 contract governs these compatibility routes. Validated r
 - Requires: An authenticated Investor with account-owned Strategy definitions and eligible Screener references.
 - Warning: Enable changes future recommendation eligibility; archive stops future recommendations for that Strategy. Other enabled Strategies and historical holdings/recommendation attribution remain intact. Neither action places an order.
 
-1. Open Strategy Registry (`/strategy/registry`) and inspect enabled/draft/archived runtime entries. Open a specific artifact's detail by stable identity.
+1. Open Strategy Registry (`/strategy/registry`) and inspect enabled/draft/archived runtime entries. An unavailable list offers Retry without reporting that no Strategies match, and a failed filtered read retains known rows. Open a specific artifact's detail by stable identity.
 2. Recover an unavailable envelope explicitly. Retry preserves the target identity and does not create or enable a Strategy.
 3. Inspect definition hash, dependencies and portable Screener references. Recover unavailable version history separately; known immutable version evidence is preserved.
 4. Export portable JSON without portfolio-local Screener ids. Failed export retains the artifact and explains the unconfirmed action; retry downloads the reviewed definition.

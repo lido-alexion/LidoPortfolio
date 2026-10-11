@@ -5,6 +5,7 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import api from '../../../resources/js/src/api';
 import ScreenerRegistryPage from '../../../resources/js/src/pages/ScreenerRegistryPage.jsx';
 import ScreenerRegistryDetailPage from '../../../resources/js/src/pages/ScreenerRegistryDetailPage.jsx';
+import StrategyRegistryPage from '../../../resources/js/src/pages/StrategyRegistryPage.jsx';
 import StrategyRegistryDetailPage from '../../../resources/js/src/pages/StrategyRegistryDetailPage.jsx';
 vi.mock('../../../resources/js/src/api', async original => ({ ...(await original()), default: { get: vi.fn(), post: vi.fn() } }));
 vi.mock('../../../resources/js/src/toast', () => ({ showToast: vi.fn() }));
@@ -14,6 +15,10 @@ beforeEach(() => vi.resetAllMocks());
 it('does not report an unavailable screener catalogue as no matching screeners and retries', async () => {
  let unavailable = true; api.get.mockImplementation(path => path.endsWith('/meta') ? Promise.resolve({ data: { data: {} } }) : unavailable ? fail() : Promise.resolve({ data: { data: [envelope('screener')] } })); render(<MemoryRouter><ScreenerRegistryPage /></MemoryRouter>);
  await screen.findByText('Screener Registry could not be loaded.'); expect(screen.queryByText('No screeners match the filters.')).toBeNull(); unavailable = false; fireEvent.click(screen.getByRole('button', { name: 'Retry Screener Registry' })); await screen.findByText('Reviewed screener'); expect(api.post).not.toHaveBeenCalled();
+});
+it('retains known strategies and does not report an unavailable catalogue as empty', async () => {
+ let unavailable = false; api.get.mockImplementation(path => path.endsWith('/meta') ? Promise.resolve({ data: { data: {} } }) : unavailable ? fail() : Promise.resolve({ data: { data: [envelope('strategy')] } })); render(<MemoryRouter><StrategyRegistryPage /></MemoryRouter>);
+ await screen.findByText('Reviewed strategy'); unavailable = true; fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'reviewed' } }); await screen.findByText('Strategy Registry could not be loaded.'); expect(screen.getByText('Reviewed strategy')).toBeInTheDocument(); expect(screen.queryByText('No strategies match the filters.')).toBeNull(); unavailable = false; fireEvent.click(screen.getByRole('button', { name: 'Retry Strategy Registry' })); await screen.findByText('Reviewed strategy'); expect(api.post).not.toHaveBeenCalled();
 });
 for (const [type, Component, route] of [['screener', ScreenerRegistryDetailPage, '/screeners/registry/:id'], ['strategy', StrategyRegistryDetailPage, '/strategy/registry/:id']]) {
  it(`retries an unavailable ${type} envelope without losing its intended identity`, async () => {
