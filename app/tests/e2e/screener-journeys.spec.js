@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 
@@ -243,6 +244,15 @@ test.describe('V9-UX-001 screener journeys', () => {
             await expect(page.getByText('Tata Consultancy Services')).toBeVisible();
             await expect(page.getByText('Close=3520.00 > SMA(200)')).toBeVisible();
             await expect(page.getByRole('button', { name: /Run ID 501 · Manual · completed/ })).toBeVisible();
+            const results = page.getByRole('region', { name: 'Screener run results', exact: true });
+            await expect(results).toContainText('Close=3520.00 > SMA(200)');
+            // Floating shell utilities and transient toast messages are outside
+            // this results-state visual contract and may overlap the crop.
+            await page.addStyleTag({ content: '.lido-toast, .lido-mobile-utility-actions { visibility: hidden !important; }' });
+            await page.mouse.move(0, 0);
+            await expect(results).toHaveScreenshot(`scr-06-results-${viewport.name}.png`, { animations: 'disabled', caret: 'hide' });
+            const accessibility = await new AxeBuilder({ page }).include('[aria-label="Screener run results"]').withTags(['wcag2a', 'wcag2aa']).analyze();
+            expect(accessibility.violations).toEqual([]);
             expect(observedRequests.some((path) => /\/orders(?:\/|$)/.test(path))).toBe(false);
         });
         test('SCR-09 explains non-matches and unavailable inputs from the saved run snapshot (' + viewport.name + ')', async ({ page }, testInfo) => {
