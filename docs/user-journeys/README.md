@@ -46,6 +46,9 @@ UI labels can evolve. The route and user intent are more important than minor wo
 | --- | --- | --- |
 | AUTH-01 | Sign in and return to the requested page | [Account entry](00-account-entry.md#auth-01--sign-in-and-return-to-the-requested-page) |
 | AUTH-02 | Recover from rejected credentials | [Account entry](00-account-entry.md#auth-02--recover-from-rejected-credentials) |
+| AUTH-03 | End a session and return through sign-in | [Account entry](00-account-entry.md#auth-03--end-a-session-and-return-through-sign-in) |
+| AUTH-04 | Recover through an administrator-issued reset link | [Account entry](00-account-entry.md#auth-04--recover-a-password-through-an-administrator-issued-link) |
+| AUTH-05 | Maintain profile, password and photo | [Account entry](00-account-entry.md#auth-05--maintain-your-profile-and-credentials) |
 
 ### A. Screeners
 
@@ -131,9 +134,11 @@ UI labels can evolve. The route and user intent are more important than minor wo
 | E2E-06 | Insufficient capital -> resolve funding -> execute | [End to end](05-end-to-end.md#e2e-06--insufficient-capital-to-execution) |
 | E2E-07 | Same stock in two strategies -> one strategy exits | [End to end](05-end-to-end.md#e2e-07--same-stock-in-two-strategies) |
 
-## Deferred/simple journey chapter
+## Supporting and remaining inventory
 
-The first version intentionally prioritizes workflows that change investment policy, recommendation state, money, orders or holdings. A later chapter should cover simpler navigation and maintenance journeys such as Dashboard reading, Stock Explorer, Watchlist, alerts, notification history, ordinary settings, profile and portfolio switching.
+[Supporting investor journeys](07-supporting-investor.md) covers stock research/watchlist membership (`E2E-09`), Kite connection recovery/disconnect (`E2E-10`), and portfolio safeguards (`E2E-11`), notification attention/recovery (`E2E-12`), and per-tab portfolio switching (`E2E-13`). These are mandatory scope under the frozen V9-UX-001 contract.
+
+The final completeness review must still reconcile Dashboard/Stock Explorer, alert lifecycle, invitation/access-request onboarding, and other major workflows introduced by completed V9 epics. Existing responsive or feature tests alone do not establish complete journey conformance. These items are open scope, not a waiver.
 
 ## Documentation rules
 

@@ -13,6 +13,7 @@ export default function ResetPasswordPage() {
     const [loading, setLoading] = useState(true);
     const [resetInfo, setResetInfo] = useState(null);
     const [error, setError] = useState('');
+    const [submissionError, setSubmissionError] = useState('');
     const [form, setForm] = useState({
         password: '',
         password_confirmation: '',
@@ -54,7 +55,7 @@ export default function ResetPasswordPage() {
     const submit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
-        setError('');
+        setSubmissionError('');
         try {
             await ensureCsrfCookie({ force: true });
             await api.post('/reset-password/accept', {
@@ -67,7 +68,7 @@ export default function ResetPasswordPage() {
             showToast('Password updated. Welcome back!');
             navigate(consumeRedirectPath() || '/');
         } catch (err) {
-            setError(
+            setSubmissionError(
                 err?.response?.data?.message
                 || err?.response?.data?.errors?.password?.[0]
                 || err?.response?.data?.errors?.token?.[0]
@@ -91,7 +92,7 @@ export default function ResetPasswordPage() {
                     </div>
                 ) : error ? (
                     <div>
-                        <div className="alert alert-warning py-2">{error}</div>
+                        <div className="alert alert-warning py-2" role="alert">{error}</div>
                         <Link className="btn btn-outline-secondary w-100" to="/">
                             Back to sign in
                         </Link>
@@ -99,8 +100,9 @@ export default function ResetPasswordPage() {
                 ) : (
                     <form onSubmit={submit}>
                         <div className="mb-3">
-                            <label className="form-label">Account</label>
+                            <label className="form-label" htmlFor="reset-account">Account</label>
                             <input
+                                id="reset-account"
                                 type="text"
                                 className="form-control"
                                 value={resetInfo?.name
@@ -111,8 +113,9 @@ export default function ResetPasswordPage() {
                             />
                         </div>
                         <div className="mb-3">
-                            <label className="form-label">New password</label>
+                            <label className="form-label" htmlFor="reset-password">New password</label>
                             <input
+                                id="reset-password"
                                 type="password"
                                 className="form-control"
                                 required
@@ -123,8 +126,9 @@ export default function ResetPasswordPage() {
                             />
                         </div>
                         <div className="mb-3">
-                            <label className="form-label">Confirm new password</label>
+                            <label className="form-label" htmlFor="reset-password-confirmation">Confirm new password</label>
                             <input
+                                id="reset-password-confirmation"
                                 type="password"
                                 className="form-control"
                                 required
@@ -149,7 +153,7 @@ export default function ResetPasswordPage() {
                                 Remember me on this device
                             </label>
                         </div>
-                        {error && <div className="alert alert-danger py-2">{error}</div>}
+                        {submissionError && <div className="alert alert-danger py-2" role="alert">{submissionError}</div>}
                         <button className="btn btn-info w-100" type="submit" disabled={submitting}>
                             {submitting ? 'Saving…' : 'Update password & sign in'}
                         </button>
