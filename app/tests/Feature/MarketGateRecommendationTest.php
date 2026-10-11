@@ -168,9 +168,12 @@ class MarketGateRecommendationTest extends TestCase
         ]);
 
         $this->mockMarket([
-            'sentiment' => ['score' => 20, 'label' => 'Bearish'],
-            'market_phase' => 'Bear',
-            'new_entry_allowed' => false,
+            // Keep the recommendation direction neutral so a score between the
+            // exit and reduce thresholds produces REDUCE, while the strategy's
+            // min_sentiment gate still independently blocks new entries.
+            'sentiment' => ['score' => 40, 'label' => 'Neutral'],
+            'market_phase' => 'Bull',
+            'new_entry_allowed' => true,
         ]);
 
         $rec = collect(app(RecommendationEngine::class)->generate($profile, $run)['recommendations'])
