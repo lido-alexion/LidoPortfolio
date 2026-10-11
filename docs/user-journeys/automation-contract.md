@@ -32,3 +32,4 @@ production smoke remains non-destructive and separate from deterministic CI.
 | `12-portfolio-analysis-tax.md` | `E2E-25`–`E2E-27` | `app/tests/e2e/portfolio-analysis-tax-journeys.spec.js` |
 | `13-financial-source-lifecycle.md` | `EXE-16`, `E2E-28`–`E2E-30` | `app/tests/e2e/financial-source-journeys.spec.js` |
 | `14-artifact-library-governance.md` | `E2E-31`–`E2E-34` | `app/tests/e2e/artifact-library-journeys.spec.js` |
+| `15-research-persisted-review.md` | `E2E-35`–`E2E-39` | `app/tests/e2e/research-review-journeys.spec.js`; existing `fundamental-insights-browser.spec.js` retains deterministic/AI provenance and desktop/mobile evidence |

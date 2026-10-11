@@ -48,11 +48,13 @@ export default function IndexSection({ index, panelId, expanded, onToggle }) {
     const [priceRows, setPriceRows] = useState([]);
     const [priceLoading, setPriceLoading] = useState(false);
     const [priceLoaded, setPriceLoaded] = useState(false);
+    const [priceError, setPriceError] = useState('');
     const [constituents, setConstituents] = useState([]);
     const [constituentsLoading, setConstituentsLoading] = useState(false);
     const [constituentsLoaded, setConstituentsLoaded] = useState(false);
     const [constituentSearch, setConstituentSearch] = useState('');
     const [constituentsMessage, setConstituentsMessage] = useState('');
+    const [constituentsError, setConstituentsError] = useState('');
 
     useEffect(() => {
         if (!expanded || priceLoaded || !index.stock_id) {
@@ -60,6 +62,7 @@ export default function IndexSection({ index, panelId, expanded, onToggle }) {
         }
         let cancelled = false;
         setPriceLoading(true);
+        setPriceError('');
         api.get(`/stocks/${index.stock_id}/market-prices`)
             .then((res) => {
                 if (!cancelled) {
@@ -70,6 +73,7 @@ export default function IndexSection({ index, panelId, expanded, onToggle }) {
             .catch(() => {
                 if (!cancelled) {
                     setPriceRows([]);
+                    setPriceError('Index history could not be loaded.');
                     setPriceLoaded(true);
                 }
             })
@@ -87,6 +91,7 @@ export default function IndexSection({ index, panelId, expanded, onToggle }) {
         }
         let cancelled = false;
         setConstituentsLoading(true);
+        setConstituentsError('');
         api.get(`/indexes/${index.symbol}/constituents`)
             .then((res) => {
                 if (!cancelled) {
@@ -98,7 +103,7 @@ export default function IndexSection({ index, panelId, expanded, onToggle }) {
             .catch(() => {
                 if (!cancelled) {
                     setConstituents([]);
-                    setConstituentsMessage('Failed to load constituents.');
+                    setConstituentsError('Index constituents could not be loaded.');
                     setConstituentsLoaded(true);
                 }
             })
@@ -192,7 +197,7 @@ export default function IndexSection({ index, panelId, expanded, onToggle }) {
                                     <span className="text-muted ms-2">({index.price_count} sessions)</span>
                                 </>
                             ) : (
-                                <span className="text-warning">No cached prices — sync indexes in Settings.</span>
+                                <span className="text-warning">No cached prices — ask an administrator to review index coverage.</span>
                             )}
                         </dd>
                     </dl>
@@ -204,7 +209,7 @@ export default function IndexSection({ index, panelId, expanded, onToggle }) {
                     ) : null}
 
                     <div className="mt-3">
-                        <PriceVolumeChart
+                        {priceError ? <div className="alert alert-danger" role="alert"><p>{priceError}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={priceLoading} onClick={() => setPriceLoaded(false)}>Retry index history</button></div> : <PriceVolumeChart
                             rows={priceRows}
                             loading={priceLoading}
                             title="Historical close"
@@ -215,12 +220,12 @@ export default function IndexSection({ index, panelId, expanded, onToggle }) {
                                 : (index.has_price_history
                                     ? 'No price points returned for this index.'
                                     : 'No price history in cache.')}
-                        />
+                        />}
                     </div>
 
                     {index.constituents_available ? (
                         <div className="mt-3">
-                            <DataTableCard
+                            {constituentsError ? <div className="alert alert-danger" role="alert"><p>{constituentsError}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={constituentsLoading} onClick={() => setConstituentsLoaded(false)}>Retry index constituents</button></div> : <DataTableCard
                                 title={`Constituents (${constituents.length || '…'})`}
                                 headerExtra={(
                                     <input
@@ -228,6 +233,7 @@ export default function IndexSection({ index, panelId, expanded, onToggle }) {
                                         className="form-control form-control-sm"
                                         style={{ width: 220 }}
                                         placeholder="Search…"
+                                        aria-label={`Search ${index.symbol} constituents`}
                                         value={constituentSearch}
                                         onChange={(e) => setConstituentSearch(e.target.value)}
                                         disabled={constituentsLoading}
@@ -238,7 +244,7 @@ export default function IndexSection({ index, panelId, expanded, onToggle }) {
                                 loading={constituentsLoading}
                                 emptyMessage={constituentsMessage || 'No constituents returned from NSE.'}
                                 storageKey={`index-constituents-${index.symbol}`}
-                            />
+                            />}
                         </div>
                     ) : (
                         <p className="text-muted small mt-3 mb-0">

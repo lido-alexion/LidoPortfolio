@@ -47,6 +47,7 @@ export default function IndicesPage() {
     const [comparison, setComparison] = useState(null);
     const [error, setError] = useState('');
     const [expandedKey, setExpandedKey] = useState(null);
+    const [retryKey, setRetryKey] = useState(0);
 
     useEffect(() => {
         let cancelled = false;
@@ -78,13 +79,13 @@ export default function IndicesPage() {
             });
 
         return () => { cancelled = true; };
-    }, []);
+    }, [retryKey]);
 
     const groups = useMemo(() => groupIndexesByExchange(indexes), [indexes]);
     const exchangeOrder = ['NSE', 'BSE'];
 
     if (error) {
-        return <div className="alert alert-danger">{error}</div>;
+        return <div className="alert alert-danger" role="alert"><p>{error}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={() => setRetryKey(key => key + 1)}>Retry index data</button></div>;
     }
 
     return (

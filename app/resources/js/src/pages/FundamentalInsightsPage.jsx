@@ -22,6 +22,7 @@ export default function FundamentalInsightsPage() {
     const [refreshingAi, setRefreshingAi] = useState(false);
     const [error, setError] = useState(null);
     const [snapshot, setSnapshot] = useState(null);
+    const [retryKey, setRetryKey] = useState(0);
 
     const loadInsights = useCallback(async (stockId) => {
         setLoading(true);
@@ -48,6 +49,7 @@ export default function FundamentalInsightsPage() {
             setSnapshot(null);
             return undefined;
         }
+        setError(null);
         let cancelled = false;
         (async () => {
             try {
@@ -72,7 +74,7 @@ export default function FundamentalInsightsPage() {
             }
         })();
         return () => { cancelled = true; };
-    }, [routeSymbol, loadInsights]);
+    }, [routeSymbol, loadInsights, retryKey]);
 
     const onStockPick = (picked) => {
         if (!picked?.symbol) return;
@@ -119,7 +121,7 @@ export default function FundamentalInsightsPage() {
             </div>
 
             {error ? (
-                <div className="alert alert-warning mt-3 py-2 small">{error}</div>
+                <div className="alert alert-warning mt-3 py-2 small" role="alert"><p>{error}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={() => setRetryKey(key => key + 1)}>Retry fundamental insights</button></div>
             ) : null}
 
             {loading && !snapshot ? (

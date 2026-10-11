@@ -92,7 +92,7 @@ export default function StockPricesPage() {
     ], []);
 
     if (error && !payload && !loading) {
-        return <div className="alert alert-danger">{error}</div>;
+        return <div className="alert alert-danger" role="alert"><p>{error}</p><button type="button" className="btn btn-sm btn-outline-primary" onClick={load}>Retry price history</button></div>;
     }
 
     const stock = payload?.stock;
@@ -120,7 +120,7 @@ export default function StockPricesPage() {
             </div>
 
             {error && (
-                <div className="alert alert-danger small mb-0">{error}</div>
+                <div className="alert alert-danger small mb-0" role="alert"><p>{error}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={load}>Retry price history</button></div>
             )}
 
             {lastSync && (
@@ -145,7 +145,7 @@ export default function StockPricesPage() {
                             {payload?.has_price_history ? (
                                 <span className="text-success">Fetched</span>
                             ) : (
-                                <span className="text-warning">Not fetched — use Force sync</span>
+                                <span className="text-warning">{isAdmin ? 'Not fetched — use Force sync' : 'Price history unavailable — ask an administrator to review source coverage'}</span>
                             )}
                         </div>
                     </div>
@@ -163,7 +163,7 @@ export default function StockPricesPage() {
             <PriceVolumeChart
                 rows={rows}
                 loading={loading}
-                emptyMessage='No historical prices to chart yet. Sync or load OHLCV data first.'
+                emptyMessage={isAdmin ? 'No historical prices to chart yet. Sync or load OHLCV data first.' : 'No cached historical prices are available for this range.'}
             />
 
             <DataTableCard
@@ -173,7 +173,7 @@ export default function StockPricesPage() {
                 storageKey={`stock-prices-${stockId}`}
                 loading={loading}
                 striped
-                emptyMessage='No historical prices yet. Click "Force sync historical prices" to fetch all available history.'
+                emptyMessage={isAdmin ? 'No historical prices yet. Click "Force sync historical prices" to fetch all available history.' : 'No cached historical prices are available for this range.'}
             />
         </div>
     );

@@ -1,0 +1,70 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>StoX user journeys</title><style>body{font:16px system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5}h1,h2{margin-top:2rem}</style></head><body><h1>StoX User Journeys — Research and Persisted Review</h1>
+
+<p>[Back to journey index](README.md)</p>
+
+<p>These workflows preserve [Market Data and Data Quality](../current/market-data-and-data-quality.md) and [Analytics, Review and Backtesting](../current/analytics-review-backtesting.md). Cached observations and stored reports are not live execution quotes. Missing inputs remain unavailable; deterministic UI fixtures do not qualify provider sources, financial calculations or background engines.</p>
+
+<h2 id="e2e-35-read-dated-stock-price-history-without-sync-authority">E2E-35 — Read dated stock price history without sync authority</h2>
+
+<p>- Requires: An authenticated Investor and a known security.</p>
+<p>- Warning: Price-history reads do not initiate a provider backfill or change the transaction ledger. Admin source repair is a separate governed action.</p>
+
+<p>1. Open `/holdings/42/prices` for the security being reviewed. A failed read offers Retry price history; unavailable data must not appear fetched.</p>
+<p>2. Inspect dated OHLCV rows, source, chart, All history from and Since Buy from. All means available instrument history; Since Buy means the current position episode.</p>
+<p>3. Switch All/Since Buy. A confirmed range with no cached prices stays empty/unavailable instead of inventing zero-priced bars.</p>
+<p>4. Switch back to inspect the available range. Investors cannot use Force sync historical prices; request source-coverage review from an administrator when needed.</p>
+
+<p>**Expected result:** Dated research remains read-only, with ranges and source limitations disclosed.</p>
+
+<h2 id="e2e-36-recover-index-research-and-retain-local-comparison-choices">E2E-36 — Recover index research and retain local comparison choices</h2>
+
+<p>- Requires: An authenticated Investor and available index master records.</p>
+<p>- Warning: Missing benchmark history is not replaced with another index. Comparison selection is a Portfolio-scoped presentation preference, not a strategy or ledger change. VIX is excluded from relative-performance charts.</p>
+
+<p>1. Open `/indices`. If overview/comparison reads fail, choose Retry index data.</p>
+<p>2. Use the Broad market/Sector legend to select available relative-performance series; inspect the dated baseline. Selection affects presentation only.</p>
+<p>3. Expand an index to inspect exchange, latest dated close, cached range, session count and change periods.</p>
+<p>4. If history is unavailable, choose Retry index history. An authoritative empty response differs from a failed read.</p>
+<p>5. If constituent lookup fails, choose Retry index constituents. Filter the returned names/symbols; a constituent link leads to Watchlist research.</p>
+<p>6. Collapse/reopen as needed. Global sync remains an administrator source-coverage responsibility.</p>
+
+<p>**Expected result:** Overview, history and constituent failures remain recoverable without treating absent evidence as usable prices or trading signals.</p>
+
+<h2 id="e2e-37-review-dated-market-breadth-with-unavailable-metrics-disclosed">E2E-37 — Review dated market breadth with unavailable metrics disclosed</h2>
+
+<p>- Requires: An authenticated Investor and cached market-breadth snapshots.</p>
+<p>- Warning: Cached market breadth is observational research, not a live execution quote. Investor UI must not instruct users to execute server backfill scripts.</p>
+
+<p>1. Open `/market-depth`. An unavailable read offers Retry market breadth rather than claiming that no snapshots exist.</p>
+<p>2. Review Date and the snapshot matrix. Choose percent or Count using Values; these are two views of the same observed evidence.</p>
+<p>3. Choose another available date. Missing metrics display an unavailable dash in both modes, not an invented zero.</p>
+<p>4. Inspect available history/series independently of the selected matrix date. If no snapshots are authoritatively returned, request administrator source-coverage review.</p>
+
+<p>**Expected result:** Snapshot date, percentage/count meaning and absence remain explicit; no provider write or backfill is performed.</p>
+
+<h2 id="e2e-38-separate-observational-review-from-persisted-report-generation">E2E-38 — Separate observational review from persisted report generation</h2>
+
+<p>- Requires: An owned Portfolio and permission to read/generate its review reports.</p>
+<p>- Warning: Accepted recommendations are not executed transactions. A stored ReviewEngine snapshot is separate from the live Review dashboard; generating a new report must not rewrite old source/report evidence.</p>
+
+<p>1. Open `/review`. Failed reads stop loading and offer recovery through Refresh; this observational path does not execute, cancel or reconcile an order.</p>
+<p>2. Choose Reports to open stored report history. An unavailable list offers Retry rather than claiming no reports exist.</p>
+<p>3. Open a report and inspect its immutable ID, period, generation/status, persisted metrics and methodology. An unavailable detail offers Retry review report; only an authoritative missing report is labelled not found.</p>
+<p>4. Return to reports. Enter optional From/To and choose Generate deliberately. Failure retains the chosen period; retry creates/opens the separately identified report.</p>
+<p>5. Verify the new report period and inspect methodology. Original report/source identity remains intact; browser fixtures do not qualify the actual ReviewEngine calculation.</p>
+
+<p>**Expected result:** Read recovery and explicit new-report generation preserve historical evidence and the approval/execution distinction.</p>
+
+<h2 id="e2e-39-recover-fundamental-research-and-use-educational-pattern-references">E2E-39 — Recover fundamental research and use educational pattern references</h2>
+
+<p>- Requires: An authenticated Investor and a resolvable security symbol.</p>
+<p>- Warning: Fundamentals and patterns are research, not investment advice or permission to trade. Deterministic evidence and optional AI interpretation have separate sufficiency/freshness; an absent AI or insight payload does not erase valid evidence or invent a signal.</p>
+
+<p>1. Open `/fundamentals/insights/TCS` for the intended security. Retry fundamental insights repeats ordinary symbol/evidence reads after a failed resolution or payload read.</p>
+<p>2. Inspect the security identity, As of date, Freshness, deterministic evidence and any optional AI limitations. Missing insight content is disclosed separately.</p>
+<p>3. Use Full fundamentals on Watchlist for deeper research. Refresh AI insights is an explicit optional interpretation action, not order execution.</p>
+<p>4. Open `/patterns`, review the educational notice and select Chart patterns/Candlesticks. Filter names/characteristics and clear an unmatched filter to recover the reference list.</p>
+<p>5. Reopen the guide to retain the local section choice. Pattern links identify a reference entry; they do not submit a recommendation or transaction.</p>
+
+<p>**Expected result:** Symbol/source failures recover through reads, and research/educational choices remain separate from trading.</p>
+</body></html>
