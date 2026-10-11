@@ -1253,7 +1253,7 @@ export default function ScreenerEditorPage() {
                     </CollapsibleSection>
 
                     {!isNew && runResult && runResultsHeading && (
-                        <div className="border rounded p-3 mb-3">
+                        <div className="border rounded p-3 mb-3" role="region" aria-label="Screener run results">
                             <div className="d-flex flex-wrap justify-content-between gap-2 mb-2">
                                 <div>
                                     <h2 className="h6 mb-1">
