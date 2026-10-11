@@ -267,7 +267,7 @@ export default function CorporateActionPage() {
             </div>
 
             <div className="col-12 col-lg-5">
-                <div className="card h-100">
+                <div className="card h-100" role="region" aria-label="Corporate action preview">
                     <div className="card-header">Preview</div>
                     <div className="card-body">
                         {!preview ? (
@@ -275,13 +275,13 @@ export default function CorporateActionPage() {
                         ) : (
                             <div className="d-grid gap-3">
                                 {preview.blocking_errors?.length ? (
-                                    <div className="alert alert-danger py-2 small mb-0">
+                                    <div className="alert alert-danger py-2 small mb-0" role="alert">
                                         {preview.blocking_errors.map((msg) => <div key={msg}>{msg}</div>)}
                                     </div>
                                 ) : null}
 
                                 {preview.warnings?.length ? (
-                                    <div className="alert alert-warning py-2 small mb-0">
+                                    <div className="alert alert-warning py-2 small mb-0" role="status">
                                         {preview.warnings.map((msg) => <div key={msg}>{msg}</div>)}
                                     </div>
                                 ) : null}

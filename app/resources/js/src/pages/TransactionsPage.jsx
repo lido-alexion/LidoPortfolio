@@ -164,6 +164,7 @@ export default function TransactionsPage() {
     const [validatingSymbol, setValidatingSymbol] = useState(false);
 
     const [submitting, setSubmitting] = useState(false);
+    const [transactionSaveError, setTransactionSaveError] = useState('');
 
     const validationTokenRef = useRef(0);
 
@@ -451,6 +452,7 @@ export default function TransactionsPage() {
 
         }
 
+        setTransactionSaveError('');
         setSubmitting(true);
 
         try {
@@ -480,6 +482,8 @@ export default function TransactionsPage() {
 
             notifyPortfolioDashboardRefresh();
 
+        } catch {
+            setTransactionSaveError('Transaction save could not be confirmed. Review existing evidence before retrying.');
         } finally {
 
             setSubmitting(false);
@@ -547,6 +551,7 @@ export default function TransactionsPage() {
 
 
     const editTx = useCallback((tx) => {
+        setTransactionSaveError('');
 
         setForm({
 
@@ -1417,6 +1422,7 @@ export default function TransactionsPage() {
 
 
 
+                            <div>{transactionSaveError && <div className="alert alert-danger py-2" role="alert">{transactionSaveError}</div>}</div>
                             <button className="btn btn-primary" type="submit" disabled={!canSubmit || submitting}>
 
                                 {submitting
@@ -1434,7 +1440,7 @@ export default function TransactionsPage() {
                                     className="btn btn-outline-secondary"
 
                                     onClick={() => {
-
+                                        setTransactionSaveError('');
                                         setForm(emptyForm());
 
                                         setSelectedStock(null);
