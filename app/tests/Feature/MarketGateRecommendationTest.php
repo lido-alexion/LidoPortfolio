@@ -137,6 +137,57 @@ class MarketGateRecommendationTest extends TestCase
         $this->assertFalse($rec->evidence['market_gate_demoted'] ?? true);
     }
 
+    public function test_reduce_remains_allowed_when_gates_block_entry(): void
+    {
+        [$profile, $stock, $run] = $this->seedRecommendationFixture([
+            'market_gates' => ['enabled' => true, 'min_sentiment' => 99],
+            // Values clear the configured indicator floors and yield a score
+            // between the exit and reduce thresholds.
+            'factor_scores' => [
+                'relative_strength' => 80,
+                'momentum_score' => 70,
+                'trend_score' => 70,
+                'breakout_score' => 75,
+                'volume_score' => 60,
+                'market_regime' => 60,
+                'sector_strength' => 60,
+                'risk_score' => 30,
+            ],
+            'thresholds' => ['reduce_position' => 80],
+        ]);
+
+        Holding::query()->create([
+            'profile_id' => $profile->id,
+            'stock_id' => $stock->id,
+            'strategy_id' => TradingStrategy::query()
+                ->where('profile_id', $profile->id)
+                ->where('status', TradingStrategy::STATUS_ACTIVE)
+                ->value('id'),
+            'quantity' => 10,
+            'avg_buy_price' => 100,
+            'invested_amount' => 1000,
+            'updated_at' => now(),
+        ]);
+
+        $this->mockMarket([
+            // Keep the recommendation direction neutral so a score between the
+            // exit and reduce thresholds produces REDUCE, while the strategy's
+            // min_sentiment gate still independently blocks new entries.
+            'sentiment' => ['score' => 40, 'label' => 'Neutral'],
+            'market_phase' => 'Bull',
+            'new_entry_allowed' => true,
+        ]);
+
+        $rec = collect(app(RecommendationEngine::class)->generate($profile, $run)['recommendations'])
+            ->firstWhere('security_id', $stock->id);
+
+        $this->assertNotNull($rec);
+        $this->assertSame(TradingRecommendation::ACTION_REDUCE_POSITION, $rec->recommendation_type);
+        $this->assertFalse($rec->evidence['market_gate_demoted'] ?? true);
+        $this->assertFalse($rec->evidence['market_analysis']['effective_new_entry_allowed'] ?? true);
+        $this->assertContains('Sentiment below strategy minimum', $rec->evidence['market_gates']['block_reasons'] ?? []);
+    }
+
     public function test_open_allowed_when_gates_pass(): void
     {
         [$profile, $stock, $run] = $this->seedRecommendationFixture([
@@ -309,7 +360,7 @@ class MarketGateRecommendationTest extends TestCase
             'watch' => 50,
             'reduce_position' => 40,
             'exit_position' => 20,
-        ]);
+        ], $options['thresholds'] ?? []);
         $config['portfolio_rules'] = array_merge($config['portfolio_rules'] ?? [], [
             'default_position_size_pct' => 6.0,
             'max_position_size_pct' => 10.0,
