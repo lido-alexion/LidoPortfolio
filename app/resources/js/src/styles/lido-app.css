@@ -1709,10 +1709,10 @@ body {
     .lido-header-actions {
         order: 3;
         flex: 1 1 100%;
+        flex-wrap: wrap;
         justify-content: flex-end;
-        overflow-x: auto;
+        overflow: visible;
         padding-bottom: 0.1rem;
-        scrollbar-width: thin;
     }
 
     .lido-profile-name {

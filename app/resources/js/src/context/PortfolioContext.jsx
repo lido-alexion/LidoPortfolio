@@ -22,7 +22,7 @@ import { registerPortfolioRecovery } from '../portfolio/portfolioRecovery';
 const PortfolioContext = createContext(null);
 
 export function PortfolioProvider({ children }) {
-    const { isAuthenticated, user } = useAuth();
+    const { isAuthenticated, user, loading: authLoading } = useAuth();
     const [portfolios, setPortfolios] = useState([]);
     const [activePortfolioId, setActivePortfolioIdState] = useState(() => getActivePortfolioId());
     const [loading, setLoading] = useState(false);
@@ -74,6 +74,11 @@ export function PortfolioProvider({ children }) {
     }, [refreshPortfolios, resolveActiveId, user?.default_portfolio_id]);
 
     useEffect(() => {
+        // A refresh begins with an unresolved session, not a confirmed logout.
+        // Preserve this tab's selection until authentication has finished.
+        if (authLoading) {
+            return;
+        }
         if (!isAuthenticated) {
             setPortfolios([]);
             clearActivePortfolioId();
@@ -81,7 +86,7 @@ export function PortfolioProvider({ children }) {
             return;
         }
         bootstrap();
-    }, [isAuthenticated, user?.id, bootstrap]);
+    }, [authLoading, isAuthenticated, user?.id, bootstrap]);
 
     useEffect(() => {
         registerPortfolioRecovery(bootstrap);

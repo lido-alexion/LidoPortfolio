@@ -56,7 +56,7 @@ for (const viewport of VIEWPORTS) {
             }
             return route.fulfill({ json: { data: items } });
         });
-        await page.route('**/api/watchlist/membership*', route => route.fulfill({ json: { data: { watchlist_ids: items.length ? [5] : [] } } }));
+        await page.route('**/api/watchlist/membership*', route => route.fulfill({ json: { watchlist_ids: items.length ? [5] : [] } }));
         await page.route('**/api/watchlist-items/91', route => { items = []; return route.fulfill({ status: 204, body: '' }); });
         await page.route('**/api/stocks/42/pattern-scan*', route => route.fulfill({ json: { data: { matches: [] } } }));
         await page.goto('/watchlist');
@@ -65,7 +65,7 @@ for (const viewport of VIEWPORTS) {
         await page.getByRole('button', { name: /TCS.*Tata Consultancy/ }).click();
         await expect(page).toHaveURL(/\/watchlist\/TCS$/);
         await page.getByRole('button', { name: 'Fundamentals', exact: true }).click();
-        await expect(page.getByText('Revenue (TTM)', { exact: true }).first()).toBeVisible();
+        await expect(page.getByRole('img', { name: /^Revenue \(TTM\):/ })).toBeVisible();
         await page.getByRole('button', { name: 'Add to Research', exact: true }).click();
         await expect(page.getByText('Watchlist temporarily unavailable.', { exact: true })).toBeVisible();
         await page.getByRole('button', { name: 'Add to Research', exact: true }).click();
@@ -140,7 +140,7 @@ for (const viewport of VIEWPORTS) {
         await page.goto('/screeners');
         await expect(page.getByRole('heading', { name: 'Screener', exact: true })).toBeVisible();
         await page.getByRole('button', { name: /Profile menu for/ }).click();
-        await page.getByRole('button', { name: 'Logout', exact: true }).click();
+        await page.getByRole('button', { name: /Logout$/ }).click();
         await expect(page.getByRole('heading', { name: 'Login', exact: true })).toBeVisible();
         await page.goto('/screeners?source=ended-session');
         await expect(page.getByRole('heading', { name: 'Screener', exact: true })).toHaveCount(0);
@@ -177,9 +177,9 @@ for (const viewport of VIEWPORTS) {
         await query;
         await expect(page.getByText('Recommendation changed', { exact: true })).toBeVisible();
         await page.getByRole('button', { name: 'Mark unread', exact: true }).click();
-        await expect(page.getByRole('button', { name: 'Mark read', exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Mark as read', exact: true })).toBeVisible();
         await page.reload();
-        await expect(page.getByRole('button', { name: 'Mark read', exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Mark as read', exact: true })).toBeVisible();
         expect(attention).toBe('unread');
         expectNoTrading(evidence);
     });
