@@ -84,6 +84,7 @@ export default function BacktestHistoryPage() {
     const [runs, setRuns] = useState([]);
     const [meta, setMeta] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [starting, setStarting] = useState(false);
     const [activeRun, setActiveRun] = useState(null);
@@ -103,6 +104,7 @@ export default function BacktestHistoryPage() {
 
     const load = useCallback(async () => {
         setLoading(true);
+        setLoadError('');
         try {
             const [listRes, metaRes] = await Promise.all([
                 api.get('/v1/backtests'),
@@ -111,6 +113,7 @@ export default function BacktestHistoryPage() {
             setRuns(listRes.data?.data?.runs || []);
             setMeta(metaRes.data?.data || null);
         } catch (e) {
+            setLoadError('Backtest history could not be loaded. Please retry.');
             showToast(e?.response?.data?.error?.message || e.message || 'Failed to load backtests', 'danger');
             setRuns([]);
         } finally {
@@ -261,7 +264,12 @@ export default function BacktestHistoryPage() {
 
             {activeRun && <BacktestProgressPanel run={activeRun} />}
 
-            {loading ? (
+            {loadError ? (
+                <div className="alert alert-danger" role="alert">
+                    <p>{loadError}</p>
+                    <button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={load}>Retry backtest history</button>
+                </div>
+            ) : loading ? (
                 <p className="text-muted mb-0">Loading backtests…</p>
             ) : runs.length === 0 ? (
                 <div className="card">
@@ -354,12 +362,12 @@ export default function BacktestHistoryPage() {
             )}
 
             {showModal && (
-                <div className="modal d-block" tabIndex={-1} role="dialog" style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}>
+                <div className="modal d-block" tabIndex={-1} role="dialog" aria-labelledby="new-strategy-backtest-title" style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}>
                     <div className="modal-dialog modal-dialog-centered">
                         <div className="modal-content">
                             <form onSubmit={onStart}>
                                 <div className="modal-header">
-                                    <h2 className="modal-title h5 mb-0">New Strategy Backtest</h2>
+                                    <h2 id="new-strategy-backtest-title" className="modal-title h5 mb-0">New Strategy Backtest</h2>
                                     <button
                                         type="button"
                                         className="btn-close"

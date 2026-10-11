@@ -193,6 +193,7 @@ export default function BacktestDetailPage() {
     const { id } = useParams();
     const [detail, setDetail] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
     const [resuming, setResuming] = useState(false);
     const [savingMeta, setSavingMeta] = useState(false);
     const [creatingDraft, setCreatingDraft] = useState(false);
@@ -205,6 +206,7 @@ export default function BacktestDetailPage() {
 
     const load = useCallback(async () => {
         setLoading(true);
+        setLoadError('');
         try {
             const res = await api.get(`/v1/backtests/${id}`);
             const data = res.data?.data || null;
@@ -216,6 +218,7 @@ export default function BacktestDetailPage() {
             }
             return data;
         } catch (e) {
+            setLoadError(e?.response?.status === 404 ? 'Backtest not found.' : 'Backtest could not be loaded. Please retry.');
             showToast(e?.response?.data?.error?.message || e.message || 'Failed to load backtest', 'danger');
             setDetail(null);
             return null;
@@ -316,7 +319,8 @@ export default function BacktestDetailPage() {
     if (!detail) {
         return (
             <div className="d-grid gap-3">
-                <p className="text-muted mb-0">Backtest not found.</p>
+                <p className="text-muted mb-0" role={loadError ? 'alert' : undefined}>{loadError || 'Backtest not found.'}</p>
+                {loadError && loadError !== 'Backtest not found.' && <button type="button" className="btn btn-outline-primary btn-sm align-self-start" onClick={load}>Retry loading backtest</button>}
                 <Link to={ROUTES.BACKTESTS} className="btn btn-outline-secondary btn-sm align-self-start">
                     Back to Backtests
                 </Link>
