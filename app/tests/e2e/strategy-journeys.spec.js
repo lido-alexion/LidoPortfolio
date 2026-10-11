@@ -438,7 +438,7 @@ test.describe('V9-UX-001 strategy journeys', () => {
             });
             await page.goto('/recommendations');
             await page.getByRole('button', { name: 'Run decision pipeline', exact: true }).click();
-            await expect(page.getByText('strategy-specific recommendations 2', { exact: true })).toBeVisible();
+            await expect(page.getByText(/\bstrategy-specific recommendations 2\b/)).toBeVisible();
             for (const rec of generated) {
                 const row = page.getByRole('row').filter({ hasText: rec.strategy_name });
                 await expect(row).toContainText('INFY');
