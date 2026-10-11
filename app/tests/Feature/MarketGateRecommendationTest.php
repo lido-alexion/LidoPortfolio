@@ -141,17 +141,19 @@ class MarketGateRecommendationTest extends TestCase
     {
         [$profile, $stock, $run] = $this->seedRecommendationFixture([
             'market_gates' => ['enabled' => true, 'min_sentiment' => 99],
-            'evaluation_score' => 30,
+            // Values clear the configured indicator floors and yield a score
+            // between the exit and reduce thresholds.
             'factor_scores' => [
-                'relative_strength' => 50,
-                'momentum_score' => 50,
-                'trend_score' => 50,
-                'breakout_score' => 50,
-                'volume_score' => 50,
-                'market_regime' => 50,
-                'sector_strength' => 50,
-                'risk_score' => 50,
+                'relative_strength' => 80,
+                'momentum_score' => 70,
+                'trend_score' => 70,
+                'breakout_score' => 75,
+                'volume_score' => 60,
+                'market_regime' => 60,
+                'sector_strength' => 60,
+                'risk_score' => 30,
             ],
+            'thresholds' => ['reduce_position' => 80],
         ]);
 
         Holding::query()->create([
@@ -358,7 +360,7 @@ class MarketGateRecommendationTest extends TestCase
             'watch' => 50,
             'reduce_position' => 40,
             'exit_position' => 20,
-        ]);
+        ], $options['thresholds'] ?? []);
         $config['portfolio_rules'] = array_merge($config['portfolio_rules'] ?? [], [
             'default_position_size_pct' => 6.0,
             'max_position_size_pct' => 10.0,
