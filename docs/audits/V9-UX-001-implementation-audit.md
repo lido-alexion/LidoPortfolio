@@ -1,7 +1,7 @@
 # V9-UX-001 Implementation Audit
 
-**Status:** IN PROGRESS — the epic remains open.
-**Audit date:** 2026-10-10
+**Status:** IN PROGRESS — implementation evidence is being closed; production acceptance, authenticated smoke, and tracker-state updates remain gated on external access.
+**Audit date:** 2026-10-11
 **Canonical scope:** [V9-UX-001 specification](../archive/specs/V9-User-Journey-Automation-E2E-Specification.md)
 **Journey sources:** [`docs/user-journeys/`](../user-journeys/)
 
@@ -26,13 +26,13 @@ SCR-01 now has browser coverage at 390×844 and 1440×900. The scenario creates 
 | Journey inventory and stable IDs | 71 source topics generated; annotation validator rejects missing/invalid source IDs. | Partial — discovered-workflow review remains open. |
 | Traceability from automation to source | All 71 documented source IDs have stable annotations validated against authoritative journey headings. | Mapped; end-to-end evidence depth and conformance remain partial. |
 | Auth/account-entry prerequisite | AUTH-01/AUTH-02 mobile/desktop scenarios, four visual baselines, and login-card axe checks; hosted PR CI passed. | Verified for this slice. |
-| Screener, strategy, recommendation, execution, and end-to-end journeys | SCR-01/02/03/04/05/06/07/08 are mapped and assert documented create/edit/validation/run-and-inspect/shared-import/archive behavior on mobile and desktop; SCR-09 now persists and displays per-security outcomes, but its hosted browser gate and wider journey conformance review are pending. Full strategy runtime concurrency, STR-16 execution attribution, execution, and end-to-end coverage remain incomplete. | In progress. |
+| Screener, strategy, recommendation, execution, and end-to-end journeys | All 71 IDs are annotated; composite E2E-01/02/03/04/06/07 browser journeys and SCR/STR/REC/EXE scenario suites are present. SCR-08 archive preservation is merged in PR #128. STR-09 REDUCE-under-entry-gate pipeline coverage is in PR #129. Composite coverage uses deterministic mocks and does not prove live domain persistence or broker execution. | In progress — hosted gates and conformance evidence remain. |
 | Deterministic data, isolation, and broker simulation | Existing harness includes a seed hook and broker-related mocks in selected tests. | Open — audit per scenario and close missing lifecycle/recovery cases. |
 | Chromium desktop and representative mobile | Playwright Chromium and mobile projects exist; auth slice covers both target viewports. | Partial — all major journeys must meet the viewport standard. |
 | Blocking CI and nightly regression | PR frontend verifier runs the canonical suite; scheduled nightly runs journeys and uploads failure evidence for 14 days. | In progress — validate hosted runs and complete the unmapped journey inventory. |
-| Visual regression | Login and rejected-credential card baselines are recorded for mobile and desktop in the current follow-up branch. | Partial — add baselines for the other key journey pages and states. |
+| Visual regression | PR #127 contains 24 Chromium baselines: the original 20 plus four hosted pending-execution row baselines for E2E-01/02 at mobile and desktop. | Pending — the latest hosted run exposed the four missing baselines; they are now added and require a clean rerun. |
 | Accessibility regression | Existing checks cover selected surfaces; auth slice adds a login-card axe check. | Partial — cover other key journey pages/states. |
-| Production smoke | Post-deploy workflow runs Chromium against the public production shell and JavaScript asset; authenticated read-only smoke requires `STOX_SMOKE_EMAIL` and `STOX_SMOKE_PASSWORD`. | Pending hosted deployment run and smoke identity provisioning. |
+| Production smoke | The prior post-deploy workflow passed the public shell and JavaScript asset smoke. The authenticated read-only case was skipped because `STOX_SMOKE_EMAIL` and `STOX_SMOKE_PASSWORD` are not configured. The PR #128 post-merge deployment workflow is still gating on backend verification. | Pending deployment completion and dedicated read-only smoke credentials. |
 | Journey conformance | PO accepted the documented STR-07/STR-08 behavior differences on 2026-10-10. | Open — complete the full comparison and resolve remaining non-PO deviations. |
 | Failure evidence and safety | PR workflow uploads Playwright results on failure; normal CI uses deterministic mocks in selected suites. | Partial — confirm artifacts in hosted CI and audit all order paths for non-destructive behavior. |
 
@@ -59,7 +59,7 @@ This audit does not claim full journey conformance, completion of the 71-scenari
 
 - STR-13 exercises enabling a draft strategy while a sibling remains active; STR-14 exercises archiving one active strategy while retaining an active sibling. STR-15 verifies concurrent registry identities/versions/allocations, and STR-16 verifies the same-stock recommendation list preserves separate strategy names and informational HOLD treatment. REC-01 through REC-12 now cover pipeline invocation and strategy-specific output, review/rejection with notes, explanation evidence, action labels, informational HOLD/WATCH, diagnostic preview, defer/reopen behavior, partial/unfunded capital resolution, supersession/replacement review, and funded approval-to-pending-execution behavior using deterministic UI mocks. STR-15 pipeline evidence and STR-16 strategy-owned execution remain unverified in the browser. Existing MultiStrategyLifecycleAssuranceTest covers same-stock execution ownership and independent quantities at the backend level.
 - STR-07 coverage verifies the sizing fields exposed by Strategy and the allocation method. Strategy target allocation % remains on `/cash`; minimum actionable amount and whole-share behavior are not exposed in the Strategy editor, and BUY cooldown is fixed at one calendar day.
-- STR-08 coverage verifies the strategy ATR stop control. The classic portfolio stop-loss and trailing-stop settings remain under Settings, so they are not part of this Strategy editor journey. STR-09 checks saving market gates; behavior for blocked OPEN/INCREASE versus eligible REDUCE/EXIT still needs pipeline coverage.
+- STR-08 coverage verifies the strategy ATR stop control. The classic portfolio stop-loss and trailing-stop settings remain under Settings, so they are not part of this Strategy editor journey. STR-09 pipeline coverage for blocked entry and eligible REDUCE is in PR #129; existing MarketGateRecommendationTest cases cover OPEN/INCREASE demotion, EXIT eligibility, and normal entry when gates pass. Await the hosted PHPUnit result before closing this finding.
 
 
 ## Progress update — 2026-10-09
@@ -112,3 +112,14 @@ The prior progress notes above are historical and are superseded where they desc
 - The PO decisions for STR-07 and STR-08 are recorded above and accepted. No behavior change is outstanding for those agreed differences.
 
 **External completion gates:** provision a dedicated read-only production investor identity and configure the two smoke secrets; provide access to the protected ML acceptance service and official dated NSE source evidence, and authorize the real acceptance/backfill run required by E2E-08. Until those gates pass, production smoke and production ML qualification cannot be evidenced. The epic remains **IN PROGRESS**, not implemented. Further full conformance review and broader visual/accessibility coverage also remain open; in particular, SCR-08 history-preserving delete behavior and STR-09 blocked-market pipeline behavior require resolution or explicit PO acceptance before closure.
+
+
+## Progress update — 2026-10-11 (archive, gate, and visual evidence)
+
+PR #128 merged to `master` as `5324fe30ae1ec1b11d3274c06fce716b847f9ea1`. Its hosted PR checks passed (PHPUnit, frontend, and Python AI/FastMCP). The merge preserves screener run/history evidence on archive and updates the legacy authorization tests to assert archived-source behavior. Post-merge master CI and the production deployment workflow are still running their backend verification; deployment and post-deploy smoke are not yet claimed as passed.
+
+PR #129 adds the missing Strategy pipeline assertion that an entry-blocking market gate does not demote a legitimate REDUCE. The branch has been reconciled with PR #128 and pushed as `f76f5339`; its original hosted PHPUnit run is still active and the updated head requires its own CI run.
+
+PR #127 adds 20 key journey baselines plus four pending-execution-row baselines captured from hosted Chromium failure evidence. The first run of the new assertions failed solely because those four baselines were absent; actual and expected row captures were identical in the artifact. The images are now included in the branch, whose local head also includes the PR #128 merge. A clean hosted rerun is required before merge. No review submissions or unresolved inline review threads were present on PRs #127 or #129 at this check.
+
+External closure requirements remain: the protected production ML acceptance service and official dated NSE source evidence, followed by an authorized production acceptance/backfill run for E2E-08; a dedicated read-only production smoke identity stored as GitHub Actions secrets `STOX_SMOKE_EMAIL` and `STOX_SMOKE_PASSWORD`; and access to the epic tracker so the final “Implemented” state can be recorded. Do not mark the epic implemented while these required evidence and tracker steps remain outstanding.
