@@ -1,0 +1,49 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>StoX user journeys</title><style>body{font:16px system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5}h1,h2{margin-top:2rem}</style></head><body><h1>Supporting investor journeys</h1>
+
+<p>These existing investor flows were discovered during the V9-UX-001 completeness review. They are included by the frozen specification's account settings, watchlist/stock-detail and Kite scope. This chapter describes current behavior; it does not authorize live broker actions from tests.</p>
+
+<h2 id="e2e-09-research-a-stock-and-maintain-a-watchlist">E2E-09 — Research a stock and maintain a watchlist</h2>
+
+<p>**Goal:** Review a stock before deciding whether to use it in investment policy.</p>
+
+<p>- Requires: An authenticated investor and an existing private watchlist.</p>
+
+<p>1. Open `/watchlist` and confirm the active watchlist.</p>
+<p>2. Search for a symbol or company and select the intended security and exchange.</p>
+<p>3. Inspect the stock's price-history availability and Fundamentals evidence. Missing history remains unavailable.</p>
+<p>4. Add the stock to the active watchlist. Confirm it appears in that list.</p>
+<p>5. Refresh and confirm the membership remains visible.</p>
+<p>6. Remove the stock from the watchlist when it is no longer being researched.</p>
+<p>7. If adding fails, read the failure, retry explicitly, and confirm only one membership exists.</p>
+
+<p>**Expected result:** Research and watchlist membership change without creating a recommendation, transaction or broker order. Removing a watchlist item does not sell a holding.</p>
+
+<h2 id="e2e-10-recover-a-kite-connection-and-disconnect-safely">E2E-10 — Recover a Kite connection and disconnect safely</h2>
+
+<p>**Goal:** Understand account connection readiness independently of portfolio execution mode.</p>
+
+<p>- Requires: An authenticated investor. Real connection recovery requires login on Kite itself.</p>
+<p>- Warning: Broker login credentials and OTPs belong on Kite/Zerodha. CI uses deterministic responses and never contacts Kite.</p>
+
+<p>1. Open `/settings/account` and inspect Zerodha / Kite.</p>
+<p>2. Distinguish Not connected, Session expired and Connected. Manual mode works without a broker connection.</p>
+<p>3. Choose Connect Kite. Complete account login only on the provider's page, then return to StoX.</p>
+<p>4. If the connection cannot be started, read the error and retry explicitly.</p>
+<p>5. Choose Disconnect when the account should no longer be connected and confirm Not connected.</p>
+
+<p>**Expected result:** The connection status reflects the account session. No order is submitted, altered or cancelled by this journey. The deterministic browser test stops at a local simulated provider handoff; a current real read-only Kite boundary check remains separate acceptance evidence.</p>
+
+<h2 id="e2e-11-save-portfolio-safeguards-independently-of-execution">E2E-11 — Save portfolio safeguards independently of execution</h2>
+
+<p>**Goal:** Set stop-loss and trailing percentages for the active portfolio.</p>
+
+<p>- Requires: An authenticated investor with an active portfolio.</p>
+
+<p>1. Open `/settings/portfolio` and confirm the intended active portfolio.</p>
+<p>2. Inspect the current Portfolio Stop-Loss % and Portfolio Trailing Stop %.</p>
+<p>3. Set the two values independently and choose Save portfolio settings.</p>
+<p>4. Confirm the save feedback, refresh, and verify the saved values.</p>
+<p>5. If a save fails, keep the intended values available and retry explicitly before relying on them.</p>
+
+<p>**Expected result:** Only the active portfolio's settings change. Saving does not run the decision pipeline, change execution mode, or submit/cancel an order. Strategy ATR controls remain in the Strategy editor under the existing approved contract.</p>
+</body></html>

@@ -126,3 +126,40 @@ External closure requirements remain: the protected production ML acceptance ser
 
 
 PR #127 follow-up: run #958 confirmed all four new pending-execution screenshots and failed on one older E2E-02 desktop screener-list baseline because merged PR #128 added the Archive action. The baseline has been replaced with the exact hosted capture containing that action; this is a functional visual update, not a tolerance adjustment.
+
+
+## Acceptance recheck — 2026-10-11
+
+This section supersedes historical pending hosted-gate and visual-coverage statements above. It does **not** assert epic completion or full per-journey conformance.
+
+### Fresh hosted and production evidence
+
+- Current master and production SHA: `9e979028fa3af60b854807595ebf49577d4c236f` (PR #129); PR #127 merged as `3b688d130ecfe5c1a42d82244bfa7ba93ebd447c`.
+- [Master CI 38121095435](https://github.com/lido-alexion/LidoPortfolio/actions/runs/38121095435): success on 2026-10-11 at 07:52:09 UTC. Canonical MySQL backend and Python contracts passed. Frontend was correctly not selected for this backend-only change; this run is not a fresh full-browser result.
+- [Production deployment 38121095427](https://github.com/lido-alexion/LidoPortfolio/actions/runs/38121095427): success at 07:46:06 UTC. Runtime gate verified build identity, public root/module, queue coverage, and scheduler heartbeat. A fresh public `/api/build-info` read confirms the same SHA, build 500, and release `20261011074429-9e979028fa3a`.
+- Deployment job `114419590947` reports **1 public smoke passed, 1 authenticated smoke skipped**. Artifact `production-smoke-9e979028fa3af60b854807595ebf49577d4c236f` (ID `11695444523`) was retained. The successful workflow does not satisfy the skipped authenticated acceptance requirement.
+- [PR #127 hosted frontend run 38114662826](https://github.com/lido-alexion/LidoPortfolio/actions/runs/38114662826), head `5a1601512f7d395f7252da2e22f0490c5e8bd343`: canonical frontend verification passed; **192 browser tests passed, 57 skipped**, no reported flaky/failed tests. Its snapshots cover account entry plus selected screener, strategy, recommendation, pending execution, and fill-form states on desktop/mobile. These are targeted element snapshots, not full-page visual certification.
+- [Nightly 38120592644](https://github.com/lido-alexion/LidoPortfolio/actions/runs/38120592644): canonical journey job passed at 07:23:19 UTC on `5324fe30ae1ec1b11d3274c06fce716b847f9ea1`, with **192 passed, 57 skipped**. This predates PR #127/#129 and cannot substitute for a nightly result on the current head. Skips include viewport-inapplicable shell checks and production-only smoke; they are not proof of missing mandatory real acceptance.
+- Chromium configuration allows one retry, with trace/video/screenshot on failure and 14-day failure-artifact uploads. Six desktop/mobile accessibility checks cover strategy configuration, recommendation review, and pending execution; other suites cover login, screener editor and fundamentals.
+- PR #128 corrected runtime screener archival/history preservation; PR #129 added STR-09 pipeline assertions that market entry gates do not suppress valid reduction/exit actions. Their merged hosted checks supersede the corresponding historical findings; dependent screener/history and full runtime review remain distinct from a single mock browser scenario.
+
+### Read-only production acceptance inspection
+
+Inspection at 2026-10-11 08:43–08:48 UTC used the deployed read-only acceptance report and allowlisted persisted summaries. It did not dispatch jobs, train models, replay backfills, activate lifecycle, or alter services.
+
+- All required ML acceptance tables exist and dedicated queue configuration is ready. `stoxla-ml-acceptance.service` is **inactive**.
+- Latest campaign `abab7807-4745-473d-af36-7605ffccbb9e`, created 2026-10-06 19:11:54 UTC with cutoff 2026-10-01, remains `preflight`. Last recorded action is `preflight_requested`; all 1m/3m/6m horizons report `preflight_not_recorded`, null worker/Python evidence and no reference-date/coverage evidence. The report has `evidence_current=false`, `readiness.ready=false`, reason `current_production_acceptance_required`.
+- There are **414 sealed NSE sources**. Recent governed backfills #7–#10 each completed their one requested date with no failed dates. Existing sealed sources and completed dates are not permission to replay old applies or train; a reviewed current-build campaign and per-date gates remain mandatory.
+- Dedicated smoke credentials are absent in the deployed environment; the hosted authenticated smoke also skipped. No user email matching a dedicated smoke identity was found. An operator must provision the dedicated read-only identity and `STOX_SMOKE_EMAIL` / `STOX_SMOKE_PASSWORD` Actions secrets without putting values into chat.
+- The persisted Kite session expired at **2026-10-06 00:30 UTC** and is not usable. No real provider API was called with the expired session. Controlled real-Kite smoke needs an operator-established current session; its validation must use read-only requests only, with no order placement/cancellation or portfolio reconciliation mutation.
+- The frozen specification explicitly names `docs/archive/specs/LidoPortfolio-V9-Wishlist.md` as the parent register. Its V9-UX-001 row remains **FROZEN / IMPLEMENTATION-READY**. GitHub issue search found no actual epic issue. External Linear access is absent; no tracker ID or closure is invented.
+
+### Remaining independent engineering and scope
+
+The original 71-ID annotation corpus is not proof of complete scope. The frozen contract explicitly includes stock research/watchlist, Kite connect/disconnect, and material account/portfolio settings; those supporting flows were missing from the journey inventory. The current slice documents existing behavior as `E2E-09`–`E2E-11` and adds deterministic desktop/mobile UI journeys for stock research/add-failure retry/removal, expired Kite-session handoff/retry/disconnect, and independent portfolio safeguard persistence. Only intercepted local responses are used; a strict local-origin guard prevents provider access. These tests prove UI requests and mock state, not real broker or database integration.
+
+Production authenticated smoke now aborts unapproved mutation requests **before** they reach the server, rather than merely noticing them afterward, and disables credential-bearing traces/screenshots/videos. Missing identity remains a recorded acceptance blocker; this slice does not silently treat that skip as pass or claim to enforce a complete authenticated deployment gate before identity provisioning.
+
+Still open: complete per-journey product/domain conformance, screener results visual coverage, remaining major workflow inventory (Dashboard/Stock Explorer, alerts/notification history, account/session recovery, profile/portfolio switching and relevant completed V9 features), primary-investor authorization/recovery paths, full current-head hosted regression, qualified real ML evidence, real-Kite boundary evidence, and authenticated production smoke. Keep the register open. No behavior-changing deviation waiver is granted by this update.
+
+Local canonical frontend verification was attempted in the isolated scratch clone. Unit/component tests, typecheck and production build passed, but Playwright OS dependency installation failed under container setuid permissions; a separate exact Chromium download also failed with a truncated archive. No heavyweight browser verification was run on the production VPS. Hosted canonical CI remains the required merge gate for this slice.

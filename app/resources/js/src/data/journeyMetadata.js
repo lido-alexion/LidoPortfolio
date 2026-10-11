@@ -546,6 +546,101 @@ export const JOURNEY_TOPICS = Object.freeze([
     "warnings": []
   },
   {
+    "id": "E2E-09",
+    "title": "How do I research a stock and maintain a watchlist?",
+    "aliases": [
+      "Research a stock and maintain a watchlist",
+      "e2e-09"
+    ],
+    "keywords": [
+      "research",
+      "stock",
+      "and",
+      "maintain",
+      "watchlist"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/watchlist",
+    "guide": "/docs/journeys/07-supporting-investor.html#e2e-09-research-a-stock-and-maintain-a-watchlist",
+    "steps": [
+      "Open `/watchlist` and confirm the active watchlist.",
+      "Search for a symbol or company and select the intended security and exchange.",
+      "Inspect the stock's price-history availability and Fundamentals evidence. Missing history remains unavailable.",
+      "Add the stock to the active watchlist. Confirm it appears in that list.",
+      "Refresh and confirm the membership remains visible.",
+      "Remove the stock from the watchlist when it is no longer being researched.",
+      "If adding fails, read the failure, retry explicitly, and confirm only one membership exists."
+    ],
+    "prerequisites": [
+      "An authenticated investor and an existing private watchlist."
+    ],
+    "warnings": []
+  },
+  {
+    "id": "E2E-10",
+    "title": "How do I recover a Kite connection and disconnect safely?",
+    "aliases": [
+      "Recover a Kite connection and disconnect safely",
+      "e2e-10"
+    ],
+    "keywords": [
+      "recover",
+      "kite",
+      "connection",
+      "and",
+      "disconnect",
+      "safely"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/settings/account",
+    "guide": "/docs/journeys/07-supporting-investor.html#e2e-10-recover-a-kite-connection-and-disconnect-safely",
+    "steps": [
+      "Open `/settings/account` and inspect Zerodha / Kite.",
+      "Distinguish Not connected, Session expired and Connected. Manual mode works without a broker connection.",
+      "Choose Connect Kite. Complete account login only on the provider's page, then return to StoX.",
+      "If the connection cannot be started, read the error and retry explicitly.",
+      "Choose Disconnect when the account should no longer be connected and confirm Not connected."
+    ],
+    "prerequisites": [
+      "An authenticated investor. Real connection recovery requires login on Kite itself."
+    ],
+    "warnings": [
+      "Broker login credentials and OTPs belong on Kite/Zerodha. CI uses deterministic responses and never contacts Kite."
+    ]
+  },
+  {
+    "id": "E2E-11",
+    "title": "How do I save portfolio safeguards independently of execution?",
+    "aliases": [
+      "Save portfolio safeguards independently of execution",
+      "e2e-11"
+    ],
+    "keywords": [
+      "save",
+      "portfolio",
+      "safeguards",
+      "independently",
+      "execution"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/settings/portfolio",
+    "guide": "/docs/journeys/07-supporting-investor.html#e2e-11-save-portfolio-safeguards-independently-of-execution",
+    "steps": [
+      "Open `/settings/portfolio` and confirm the intended active portfolio.",
+      "Inspect the current Portfolio Stop-Loss % and Portfolio Trailing Stop %.",
+      "Set the two values independently and choose Save portfolio settings.",
+      "Confirm the save feedback, refresh, and verify the saved values.",
+      "If a save fails, keep the intended values available and retry explicitly before relying on them."
+    ],
+    "prerequisites": [
+      "An authenticated investor with an active portfolio."
+    ],
+    "warnings": []
+  },
+  {
     "id": "EXE-01",
     "title": "How do I execute an approved recommendation manually?",
     "aliases": [

@@ -131,9 +131,11 @@ UI labels can evolve. The route and user intent are more important than minor wo
 | E2E-06 | Insufficient capital -> resolve funding -> execute | [End to end](05-end-to-end.md#e2e-06--insufficient-capital-to-execution) |
 | E2E-07 | Same stock in two strategies -> one strategy exits | [End to end](05-end-to-end.md#e2e-07--same-stock-in-two-strategies) |
 
-## Deferred/simple journey chapter
+## Supporting and remaining inventory
 
-The first version intentionally prioritizes workflows that change investment policy, recommendation state, money, orders or holdings. A later chapter should cover simpler navigation and maintenance journeys such as Dashboard reading, Stock Explorer, Watchlist, alerts, notification history, ordinary settings, profile and portfolio switching.
+[Supporting investor journeys](07-supporting-investor.md) covers stock research/watchlist membership (`E2E-09`), Kite connection recovery/disconnect (`E2E-10`), and portfolio safeguards (`E2E-11`). These are mandatory scope under the frozen V9-UX-001 contract.
+
+The final completeness review must still reconcile Dashboard/Stock Explorer, alerts and notification history, profile and portfolio switching, account/session recovery, and other major workflows introduced by completed V9 epics. Existing responsive or feature tests alone do not establish complete journey conformance. These items are open scope, not a waiver.
 
 ## Documentation rules
 
