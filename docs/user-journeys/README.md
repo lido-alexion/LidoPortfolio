@@ -246,3 +246,15 @@ If this guide conflicts with an implemented/current product contract, correct th
 | E2E-37 | Inspect dated breadth and absent metrics | [Breadth](15-research-persisted-review.md#e2e-37--review-dated-market-breadth-with-unavailable-metrics-disclosed) |
 | E2E-38 | Separate observational review and new reports | [Review](15-research-persisted-review.md#e2e-38--separate-observational-review-from-persisted-report-generation) |
 | E2E-39 | Recover fundamentals and educational patterns | [Research](15-research-persisted-review.md#e2e-39--recover-fundamental-research-and-use-educational-pattern-references) |
+
+
+### Personal knowledge and Calendar
+
+| ID | Scenario | Detail |
+| --- | --- | --- |
+| E2E-40 | Recover private Notes and preserve failed changes | [Notes](16-personal-knowledge-calendar.md#e2e-40--recover-personal-notes-and-preserve-failed-changes) |
+| E2E-41 | Maintain tags with deliberate merge/deletion | [Tags](16-personal-knowledge-calendar.md#e2e-41--maintain-personal-tags-with-deliberate-merge-and-deletion) |
+| E2E-42 | Author/recover private Wiki, history and portability | [Wiki](16-personal-knowledge-calendar.md#e2e-42--author-private-wiki-pages-and-recover-history-and-portability) |
+| E2E-43 | Share one page and revoke public capability | [Sharing](16-personal-knowledge-calendar.md#e2e-43--share-one-wiki-page-and-revoke-its-public-capability) |
+| E2E-44 | Maintain recurring events without holiday authority | [Calendar](16-personal-knowledge-calendar.md#e2e-44--maintain-recurring-calendar-events-without-holiday-authority) |
+| E2E-45 | Recover personal contextual notes without unknown overwrite | [Contextual notes](16-personal-knowledge-calendar.md#e2e-45--recover-route-scoped-contextual-notes-without-overwriting-unknown-content) |

@@ -7,6 +7,7 @@ import { showToast } from '../toast';
 export default function KnowledgeBoardTagsPage() {
     const [tags, setTags] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
     const [editingId, setEditingId] = useState(null);
     const [editName, setEditName] = useState('');
     const [editColor, setEditColor] = useState('#0d6efd');
@@ -16,10 +17,12 @@ export default function KnowledgeBoardTagsPage() {
 
     const load = useCallback(async () => {
         setLoading(true);
+        setLoadError('');
         try {
             const res = await api.get('/knowledge-board/tags');
             setTags(res.data.data || []);
         } catch {
+            setLoadError('Knowledge tags could not be loaded.');
             showToast('Failed to load tags.', 'danger');
             setTags([]);
         } finally {
@@ -121,6 +124,7 @@ export default function KnowledgeBoardTagsPage() {
                             className="form-control form-control-sm"
                             style={{ maxWidth: '16rem' }}
                             placeholder="Tag name"
+                            aria-label="New tag name"
                             value={newName}
                             onChange={(e) => setNewName(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && createTag()}
@@ -154,7 +158,7 @@ export default function KnowledgeBoardTagsPage() {
             <div className="card">
                 <div className="card-header">All tags</div>
                 <div className="card-body p-0">
-                    {loading ? (
+                    {loadError ? <div className="alert alert-danger" role="alert"><p>{loadError}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={load}>Retry knowledge tags</button></div> : loading ? (
                         <div className="p-3 text-muted small">Loading…</div>
                     ) : tags.length === 0 ? (
                         <div className="p-3 text-muted small">No tags yet.</div>
@@ -168,6 +172,7 @@ export default function KnowledgeBoardTagsPage() {
                                                 type="text"
                                                 className="form-control form-control-sm"
                                                 style={{ maxWidth: '12rem' }}
+                                                aria-label="Rename tag"
                                                 value={editName}
                                                 onChange={(e) => setEditName(e.target.value)}
                                             />

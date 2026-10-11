@@ -33,3 +33,6 @@ production smoke remains non-destructive and separate from deterministic CI.
 | `13-financial-source-lifecycle.md` | `EXE-16`, `E2E-28`–`E2E-30` | `app/tests/e2e/financial-source-journeys.spec.js` |
 | `14-artifact-library-governance.md` | `E2E-31`–`E2E-34` | `app/tests/e2e/artifact-library-journeys.spec.js` |
 | `15-research-persisted-review.md` | `E2E-35`–`E2E-39` | `app/tests/e2e/research-review-journeys.spec.js`; existing `fundamental-insights-browser.spec.js` retains deterministic/AI provenance and desktop/mobile evidence |
+| `16-personal-knowledge-calendar.md` | `E2E-40`–`E2E-45` | `app/tests/e2e/personal-knowledge-calendar-journeys.spec.js`; API/domain evidence remains separately covered by KnowledgeBoardTest, KnowledgeBoardImageTest, V5WikiFoundationTest, V6ContextualNotesTest and CalendarEventTest |
+
+Personal-knowledge journeys exercise real desktop/mobile controls against strictly bounded localhost fixtures. Synthetic public capabilities, page images, export transport, recurrence occurrences, holidays and reminder settings are UI evidence only; they do not qualify production sharing, ZIP structure, official holiday sources or provider delivery. Failed private reads are never treated as confirmed empty/missing, unknown contextual-note reads block Save, and delayed Wiki responses cannot replace another Portfolio's content.

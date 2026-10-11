@@ -17,12 +17,14 @@ export default function ContextualNotesContent({ onClose, headingId = 'lido-cont
     const [body, setBody] = useState('');
     const [busy, setBusy] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [loadError, setLoadError] = useState('');
     const requestIdRef = useRef(0);
     const contextKey = useMemo(() => contextFromPath(pathname), [pathname]);
 
     const load = useCallback(async () => {
         const requestId = ++requestIdRef.current;
         setLoading(true);
+        setLoadError('');
         setNote(null);
         setBody('');
         try {
@@ -38,6 +40,7 @@ export default function ContextualNotesContent({ onClose, headingId = 'lido-cont
             setBody(current?.body || '');
         } catch {
             if (requestId !== requestIdRef.current) return;
+            setLoadError('Contextual note could not be loaded.');
             setNote(null);
             setBody('');
         } finally {
@@ -100,6 +103,7 @@ export default function ContextualNotesContent({ onClose, headingId = 'lido-cont
                     <X size={16} />
                 </button>
             </div>
+            {loadError && <div className="alert alert-danger" role="alert"><p>{loadError}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading || busy} onClick={load}>Retry contextual note</button></div>}
             <label className="visually-hidden" htmlFor={`${headingId}-body`}>Contextual note</label>
             <textarea
                 id={`${headingId}-body`}
@@ -108,14 +112,14 @@ export default function ContextualNotesContent({ onClose, headingId = 'lido-cont
                 onChange={(event) => setBody(event.target.value)}
                 maxLength={10000}
                 aria-busy={loading}
-                disabled={loading}
+                disabled={loading || Boolean(loadError)}
             />
             <div className="lido-context-notes-actions">
-                <button type="button" className="btn btn-primary btn-sm" disabled={busy || loading} onClick={save}>
+                <button type="button" className="btn btn-primary btn-sm" disabled={busy || loading || Boolean(loadError)} onClick={save}>
                     <Save size={14} /> Save
                 </button>
                 {note && (
-                    <button type="button" className="btn btn-outline-danger btn-sm" disabled={busy || loading} onClick={remove}>
+                    <button type="button" className="btn btn-outline-danger btn-sm" disabled={busy || loading || Boolean(loadError)} onClick={remove}>
                         <Trash2 size={14} /> Delete
                     </button>
                 )}

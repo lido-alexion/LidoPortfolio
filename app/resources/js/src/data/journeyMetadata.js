@@ -1853,6 +1853,222 @@ export const JOURNEY_TOPICS = Object.freeze([
     ]
   },
   {
+    "id": "E2E-40",
+    "title": "How do I recover personal Notes and preserve failed changes?",
+    "aliases": [
+      "Recover personal Notes and preserve failed changes",
+      "e2e-40"
+    ],
+    "keywords": [
+      "recover",
+      "personal",
+      "notes",
+      "and",
+      "preserve",
+      "failed",
+      "changes"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/knowledge-board",
+    "guide": "/docs/journeys/16-personal-knowledge-calendar.html#e2e-40-recover-personal-notes-and-preserve-failed-changes",
+    "steps": [
+      "Open Knowledge Board (`/knowledge-board`). Retry knowledge notes or Retry knowledge tags recovers unavailable reads; a failed read is not a confirmed empty Board.",
+      "Choose New note, enter title and research content, and inspect the save status. A rejected save keeps the draft available for manual Save. Close and reopen the confirmed note to verify persistence.",
+      "Choose Manage notes. Pin, Duplicate and Archive are explicit actions; a rejected action preserves the original note. Archive removes it from the active list only after confirmation from the service.",
+      "Use Show archived, search and tags to find personal research. Duplicating creates a distinct note; editing the copy does not replace its source.",
+      "Select notes and Export to review Markdown. A failed clipboard copy leaves the export available to copy again.",
+      "Cancel a bulk deletion to leave selection and notes intact. On a failed confirmed deletion, inspect the retained selection and retry deliberately."
+    ],
+    "prerequisites": [
+      "An authenticated Investor and an owned Portfolio."
+    ],
+    "warnings": [
+      "Blank notes are not saved. Autosave and manual Save use the same personal note; a transport failure cannot establish whether a write committed. Inspect the retained note before retrying. Copy/export does not publish a note."
+    ]
+  },
+  {
+    "id": "E2E-41",
+    "title": "How do I maintain personal tags with deliberate merge and deletion?",
+    "aliases": [
+      "Maintain personal tags with deliberate merge and deletion",
+      "e2e-41"
+    ],
+    "keywords": [
+      "maintain",
+      "personal",
+      "tags",
+      "with",
+      "deliberate",
+      "merge",
+      "and",
+      "deletion"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/knowledge-board/tags",
+    "guide": "/docs/journeys/16-personal-knowledge-calendar.html#e2e-41-maintain-personal-tags-with-deliberate-merge-and-deletion",
+    "steps": [
+      "Open Manage tags (`/knowledge-board/tags`). Retry knowledge tags recovers an unavailable list.",
+      "Enter a nonblank New tag name and choose Add. A failed creation retains the name for correction/retry.",
+      "Rename a tag. Cancel preserves its original name; a rejected Save keeps the entered name available.",
+      "Select distinct Source and Target tags before Merge. On failure, retain both selections and inspect the current list before retrying.",
+      "Cancel deletion to preserve the tag. A rejected confirmed deletion retains it; retry removes only the intended tag."
+    ],
+    "prerequisites": [
+      "Owned Portfolio notes and tags."
+    ],
+    "warnings": [
+      "Merging consolidates the source tag into the selected target. Deleting a tag does not delete its notes."
+    ]
+  },
+  {
+    "id": "E2E-42",
+    "title": "How do I author private Wiki Pages and recover history and portability?",
+    "aliases": [
+      "Author private Wiki Pages and recover history and portability",
+      "e2e-42"
+    ],
+    "keywords": [
+      "author",
+      "private",
+      "wiki",
+      "pages",
+      "and",
+      "recover",
+      "history",
+      "portability"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/knowledge-board/wiki",
+    "guide": "/docs/journeys/16-personal-knowledge-calendar.html#e2e-42-author-private-wiki-pages-and-recover-history-and-portability",
+    "steps": [
+      "Open Wiki (`/knowledge-board/wiki`); Retry Wiki hierarchy and Retry Wiki Page recover unavailable reads without treating them as a missing page or navigating away silently.",
+      "Create a root page or a child beneath the selected parent. Cancelling the prompt creates nothing; rejected creation retains existing hierarchy.",
+      "Edit title/Markdown and Insert Wiki Link to a selected page. Preview failure retains source; retry displays safe derived content. Save failure retains the draft; verify confirmed source/history after retry.",
+      "Compare a stored revision with current Markdown. Cancel Restore to leave history intact; retry a rejected confirmed restore to create a forward revision while retaining old evidence.",
+      "Use Move Wiki Page to reparent explicitly. A failed move preserves the old parent and permits retrying the same target. Stable links remain usable.",
+      "Insert image. Upload and page attachment must both succeed before the image is inserted into Markdown. Save deliberately to persist the Markdown change. Partial upload failures do not imply rollback of uploaded files.",
+      "Export page, Export branch or Export Wiki deliberately. Read failures leave the page available to retry. Exports do not publish or alter source/history.",
+      "Cancel branch deletion to preserve all pages. A rejected confirmed deletion retains the branch; inspect and retry deliberately."
+    ],
+    "prerequisites": [
+      "An owned Portfolio and access to its Wiki."
+    ],
+    "warnings": [
+      "Markdown is the canonical source. Rendered preview is derived. Moving/renaming preserves immutable page identity and managed links. Restoring creates a new revision; branch deletion requires explicit confirmation of the branch size."
+    ]
+  },
+  {
+    "id": "E2E-43",
+    "title": "How do I share one Wiki Page and revoke its public capability?",
+    "aliases": [
+      "Share one Wiki Page and revoke its public capability",
+      "e2e-43"
+    ],
+    "keywords": [
+      "share",
+      "one",
+      "wiki",
+      "page",
+      "and",
+      "revoke",
+      "its",
+      "public",
+      "capability"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/knowledge-board/wiki",
+    "guide": "/docs/journeys/16-personal-knowledge-calendar.html#e2e-43-share-one-wiki-page-and-revoke-its-public-capability",
+    "steps": [
+      "On the owned private Wiki Page (`/knowledge-board/wiki`) choose Share publicly. Failure displays no confirmed link; retry shows the link field after service confirmation. If clipboard access fails, copy the displayed field manually.",
+      "Regenerate link explicitly. Failure preserves the current confirmed link; success supplies a replacement. Private Markdown/history is unchanged.",
+      "Open the link as a guest. An unavailable read offers Retry shared Wiki Page. An authoritative invalid/revoked link shows a generic unavailable message.",
+      "Inspect only the shared page and its attached images. Private hierarchy, revision history, linked-page content and personal contextual notes are absent.",
+      "Stop sharing deliberately. Failure retains the confirmed capability for inspection/retry; confirmed revocation removes the link field and makes guest access unavailable."
+    ],
+    "prerequisites": [
+      "A page owner for sharing; a current public link for guest reads."
+    ],
+    "warnings": [
+      "Anyone with the public link may read the shared page and its attached images. Linked private pages, tree, breadcrumbs, revisions and editing remain inaccessible. Regeneration invalidates the old capability; Stop sharing revokes access."
+    ]
+  },
+  {
+    "id": "E2E-44",
+    "title": "How do I maintain recurring Calendar events without holiday authority?",
+    "aliases": [
+      "Maintain recurring Calendar events without holiday authority",
+      "e2e-44"
+    ],
+    "keywords": [
+      "maintain",
+      "recurring",
+      "calendar",
+      "events",
+      "without",
+      "holiday",
+      "authority"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/calendar",
+    "guide": "/docs/journeys/16-personal-knowledge-calendar.html#e2e-44-maintain-recurring-calendar-events-without-holiday-authority",
+    "steps": [
+      "Open Calendar (`/calendar`). Retry calendar recovers an unavailable year/occurrence read.",
+      "Open New event. Cancel makes no changes. Enter Title, Anchor date and Repeat; inspect the conditional recurrence fields and optional Repeat until.",
+      "For a monthly event on day 31, shorter months use the existing clamping rule. Select Event reminder and reminder offsets deliberately; custom offsets extend the selected list.",
+      "Save explicitly. A failure retains the entered event and an uncertain-write explanation. Inspect and retry; open a displayed occurrence to edit the underlying series.",
+      "A rejected series edit retains its draft. Retry and inspect another occurrence of the same series.",
+      "View a global Trade Holiday. Its fields are read-only for Investors and there are no Save/Delete actions.",
+      "Cancel Delete to preserve an owned event. A rejected confirmed deletion retains the series; retry removes only that series, preserving global holidays."
+    ],
+    "prerequisites": [
+      "An authenticated Investor and an owned Portfolio."
+    ],
+    "warnings": [
+      "Global Trade Holidays are administrator-owned and shown on every Portfolio. An Investor cannot edit/delete them. Recurrence uses one event series; reminders use the account's enabled, verified notification channels and do not prove provider delivery."
+    ]
+  },
+  {
+    "id": "E2E-45",
+    "title": "How do I recover route-scoped contextual notes without overwriting unknown content?",
+    "aliases": [
+      "Recover route-scoped contextual notes without overwriting unknown content",
+      "e2e-45"
+    ],
+    "keywords": [
+      "recover",
+      "route",
+      "scoped",
+      "contextual",
+      "notes",
+      "without",
+      "overwriting",
+      "unknown",
+      "content"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/screeners",
+    "guide": "/docs/journeys/16-personal-knowledge-calendar.html#e2e-45-recover-route-scoped-contextual-notes-without-overwriting-unknown-content",
+    "steps": [
+      "Open contextual notes on a supported route, such as Screeners (`/screeners`). If the existing note cannot be read, Retry contextual note first; Save remains disabled to prevent overwriting unknown content.",
+      "Enter a private note after a confirmed empty read and Save. Failure retains entered text; retry and reopen the pane to inspect the confirmed note in the same context.",
+      "Edit and Save deliberately. A rejected update retains the entered draft and existing record for recovery.",
+      "Cancel Delete to preserve the note. A rejected confirmed deletion retains it; retry clears only the current personal contextual note.",
+      "Switching Portfolio/context must not expose or replace the next context's personal content with a delayed response from the previous one."
+    ],
+    "prerequisites": [
+      "An authenticated Investor and a contextual-note surface."
+    ],
+    "warnings": [
+      "The note belongs to its owner, route context and active Portfolio where applicable. It is personal research, not shared advice or a trading instruction."
+    ]
+  },
+  {
     "id": "EXE-01",
     "title": "How do I execute an approved recommendation manually?",
     "aliases": [

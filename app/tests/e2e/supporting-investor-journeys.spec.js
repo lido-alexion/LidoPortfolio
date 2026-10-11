@@ -146,7 +146,7 @@ for (const viewport of VIEWPORTS) {
         await page.goto('/screeners');
         await expect(page.getByRole('heading', { name: 'Screener', exact: true })).toBeVisible();
         await page.getByRole('button', { name: /Profile menu for/ }).click();
-        await page.getByRole('button', { name: /Logout$/ }).click();
+        await Promise.all([page.waitForURL('**/', { waitUntil: 'load' }), page.getByRole('button', { name: /Logout$/ }).click()]);
         await expect(page.getByRole('heading', { name: 'Login', exact: true })).toBeVisible();
         await page.goto('/screeners?source=ended-session');
         await expect(page.getByRole('heading', { name: 'Screener', exact: true })).toHaveCount(0);
