@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { availableComboPresets, COMBO_CHART_PRESETS, cycleComboPreset, resolveComboDefault } from './comboChartPresets';
 import { comboTooltipEntries, rangeAndSamplingRows } from './comboChartData';
@@ -23,11 +23,20 @@ function ComboTooltip({ active, label, payload, preset, visible, formatValue }) 
 
 export default function ComboChart({ rows = [], availability = {}, defaultPresetId = 'price-volume', height = 320, onSetDefault, savingDefault = false, formatValue }) {
     const presets = useMemo(() => availableComboPresets(availability), [availability]);
-    const [presetId, setPresetId] = useState(() => resolveComboDefault(defaultPresetId, availability) ?? 'price-volume');
+    const initialPresetId = resolveComboDefault(defaultPresetId, availability) ?? 'price-volume';
+    const synchronizedDefaultRef = useRef(initialPresetId);
+    const [presetId, setPresetId] = useState(initialPresetId);
     const [visible, setVisible] = useState({});
     const [range, setRange] = useState('all');
     const [sampling, setSampling] = useState('1d');
-    useEffect(() => setPresetId(resolveComboDefault(defaultPresetId, availability) ?? 'price-volume'), [defaultPresetId, availability]);
+    useEffect(() => {
+        const resolvedDefault = resolveComboDefault(defaultPresetId, availability) ?? 'price-volume';
+        setPresetId((current) => {
+            const currentAvailable = presets.some((item) => item.id === current && item.available);
+            return synchronizedDefaultRef.current !== resolvedDefault || !currentAvailable ? resolvedDefault : current;
+        });
+        synchronizedDefaultRef.current = resolvedDefault;
+    }, [defaultPresetId, availability, presets]);
     const preset = presets.find((item) => item.id === presetId && item.available) || presets.find((item) => item.id === resolveComboDefault(null, availability));
     const shownRows = useMemo(() => rangeAndSamplingRows(rows, range, sampling), [rows, range, sampling]);
     const activeSeries = preset?.series ?? [];
