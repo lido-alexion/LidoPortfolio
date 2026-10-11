@@ -216,3 +216,13 @@ If this guide conflicts with an implemented/current product contract, correct th
 | E2E-25 | Inspect dated holdings/flows and recover derived snapshots | [Historical analysis](12-portfolio-analysis-tax.md#e2e-25--inspect-historical-holdings-compare-dates-and-recover-derived-snapshots) |
 | E2E-26 | Review performance/tax scope, preferences and calculation evidence | [Reporting](12-portfolio-analysis-tax.md#e2e-26--review-performance-tax-scope-save-preferences-and-preserve-calculation-evidence) |
 | E2E-27 | Record tax inputs and preview CSV before import | [Tax evidence](12-portfolio-analysis-tax.md#e2e-27--record-tax-inputs-and-preview-a-dividend-csv-before-import) |
+
+
+### Financial source lifecycle
+
+| ID | Scenario | Detail |
+| --- | --- | --- |
+| EXE-16 | Correct/delete recorded transaction evidence | [Corrections](13-financial-source-lifecycle.md#exe-16--correct-or-delete-recorded-transaction-evidence) |
+| E2E-28 | Review and retry an idempotent transaction CSV batch | [Bulk import](13-financial-source-lifecycle.md#e2e-28--review-and-import-an-idempotent-transaction-csv-batch) |
+| E2E-29 | Adopt unmanaged holdings without changing sibling ownership | [Adoption](13-financial-source-lifecycle.md#e2e-29--adopt-an-unmanaged-holding-into-one-enabled-strategy) |
+| E2E-30 | Preview/confirm split or bonus financial application | [Corporate actions](13-financial-source-lifecycle.md#e2e-30--preview-and-explicitly-apply-a-split-or-bonus) |

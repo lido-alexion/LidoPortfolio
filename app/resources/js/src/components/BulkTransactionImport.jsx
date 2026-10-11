@@ -224,7 +224,7 @@ export default function BulkTransactionImport({ feeComponents, onSaved }) {
             const errors = extractBulkErrors(error);
             setSubmitErrors(errors);
             showToast(
-                error?.response?.data?.message || 'Import failed — no transactions were saved. Fix and retry.',
+                error?.response?.data?.message || 'Import could not be confirmed. Review existing evidence and retry the same batch.',
                 'danger',
             );
         } finally {
@@ -325,8 +325,8 @@ export default function BulkTransactionImport({ feeComponents, onSaved }) {
             <div className="card-body d-grid gap-3">
                 {batchStatus === 'failed' && (
                     <div className="alert alert-warning py-2 mb-0 small" role="status">
-                        Import failed — no transactions were committed. Correct the rows and retry
-                        (same batch). Or go back to paste a new CSV (new batch).
+                        Import could not be confirmed. Review existing evidence before retrying
+                        the same batch. Only start a new batch for a separate import.
                     </div>
                 )}
                 {batchCompleted && (
@@ -436,6 +436,7 @@ export default function BulkTransactionImport({ feeComponents, onSaved }) {
                                             />
                                         </td>
                                         <td className="lido-bulk-import-date">
+                                            <label className="visually-hidden" htmlFor={`bulk-tx-date-${row.id}`}>Transaction date {row.symbol}</label>
                                             <TransactionDateInput
                                                 id={`bulk-tx-date-${row.id}`}
                                                 displayValue={displayDate}

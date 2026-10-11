@@ -1434,6 +1434,109 @@ export const JOURNEY_TOPICS = Object.freeze([
     ]
   },
   {
+    "id": "E2E-28",
+    "title": "How do I review and import an idempotent transaction CSV batch?",
+    "aliases": [
+      "Review and import an idempotent transaction CSV batch",
+      "e2e-28"
+    ],
+    "keywords": [
+      "review",
+      "and",
+      "import",
+      "idempotent",
+      "transaction",
+      "csv",
+      "batch"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/transactions",
+    "guide": "/docs/journeys/13-financial-source-lifecycle.html#e2e-28-review-and-import-an-idempotent-transaction-csv-batch",
+    "steps": [
+      "Open `/transactions`, choose Bulk (CSV), and paste Stock, Quantity, Average Price and Transaction Type columns, optionally Owner (`unmanaged` or `strategy:ID`).",
+      "Choose Parse & review. Correct invalid rows, whole positive quantities/prices, side, exchange and actual dates. Dates default to today and must be reviewed.",
+      "Back to CSV abandons that review/batch identity. Reparse only when intending a new review; no source write occurs before Save all.",
+      "Choose Save all once. If unavailable/unconfirmed, inspect source evidence and retry the same reviewed batch. Validation failures retain rows and their batch identity for correction.",
+      "A committed/already-committed response locks the batch and removes Save all. Verify refreshed transactions and derived accounting.",
+      "Choose New import only for additional, separate financial evidence."
+    ],
+    "prerequisites": [
+      "An owned portfolio and actual transaction evidence in the supported CSV format."
+    ],
+    "warnings": [
+      "Import writes all reviewed rows atomically through the financial write path. An uncertain response is not proof that nothing committed. Retry the same batch identity; use a new batch only for a separate import."
+    ]
+  },
+  {
+    "id": "E2E-29",
+    "title": "How do I adopt an unmanaged holding into one enabled strategy?",
+    "aliases": [
+      "Adopt an unmanaged holding into one enabled strategy",
+      "e2e-29"
+    ],
+    "keywords": [
+      "adopt",
+      "unmanaged",
+      "holding",
+      "into",
+      "one",
+      "enabled",
+      "strategy"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/holdings",
+    "guide": "/docs/journeys/13-financial-source-lifecycle.html#e2e-29-adopt-an-unmanaged-holding-into-one-enabled-strategy",
+    "steps": [
+      "Open `/holdings`, identify the unmanaged ownership episode, open its Sell menu and choose Adopt.",
+      "Review the destination strategy and any merge/sibling disclosures. No eligible enabled strategy leaves Adopt unavailable; close/cancel preserves ownership.",
+      "Choose the intended Destination strategy and Adopt explicitly.",
+      "On failure retain the selected destination and unchanged visible ownership; inspect existing adoption evidence before retrying.",
+      "After success inspect the refreshed ownership episodes and confirm other strategies' same-stock quantities/basis are unchanged."
+    ],
+    "prerequisites": [
+      "An owned unmanaged holding and an enabled eligible destination strategy."
+    ],
+    "warnings": [
+      "Adoption changes ownership-aware future lifecycle. Same-stock destination ownership can merge under accepted weighted-average rules; sibling strategies remain separate. It is not a trade."
+    ]
+  },
+  {
+    "id": "E2E-30",
+    "title": "How do I preview and explicitly apply a split or bonus?",
+    "aliases": [
+      "Preview and explicitly apply a split or bonus",
+      "e2e-30"
+    ],
+    "keywords": [
+      "preview",
+      "and",
+      "explicitly",
+      "apply",
+      "split",
+      "bonus"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/holdings",
+    "guide": "/docs/journeys/13-financial-source-lifecycle.html#e2e-30-preview-and-explicitly-apply-a-split-or-bonus",
+    "steps": [
+      "From `/holdings`, choose Split/Bonus in the intended holding's menu, or open `/corporate-action` and select the stock.",
+      "Choose Stock split or Bonus issue, enter its ratio, actual Ex-date / record date, supported split scope and source Notes.",
+      "Preview affected transactions, warnings, blocking errors and estimated post-state. A failed preview leaves inputs available; changing any input invalidates the prior preview.",
+      "Apply without a preview first obtains one; blocking errors cannot apply ledger changes. Review a valid preview before applying.",
+      "Choose Apply and review the stock/ratio/ledger confirmation. Dismiss to preserve source state. A failed application does not claim success; inspect existing action evidence before retrying.",
+      "After confirmed application, review the matching transactions/holdings. Verify cost/quantity/ownership consequences through accounting tests, not a synthetic browser response."
+    ],
+    "prerequisites": [
+      "An owned portfolio, affected stock and official action/effective-date evidence for any real application."
+    ],
+    "warnings": [
+      "Financial ledger application is separate from historical price repair. Rights subscriptions are normal buys at the actual subscription price, not an automatic split/bonus."
+    ]
+  },
+  {
     "id": "EXE-01",
     "title": "How do I execute an approved recommendation manually?",
     "aliases": [
@@ -1871,6 +1974,39 @@ export const JOURNEY_TOPICS = Object.freeze([
     ],
     "prerequisites": [],
     "warnings": []
+  },
+  {
+    "id": "EXE-16",
+    "title": "How do I correct or delete recorded transaction evidence?",
+    "aliases": [
+      "Correct or delete recorded transaction evidence",
+      "exe-16"
+    ],
+    "keywords": [
+      "correct",
+      "delete",
+      "recorded",
+      "transaction",
+      "evidence"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/transactions",
+    "guide": "/docs/journeys/13-financial-source-lifecycle.html#exe-16-correct-or-delete-recorded-transaction-evidence",
+    "steps": [
+      "Open `/transactions`, find the recorded row and choose Edit. Inspect its stock, side, actual date, quantity, price and notes.",
+      "Cancel Edit to leave source evidence unchanged, or enter a supported correction and choose Update Transaction.",
+      "If saving is unconfirmed, retain the draft and inspect existing evidence before explicit retry. A correction updates the same transaction, not a new trade.",
+      "Verify the confirmed row and derived holdings/cash/history through the accounting contract.",
+      "If deletion is required, choose Delete and review its ledger/recommendation warning. Dismiss to preserve the row; confirm only the intended correction.",
+      "A failed deletion preserves the visible row for inspection/retry. After confirmation inspect refreshed source and any reopened Pending Execution intent."
+    ],
+    "prerequisites": [
+      "An owned portfolio and the actual original transaction/source evidence."
+    ],
+    "warnings": [
+      "Corrections/deletions change financial source state and derived accounting. Deleting a recommendation-linked transaction can return its intent to Pending Execution; it does not cancel a broker fill."
+    ]
   },
   {
     "id": "REC-01",

@@ -763,11 +763,11 @@ export default function HoldingsPage() {
             </div>
         </div>
             {adoptHolding ? (
-                <div className="modal d-block" tabIndex={-1} role="dialog" style={{ background: 'rgba(0,0,0,0.4)' }}>
+                <div className="modal d-block" tabIndex={-1} role="dialog" aria-labelledby="holding-adoption-title" style={{ background: 'rgba(0,0,0,0.4)' }}>
                     <div className="modal-dialog">
                         <div className="modal-content">
                             <div className="modal-header">
-                                <h5 className="modal-title">
+                                <h5 id="holding-adoption-title" className="modal-title">
                                     Adopt
                                     {' '}
                                     {adoptHolding.stock?.symbol || 'holding'}
@@ -822,7 +822,7 @@ export default function HoldingsPage() {
                                     })}
                                 </select>
                                 {adoptError ? (
-                                    <div className="alert alert-danger mt-3 mb-0 py-2 small">{adoptError}</div>
+                                    <div className="alert alert-danger mt-3 mb-0 py-2 small" role="alert">{adoptError}</div>
                                 ) : null}
                             </div>
                             <div className="modal-footer">

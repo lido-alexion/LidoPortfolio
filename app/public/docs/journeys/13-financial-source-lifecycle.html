@@ -1,0 +1,61 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>StoX user journeys</title><style>body{font:16px system-ui;max-width:900px;margin:2rem auto;padding:0 1rem;line-height:1.5}h1,h2{margin-top:2rem}</style></head><body><h1>StoX User Journeys — Financial Source Lifecycle</h1>
+
+<p>[Back to journey index](README.md)</p>
+
+<p>These flows preserve the accepted [accounting contract](../current/portfolio-cash-accounting.md). Actual financial source writes require real documentary evidence and the correct owned portfolio. Synthetic UI fixtures do not qualify accounting outcomes. Broker operations remain separate.</p>
+
+<h2 id="exe-16-correct-or-delete-recorded-transaction-evidence">EXE-16 — Correct or delete recorded transaction evidence</h2>
+
+<p>- Requires: An owned portfolio and the actual original transaction/source evidence.</p>
+<p>- Warning: Corrections/deletions change financial source state and derived accounting. Deleting a recommendation-linked transaction can return its intent to Pending Execution; it does not cancel a broker fill.</p>
+
+<p>1. Open `/transactions`, find the recorded row and choose Edit. Inspect its stock, side, actual date, quantity, price and notes.</p>
+<p>2. Cancel Edit to leave source evidence unchanged, or enter a supported correction and choose Update Transaction.</p>
+<p>3. If saving is unconfirmed, retain the draft and inspect existing evidence before explicit retry. A correction updates the same transaction, not a new trade.</p>
+<p>4. Verify the confirmed row and derived holdings/cash/history through the accounting contract.</p>
+<p>5. If deletion is required, choose Delete and review its ledger/recommendation warning. Dismiss to preserve the row; confirm only the intended correction.</p>
+<p>6. A failed deletion preserves the visible row for inspection/retry. After confirmation inspect refreshed source and any reopened Pending Execution intent.</p>
+
+<p>**Expected result:** Explicit corrections/deletions remain attributable to the original event and never submit broker orders.</p>
+
+<h2 id="e2e-28-review-and-import-an-idempotent-transaction-csv-batch">E2E-28 — Review and import an idempotent transaction CSV batch</h2>
+
+<p>- Requires: An owned portfolio and actual transaction evidence in the supported CSV format.</p>
+<p>- Warning: Import writes all reviewed rows atomically through the financial write path. An uncertain response is not proof that nothing committed. Retry the same batch identity; use a new batch only for a separate import.</p>
+
+<p>1. Open `/transactions`, choose Bulk (CSV), and paste Stock, Quantity, Average Price and Transaction Type columns, optionally Owner (`unmanaged` or `strategy:ID`).</p>
+<p>2. Choose Parse &amp; review. Correct invalid rows, whole positive quantities/prices, side, exchange and actual dates. Dates default to today and must be reviewed.</p>
+<p>3. Back to CSV abandons that review/batch identity. Reparse only when intending a new review; no source write occurs before Save all.</p>
+<p>4. Choose Save all once. If unavailable/unconfirmed, inspect source evidence and retry the same reviewed batch. Validation failures retain rows and their batch identity for correction.</p>
+<p>5. A committed/already-committed response locks the batch and removes Save all. Verify refreshed transactions and derived accounting.</p>
+<p>6. Choose New import only for additional, separate financial evidence.</p>
+
+<p>**Expected result:** Repeating the same idempotent batch after an uncertain response cannot intentionally duplicate the financial event; real domain persistence is verified independently from UI fixtures.</p>
+
+<h2 id="e2e-29-adopt-an-unmanaged-holding-into-one-enabled-strategy">E2E-29 — Adopt an unmanaged holding into one enabled strategy</h2>
+
+<p>- Requires: An owned unmanaged holding and an enabled eligible destination strategy.</p>
+<p>- Warning: Adoption changes ownership-aware future lifecycle. Same-stock destination ownership can merge under accepted weighted-average rules; sibling strategies remain separate. It is not a trade.</p>
+
+<p>1. Open `/holdings`, identify the unmanaged ownership episode, open its Sell menu and choose Adopt.</p>
+<p>2. Review the destination strategy and any merge/sibling disclosures. No eligible enabled strategy leaves Adopt unavailable; close/cancel preserves ownership.</p>
+<p>3. Choose the intended Destination strategy and Adopt explicitly.</p>
+<p>4. On failure retain the selected destination and unchanged visible ownership; inspect existing adoption evidence before retrying.</p>
+<p>5. After success inspect the refreshed ownership episodes and confirm other strategies' same-stock quantities/basis are unchanged.</p>
+
+<p>**Expected result:** Adoption is explicit, scoped and auditable, without creating economic quantity or authority over a sibling strategy.</p>
+
+<h2 id="e2e-30-preview-and-explicitly-apply-a-split-or-bonus">E2E-30 — Preview and explicitly apply a split or bonus</h2>
+
+<p>- Requires: An owned portfolio, affected stock and official action/effective-date evidence for any real application.</p>
+<p>- Warning: Financial ledger application is separate from historical price repair. Rights subscriptions are normal buys at the actual subscription price, not an automatic split/bonus.</p>
+
+<p>1. From `/holdings`, choose Split/Bonus in the intended holding's menu, or open `/corporate-action` and select the stock.</p>
+<p>2. Choose Stock split or Bonus issue, enter its ratio, actual Ex-date / record date, supported split scope and source Notes.</p>
+<p>3. Preview affected transactions, warnings, blocking errors and estimated post-state. A failed preview leaves inputs available; changing any input invalidates the prior preview.</p>
+<p>4. Apply without a preview first obtains one; blocking errors cannot apply ledger changes. Review a valid preview before applying.</p>
+<p>5. Choose Apply and review the stock/ratio/ledger confirmation. Dismiss to preserve source state. A failed application does not claim success; inspect existing action evidence before retrying.</p>
+<p>6. After confirmed application, review the matching transactions/holdings. Verify cost/quantity/ownership consequences through accounting tests, not a synthetic browser response.</p>
+
+<p>**Expected result:** Preview, explicit confirmation and actual application remain distinct, and no broker order or price-repair operation is triggered.</p>
+</body></html>
