@@ -83,7 +83,7 @@ for (const viewport of VIEWPORTS) {
             await expect(page.getByRole('alert').filter({ hasText: 'Please complete human verification' })).toBeVisible(); expect(attempts).toBe(0);
             await page.getByRole('button', { name: 'Complete synthetic human verification' }).click();
             await page.getByRole('button', { name: 'Submit access request', exact: true }).click();
-            await expect(page.getByRole('alert').filter({ hasText: 'Synthetic request unavailable.' })).toBeVisible(); await expect(page.getByLabel('Full name')).toHaveValue('Requested investor');
+            await expect(page.locator('form').getByRole('alert').filter({ hasText: 'Synthetic request unavailable.' })).toBeVisible(); await expect(page.getByLabel('Full name')).toHaveValue('Requested investor');
             await page.getByRole('button', { name: 'Submit access request', exact: true }).click();
             await expect(page.getByRole('status').filter({ hasText: 'If this email is eligible' })).toBeVisible();
             await page.goto('/request-account/verify/synthetic-verification-token');
