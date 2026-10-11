@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import api from '../api';
+import api, { getApiErrorMessage } from '../api';
 import useApiGet from '../hooks/useApiGet';
 import { usePortfolio } from '../context/PortfolioContext';
 import { formatTableMoney2, formatTablePercent2 } from '../utils/tableFormat';
@@ -30,6 +30,7 @@ export default function PerformanceTaxPage() {
     const [selectedIds, setSelectedIds] = useState([]);
     const [savingEvidence, setSavingEvidence] = useState(false);
     const [savingPreferences, setSavingPreferences] = useState(false);
+    const [operationError, setOperationError] = useState('');
     const [preferenceForm, setPreferenceForm] = useState(null);
     const [accountPreferenceForm, setAccountPreferenceForm] = useState(null);
 
@@ -67,6 +68,7 @@ export default function PerformanceTaxPage() {
 
     const preserve = async (calculationType) => {
         setSavingEvidence(true);
+        setOperationError('');
         try {
             const payload = calculationType === 'portfolio_performance'
                 ? { calculation_type: calculationType, from, to }
@@ -75,11 +77,13 @@ export default function PerformanceTaxPage() {
                 : { calculation_type: 'account_tax', financial_year: financialYear, ...(whatIf ? { portfolio_ids: selectedIds } : {}) };
             await api.post('/analysis/evidence', payload);
             showToast('Immutable calculation evidence preserved', 'success');
-        } finally { setSavingEvidence(false); }
+        } catch { setOperationError('Calculation evidence could not be preserved. Please retry.'); }
+        finally { setSavingEvidence(false); }
     };
 
     const savePreferences = async () => {
         setSavingPreferences(true);
+        setOperationError('');
         try {
             await api.put('/analysis/preferences', {
                 primary_benchmark_id: Number(preferenceForm.primary_benchmark_id),
@@ -91,10 +95,12 @@ export default function PerformanceTaxPage() {
             });
             showToast('Analysis preferences saved', 'success');
             reload();
-        } finally { setSavingPreferences(false); }
+        } catch { setOperationError('Analysis preferences could not be saved. Please retry.'); }
+        finally { setSavingPreferences(false); }
     };
     const saveAccountPreferences = async () => {
         setSavingPreferences(true);
+        setOperationError('');
         try {
             await api.put('/analysis/preferences', {
                 scope: 'account',
@@ -105,7 +111,8 @@ export default function PerformanceTaxPage() {
             });
             showToast('Account analysis overrides saved', 'success');
             reload();
-        } finally { setSavingPreferences(false); }
+        } catch { setOperationError('Account analysis overrides could not be saved. Please retry.'); }
+        finally { setSavingPreferences(false); }
     };
 
     return <div className="container-fluid py-3">
@@ -118,7 +125,8 @@ export default function PerformanceTaxPage() {
             <div className="col-12 form-check ms-2"><input id="tax-what-if" className="form-check-input" type="checkbox" checked={whatIf} onChange={(e) => setWhatIf(e.target.checked)} /><label className="form-check-label small" htmlFor="tax-what-if">What-if portfolio selection (does not change configured inclusion)</label></div>
             {whatIf ? <div className="col-12 d-flex flex-wrap gap-3">{portfolios.map((portfolio) => <label className="small" key={portfolio.id}><input type="checkbox" className="form-check-input me-1" checked={selectedIds.includes(portfolio.id)} onChange={(e) => setSelectedIds((ids) => e.target.checked ? [...ids, portfolio.id] : ids.filter((id) => id !== portfolio.id))} />{portfolio.name}</label>)}</div> : null}
         </div></div>
-        {error ? <div className="alert alert-danger py-2 small">{String(error)}</div> : null}
+        {error ? <div className="alert alert-danger py-2 small" role="alert">{getApiErrorMessage(error, 'Could not load portfolio analysis. Please retry.')}</div> : null}
+        {operationError && <div className="alert alert-danger py-2 small" role="alert">{operationError}</div>}
         {data ? <>
             {preferenceForm ? <div className="card mb-3"><div className="card-header">Analysis settings · {activePortfolio.name}</div><div className="card-body row g-2 align-items-end">
                 <div className="col-md-4"><label className="form-label small" htmlFor="primary-benchmark">Primary benchmark</label><select id="primary-benchmark" className="form-select form-select-sm" value={preferenceForm.primary_benchmark_id ?? ''} onChange={(e) => setPreferenceForm((value) => ({ ...value, primary_benchmark_id: e.target.value }))}>{data.benchmarks.map((benchmark) => <option key={benchmark.id} value={benchmark.id}>{benchmark.name} · {benchmark.return_type}</option>)}</select></div>
