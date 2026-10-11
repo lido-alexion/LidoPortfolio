@@ -44,12 +44,14 @@ describe('combo chart preset contracts', () => {
         const availability = Object.fromEntries(COMBO_CHART_PRESETS.map(({ id }) => [id, { available: true }]));
         const rows = [{ date: '2025-01-01', price: 10, volume: 100, pe: 2 }, { date: '2025-02-01', price: 11, volume: 120, pe: 3 }];
         const onSetDefault = vi.fn();
-        render(<ComboChart rows={rows} availability={availability} defaultPresetId="price-volume" onSetDefault={onSetDefault} />);
+        const { rerender } = render(<ComboChart rows={rows} availability={availability} defaultPresetId="price-volume" onSetDefault={onSetDefault} />);
         const selector = screen.getByLabelText('Combo chart preset');
         const priceLegend = screen.getByRole('checkbox', { name: 'Show Price' }).closest('label');
         expect(within(priceLegend).getByText('Price')).not.toHaveAttribute('style');
         expect(priceLegend.querySelector('[aria-hidden="true"]')).toHaveStyle({ color: '#0d6efd' });
         fireEvent.change(selector, { target: { value: 'price-pe' } });
+        expect(selector.value).toBe('price-pe');
+        rerender(<ComboChart rows={rows} availability={{ ...availability }} defaultPresetId="price-volume" onSetDefault={onSetDefault} />);
         expect(selector.value).toBe('price-pe');
         expect(screen.getByRole('checkbox', { name: 'Show P/E' })).toBeChecked();
         fireEvent.click(screen.getByRole('checkbox', { name: 'Show P/E' }));
@@ -64,5 +66,25 @@ describe('combo chart preset contracts', () => {
         const sampling = screen.getByRole('group', { name: 'Combo chart sampling frequency' });
         fireEvent.click(within(sampling).getByRole('button', { name: 'Quarterly' }));
         expect(within(sampling).getByRole('button', { name: 'Quarterly' })).toHaveAttribute('aria-pressed', 'true');
+    });
+    it('follows a changed saved default after a deliberate local selection', () => {
+        const availability = Object.fromEntries(COMBO_CHART_PRESETS.map(({ id }) => [id, { available: true }]));
+        const { rerender } = render(<React.StrictMode><ComboChart availability={availability} defaultPresetId="price-volume" /></React.StrictMode>);
+        const selector = screen.getByLabelText('Combo chart preset');
+        fireEvent.change(selector, { target: { value: 'price-pe' } });
+        expect(selector).toHaveValue('price-pe');
+        rerender(<React.StrictMode><ComboChart availability={availability} defaultPresetId="price-pb" /></React.StrictMode>);
+        expect(selector).toHaveValue('price-pb');
+    });
+
+    it('recovers an unavailable selected chart without changing the saved default', () => {
+        const availability = Object.fromEntries(COMBO_CHART_PRESETS.map(({ id }) => [id, { available: true }]));
+        const { rerender } = render(<ComboChart availability={availability} defaultPresetId="price-volume" />);
+        const selector = screen.getByLabelText('Combo chart preset');
+        fireEvent.change(selector, { target: { value: 'price-pe' } });
+        expect(selector).toHaveValue('price-pe');
+        rerender(<ComboChart availability={{ ...availability, 'price-pe': { available: false } }} defaultPresetId="price-volume" />);
+        expect(selector).toHaveValue('price-volume');
+        expect(screen.getByRole('option', { name: /Price \+ P\/E/ })).toBeDisabled();
     });
 });
