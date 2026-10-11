@@ -185,3 +185,10 @@ If this guide conflicts with an implemented/current product contract, correct th
 | E2E-15 | Compare relative strength and recover missing history | [Stock Explorer](08-investor-overview-alerts.md#e2e-15--compare-a-stock-with-its-benchmark-and-recover-missing-price-data) |
 | E2E-16 | Maintain/evaluate advisory alert policies | [Alert policies](08-investor-overview-alerts.md#e2e-16--maintain-and-evaluate-an-advisory-alert-policy) |
 | E2E-17 | Save optional product-email preferences and retry failure | [Email preferences](08-investor-overview-alerts.md#e2e-17--save-optional-product-email-preferences-and-recover-a-failed-update) |
+
+### Data export
+
+| ID | Scenario | Detail |
+| --- | --- | --- |
+| E2E-18 | Export scoped snapshot/chart data and recover background status/cancellation | [Data export](09-data-export.md#e2e-18--export-snapshot-data-and-recover-a-background-export) |
+| E2E-19 | Maintain a private export basket and recover workbook generation | [Data export](09-data-export.md#e2e-19--maintain-a-private-export-basket-and-recover-a-rejected-workbook) |
