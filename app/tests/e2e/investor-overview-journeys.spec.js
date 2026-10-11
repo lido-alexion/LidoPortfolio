@@ -59,6 +59,68 @@ for (const viewport of VIEWPORTS) {
             expect(rejected).toEqual([]);
         });
 
+        test(`E2E-48 recovers named Dashboard reads, autosave and default confirmation (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'E2E-48');
+            const { rejected, seal } = await prepare(page, viewport, [['PUT', '/api/dashboard-layouts/7']]);
+            const layout = {
+                schema: 'stox.dashboard.layout',
+                version: 1,
+                locked: false,
+                desktop: { cards: [], summaryFields: [] },
+                mobile: { cards: [], summaryFields: [] },
+            };
+            let listUnavailable = true;
+            let named = { id: 7, name: 'Investor', is_default: false, definition: layout };
+            let autosaveAttempts = 0;
+            let defaultAttempts = 0;
+            await page.route('**/api/dashboard-layouts', route => {
+                expect(route.request().method()).toBe('GET');
+                if (listUnavailable) {
+                    return route.fulfill({ status: 503, json: { message: 'Synthetic named layouts unavailable.' } });
+                }
+                return route.fulfill({ json: { data: [named] } });
+            });
+            await page.route('**/api/dashboard-layouts/7', route => {
+                expect(route.request().method()).toBe('PUT');
+                const body = route.request().postDataJSON();
+                if (body.definition) {
+                    autosaveAttempts++;
+                    expect(body.definition[viewport.name === 'mobile' ? 'mobile' : 'desktop'].summaryFields.find(field => field.id === 'xirr')?.visible).toBe(false);
+                    if (autosaveAttempts === 1) return route.fulfill({ status: 503, json: { message: 'Synthetic layout save unavailable.' } });
+                    named = { ...named, definition: body.definition };
+                    return route.fulfill({ json: { data: named } });
+                }
+                defaultAttempts++;
+                expect(body).toEqual({ is_default: true });
+                if (defaultAttempts === 1) return route.fulfill({ status: 503, json: { message: 'Synthetic default unavailable.' } });
+                named = { ...named, is_default: true };
+                return route.fulfill({ json: { data: named } });
+            });
+            await seal();
+            await page.goto('/');
+            const toolbar = page.getByTestId('dashboard-layout-toolbar');
+            await expect(toolbar.getByRole('alert')).toContainText('Named dashboards could not be loaded');
+            await expect(toolbar.getByLabel('Named dashboard')).toHaveCount(0);
+            listUnavailable = false;
+            await toolbar.getByRole('button', { name: 'Retry named dashboards' }).click();
+            await toolbar.getByLabel('Named dashboard').selectOption('7');
+            await toolbar.getByRole('button', { name: 'Customize' }).click();
+            await toolbar.getByLabel('Editing variant').selectOption(viewport.name === 'mobile' ? 'mobile' : 'desktop');
+            await toolbar.getByRole('checkbox', { name: 'XIRR' }).uncheck();
+            await expect(toolbar.getByText('Failed', { exact: true })).toBeVisible();
+            await toolbar.getByRole('button', { name: 'Retry named dashboard save' }).click();
+            await expect(toolbar.getByText('Saved', { exact: true })).toBeVisible();
+            await toolbar.getByRole('button', { name: 'Set default' }).click();
+            await expect(toolbar.getByRole('alert')).toContainText('Default dashboard could not be confirmed');
+            await expect(toolbar.getByLabel('Named dashboard')).toHaveValue('7');
+            await toolbar.getByRole('button', { name: 'Set default' }).click();
+            await expect(toolbar.getByLabel('Named dashboard')).toContainText('Investor (default)');
+            const accessibility = await new AxeBuilder({ page }).include('[data-testid="dashboard-layout-toolbar"]').withTags(['wcag2a', 'wcag2aa']).analyze();
+            expect(accessibility.violations).toEqual([]);
+            expect({ autosaveAttempts, defaultAttempts }).toEqual({ autosaveAttempts: 2, defaultAttempts: 2 });
+            expect(rejected).toEqual([]);
+        });
+
         test(`E2E-15 recovers unavailable stock history with temporary manual RS then retries fetched analysis (${viewport.name})`, async ({ page }, testInfo) => {
             journeyId(testInfo, 'E2E-15');
             const { rejected, seal } = await prepare(page, viewport, [['POST', '/api/analytics/explore']]);
