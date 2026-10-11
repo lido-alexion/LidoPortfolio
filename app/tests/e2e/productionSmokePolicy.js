@@ -9,6 +9,15 @@ export function allowProductionSmokeRequest(method, url, baseUrl, { login = fals
 }
 
 
+/** Keep automatic preference persistence inside the browser instead of mutating production. */
+export function neutralizeProductionSmokeRequest(method, url, baseUrl) {
+    const target = new URL(url);
+    return target.origin === new URL(baseUrl).origin
+        && method === 'PUT'
+        && target.pathname === '/api/guided-tour';
+}
+
+
 // Diagnostics are fixed categories, never URLs, query strings, headers or bodies.
 const BLOCK_REASONS = ['cross_origin', 'guided_tour_write', 'late_login_write', 'other_write'];
 export function productionSmokeBlockReason(method, url, baseUrl) {

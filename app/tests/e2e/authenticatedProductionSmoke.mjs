@@ -1,5 +1,5 @@
 import { chromium } from 'playwright';
-import { allowProductionSmokeRequest, productionSmokeBlockReason } from './productionSmokePolicy.js';
+import { allowProductionSmokeRequest, neutralizeProductionSmokeRequest, productionSmokeBlockReason } from './productionSmokePolicy.js';
 import { readOnlyReviewHeading } from './productionSmokeSelectors.js';
 
 let stage = 'configuration';
@@ -20,9 +20,14 @@ try {
     let blocked = false;
     await page.route('**/*', async route => {
         const request = route.request();
-        if (!allowProductionSmokeRequest(request.method(), request.url(), baseURL, { login })) {
+        const method = request.method();
+        const url = request.url();
+        if (neutralizeProductionSmokeRequest(method, url, baseURL)) {
+            return route.fulfill({ status: 204 });
+        }
+        if (!allowProductionSmokeRequest(method, url, baseURL, { login })) {
             blocked = true;
-            blockedReasons.add(productionSmokeBlockReason(request.method(), request.url(), baseURL));
+            blockedReasons.add(productionSmokeBlockReason(method, url, baseURL));
             return route.abort();
         }
         return route.continue();
