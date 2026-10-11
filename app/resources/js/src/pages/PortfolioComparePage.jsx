@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import api from '../api';
+import api, { getApiErrorMessage } from '../api';
 import useApiGet from '../hooks/useApiGet';
 import { usePortfolio } from '../context/PortfolioContext';
 import { ROUTES } from '../navigation/routes';
@@ -83,7 +83,7 @@ export default function PortfolioComparePage() {
                 </div>
             </div></div>
 
-            {error ? <div className="alert alert-danger py-2 small">{String(error)}</div> : null}
+            {error ? <div className="alert alert-danger py-2 small" role="alert">{getApiErrorMessage(error, 'Could not load portfolio analysis. Please retry.')}</div> : null}
             {data ? <>
                 <div className="row g-3 mb-3">
                     {[data.endpoint_a, data.endpoint_b].map((endpoint) => <div className="col-md-6" key={endpoint.date}><div className="card h-100"><div className="card-header">{endpoint.date}</div><div className="card-body small">Holdings {money(endpoint.holdings_market_value)} · Cash {money(endpoint.cash)} · Total {money(endpoint.total_value)}</div></div></div>)}

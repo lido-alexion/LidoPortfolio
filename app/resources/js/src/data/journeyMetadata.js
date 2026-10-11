@@ -1321,6 +1321,222 @@ export const JOURNEY_TOPICS = Object.freeze([
     ]
   },
   {
+    "id": "E2E-25",
+    "title": "How do I inspect historical holdings, compare dates and recover derived snapshots?",
+    "aliases": [
+      "Inspect historical holdings, compare dates and recover derived snapshots",
+      "e2e-25"
+    ],
+    "keywords": [
+      "inspect",
+      "historical",
+      "holdings",
+      "compare",
+      "dates",
+      "and",
+      "recover",
+      "derived",
+      "snapshots"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/portfolio/historical-holdings",
+    "guide": "/docs/journeys/12-portfolio-analysis-tax.html#e2e-25-inspect-historical-holdings-compare-dates-and-recover-derived-snapshots",
+    "steps": [
+      "Open `/portfolio/historical-holdings`, choose As-of date and inspect quantity, cost basis, dated price, market value and completeness warnings. Refresh after an unavailable read; preserve unavailable price/value distinctions.",
+      "Follow Compare dates to `/portfolio/compare`, choose Date A before Date B with neither in the future, and Compare. Invalid dates cannot be submitted.",
+      "Inspect dated cash/holdings totals, external deposits/withdrawals/adjustments, holdings differences and transaction evidence in `(A, B]`. Retry a failed comparison without changing the requested dates.",
+      "Open `/portfolio/snapshots`, choose the history range and inspect the latest date, growth chart and daily values. Refresh a failed read; a failed refresh must not manufacture values or financial events.",
+      "If source corrections require rebuilding derived history, choose Rebuild history and review its confirmation. Dismiss to keep the existing derived state. A failed rebuild reports failure; check existing results before retrying.",
+      "Confirm successful rebuild and refreshed dated rows. Source ledger and live order state remain distinct from the recalculated presentation."
+    ],
+    "prerequisites": [
+      "An owned active portfolio with dated financial source evidence."
+    ],
+    "warnings": [
+      "Historical holdings are an as-of reconstruction, snapshots are rebuildable derived views, and value change between dates is not investment return or causal attribution. Missing prices are not zero."
+    ]
+  },
+  {
+    "id": "E2E-26",
+    "title": "How do I review performance/tax scope, save preferences and preserve calculation evidence?",
+    "aliases": [
+      "Review performance/tax scope, save preferences and preserve calculation evidence",
+      "e2e-26"
+    ],
+    "keywords": [
+      "review",
+      "performance",
+      "tax",
+      "scope",
+      "save",
+      "preferences",
+      "and",
+      "preserve",
+      "calculation",
+      "evidence"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/portfolio/performance-tax",
+    "guide": "/docs/journeys/12-portfolio-analysis-tax.html#e2e-26-review-performance-tax-scope-save-preferences-and-preserve-calculation-evidence",
+    "steps": [
+      "Open `/portfolio/performance-tax`, choose Performance from/to and Tax financial year, then Calculate. Correct invalid/future ranges; retry an unavailable calculation with the same reviewed inputs.",
+      "Inspect portfolio/account metrics, primary benchmark, attribution residual and tax completeness/limitations. Incomplete or unavailable values are not zero.",
+      "Review Analysis settings: Primary benchmark, comparison benchmarks, risk-free rate, annualization days and independent account performance/tax inclusion. Save settings. Failure retains the draft for retry; confirmed changes appear after reloading.",
+      "If needed, review and Save Account overrides separately; these are account analytics preferences, not a portfolio cash movement.",
+      "Enable What-if portfolio selection and choose owned portfolios. Inspect the resulting scope without changing the configured inclusion preferences; disable it to return to configured reporting.",
+      "Choose Preserve evidence for the intended portfolio performance, account performance or account tax calculation. Retry a failed preservation explicitly; do not claim immutable evidence was stored before success.",
+      "Export the desired tax dataset. A failed CSV export reports failure; retry and verify the selected dataset/financial-year scope and attachment. Downloading a report does not change financial sources."
+    ],
+    "prerequisites": [
+      "An owned active portfolio and the financial/benchmark evidence required by the chosen calculation."
+    ],
+    "warnings": [
+      "Account results are independently aggregated, not averaged portfolio percentages. What-if selection does not change configured inclusion. Tax estimates are not certified advice, and incomplete inputs must remain disclosed."
+    ]
+  },
+  {
+    "id": "E2E-27",
+    "title": "How do I record tax inputs and preview a dividend CSV before import?",
+    "aliases": [
+      "Record tax inputs and preview a dividend CSV before import",
+      "e2e-27"
+    ],
+    "keywords": [
+      "record",
+      "tax",
+      "inputs",
+      "and",
+      "preview",
+      "dividend",
+      "csv",
+      "before",
+      "import"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/portfolio/performance-tax",
+    "guide": "/docs/journeys/12-portfolio-analysis-tax.html#e2e-27-record-tax-inputs-and-preview-a-dividend-csv-before-import",
+    "steps": [
+      "In Record tax evidence on `/portfolio/performance-tax`, enter Manual dividend date, positive amount and source reference, then Record dividend. Failure retains the draft and reports that the write was not confirmed.",
+      "For Tax loss, choose term/status, enter a positive amount and the required evidence/reason for Confirmed carry-forward; Record loss. Do not confuse a calculated loss with confirmed carry-forward.",
+      "For Opening tax lot, select the stock, acquired date, positive quantity, cost basis and required source reason, then Record opening lot. These inputs supplement tax reconstruction; they do not place a trade.",
+      "Choose the supported Dividend CSV (`generic-dividend-csv.v1`) and Preview. Inspect validity, candidate rows and duplicates. A failed/invalid preview cannot enable Import validated rows.",
+      "Changing the file invalidates its prior preview; preview the corrected file again. Only then deliberately choose Import validated rows and inspect imported/duplicate counts.",
+      "After a failed write/import, inspect existing evidence before retrying. After success, verify refreshed reporting; a preview alone must not change reports or claim rows were imported."
+    ],
+    "prerequisites": [
+      "An owned portfolio and actual documentary evidence for any real tax input."
+    ],
+    "warnings": [
+      "These are source-evidence writes. Inspect existing records after an uncertain response before retrying. A browser fixture cannot certify tax rules, filing eligibility or real import persistence."
+    ]
+  },
+  {
+    "id": "E2E-28",
+    "title": "How do I review and import an idempotent transaction CSV batch?",
+    "aliases": [
+      "Review and import an idempotent transaction CSV batch",
+      "e2e-28"
+    ],
+    "keywords": [
+      "review",
+      "and",
+      "import",
+      "idempotent",
+      "transaction",
+      "csv",
+      "batch"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/transactions",
+    "guide": "/docs/journeys/13-financial-source-lifecycle.html#e2e-28-review-and-import-an-idempotent-transaction-csv-batch",
+    "steps": [
+      "Open `/transactions`, choose Bulk (CSV), and paste Stock, Quantity, Average Price and Transaction Type columns, optionally Owner (`unmanaged` or `strategy:ID`).",
+      "Choose Parse & review. Correct invalid rows, whole positive quantities/prices, side, exchange and actual dates. Dates default to today and must be reviewed.",
+      "Back to CSV abandons that review/batch identity. Reparse only when intending a new review; no source write occurs before Save all.",
+      "Choose Save all once. If unavailable/unconfirmed, inspect source evidence and retry the same reviewed batch. Validation failures retain rows and their batch identity for correction.",
+      "A committed/already-committed response locks the batch and removes Save all. Verify refreshed transactions and derived accounting.",
+      "Choose New import only for additional, separate financial evidence."
+    ],
+    "prerequisites": [
+      "An owned portfolio and actual transaction evidence in the supported CSV format."
+    ],
+    "warnings": [
+      "Import writes all reviewed rows atomically through the financial write path. An uncertain response is not proof that nothing committed. Retry the same batch identity; use a new batch only for a separate import."
+    ]
+  },
+  {
+    "id": "E2E-29",
+    "title": "How do I adopt an unmanaged holding into one enabled strategy?",
+    "aliases": [
+      "Adopt an unmanaged holding into one enabled strategy",
+      "e2e-29"
+    ],
+    "keywords": [
+      "adopt",
+      "unmanaged",
+      "holding",
+      "into",
+      "one",
+      "enabled",
+      "strategy"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/holdings",
+    "guide": "/docs/journeys/13-financial-source-lifecycle.html#e2e-29-adopt-an-unmanaged-holding-into-one-enabled-strategy",
+    "steps": [
+      "Open `/holdings`, identify the unmanaged ownership episode, open its Sell menu and choose Adopt.",
+      "Review the destination strategy and any merge/sibling disclosures. No eligible enabled strategy leaves Adopt unavailable; close/cancel preserves ownership.",
+      "Choose the intended Destination strategy and Adopt explicitly.",
+      "On failure retain the selected destination and unchanged visible ownership; inspect existing adoption evidence before retrying.",
+      "After success inspect the refreshed ownership episodes and confirm other strategies' same-stock quantities/basis are unchanged."
+    ],
+    "prerequisites": [
+      "An owned unmanaged holding and an enabled eligible destination strategy."
+    ],
+    "warnings": [
+      "Adoption changes ownership-aware future lifecycle. Same-stock destination ownership can merge under accepted weighted-average rules; sibling strategies remain separate. It is not a trade."
+    ]
+  },
+  {
+    "id": "E2E-30",
+    "title": "How do I preview and explicitly apply a split or bonus?",
+    "aliases": [
+      "Preview and explicitly apply a split or bonus",
+      "e2e-30"
+    ],
+    "keywords": [
+      "preview",
+      "and",
+      "explicitly",
+      "apply",
+      "split",
+      "bonus"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/holdings",
+    "guide": "/docs/journeys/13-financial-source-lifecycle.html#e2e-30-preview-and-explicitly-apply-a-split-or-bonus",
+    "steps": [
+      "From `/holdings`, choose Split/Bonus in the intended holding's menu, or open `/corporate-action` and select the stock.",
+      "Choose Stock split or Bonus issue, enter its ratio, actual Ex-date / record date, supported split scope and source Notes.",
+      "Preview affected transactions, warnings, blocking errors and estimated post-state. A failed preview leaves inputs available; changing any input invalidates the prior preview.",
+      "Apply without a preview first obtains one; blocking errors cannot apply ledger changes. Review a valid preview before applying.",
+      "Choose Apply and review the stock/ratio/ledger confirmation. Dismiss to preserve source state. A failed application does not claim success; inspect existing action evidence before retrying.",
+      "After confirmed application, review the matching transactions/holdings. Verify cost/quantity/ownership consequences through accounting tests, not a synthetic browser response."
+    ],
+    "prerequisites": [
+      "An owned portfolio, affected stock and official action/effective-date evidence for any real application."
+    ],
+    "warnings": [
+      "Financial ledger application is separate from historical price repair. Rights subscriptions are normal buys at the actual subscription price, not an automatic split/bonus."
+    ]
+  },
+  {
     "id": "EXE-01",
     "title": "How do I execute an approved recommendation manually?",
     "aliases": [
@@ -1758,6 +1974,39 @@ export const JOURNEY_TOPICS = Object.freeze([
     ],
     "prerequisites": [],
     "warnings": []
+  },
+  {
+    "id": "EXE-16",
+    "title": "How do I correct or delete recorded transaction evidence?",
+    "aliases": [
+      "Correct or delete recorded transaction evidence",
+      "exe-16"
+    ],
+    "keywords": [
+      "correct",
+      "delete",
+      "recorded",
+      "transaction",
+      "evidence"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/transactions",
+    "guide": "/docs/journeys/13-financial-source-lifecycle.html#exe-16-correct-or-delete-recorded-transaction-evidence",
+    "steps": [
+      "Open `/transactions`, find the recorded row and choose Edit. Inspect its stock, side, actual date, quantity, price and notes.",
+      "Cancel Edit to leave source evidence unchanged, or enter a supported correction and choose Update Transaction.",
+      "If saving is unconfirmed, retain the draft and inspect existing evidence before explicit retry. A correction updates the same transaction, not a new trade.",
+      "Verify the confirmed row and derived holdings/cash/history through the accounting contract.",
+      "If deletion is required, choose Delete and review its ledger/recommendation warning. Dismiss to preserve the row; confirm only the intended correction.",
+      "A failed deletion preserves the visible row for inspection/retry. After confirmation inspect refreshed source and any reopened Pending Execution intent."
+    ],
+    "prerequisites": [
+      "An owned portfolio and the actual original transaction/source evidence."
+    ],
+    "warnings": [
+      "Corrections/deletions change financial source state and derived accounting. Deleting a recommendation-linked transaction can return its intent to Pending Execution; it does not cancel a broker fill."
+    ]
   },
   {
     "id": "REC-01",

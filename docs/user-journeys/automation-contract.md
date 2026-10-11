@@ -29,3 +29,5 @@ production smoke remains non-destructive and separate from deterministic CI.
 | `11-historical-analysis.md` | `E2E-23`–`E2E-24` | `app/tests/e2e/historical-analysis-journeys.spec.js` |
 | `10-portfolio-cash.md` | `E2E-20`–`E2E-22` | `app/tests/e2e/portfolio-cash-journeys.spec.js` |
 | `09-data-export.md` | `E2E-18`–`E2E-19` | `app/tests/e2e/export-journeys.spec.js` |
+| `12-portfolio-analysis-tax.md` | `E2E-25`–`E2E-27` | `app/tests/e2e/portfolio-analysis-tax-journeys.spec.js` |
+| `13-financial-source-lifecycle.md` | `EXE-16`, `E2E-28`–`E2E-30` | `app/tests/e2e/financial-source-journeys.spec.js` |
