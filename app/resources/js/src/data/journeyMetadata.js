@@ -341,7 +341,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     ],
     "synonyms": [],
     "category": "Account access",
-    "route": "/login",
+    "route": "/settings/users",
     "guide": "/docs/journeys/00-account-entry.html#auth-04-recover-a-password-through-an-administrator-issued-link",
     "steps": [
       "Open the administrator-issued reset link and confirm the displayed account.",
@@ -488,17 +488,24 @@ export const JOURNEY_TOPICS = Object.freeze([
     "synonyms": [
       "approve access request",
       "unverified request",
-      "create invite."
+      "create invite",
+      "resend verification",
+      "ignore request",
+      "reject request",
+      "clear request ban."
     ],
     "category": "Account access",
     "route": "/settings/users",
     "guide": "/docs/journeys/00-account-entry.html#auth-08-review-an-access-request-and-preserve-the-standard-invitation-boundary",
     "steps": [
-      "Inspect pending Account access requests, their Verified/Unverified indication and observed email delivery state.",
+      "Inspect pending Account access requests, their Verified/Unverified indication and observed email delivery state. An unavailable read is not an empty list; use Retry access requests. A failed filter read preserves known rows but requires fresh recovery before another decision. Review loads the selected request’s history/audit; retry that selected detail read if unavailable.",
       "Review the request and choose Create invite. For an unverified request, read the confirmation; cancelling performs no action, while explicit approval records the unverified decision and issues the normal secure invitation.",
       "If creation fails, preserve the pending request and retry after recovery. Email delivery failure does not invalidate a successfully created invitation.",
       "Use Show all statuses to inspect the resolved request. Where manual fallback is needed, Copy invitation email/link uses the existing invitation and does not mint another token.",
-      "Where needed, resend verification for a still-active unverified request, or use Ignore/Reject with an internal reason. Applicant-facing messages must not disclose the internal reason or ban details."
+      "Where needed, resend verification for the same still-active unverified request. A rejected resend preserves the request; retry deliberately. Queued delivery does not mean Verified or actual mailbox receipt.",
+      "Use Ignore/Reject with an optional internal reason. Cancelling performs no action. A rejected decision preserves the pending request and reason for the next prompt; retry explicitly. Confirmed status preserves other requests. Applicant-facing messages must not disclose the internal reason or ban details.",
+      "If an authorized Admin deliberately clears a displayed active request ban, a rejected clear retains that ban; retry after recovery. Successful clearing does not approve a rejected request or issue an invitation.",
+      "To issue a direct standard invitation without a pending request, use Invite new users. An unavailable invitation list blocks creation; Retry user management recovers it, and Refresh user management deliberately refreshes known material. Rejected creation retains its email. Confirmed creation preserves the original expiry; Copy link / Copy invitation email on the pending invitation retrieves that same private capability after refresh. A failed email retry retains the invitation; queued retry and actual mailbox receipt remain separate."
     ],
     "prerequisites": [
       "an authorized Admin using `/settings/users`; an investor cannot perform these actions."

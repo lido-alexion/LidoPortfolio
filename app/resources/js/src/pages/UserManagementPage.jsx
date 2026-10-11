@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
@@ -110,7 +110,7 @@ function IssuedInviteBanner({ invite, onDismiss }) {
                 <div>
                     <strong>Active invitation URL</strong>
                     <p className="small mb-2 mt-1">
-                        Copy and save this URL now. It is shown only after create or regenerate.
+                        Copy and keep this URL private. You can also retrieve the existing link from the pending invitation row.
                         Regenerating later will invalidate this URL; the previous link will stop working.
                         Expiry stays {formatDate(invite.expires_at)} (72 hours from original creation).
                     </p>
@@ -161,8 +161,10 @@ export default function UserManagementPage() {
     const [sessions, setSessions] = useState([]);
     const [sessionsLoading, setSessionsLoading] = useState(false);
     const [sessionBusyId, setSessionBusyId] = useState(null);
+    const readRequest = useRef(0);
 
     const loadAll = useCallback(async () => {
+        const request = ++readRequest.current;
         setLoading(true);
         setLoadError('');
         try {
@@ -171,22 +173,22 @@ export default function UserManagementPage() {
                 api.get('/invites'),
                 api.get('/password-reset-links'),
             ]);
+            if (request !== readRequest.current) return;
             setUsers(usersRes.data.data || []);
             setInvites(invitesRes.data.data || []);
             setResetLinks(resetRes.data.data || []);
         } catch (error) {
+            if (request !== readRequest.current) return;
             const msg = error?.response?.data?.message || 'Failed to load user management data';
             setLoadError(msg);
-            setUsers([]);
-            setInvites([]);
-            setResetLinks([]);
         } finally {
-            setLoading(false);
+            if (request === readRequest.current) setLoading(false);
         }
     }, []);
 
     useEffect(() => {
         loadAll();
+        return () => { readRequest.current++; };
     }, [loadAll]);
 
     const openSessions = async (targetUser) => {
@@ -242,7 +244,7 @@ export default function UserManagementPage() {
     const createInvite = async (e) => {
         e.preventDefault();
         const email = inviteEmail.trim();
-        if (!email) {
+        if (!email || loading || loadError) {
             return;
         }
 
@@ -446,7 +448,8 @@ export default function UserManagementPage() {
     };
 
     return (
-        <div className="row g-3">
+        <div className="row g-3 lido-user-management">
+            <div className="col-12"><button type="button" className="btn btn-sm btn-outline-secondary" disabled={loading} onClick={loadAll}>Refresh user management</button></div>
             <div className="col-12">
                 <AccessRequestsAdminSection />
             </div>
@@ -460,10 +463,10 @@ export default function UserManagementPage() {
                     </div>
                     <div className="card-body">
                         <p className="text-muted small">
-                            Create a 72-hour invitation (expiry starts at creation). After create, copy the
-                            invitation URL immediately — it is not stored for later re-copy. Use
-                            <strong> Regenerate Invitation URL</strong> if the link is lost; that invalidates
-                            the previous URL and does not extend the original expiry.
+                            Create a 72-hour invitation (expiry starts at creation). Copy the URL now, or use
+                            Copy link / Copy invitation email on its pending row to retrieve the same secure invitation.
+                            <strong> Regenerate Invitation URL</strong> invalidates the previous URL
+                            without extending the original expiry.
                         </p>
                         <form className="row g-2 align-items-end mb-3" onSubmit={createInvite}>
                             <div className="col-12 col-md-6">
@@ -484,7 +487,7 @@ export default function UserManagementPage() {
                                 <button
                                     type="submit"
                                     className="btn btn-primary"
-                                    disabled={creatingInvite}
+                                    disabled={creatingInvite || loading || Boolean(loadError)}
                                 >
                                     {creatingInvite ? 'Creating…' : 'Create invite'}
                                 </button>
@@ -495,11 +498,11 @@ export default function UserManagementPage() {
                             onDismiss={() => setIssuedInvite(null)}
                         />
                         {loadError ? (
-                            <div className="alert alert-danger py-2 small">{loadError}</div>
+                            <div className="alert alert-danger py-2 small" role="alert">{loadError} <button type="button" className="btn btn-sm btn-outline-danger" onClick={loadAll}>Retry user management</button></div>
                         ) : null}
                         {loading ? (
                             <div className="text-muted">Loading invites…</div>
-                        ) : invites.length === 0 ? (
+                        ) : invites.length === 0 && !loadError ? (
                             <div className="text-muted">No invites yet.</div>
                         ) : (
                             <div className="table-responsive">
@@ -515,7 +518,7 @@ export default function UserManagementPage() {
                                     </thead>
                                     <tbody>
                                         {invites.map((invite) => {
-                                            const busy = inviteBusyId === invite.id;
+                                            const busy = inviteBusyId === invite.id || loading || Boolean(loadError);
                                             const canManage = invite.status === 'pending' || invite.status === 'expired';
 
                                             return (
@@ -584,7 +587,7 @@ export default function UserManagementPage() {
                                 <button
                                     type="submit"
                                     className="btn btn-primary"
-                                    disabled={creatingResetLink || loading || users.length === 0}
+                                    disabled={creatingResetLink || loading || Boolean(loadError) || users.length === 0}
                                 >
                                     {creatingResetLink ? 'Creating…' : 'Generate reset link'}
                                 </button>
@@ -592,7 +595,7 @@ export default function UserManagementPage() {
                         </form>
                         {loading ? (
                             <div className="text-muted">Loading reset links…</div>
-                        ) : resetLinks.length === 0 ? (
+                        ) : resetLinks.length === 0 && !loadError ? (
                             <div className="text-muted">No password reset links yet.</div>
                         ) : (
                             <div className="table-responsive">
@@ -608,7 +611,7 @@ export default function UserManagementPage() {
                                     </thead>
                                     <tbody>
                                         {resetLinks.map((link) => {
-                                            const busy = resetBusyId === link.id;
+                                            const busy = resetBusyId === link.id || loading || Boolean(loadError);
                                             const canManage = link.status === 'pending' || link.status === 'expired';
 
                                             return (
@@ -653,7 +656,7 @@ export default function UserManagementPage() {
                         </p>
                         {loading ? (
                             <div className="text-muted">Loading users…</div>
-                        ) : users.length === 0 ? (
+                        ) : users.length === 0 && !loadError ? (
                             <div className="text-muted">No users found.</div>
                         ) : (
                             <div className="table-responsive">
@@ -671,7 +674,7 @@ export default function UserManagementPage() {
                                     <tbody>
                                         {users.map((row) => {
                                             const isSelf = row.id === currentUser?.id;
-                                            const busy = updatingId === row.id;
+                                            const busy = updatingId === row.id || loading || Boolean(loadError);
 
                                             return (
                                                 <tr key={row.id}>
