@@ -255,6 +255,17 @@ jobs:
       - package
     environment: production
     steps:
+      - name: Require mandatory production smoke identity before activation
+        env:
+          STOX_SMOKE_EMAIL: ${{ secrets.STOX_SMOKE_EMAIL }}
+          STOX_SMOKE_PASSWORD: ${{ secrets.STOX_SMOKE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${STOX_SMOKE_EMAIL:-}" ] || [ -z "${STOX_SMOKE_PASSWORD:-}" ]; then
+            echo "::error::Production activation blocked: configure the dedicated read-only smoke identity in STOX_SMOKE_EMAIL and STOX_SMOKE_PASSWORD Actions secrets."
+            exit 1
+          fi
+
       - name: Check out repository
         uses: actions/checkout@v7
         with:
