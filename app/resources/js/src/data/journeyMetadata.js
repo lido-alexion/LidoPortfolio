@@ -1057,6 +1057,89 @@ export const JOURNEY_TOPICS = Object.freeze([
     "warnings": []
   },
   {
+    "id": "E2E-18",
+    "title": "How do I export snapshot data and recover a background export?",
+    "aliases": [
+      "Export snapshot data and recover a background export",
+      "e2e-18"
+    ],
+    "keywords": [
+      "export",
+      "snapshot",
+      "data",
+      "and",
+      "recover",
+      "background"
+    ],
+    "synonyms": [
+      "export CSV",
+      "export chart data",
+      "cancel export",
+      "download snapshots"
+    ],
+    "category": "StoX",
+    "route": "/portfolio/snapshots",
+    "guide": "/docs/journeys/09-data-export.html#e2e-18-export-snapshot-data-and-recover-a-background-export",
+    "steps": [
+      "Open `/portfolio/snapshots`, inspect the date range and choose Export table data or Export chart data.",
+      "Choose CSV or XLSX, an offered scope, and one or more offered fields. Selected scope uses selected stable row IDs; chart export contains underlying values rather than an image.",
+      "Cancel the configuration dialog to leave without creating an export, or correct an invalid field selection before submitting.",
+      "If generation fails, keep the originating data and retry with the intended scope/fields. A small ready export downloads immediately; a queued/running export shows its latest status.",
+      "Use Refresh export status after a failed read or while waiting. Download becomes available only when generation is ready and its retention has not expired.",
+      "To stop a queued/running export, choose Cancel export. If cancellation cannot be confirmed, refresh its status before retrying; confirm the cancelled state has no download.",
+      "Generate a fresh export if the previous job failed or expired. Do not interpret an unavailable status as a completed job."
+    ],
+    "prerequisites": [
+      "sign in as an investor with an active portfolio and available snapshot data."
+    ],
+    "warnings": [
+      "generated downloads expire after 24 hours; cancelled, failed or expired jobs have no downloadable artifact."
+    ]
+  },
+  {
+    "id": "E2E-19",
+    "title": "How do I maintain a private export basket and recover a rejected workbook?",
+    "aliases": [
+      "Maintain a private export basket and recover a rejected workbook",
+      "e2e-19"
+    ],
+    "keywords": [
+      "maintain",
+      "private",
+      "export",
+      "basket",
+      "and",
+      "recover",
+      "rejected",
+      "workbook"
+    ],
+    "synonyms": [
+      "export basket",
+      "combine datasets",
+      "XLSX export",
+      "spreadsheet download"
+    ],
+    "category": "StoX",
+    "route": "/",
+    "guide": "/docs/journeys/09-data-export.html#e2e-19-maintain-a-private-export-basket-and-recover-a-rejected-workbook",
+    "steps": [
+      "Open `/` and expand Export basket. Inspect the saved items and the available dataset catalog.",
+      "Add a supported dataset. If saving fails, retry the addition; do not treat an unsaved item as persisted.",
+      "Set its sheet name, choose fields/scope and provide required snapshot filters or stable selected-row IDs. Correct a highlighted invalid configuration before saving.",
+      "Save item configuration. If saving fails, retain the draft for correction/retry; after success, reopen or reload the basket to verify persistence.",
+      "Add another dataset with its own configuration. Choose Export XLSX to save/revalidate the configurations and request fresh data for each sheet.",
+      "If the server rejects a stale/unavailable dataset, field, selection or permission, review the affected item and retry. Do not reuse the rejected result as a valid workbook.",
+      "Follow the latest export status/download/cancellation controls as in E2E-18. A queued job does not start a download.",
+      "Remove an item when no longer needed. A failed removal keeps the saved item so it can be retried."
+    ],
+    "prerequisites": [
+      "sign in as an investor with an active portfolio and supported export datasets."
+    ],
+    "warnings": [
+      "the basket stores configuration, not a data snapshot; every generation revalidates current access and freshness. The basket is account-private, limited to ten items and not an export history."
+    ]
+  },
+  {
     "id": "EXE-01",
     "title": "How do I execute an approved recommendation manually?",
     "aliases": [
