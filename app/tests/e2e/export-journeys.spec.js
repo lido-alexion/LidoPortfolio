@@ -19,7 +19,7 @@ async function prepare(page, name, writes) {
 async function snapshotPage(page) {
     await page.route('**/api/portfolio/snapshots*', route => route.fulfill({ json: { snapshots: [{ id: 101, snapshot_date: '2026-10-10', portfolio_value: 100000, invested_value: 90000 }], meta: { count: 1 } } }));
     await page.goto('/portfolio/snapshots');
-    await expect(page.getByRole('heading', { name: 'Portfolio Snapshots', exact: true })).toBeVisible();
+    await expect(page.locator('.container-fluid').getByRole('heading', { name: 'Portfolio Snapshots', exact: true })).toBeVisible();
 }
 function prompts(page, answers) {
     page.on('dialog', async dialog => {
