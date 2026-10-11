@@ -2531,7 +2531,7 @@ export const JOURNEY_TOPICS = Object.freeze([
     "route": "/strategy/registry",
     "guide": "/docs/journeys/20-runtime-registry-compatibility.html#e2e-55-inspect-portable-strategy-registry-evidence-and-deliberately-enable-or-archive-its-runtime-instance",
     "steps": [
-      "Open Strategy Registry (`/strategy/registry`) and inspect enabled/draft/archived runtime entries. Open a specific artifact's detail by stable identity.",
+      "Open Strategy Registry (`/strategy/registry`) and inspect enabled/draft/archived runtime entries. An unavailable list offers Retry without reporting that no Strategies match, and a failed filtered read retains known rows. Open a specific artifact's detail by stable identity.",
       "Recover an unavailable envelope explicitly. Retry preserves the target identity and does not create or enable a Strategy.",
       "Inspect definition hash, dependencies and portable Screener references. Recover unavailable version history separately; known immutable version evidence is preserved.",
       "Export portable JSON without portfolio-local Screener ids. Failed export retains the artifact and explains the unconfirmed action; retry downloads the reviewed definition.",
