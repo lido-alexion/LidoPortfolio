@@ -1,6 +1,6 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import api from '../../../resources/js/src/api';
 import { showToast } from '../../../resources/js/src/toast';
 import DashboardLayoutToolbar from '../../../resources/js/src/components/DashboardLayoutToolbar.jsx';
@@ -34,6 +34,6 @@ describe('dashboard and combo chart recovery', () => {
  });
  it('retains the selected chart and shows the canonical error after a rejected account default write', async () => {
   api.get.mockImplementation(path => Promise.resolve({ data: { data: path.endsWith('combo-chart-preference') ? { default_preset_id: 'price-volume' } : { points } } })); api.put.mockImplementation(rejected);
-  render(<StockDetailsComboChart stockId={42} prices={prices} />); await waitFor(() => { expect(screen.getByRole('button', { name: 'Default chart' })).toBeDisabled(); expect(screen.getByRole('option', { name: 'Price + P/E', exact: true })).toBeEnabled(); }); const preset = screen.getByLabelText('Combo chart preset'); fireEvent.change(preset, { target: { value: 'price-pe' } }); await waitFor(() => expect(preset).toHaveValue('price-pe')); fireEvent.click(await screen.findByRole('button', { name: 'Set as default' })); await screen.findByText('Synthetic service unavailable.'); expect(screen.getByLabelText('Combo chart preset')).toHaveValue('price-pe'); expect(screen.getByRole('button', { name: 'Set as default' })).toBeEnabled();
+  await act(async () => { render(<StockDetailsComboChart stockId={42} prices={prices} />); }); await waitFor(() => { expect(screen.getByRole('button', { name: 'Default chart' })).toBeDisabled(); expect(screen.getByRole('option', { name: 'Price + P/E', exact: true })).toBeEnabled(); }); const preset = screen.getByLabelText('Combo chart preset'); fireEvent.change(preset, { target: { value: 'price-pe' } }); await waitFor(() => expect(preset).toHaveValue('price-pe')); fireEvent.click(await screen.findByRole('button', { name: 'Set as default' })); await screen.findByText('Synthetic service unavailable.'); expect(api.put).toHaveBeenCalledTimes(1); expect(api.put.mock.calls[0].slice(0, 2)).toEqual(['/v1/stock-details/combo-chart-preference', { default_preset_id: 'price-pe' }]); expect(screen.getByLabelText('Combo chart preset')).toHaveValue('price-pe'); expect(screen.getByRole('button', { name: 'Set as default' })).toBeEnabled();
  });
 });
