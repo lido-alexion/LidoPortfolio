@@ -137,6 +137,52 @@ class MarketGateRecommendationTest extends TestCase
         $this->assertFalse($rec->evidence['market_gate_demoted'] ?? true);
     }
 
+    public function test_reduce_remains_allowed_when_gates_block_entry(): void
+    {
+        [$profile, $stock, $run] = $this->seedRecommendationFixture([
+            'market_gates' => ['enabled' => true, 'min_sentiment' => 99],
+            'evaluation_score' => 30,
+            'factor_scores' => [
+                'relative_strength' => 50,
+                'momentum_score' => 50,
+                'trend_score' => 50,
+                'breakout_score' => 50,
+                'volume_score' => 50,
+                'market_regime' => 50,
+                'sector_strength' => 50,
+                'risk_score' => 50,
+            ],
+        ]);
+
+        Holding::query()->create([
+            'profile_id' => $profile->id,
+            'stock_id' => $stock->id,
+            'strategy_id' => TradingStrategy::query()
+                ->where('profile_id', $profile->id)
+                ->where('status', TradingStrategy::STATUS_ACTIVE)
+                ->value('id'),
+            'quantity' => 10,
+            'avg_buy_price' => 100,
+            'invested_amount' => 1000,
+            'updated_at' => now(),
+        ]);
+
+        $this->mockMarket([
+            'sentiment' => ['score' => 20, 'label' => 'Bearish'],
+            'market_phase' => 'Bear',
+            'new_entry_allowed' => false,
+        ]);
+
+        $rec = collect(app(RecommendationEngine::class)->generate($profile, $run)['recommendations'])
+            ->firstWhere('security_id', $stock->id);
+
+        $this->assertNotNull($rec);
+        $this->assertSame(TradingRecommendation::ACTION_REDUCE_POSITION, $rec->recommendation_type);
+        $this->assertFalse($rec->evidence['market_gate_demoted'] ?? true);
+        $this->assertFalse($rec->evidence['market_analysis']['effective_new_entry_allowed'] ?? true);
+        $this->assertContains('Sentiment below strategy minimum', $rec->evidence['market_gates']['block_reasons'] ?? []);
+    }
+
     public function test_open_allowed_when_gates_pass(): void
     {
         [$profile, $stock, $run] = $this->seedRecommendationFixture([
