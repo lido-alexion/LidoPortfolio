@@ -387,7 +387,7 @@ test.describe('V9-UX-001 strategy journeys', () => {
             await expect(page.getByRole('row', { name: /quality-core.*Quality Core/ })).toContainText('active');
             await expect(page.getByRole('row', { name: /quality-core.*Quality Core/ }).getByRole('button', { name: 'Enable' })).toHaveCount(0);
         });
-        test('STR-15 keeps multiple enabled strategies independently identifiable (' + viewport.name + ')', async ({ page }, testInfo) => {
+        test('STR-15 generates and reviews concurrent strategies independently (' + viewport.name + ')', async ({ page }, testInfo) => {
             journeyId(testInfo, 'STR-15');
             await seedDeterministicJourney(page, 'strategy-str15-' + viewport.name);
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -408,6 +408,61 @@ test.describe('V9-UX-001 strategy journeys', () => {
             await expect(quality).toContainText('50.00%');
             await expect(momentum.getByRole('button', { name: 'Enable' })).toHaveCount(0);
             await expect(quality.getByRole('button', { name: 'Enable' })).toHaveCount(0);
+            const generated = [
+                { ...OPEN_BUY_RECOMMENDATION, id: 2151, strategy_id: 7, strategy_name: 'Momentum Core', strategy_version: '1.0.0', strategy_version_id: 71, source_screener_id: 41, source_screener_version: 3 },
+                { ...OPEN_BUY_RECOMMENDATION, id: 2152, strategy_id: 8, strategy_name: 'Quality Core', strategy_version: '2.1.0', strategy_version_id: 82, source_screener_id: 42, source_screener_version: 4 },
+            ];
+            await installTosApiMocks(page, { recommendations: [], pipelineRecommendations: generated, retainApprovedRecommendations: true,
+                pipelineStages: { discovery: { candidates: 2 }, evaluation: { results: 2 }, recommendation: { count: 2 } } });
+            let failFirstReview = true;
+            const reviews = [];
+            await page.route('**/api/v1/recommendations/*/review', route => {
+                reviews.push({ path: new URL(route.request().url()).pathname, body: route.request().postDataJSON() });
+                if (failFirstReview) {
+                    failFirstReview = false;
+                    return route.fulfill({ status: 503, json: { message: 'Synthetic review unavailable.' } });
+                }
+                return route.fallback();
+            });
+            const rejected = [];
+            await page.route('**/*', route => {
+                const request = route.request();
+                const url = new URL(request.url());
+                const read = ['GET', 'HEAD'].includes(request.method());
+                const allowed = request.method() === 'POST' && ['/api/v1/pipeline/run', '/api/v1/recommendations/2151/review', '/api/v1/recommendations/2152/review', '/api/logs/frontend'].includes(url.pathname);
+                if (url.origin !== 'http://127.0.0.1:4177' || (!read && !allowed)) {
+                    rejected.push(`${request.method()} ${url.pathname}`);
+                    return route.abort();
+                }
+                return route.fallback();
+            });
+            await page.goto('/recommendations');
+            await page.getByRole('button', { name: 'Run decision pipeline', exact: true }).click();
+            await expect(page.getByText('strategy-specific recommendations 2', { exact: true })).toBeVisible();
+            for (const rec of generated) {
+                const row = page.getByRole('row').filter({ hasText: rec.strategy_name });
+                await expect(row).toContainText('INFY');
+                await expect(row).toContainText('pending_review');
+                await row.getByRole('button', { name: 'Review', exact: true }).click();
+                const dialog = page.getByRole('dialog');
+                await expect(dialog).toContainText(rec.strategy_name);
+                await expect(dialog).toContainText(`Version ${rec.strategy_version}`);
+                await expect(dialog.getByTestId('recommendation-provenance')).toContainText(`Source screener #${rec.source_screener_id} · Version ${rec.source_screener_version} · Strategy #${rec.strategy_id} · Strategy version #${rec.strategy_version_id}`);
+                await dialog.getByLabel('Review notes (optional)').fill(`Reviewed ${rec.strategy_name} independently.`);
+                await dialog.getByRole('button', { name: 'Approve', exact: true }).click();
+                if (rec.id === 2151) {
+                    await expect(page.getByText('Synthetic review unavailable.', { exact: true })).toBeVisible();
+                    await expect(dialog).toBeVisible();
+                    await expect(dialog.getByLabel('Review notes (optional)')).toHaveValue('Reviewed Momentum Core independently.');
+                    await expect(page.getByRole('row').filter({ hasText: 'Quality Core' })).toContainText('pending_review');
+                    await dialog.getByRole('button', { name: 'Approve', exact: true }).click();
+                }
+                await expect(dialog).toHaveCount(0);
+                await expect(row).toContainText('pending_execution');
+            }
+            expect(reviews.map(review => review.path)).toEqual(['/api/v1/recommendations/2151/review', '/api/v1/recommendations/2151/review', '/api/v1/recommendations/2152/review']);
+            for (const review of reviews) expect(review.body).toMatchObject({ decision: 'approved', notes: review.path.includes('2151') ? 'Reviewed Momentum Core independently.' : 'Reviewed Quality Core independently.' });
+            expect(rejected).toEqual([]);
         });
         test('STR-16 keeps same-stock recommendations separately attributable (' + viewport.name + ')', async ({ page }, testInfo) => {
             journeyId(testInfo, 'STR-16');
