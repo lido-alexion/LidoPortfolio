@@ -33,7 +33,7 @@ These journeys describe existing investor behavior discovered during the V9-UX-0
 - Requires: an authenticated investor with an active portfolio.
 - Search synonyms: alert policy, holdings alert, evaluate alerts.
 
-1. Open Alert policies at `/alert-policies` and choose New policy.
+1. Open Alert policies at `/settings/alert-policies` and choose New policy.
 2. Name the policy, describe its intent, define its holding-value comparison, message and suggested action, then create it. Correct validation errors or retry a transient failure without losing the form.
 3. Inspect the saved policy, edit its configuration, or disable it with Policy enabled before updating. Reload and confirm the saved enabled state.
 4. Choose Run policies now to evaluate enabled policies against holdings. If evaluation fails, retry after recovery; inspect Last evaluation and its per-holding outcome instead of assuming an alert was generated.

@@ -484,13 +484,18 @@ export default function StockExplorerPage() {
             setSelectedStock(stock);
             await runAnalysisFor(urlSymbol, stock?.exchange, bench);
         })().finally(() => {
-            if (inFlightKeyRef.current === key) {
+            if (requestId === resolveRequestIdRef.current && inFlightKeyRef.current === key) {
                 inFlightKeyRef.current = '';
             }
         });
 
         return () => {
             cancelled = true;
+            // A cancelled stock lookup cannot complete the analysis. Release
+            // its key so StrictMode's replacement effect can resolve it again.
+            if (requestId === resolveRequestIdRef.current && inFlightKeyRef.current === key) {
+                inFlightKeyRef.current = '';
+            }
         };
     }, [urlSymbol, urlBenchmark, primarySymbol, runAnalysisFor]);
 
