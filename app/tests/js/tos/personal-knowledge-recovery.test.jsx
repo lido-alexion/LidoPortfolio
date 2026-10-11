@@ -10,6 +10,7 @@ import WikiPage from '../../../resources/js/src/pages/WikiPage';
 import PublicWikiPage from '../../../resources/js/src/pages/PublicWikiPage';
 import ContextualNotesContent from '../../../resources/js/src/components/ContextualNotesContent';
 import CalendarPage from '../../../resources/js/src/pages/CalendarPage';
+import KnowledgeNoteCard from '../../../resources/js/src/components/knowledgeBoard/KnowledgeNoteCard';
 
 vi.mock('../../../resources/js/src/api', () => ({ default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() }, getApiErrorMessage: () => 'Synthetic unavailable' }));
 const portfolioState = vi.hoisted(() => ({ id: 1 }));
@@ -21,6 +22,19 @@ vi.mock('../../../resources/js/src/components/knowledgeBoard/KnowledgeNoteEditor
 beforeEach(() => { cleanup(); vi.clearAllMocks(); localStorage.clear(); portfolioState.id = 1; });
 const unavailable = () => ({ response: { status: 503 }, message: 'Synthetic unavailable' });
 const at = (path, route, node) => render(<MemoryRouter initialEntries={[path]}><Routes><Route path={route} element={node} /></Routes></MemoryRouter>);
+
+it('opens the touch note-action menu without depending on Bootstrap document handlers', () => {
+    const onTogglePin = vi.fn();
+    render(<KnowledgeNoteCard note={{ id: 1, content_html: '<p>Reviewed note</p>', tags: [], is_pinned: false }} onTogglePin={onTogglePin} />);
+    const menu = screen.getByRole('button', { name: 'Note actions' });
+    expect(menu).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(menu);
+    expect(menu).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Pin', exact: true }).closest('.dropdown-menu')).toHaveClass('show');
+    fireEvent.click(screen.getByRole('button', { name: 'Pin', exact: true }));
+    expect(onTogglePin).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }));
+    expect(menu).toHaveAttribute('aria-expanded', 'false');
+});
 
 it('distinguishes unavailable notes from an empty Board and retries reads', async () => {
     let failed = true; api.get.mockImplementation(async path => { if (path.endsWith('/notes') && failed) throw unavailable(); return { data: { data: [] } }; });
@@ -49,6 +63,18 @@ it('handles rejected Wiki preview without losing the reviewed Markdown', async (
     api.get.mockImplementation(async path => ({ data: { data: path.endsWith('/wiki/pages') ? [] : { uuid: 'page-one', title: 'Reviewed Wiki', markdown: 'Reviewed source', rendered_html: '', revisions: [] } } })); api.post.mockRejectedValue(unavailable());
     at('/knowledge-board/wiki/page-one', '/knowledge-board/wiki/:pageId', <WikiPage />); await screen.findByLabelText('Markdown source'); fireEvent.click(screen.getByRole('button', { name: 'Preview', exact: true }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Wiki action could not be confirmed'); expect(screen.getByLabelText('Markdown source')).toHaveValue('Reviewed source');
+});
+it('reports a rejected Wiki image upload and permits the same file to be selected again', async () => {
+    api.get.mockImplementation(async path => ({ data: { data: path.endsWith('/wiki/pages') ? [] : { uuid: 'page-one', title: 'Reviewed Wiki', markdown: '', rendered_html: '', revisions: [] } } }));
+    api.post.mockRejectedValue(unavailable());
+    at('/knowledge-board/wiki/page-one', '/knowledge-board/wiki/:pageId', <WikiPage />);
+    const input = await screen.findByLabelText('Insert image');
+    const file = new File(['synthetic'], 'synthetic.png', { type: 'image/png' });
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(await screen.findByRole('alert')).toHaveTextContent('Wiki action could not be confirmed');
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
+    expect(screen.getByLabelText('Markdown source')).toHaveValue('');
 });
 it('blocks unknown contextual-note overwrite until a failed read is recovered', async () => {
     api.get.mockRejectedValueOnce(unavailable()).mockResolvedValue({ data: { data: [{ id: 2, body: 'Existing private evidence' }] } });
