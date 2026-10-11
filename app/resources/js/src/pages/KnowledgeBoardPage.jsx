@@ -51,6 +51,9 @@ export default function KnowledgeBoardPage() {
     const [notes, setNotes] = useState([]);
     const [tags, setTags] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
+    const [tagsError, setTagsError] = useState('');
+    const notesRequestRef = useRef(0);
     const [search, setSearch] = useState('');
     const [wikiSearchResults, setWikiSearchResults] = useState([]);
     const [sort, setSort] = useState(() => loadSortPreference());
@@ -71,12 +74,19 @@ export default function KnowledgeBoardPage() {
     const debouncedSearch = useDebouncedValue(search, 300);
 
     const loadTags = useCallback(async () => {
-        const res = await api.get('/knowledge-board/tags');
-        setTags(res.data.data || []);
+        setTagsError('');
+        try {
+            const res = await api.get('/knowledge-board/tags');
+            setTags(res.data.data || []);
+        } catch {
+            setTagsError('Knowledge tags could not be loaded.');
+        }
     }, []);
 
     const loadNotes = useCallback(async () => {
+        const requestId = ++notesRequestRef.current;
         setLoading(true);
+        setLoadError('');
         try {
             const res = await api.get('/knowledge-board/notes', {
                 params: {
@@ -87,14 +97,16 @@ export default function KnowledgeBoardPage() {
                     sort: sort === 'manual' ? 'updated_at' : sort,
                 },
             });
-            setNotes(res.data.data || []);
+            if (requestId === notesRequestRef.current) setNotes(res.data.data || []);
         } catch {
-            showToast('Failed to load knowledge notes.', 'danger');
-            setNotes([]);
+            if (requestId === notesRequestRef.current) {
+                setLoadError('Knowledge notes could not be loaded.');
+                showToast('Failed to load knowledge notes.', 'danger');
+            }
         } finally {
-            setLoading(false);
+            if (requestId === notesRequestRef.current) setLoading(false);
         }
-    }, [debouncedSearch, showArchived, tagMatch, filterTagIds, sort]);
+    }, [debouncedSearch, showArchived, tagMatch, filterTagIds, sort, profileId]);
 
     useEffect(() => {
         loadTags().catch(() => setTags([]));
@@ -227,8 +239,10 @@ export default function KnowledgeBoardPage() {
             const res = await api.put(`/knowledge-board/notes/${note.id}`, changes);
             const updated = res.data.data;
             setNotes((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
+            return true;
         } catch {
             showToast('Could not update note.', 'danger');
+            return false;
         }
     };
 
@@ -244,9 +258,10 @@ export default function KnowledgeBoardPage() {
     };
 
     const archiveNote = async (note) => {
-        await patchNote(note, { is_archived: true });
-        setNotes((prev) => prev.filter((row) => row.id !== note.id));
-        showToast('Note archived.');
+        if (await patchNote(note, { is_archived: true })) {
+            setNotes((prev) => prev.filter((row) => row.id !== note.id));
+            showToast('Note archived.');
+        }
     };
 
     const deleteNote = async (note, { closeEditor = false } = {}) => {
@@ -486,7 +501,8 @@ export default function KnowledgeBoardPage() {
 
             {wikiSearchResults.length ? <div className="card"><div className="card-header">Wiki Page results</div><div className="list-group list-group-flush">{wikiSearchResults.map((result) => <Link key={result.id} to={`/knowledge-board/wiki/${result.id}`} className="list-group-item list-group-item-action"><strong>{result.title}</strong><div className="small text-muted">Wiki Page · {result.context}</div><div className="small">{result.excerpt}</div></Link>)}</div></div> : null}
 
-            {loading ? (
+            {tagsError && <div className="alert alert-danger" role="alert"><p>{tagsError}</p><button type="button" className="btn btn-sm btn-outline-primary" onClick={loadTags}>Retry knowledge tags</button></div>}
+            {loadError ? <div className="alert alert-danger" role="alert"><p>{loadError}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={loadNotes}>Retry knowledge notes</button></div> : loading ? (
                 <div className="text-muted small px-1">Loading notes…</div>
             ) : displayNotes.length === 0 ? (
                 <div className="card">

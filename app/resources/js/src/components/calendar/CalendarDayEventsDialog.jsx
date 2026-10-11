@@ -18,11 +18,11 @@ export default function CalendarDayEventsDialog({
 
     return (
         <>
-            <div className="modal show d-block" tabIndex={-1} role="dialog" aria-modal="true">
+            <div className="modal show d-block" tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="calendar-day-dialog-title">
                 <div className="modal-dialog modal-dialog-scrollable">
                     <div className="modal-content">
                         <div className="modal-header">
-                            <h5 className="modal-title">Events on {dateLabel}</h5>
+                            <h5 id="calendar-day-dialog-title" className="modal-title">Events on {dateLabel}</h5>
                             <button type="button" className="btn-close" aria-label="Close" onClick={onClose} />
                         </div>
                         <div className="modal-body">

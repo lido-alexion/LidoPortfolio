@@ -43,6 +43,7 @@ function MonthGrid({ year, monthIndex, occurrencesByDate, onDayClick }) {
                             type="button"
                             className={`calendar-day-cell${dayEvents.length ? ' has-events' : ''}${isToday ? ' is-today' : ''}`}
                             title={title || undefined}
+                            aria-label={`Open events for ${key}`}
                             onClick={() => onDayClick(key, dayEvents)}
                         >
                             <span className="calendar-day-number-wrap">
@@ -65,6 +66,8 @@ export default function CalendarPage() {
     const [events, setEvents] = useState([]);
     const [occurrences, setOccurrences] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
+    const [formError, setFormError] = useState('');
     const [saving, setSaving] = useState(false);
     const [formOpen, setFormOpen] = useState(false);
     const [editingEvent, setEditingEvent] = useState(null);
@@ -90,6 +93,7 @@ export default function CalendarPage() {
 
     const loadData = useCallback(async () => {
         setLoading(true);
+        setLoadError('');
         try {
             const [eventsRes, occRes] = await Promise.all([
                 api.get('/calendar/events'),
@@ -98,6 +102,7 @@ export default function CalendarPage() {
             setEvents(eventsRes.data?.data ?? []);
             setOccurrences(occRes.data?.data ?? []);
         } catch (error) {
+            setLoadError('Calendar could not be loaded.');
             showToast(error?.response?.data?.message || 'Failed to load calendar.', 'danger');
         } finally {
             setLoading(false);
@@ -112,6 +117,7 @@ export default function CalendarPage() {
 
     const openCreate = () => {
         setEditingEvent(null);
+        setFormError('');
         setFormOpen(true);
     };
 
@@ -120,12 +126,14 @@ export default function CalendarPage() {
         if (!event) {
             return;
         }
+        setFormError('');
         setEditingEvent(event);
         setFormOpen(true);
         setDayDialog({ open: false, date: null, events: [] });
     };
 
     const handleSave = async (payload) => {
+        setFormError('');
         setSaving(true);
         try {
             if (editingEvent?.id) {
@@ -139,6 +147,7 @@ export default function CalendarPage() {
             setEditingEvent(null);
             await loadData();
         } catch (error) {
+            setFormError('Event save could not be confirmed. Review existing events before retrying.');
             showToast(error?.response?.data?.message || 'Failed to save event.', 'danger');
         } finally {
             setSaving(false);
@@ -149,6 +158,7 @@ export default function CalendarPage() {
         if (!window.confirm(`Delete "${event.title}"?`)) {
             return;
         }
+        setFormError('');
         setSaving(true);
         try {
             await api.delete(`/calendar/events/${event.id}`);
@@ -157,6 +167,7 @@ export default function CalendarPage() {
             setEditingEvent(null);
             await loadData();
         } catch (error) {
+            setFormError('Event deletion could not be confirmed. Review existing events before retrying.');
             showToast(error?.response?.data?.message || 'Failed to delete event.', 'danger');
         } finally {
             setSaving(false);
@@ -179,7 +190,7 @@ export default function CalendarPage() {
                 </button>
             </div>
 
-            {loading ? (
+            {loadError ? <div className="alert alert-danger" role="alert"><p>{loadError}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={loadData}>Retry calendar</button></div> : loading ? (
                 <div className="text-center text-muted py-5">Loading calendar…</div>
             ) : (
                 <div className="calendar-year-grid">
@@ -205,6 +216,7 @@ export default function CalendarPage() {
                 open={formOpen}
                 event={editingEvent}
                 saving={saving}
+                error={formError}
                 isAdmin={isAdmin}
                 onClose={() => {
                     setFormOpen(false);

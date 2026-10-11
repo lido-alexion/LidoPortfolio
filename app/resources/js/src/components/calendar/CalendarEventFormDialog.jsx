@@ -65,6 +65,7 @@ function ReminderDaysInput({ value, onChange }) {
                     type="text"
                     className="form-control"
                     placeholder="e.g. 2, 5, 14"
+                    aria-label="Custom reminder days"
                     value={customDays}
                     onChange={(e) => setCustomDays(e.target.value)}
                     onBlur={applyCustom}
@@ -81,6 +82,7 @@ export default function CalendarEventFormDialog({
     open,
     event,
     saving = false,
+    error = '',
     isAdmin = false,
     onClose,
     onSave,
@@ -155,14 +157,15 @@ export default function CalendarEventFormDialog({
 
     return (
         <>
-            <div className="modal show d-block" tabIndex={-1} role="dialog" aria-modal="true">
+            <div className="modal show d-block" tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="calendar-event-dialog-title">
                 <div className="modal-dialog modal-lg modal-dialog-scrollable">
                     <form className="modal-content" onSubmit={handleSubmit}>
                         <div className="modal-header">
-                            <h5 className="modal-title">{title}</h5>
+                            <h5 id="calendar-event-dialog-title" className="modal-title">{title}</h5>
                             <button type="button" className="btn-close" aria-label="Close" onClick={onClose} />
                         </div>
                         <div className="modal-body">
+                            {error && <div className="alert alert-danger" role="alert">{error}</div>}
                             {readOnlyGlobal ? (
                                 <div className="alert alert-secondary py-2 small">
                                     This is a global trade holiday (visible to everyone). Only an admin can edit it.
@@ -269,8 +272,8 @@ export default function CalendarEventFormDialog({
                                 <div className="row g-3 mb-3">
                                     {showMonth && (
                                         <div className="col-md-4">
-                                            <label className="form-label">Month</label>
-                                            <select
+                                            <label className="form-label" htmlFor="calendar-recurrence-month">Month</label>
+                                            <select id="calendar-recurrence-month"
                                                 className="form-select"
                                                 value={form.recurrence_config.month ?? 1}
                                                 onChange={(e) => updateConfig({ month: Number(e.target.value) })}
@@ -283,8 +286,8 @@ export default function CalendarEventFormDialog({
                                     )}
                                     {showMonthDay && (
                                         <div className="col-md-4">
-                                            <label className="form-label">Day of month</label>
-                                            <input
+                                            <label className="form-label" htmlFor="calendar-recurrence-day">Day of month</label>
+                                            <input id="calendar-recurrence-day"
                                                 type="number"
                                                 min={1}
                                                 max={31}
@@ -296,8 +299,8 @@ export default function CalendarEventFormDialog({
                                     )}
                                     {showWeekOfMonth && (
                                         <div className="col-md-4">
-                                            <label className="form-label">Week of month</label>
-                                            <select
+                                            <label className="form-label" htmlFor="calendar-recurrence-week">Week of month</label>
+                                            <select id="calendar-recurrence-week"
                                                 className="form-select"
                                                 value={form.recurrence_config.week_of_month ?? 1}
                                                 onChange={(e) => updateConfig({ week_of_month: Number(e.target.value) })}
@@ -310,8 +313,8 @@ export default function CalendarEventFormDialog({
                                     )}
                                     {showWeekday && (
                                         <div className="col-md-4">
-                                            <label className="form-label">Day of week</label>
-                                            <select
+                                            <label className="form-label" htmlFor="calendar-recurrence-weekday">Day of week</label>
+                                            <select id="calendar-recurrence-weekday"
                                                 className="form-select"
                                                 value={form.recurrence_config.weekday ?? 1}
                                                 onChange={(e) => updateConfig({ weekday: Number(e.target.value) })}
@@ -323,8 +326,8 @@ export default function CalendarEventFormDialog({
                                         </div>
                                     )}
                                     <div className="col-md-4">
-                                        <label className="form-label">Repeat until (optional)</label>
-                                        <input
+                                        <label className="form-label" htmlFor="calendar-recurrence-until">Repeat until (optional)</label>
+                                        <input id="calendar-recurrence-until"
                                             type="date"
                                             className="form-control"
                                             value={form.recurrence_end_date}
@@ -354,6 +357,7 @@ export default function CalendarEventFormDialog({
                                             value={form.color}
                                             onChange={(e) => update({ color: e.target.value })}
                                             title="Pick custom color"
+                                            aria-label="Custom event color"
                                         />
                                     </div>
                                 </div>
@@ -379,11 +383,11 @@ export default function CalendarEventFormDialog({
                                             onChange={(e) => update({ reminder_enabled: e.target.checked })}
                                         />
                                         <label className="form-check-label" htmlFor="calendar-reminder-enabled">
-                                            Telegram reminder
+                                            Event reminder
                                         </label>
                                     </div>
                                     <div className="small text-muted mb-2">
-                                        Uses Telegram settings for the active portfolio (Settings → Portfolio).
+                                        Uses your enabled, verified notification channels (Settings → Notifications).
                                     </div>
                                     {form.reminder_enabled && (
                                         <ReminderDaysInput
