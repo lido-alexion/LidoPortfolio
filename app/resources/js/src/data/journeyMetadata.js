@@ -1140,6 +1140,113 @@ export const JOURNEY_TOPICS = Object.freeze([
     ]
   },
   {
+    "id": "E2E-20",
+    "title": "How do I create, rename, select, default and retire a portfolio?",
+    "aliases": [
+      "Create, rename, select, default and retire a portfolio",
+      "e2e-20"
+    ],
+    "keywords": [
+      "create",
+      "rename",
+      "select",
+      "default",
+      "and",
+      "retire",
+      "portfolio"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/portfolios",
+    "guide": "/docs/journeys/10-portfolio-cash.html#e2e-20-create-rename-select-default-and-retire-a-portfolio",
+    "steps": [
+      "Open `/portfolios` and enter a valid name using letters, numbers, spaces, hyphens or underscores.",
+      "Choose Live and Create. A failed request retains the entered name; correct validation or retry without assuming a new portfolio exists.",
+      "Confirm the new portfolio in the list. Choose Rename, enter its new name and Save. A failed save retains the editor; Cancel preserves the saved name.",
+      "Choose Use in this tab to select an owned portfolio. Selection is per tab, separately from the default preference.",
+      "On another owned portfolio, choose Set default and confirm the Default badge after a successful response. A failed response must not claim the preference changed.",
+      "Delete only an inactive, non-default portfolio while another portfolio exists. Read the irreversible confirmation; dismiss it to keep the portfolio. Retry a failed deletion only after checking that the portfolio remains present.",
+      "Reload and verify the saved names, default and surviving portfolios."
+    ],
+    "prerequisites": [
+      "An authenticated investor who owns the affected portfolios."
+    ],
+    "warnings": [
+      "Deleting a portfolio permanently removes its transactions, holdings, alerts, snapshots and settings. Review the confirmation; cancellation must leave it intact."
+    ]
+  },
+  {
+    "id": "E2E-21",
+    "title": "How do I clone a live portfolio into a distinct paper simulation?",
+    "aliases": [
+      "Clone a live portfolio into a distinct paper simulation",
+      "e2e-21"
+    ],
+    "keywords": [
+      "clone",
+      "live",
+      "portfolio",
+      "into",
+      "distinct",
+      "paper",
+      "simulation"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/portfolios",
+    "guide": "/docs/journeys/10-portfolio-cash.html#e2e-21-clone-a-live-portfolio-into-a-distinct-paper-simulation",
+    "steps": [
+      "Open `/portfolios`, locate the source and choose Clone as Paper.",
+      "Review Paper name, positive Simulated cash, Fill price and Copy holdings. Cancel abandons the form without cloning.",
+      "Choose Clone. A failed request leaves the draft available for correction or retry.",
+      "Confirm a separate PAPER portfolio with the chosen name; the original LIVE portfolio remains present.",
+      "Pause simulation and confirm its action changes to Resume simulation only after success. Retry a rejected pause while the previous state remains visible.",
+      "Resume simulation and verify the active simulation state after reload. Its worker follows effective-session checkpoints and must never submit a live broker order."
+    ],
+    "prerequisites": [
+      "An owned source portfolio."
+    ],
+    "warnings": [
+      "Paper simulation is simulated evidence, not a live order or proof of live execution. Copy holdings is explicit; source ownership and accounting remain intact."
+    ]
+  },
+  {
+    "id": "E2E-22",
+    "title": "How do I record cash evidence and inspect reservations without trading?",
+    "aliases": [
+      "Record cash evidence and inspect reservations without trading",
+      "e2e-22"
+    ],
+    "keywords": [
+      "record",
+      "cash",
+      "evidence",
+      "and",
+      "inspect",
+      "reservations",
+      "without",
+      "trading"
+    ],
+    "synonyms": [],
+    "category": "StoX",
+    "route": "/cash",
+    "guide": "/docs/journeys/10-portfolio-cash.html#e2e-22-record-cash-evidence-and-inspect-reservations-without-trading",
+    "steps": [
+      "Open `/cash`, inspect cash balance, Reserved cash and Available cash. Use See reservation details to inspect recommendation identity and the reserved amount; do not infer a fill from reservation alone.",
+      "Choose Deposit, enter a positive whole-rupee Amount, Transaction date and optional Remarks, then submit. A failed write retains the input and unchanged statement; retry only after checking whether the record exists.",
+      "Confirm the successful entry in Cash account statement with its effective date, running balance and remarks.",
+      "Choose Withdraw. An amount above available cash cannot be recorded. Record a valid withdrawal using the same explicit form, then inspect the statement.",
+      "Choose Adjust, enter a non-zero signed whole-rupee amount and a required reason. Correct rejected input or retry a failed write while the draft remains visible. Confirm a separate adjustment entry rather than rewriting a prior economic event.",
+      "Reload and verify the statement and balances. No order, fill or external transfer should be created by these actions."
+    ],
+    "prerequisites": [
+      "An owned active portfolio and actual accounting evidence for any real cash record."
+    ],
+    "warnings": [
+      "Record cash movement updates the StoX ledger; it does not transfer money at a bank or broker. Available cash and reserved cash differ. A reserve shortfall is a warning, not a second cash account or an independent withdrawal prohibition."
+    ]
+  },
+  {
     "id": "EXE-01",
     "title": "How do I execute an approved recommendation manually?",
     "aliases": [
