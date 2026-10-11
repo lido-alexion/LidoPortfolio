@@ -282,6 +282,10 @@ test.describe('V9-UX-001 composite journey coverage', () => {
 
                 await page.goto('/transactions/pending', { waitUntil: 'domcontentloaded' });
                 const pendingRow = page.getByRole('row').filter({ hasText: 'INFY' });
+                await expect(pendingRow).toBeVisible();
+                await page.addStyleTag({ content: '.lido-toast { visibility: hidden !important; }' });
+                await page.mouse.move(0, 0);
+                await expect(pendingRow).toHaveScreenshot(`e2e-${journey}-pending-execution-${viewport.name}.png`, { animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02 });
                 await pendingRow.getByRole('button', { name: 'Execute manually' }).click();
                 await expect(page).toHaveURL('/transactions');
                 await expect(page.getByText(`Recording actual broker fill for recommendation #${generated.id}.`)).toBeVisible();
