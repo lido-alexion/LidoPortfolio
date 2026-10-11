@@ -2421,7 +2421,8 @@ export const JOURNEY_TOPICS = Object.freeze([
       "A failed filtered read retains known rows with an unavailable warning; it does not fabricate an empty result. Retry uses the same filter.",
       "Edit uses the existing Transactions form and its retained-draft safeguards (EXE-16). Inspect the target stored evidence before changing it.",
       "Delete only the intended record after confirmation. Cancelling sends no delete request. A rejected deletion keeps the row and explains the unconfirmed operation.",
-      "Inspect/retry deliberately. Confirmed deletion removes only the target, refreshes the current filtered view and invalidates affected dashboard data. Other transactions and strategy attribution remain intact."
+      "Inspect/retry deliberately. Confirmed deletion removes only the target, refreshes the current filtered view and invalidates affected dashboard data. Other transactions and strategy attribution remain intact.",
+      "Switch Portfolios using the real selector. The previous Portfolio’s rows and counts clear before the new read; failure never presents those rows as the new Portfolio’s evidence. Retry recovers only the selected Portfolio. A late response to a prior Portfolio’s deletion cannot refresh, notify or replace this view."
     ],
     "prerequisites": [
       "An authenticated Investor with stored squared-off transaction records."

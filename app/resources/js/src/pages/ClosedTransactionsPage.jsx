@@ -22,6 +22,7 @@ export default function ClosedTransactionsPage() {
     const [actionError, setActionError] = useState('');
     const readRequestRef = useRef(0);
     const deletingRef = useRef(false);
+    const scopeRef = useRef(0);
 
     const load = useCallback(async (pageNum, search) => {
         const request = ++readRequestRef.current;
@@ -46,7 +47,7 @@ export default function ClosedTransactionsPage() {
                 total: txRes.data.total,
             });
         } catch {
-            if (request === readRequestRef.current) setReadError('Squared-off transactions could not be loaded. Stored evidence is retained.');
+            if (request === readRequestRef.current) setReadError('Squared-off transactions could not be loaded. Known evidence is retained only within the current Portfolio.');
         } finally {
             if (request === readRequestRef.current) setLoading(false);
         }
@@ -57,7 +58,13 @@ export default function ClosedTransactionsPage() {
         return () => { readRequestRef.current++; };
     }, [load, page, stockSearch]);
 
+    useEffect(() => () => { scopeRef.current++; }, []);
+
     usePortfolioChanged(() => {
+        scopeRef.current++;
+        setTransactions([]);
+        setPagination(null);
+        setActionError('');
         load(page, stockSearch);
     });
 
@@ -76,14 +83,17 @@ export default function ClosedTransactionsPage() {
     const handleDelete = useCallback(async (id) => {
         if (deletingRef.current || !window.confirm('Delete this transaction?')) return;
         deletingRef.current = true;
+        const scope = scopeRef.current;
         setActionError('');
         try {
             await api.delete(`/transactions/${id}`);
+            if (scope !== scopeRef.current) return;
             setTransactions(current => current.filter(item => item.id !== id));
             showToast('Transaction deleted');
             notifyPortfolioDashboardRefresh();
             await load(page, stockSearch);
         } catch {
+            if (scope !== scopeRef.current) return;
             setActionError('Transaction deletion could not be confirmed. Inspect the stored transaction before retrying.');
         } finally {
             deletingRef.current = false;

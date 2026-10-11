@@ -14,6 +14,8 @@ These are stored financial/analytical observations. Recovery must distinguish an
 5. Delete only the intended record after confirmation. Cancelling sends no delete request. A rejected deletion keeps the row and explains the unconfirmed operation.
 6. Inspect/retry deliberately. Confirmed deletion removes only the target, refreshes the current filtered view and invalidates affected dashboard data. Other transactions and strategy attribution remain intact.
 
+7. Switch Portfolios using the real selector. The previous Portfolio’s rows and counts clear before the new read; failure never presents those rows as the new Portfolio’s evidence. Retry recovers only the selected Portfolio. A late response to a prior Portfolio’s deletion cannot refresh, notify or replace this view.
+
 **Expected result:** Unavailable, cancelled, unconfirmed and confirmed states are distinct and financial evidence is retained until confirmation.
 
 ## E2E-53 — Inspect a stored evaluation run and recover unavailable observations
