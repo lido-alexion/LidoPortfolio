@@ -618,7 +618,6 @@ Normal deployment [38170602869](https://github.com/lido-alexion/LidoPortfolio/ac
 
 The authenticated child keeps real login, guided-tour GET and Review visibility against production, while only the exact same-origin single-key `record_welcome_shown` bookkeeping request is answered inside Playwright and never reaches StoX. Other guided-tour actions and all financial, order, cancellation, execution, cash, settings, cross-origin and protected-ML writes remain denied. This qualifies the mandatory read-only production smoke gate, not production guided-tour persistence. The protected ML acceptance service remains inactive. Current-head nightly, renewed non-destructive real-Kite evidence, governed ML qualification and canonical tracker closure remain open; V9-UX-001 is not marked Implemented.
 
-
 ### 2026-10-11 20:28 UTC — Current-master CI and nightly qualified
 
 Post-merge master CI [38170602783](https://github.com/lido-alexion/LidoPortfolio/actions/runs/38170602783) passes on exact runtime commit 8cf83fd0dfc14284af48bec5ecc6baa4233cdb85: 222 Node contracts, 278 components in 62 files, production build and 350 Chromium cases in 20.8 minutes with 57 separately governed viewport/production skips. The Playwright failure-evidence upload is skipped because the suite is green; no retry-dependent pass is present. Docs-only current-master CI [38171104903](https://github.com/lido-alexion/LidoPortfolio/actions/runs/38171104903) also passes on a6a047e99b31483dbf76a3cc6079bd620b206af7 with the expected frontend/backend/VPS skips after change detection.
