@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { readOnlyReviewHeading } from './productionSmokeSelectors.js';
 import { SAMPLE_REVIEW_REPORT } from '../js/tos/fixtures/tosApi.js';
 
 const VIEWPORTS = [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }];
@@ -33,6 +34,15 @@ for (const viewport of VIEWPORTS) {
             journeyId(testInfo, 'E2E-37'); const safety = await prepare(page, viewport, 'breadth'); let fail = true; const dates = [];
             await page.route('**/api/market-depth*', route => { const date = new URL(route.request().url()).searchParams.get('date') || '2026-10-01'; dates.push(date); if (fail) return failure(route); return route.fulfill({ json: { available_dates: ['2026-10-01', '2026-09-30'], as_of_date: date, chart_history: [], matrix: { as_of_date: date, columns: [{ key: 'rising', label: 'Rising' }], rows: [{ symbol: 'NIFTY50', name: 'Nifty 50', eligible: 10, pct_rising: date === '2026-10-01' ? 50 : null, pass_rising: date === '2026-10-01' ? 5 : null, scanned_rising: date === '2026-10-01' ? 10 : null }] } } }); });
             await safety.seal(); await page.goto('/market-depth'); await expect(page.getByRole('alert').filter({ hasText: 'Market breadth could not be loaded' })).toContainText('Market breadth could not be loaded'); await expect(page.getByText(/Run cpanel-backfill/)).toHaveCount(0); const initialReads = dates.length; expect(initialReads).toBeGreaterThan(0); expect(initialReads).toBeLessThanOrEqual(2); expect(dates).toEqual(Array(initialReads).fill('2026-10-01')); fail = false; await page.getByRole('button', { name: 'Retry market breadth' }).click(); await expect(page.getByLabel('Date', { exact: true })).toHaveValue('2026-10-01'); await expect(page.locator('.lido-market-depth-cell')).toHaveText('50%'); await page.getByRole('group', { name: 'Value mode' }).getByRole('button', { name: 'Count', exact: true }).click(); await expect(page.locator('.lido-market-depth-cell')).toHaveText('5'); await page.getByLabel('Date', { exact: true }).selectOption('2026-09-30'); await expect(page.locator('.lido-market-depth-cell')).toHaveText('—'); await page.getByRole('group', { name: 'Value mode' }).getByRole('button', { name: '%', exact: true }).click(); await expect(page.locator('.lido-market-depth-cell')).toHaveText('—'); expect(dates).toEqual([...Array(initialReads).fill('2026-10-01'), '2026-10-01', '2026-09-30']); expect(safety.writes).toHaveLength(0); expect(safety.blocked).toEqual([]);
+        });
+        test(`E2E-38 resolves production review smoke beside the navigation title (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'E2E-38'); const safety = await prepare(page, viewport, 'production-review-selector');
+            await page.route('**/api/v1/review/dashboard', route => route.fulfill({ json: { data: { counts: {}, portfolio: {}, outcomes: [], informational_outcomes: [] } } }));
+            await page.route('**/api/v1/orders', route => route.fulfill({ json: { data: [] } }));
+            await safety.seal(); await page.goto('/review');
+            await expect(page.getByRole('heading', { name: 'Review', exact: true })).toHaveCount(2);
+            await expect(readOnlyReviewHeading(page)).toBeVisible(); await expect(readOnlyReviewHeading(page)).toHaveCount(1);
+            expect(safety.writes).toEqual([]); expect(safety.blocked).toEqual([]);
         });
         test(`E2E-38 separates failed observational reads, stored report identity and explicit generation retry (${viewport.name})`, async ({ page }, testInfo) => {
             journeyId(testInfo, 'E2E-38'); const safety = await prepare(page, viewport, 'reports', (method, path) => method === 'POST' && path === '/api/v1/reviews/generate'); let dashboardFails = true; let listFails = true; let detailFails = true; let generateFails = true; const report = structuredClone(SAMPLE_REVIEW_REPORT); const original = JSON.stringify(report);
