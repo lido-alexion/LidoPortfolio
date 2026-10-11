@@ -34,3 +34,15 @@ These journeys cover the authentication prerequisite for using protected investo
 **Expected result:** Rejected credentials do not authenticate the account or expose protected content. The error is announced to assistive technology, and the investor can retry. A successful retry returns to the requested destination when one was saved.
 
 **Recovery:** If the account is pending invitation setup, use the administrator-provided invitation link rather than repeatedly retrying normal sign-in.
+
+
+## AUTH-03 — End a session and return through sign-in
+
+**Goal:** Stop account access on a device and recover access through explicit login when needed.
+
+1. Open the profile menu from a protected page and choose Logout.
+2. Confirm that protected investor content is no longer visible.
+3. Reopen the intended protected page. If the previous session expired or was ended, sign in again.
+4. Confirm the intended page is restored only after successful sign-in.
+
+**Expected result:** Ending a session clears the signed-in UI. Neither logout nor sign-in submits a broker order. A stale session must not reveal a protected page after refresh.

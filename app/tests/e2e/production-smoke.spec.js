@@ -1,4 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
+const run = promisify(execFile);
 
 test('production smoke is available and non-destructive', async ({ page }) => {
     test.skip(!process.env.STOX_E2E_BASE_URL, 'Set STOX_E2E_BASE_URL for controlled production smoke.');
@@ -16,25 +20,21 @@ test('production smoke is available and non-destructive', async ({ page }) => {
     expect(moduleResponse.headers()['content-type']).toMatch(/javascript/i);
 });
 
-test('dedicated smoke identity can open a read-only investor page', async ({ page }) => {
-    const email = process.env.STOX_SMOKE_EMAIL;
-    const password = process.env.STOX_SMOKE_PASSWORD;
-    test.skip(!email || !password, 'Configure a dedicated, read-only production smoke identity.');
-
-    await page.goto('/login');
-    await page.getByLabel('Email').fill(email);
-    await page.getByLabel('Password').fill(password);
-    await page.getByRole('button', { name: 'Login' }).click();
-    await expect(page.getByRole('heading', { name: 'Login' })).toHaveCount(0, { timeout: 30_000 });
-
-    const writes = [];
-    page.on('request', (request) => {
-        if (/^(POST|PUT|PATCH|DELETE)$/.test(request.method())
-            && !/\/(logs\/frontend|telemetry)(\/|$)/.test(new URL(request.url()).pathname)) {
-            writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
-        }
-    });
-    await page.goto('/review');
-    await expect(page.getByRole('heading', { name: 'Review' })).toBeVisible();
-    expect(writes).toEqual([]);
+test('dedicated smoke identity can open a read-only investor page', async () => {
+    test.setTimeout(70_000);
+    test.skip(!process.env.STOX_E2E_BASE_URL, 'Set STOX_E2E_BASE_URL for controlled production smoke.');
+    if (!process.env.STOX_SMOKE_EMAIL || !process.env.STOX_SMOKE_PASSWORD) {
+        throw new Error('Mandatory authenticated production smoke requires a dedicated read-only identity configured as STOX_SMOKE_EMAIL and STOX_SMOKE_PASSWORD Actions secrets.');
+    }
+    // Run outside the test reporter: even untraced page.fill calls retain credential
+    // arguments in HTML step metadata. This child prints only allowlisted outcomes.
+    try {
+        const { stdout } = await run(process.execPath,
+            [fileURLToPath(new URL('./authenticatedProductionSmoke.mjs', import.meta.url))],
+            { env: process.env, timeout: 60_000 });
+        expect(stdout.trim()).toBe('AUTHENTICATED_SMOKE_PASSED');
+    } catch (error) {
+        const stage = String(error.stdout || '').match(/AUTHENTICATED_SMOKE_FAILED:([a-z_]+)/)?.[1] || 'child_execution';
+        throw new Error(`Authenticated production smoke failed at ${stage}; credentials and provider responses are omitted.`);
+    }
 });
