@@ -327,6 +327,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                 test.setTimeout(90_000);
                 journeyId(testInfo, journey);
                 await seedDeterministicJourney(page, `${journey.toLowerCase()}-strategy-exit-${viewport.name}`);
+                journeyId(testInfo, 'STR-16');
                 await page.setViewportSize({ width: viewport.width, height: 1200 });
 
                 const recommendationId = journey === 'E2E-03' ? 803 : 807;
