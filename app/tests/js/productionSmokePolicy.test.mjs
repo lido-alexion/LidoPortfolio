@@ -14,6 +14,10 @@ test('production smoke permits only same-origin reads and narrow login/telemetry
     }
     assert.equal(allowed('POST', `${base}/api/logs/frontend`, base), true);
     assert.equal(allowed('POST', `${base}/api/logs/frontend/orders`, base), false);
+    assert.equal(allowed('POST', `${base}/api/telemetry`, base), true);
+    assert.equal(allowed('POST', `${base}/api/telemetry/route-view`, base), true);
+    assert.equal(allowed('POST', `${base}/api/telemetry/otlp/v1/traces`, base), true);
+    assert.equal(allowed('POST', `${base}/api/telemetry-unrelated`, base), false);
     assert.equal(allowed('GET', 'https://broker.example.test/orders', base), false);
     assert.equal(allowed('POST', 'https://broker.example.test/api/auth/login', base, { login: true }), false);
 });
