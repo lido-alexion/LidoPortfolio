@@ -25,6 +25,7 @@ use App\Services\ML\MlTrainingRunRecoveryService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -225,6 +226,28 @@ class MlProductionAcceptanceTest extends TestCase
         $this->assertSame(3, MlTrainingRun::query()->where('status', 'cancelled')->count());
         $this->assertDatabaseCount('stox_ml_lifecycle_schedules', 0);
         $this->assertDatabaseCount('stox_ml_model_versions', 0);
+    }
+
+    public function test_campaign_cancel_lock_contention_returns_retryable_busy_response_without_mutation(): void
+    {
+        $admin = $this->admin();
+        $campaign = app(MlAcceptanceCampaignService::class)->create('2026-09-30', $admin->id);
+        $history = $campaign->history;
+        $lock = Cache::lock('ml-campaign-'.$campaign->id, MlAcceptanceRuntime::LOCK_SECONDS);
+        $this->assertTrue($lock->get());
+
+        try {
+            $this->actingAs($admin)->postJson('/api/v1/admin/ml/acceptance/campaigns/'.$campaign->id.'/cancel')
+                ->assertStatus(409)
+                ->assertJsonPath('error.code', 'campaign_busy')
+                ->assertJsonPath('error.retryable', true)
+                ->assertHeader('Retry-After', '5');
+        } finally {
+            $lock->release();
+        }
+
+        $this->assertSame('preflight', $campaign->refresh()->status);
+        $this->assertSame($history, $campaign->history);
     }
 
     public function test_stale_and_changed_acceptance_identity_fail_closed(): void
