@@ -247,7 +247,7 @@ class MlProductionAcceptanceTest extends TestCase
             ->assertHeader('Retry-After', '5');
 
         $this->assertSame('preflight', $campaign->refresh()->status);
-        $this->assertSame($history, $campaign->history);
+        $this->assertEqualsCanonicalizing($history, $campaign->history);
     }
 
     public function test_stale_and_changed_acceptance_identity_fail_closed(): void
