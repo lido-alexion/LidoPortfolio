@@ -10,6 +10,7 @@ use App\Services\ML\MlAcceptanceCampaignService;
 use App\Services\ML\MlAcceptanceBackfillService;
 use App\Services\ML\MlAcceptanceReportService;
 use Illuminate\Http\Request;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 
 class MlAcceptanceController extends Controller
 {
@@ -42,5 +43,20 @@ class MlAcceptanceController extends Controller
         return $this->response($service->create($data['cutoff_date'], $request->user()->id)->toArray(), 202);
     }
     public function campaign(MlAcceptanceCampaign $campaign) { return $this->response($campaign->toArray()); }
-    public function campaignAction(Request $request, MlAcceptanceCampaign $campaign, string $action, MlAcceptanceCampaignService $service) { return $this->response($service->action($campaign, $action, $request->user()->id)->toArray()); }
+    public function campaignAction(Request $request, MlAcceptanceCampaign $campaign, string $action, MlAcceptanceCampaignService $service)
+    {
+        try {
+            return $this->response($service->action($campaign, $action, $request->user()->id)->toArray());
+        } catch (LockTimeoutException $exception) {
+            if ($action !== 'cancel') {
+                throw $exception;
+            }
+
+            return response()->json(['error' => [
+                'code' => 'campaign_busy',
+                'message' => 'The campaign is being processed. Check its status, then retry cancellation if it is still active.',
+                'retryable' => true,
+            ]], 409, ['Retry-After' => '5']);
+        }
+    }
 }
