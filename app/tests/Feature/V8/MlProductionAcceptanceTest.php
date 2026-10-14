@@ -90,6 +90,31 @@ class MlProductionAcceptanceTest extends TestCase
         Bus::assertNothingDispatched();
     }
 
+    public function test_source_create_response_starts_at_zero_and_api_upload_can_finalize(): void
+    {
+        $admin = $this->admin();
+        $contents = 'source-bytes';
+        $base = '/api/v1/admin/ml/acceptance/sources';
+        $created = $this->actingAs($admin)->postJson($base, [
+            'version' => 1,
+            'source' => 'nse_cash_bhavcopy',
+            'date' => '2026-09-29',
+            'filename' => 'cm29SEP2026bhav.csv',
+            'bytes' => strlen($contents),
+            'sha256' => hash('sha256', $contents),
+        ])->assertCreated()->assertJsonPath('data.received', 0);
+        $sourceId = $created->json('data.id');
+        $this->sourceIds[] = $sourceId;
+
+        $this->putJson($base.'/'.$sourceId.'/chunks', [
+            'offset' => 0,
+            'chunk' => base64_encode($contents),
+        ])->assertOk()->assertJsonPath('data.received', strlen($contents));
+        $this->postJson($base.'/'.$sourceId.'/finalize')
+            ->assertOk()->assertJsonPath('data.status', 'queued')
+            ->assertJsonPath('data.received', strlen($contents));
+    }
+
     public function test_private_source_seals_without_requiring_master_mapping_and_rejects_mutation(): void
     {
         $source = $this->source();

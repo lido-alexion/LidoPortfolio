@@ -42,7 +42,7 @@ class MlAcceptanceSourceService
             }
             $this->require($reserved + (int) $manifest['bytes'] + self::MAX_EXPANDED <= 2147483648, 'Private source quota exceeded.');
             $source = MlAcceptanceSource::query()->create([
-                'id' => (string) Str::uuid(), 'actor_id' => $actor, 'status' => 'uploading', 'manifest' => $manifest,
+                'id' => (string) Str::uuid(), 'actor_id' => $actor, 'status' => 'uploading', 'manifest' => $manifest, 'received' => 0,
                 'history' => app(MlAcceptanceRuntime::class)->history([], 'created', $actor),
             ]);
             File::ensureDirectoryExists($this->directory($source), 0700, true);

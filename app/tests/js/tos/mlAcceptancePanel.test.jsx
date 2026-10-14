@@ -50,4 +50,63 @@ describe('ML acceptance controls', () => {
         expect(await screen.findByText('Source page 2 of 2')).toBeInTheDocument();
     });
 
+    it('uploads from zero when a new source response omits the offset', async () => {
+        const contents = new Uint8Array([1, 2, 3]);
+        const file = new File([contents], 'cm30SEP2026bhav.csv');
+        Object.defineProperty(file, 'arrayBuffer', { value: async () => contents.buffer });
+        vi.stubGlobal('crypto', { subtle: { digest: vi.fn(async () => new Uint8Array(32).buffer) } });
+        api.post.mockImplementation(async (url) => url.endsWith('/sources')
+            ? { data: { data: { id: 'new-source', manifest: { bytes: 3 } } } }
+            : { data: { data: { status: 'queued' } } });
+        render(<MlAcceptancePanel />);
+        await screen.findByText(/Campaign: ready/);
+        fireEvent.change(screen.getByLabelText('Official CSV or ZIP'), { target: { files: [file] } });
+        fireEvent.click(screen.getByRole('button', { name: 'Upload and queue validation' }));
+        await waitFor(() => expect(api.post).toHaveBeenCalledWith('/v1/admin/ml/acceptance/sources/new-source/finalize'));
+        expect(api.put).toHaveBeenCalledWith('/v1/admin/ml/acceptance/sources/new-source/chunks', { offset: 0, chunk: btoa('\u0001\u0002\u0003') });
+        vi.unstubAllGlobals();
+    });
+
+    it('resumes an existing partial upload from its validated server offset', async () => {
+        const contents = new Uint8Array(1024 * 1024 + 3);
+        const file = new File([contents], 'cm30SEP2026bhav.csv');
+        Object.defineProperty(file, 'arrayBuffer', { value: async () => contents.buffer });
+        vi.stubGlobal('crypto', { subtle: { digest: vi.fn(async () => new Uint8Array(32).buffer) } });
+        const partial = { id: 'partial-source', status: 'uploading', received: 1024 * 1024,
+            manifest: { filename: file.name, bytes: file.size, sha256: '0'.repeat(64) } };
+        api.get.mockImplementation(async (url) => ({ data: { data: url.endsWith('/sources')
+            ? { data: [partial] }
+            : url.endsWith('/sources/partial-source') ? partial : report } }));
+        api.post.mockResolvedValue({ data: { data: { status: 'queued' } } });
+        render(<MlAcceptancePanel />);
+        await screen.findByText(/Campaign: ready/);
+        fireEvent.change(screen.getByLabelText('Official CSV or ZIP'), { target: { files: [file] } });
+        fireEvent.change(screen.getByLabelText('Resume upload'), { target: { value: 'partial-source' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Upload and queue validation' }));
+        await waitFor(() => expect(api.post).toHaveBeenCalledWith('/v1/admin/ml/acceptance/sources/partial-source/finalize'));
+        expect(api.put).toHaveBeenCalledWith('/v1/admin/ml/acceptance/sources/partial-source/chunks', expect.objectContaining({ offset: 1024 * 1024 }));
+        vi.unstubAllGlobals();
+    });
+
+    it('refuses an invalid existing offset without uploading or finalizing', async () => {
+        const contents = new Uint8Array([1, 2, 3]);
+        const file = new File([contents], 'cm30SEP2026bhav.csv');
+        Object.defineProperty(file, 'arrayBuffer', { value: async () => contents.buffer });
+        vi.stubGlobal('crypto', { subtle: { digest: vi.fn(async () => new Uint8Array(32).buffer) } });
+        const invalid = { id: 'bad-source', status: 'uploading', received: -1,
+            manifest: { filename: file.name, bytes: file.size, sha256: '0'.repeat(64) } };
+        api.get.mockImplementation(async (url) => ({ data: { data: url.endsWith('/sources')
+            ? { data: [invalid] }
+            : url.endsWith('/sources/bad-source') ? invalid : report } }));
+        render(<MlAcceptancePanel />);
+        await screen.findByText(/Campaign: ready/);
+        fireEvent.change(screen.getByLabelText('Official CSV or ZIP'), { target: { files: [file] } });
+        fireEvent.change(screen.getByLabelText('Resume upload'), { target: { value: 'bad-source' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Upload and queue validation' }));
+        expect(await screen.findByText(/Could not read a valid current upload offset/)).toBeInTheDocument();
+        expect(api.put).not.toHaveBeenCalled();
+        expect(api.post).not.toHaveBeenCalled();
+        vi.unstubAllGlobals();
+    });
+
 });
