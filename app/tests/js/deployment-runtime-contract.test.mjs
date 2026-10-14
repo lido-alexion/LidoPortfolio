@@ -119,7 +119,7 @@ test('production activation fails closed for debug auth and normalizes PHP writa
     }
 });
 
-test('deploy writable-path normalization preserves sealed ML acceptance sources', async () => {
+test('deploy writable-path normalization preserves private ML acceptance sources and campaign evidence', async () => {
     const deploy = await source('deploy/scripts/stoxla-deploy-release.sh');
     const start = deploy.indexOf('prepare_writable_tree() {');
     const end = deploy.indexOf('\n}\n\nprepare_fundamentals_python()', start) + 2;
@@ -128,15 +128,21 @@ test('deploy writable-path normalization preserves sealed ML acceptance sources'
     const fixture = await mkdtemp(resolve(tmpdir(), 'stox-private-storage-'));
     try {
         const sources = resolve(fixture, 'app/private/ml-acceptance/sources/29fbcda4-77ae-4850-802d-f15a297f061c');
+        const campaign = resolve(fixture, 'app/private/ml-acceptance/campaigns/campaign-1/1m');
         const ordinary = resolve(fixture, 'app/framework/cache');
         await mkdir(sources, { recursive: true, mode: 0o700 });
+        await mkdir(campaign, { recursive: true, mode: 0o700 });
         await mkdir(ordinary, { recursive: true });
         const sealed = resolve(sources, 'payload');
+        const journal = resolve(campaign, 'pit-evidence.jsonl.gz');
         const cache = resolve(ordinary, 'cache.php');
         await writeFile(sealed, 'sealed-source');
+        await writeFile(journal, 'private-evidence');
         await writeFile(cache, 'ordinary-cache');
         await chmod(sources, 0o700);
         await chmod(sealed, 0o400);
+        await chmod(campaign, 0o700);
+        await chmod(journal, 0o400);
 
         const script = `${deploy.slice(start, end)}\nPHP_FPM_GROUP="$(id -gn)"\nprepare_writable_tree "$1"`;
         const result = spawnSync('bash', ['-c', script, 'bash', fixture], { encoding: 'utf8' });
@@ -144,11 +150,15 @@ test('deploy writable-path normalization preserves sealed ML acceptance sources'
         const mode = async path => (await (await import('node:fs/promises')).stat(path)).mode & 0o7777;
         assert.equal(await mode(sources), 0o700);
         assert.equal(await mode(sealed), 0o400);
+        assert.equal(await mode(campaign), 0o700);
+        assert.equal(await mode(journal), 0o400);
         assert.equal(await readFile(sealed, 'utf8'), 'sealed-source');
+        assert.equal(await readFile(journal, 'utf8'), 'private-evidence');
         assert.equal(await mode(ordinary), 0o2775);
         assert.equal(await mode(cache), 0o664);
     } finally {
         await chmod(resolve(fixture, 'app/private/ml-acceptance/sources/29fbcda4-77ae-4850-802d-f15a297f061c'), 0o700).catch(() => {});
+        await chmod(resolve(fixture, 'app/private/ml-acceptance/campaigns/campaign-1/1m'), 0o700).catch(() => {});
         await chmod(resolve(fixture, 'app/private/ml-acceptance/sources'), 0o700).catch(() => {});
         await chmod(resolve(fixture, 'app/private/ml-acceptance'), 0o700).catch(() => {});
         await chmod(resolve(fixture, 'app/private'), 0o700).catch(() => {});
@@ -172,4 +182,32 @@ test('acceptance worker must drain before shared Python changes or rollback acti
     }
     assert.match(unit, /queue:work ml-acceptance --queue=ml-acceptance .*--timeout=14400/);
     assert.match(unit, /KillMode=mixed/);
+});
+
+test('acceptance worker private-source override and stopped access preflight preserve source permissions', async () => {
+    const [override, preflight, runbook] = await Promise.all([
+        source('deploy/systemd/stoxla-ml-acceptance.service.d/20-private-source-access.conf'),
+        source('deploy/scripts/stoxla-ml-acceptance-worker-preflight.sh'),
+        source('deploy/STOXLA-VPS-DEPLOY.md'),
+    ]);
+    const syntax = spawnSync('bash', ['-n'], { input: preflight, encoding: 'utf8' });
+
+    assert.equal(syntax.status, 0, syntax.stderr);
+    assert.match(override, /User=www-data/);
+    assert.match(override, /Group=www-data/);
+    assert.match(preflight, /--property=User/);
+    assert.match(preflight, /--property=Group/);
+    assert.match(preflight, /"\$service_state" == inactive \|\| "\$service_state" == failed/);
+    assert.match(preflight, /! -perm -0700/);
+    assert.match(preflight, /-perm \/0077/);
+    assert.match(preflight, /source_dir_violations/);
+    assert.match(preflight, /source_file_violations/);
+    assert.match(preflight, /evidence_dir_violations/);
+    assert.match(preflight, /evidence_file_violations/);
+    assert.match(preflight, /! -readable/);
+    assert.match(preflight, /import sklearn/);
+    assert.match(preflight, /CACHE_ROOT/);
+    assert.match(preflight, /MODEL_ROOT/);
+    assert.doesNotMatch(preflight, /\b(?:chmod|chown|setfacl)\b/);
+    assert.match(runbook, /systemctl daemon-reload[\s\S]*worker-preflight\.sh && \\\s*sudo systemctl restart stoxla-ml-acceptance\.service/);
 });
