@@ -168,6 +168,7 @@ test('deploy writable-path normalization preserves private ML acceptance sources
 
 test('private acceptance permission repair is dry-run by default and narrowly guarded', async () => {
     const script = await source('app/scripts/repair-ml-acceptance-private-permissions.php');
+    const ci = await source('.github/workflows/ci.yml');
     const help = spawnSync('php', ['scripts/repair-ml-acceptance-private-permissions.php', '--help'], { encoding: 'utf8', cwd: resolve(repositoryRoot, 'app') });
     assert.equal(help.status, 0, help.stderr);
     assert.match(help.stdout, /\[--actor OPERATOR\] \[--apply\]/);
@@ -191,6 +192,7 @@ test('private acceptance permission repair is dry-run by default and narrowly gu
     assert.match(script, /\$object\['path'\]/);
     assert.match(script, /sha256=%s/);
     assert.doesNotMatch(script, /setfacl|chmod\s+-R|chown\s+-R/);
+    assert.match(ci, /app\/scripts\/\*\*\|app\/tests\/\*\.php/);
 });
 
 test('acceptance worker must drain before shared Python changes or rollback activation', async () => {
