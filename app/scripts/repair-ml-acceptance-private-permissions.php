@@ -45,6 +45,14 @@ function safePath(string $path, string $root): void
     if ($real === false || ($real !== $root && !str_starts_with($real, $root . DIRECTORY_SEPARATOR))) stop("path escapes private root: {$path}");
 }
 
+function assertRegisteredEntries(string $directory, array $registeredIds, string $kind): void
+{
+    $entries = array_values(array_diff(scandir($directory) ?: [], ['.', '..']));
+    foreach ($entries as $entry) {
+        if (!isset($registeredIds[$entry])) stop("unregistered {$kind} directory present: {$entry}");
+    }
+}
+
 function recordObject(string $path, int $mode, string $kind, string $state, int $uid, int $gid): array
 {
     $stat = lstat($path);
@@ -60,7 +68,7 @@ function recordObject(string $path, int $mode, string $kind, string $state, int 
         'inode' => $stat['ino'], 'sha256' => $hash, 'kind' => $kind];
 }
 
-function walkSource(string $dir, array $row, string $root, int $uid, int $gid): array
+function walkSource(string $dir, object $row, string $root, int $uid, int $gid): array
 {
     $status = $row->status;
     if (!in_array($status, ['uploading', 'queued', 'sealed', 'failed', 'cancelled'], true)) stop("unknown source state: {$row->id}");
@@ -70,7 +78,7 @@ function walkSource(string $dir, array $row, string $root, int $uid, int $gid): 
     if ($status === 'sealed') {
         $evidence = is_array($row->evidence) ? $row->evidence : json_decode((string) $row->evidence, true);
         $filename = is_array($evidence) ? ($evidence['filename'] ?? null) : null;
-        if (!is_string($filename) || basename($filename) !== $filename || str_contains($filename, '\\')) stop("sealed source has unsafe manifest filename: {$row->id}");
+        if (!is_string($filename) || $filename === 'payload' || basename($filename) !== $filename || str_contains($filename, '\\')) stop("sealed source has unsafe manifest filename: {$row->id}");
         $expected[] = $filename;
     }
     if (in_array($status, ['failed', 'cancelled'], true)) {
@@ -129,6 +137,9 @@ function walkCampaign(string $dir, string $root, int $uid, int $gid): array
     return $objects;
 }
 
+// Test harnesses may load the planner functions without entering the production CLI.
+if (defined('REPAIR_LIBRARY_ONLY') && REPAIR_LIBRARY_ONLY === true) return;
+
 $options = parseArgs($argv);
 if (PHP_OS_FAMILY !== 'Linux' || posix_geteuid() !== 0) stop('run on the production host as root via sudo');
 if (!is_dir(REPAIR_APP . '/app') || !is_file(REPAIR_APP . '/artisan')) stop('expected current Laravel release not found');
@@ -174,8 +185,7 @@ foreach ($sourceRows as $row) {
     $dir = $sourcesRoot . '/' . $row->id;
     if (file_exists($dir) || is_link($dir)) $plan = array_merge($plan, walkSource($dir, $row, REPAIR_ROOT, $uid, $gid));
 }
-$entries = array_values(array_diff(scandir($sourcesRoot) ?: [], ['.', '..']));
-foreach ($entries as $entry) if (!isset($sourceIds[$entry])) stop("unregistered source directory present: {$entry}");
+assertRegisteredEntries($sourcesRoot, $sourceIds, 'source');
 
 $campaignRows = DB::table('stox_ml_acceptance_campaigns')->get()->keyBy('id');
 $campaignState = $campaignRows->sortBy('id')->map(fn ($r) => [$r->id, $r->status, $r->updated_at])->values()->all();
@@ -189,8 +199,7 @@ foreach ($campaignRows as $row) {
         $plan = array_merge($plan, walkCampaign($dir, REPAIR_ROOT, $uid, $gid));
     }
 }
-$entries = array_values(array_diff(scandir($campaignRoot) ?: [], ['.', '..']));
-foreach ($entries as $entry) if (!isset($campaignIds[$entry])) stop("unregistered campaign directory present: {$entry}");
+assertRegisteredEntries($campaignRoot, $campaignIds, 'campaign');
 
 foreach ($plan as $object) {
     if ($object['before_mode'] !== $object['after_mode'] || $object['before_uid'] !== $uid || $object['before_gid'] !== $gid) {
