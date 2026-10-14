@@ -166,6 +166,30 @@ test('deploy writable-path normalization preserves private ML acceptance sources
     }
 });
 
+test('private acceptance permission repair is dry-run by default and narrowly guarded', async () => {
+    const script = await source('app/scripts/repair-ml-acceptance-private-permissions.php');
+    const help = spawnSync('php', ['scripts/repair-ml-acceptance-private-permissions.php', '--help'], { encoding: 'utf8', cwd: resolve(repositoryRoot, 'app') });
+    assert.equal(help.status, 0, help.stderr);
+    assert.match(help.stdout, /\[--actor OPERATOR\] \[--apply\]/);
+    const unsafeApply = spawnSync('php', ['scripts/repair-ml-acceptance-private-permissions.php', '--apply'], { encoding: 'utf8', cwd: resolve(repositoryRoot, 'app') });
+    assert.equal(unsafeApply.status, 2);
+    assert.match(unsafeApply.stderr, /--apply requires --actor/);
+
+    assert.match(script, /const REPAIR_ROOT = '\/var\/www\/stoxla\/shared\/storage\/app\/private\/ml-acceptance'/);
+    assert.match(script, /where\('queue', 'ml-acceptance'\)->count\(\)/);
+    assert.match(script, /whereIn\('status', \['preflight', 'training'\]\)/);
+    assert.match(script, /\['uploading', 'queued', 'sealed', 'failed', 'cancelled'\]/);
+    assert.match(script, /sealed-payload/);
+    assert.match(script, /writable-upload-payload/);
+    assert.match(script, /hash_file\('sha256'/);
+    assert.match(script, /before_mode/);
+    assert.match(script, /before_uid/);
+    assert.match(script, /before_gid/);
+    assert.match(script, /is_link\(/);
+    assert.match(script, /realpath\(\$path\)/);
+    assert.doesNotMatch(script, /setfacl|chmod\s+-R|chown\s+-R/);
+});
+
 test('acceptance worker must drain before shared Python changes or rollback activation', async () => {
     const [deploy, rollback, unit] = await Promise.all([
         source('deploy/scripts/stoxla-deploy-release.sh'),
