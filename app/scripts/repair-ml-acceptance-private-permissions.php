@@ -149,6 +149,13 @@ if ($busy !== 0) stop('an acceptance campaign is active');
 $queued = DB::table('jobs')->where('queue', 'ml-acceptance')->count();
 if ($queued !== 0) stop('dedicated acceptance queue is not empty');
 
+$runuser = '/usr/sbin/runuser';
+if (!is_executable($runuser)) stop('runuser is unavailable; cannot verify www-data parent traversal');
+foreach ([REPAIR_ROOT, REPAIR_ROOT . '/sources', REPAIR_ROOT . '/campaigns'] as $parent) {
+    exec($runuser . ' -u www-data -- test -r ' . escapeshellarg($parent) . ' && ' . $runuser . ' -u www-data -- test -x ' . escapeshellarg($parent), $unused, $exitCode);
+    if ($exitCode !== 0) stop("www-data cannot read/traverse shared parent {$parent}; this object-only repair will not change parent modes");
+}
+
 $uid = posix_getpwnam('www-data')['uid'] ?? null;
 $gid = posix_getgrnam('www-data')['gid'] ?? null;
 if (!is_int($uid) || !is_int($gid)) stop('www-data identity unavailable');
@@ -159,6 +166,7 @@ foreach (['sources' => $sourcesRoot, 'campaigns' => $campaignRoot] as $name => $
     if (!is_dir($path) || is_link($path) || realpath($path) !== $path) stop("expected canonical {$name} directory missing");
 }
 $sourceRows = DB::table('stox_ml_acceptance_sources')->get();
+$sourceState = $sourceRows->sortBy('id')->map(fn ($r) => [$r->id, $r->status, $r->updated_at, $r->manifest, $r->evidence])->values()->all();
 $sourceIds = [];
 foreach ($sourceRows as $row) {
     if (!preg_match('/\A[0-9a-f-]{36}\z/i', $row->id)) stop('invalid source identity in database');
@@ -170,6 +178,7 @@ $entries = array_values(array_diff(scandir($sourcesRoot) ?: [], ['.', '..']));
 foreach ($entries as $entry) if (!isset($sourceIds[$entry])) stop("unregistered source directory present: {$entry}");
 
 $campaignRows = DB::table('stox_ml_acceptance_campaigns')->get()->keyBy('id');
+$campaignState = $campaignRows->sortBy('id')->map(fn ($r) => [$r->id, $r->status, $r->updated_at])->values()->all();
 $campaignIds = [];
 foreach ($campaignRows as $row) {
     if (!preg_match('/\A[0-9a-f-]{36}\z/i', $row->id)) stop('invalid campaign identity in database');
@@ -185,13 +194,22 @@ foreach ($entries as $entry) if (!isset($campaignIds[$entry])) stop("unregistere
 
 foreach ($plan as $object) {
     if ($object['before_mode'] !== $object['after_mode'] || $object['before_uid'] !== $uid || $object['before_gid'] !== $gid) {
-        printf("%s %04o:%d:%d -> %04o:%d:%d [%s]\n", $object['type'], $object['before_mode'], $object['before_uid'], $object['before_gid'], $object['after_mode'], $uid, $gid, $object['kind']);
+        printf("%s %s %04o:%d:%d -> %04o:%d:%d [%s] sha256=%s\n", $object['type'], $object['path'], $object['before_mode'], $object['before_uid'], $object['before_gid'], $object['after_mode'], $uid, $gid, $object['kind'], $object['sha256'] ?? '-');
     }
 }
 $changes = array_values(array_filter($plan, fn ($o) => $o['before_mode'] !== $o['after_mode'] || $o['before_uid'] !== $uid || $o['before_gid'] !== $gid));
 printf("Plan: %d recognized objects, %d changes; service=%s; active campaigns=0; queued jobs=0; mode=%s\n", count($plan), count($changes), $service, $options['apply'] ? 'APPLY' : 'DRY-RUN');
 if (!$options['apply']) exit(0);
 if ($changes === []) { echo "No changes required.\n"; exit(0); }
+
+$currentService = trim((string) shell_exec('/usr/bin/systemctl is-active stoxla-ml-acceptance.service 2>/dev/null'));
+if (!in_array($currentService, ['inactive', 'failed'], true) || $currentService !== $service) stop('worker state changed after planning; rerun dry-run');
+if (DB::table('stox_ml_acceptance_campaigns')->whereIn('status', ['preflight', 'training'])->count() !== 0
+    || DB::table('jobs')->where('queue', 'ml-acceptance')->count() !== 0) stop('campaign/queue state changed after planning; rerun dry-run');
+$sourceNow = DB::table('stox_ml_acceptance_sources')->get()->sortBy('id')->map(fn ($r) => [$r->id, $r->status, $r->updated_at, $r->manifest, $r->evidence])->values()->all();
+$campaignNow = DB::table('stox_ml_acceptance_campaigns')->get()->sortBy('id')->map(fn ($r) => [$r->id, $r->status, $r->updated_at])->values()->all();
+if (!hash_equals(hash('sha256', json_encode($sourceState)), hash('sha256', json_encode($sourceNow)))
+    || !hash_equals(hash('sha256', json_encode($campaignState)), hash('sha256', json_encode($campaignNow)))) stop('acceptance source/campaign state changed after planning; rerun dry-run');
 
 if (!is_dir(REPAIR_AUDIT) && !mkdir(REPAIR_AUDIT, 0700, true)) stop('cannot create protected audit directory');
 if (is_link(REPAIR_AUDIT) || (fileperms(REPAIR_AUDIT) & 0077) !== 0) stop('audit directory must be owner-only and not symlinked');

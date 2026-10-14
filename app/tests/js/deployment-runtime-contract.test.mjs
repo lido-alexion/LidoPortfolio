@@ -187,6 +187,9 @@ test('private acceptance permission repair is dry-run by default and narrowly gu
     assert.match(script, /before_gid/);
     assert.match(script, /is_link\(/);
     assert.match(script, /realpath\(\$path\)/);
+    assert.match(script, /cannot read\/traverse shared parent/);
+    assert.match(script, /\$object\['path'\]/);
+    assert.match(script, /sha256=%s/);
     assert.doesNotMatch(script, /setfacl|chmod\s+-R|chown\s+-R/);
 });
 
