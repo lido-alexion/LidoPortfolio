@@ -228,6 +228,13 @@ jobs:
             cp -a ../shared ./shared
           fi
 
+      - name: Stage reviewed ML acceptance deployment files
+        run: |
+          install -D -m 0644 ../deploy/systemd/stoxla-ml-acceptance.service.d/20-private-source-access.conf \
+            ./deploy/systemd/stoxla-ml-acceptance.service.d/20-private-source-access.conf
+          install -D -m 0755 ../deploy/scripts/stoxla-ml-acceptance-worker-preflight.sh \
+            ./deploy/scripts/stoxla-ml-acceptance-worker-preflight.sh
+
       - name: Create release archive
         run: |
           tar \
@@ -237,6 +244,38 @@ jobs:
             --exclude='./public/storage' \
             --exclude='./public/hot' \
             -czf ../stoxla-release.tgz .
+
+      - name: Verify release archive contents
+        run: |
+          python3 - ../stoxla-release.tgz <<'PY'
+          import hashlib
+          import pathlib
+          import sys
+          import tarfile
+
+          archive_path = pathlib.Path(sys.argv[1])
+          expected = {
+              "deploy/systemd/stoxla-ml-acceptance.service.d/20-private-source-access.conf": ("../deploy/systemd/stoxla-ml-acceptance.service.d/20-private-source-access.conf", False),
+              "deploy/scripts/stoxla-ml-acceptance-worker-preflight.sh": ("../deploy/scripts/stoxla-ml-acceptance-worker-preflight.sh", True),
+              "deploy/python/fundamentals-requirements.txt": ("deploy/python/fundamentals-requirements.txt", False),
+              "deploy/python/ml-requirements.txt": ("deploy/python/ml-requirements.txt", False),
+              "deploy/scripts/stoxla-run-fundamentals-bootstrap.sh": ("deploy/scripts/stoxla-run-fundamentals-bootstrap.sh", True),
+          }
+
+          with tarfile.open(archive_path, "r:gz") as archive:
+              members = {member.name.removeprefix("./"): member for member in archive.getmembers()}
+              for archive_name, (source_name, executable) in expected.items():
+                  member = members.get(archive_name)
+                  if member is None or not member.isfile():
+                      raise SystemExit(f"release archive is missing regular file {archive_name}")
+                  source = pathlib.Path(source_name).read_bytes()
+                  content = archive.extractfile(member).read()
+                  if hashlib.sha256(content).digest() != hashlib.sha256(source).digest():
+                      raise SystemExit(f"release archive hash mismatch for {archive_name}")
+                  if bool(member.mode & 0o111) != executable:
+                      raise SystemExit(f"release archive executable mode mismatch for {archive_name}")
+          print("release archive paths, hashes, modes and existing deployment assets verified")
+          PY
 
       - name: Upload release archive
         uses: actions/upload-artifact@v4
