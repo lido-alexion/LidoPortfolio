@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -115,6 +116,43 @@ test('production activation fails closed for debug auth and normalizes PHP writa
     assert.match(deploy, /prepare_writable_tree "\$SHARED_DIR\/ml"/);
     for (const channel of ['single', 'daily', 'frontend', 'provider', 'scheduler', 'emergency']) {
         assert.match(logging, new RegExp(`'${channel}'[\\s\\S]*?'permission'\\s*=>\\s*0664`));
+    }
+});
+
+test('deploy writable-path normalization preserves sealed ML acceptance sources', async () => {
+    const deploy = await source('deploy/scripts/stoxla-deploy-release.sh');
+    const start = deploy.indexOf('prepare_writable_tree() {');
+    const end = deploy.indexOf('\n}\n\nprepare_fundamentals_python()', start) + 2;
+    assert.ok(start >= 0 && end > start);
+
+    const fixture = await mkdtemp(resolve(tmpdir(), 'stox-private-storage-'));
+    try {
+        const sources = resolve(fixture, 'app/private/ml-acceptance/sources/29fbcda4-77ae-4850-802d-f15a297f061c');
+        const ordinary = resolve(fixture, 'app/framework/cache');
+        await mkdir(sources, { recursive: true, mode: 0o700 });
+        await mkdir(ordinary, { recursive: true });
+        const sealed = resolve(sources, 'payload');
+        const cache = resolve(ordinary, 'cache.php');
+        await writeFile(sealed, 'sealed-source');
+        await writeFile(cache, 'ordinary-cache');
+        await chmod(sources, 0o700);
+        await chmod(sealed, 0o400);
+
+        const script = `${deploy.slice(start, end)}\nPHP_FPM_GROUP="$(id -gn)"\nprepare_writable_tree "$1"`;
+        const result = spawnSync('bash', ['-c', script, 'bash', fixture], { encoding: 'utf8' });
+        assert.equal(result.status, 0, result.stderr);
+        const mode = async path => (await (await import('node:fs/promises')).stat(path)).mode & 0o7777;
+        assert.equal(await mode(sources), 0o700);
+        assert.equal(await mode(sealed), 0o400);
+        assert.equal(await readFile(sealed, 'utf8'), 'sealed-source');
+        assert.equal(await mode(ordinary), 0o2775);
+        assert.equal(await mode(cache), 0o664);
+    } finally {
+        await chmod(resolve(fixture, 'app/private/ml-acceptance/sources/29fbcda4-77ae-4850-802d-f15a297f061c'), 0o700).catch(() => {});
+        await chmod(resolve(fixture, 'app/private/ml-acceptance/sources'), 0o700).catch(() => {});
+        await chmod(resolve(fixture, 'app/private/ml-acceptance'), 0o700).catch(() => {});
+        await chmod(resolve(fixture, 'app/private'), 0o700).catch(() => {});
+        await rm(fixture, { recursive: true, force: true });
     }
 });
 

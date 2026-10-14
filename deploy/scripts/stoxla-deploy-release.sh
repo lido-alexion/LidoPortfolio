@@ -38,10 +38,16 @@ prepare_writable_tree() {
 
   # Existing PHP-owned files are validated by the health check; only normalize
   # files the deployment user can safely change.
-  find "$path" -type d -user "$deploy_user" \
+  # ML acceptance sources are deliberately sealed 0700/0400. Keep this exact
+  # private subtree out of the generic Laravel writable-path normalization;
+  # chmod/chgrp here would both weaken that contract and make deploy fail when
+  # the tree is owned by PHP-FPM rather than the deployment user.
+  find "$path" -path "$path/app/private/ml-acceptance/sources" -prune -o \
+    -type d -user "$deploy_user" \
     -exec chgrp "$PHP_FPM_GROUP" {} + \
     -exec chmod 2775 {} +
-  find "$path" -type f -user "$deploy_user" \
+  find "$path" -path "$path/app/private/ml-acceptance/sources" -prune -o \
+    -type f -user "$deploy_user" \
     -exec chgrp "$PHP_FPM_GROUP" {} + \
     -exec chmod 0664 {} +
 }
