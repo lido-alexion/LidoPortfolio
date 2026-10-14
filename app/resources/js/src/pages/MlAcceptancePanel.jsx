@@ -41,6 +41,7 @@ export default function MlAcceptancePanel() {
         const digest = await crypto.subtle.digest('SHA-256', bytes);
         const sha256 = Array.from(new Uint8Array(digest), (v) => v.toString(16).padStart(2, '0')).join('');
         let source;
+        const isNewUpload = !resumeId;
         if (resumeId) {
             source = (await api.get(`${base}/sources/${resumeId}`)).data.data;
             if (source.manifest.sha256 !== sha256 || source.manifest.bytes !== file.size) throw new Error('Reselect the identical original file to resume.');
@@ -48,7 +49,11 @@ export default function MlAcceptancePanel() {
             source = (await api.post(`${base}/sources`, { version: 1, source: family, date, filename: file.name, bytes: file.size, sha256 })).data.data;
             setResumeId(source.id);
         }
-        for (let offset = source.received; offset < bytes.length; offset += 1024 * 1024) {
+        const received = isNewUpload && source.received === undefined ? 0 : source.received;
+        if (!Number.isSafeInteger(received) || received < 0 || received > bytes.length || received > source.manifest.bytes) {
+            throw new Error('Could not read a valid current upload offset. Refresh the source list and resume the upload again.');
+        }
+        for (let offset = received; offset < bytes.length; offset += 1024 * 1024) {
             const chunk = bytes.subarray(offset, Math.min(offset + 1024 * 1024, bytes.length));
             let binary = ''; for (const byte of chunk) binary += String.fromCharCode(byte);
             await api.put(`${base}/sources/${source.id}/chunks`, { offset, chunk: btoa(binary) });
