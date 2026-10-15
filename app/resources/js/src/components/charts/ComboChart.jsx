@@ -50,7 +50,24 @@ export default function ComboChart({ rows = [], availability = {}, defaultPreset
     };
     const toggle = (key) => setVisible((state) => ({ ...state, [key]: state[key] === false }));
 
-    if (!preset) return <div className="text-muted small">No combo chart data available.</div>;
+    if (!preset) return <section className="lido-combo-chart card" aria-label="Stock Details combo chart">
+        <div className="card-header d-flex flex-wrap align-items-center gap-2 py-2">
+            <label className="visually-hidden" htmlFor="combo-chart-preset">Combo chart preset</label>
+            <select id="combo-chart-preset" className="form-select form-select-sm flex-grow-1" value="" disabled>
+                <option value="" disabled>No available preset</option>
+                {['Market activity', 'Valuation', 'Fundamentals'].map((category) => <optgroup key={category} label={category}>
+                    {presets.filter((item) => item.category === category).map((item) => <option key={item.id} value={item.id} disabled>
+                        {item.label} — {item.unavailableReason || 'Unavailable'}
+                    </option>)}
+                </optgroup>)}
+            </select>
+            <button type="button" className="btn btn-outline-secondary btn-sm" aria-label="Previous combo chart" disabled>‹</button>
+            <button type="button" className="btn btn-outline-secondary btn-sm" aria-label="Next combo chart" disabled>›</button>
+        </div>
+        <div className="card-body">
+            <p className="text-muted small mb-0" role="status">No combo chart preset has enough historical data yet. The disabled options show what each preset needs.</p>
+        </div>
+    </section>;
     return <section className="lido-combo-chart card" aria-label="Stock Details combo chart">
         <div className="card-header d-flex flex-wrap align-items-center gap-2 py-2">
             <label className="visually-hidden" htmlFor="combo-chart-preset">Combo chart preset</label>

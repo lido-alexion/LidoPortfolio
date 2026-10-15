@@ -87,4 +87,21 @@ describe('combo chart preset contracts', () => {
         expect(selector).toHaveValue('price-volume');
         expect(screen.getByRole('option', { name: /Price \+ P\/E/ })).toBeDisabled();
     });
+
+    it('keeps the grouped catalogue and each disabled reason visible when all histories are unavailable', () => {
+        const availability = Object.fromEntries(COMBO_CHART_PRESETS.map(({ id }) => [id, { available: false, reason: `No ${id} history` }]));
+        render(<ComboChart availability={availability} defaultPresetId="price-volume" />);
+
+        const chart = screen.getByRole('region', { name: 'Stock Details combo chart' });
+        const selector = within(chart).getByLabelText('Combo chart preset');
+        expect(selector).toBeDisabled();
+        expect(within(selector).getAllByRole('group')).toHaveLength(3);
+        expect(selector.querySelectorAll('optgroup > option')).toHaveLength(7);
+        for (const preset of COMBO_CHART_PRESETS) {
+            expect(within(selector).getByRole('option', { name: `${preset.label} — No ${preset.id} history`, exact: true })).toBeDisabled();
+        }
+        expect(within(chart).getByRole('button', { name: 'Previous combo chart' })).toBeDisabled();
+        expect(within(chart).getByRole('button', { name: 'Next combo chart' })).toBeDisabled();
+        expect(within(chart).getByRole('status')).toHaveTextContent('No combo chart preset has enough historical data yet');
+    });
 });
