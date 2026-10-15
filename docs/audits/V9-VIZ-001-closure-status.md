@@ -1,5 +1,9 @@
 # V9-VIZ-001 Closure — Live Status
 
+## Current state correction — 2026-10-15 18:45 UTC
+
+The older connector-blocker narrative below is superseded. Root published draft PR #179 at head `4525b73b6fc11568ad4a0dc51a1d9c324a563b4d`; hosted exact-head run `38756861711` passed. Root review then found a blocking geometry-selector defect in the authenticated smoke: CSS re-queried explicit `[role="region"]` while the chart is a labelled `<section>` with an implicit region role. The current uncommitted fix samples nonempty paths through the Playwright role-located chart element and shares the preset-aware predicate with browser regression coverage. Focused Node tests passed 2/2 and configured VIZ-01 Chromium passed 7/7. This fix has not yet been pushed; required frontend parity, fresh hosted exact-head CI, normal reviewed merge, serialized deployment and successful authenticated production smoke remain outstanding. Builds 544 and 545 had failed smoke runs; do not claim the selector defect solely explains them. No production writes, secrets, manual deploy, ML/service changes, or other-worktree edits.
+
 **Updated:** 2026-10-15 11:23 UTC
 **Workspace:** `/home/nitty/stox-v9-viz001`
 **Feature branch:** `fix/viz001-default-availability-sync` is pushed and clean, based on current `origin/master` `f43201beb43ea5145ed3fb8ea742bd5167dc8432`. Feature source commit is `c485eaf1`; later commits on the branch contain only truthful audit/status handoff updates. PR #178 remains the latest merged feature code; follow-up PR has not been opened.

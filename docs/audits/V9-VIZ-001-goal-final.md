@@ -1,5 +1,9 @@
 # V9-VIZ-001 Closure Handoff — Not Closed
 
+## Current state correction — 2026-10-15 18:45 UTC
+
+The historical connector-blocker narrative below is superseded. Root published draft PR #179 at head `4525b73b6fc11568ad4a0dc51a1d9c324a563b4d`; hosted exact-head run `38756861711` passed. Root review then found a blocking geometry-selector defect in the authenticated smoke. The local correction scopes SVG sampling to the role-located implicit `<section>` region and shares the preset-aware nonempty geometry predicate with a browser regression. Focused Node tests passed 2/2 and configured VIZ-01 Chromium passed 7/7. The correction is not yet committed or on the PR; full frontend parity and all release/production acceptance steps remain pending. Build545 smoke failure remains an observed failure and is not attributed solely to the selector defect.
+
 **Updated:** 2026-10-15 11:23 UTC
 **State:** Epic remains open; production acceptance is not verified.
 **Latest merged code:** `f43201beb43ea5145ed3fb8ea742bd5167dc8432` (PR #178).

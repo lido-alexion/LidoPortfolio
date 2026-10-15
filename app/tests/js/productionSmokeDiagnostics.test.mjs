@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { safeAuthenticatedSmokeStage } from '../e2e/productionSmokeDiagnostics.js';
+import { hasPresetChartGeometry, safeAuthenticatedSmokeStage } from '../e2e/productionSmokeDiagnostics.js';
 
 test('authenticated smoke reports only fixed, stage-level diagnostics', () => {
     for (const stage of [
@@ -13,4 +13,11 @@ test('authenticated smoke reports only fixed, stage-level diagnostics', () => {
     }
     assert.equal(safeAuthenticatedSmokeStage('secret@example.test'), 'unknown');
     assert.equal(safeAuthenticatedSmokeStage('provider-response-with-private-data'), 'unknown');
+});
+
+test('combo geometry acceptance requires non-empty preset-appropriate plotted paths', () => {
+    assert.equal(hasPresetChartGeometry({ linePathData: ['M0 0L1 1', 'M0 1L1 0'] }, 'price-pe'), true);
+    assert.equal(hasPresetChartGeometry({ linePathData: ['M0 0L1 1'], barPathData: ['M0 0h2v3z'] }, 'price-volume'), true);
+    assert.equal(hasPresetChartGeometry({ linePathData: [' '], barPathData: [''] }, 'price-volume'), false);
+    assert.equal(hasPresetChartGeometry({ linePathData: ['M0 0L1 1'] }, 'price-pe'), false);
 });

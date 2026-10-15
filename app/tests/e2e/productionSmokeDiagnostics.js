@@ -23,3 +23,13 @@ const AUTHENTICATED_SMOKE_STAGES = new Set([
 export function safeAuthenticatedSmokeStage(stage) {
     return AUTHENTICATED_SMOKE_STAGES.has(stage) ? stage : 'unknown';
 }
+
+// Keep the production acceptance rule shared with browser regression coverage.
+// The caller scopes these paths to the Playwright-located combo chart region.
+export function hasPresetChartGeometry({ linePathData = [], barPathData = [] }, presetId) {
+    const lineCount = linePathData.filter(value => typeof value === 'string' && value.trim()).length;
+    const barCount = barPathData.filter(value => typeof value === 'string' && value.trim()).length;
+    return ['price-pe', 'price-pb', 'price-ps'].includes(presetId)
+        ? lineCount >= 2
+        : lineCount >= 1 && barCount >= 1;
+}

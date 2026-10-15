@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { hasPresetChartGeometry } from './productionSmokeDiagnostics.js';
 
 const dates = ['2025-10-01', '2026-01-01', '2026-04-01', '2026-07-01'];
 const prices = dates.map((price_date, index) => ({
@@ -97,6 +98,22 @@ async function inspectChart(page, viewport, testInfo) {
 
 test('VIZ-01 supports desktop keyboard preset, legend and in-chart controls without writes', async ({ page }, testInfo) => {
     await inspectChart(page, 'desktop', testInfo);
+});
+
+test('production geometry predicate accepts plotted data in the labelled implicit section region', async ({ page }, testInfo) => {
+    journeyId(testInfo, 'VIZ-01');
+    await prepare(page, 'desktop');
+    await page.goto('/watchlist/TCS');
+    const chart = page.getByRole('region', { name: 'Stock Details combo chart', exact: true });
+    await expect(chart).toBeVisible();
+    const semantics = await chart.evaluate(region => ({ tagName: region.tagName, explicitRole: region.getAttribute('role') }));
+    expect(semantics).toEqual({ tagName: 'SECTION', explicitRole: null });
+    const readGeometry = () => chart.evaluate(region => ({
+        linePathData: [...region.querySelectorAll('.recharts-line-curve')].map(path => path.getAttribute('d')),
+        barPathData: [...region.querySelectorAll('.recharts-bar-rectangle .recharts-rectangle')].map(rect => rect.getAttribute('d')),
+    }));
+    await expect.poll(async () => hasPresetChartGeometry(await readGeometry(), 'price-pe')).toBe(true);
+    expect(hasPresetChartGeometry({ linePathData: [], barPathData: [] }, 'price-pe')).toBe(false);
 });
 
 test('symbol deep links prefer the data-bearing NSE listing over a BSE-first watchlist row', async ({ page }, testInfo) => {
