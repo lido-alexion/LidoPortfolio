@@ -182,7 +182,7 @@ test('private acceptance permission repair is dry-run by default and narrowly gu
     assert.match(script, /const REPAIR_ROOT = '\/var\/www\/stoxla\/shared\/storage\/app\/private\/ml-acceptance'/);
     assert.doesNotMatch(script, /DB::table\(['"]jobs['"]\)/);
     assert.equal((script.match(/checkAcceptanceQueueOrStop\(/g) || []).length, 3);
-    assert.match(script, /whereIn\('status', \['preflight', 'training'\]\)/);
+    assert.match(script, /whereIn\('status', \['preflight', 'ready', 'training'\]\)/);
     assert.match(script, /\['uploading', 'queued', 'sealed', 'failed', 'cancelled'\]/);
     assert.match(script, /sealed-payload/);
     assert.match(script, /writable-upload-payload/);
