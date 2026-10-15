@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { accountLayoutStorageKey, factoryDashboardLayout, hasLocalDashboardLayout, inspectDashboardLayoutCompatibility, migrateDashboardLayout, readLocalDashboardLayout, toggleCard } from '../../resources/js/src/utils/dashboardLayouts.js';
+import { accountLayoutStorageKey, factoryDashboardLayout, hasLocalDashboardLayout, inspectDashboardLayoutCompatibility, mergeDashboardLayoutRecord, migrateDashboardLayout, readLocalDashboardLayout, toggleCard } from '../../resources/js/src/utils/dashboardLayouts.js';
 
 test('layout migration preserves variants and adds new cards', () => {
     const layout = migrateDashboardLayout({ desktop: { cards: [{ id: 'alerts', visible: false }] } });
@@ -28,6 +28,16 @@ test('migration drops retired cards and strips unsupported properties while reta
 
 test('local layout keys are separated by account', () => {
     assert.notEqual(accountLayoutStorageKey('one'), accountLayoutStorageKey('two'));
+});
+
+test('stale named-layout responses cannot replace a definition with a newer revision', () => {
+    const older = { id: 7, name: 'Renamed', revision: 2, schema_version: 1, definition: { desktop: { cards: [{ id: 'older' }] } } };
+    const newer = { id: 7, name: 'Investor', revision: 3, schema_version: 1, definition: { desktop: { cards: [{ id: 'newer' }] } } };
+    const merged = mergeDashboardLayoutRecord(newer, older);
+    assert.equal(merged.name, 'Renamed');
+    assert.equal(merged.revision, 3);
+    assert.deepEqual(merged.definition, newer.definition);
+    assert.equal(mergeDashboardLayoutRecord(older, newer), newer);
 });
 
 test('legacy account-scoped keys migrate into the current key without crossing accounts', () => {
