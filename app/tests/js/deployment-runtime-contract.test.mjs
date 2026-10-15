@@ -182,7 +182,9 @@ test('private acceptance permission repair is dry-run by default and narrowly gu
     assert.match(script, /const REPAIR_ROOT = '\/var\/www\/stoxla\/shared\/storage\/app\/private\/ml-acceptance'/);
     assert.doesNotMatch(script, /DB::table\(['"]jobs['"]\)/);
     assert.equal((script.match(/checkAcceptanceQueueOrStop\(/g) || []).length, 3);
-    assert.match(script, /whereIn\('status', \['preflight', 'ready', 'training'\]\)/);
+    const activeCampaignGuard = /whereIn\('status', \['preflight', 'ready', 'training'\]\)/g;
+    assert.equal([...script.matchAll(activeCampaignGuard)].length, 2, 'initial and pre-apply checks must reject preflight, ready, and training campaigns');
+    assert.match(script, /in_array\(\$row->status, \['preflight', 'ready', 'training'\], true\)/, 'the private-object planner must treat ready campaigns as active');
     assert.match(script, /\['uploading', 'queued', 'sealed', 'failed', 'cancelled'\]/);
     assert.match(script, /sealed-payload/);
     assert.match(script, /writable-upload-payload/);
