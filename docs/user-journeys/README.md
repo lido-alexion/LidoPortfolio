@@ -35,6 +35,7 @@ Canonical application paths used by the guide include:
 - Closed Transactions: `/transactions/closed`
 - Holdings: `/holdings`
 - Backtests: `/backtests`
+- Stock Details: `/watchlist/{symbol}`
 
 UI labels can evolve. The route and user intent are more important than minor wording differences in a button label.
 
@@ -281,3 +282,9 @@ Extended existing Dashboard local/lifecycle/portability and Stock Details combo-
 Stored squared-off transaction and historical evaluation recovery are [E2E-52–53](19-persisted-history.md), preserving financial/observation identity and explicit deletion confirmation.
 
 Runtime Screener/Strategy registry compatibility, immutable version reads, definition export, owned/shared copy and reviewed runtime JSON imports are [E2E-54–55](20-runtime-registry-compatibility.md). Current V8 FEAT-064 imports do not require Library publication.
+
+### F. Stock Details visualization
+
+| ID | Scenario | Detail |
+| --- | --- | --- |
+| VIZ-01 | Compare a stock's price with a curated metric and manage the account default | [Stock Details combo charts](07-stock-details-combo-charts.md#viz-01--compare-stock-details-combo-charts) |

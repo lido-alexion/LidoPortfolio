@@ -35,6 +35,7 @@
 <p>- Closed Transactions: `/transactions/closed`</p>
 <p>- Holdings: `/holdings`</p>
 <p>- Backtests: `/backtests`</p>
+<p>- Stock Details: `/watchlist/{symbol}`</p>
 
 <p>UI labels can evolve. The route and user intent are more important than minor wording differences in a button label.</p>
 
@@ -281,4 +282,10 @@
 <p>Stored squared-off transaction and historical evaluation recovery are [E2E-52–53](19-persisted-history.md), preserving financial/observation identity and explicit deletion confirmation.</p>
 
 <p>Runtime Screener/Strategy registry compatibility, immutable version reads, definition export, owned/shared copy and reviewed runtime JSON imports are [E2E-54–55](20-runtime-registry-compatibility.md). Current V8 FEAT-064 imports do not require Library publication.</p>
+
+<p>### F. Stock Details visualization</p>
+
+<p>| ID | Scenario | Detail |</p>
+<p>| --- | --- | --- |</p>
+<p>| VIZ-01 | Compare a stock's price with a curated metric and manage the account default | [Stock Details combo charts](07-stock-details-combo-charts.md#viz-01--compare-stock-details-combo-charts) |</p>
 </body></html>
