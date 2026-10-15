@@ -157,8 +157,9 @@ function walkSource(string $dir, object $row, string $root, int $uid, int $gid):
     return $objects;
 }
 
-function walkCampaign(string $dir, string $root, int $uid, int $gid): array
+function walkCampaign(string $dir, string $root, int $uid, int $gid, string $status): array
 {
+    if (!in_array($status, ['blocked', 'cancelled', 'failed', 'qualified', 'local_complete'], true)) stop("campaign is not in a recognized terminal state: {$status}");
     safePath($dir, $root);
     $objects = [recordObject($dir, 0700, 'campaign-directory', 'terminal-campaign', $uid, $gid)];
     $items = scandir($dir);
@@ -171,15 +172,75 @@ function walkCampaign(string $dir, string $root, int $uid, int $gid): array
             $objects[] = recordObject($path, 0700, 'campaign-horizon-directory', 'terminal-campaign', $uid, $gid);
             $children = scandir($path);
             if ($children === false) stop("cannot list campaign horizon: {$path}");
+            $journalSeen = false;
             foreach (array_diff($children, ['.', '..']) as $child) {
                 $file = $path . DIRECTORY_SEPARATOR . $child;
                 safePath($file, $root);
-                if ($child !== 'pit-evidence.jsonl.gz' || !is_file($file)) stop("unrecognized campaign evidence object: {$file}");
-                $objects[] = recordObject($file, 0400, 'sealed-evidence-journal', 'terminal-campaign', $uid, $gid);
+                if (in_array($child, ['pit-evidence.jsonl.gz', 'pit-evidence.jsonl'], true)) {
+                    if ($journalSeen) stop("multiple campaign evidence journals present: {$path}");
+                    if (!is_file($file)) stop("campaign evidence journal is not a regular file: {$file}");
+                    $kind = $child === 'pit-evidence.jsonl' ? 'legacy-plain-evidence-journal' : 'sealed-evidence-journal';
+                    $objects[] = recordObject($file, 0400, $kind, 'terminal-campaign', $uid, $gid);
+                    $journalSeen = true;
+                    continue;
+                }
+                if ($child === 'dataset' && is_dir($file)) {
+                    // MlTrainingDatasetBuilder::buildStreamed creates exactly these partition files.
+                    // An interrupted preflight may leave any subset (including none) before its finally cleanup.
+                    $objects[] = recordObject($file, 0700, 'retained-temporary-dataset-directory', 'terminal-campaign', $uid, $gid);
+                    $datasetEntries = scandir($file);
+                    if ($datasetEntries === false) stop("cannot list retained dataset: {$file}");
+                    $expectedPartitions = ['train.jsonl', 'validation.jsonl', 'test.jsonl'];
+                    foreach (array_diff($datasetEntries, ['.', '..']) as $partition) {
+                        $partitionPath = $file . DIRECTORY_SEPARATOR . $partition;
+                        safePath($partitionPath, $root);
+                        if (!in_array($partition, $expectedPartitions, true) || !is_file($partitionPath)) {
+                            stop("unrecognized retained dataset object: {$partitionPath}");
+                        }
+                        $objects[] = recordObject($partitionPath, 0400, 'retained-temporary-dataset-partition', 'terminal-campaign', $uid, $gid);
+                    }
+                    continue;
+                }
+                stop("unrecognized campaign evidence object: {$file}");
             }
         } else stop("unrecognized campaign object: {$path}");
     }
     return $objects;
+}
+
+/** Build the complete registered-object plan identically for dry-run and apply validation. */
+function planRegisteredObjects(iterable $sourceRows, iterable $campaignRows, string $root, string $sourcesRoot, string $campaignRoot, int $uid, int $gid): array
+{
+    $plan = [];
+    $sourceIds = [];
+    foreach ($sourceRows as $row) {
+        if (!preg_match('/\A[0-9a-f-]{36}\z/i', $row->id)) stop('invalid source identity in database');
+        $sourceIds[$row->id] = true;
+        $dir = $sourcesRoot . '/' . $row->id;
+        if (file_exists($dir) || is_link($dir)) $plan = array_merge($plan, walkSource($dir, $row, $root, $uid, $gid));
+    }
+    assertRegisteredEntries($sourcesRoot, $sourceIds, 'source');
+
+    $campaignIds = [];
+    foreach ($campaignRows as $row) {
+        if (!preg_match('/\A[0-9a-f-]{36}\z/i', $row->id)) stop('invalid campaign identity in database');
+        $campaignIds[$row->id] = true;
+        $dir = $campaignRoot . '/' . $row->id;
+        if (file_exists($dir) || is_link($dir)) {
+            if (in_array($row->status, ['preflight', 'ready', 'training'], true)) stop("active campaign has private objects: {$row->id}");
+            $plan = array_merge($plan, walkCampaign($dir, $root, $uid, $gid, (string) $row->status));
+        }
+    }
+    assertRegisteredEntries($campaignRoot, $campaignIds, 'campaign');
+    return $plan;
+}
+
+function planFingerprint(array $plan): string
+{
+    $byPath = [];
+    foreach ($plan as $object) $byPath[$object['path']] = $object;
+    ksort($byPath);
+    return hash('sha256', json_encode($byPath, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
 }
 
 // Test harnesses may load the planner functions without entering the production CLI.
@@ -200,7 +261,7 @@ $kernel->bootstrap();
 
 $service = trim((string) shell_exec('/usr/bin/systemctl is-active stoxla-ml-acceptance.service 2>/dev/null'));
 if (!in_array($service, ['inactive', 'failed'], true)) stop("dedicated worker must be stopped (state: " . ($service ?: 'unknown') . ')');
-$busy = DB::table('stox_ml_acceptance_campaigns')->whereIn('status', ['preflight', 'training'])->count();
+$busy = DB::table('stox_ml_acceptance_campaigns')->whereIn('status', ['preflight', 'ready', 'training'])->count();
 if ($busy !== 0) stop('an acceptance campaign is active');
 $queueConfig = config('queue.connections');
 $databaseConnections = config('database.connections');
@@ -227,28 +288,9 @@ foreach (['sources' => $sourcesRoot, 'campaigns' => $campaignRoot] as $name => $
 }
 $sourceRows = DB::table('stox_ml_acceptance_sources')->get();
 $sourceState = $sourceRows->sortBy('id')->map(fn ($r) => [$r->id, $r->status, $r->updated_at, $r->manifest, $r->evidence])->values()->all();
-$sourceIds = [];
-foreach ($sourceRows as $row) {
-    if (!preg_match('/\A[0-9a-f-]{36}\z/i', $row->id)) stop('invalid source identity in database');
-    $sourceIds[$row->id] = true;
-    $dir = $sourcesRoot . '/' . $row->id;
-    if (file_exists($dir) || is_link($dir)) $plan = array_merge($plan, walkSource($dir, $row, REPAIR_ROOT, $uid, $gid));
-}
-assertRegisteredEntries($sourcesRoot, $sourceIds, 'source');
-
 $campaignRows = DB::table('stox_ml_acceptance_campaigns')->get()->keyBy('id');
 $campaignState = $campaignRows->sortBy('id')->map(fn ($r) => [$r->id, $r->status, $r->updated_at])->values()->all();
-$campaignIds = [];
-foreach ($campaignRows as $row) {
-    if (!preg_match('/\A[0-9a-f-]{36}\z/i', $row->id)) stop('invalid campaign identity in database');
-    $campaignIds[$row->id] = true;
-    $dir = $campaignRoot . '/' . $row->id;
-    if (file_exists($dir) || is_link($dir)) {
-        if (in_array($row->status, ['preflight', 'training'], true)) stop("active campaign has private objects: {$row->id}");
-        $plan = array_merge($plan, walkCampaign($dir, REPAIR_ROOT, $uid, $gid));
-    }
-}
-assertRegisteredEntries($campaignRoot, $campaignIds, 'campaign');
+$plan = planRegisteredObjects($sourceRows, $campaignRows, REPAIR_ROOT, $sourcesRoot, $campaignRoot, $uid, $gid);
 
 foreach ($plan as $object) {
     if ($object['before_mode'] !== $object['after_mode'] || $object['before_uid'] !== $uid || $object['before_gid'] !== $gid) {
@@ -262,12 +304,16 @@ if ($changes === []) { echo "No changes required.\n"; exit(0); }
 
 $currentService = trim((string) shell_exec('/usr/bin/systemctl is-active stoxla-ml-acceptance.service 2>/dev/null'));
 if (!in_array($currentService, ['inactive', 'failed'], true) || $currentService !== $service) stop('worker state changed after planning; rerun dry-run');
-if (DB::table('stox_ml_acceptance_campaigns')->whereIn('status', ['preflight', 'training'])->count() !== 0) stop('campaign state changed after planning; rerun dry-run');
+if (DB::table('stox_ml_acceptance_campaigns')->whereIn('status', ['preflight', 'ready', 'training'])->count() !== 0) stop('campaign state changed after planning; rerun dry-run');
 checkAcceptanceQueueOrStop($queueConfig, config('database.default'), $databaseConnections, $countAcceptanceJobs, 'pre-apply safety check');
-$sourceNow = DB::table('stox_ml_acceptance_sources')->get()->sortBy('id')->map(fn ($r) => [$r->id, $r->status, $r->updated_at, $r->manifest, $r->evidence])->values()->all();
-$campaignNow = DB::table('stox_ml_acceptance_campaigns')->get()->sortBy('id')->map(fn ($r) => [$r->id, $r->status, $r->updated_at])->values()->all();
+$sourceRowsNow = DB::table('stox_ml_acceptance_sources')->get();
+$campaignRowsNow = DB::table('stox_ml_acceptance_campaigns')->get()->keyBy('id');
+$sourceNow = $sourceRowsNow->sortBy('id')->map(fn ($r) => [$r->id, $r->status, $r->updated_at, $r->manifest, $r->evidence])->values()->all();
+$campaignNow = $campaignRowsNow->sortBy('id')->map(fn ($r) => [$r->id, $r->status, $r->updated_at])->values()->all();
 if (!hash_equals(hash('sha256', json_encode($sourceState)), hash('sha256', json_encode($sourceNow)))
     || !hash_equals(hash('sha256', json_encode($campaignState)), hash('sha256', json_encode($campaignNow)))) stop('acceptance source/campaign state changed after planning; rerun dry-run');
+$planNow = planRegisteredObjects($sourceRowsNow, $campaignRowsNow, REPAIR_ROOT, $sourcesRoot, $campaignRoot, $uid, $gid);
+if (!hash_equals(planFingerprint($plan), planFingerprint($planNow))) stop('private object plan changed after planning; rerun dry-run');
 
 if (!is_dir(REPAIR_AUDIT) && !mkdir(REPAIR_AUDIT, 0700, true)) stop('cannot create protected audit directory');
 if (is_link(REPAIR_AUDIT) || (fileperms(REPAIR_AUDIT) & 0077) !== 0) stop('audit directory must be owner-only and not symlinked');
