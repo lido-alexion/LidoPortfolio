@@ -138,11 +138,17 @@ class MlAcceptancePrivatePermissionRepairScriptTest extends TestCase
         $this->assertCount(19, $plan); // campaign, three horizons, three datasets, nine partitions and three journals
         $datasetDirectories = array_values(array_filter($plan, fn ($item) => $item['kind'] === 'retained-temporary-dataset-directory'));
         $this->assertCount(3, $datasetDirectories);
-        foreach ($datasetDirectories as $directory) $this->assertSame(0700, $directory['after_mode']);
+        foreach ($datasetDirectories as $directory) {
+            $this->assertSame(0700, $directory['after_mode']);
+            $this->assertSame(33, $directory['after_uid']);
+            $this->assertSame(33, $directory['after_gid']);
+        }
         $partitionObjects = array_values(array_filter($plan, fn ($item) => $item['kind'] === 'retained-temporary-dataset-partition'));
         $this->assertCount(9, $partitionObjects);
         foreach ($partitionObjects as $object) {
             $this->assertSame(0400, $object['after_mode']);
+            $this->assertSame(33, $object['after_uid']);
+            $this->assertSame(33, $object['after_gid']);
             $this->assertSame(hash_file('sha256', $object['path']), $object['sha256']);
         }
         $gzipJournals = array_values(array_filter($plan, fn ($item) => $item['kind'] === 'sealed-evidence-journal'));
@@ -181,6 +187,8 @@ class MlAcceptancePrivatePermissionRepairScriptTest extends TestCase
         $this->assertCount(3, $journals);
         foreach ($journals as $journal) {
             $this->assertSame(0400, $journal['after_mode']);
+            $this->assertSame(33, $journal['after_uid']);
+            $this->assertSame(33, $journal['after_gid']);
             $this->assertSame(hash('sha256', $legacyBytes), $journal['sha256']);
             $this->assertSame($legacyBytes, file_get_contents($journal['path']));
         }
