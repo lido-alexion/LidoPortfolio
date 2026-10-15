@@ -31,6 +31,22 @@ if ($targets !== array_fill(0, 2, ['queue_archive', 'portfolio_jobs', 'ml-accept
     throw new RuntimeException('guard did not query the configured connection/table/queue at both checks');
 }
 
+$defaultQueueConfig = ['ml-acceptance' => array_merge($queueConfig['ml-acceptance'], ['connection' => null])];
+$defaultTargets = [];
+assertAcceptanceQueueEmpty(
+    $defaultQueueConfig,
+    'application_db',
+    ['application_db' => ['driver' => 'mysql']],
+    static function (string $connection, string $table, string $queue) use (&$defaultTargets): int {
+        $defaultTargets[] = [$connection, $table, $queue];
+        return 0;
+    },
+    'default connection fallback'
+);
+if ($defaultTargets !== [['application_db', 'portfolio_jobs', 'ml-acceptance']]) {
+    throw new RuntimeException('null queue connection did not use Laravel default with configured table/queue');
+}
+
 $queueRows = 0;
 assertAcceptanceQueueEmpty($queueConfig, 'application_db', $databaseConnections, $countJobs, 'empty queue control');
 
