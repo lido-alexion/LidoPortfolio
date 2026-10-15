@@ -1,6 +1,6 @@
 # V9-UX-001 Implementation Audit
 
-**Status:** IMPLEMENTATION IN PROGRESS — governed current-build ML acceptance, current real-Kite smoke and complete frozen §19 audit remain open. The canonical tracker stays FROZEN / IMPLEMENTATION-READY until all completion criteria pass.
+**Status:** IMPLEMENTATION IN PROGRESS — governed current-build ML acceptance and final frozen §19 audit remain open. The controlled real-Kite read-only smoke passed three GETs on build 523 / `8cf83fd0dfc14284af48bec5ecc6baa4233cdb85` on 2026-10-12; its relevance to the current deployed build remains to be reviewed. The canonical tracker remains IMPLEMENTATION IN PROGRESS under PR #171, not closed.
 **Audit date:** 2026-10-15
 **Canonical scope:** [V9-UX-001 specification](../archive/specs/V9-User-Journey-Automation-E2E-Specification.md)
 **Journey sources:** [`docs/user-journeys/`](../user-journeys/)
@@ -15,9 +15,9 @@ The first read-only worker access preflight failed because it was invoked from `
 
 The permission audit validates planned object identity/integrity; it does not establish source provenance, historical date coverage or ML acceptance. The frozen acceptance contract still requires a genuine current-build queued preflight, complete requested-date membership, at least 90% mapping for each date, nonzero historical breadth, PIT-valid feature coverage/exclusions, and real adapter completion for all three horizons. Static review confirms the historical feature builder delegates TTM and comparable-period growth to the canonical point-in-time `FundamentalDataService`; code-level formula checks do not establish deployed historical data coverage. No payload was inspected for this audit.
 
-The protected worker remains inactive. Do not start it, queue acceptance work, mutate sources/campaigns, train, or enable lifecycle/schedules without the separate operator approvals and evidence required by the frozen contract. The next operator operation after the cwd fix reaches production is the stopped-worker read-only preflight. The last recorded Kite session was expired; a current authorized connection and the separate three-GET read-only Kite smoke remain required if not renewed since the last audit. No real order, cancellation, reconciliation or cash action is permitted.
+The protected worker remains inactive. The PO's existing authorization permits governed ML acceptance and associated training once every readiness and provenance gate passes; starting or controlling the production service remains an operator action. After the cwd fix reaches production, the next operator operation is the stopped-worker read-only preflight. The build-523 real-Kite receipt is retained as a passed read-only integration boundary; review whether that evidence satisfies the exact-current-build criterion or whether the authorized Kite owner should renew the connection and repeat the three-GET smoke. No real order, cancellation, reconciliation, cash action, automatic activation or schedule enablement is permitted.
 
-V9-UX-001 remains **IMPLEMENTATION IN PROGRESS**. Journey conformance and final scope reconciliation are still required; this audit, CI, deployment and smoke evidence do not close the epic. The canonical wishlist row remains unchanged.
+V9-UX-001 remains **IMPLEMENTATION IN PROGRESS**. Journey conformance and final scope reconciliation are still required; this audit, CI, deployment and smoke evidence do not close the epic. The canonical wishlist row was updated under merged PR #171 and must remain in progress.
 
 ### Historical readiness snapshot — 2026-10-11 20:30 UTC
 
@@ -40,7 +40,7 @@ All independent code, deployment and nightly qualification is complete. The rema
 1. Have the authorized Kite owner reconnect, then run the deployed `stox:kite-read-only-smoke` for that authorized user. Preserve its three provider GETs and unchanged order/cash evidence; no orders/cancellations or money actions are authorized.
 2. Provide specific authorization for the protected dedicated ML worker and governed current-build preflight/source preview/review/apply/canonical 1m/3m/6m campaign under [the acceptance contract](../current/ml-production-acceptance.md). Reconcile the existing campaign before creating another; inspect and reuse eligible sealed sources, obtaining original dated sources only for actual uncovered boundaries. Require 100% requested membership-date coverage, >=90% mapping on every date, nonzero historical breadth and real adapter completion, preserving unknown sectors where dated evidence is absent and leaving lifecycle/schedules/drift/model activation disabled.
 
-The actual tracker is [the repository V9 wishlist](../archive/specs/LidoPortfolio-V9-Wishlist.md), row `V9-UX-001`, and is accessible. It remains **FROZEN / IMPLEMENTATION-READY** until every frozen §19 requirement qualifies. No unavailable Linear ID, tracker-access blocker or acceptance waiver is invented. Earlier dated sections below are chronological evidence and superseded scope counts; this current snapshot governs acceptance.
+The actual tracker is [the repository V9 wishlist](../archive/specs/LidoPortfolio-V9-Wishlist.md), row `V9-UX-001`, and is accessible. PR #171 records the active owner and **IMPLEMENTATION IN PROGRESS** status; preserve that row until every frozen §19 requirement qualifies. No unavailable Linear ID or acceptance waiver is invented. Earlier dated sections below are chronological evidence and superseded scope counts; this current snapshot governs acceptance.
 
 ## Initial foundation slice
 
