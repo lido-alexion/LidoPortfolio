@@ -1,10 +1,11 @@
 # V9-VIZ-001 Closure — Live Status
 
-**Updated:** 2026-10-15 08:46 UTC (runner clock)
+**Updated:** 2026-10-15 08:48 UTC (runner clock)
 **Owner:** Codex VIZ-001 closure session
 **Workspace:** `/home/nitty/stox-v9-viz001`
 **Branch / local base:** `fix/viz001-smoke-stage-diagnostics`, currently based at `47cd05132352d6fb46d483d38e1841f1a3ef56dc` (merged PR #172)
 **Latest upstream master observed through GitHub read-only connector:** `51fec37be88399275948a74491dfef7350a61a30` (merged PR #170, V9-UX-003; not yet integrated locally)
+**Local diagnostic commit:** `015ae043b90e3c7800139f344ce1eee5dd064d3f` (not published; parent is `47cd051`)
 **Live command:** none. No detached/background worker or durable log file exists.
 
 ## Goal and plan
@@ -47,9 +48,9 @@ Added regression test `app/tests/js/productionSmokeDiagnostics.test.mjs` verifie
 
 ## Blockers and next actions
 
-1. Review the full diagnostic diff, focused privacy test, direct smoke fail-closed checks, and `git diff --check`; hosted frontend CI must pass because this runner cannot spawn the pre-existing subprocess test.
+1. Local diagnostic commit is self-reviewed; `git diff --check`, focused stage-allowlist test, script syntax, and direct missing/non-HTTPS fail-closed checks passed. Hosted frontend CI must pass because this runner cannot spawn the pre-existing subprocess test.
 2. Integrate current upstream master `51fec37` into this branch after normal `git fetch` works. Current SSH and HTTPS fetch both fail DNS; do not publish/push until normally reconciled. Latest deployment history has no active run, so no other deployment needs cancellation or coordination now. Never rewrite shared history or force-push.
-3. Publish diagnostic changes as a reviewable PR through standard GitHub flow; if connector mutation remains approval-blocked, leave exact local branch/commit/diff ready and report the precise connector action needed.
+3. Publish diagnostic changes as a reviewable PR through standard GitHub flow after reconciling `51fec37`; git pushes currently cannot resolve GitHub DNS, while prior GitHub connector mutation was approval-blocked under approval policy `never`. Local branch/commit/diff are ready. Required root-side action if this persists: restore normal git remote connectivity and fetch/merge `origin/master`, then push branch `fix/viz001-smoke-stage-diagnostics` and open a PR against `master` from commit `015ae043` plus its normal reconciliation merge.
 4. Poll exact-head required CI and review feedback. Fix failures in scope without weakening gates; merge only reviewed green code.
 5. Inspect release queue/active deployments before allowing another workflow. Never cancel another thread's release. Let master deployment serialize normally; do not manually deploy.
 6. Use fixed sub-stage output to fix the actual combo-chart cause, then repeat green PR/CI/merge/deploy as needed.
