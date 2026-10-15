@@ -1,12 +1,12 @@
 # V9-VIZ-001 Closure — Live Status
 
-**Updated:** 2026-10-15 08:46 UTC (runner clock)
+**Updated:** 2026-10-15 08:47 UTC (runner clock)
 **Owner:** Codex VIZ-001 closure session
 **Workspace:** `/home/nitty/stox-v9-viz001`
-**Branch / local base:** `fix/viz001-smoke-stage-diagnostics`, currently based at `47cd05132352d6fb46d483d38e1841f1a3ef56dc` (merged PR #172)
-**Latest upstream master observed through GitHub read-only connector:** `aeb4c3d0a200815e0537c2a1cb53ac95c137d8dc` (merged PR #174 documentation, after PR #170; not yet integrated locally)
+**Branch / reconciled base:** `fix/viz001-smoke-stage-diagnostics`, normal merge commit `9871a6ba3475719f96e45a8cfc96e6712cba77cd` incorporates latest observed master `aeb4c3d`
+**Latest upstream master observed through GitHub read-only connector:** `aeb4c3d0a200815e0537c2a1cb53ac95c137d8dc` (merged PR #174 documentation, after PR #170; incorporated locally)
 **Local diagnostic commit:** `015ae043b90e3c7800139f344ce1eee5dd064d3f` (not published; parent is `47cd051`)
-**Local branch tip:** `7c7de630` (three unpushed local commits: diagnostic code/test and two evidence-only status updates)
+**Local branch tip before this status refresh:** `9871a6ba` (five local commits from the original base, including the diagnostic commit and normal merge; unpublished)
 **Session / process / log:** active conversation; no persistent shell PID, detached process, or durable log file. Prior frontend verifier exec session `11134` ended after the sandbox-denied child-process test.
 
 ## Goal and plan
@@ -17,7 +17,7 @@ Close frozen `docs/archive/specs/V9-Combo-Chart-Support-Specification.md` AC1–
 
 **Post-merge production acceptance remediation.** PR #172 merged normally as `47cd05132352d6fb46d483d38e1841f1a3ef56dc`. Master CI run `38698956743` passed. Production deployment build 540 / run `38698956653` activated that exact SHA and its post-deploy exact-SHA health check passed; its final non-destructive browser smoke failed at the coarse diagnostic stage `combo_chart`. The feature has therefore not passed live acceptance and the V9 register remains `IMPLEMENTATION IN PROGRESS`.
 
-This session created a clean local branch from then-recorded `origin/master` SHA `47cd051`. New upstream commits `51fec37` (PR #170) and `aeb4c3d` (PR #174 documentation) are visible via GitHub's read-only commit search. SSH and HTTPS fetch attempts at 08:41 and 08:46 UTC failed because this runner cannot resolve `github.com`. The UX-003 worktree was not touched. Normal integration with current master `aeb4c3d` is required before publishing; do not push the stale-base branch. GitHub connector evidence confirms PR #172's merge and successful CI/health stages. The smoke artifact was not downloaded because it can contain browser evidence and is unnecessary for the first diagnostic step.
+This session created a clean local branch from then-recorded `origin/master` SHA `47cd051`. The feature branch now contains a normal merge commit whose second parent is latest observed upstream master `aeb4c3d`; the UX-003 worktree was not touched. SSH and HTTPS fetch attempts at 08:41, 08:46 and 08:47 UTC failed because this runner cannot resolve `github.com`; the local tracking ref was independently checked against GitHub's read-only commit search before the merge. A fresh `git fetch` is still required before push and has not succeeded, so the branch remains unpublished. GitHub connector evidence confirms PR #172's merge and successful CI/health stages. The smoke artifact was not downloaded because it can contain browser evidence and is unnecessary for the first diagnostic step.
 
 ## Acceptance audit (frozen AC1–AC16)
 
@@ -51,8 +51,8 @@ Added regression test `app/tests/js/productionSmokeDiagnostics.test.mjs` verifie
 ## Blockers and next actions
 
 1. Local diagnostic commit is self-reviewed; `git diff --check`, focused stage-allowlist test, script syntax, and direct missing/non-HTTPS fail-closed checks passed. Hosted frontend CI must pass because this runner cannot spawn the pre-existing subprocess test.
-2. Integrate current upstream master `aeb4c3d` into this branch after normal `git fetch` works. Current SSH and HTTPS fetch both fail DNS; do not publish/push until normally reconciled. Latest deployment history has no active run, so no other deployment needs cancellation or coordination now. Never rewrite shared history or force-push.
-3. Publish diagnostic changes as a reviewable PR through standard GitHub flow after reconciling `aeb4c3d`; git pushes currently cannot resolve GitHub DNS, while prior GitHub connector mutation was approval-blocked under approval policy `never`. Local branch/commit/diff are ready. Required root-side action if this persists: restore normal git remote connectivity and fetch/merge `origin/master`, then push branch `fix/viz001-smoke-stage-diagnostics` and open a PR against `master` from commit `015ae043` plus its normal reconciliation merge.
+2. Branch is reconciled with current observed master `aeb4c3d` via merge `9871a6ba`; perform a fresh `git fetch origin master` before publishing. Fetch still fails DNS, so do not push. Latest deployment history has no active run; never rewrite shared history or force-push.
+3. Publish the reviewable diagnostic PR through standard GitHub flow. If the DNS blocker persists, the exact root-side action is to restore normal GitHub remote connectivity, fetch and confirm `origin/master` has not advanced beyond `aeb4c3d`, then push `fix/viz001-smoke-stage-diagnostics` (HEAD `9871a6ba` plus the current status update) and open a PR against `master`. Earlier GitHub connector mutations were rejected because the approval policy is `never`; do not bypass it.
 4. Poll exact-head required CI and review feedback. Fix failures in scope without weakening gates; merge only reviewed green code.
 5. Inspect release queue/active deployments before allowing another workflow. Never cancel another thread's release. Let master deployment serialize normally; do not manually deploy.
 6. Use fixed sub-stage output to fix the actual combo-chart cause, then repeat green PR/CI/merge/deploy as needed.
@@ -61,3 +61,8 @@ Added regression test `app/tests/js/productionSmokeDiagnostics.test.mjs` verifie
 ## Boundaries
 
 No ML implementation, production data/service, broker order, other worktree/process, or unrelated epic implementation has been changed. Read-only review of PR #174's merged audit note was limited to shared VIZ smoke failure/deployment evidence. No secret values or production smoke artifacts have been retrieved. No manual deploy, gate bypass, force-push, or production write has occurred.
+
+
+## Root supervision update — 2026-10-15 08:50 UTC
+
+Earlier runner connectivity and subprocess limitations above are historical. Authorized VPS git fetch succeeded; origin/master aeb4c3d was merged normally. Focused smoke tests passed 3/3. Canonical frontend verification passed 229 Node tests, 281 Vitest tests, TypeScript and production build, then stopped at Playwright OS dependency installation because sudo cannot prompt. Hosted exact-head CI must complete the full browser gate. Root reviewed the diagnostic diff: assertions and read-only policy remain intact; only fixed allowlisted failure stages are emitted. Timestamp-only generated documentation noise was inspected and restored. Production acceptance remains failed and the epic remains open.
