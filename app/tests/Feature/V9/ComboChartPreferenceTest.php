@@ -10,6 +10,12 @@ class ComboChartPreferenceTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_combo_chart_preference_requires_authentication(): void
+    {
+        $this->getJson('/api/v1/stock-details/combo-chart-preference')->assertUnauthorized();
+        $this->putJson('/api/v1/stock-details/combo-chart-preference', ['default_preset_id' => 'price-pe'])->assertUnauthorized();
+    }
+
     public function test_combo_chart_default_is_account_wide_and_only_visible_to_its_user(): void
     {
         $user = User::factory()->create();

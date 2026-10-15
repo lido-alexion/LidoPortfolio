@@ -16,6 +16,14 @@ test('explicit default wins when available, otherwise fallback then first availa
     assert.equal(resolveComboDefault(null, { 'price-volume': { available: false }, 'price-pe': { available: false }, 'price-pb': { available: true }, 'price-ps': { available: false }, 'price-eps': { available: false }, 'price-revenue': { available: false }, 'price-net-profit': { available: false } }), 'price-pb');
 });
 
+test('preset catalogue fixes each renderer and materially required axis assignment', () => {
+    const byId = Object.fromEntries(COMBO_CHART_PRESETS.map((preset) => [preset.id, preset]));
+    assert.deepEqual([byId['price-volume'].chartTypes, byId['price-volume'].axes], [['line', 'bar'], { price: 'left', volume: 'right' }]);
+    assert.deepEqual([byId['price-pe'].chartTypes, byId['price-pe'].axes], [['line', 'line'], { price: 'left', pe: 'right' }]);
+    assert.deepEqual([byId['price-eps'].chartTypes, byId['price-eps'].axes], [['line', 'bar'], { price: 'left', eps: 'left' }]);
+    assert.deepEqual([byId['price-revenue'].chartTypes, byId['price-revenue'].axes], [['line', 'bar'], { price: 'left', revenue: 'right' }]);
+});
+
 test('availability requires sufficient stock data and carries a per-stock explanation', () => {
     const availability = comboPresetAvailability({ prices: [{ price_date: '2025-01-01', close_price: 10, volume: 100 }, { price_date: '2025-02-01', close_price: 11, volume: 120 }], series: { pe: { points: [{ value: 1 }, { value: 2 }] } } });
     assert.equal(availability['price-volume'].available, true);
@@ -39,6 +47,18 @@ test('cadence alignment leaves missing fundamentals empty and range sampling ret
     assert.equal(quarterly.length, 3);
     assert.equal(quarterly.find((row) => row.date === '2025-02-01').revenue, 60);
     assert.equal(quarterly.find((row) => row.date === '2025-02-03').revenue, null);
+});
+
+test('tooltip receives price and fundamental values only at a shared source observation date', () => {
+    const rows = alignComboChartData({
+        prices: [{ price_date: '2025-06-30', close_price: 120, volume: 100 }, { price_date: '2025-07-01', close_price: 121, volume: 110 }],
+        fundamentals: { revenue: { points: [{ period_end: '2025-06-30', value: 50 }] } },
+    });
+    const selected = rows.find((row) => row.date === '2025-06-30');
+    const preset = COMBO_CHART_PRESETS.find((item) => item.id === 'price-revenue');
+    assert.deepEqual(comboTooltipEntries([{ dataKey: 'price', value: selected.price }, { dataKey: 'revenue', value: selected.revenue }], preset)
+        .map(({ key, entry }) => [key, entry.value]), [['price', 120], ['revenue', 50]]);
+    assert.equal(rows.find((row) => row.date === '2025-07-01').revenue, null);
 });
 
 test('synchronized tooltip entries keep date-aligned visible values and omit hidden or missing series', () => {

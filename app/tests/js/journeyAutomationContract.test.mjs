@@ -8,13 +8,13 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '../../../');
 const journeysRoot = path.join(repoRoot, 'docs/user-journeys');
 const e2eRoot = path.join(here, '../e2e');
-const idPattern = /^(AUTH|SCR|STR|REC|EXE|E2E|AI)-\d+$/;
+const idPattern = /^(AUTH|SCR|STR|REC|EXE|E2E|AI|VIZ)-\d+$/;
 
 test('automated journey annotations resolve to an authoritative journey heading', () => {
     const documented = new Set();
     for (const file of fs.readdirSync(journeysRoot).filter((name) => /^\d{2}-.*\.md$/.test(name))) {
         const source = fs.readFileSync(path.join(journeysRoot, file), 'utf8');
-        for (const [, id] of source.matchAll(/^##\s+((?:AUTH|SCR|STR|REC|EXE|E2E|AI)-\d+)\s+—/gm)) {
+        for (const [, id] of source.matchAll(/^##\s+((?:AUTH|SCR|STR|REC|EXE|E2E|AI|VIZ)-\d+)\s+—/gm)) {
             documented.add(id);
         }
     }

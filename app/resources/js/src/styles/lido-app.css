@@ -4048,6 +4048,10 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     min-height: 40px;
 }
 
+.lido-combo-chart .card-header button[aria-label$='combo chart'] {
+    min-width: 40px;
+}
+
 .lido-combo-chart .card-header .form-select {
     min-width: min(100%, 15rem);
 }
