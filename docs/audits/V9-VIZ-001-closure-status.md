@@ -1,5 +1,13 @@
 # V9-VIZ-001 Closure — Live Status
 
+## Current continuation checkpoint — 2026-10-15 21:27 UTC
+
+**Phase:** Feature PR #182 merged normally as `805adcee157fd5081fa2d2aa981c021028e3c9fa` after exact-head CI1195 (`38801907328`) passed. Serialized deployment build549 (`38807937333`) activated that exact SHA, passed exact-SHA runtime health, and passed both production smoke tests; the authenticated read-only investor-page test requires the smoke child to return `AUTHENTICATED_SMOKE_PASSED`. Evidence artifact `12007112526` is scoped to the exact deployed SHA. Post-merge master CI1196 (`38807937231`) also passed on `805adcee` at 2026-10-15 21:27 UTC; frontend and Python/FastMCP jobs passed, backend and VPS-health jobs were skipped by path classification.
+
+The current local branch is `docs/viz001-closure-evidence`, based directly on `origin/master` at `805adcee157fd5081fa2d2aa981c021028e3c9fa`. Its four uncommitted changes are docs-only: the VIZ register row, live status, AC1–AC16 implementation audit, and final closure report. The user journey was already accurate and remains unchanged. `npm run docs:static:check` passes (53 topics); `git diff --check` passes. No product code is in this docs change and no second production deployment is required.
+
+**Current next owner/action:** finish the four-file diff review, commit and push the docs-only branch normally, then hand the exact head to root for a normal docs PR, hosted CI, review and merge. No secrets or production preferences were read or changed. Other worktrees, services, ML state and unrelated epics remain untouched.
+
 ## Active root continuation — 2026-10-15 20:11 UTC
 
 **Phase:** Implement and verify a narrowly scoped, read-only authenticated smoke setup for the guided-tour welcome prompt, then continue toward a reviewed green PR and production acceptance. Current `origin/master` remains `6959c298f4f935541524cb021afb8bce9b3d5fd1`; working branch `fix/viz001-legend-stage-diagnostics` is based on it and contains preserved audit edits plus unpublished smoke/E2E changes. PR #179/build548 exact-SHA health succeeded but authenticated production smoke failed twice at `combo_legend_toggle` (job `116635403172`). Root source investigation showed a welcome prompt can intercept pointer events despite allowing scripted keyboard navigation. The prompt is reproduced in a local fixture; **whether it was present in the live account remains unknown**.
