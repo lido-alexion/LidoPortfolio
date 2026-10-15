@@ -4,11 +4,24 @@ import ComboChart from './ComboChart';
 import { alignComboChartData } from './comboChartData';
 import { comboPresetAvailability, DEFAULT_COMBO_PRESET_ID } from './comboChartPresets';
 
+const HISTORY_REQUESTS = [
+    ['pe', 'pe', { range: '5y', frequency: 'daily' }],
+    ['pb', 'pb', { range: '5y', frequency: 'daily' }],
+    ['ps', 'ps', { range: '5y', frequency: 'daily' }],
+    ['eps', 'eps', { range: '5y' }],
+    ['revenue', 'revenue', { range: '5y' }],
+    ['net_profit', 'net_income', { range: '5y' }],
+];
+const PRESET_HISTORY_KEYS = {
+    'price-pe': 'pe', 'price-pb': 'pb', 'price-ps': 'ps',
+    'price-eps': 'eps', 'price-revenue': 'revenue', 'price-net-profit': 'net_profit',
+};
+
 export default function StockDetailsComboChart({ stockId, prices = [] }) {
     const [series, setSeries] = useState({});
     const [defaultPresetId, setDefaultPresetId] = useState(null);
     const [preferenceLoaded, setPreferenceLoaded] = useState(false);
-    const [loading, setLoading] = useState(false);
+    const [pendingHistory, setPendingHistory] = useState({});
     const [savingDefault, setSavingDefault] = useState(false);
     const [error, setError] = useState('');
     const [historyError, setHistoryError] = useState('');
@@ -22,24 +35,26 @@ export default function StockDetailsComboChart({ stockId, prices = [] }) {
             return undefined;
         }
         let cancelled = false;
-        setLoading(true);
+        const pending = Object.fromEntries(HISTORY_REQUESTS.map(([key]) => [key, true]));
+        setPendingHistory(pending);
+        setSeries(Object.fromEntries(HISTORY_REQUESTS.map(([key]) => [key, { points: [], loading: true }])));
         setHistoryError('');
-        Promise.allSettled([
-            api.get(`/v1/stocks/${stockId}/fundamentals/metrics/pe/history`, { params: { range: '5y', frequency: 'daily' }, skipErrorToast: true }),
-            api.get(`/v1/stocks/${stockId}/fundamentals/metrics/pb/history`, { params: { range: '5y', frequency: 'daily' }, skipErrorToast: true }),
-            api.get(`/v1/stocks/${stockId}/fundamentals/metrics/ps/history`, { params: { range: '5y', frequency: 'daily' }, skipErrorToast: true }),
-            api.get(`/v1/stocks/${stockId}/fundamentals/metrics/eps/history`, { params: { range: '5y' }, skipErrorToast: true }),
-            api.get(`/v1/stocks/${stockId}/fundamentals/metrics/revenue/history`, { params: { range: '5y' }, skipErrorToast: true }),
-            api.get(`/v1/stocks/${stockId}/fundamentals/metrics/net_income/history`, { params: { range: '5y' }, skipErrorToast: true }),
-        ]).then((results) => {
-            if (cancelled) return;
-            const keys = ['pe', 'pb', 'ps', 'eps', 'revenue', 'net_profit'];
-            const next = Object.fromEntries(results.map((result, index) => [keys[index], result.status === 'fulfilled'
-                ? (result.value?.data?.data ?? result.value?.data ?? null)
-                : { points: [], unavailableReason: `historical ${keys[index] === 'net_profit' ? 'net profit' : keys[index].toUpperCase()} request failed` }]));
-            setSeries(next);
-            if (results.some((result) => result.status === 'rejected')) setHistoryError('Some combo chart history is temporarily unavailable. Unavailable presets remain disabled with a reason.');
-        }).finally(() => { if (!cancelled) setLoading(false); });
+        HISTORY_REQUESTS.forEach(([key, metric, params]) => {
+            api.get(`/v1/stocks/${stockId}/fundamentals/metrics/${metric}/history`, { params, skipErrorToast: true })
+                .then((response) => {
+                    if (cancelled) return;
+                    const history = response?.data?.data ?? response?.data ?? null;
+                    setSeries((current) => ({ ...current, [key]: history ?? { points: [] } }));
+                })
+                .catch(() => {
+                    if (cancelled) return;
+                    setSeries((current) => ({ ...current, [key]: { points: [], unavailableReason: `historical ${key === 'net_profit' ? 'net profit' : key.toUpperCase()} request failed` } }));
+                    setHistoryError('Some combo chart history is temporarily unavailable. Unavailable presets remain disabled with a reason.');
+                })
+                .finally(() => {
+                    if (!cancelled) setPendingHistory((current) => ({ ...current, [key]: false }));
+                });
+        });
         return () => { cancelled = true; };
     }, [stockId, historyRetry]);
 
@@ -56,6 +71,9 @@ export default function StockDetailsComboChart({ stockId, prices = [] }) {
 
     const availability = useMemo(() => comboPresetAvailability({ prices, series }), [prices, series]);
     const rows = useMemo(() => alignComboChartData({ prices, fundamentals: series }), [prices, series]);
+    const loading = Object.values(pendingHistory).some(Boolean);
+    const preferredHistoryKey = PRESET_HISTORY_KEYS[defaultPresetId];
+    const defaultResolutionPending = Boolean(preferredHistoryKey && pendingHistory[preferredHistoryKey]);
     const saveDefault = async (presetId) => {
         setSavingDefault(true);
         setError('');
@@ -74,12 +92,13 @@ export default function StockDetailsComboChart({ stockId, prices = [] }) {
         {historyError && <div className="alert alert-warning py-2 small mb-0" role="status">{historyError} <button type="button" className="btn btn-sm btn-outline-secondary" disabled={loading} onClick={() => setHistoryRetry(value => value + 1)}>Retry combo chart history</button></div>}
         {preferenceError && <div className="alert alert-warning py-2 small mb-0" role="status">{preferenceError} <button type="button" className="btn btn-sm btn-outline-secondary" disabled={!preferenceLoaded} onClick={() => setPreferenceRetry(value => value + 1)}>Retry combo chart preference</button></div>}
         {error ? <div className="alert alert-warning py-2 small mb-0" role="status">{error}</div> : null}
-        {loading || !preferenceLoaded ? <div className="card"><div className="card-body text-muted small py-3">Loading combo chart history…</div></div> : (
+        {!preferenceLoaded ? <div className="card"><div className="card-body text-muted small py-3">Loading saved combo chart preference…</div></div> : (
             <ComboChart
                 key={stockId}
                 rows={rows}
                 availability={availability}
                 defaultPresetId={preferenceError ? null : defaultPresetId ?? DEFAULT_COMBO_PRESET_ID}
+                defaultResolutionPending={defaultResolutionPending}
                 onSetDefault={saveDefault}
                 savingDefault={savingDefault}
             />

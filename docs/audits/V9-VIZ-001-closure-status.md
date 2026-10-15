@@ -1,41 +1,45 @@
 # V9-VIZ-001 Closure — Live Status
 
-**Updated:** 2026-10-15 09:38 UTC
+**Updated:** 2026-10-15 10:21 UTC
 **Workspace:** `/home/nitty/stox-v9-viz001`
-**Branch:** `fix/viz001-combo-route-availability`, based on current `origin/master` `b2096e2fd0b55463c403ad3e1cc3a53569da3789`.
-**Current phase:** Runtime fixes and regressions implemented; all four focused VIZ desktop/mobile browser cases pass, as do frontend tests/typecheck/build. Canonical verifier stops only at its required Playwright OS dependency installation because the environment forbids sudo. Final diff review complete; preparing scoped commits and hosted PR CI.
-**V9 register:** `IMPLEMENTATION IN PROGRESS`; production acceptance remains failed pending a passing authenticated combo smoke.
-**Session/process/log:** Active Codex session; no detached process or durable verifier log. Frontend verifier has exited after the sandbox-denied OS installer; no active local test PID.
+**Branch:** `fix/viz001-progressive-history-readiness`, created from fetched `origin/master` `c4eb345550b32c110789146fabc940dac81479ee`.
+**Current phase:** Fixing repeated production acceptance failure. PR #177 merged as `c4eb3455`; build544 / deployment run `38717452088` activated that exact SHA and exact-SHA health passed, but authenticated read-only smoke failed twice at `combo_chart_visible` (job `116364601091`). Source trace found `StockDetailsComboChart` withheld `ComboChart` until all six fundamentals histories settled, while price/volume observations were already supplied by Stock Details. This is a concrete frontend dependency defect; production request latency was not measured and is not claimed as proven. Local fix now renders data-backed Price + Volume after preference resolves, independently settles metrics with explicit loading/unavailable states, and resolves an account default against its own history while retaining deliberate in-session user choice. Focused component tests pass 8/8 and browser suite 5/5, including deferred P/E, rendered price/volume SVG, and eventual default selection. Canonical frontend verifier passed 232 Node and 286 Vitest tests, typecheck and production build; it stopped only at prescribed Playwright OS dependency installation, denied because sandbox policy forbids sudo. No PR published yet.
+**V9 register:** `IMPLEMENTATION IN PROGRESS`; production acceptance remains failed.
+**Session/process/log:** Active session; focused test processes exited successfully. Canonical verifier has not started; no detached verifier process or durable log.
 
-## Production evidence
+## Production evidence and diagnosis
 
-- PR #172 implementation merge: `47cd05132352d6fb46d483d38e1841f1a3ef56dc`.
-- PR #175 stage-diagnostics merge: `b2096e2fd0b55463c403ad3e1cc3a53569da3789`. No independent review submission or inline thread was present; root reviewed its diff.
-- Production build 543 / workflow run `38711506766` activated exact SHA `b2096e2fd0b55463c403ad3e1cc3a53569da3789`; exact-SHA health passed. Authenticated read-only smoke failed twice at fixed stage `combo_chart_visible` after preference response and account-scope checks passed. No credentials, private account rows, provider payloads, or raw browser errors were inspected here.
-- Root supplied safe aggregate listing evidence: NSE TCS id 1886 has 5,458 price rows (all with volume) across 2004-08-25–2026-10-15; BSE TCS id 4573 has no price rows. Source review found symbol-only Watchlist deep links could pick the first same-symbol watchlist row (BSE) before search's NSE preference. This is a reproducible source-supported cause, not direct observation of the private production selection.
-- Root review found a second selection-precedence issue: the NSE fallback ran before the same-symbol selectedStock guard. A late watchlist-items update could override an explicit BSE choice. This is now fixed and has a real browser regression that deliberately selects BSE and releases both listing rows afterward; the final selected price-history request remains BSE id 4573.
-- Confirmed AC8 gap: when every preset is unavailable, the previous early return omitted the grouped catalogue and disabled reasons. The current UI exposes all seven disabled entries and the no-history explanation without fabricating chart values.
+- Authenticated read-only production smoke on build544 (run `38717452088`) failed twice at fixed stage `combo_chart_visible`, job `116364601091`; the prior preference-response and account-scope checks passed. The stage assertion and timeout are unchanged.
+- Root-provided aggregate evidence: NSE TCS listing id 1886 has 5,458 price rows, all containing volume, dates 2004-08-25 through 2026-10-15; BSE id 4573 has no price rows. This aggregate does not identify which private listing the smoke account selected.
+- PR #177's listing resolver and explicit-selection protection remain source-supported and regression-tested, but build544 proves they did not by themselves fix live visibility. AC8's all-unavailable catalogue correction remains intact.
+- `StockDetailsComboChart.jsx` previously gated the entire `ComboChart` on `loading` set true until a `Promise.allSettled` across PE/PB/PS/EPS/revenue/net-profit finished. Price + Volume derives entirely from the already-loaded `prices` prop. `FundamentalInvestorSnapshotService::valuationMetricHistory` can traverse every daily price row and calculate PIT valuation metrics; this is a plausible expensive endpoint path, but live duration/request timing has not been measured. The repair removes the unnecessary frontend all-six-settled gate without changing service work, endpoints, data, or smoke assertions.
 
-## Current change and verification
+## Current local fix
 
-- Symbol-only deep links choose an exact NSE listing from watchlist rows when available; otherwise they search exact symbol results preferring NSE, with an existing-listing fallback on search error/no match.
-- A same-symbol selected stock now takes precedence over all route fallback resolution, preserving deliberate exchange/listing selection when watchlist rows arrive later.
-- AC8 all-unavailable UI retains the named combo-chart region, all seven grouped options with canonical disabled reasons, disabled navigation, and a no-history status.
-- All four focused VIZ browser cases passed 4/4: desktop keyboard/control flow; canonical symbol-only deep link chooses data-bearing NSE id 1886 over a BSE-first item; deliberate BSE autocomplete selection survives late both-exchange watchlist rows and continues requesting BSE id 4573; and mobile touch/viewport behavior. Listing-selection cases assert no writes or blocked requests.
-- Focused Node listing tests passed 3/3. Combo chart component/preset Vitest passed 9/9.
-- `./scripts/verify-ci.sh --frontend`: Node 232/232; Vitest 282/282; TypeScript check and production build passed. It then stopped at the prescribed Playwright OS dependency installer: sudo is disabled by `no new privileges`. The full required browser gate remains assigned to hosted exact-head CI; no browser gate was skipped or weakened.
-- `git diff --check` passed. Build-generated timestamp-only AI-guide/static-doc changes were inspected and restored.
-- `git fetch origin` completed. `origin/master` remains `b2096e2`; no branch reconciliation needed before publication.
+- Each metric request now settles independently; outstanding metric presets stay present and disabled with a loading reason, settled failures retain their explicit unavailable reason, and successful histories become eligible by canonical thresholds.
+- Actual Price + Volume chart renders as soon as price observations and account preference response permit. A saved metric default stays marked/loading and cannot be mistakenly saved over; when its own history becomes available, it wins unless the user intentionally chose another chart while waiting. If history proves unavailable, the specification fallback resolver applies.
+- Regressions cover six outstanding histories while real price and volume are rendered, delayed saved P/E default then precedence, user selection during the delay, partial request failure, retry/recovery, and no preference writes. Browser regression uses a deferred P/E response, verifies rendered line/bar SVG from real fixture observations while pending, then verifies the saved default takes effect.
+- No production writes, credentials, raw account rows, network payloads, manual deploy, or latency benchmark were used.
 
-## Next actions
+## Verification so far on this branch
 
-1. Self-review complete diff, including frozen AC1–AC16 coverage and root's BSE-precedence feedback; update the detailed audit truthfully.
-2. Commit scoped implementation, tests and audit notes; push normally and publish a reviewable PR.
-3. Poll exact-head hosted CI and review; repair any in-scope failures through normal commits, never bypass checks.
-4. Merge only green reviewed code. Inspect the deployment queue and allow the normal serialized GitHub release to run; do not trigger a manual deployment or interfere with other releases.
-5. Verify exact live SHA health, then the authenticated read-only combo smoke. If it fails, use only fixed stage diagnostics and continue the same reviewed green PR/release cycle.
-6. Complete evidence review of AC1–AC16, update V9 register and journey/audit documentation only when supported by production acceptance, and write `docs/audits/V9-VIZ-001-closure-report.md` only on verified closure.
+- `npm run test:js:tos -- tests/js/tos/dashboard-combo-recovery.test.jsx`: 8/8 passed.
+- `npm run test:e2e:tos -- tests/e2e/v9-viz001-combo-charts.spec.js`: 5/5 Chromium tests passed after final code, including desktop, BSE-first route selection, deliberate BSE preservation, deferred-history render/default integration, and mobile touch.
+- The initial attempt used nonexistent npm script `test:unit` and did not execute tests; rerun used the repository script above. An initial test assertion expected a Recharts SVG in jsdom (not laid out there); corrected it to assert semantic data/availability, while the browser regression verifies actual SVG render.
+- The first canonical frontend run found one selector regression: a newly changed saved-default prop must still supersede a prior local selection. The implementation now distinguishes that explicit prop change from a late availability update; focused preset coverage passed and the complete canonical rerun passed all 286 Vitest tests.
+- `git diff --check` passed before the last test label correction; rerun before commit.
+- Canonical `./scripts/verify-ci.sh --frontend`: 232 Node and 286 Vitest passed; TypeScript and production build passed. The prescribed Playwright OS dependency installer then exited because `sudo` is blocked by `no new privileges`. Focused exact Chromium browser coverage passed 5/5; hosted exact-head CI remains required.
+- `npm run docs:static:check` passed (53 topics) after journey documentation update; `git diff --check` passed. Branch self-review, fetch/reconcile before push, and exact-head hosted CI remain outstanding.
 
-## Boundaries
+## Next steps
 
-No other worktree/process, ML implementation/configuration/private evidence, production data/services, broker order, unrelated epic, or deployment gate has been changed. No production write, manual deploy, force-push, secret, or raw production-smoke artifact was used.
+1. Run the canonical `./scripts/verify-ci.sh --frontend`; resolve in-scope failures without weakening gates. Inspect generated noise afterward.
+2. Review the final complete diff against frozen AC1–AC16 and existing feedback; update journey/audit evidence accurately.
+3. Fetch latest `origin/master`, reconcile normally, rerun required checks and `git diff --check`; commit/push a scoped branch and publish a reviewable PR. Root will handle connector mutation if necessary.
+4. Poll exact-head required CI; resolve any in-scope failures using new reviewed commits. Merge normally only after green checks/root review.
+5. Inspect serialized deployment state and leave other releases untouched. Verify the exact deployed SHA health and unchanged authenticated read-only production smoke. If visibility still fails, use fixed stage diagnostics and source investigation; do not extend timeout or mask the assertion.
+6. Only after authenticated acceptance passes: update V9 register, journey/audit documentation, and write the final closure report. Do not claim epic closure before evidence.
+
+## Scope boundaries
+
+No other worktree/process, ML implementation/configuration/private evidence, production data/service, broker order, unrelated epic, or deployment policy was changed. No manual deployment, forced history, gate bypass, or secret access occurred.
