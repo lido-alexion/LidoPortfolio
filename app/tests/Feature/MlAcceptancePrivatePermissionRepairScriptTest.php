@@ -100,7 +100,12 @@ class MlAcceptancePrivatePermissionRepairScriptTest extends TestCase
 
     public function test_terminal_campaign_plans_exact_interrupted_dataset_builder_layout_without_touching_bytes(): void
     {
-        $campaign = $this->fixtureRoot.'/campaigns/42345678-1234-4234-8234-123456789abc';
+        $campaignId = '42345678-1234-4234-8234-123456789abc';
+        $campaignRoot = $this->fixtureRoot.'/campaigns';
+        $sourcesRoot = $this->fixtureRoot.'/sources';
+        mkdir($campaignRoot, 0700, true);
+        mkdir($sourcesRoot, 0700, true);
+        $campaign = $campaignRoot.'/'.$campaignId;
         $payloads = [
             'train.jsonl' => "{\"row\":\"train fixture\"}\n",
             'validation.jsonl' => "{\"row\":\"validation fixture\"}\n",
@@ -119,13 +124,17 @@ class MlAcceptancePrivatePermissionRepairScriptTest extends TestCase
         }
 
         // This mirrors the producer's paths returned by buildStreamed and its finally-cleaned dataset child.
-        $first = $this->runPlanner('echo json_encode(walkCampaign('.var_export($campaign, true).', '.var_export($this->fixtureRoot, true).', 33, 33, "failed"));');
-        $second = $this->runPlanner('echo json_encode(walkCampaign('.var_export($campaign, true).', '.var_export($this->fixtureRoot, true).', 33, 33, "failed"));');
+        $planner = '$campaign = (object) '.var_export(['id' => $campaignId, 'status' => 'failed'], true).'; $plan = planRegisteredObjects([], [$campaign], '.var_export($this->fixtureRoot, true).', '.var_export($sourcesRoot, true).', '.var_export($campaignRoot, true).', 33, 33); echo json_encode(["objects" => $plan, "fingerprint" => planFingerprint($plan)]);';
+        $first = $this->runPlanner($planner);
+        $second = $this->runPlanner($planner);
 
         $this->assertSame(0, $first->getExitCode(), $first->getErrorOutput());
         $this->assertSame(0, $second->getExitCode(), $second->getErrorOutput());
-        $plan = json_decode($first->getOutput(), true, flags: JSON_THROW_ON_ERROR);
-        $this->assertSame($plan, json_decode($second->getOutput(), true, flags: JSON_THROW_ON_ERROR));
+        $firstPlan = json_decode($first->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+        $secondPlan = json_decode($second->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame($firstPlan, $secondPlan);
+        $this->assertSame($firstPlan['fingerprint'], $secondPlan['fingerprint']);
+        $plan = $firstPlan['objects'];
         $this->assertCount(19, $plan); // campaign, three horizons, three datasets, nine partitions and three journals
         $datasetDirectories = array_values(array_filter($plan, fn ($item) => $item['kind'] === 'retained-temporary-dataset-directory'));
         $this->assertCount(3, $datasetDirectories);
