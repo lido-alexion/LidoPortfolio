@@ -15,11 +15,126 @@ const prices = dates.map((price_date, index) => ({
     data_source: 'SYNTHETIC_FIXTURE_ONLY',
 }));
 const points = dates.map((as_of, index) => ({ as_of, period_end: as_of, value: 3 + index }));
+const metricNames = ['pe', 'pb', 'ps', 'eps', 'revenue', 'net_profit'];
 
-async function prepare(page, viewport) {
+function createDensePriceHistory() {
+    const rows = [];
+    const cursor = new Date('2005-10-03T00:00:00Z');
+    while (rows.length < 5458) {
+        const weekday = cursor.getUTCDay();
+        if (weekday !== 0 && weekday !== 6) {
+            const price_date = cursor.toISOString().slice(0, 10);
+            const close_price = 100 + (rows.length % 700) / 10;
+            rows.push({ price_date, open_price: close_price - 1, high_price: close_price + 2, low_price: close_price - 2, close_price, volume: 1000 + rows.length, data_source: 'SYNTHETIC_FIXTURE_ONLY' });
+        }
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    return rows;
+}
+
+function deferred() {
+    let resolve;
+    const promise = new Promise(done => { resolve = done; });
+    return { promise, resolve };
+}
+
+async function togglePlottedSeriesLikeProductionSmoke(chart, name, seriesSelector, expectedGeometryAfterOff) {
+    const checkbox = chart.getByRole('checkbox', { name: `Show ${name}`, exact: true });
+    const series = chart.locator(seriesSelector);
+    const geometryCount = () => series.evaluateAll(nodes => nodes.filter(node => Boolean(node.getAttribute('d')?.trim())).length);
+    await expect(checkbox).toBeVisible();
+    await expect(checkbox).toBeChecked();
+    await expect.poll(geometryCount).toBeGreaterThan(0);
+    const geometryBeforeToggle = await geometryCount();
+
+    // Match the authenticated production smoke exactly: read checked state,
+    // then use Playwright's actionability-checked pointer setChecked path.
+    const wasChecked = await checkbox.isChecked();
+    await checkbox.setChecked(!wasChecked);
+    await expect(checkbox).toHaveJSProperty('checked', !wasChecked);
+    await expect.poll(geometryCount).toBe(expectedGeometryAfterOff);
+    await checkbox.setChecked(wasChecked);
+    await expect(checkbox).toHaveJSProperty('checked', wasChecked);
+    await expect.poll(geometryCount).toBe(geometryBeforeToggle);
+}
+
+async function progressiveDenseLegendScenario(page, viewport) {
+    const safety = await prepare(page, viewport);
+    // Playwright's browser.newContext() default used by the production smoke.
+    await page.setViewportSize(viewport === 'mobile' ? { width: 390, height: 844 } : { width: 1280, height: 720 });
+    const longPriceHistory = createDensePriceHistory();
+    const releaseMetric = Object.fromEntries(metricNames.map(metric => [metric, deferred()]));
+    const requestedMetrics = new Set();
+    const observationDates = [-378, -252, -126, -1].map(offset => longPriceHistory.at(offset).price_date);
+    const progressivePoints = observationDates.map((as_of, index) => ({ as_of, period_end: as_of, value: 3 + index }));
+
+    // The long synthetic history stresses actual Recharts geometry while six
+    // independent metric histories resolve one at a time. No production data
+    // or preference writes are involved.
+    await page.route('**/api/stocks/42/market-prices', route => route.fulfill({ json: { data: longPriceHistory, has_price_history: true, price_count: longPriceHistory.length } }));
+    await page.route('**/api/v1/stocks/42/fundamentals/metrics/*/history?*', async route => {
+        const routeMetric = new URL(route.request().url()).pathname.split('/').at(-2);
+        const metric = routeMetric === 'net_income' ? 'net_profit' : routeMetric;
+        requestedMetrics.add(metric);
+        await releaseMetric[metric]?.promise;
+        return route.fulfill({ json: { data: { points: progressivePoints } } });
+    });
+
+    const startedAt = Date.now();
+    const deadline = startedAt + 20_000;
+    const remaining = () => Math.max(1, deadline - Date.now());
+    await page.goto('/watchlist/TCS');
+    await expect(page.locator('.lido-guided-tour-modal[aria-labelledby="guided-tour-welcome-title"]')).toHaveCount(0);
+    const chart = page.getByRole('region', { name: 'Stock Details combo chart', exact: true });
+    await expect(chart).toBeVisible({ timeout: remaining() });
+    const selector = chart.getByLabel('Combo chart preset');
+    await expect(selector).toHaveValue('price-volume', { timeout: remaining() });
+    await expect(chart.getByText(/Loading the saved default’s history/)).toBeVisible({ timeout: remaining() });
+    await expect.poll(() => chart.locator('.recharts-line-curve').evaluateAll(paths => paths.filter(path => Boolean(path.getAttribute('d')?.trim())).length), { timeout: remaining() }).toBe(1);
+    await expect.poll(() => chart.locator('.recharts-bar-rectangle .recharts-rectangle').evaluateAll(rectangles => rectangles.filter(rect => Boolean(rect.getAttribute('d')?.trim())).length), { timeout: remaining() }).toBeGreaterThan(0);
+
+    await togglePlottedSeriesLikeProductionSmoke(chart, 'Price', '.recharts-line-curve', 0);
+    await togglePlottedSeriesLikeProductionSmoke(chart, 'Volume', '.recharts-bar-rectangle .recharts-rectangle', 0);
+
+    // Resolve metrics progressively, checking default availability only after
+    // its own history arrives. In particular, PE availability selects the
+    // saved valuation default and must provide real line geometry.
+    for (const metric of metricNames) {
+        await expect.poll(() => requestedMetrics.has(metric), { timeout: 5_000 }).toBe(true);
+        releaseMetric[metric].resolve();
+        const option = chart.locator(`option[value="price-${metric === 'net_profit' ? 'net-profit' : metric}"]`);
+        await expect(option).toBeEnabled({ timeout: 5_000 });
+        if (metric === 'pe') {
+            await expect(selector).toHaveValue('price-pe', { timeout: remaining() });
+            await expect.poll(() => chart.locator('.recharts-line-curve').evaluateAll(paths => paths.filter(path => Boolean(path.getAttribute('d')?.trim())).length), { timeout: remaining() }).toBeGreaterThanOrEqual(2);
+            await togglePlottedSeriesLikeProductionSmoke(chart, 'Price', '.recharts-line-curve', 1);
+        }
+        if (metric === 'pb') {
+            const next = chart.getByRole('button', { name: 'Next combo chart' });
+            await next.focus();
+            await page.keyboard.press('Enter');
+            await expect(selector).toHaveValue('price-pb');
+            await expect.poll(() => chart.locator('.recharts-line-curve').evaluateAll(paths => paths.filter(path => Boolean(path.getAttribute('d')?.trim())).length)).toBeGreaterThanOrEqual(2);
+            await togglePlottedSeriesLikeProductionSmoke(chart, 'Price', '.recharts-line-curve', 1);
+        }
+    }
+
+    expect(longPriceHistory).toHaveLength(5458);
+    expect(safety.writes).toEqual([]);
+    expect(safety.blocked).toEqual([]);
+}
+
+async function prepare(page, viewport, { showWelcomePrompt = false, allowMockedTourActions = false } = {}) {
     await seedDeterministicJourney(page, `v9-viz001-${viewport}`);
     await page.setViewportSize(viewport === 'mobile' ? { width: 390, height: 844 } : { width: 1440, height: 900 });
-    await installInvestorWorkflowApiMocks(page);
+    await installInvestorWorkflowApiMocks(page, showWelcomePrompt ? { guidedTourState: {
+        eligible: true,
+        show_welcome_prompt: true,
+        can_manual_relaunch: true,
+        welcome_shown_at: null,
+        completed_at: null,
+        tour_in_progress: false,
+    } } : {});
     await page.route('**/api/watchlists', route => route.fulfill({ json: { data: [{ id: 5, name: 'Synthetic research', item_count: 0 }] } }));
     await page.route('**/api/watchlists/5/items*', route => route.fulfill({ json: { data: [] } }));
     await page.route('**/api/watchlist/membership*', route => route.fulfill({ json: { watchlist_ids: [] } }));
@@ -32,18 +147,29 @@ async function prepare(page, viewport) {
     });
     const writes = [];
     const blocked = [];
+    let welcomeSkipUiActionInProgress = false;
     await page.route('**/*', route => {
         const request = route.request();
         const url = new URL(request.url());
         const write = /^(POST|PUT|PATCH|DELETE)$/.test(request.method());
-        if (url.origin !== 'http://127.0.0.1:4177' || (write && url.pathname !== '/api/logs/frontend')) {
+        let tourAction = null;
+        try {
+            const payload = request.postDataJSON();
+            if (payload && typeof payload === 'object' && !Array.isArray(payload) && Object.keys(payload).length === 1) tourAction = payload.action;
+        } catch {}
+        const mockedTourAction = allowMockedTourActions && url.origin === 'http://127.0.0.1:4177'
+            && url.pathname === '/api/guided-tour' && request.method() === 'PUT'
+            && (tourAction === 'record_welcome_shown' || (tourAction === 'skip_prompt' && welcomeSkipUiActionInProgress));
+        if (url.origin !== 'http://127.0.0.1:4177' || (write && url.pathname !== '/api/logs/frontend' && !mockedTourAction)) {
             blocked.push(`${request.method()} ${url.pathname}`);
             return route.abort();
         }
-        if (write && url.pathname !== '/api/logs/frontend') writes.push(`${request.method()} ${url.pathname}`);
+        if (write && url.pathname !== '/api/logs/frontend') {
+            writes.push(`${request.method()} ${url.pathname}${tourAction ? ` ${tourAction}` : ''}`);
+        }
         return route.fallback();
     });
-    return { writes, blocked };
+    return { writes, blocked, setWelcomeSkipUiActionInProgress(value) { welcomeSkipUiActionInProgress = value; } };
 }
 
 async function inspectChart(page, viewport, testInfo) {
@@ -63,6 +189,12 @@ async function inspectChart(page, viewport, testInfo) {
     await next.focus();
     await page.keyboard.press('Enter');
     await expect(selector).toHaveValue('price-pb');
+    const smokeStyleLegend = chart.getByRole('checkbox').first();
+    const wasChecked = await smokeStyleLegend.isChecked();
+    await smokeStyleLegend.setChecked(!wasChecked);
+    await expect(smokeStyleLegend).toHaveJSProperty('checked', !wasChecked);
+    await smokeStyleLegend.setChecked(wasChecked);
+    await expect(smokeStyleLegend).toHaveJSProperty('checked', wasChecked);
     await selector.selectOption('price-revenue');
     const revenueLegend = chart.getByRole('checkbox', { name: 'Show Revenue' });
     await revenueLegend.focus();
@@ -276,17 +408,7 @@ test('renders price and volume while the saved metric history is delayed, then h
 test('renders real combo series with 5,458 price rows while every unrelated history is pending', async ({ page }, testInfo) => {
     journeyId(testInfo, 'VIZ-01');
     const safety = await prepare(page, 'desktop');
-    const longPriceHistory = [];
-    const cursor = new Date('2005-10-03T00:00:00Z');
-    while (longPriceHistory.length < 5458) {
-        const weekday = cursor.getUTCDay();
-        if (weekday !== 0 && weekday !== 6) {
-            const price_date = cursor.toISOString().slice(0, 10);
-            const close_price = 100 + (longPriceHistory.length % 700) / 10;
-            longPriceHistory.push({ price_date, open_price: close_price - 1, high_price: close_price + 2, low_price: close_price - 2, close_price, volume: 1000 + longPriceHistory.length, data_source: 'SYNTHETIC_FIXTURE_ONLY' });
-        }
-        cursor.setUTCDate(cursor.getUTCDate() + 1);
-    }
+    const longPriceHistory = createDensePriceHistory();
     const historiesReady = new Promise(() => {});
     let pendingHistoryRequests = 0;
     await page.route('**/api/stocks/42/market-prices', route => route.fulfill({ json: { data: longPriceHistory, has_price_history: true, price_count: longPriceHistory.length } }));
@@ -319,6 +441,78 @@ test('renders real combo series with 5,458 price rows while every unrelated hist
     expect(safety.blocked).toEqual([]);
 });
 
+test('production pointer legend toggle removes and restores dense plotted series while metrics resolve progressively', async ({ page }, testInfo) => {
+    journeyId(testInfo, 'VIZ-01');
+    await progressiveDenseLegendScenario(page, 'desktop');
+});
+
+test('an open welcome prompt blocks the production pointer legend action until skipped through its normal UI', async ({ page }, testInfo) => {
+    journeyId(testInfo, 'VIZ-01');
+    const safety = await prepare(page, 'desktop', { showWelcomePrompt: true, allowMockedTourActions: true });
+    await page.setViewportSize({ width: 1280, height: 720 });
+    const longPriceHistory = createDensePriceHistory();
+    await page.route('**/api/stocks/42/market-prices', route => route.fulfill({ json: { data: longPriceHistory, has_price_history: true, price_count: longPriceHistory.length } }));
+
+    await page.goto('/watchlist/TCS');
+    const chart = page.getByRole('region', { name: 'Stock Details combo chart', exact: true });
+    const welcome = page.getByRole('dialog', { name: 'Welcome to StoX', exact: true });
+    await expect(welcome).toBeVisible();
+    await expect(chart).toBeVisible();
+    const selector = chart.getByLabel('Combo chart preset');
+    await expect(selector).toHaveValue('price-pe');
+    const next = chart.getByRole('button', { name: 'Next combo chart' });
+    await next.focus();
+    await page.keyboard.press('Enter');
+    await expect(selector).toHaveValue('price-pb');
+    await chart.scrollIntoViewIfNeeded();
+
+    const pricePaths = chart.locator('.recharts-line-curve');
+    await expect.poll(() => pricePaths.evaluateAll(paths => paths.filter(path => Boolean(path.getAttribute('d')?.trim())).length)).toBeGreaterThanOrEqual(2);
+    const legend = chart.getByRole('checkbox').first();
+    await expect(legend).toBeChecked();
+    let pointerError;
+    try {
+        await legend.setChecked(false, { timeout: 750 });
+    } catch (error) {
+        pointerError = error;
+    }
+    expect(pointerError).toBeTruthy();
+    expect(pointerError.message).toMatch(/intercepts pointer events/i);
+    await expect(legend).toBeChecked();
+    await expect(welcome).toBeVisible();
+
+    // A skip-shaped request without the real button action, including an
+    // unexpected extra field, is blocked by the read-only request guard.
+    await page.evaluate(async () => {
+        const send = body => fetch('/api/guided-tour', { method: 'PUT', headers: { 'content-type': 'application/json' }, body });
+        await send('{"action":"skip_prompt"}').catch(() => {});
+        await send('{"action":"skip_prompt","extra":true}').catch(() => {});
+    });
+    expect(safety.blocked).toEqual(['PUT /api/guided-tour', 'PUT /api/guided-tour']);
+
+    // Exercise the user's real onboarding choice in the local API mock only.
+    // Production smoke remains read-only and never clicks these mutating actions.
+    safety.setWelcomeSkipUiActionInProgress(true);
+    try {
+        await welcome.getByRole('button', { name: 'Skip for now', exact: true }).click();
+    } finally {
+        safety.setWelcomeSkipUiActionInProgress(false);
+    }
+    await expect(welcome).toBeHidden();
+    const pathsBefore = await pricePaths.evaluateAll(paths => paths.filter(path => Boolean(path.getAttribute('d')?.trim())).length);
+    await legend.setChecked(false);
+    await expect(legend).not.toBeChecked();
+    await expect.poll(() => pricePaths.evaluateAll(paths => paths.filter(path => Boolean(path.getAttribute('d')?.trim())).length)).toBe(pathsBefore - 1);
+    await legend.setChecked(true);
+    await expect(legend).toBeChecked();
+    await expect.poll(() => pricePaths.evaluateAll(paths => paths.filter(path => Boolean(path.getAttribute('d')?.trim())).length)).toBe(pathsBefore);
+    expect(safety.writes).toEqual([
+        'PUT /api/guided-tour record_welcome_shown',
+        'PUT /api/guided-tour skip_prompt',
+    ]);
+    expect(safety.blocked).toEqual(['PUT /api/guided-tour', 'PUT /api/guided-tour']);
+});
+
 test.describe('VIZ-01 mobile and touch', () => {
     test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
     test('keeps the combo chart and touch targets inside the mobile viewport without writes', async ({ page }, testInfo) => {
@@ -330,5 +524,10 @@ test.describe('VIZ-01 mobile and touch', () => {
             expect(bounds.width).toBeGreaterThanOrEqual(40);
             expect(bounds.height).toBeGreaterThanOrEqual(40);
         }
+    });
+
+    test('production pointer legend toggle removes and restores dense plotted series while metrics resolve progressively', async ({ page }, testInfo) => {
+        journeyId(testInfo, 'VIZ-01');
+        await progressiveDenseLegendScenario(page, 'mobile');
     });
 });

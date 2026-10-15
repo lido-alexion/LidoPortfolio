@@ -156,9 +156,13 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
     const guidedTourState = {
         eligible: false,
         show_welcome_prompt: false,
+        welcome_prompt_count: 0,
+        max_auto_prompts: 3,
         can_manual_relaunch: false,
         welcome_shown_at: '2026-01-01T00:00:00Z',
         completed_at: '2026-01-01T00:00:00Z',
+        completed: false,
+        permanently_dismissed: false,
         dismissed_at: null,
         current_step_id: null,
         tour_in_progress: false,
@@ -268,7 +272,12 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
                     guidedTourState.tour_in_progress = false;
                     guidedTourState.completed_at = '2026-01-02T00:00:00Z';
                 } else if (action === 'skip_prompt') {
-                    guidedTourState.show_welcome_prompt = false;
+                    guidedTourState.welcome_prompt_count += 1;
+                    guidedTourState.show_welcome_prompt = Boolean(guidedTourState.eligible)
+                        && guidedTourState.welcome_prompt_count < guidedTourState.max_auto_prompts
+                        && guidedTourState.completed !== true
+                        && guidedTourState.permanently_dismissed !== true
+                        && guidedTourState.tour_in_progress !== true;
                 }
             }
             return json(route, apiEnvelope(guidedTourState));

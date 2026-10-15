@@ -4,10 +4,12 @@ import { hasPresetChartGeometry, safeAuthenticatedSmokeStage, waitForPresetChart
 
 test('authenticated smoke reports only fixed, stage-level diagnostics', () => {
     for (const stage of [
-        'configuration', 'browser_launch', 'login', 'review', 'combo_navigation',
+        'configuration', 'browser_launch', 'login', 'review', 'account_onboarding_readiness', 'combo_navigation',
         'combo_preference_response', 'combo_preference_scope', 'combo_chart_attached', 'combo_chart_visible',
         'combo_default_selection', 'combo_default_options', 'combo_default_resolution', 'combo_default_precedence', 'combo_chart_data_rendered', 'combo_keyboard_navigation',
-        'combo_legend_toggle', 'combo_selection_restore', 'request_safety',
+        'combo_legend_control', 'combo_legend_read', 'combo_legend_toggle_off',
+        'account_onboarding_prompt', 'combo_legend_toggle_restore', 'combo_legend_verify_restore',
+        'combo_selection_restore', 'request_safety',
     ]) {
         assert.equal(safeAuthenticatedSmokeStage(stage), stage);
     }
