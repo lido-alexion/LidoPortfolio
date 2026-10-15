@@ -58,4 +58,17 @@ class V9DashboardLayoutApiTest extends TestCase
         $first = \App\Models\DashboardLayout::query()->where('user_id', $user->id)->firstOrFail();
         $this->postJson("/api/dashboard-layouts/{$first->id}/duplicate", ['name' => 'Also too many'])->assertUnprocessable();
     }
+
+    public function test_dashboard_definition_updates_require_the_current_revision(): void
+    {
+        $user = User::factory()->create(['is_admin' => false]);
+        $definition = ['schema' => 'stox.dashboard.layout', 'version' => 1, 'desktop' => [], 'mobile' => []];
+        $created = $this->actingAs($user)->postJson('/api/dashboard-layouts', ['name' => 'Shared', 'definition' => $definition])->assertCreated();
+        $id = $created->json('data.id');
+        $this->putJson("/api/dashboard-layouts/{$id}", ['definition' => $definition, 'expected_revision' => 1])
+            ->assertOk()->assertJsonPath('data.revision', 2);
+        $this->putJson("/api/dashboard-layouts/{$id}", ['definition' => $definition, 'expected_revision' => 1])
+            ->assertConflict();
+        $this->assertSame(2, \App\Models\DashboardLayout::findOrFail($id)->revision);
+    }
 }

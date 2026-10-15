@@ -22,6 +22,8 @@ export default function DashboardLayoutToolbar({ userId, onLayoutChange }) {
     const saveQueue = useRef(Promise.resolve());
     const layoutRef = useRef(layout);
     const selectedRef = useRef(selectedNamed);
+    const selectedRevisionRef = useRef(1);
+    const revisionsRef = useRef(new Map());
     const revisionRef = useRef(0);
     const pendingSaveRef = useRef(null);
     const deletingRecordRef = useRef('');
@@ -34,8 +36,11 @@ export default function DashboardLayoutToolbar({ userId, onLayoutChange }) {
         pendingSaveRef.current = null;
         saveQueue.current = saveQueue.current.then(async () => {
             try {
-                const response = await api.put(`/dashboard-layouts/${pending.recordId}`, { definition: pending.definition });
+                const expectedRevision = revisionsRef.current.get(pending.recordId) ?? pending.expectedRevision;
+                const response = await api.put(`/dashboard-layouts/${pending.recordId}`, { definition: pending.definition, expected_revision: expectedRevision });
                 setNamed((current) => current.map((item) => String(item.id) === pending.recordId ? response.data.data : item));
+                revisionsRef.current.set(pending.recordId, response.data.data.revision);
+                if (selectedRef.current === pending.recordId) selectedRevisionRef.current = response.data.data.revision;
                 if (revisionRef.current === pending.revision && selectedRef.current === pending.recordId) {
                     const latest = migrateDashboardLayout(response.data.data.definition);
                     setLayout(latest);
@@ -43,14 +48,15 @@ export default function DashboardLayoutToolbar({ userId, onLayoutChange }) {
                     onLayoutChange?.(latest);
                     setSaveStatus('Saved');
                 }
-            } catch {
+            } catch (error) {
                 if (revisionRef.current === pending.revision && selectedRef.current === pending.recordId) setSaveStatus('Failed');
+                if (error?.response?.status === 409 && selectedRef.current === pending.recordId) setNamedActionError('This named dashboard changed on another device. Your local layout is preserved. Reload the page, then select this named dashboard to load the latest server copy.');
                 showToast('Named dashboard update failed; local layout is still saved.', 'warning');
             }
         });
     };
 
-    const loadNamedRecord = (record) => { if (selectedRef.current !== String(record.id)) flushSave(); const next = migrateDashboardLayout(record.definition); setSelectedNamed(String(record.id)); selectedRef.current = String(record.id); setLayout(next); layoutRef.current = next; onLayoutChange?.(next); setSaveStatus('Saved'); };
+    const loadNamedRecord = (record) => { if (selectedRef.current !== String(record.id)) flushSave(); setNamedActionError(''); const next = migrateDashboardLayout(record.definition); setSelectedNamed(String(record.id)); selectedRef.current = String(record.id); selectedRevisionRef.current = record.revision || 1; revisionsRef.current.set(String(record.id), record.revision || 1); setLayout(next); layoutRef.current = next; onLayoutChange?.(next); setSaveStatus('Saved'); };
 
     const loadNamedRecords = async ({ allowDefault = false } = {}) => {
         const requestId = ++namedRequestRef.current;
@@ -87,7 +93,7 @@ export default function DashboardLayoutToolbar({ userId, onLayoutChange }) {
         if (selectedRef.current && selectedRef.current !== deletingRecordRef.current) {
             const recordId = selectedRef.current;
             const revision = ++revisionRef.current;
-            pendingSaveRef.current = { recordId, definition: migrated, revision };
+            pendingSaveRef.current = { recordId, definition: migrated, revision, expectedRevision: selectedRevisionRef.current };
             setSaveStatus('Saving');
             clearTimeout(saveTimer.current);
             saveTimer.current = setTimeout(flushSave, 500);
@@ -148,7 +154,7 @@ export default function DashboardLayoutToolbar({ userId, onLayoutChange }) {
         const recordId = selectedRef.current;
         if (!recordId || deletingRecordRef.current === recordId) return;
         const revision = ++revisionRef.current;
-        pendingSaveRef.current = { recordId, definition: migrateDashboardLayout(layoutRef.current), revision };
+        pendingSaveRef.current = { recordId, definition: migrateDashboardLayout(layoutRef.current), revision, expectedRevision: selectedRevisionRef.current };
         setSaveStatus('Saving');
         flushSave();
     };

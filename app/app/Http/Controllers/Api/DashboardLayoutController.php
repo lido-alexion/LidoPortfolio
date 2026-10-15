@@ -19,6 +19,7 @@ class DashboardLayoutController extends Controller
             if ($normalized !== $layout->definition || $layout->schema_version !== $normalized['version']) {
                 $layout->definition = $normalized;
                 $layout->schema_version = $normalized['version'];
+                $layout->revision++;
                 $layout->save();
             }
         }
@@ -32,7 +33,7 @@ class DashboardLayoutController extends Controller
         $layout = DB::transaction(function () use ($request, $data) {
             $this->lockAccountAndEnsureCapacity($request->user()->id);
             if ($data['is_default'] ?? false) DashboardLayout::query()->where('user_id', $request->user()->id)->update(['is_default' => false]);
-            return DashboardLayout::create(['user_id' => $request->user()->id, ...$data, 'schema_version' => $data['definition']['version']]);
+            return DashboardLayout::create(['user_id' => $request->user()->id, ...$data, 'schema_version' => $data['definition']['version'], 'revision' => 1]);
         });
         return response()->json(['data' => $layout], 201);
     }
@@ -40,11 +41,15 @@ class DashboardLayoutController extends Controller
     public function update(Request $request, DashboardLayout $dashboardLayout): JsonResponse
     {
         abort_unless((int) $dashboardLayout->user_id === (int) $request->user()->id, 404);
-        $data = $request->validate(['name' => ['sometimes', 'string', 'max:120'], 'definition' => ['sometimes', 'array'], 'is_default' => ['sometimes', 'boolean']]);
+        $data = $request->validate(['name' => ['sometimes', 'string', 'max:120'], 'definition' => ['sometimes', 'array'], 'expected_revision' => ['required_with:definition', 'integer', 'min:1'], 'is_default' => ['sometimes', 'boolean']]);
         if (array_key_exists('definition', $data)) $data['definition'] = $this->definition($data['definition']);
         DB::transaction(function () use ($dashboardLayout, $request, $data) {
             DB::table('portfolio_users')->where('id', $request->user()->id)->lockForUpdate()->first();
             $current = DashboardLayout::query()->where('user_id', $request->user()->id)->whereKey($dashboardLayout->id)->lockForUpdate()->firstOrFail();
+            if (array_key_exists('definition', $data)) {
+                abort_if((int) $data['expected_revision'] !== (int) $current->revision, 409, 'Dashboard changed elsewhere. Reload it before saving.');
+                $current->revision++;
+            }
             $current->fill($data);
             if (array_key_exists('definition', $data)) $current->schema_version = $data['definition']['version'];
             if ($current->is_default) DashboardLayout::query()->where('user_id', $request->user()->id)->where('id', '!=', $current->id)->update(['is_default' => false]);
@@ -62,7 +67,7 @@ class DashboardLayoutController extends Controller
             $this->lockAccountAndEnsureCapacity($request->user()->id);
             $source = DashboardLayout::query()->where('user_id', $request->user()->id)->whereKey($dashboardLayout->id)->firstOrFail();
             $definition = $this->definition($source->definition);
-            return DashboardLayout::create(['user_id' => $request->user()->id, 'name' => $name, 'definition' => $definition, 'schema_version' => $definition['version'], 'is_default' => false]);
+            return DashboardLayout::create(['user_id' => $request->user()->id, 'name' => $name, 'definition' => $definition, 'schema_version' => $definition['version'], 'is_default' => false, 'revision' => 1]);
         });
         return response()->json(['data' => $copy], 201);
     }
