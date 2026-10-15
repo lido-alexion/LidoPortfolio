@@ -33,3 +33,36 @@ export function hasPresetChartGeometry({ linePathData = [], barPathData = [] }, 
         ? lineCount >= 2
         : lineCount >= 1 && barCount >= 1;
 }
+
+export async function waitForPresetChartGeometry({
+    readGeometry,
+    presetId,
+    deadline,
+    now = () => Date.now(),
+    wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)),
+    scheduleTimeout = setTimeout,
+    cancelTimeout = clearTimeout,
+}) {
+    while (now() < deadline) {
+        const remainingMs = deadline - now();
+        const timedOut = Symbol('geometry-read-deadline');
+        let deadlineTimer;
+        let geometry;
+        try {
+            geometry = await Promise.race([
+                Promise.resolve().then(readGeometry),
+                new Promise(resolve => {
+                    deadlineTimer = scheduleTimeout(() => resolve(timedOut), remainingMs);
+                }),
+            ]);
+        } finally {
+            cancelTimeout(deadlineTimer);
+        }
+        if (geometry === timedOut || now() >= deadline) return false;
+        if (hasPresetChartGeometry(geometry, presetId)) return true;
+        const nextRemainingMs = deadline - now();
+        if (nextRemainingMs <= 0) return false;
+        await wait(Math.min(100, nextRemainingMs));
+    }
+    return false;
+}

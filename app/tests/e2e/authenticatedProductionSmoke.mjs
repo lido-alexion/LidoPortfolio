@@ -1,6 +1,6 @@
 import { allowProductionSmokeRequest, neutralizeProductionSmokeRequest, productionSmokeBlockReason } from './productionSmokePolicy.js';
 import { readOnlyReviewHeading } from './productionSmokeSelectors.js';
-import { hasPresetChartGeometry, safeAuthenticatedSmokeStage } from './productionSmokeDiagnostics.js';
+import { safeAuthenticatedSmokeStage, waitForPresetChartGeometry } from './productionSmokeDiagnostics.js';
 
 let stage = 'configuration';
 let browser;
@@ -83,18 +83,14 @@ try {
     stage = 'combo_chart_data_rendered';
     await comboChart.scrollIntoViewIfNeeded({ timeout: remainingChartAcceptanceMs() });
     const chartRegion = await comboChart.elementHandle({ timeout: remainingChartAcceptanceMs() });
-    let chartGeometryAccepted = false;
-    while (remainingChartAcceptanceMs() > 0) {
-        const geometry = await chartRegion.evaluate(region => ({
+    const chartGeometryAccepted = await waitForPresetChartGeometry({
+        presetId: openingPreset,
+        deadline: chartAcceptanceDeadline,
+        readGeometry: () => chartRegion.evaluate(region => ({
             linePathData: [...region.querySelectorAll('.recharts-line-curve')].map(path => path.getAttribute('d')),
             barPathData: [...region.querySelectorAll('.recharts-bar-rectangle .recharts-rectangle')].map(rect => rect.getAttribute('d')),
-        }));
-        if (hasPresetChartGeometry(geometry, openingPreset)) {
-            chartGeometryAccepted = true;
-            break;
-        }
-        await page.waitForTimeout(Math.min(100, remainingChartAcceptanceMs()));
-    }
+        })),
+    });
     if (!chartGeometryAccepted) throw new Error();
     stage = 'combo_keyboard_navigation';
     const nextPreset = comboChart.getByRole('button', { name: 'Next combo chart' });

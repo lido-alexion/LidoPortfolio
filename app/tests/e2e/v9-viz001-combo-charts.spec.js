@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
-import { hasPresetChartGeometry } from './productionSmokeDiagnostics.js';
+import { hasPresetChartGeometry, waitForPresetChartGeometry } from './productionSmokeDiagnostics.js';
 
 const dates = ['2025-10-01', '2026-01-01', '2026-04-01', '2026-07-01'];
 const prices = dates.map((price_date, index) => ({
@@ -114,6 +114,39 @@ test('production geometry predicate accepts plotted data in the labelled implici
     }));
     await expect.poll(async () => hasPresetChartGeometry(await readGeometry(), 'price-pe')).toBe(true);
     expect(hasPresetChartGeometry({ linePathData: [], barPathData: [] }, 'price-pe')).toBe(false);
+});
+
+test('production geometry polling terminates on an empty implicit section within its budget', async ({ page }, testInfo) => {
+    journeyId(testInfo, 'VIZ-01');
+    await prepare(page, 'desktop');
+    await page.goto('/watchlist/TCS');
+    const chart = page.getByRole('region', { name: 'Stock Details combo chart', exact: true });
+    await expect(chart).toBeVisible();
+    await expect(chart.locator('.recharts-line-curve')).toHaveCount(2);
+    await chart.evaluate(region => {
+        region.querySelectorAll('.recharts-line-curve, .recharts-bar-rectangle .recharts-rectangle')
+            .forEach(path => path.setAttribute('d', ''));
+    });
+    const semantics = await chart.evaluate(region => ({ tagName: region.tagName, explicitRole: region.getAttribute('role') }));
+    expect(semantics).toEqual({ tagName: 'SECTION', explicitRole: null });
+    let elapsedMs = 0;
+    const accepted = await waitForPresetChartGeometry({
+        presetId: 'price-pe',
+        deadline: 25,
+        now: () => elapsedMs,
+        wait: async milliseconds => {
+            elapsedMs += milliseconds;
+            if (elapsedMs > 25) throw new Error('geometry polling exceeded its deterministic deadline');
+        },
+        scheduleTimeout: () => 1,
+        cancelTimeout: () => {},
+        readGeometry: () => chart.evaluate(region => ({
+            linePathData: [...region.querySelectorAll('.recharts-line-curve')].map(path => path.getAttribute('d')),
+            barPathData: [...region.querySelectorAll('.recharts-bar-rectangle .recharts-rectangle')].map(rect => rect.getAttribute('d')),
+        })),
+    });
+    expect(accepted).toBe(false);
+    expect(elapsedMs).toBe(25);
 });
 
 test('symbol deep links prefer the data-bearing NSE listing over a BSE-first watchlist row', async ({ page }, testInfo) => {

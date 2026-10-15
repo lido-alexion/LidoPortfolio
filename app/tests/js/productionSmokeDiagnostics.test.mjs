@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { hasPresetChartGeometry, safeAuthenticatedSmokeStage } from '../e2e/productionSmokeDiagnostics.js';
+import { hasPresetChartGeometry, safeAuthenticatedSmokeStage, waitForPresetChartGeometry } from '../e2e/productionSmokeDiagnostics.js';
 
 test('authenticated smoke reports only fixed, stage-level diagnostics', () => {
     for (const stage of [
@@ -20,4 +20,45 @@ test('combo geometry acceptance requires non-empty preset-appropriate plotted pa
     assert.equal(hasPresetChartGeometry({ linePathData: ['M0 0L1 1'], barPathData: ['M0 0h2v3z'] }, 'price-volume'), true);
     assert.equal(hasPresetChartGeometry({ linePathData: [' '], barPathData: [''] }, 'price-volume'), false);
     assert.equal(hasPresetChartGeometry({ linePathData: ['M0 0L1 1'] }, 'price-pe'), false);
+});
+
+test('geometry polling stops at its raw deadline when a chart remains empty', async () => {
+    const budgetMs = 25;
+    let elapsedMs = 0;
+    let reads = 0;
+    const accepted = await waitForPresetChartGeometry({
+        presetId: 'price-volume',
+        deadline: budgetMs,
+        now: () => elapsedMs,
+        wait: async milliseconds => {
+            elapsedMs += milliseconds;
+            if (elapsedMs > budgetMs) throw new Error('geometry polling exceeded its deterministic deadline');
+        },
+        readGeometry: async () => {
+            reads += 1;
+            return { linePathData: [''], barPathData: [' '] };
+        },
+    });
+    assert.equal(accepted, false);
+    assert.equal(elapsedMs, budgetMs);
+    assert.ok(reads > 0);
+    assert.ok(reads < 10);
+});
+
+test('geometry reads that resolve after the deadline are rejected by the watchdog', async () => {
+    const budgetMs = 25;
+    let elapsedMs = 0;
+    let resolveLateGeometry;
+    const lateGeometry = new Promise(resolve => { resolveLateGeometry = resolve; });
+    const accepted = await waitForPresetChartGeometry({
+        presetId: 'price-pe',
+        deadline: budgetMs,
+        now: () => elapsedMs,
+        scheduleTimeout: (callback, milliseconds) => { elapsedMs += milliseconds; callback(); return 1; },
+        cancelTimeout: () => {},
+        readGeometry: () => lateGeometry,
+    });
+    assert.equal(accepted, false);
+    assert.equal(elapsedMs, budgetMs);
+    resolveLateGeometry({ linePathData: ['M0 0L1 1', 'M1 0L0 1'] });
 });
