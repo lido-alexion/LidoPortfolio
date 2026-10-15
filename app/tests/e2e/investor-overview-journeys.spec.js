@@ -70,7 +70,7 @@ for (const viewport of VIEWPORTS) {
                 mobile: { cards: [], summaryFields: [] },
             };
             let listUnavailable = true;
-            let named = { id: 7, name: 'Investor', is_default: false, definition: layout };
+            let named = { id: 7, name: 'Investor', is_default: false, definition: layout, revision: 1 };
             let autosaveAttempts = 0;
             let defaultAttempts = 0;
             await page.route('**/api/dashboard-layouts', route => {
@@ -85,9 +85,10 @@ for (const viewport of VIEWPORTS) {
                 const body = route.request().postDataJSON();
                 if (body.definition) {
                     autosaveAttempts++;
+                    expect(body.expected_revision).toBe(named.revision);
                     expect(body.definition[viewport.name === 'mobile' ? 'mobile' : 'desktop'].summaryFields.find(field => field.id === 'xirr')?.visible).toBe(false);
                     if (autosaveAttempts === 1) return route.fulfill({ status: 503, json: { message: 'Synthetic layout save unavailable.' } });
-                    named = { ...named, definition: body.definition };
+                    named = { ...named, definition: body.definition, revision: named.revision + 1 };
                     return route.fulfill({ json: { data: named } });
                 }
                 defaultAttempts++;

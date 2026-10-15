@@ -23,7 +23,7 @@
 
 <p>1. Open the Dashboard (`/`). Existing local working preferences take precedence over an account default. An unavailable named list offers Retry without replacing the current local definition.</p>
 <p>2. Save as named dashboard with an explicit name. Failed creation leaves the existing list and local working layout intact; inspect and repeat deliberately.</p>
-<p>3. Select a named layout. Edit its variant and inspect Saving, Saved or Failed. Failed autosave keeps the reviewed local definition; Retry named dashboard save submits that exact current definition. Changing layout/account does not silently retry the rejected write.</p>
+<p>3. Select a named layout. Edit its variant and inspect Saving, Saved or Failed. Failed autosave keeps the reviewed local definition; Retry named dashboard save submits that exact current definition. If another device saves while a request is in flight, the response must not advance this device past the exact revision it saved; the next write conflicts safely and preserves both the local draft and newer server definition. If the server reports that another device changed the layout, reload the page and explicitly select that named dashboard to load its latest server definition before editing again. Changing layout/account does not silently retry the rejected write.</p>
 <p>4. Set one account default. A failed update retains the prior indication. Correct/retry explicitly and verify the confirmed default.</p>
 <p>5. Rename or Duplicate a named dashboard. On failure, the original record remains intact. Duplication creates a separate record; it never replaces a sibling.</p>
 <p>6. Copy a selected named dashboard to this device to detach the unnamed local working layout. Reopening preserves local precedence.</p>

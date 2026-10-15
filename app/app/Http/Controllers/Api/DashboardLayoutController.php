@@ -13,15 +13,28 @@ class DashboardLayoutController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $layouts = DashboardLayout::query()->where('user_id', $request->user()->id)->orderBy('name')->get();
-        foreach ($layouts as $layout) {
-            $normalized = DashboardLayoutDefinition::normalize($layout->definition);
-            if ($normalized !== $layout->definition || $layout->schema_version !== $normalized['version']) {
-                $layout->definition = $normalized;
-                $layout->schema_version = $normalized['version'];
-                $layout->save();
+        $userId = (int) $request->user()->id;
+        $layouts = DB::transaction(function () use ($userId) {
+            // Serialize normalization with named-layout writes using the same account-then-record lock order.
+            DB::table('portfolio_users')->where('id', $userId)->lockForUpdate()->first();
+            $layouts = DashboardLayout::query()
+                ->where('user_id', $userId)
+                ->orderBy('name')
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($layouts as $layout) {
+                $normalized = DashboardLayoutDefinition::normalize($layout->definition);
+                if ($this->canonicalize($normalized) !== $this->canonicalize($layout->definition) || $layout->schema_version !== $normalized['version']) {
+                    $layout->definition = $normalized;
+                    $layout->schema_version = $normalized['version'];
+                    $layout->revision++;
+                    $layout->save();
+                }
             }
-        }
+            return $layouts;
+        });
+
         return response()->json(['data' => $layouts]);
     }
 
@@ -32,7 +45,7 @@ class DashboardLayoutController extends Controller
         $layout = DB::transaction(function () use ($request, $data) {
             $this->lockAccountAndEnsureCapacity($request->user()->id);
             if ($data['is_default'] ?? false) DashboardLayout::query()->where('user_id', $request->user()->id)->update(['is_default' => false]);
-            return DashboardLayout::create(['user_id' => $request->user()->id, ...$data, 'schema_version' => $data['definition']['version']]);
+            return DashboardLayout::create(['user_id' => $request->user()->id, ...$data, 'schema_version' => $data['definition']['version'], 'revision' => 1]);
         });
         return response()->json(['data' => $layout], 201);
     }
@@ -40,18 +53,22 @@ class DashboardLayoutController extends Controller
     public function update(Request $request, DashboardLayout $dashboardLayout): JsonResponse
     {
         abort_unless((int) $dashboardLayout->user_id === (int) $request->user()->id, 404);
-        $data = $request->validate(['name' => ['sometimes', 'string', 'max:120'], 'definition' => ['sometimes', 'array'], 'is_default' => ['sometimes', 'boolean']]);
+        $data = $request->validate(['name' => ['sometimes', 'string', 'max:120'], 'definition' => ['sometimes', 'array'], 'expected_revision' => ['required_with:definition', 'integer', 'min:1'], 'is_default' => ['sometimes', 'boolean']]);
         if (array_key_exists('definition', $data)) $data['definition'] = $this->definition($data['definition']);
-        DB::transaction(function () use ($dashboardLayout, $request, $data) {
+        $saved = DB::transaction(function () use ($dashboardLayout, $request, $data) {
             DB::table('portfolio_users')->where('id', $request->user()->id)->lockForUpdate()->first();
             $current = DashboardLayout::query()->where('user_id', $request->user()->id)->whereKey($dashboardLayout->id)->lockForUpdate()->firstOrFail();
+            if (array_key_exists('definition', $data)) {
+                abort_if((int) $data['expected_revision'] !== (int) $current->revision, 409, 'Dashboard changed elsewhere. Reload it before saving.');
+                $current->revision++;
+            }
             $current->fill($data);
             if (array_key_exists('definition', $data)) $current->schema_version = $data['definition']['version'];
             if ($current->is_default) DashboardLayout::query()->where('user_id', $request->user()->id)->where('id', '!=', $current->id)->update(['is_default' => false]);
             $current->save();
-            $dashboardLayout->setRawAttributes($current->getAttributes(), true);
+            return $current;
         });
-        return response()->json(['data' => $dashboardLayout->fresh()]);
+        return response()->json(['data' => $saved]);
     }
 
     public function duplicate(Request $request, DashboardLayout $dashboardLayout): JsonResponse
@@ -62,7 +79,7 @@ class DashboardLayoutController extends Controller
             $this->lockAccountAndEnsureCapacity($request->user()->id);
             $source = DashboardLayout::query()->where('user_id', $request->user()->id)->whereKey($dashboardLayout->id)->firstOrFail();
             $definition = $this->definition($source->definition);
-            return DashboardLayout::create(['user_id' => $request->user()->id, 'name' => $name, 'definition' => $definition, 'schema_version' => $definition['version'], 'is_default' => false]);
+            return DashboardLayout::create(['user_id' => $request->user()->id, 'name' => $name, 'definition' => $definition, 'schema_version' => $definition['version'], 'is_default' => false, 'revision' => 1]);
         });
         return response()->json(['data' => $copy], 201);
     }
@@ -78,6 +95,16 @@ class DashboardLayoutController extends Controller
     {
         abort_if(strlen(json_encode($definition, JSON_THROW_ON_ERROR)) > 32768, 422, 'Dashboard definition exceeds the 32 KB limit.');
         return DashboardLayoutDefinition::normalize($definition);
+    }
+
+    private function canonicalize(mixed $value): mixed
+    {
+        if (!is_array($value)) return $value;
+        if (array_is_list($value)) return array_map(fn ($item) => $this->canonicalize($item), $value);
+
+        ksort($value, SORT_STRING);
+        foreach ($value as $key => $item) $value[$key] = $this->canonicalize($item);
+        return $value;
     }
 
     private function lockAccountAndEnsureCapacity(int $userId): void
