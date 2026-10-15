@@ -98,6 +98,73 @@ class MlAcceptancePrivatePermissionRepairScriptTest extends TestCase
         $this->assertStringContainsString('unregistered source directory', $unregistered->getErrorOutput());
     }
 
+    public function test_terminal_campaign_plans_exact_interrupted_dataset_builder_layout_without_touching_bytes(): void
+    {
+        $campaign = $this->fixtureRoot.'/campaigns/42345678-1234-4234-8234-123456789abc';
+        $payloads = [
+            'train.jsonl' => "{\"row\":\"train fixture\"}\n",
+            'validation.jsonl' => "{\"row\":\"validation fixture\"}\n",
+            'test.jsonl' => "{\"row\":\"test fixture\"}\n",
+        ];
+        $before = [];
+        foreach (['1m', '3m', '6m'] as $horizonName) {
+            $horizon = $campaign.'/'.$horizonName;
+            $dataset = $horizon.'/dataset';
+            mkdir($dataset, 0700, true);
+            foreach ($payloads as $name => $bytes) {
+                file_put_contents($dataset.'/'.$name, $bytes);
+                $before[$horizonName.'/'.$name] = hash('sha256', $bytes);
+            }
+            file_put_contents($horizon.'/pit-evidence.jsonl.gz', 'journal fixture bytes');
+        }
+
+        // This mirrors the producer's paths returned by buildStreamed and its finally-cleaned dataset child.
+        $first = $this->runPlanner('echo json_encode(walkCampaign('.var_export($campaign, true).', '.var_export($this->fixtureRoot, true).', 33, 33, "failed"));');
+        $second = $this->runPlanner('echo json_encode(walkCampaign('.var_export($campaign, true).', '.var_export($this->fixtureRoot, true).', 33, 33, "failed"));');
+
+        $this->assertSame(0, $first->getExitCode(), $first->getErrorOutput());
+        $this->assertSame(0, $second->getExitCode(), $second->getErrorOutput());
+        $plan = json_decode($first->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame($plan, json_decode($second->getOutput(), true, flags: JSON_THROW_ON_ERROR));
+        $this->assertCount(19, $plan); // campaign, three horizons, three datasets, nine partitions and three journals
+        $datasetDirectories = array_values(array_filter($plan, fn ($item) => $item['kind'] === 'retained-temporary-dataset-directory'));
+        $this->assertCount(3, $datasetDirectories);
+        foreach ($datasetDirectories as $directory) $this->assertSame(0700, $directory['after_mode']);
+        $partitionObjects = array_values(array_filter($plan, fn ($item) => $item['kind'] === 'retained-temporary-dataset-partition'));
+        $this->assertCount(9, $partitionObjects);
+        foreach ($partitionObjects as $object) {
+            $this->assertSame(0400, $object['after_mode']);
+            $this->assertSame(hash_file('sha256', $object['path']), $object['sha256']);
+        }
+        $after = [];
+        foreach (['1m', '3m', '6m'] as $horizonName) {
+            foreach (array_keys($payloads) as $name) $after[$horizonName.'/'.$name] = hash_file('sha256', $campaign.'/'.$horizonName.'/dataset/'.$name);
+        }
+        $this->assertSame($before, $after);
+    }
+
+    public function test_campaign_planning_rejects_unexpected_nested_objects_symlinks_and_nonterminal_states(): void
+    {
+        $campaign = $this->fixtureRoot.'/campaigns/52345678-1234-4234-8234-123456789abc';
+        mkdir($campaign.'/1m/dataset', 0700, true);
+        file_put_contents($campaign.'/1m/dataset/train.jsonl', "{}\n");
+        mkdir($campaign.'/1m/dataset/nested');
+        $nested = $this->runPlanner('walkCampaign('.var_export($campaign, true).', '.var_export($this->fixtureRoot, true).', 33, 33, "cancelled");');
+        $this->assertSame(2, $nested->getExitCode());
+        $this->assertStringContainsString('unrecognized retained dataset object', $nested->getErrorOutput());
+
+        rmdir($campaign.'/1m/dataset/nested');
+        file_put_contents($this->fixtureRoot.'/outside-partition', 'outside bytes');
+        symlink($this->fixtureRoot.'/outside-partition', $campaign.'/1m/dataset/validation.jsonl');
+        $symlink = $this->runPlanner('walkCampaign('.var_export($campaign, true).', '.var_export($this->fixtureRoot, true).', 33, 33, "cancelled");');
+        $this->assertSame(2, $symlink->getExitCode());
+        $this->assertStringContainsString('symlink encountered', $symlink->getErrorOutput());
+
+        $active = $this->runPlanner('walkCampaign('.var_export($campaign, true).', '.var_export($this->fixtureRoot, true).', 33, 33, "training");');
+        $this->assertSame(2, $active->getExitCode());
+        $this->assertStringContainsString('not in a recognized terminal state', $active->getErrorOutput());
+    }
+
     private function runPlanner(string $body): Process
     {
         $script = base_path('scripts/repair-ml-acceptance-private-permissions.php');
