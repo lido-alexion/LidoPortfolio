@@ -21,22 +21,26 @@ function ComboTooltip({ active, label, payload, preset, visible, formatValue }) 
     </div>;
 }
 
-export default function ComboChart({ rows = [], availability = {}, defaultPresetId = 'price-volume', height = 320, onSetDefault, savingDefault = false, formatValue }) {
+export default function ComboChart({ rows = [], availability = {}, defaultPresetId = 'price-volume', defaultResolutionPending = false, height = 320, onSetDefault, savingDefault = false, formatValue }) {
     const presets = useMemo(() => availableComboPresets(availability), [availability]);
     const initialPresetId = resolveComboDefault(defaultPresetId, availability) ?? 'price-volume';
     const synchronizedDefaultRef = useRef(initialPresetId);
+    const previousDefaultPropRef = useRef(defaultPresetId);
     const [presetId, setPresetId] = useState(initialPresetId);
     const [visible, setVisible] = useState({});
     const [range, setRange] = useState('all');
     const [sampling, setSampling] = useState('1d');
+    const userSelectionRef = useRef(false);
     useEffect(() => {
         const resolvedDefault = resolveComboDefault(defaultPresetId, availability) ?? 'price-volume';
         const defaultChanged = synchronizedDefaultRef.current !== resolvedDefault;
+        const savedDefaultChanged = previousDefaultPropRef.current !== defaultPresetId;
         setPresetId((current) => {
             const currentAvailable = presets.some((item) => item.id === current && item.available);
-            return defaultChanged || !currentAvailable ? resolvedDefault : current;
+            return savedDefaultChanged || (!userSelectionRef.current && defaultChanged) || !currentAvailable ? resolvedDefault : current;
         });
         synchronizedDefaultRef.current = resolvedDefault;
+        previousDefaultPropRef.current = defaultPresetId;
     }, [defaultPresetId, availability, presets]);
     const preset = presets.find((item) => item.id === presetId && item.available) || presets.find((item) => item.id === resolveComboDefault(null, availability));
     const shownRows = useMemo(() => rangeAndSamplingRows(rows, range, sampling), [rows, range, sampling]);
@@ -46,7 +50,10 @@ export default function ComboChart({ rows = [], availability = {}, defaultPreset
     const selectionChanged = preset?.id !== defaultPresetId;
     const next = (direction) => {
         const target = cycleComboPreset(presets, preset?.id, direction);
-        if (target) setPresetId(target.id);
+        if (target) {
+            userSelectionRef.current = true;
+            setPresetId(target.id);
+        }
     };
     const toggle = (key) => setVisible((state) => ({ ...state, [key]: state[key] === false }));
 
@@ -71,18 +78,19 @@ export default function ComboChart({ rows = [], availability = {}, defaultPreset
     return <section className="lido-combo-chart card" aria-label="Stock Details combo chart">
         <div className="card-header d-flex flex-wrap align-items-center gap-2 py-2">
             <label className="visually-hidden" htmlFor="combo-chart-preset">Combo chart preset</label>
-            <select id="combo-chart-preset" className="form-select form-select-sm flex-grow-1" value={preset.id} onChange={(event) => setPresetId(event.target.value)}>
+            <select id="combo-chart-preset" className="form-select form-select-sm flex-grow-1" value={preset.id} onChange={(event) => { userSelectionRef.current = true; setPresetId(event.target.value); }}>
                 {['Market activity', 'Valuation', 'Fundamentals'].map((category) => <optgroup key={category} label={category}>
                     {presets.filter((item) => item.category === category).map((item) => <option key={item.id} value={item.id} disabled={!item.available}>{item.label}{!item.available ? ` — ${item.unavailableReason || 'Unavailable'}` : ''}</option>)}
                 </optgroup>)}
             </select>
             <button type="button" className="btn btn-outline-secondary btn-sm" aria-label="Previous combo chart" onClick={() => next(-1)}>‹</button>
             <button type="button" className="btn btn-outline-secondary btn-sm" aria-label="Next combo chart" onClick={() => next(1)}>›</button>
-            {onSetDefault ? <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => onSetDefault(preset.id)} disabled={!selectionChanged || savingDefault}>
-                {savingDefault ? 'Saving…' : selectionChanged ? 'Set as default' : 'Default chart'}
+            {onSetDefault ? <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => onSetDefault(preset.id)} disabled={!selectionChanged || savingDefault || defaultResolutionPending}>
+                {savingDefault ? 'Saving…' : defaultResolutionPending ? 'Loading saved default…' : selectionChanged ? 'Set as default' : 'Default chart'}
             </button> : null}
         </div>
         <div className="card-body pb-2">
+            {defaultResolutionPending ? <p className="text-muted small mb-2" role="status">Loading the saved default’s history; showing available chart data meanwhile.</p> : null}
             <div className="d-flex flex-wrap gap-2 mb-2" role="group" aria-label="Series visibility">
                 {activeSeries.map((key) => {
                     const checked = visible[key] !== false;

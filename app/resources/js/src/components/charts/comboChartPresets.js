@@ -56,7 +56,10 @@ export function comboPresetAvailability({ prices = [], series = {} } = {}) {
             return date && (!priceDates.length || (date >= priceDates[0] && date <= priceDates.at(-1)))
                 && point.value != null && point.value !== '' && Number.isFinite(Number(point.value));
         }).length;
-        availability[preset.id] = series[key]?.unavailableReason
+        const metricLabel = ({ pe: 'P/E', pb: 'P/B', ps: 'P/S', net_profit: 'net profit' })[key] ?? key.toUpperCase();
+        availability[preset.id] = series[key]?.loading
+            ? { available: false, reason: `Loading historical ${metricLabel} data` }
+            : series[key]?.unavailableReason
             ? { available: false, reason: `Temporarily unavailable: ${series[key].unavailableReason}` }
             : hasPriceTimeline && inPriceWindow >= 4
                 ? { available: true }

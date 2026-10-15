@@ -178,6 +178,39 @@ test('a deliberate BSE selection survives late watchlist rows for the same symbo
     expect(safety.blocked).toEqual([]);
 });
 
+test('renders price and volume while the saved metric history is delayed, then honors that default', async ({ page }, testInfo) => {
+    journeyId(testInfo, 'VIZ-01');
+    const safety = await prepare(page, 'desktop');
+    let releasePe;
+    const peReady = new Promise(resolve => { releasePe = resolve; });
+    let peRequested = false;
+    await page.route('**/api/v1/stocks/42/fundamentals/metrics/*/history?*', async route => {
+        const metric = new URL(route.request().url()).pathname.split('/').at(-2);
+        if (metric === 'pe') {
+            peRequested = true;
+            await peReady;
+        }
+        return route.fulfill({ json: { data: { points } } });
+    });
+
+    await page.goto('/watchlist/TCS');
+    const chart = page.getByRole('region', { name: 'Stock Details combo chart', exact: true });
+    await expect(chart).toBeVisible();
+    const selector = chart.getByLabel('Combo chart preset');
+    await expect(selector).toHaveValue('price-volume');
+    await expect(chart.getByRole('checkbox', { name: 'Show Price' })).toBeVisible();
+    await expect(chart.locator('.recharts-line')).toBeVisible();
+    await expect(chart.locator('.recharts-bar')).toBeVisible();
+    await expect(chart.getByText(/Loading the saved default’s history/)).toBeVisible();
+    await expect.poll(() => peRequested).toBe(true);
+    expect(safety.writes).toEqual([]);
+    expect(safety.blocked).toEqual([]);
+
+    releasePe();
+    await expect(selector).toHaveValue('price-pe');
+    await expect(chart.getByRole('button', { name: 'Default chart', exact: true })).toBeDisabled();
+});
+
 test.describe('VIZ-01 mobile and touch', () => {
     test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
     test('keeps the combo chart and touch targets inside the mobile viewport without writes', async ({ page }, testInfo) => {
