@@ -168,16 +168,20 @@ test('deploy writable-path normalization preserves private ML acceptance sources
 
 test('private acceptance permission repair is dry-run by default and narrowly guarded', async () => {
     const script = await source('app/scripts/repair-ml-acceptance-private-permissions.php');
+    const behavior = spawnSync('php', ['scripts/tests/test_repair_ml_acceptance_configured_queue.php'], { encoding: 'utf8', cwd: resolve(repositoryRoot, 'app') });
     const ci = await source('.github/workflows/ci.yml');
     const help = spawnSync('php', ['scripts/repair-ml-acceptance-private-permissions.php', '--help'], { encoding: 'utf8', cwd: resolve(repositoryRoot, 'app') });
     assert.equal(help.status, 0, help.stderr);
+    assert.equal(behavior.status, 0, behavior.stderr);
+    assert.match(behavior.stdout, /Configured acceptance queue guard behavior passed/);
     assert.match(help.stdout, /\[--actor OPERATOR\] \[--apply\]/);
     const unsafeApply = spawnSync('php', ['scripts/repair-ml-acceptance-private-permissions.php', '--apply'], { encoding: 'utf8', cwd: resolve(repositoryRoot, 'app') });
     assert.equal(unsafeApply.status, 2);
     assert.match(unsafeApply.stderr, /--apply requires --actor/);
 
     assert.match(script, /const REPAIR_ROOT = '\/var\/www\/stoxla\/shared\/storage\/app\/private\/ml-acceptance'/);
-    assert.match(script, /where\('queue', 'ml-acceptance'\)->count\(\)/);
+    assert.doesNotMatch(script, /DB::table\(['"]jobs['"]\)/);
+    assert.equal((script.match(/checkAcceptanceQueueOrStop\(/g) || []).length, 3);
     assert.match(script, /whereIn\('status', \['preflight', 'training'\]\)/);
     assert.match(script, /\['uploading', 'queued', 'sealed', 'failed', 'cancelled'\]/);
     assert.match(script, /sealed-payload/);

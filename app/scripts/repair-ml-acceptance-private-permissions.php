@@ -38,6 +38,51 @@ function parseArgs(array $argv): array
     return $args;
 }
 
+/** Resolve the dedicated Laravel database queue from effective cached config. */
+function acceptanceQueueTarget(array $queueConfig, ?string $defaultConnection, array $databaseConnections): array
+{
+    $queue = $queueConfig['ml-acceptance'] ?? null;
+    if (!is_array($queue) || ($queue['driver'] ?? null) !== 'database') {
+        throw new RuntimeException('dedicated acceptance queue driver/config is unsupported');
+    }
+    $queueName = $queue['queue'] ?? null;
+    if (!is_string($queueName) || $queueName !== 'ml-acceptance') {
+        throw new RuntimeException('dedicated acceptance queue name is invalid');
+    }
+    $table = $queue['table'] ?? null;
+    if (!is_string($table) || !preg_match('/\\A[a-zA-Z_][a-zA-Z0-9_]*\\z/', $table)) {
+        throw new RuntimeException('dedicated acceptance queue table is invalid');
+    }
+    $connection = $queue['connection'] ?? null;
+    if ($connection === null) $connection = $defaultConnection;
+    if (!is_string($connection) || $connection === '' || !isset($databaseConnections[$connection]) || !is_array($databaseConnections[$connection])) {
+        throw new RuntimeException('dedicated acceptance database connection is invalid');
+    }
+    $driver = $databaseConnections[$connection]['driver'] ?? null;
+    if (!is_string($driver) || !in_array($driver, ['mysql', 'mariadb', 'pgsql', 'sqlite', 'sqlsrv'], true)) {
+        throw new RuntimeException('dedicated acceptance database driver is unsupported');
+    }
+    return ['connection' => $connection, 'table' => $table, 'queue' => $queueName];
+}
+
+/** Shared fail-closed guard used at initial planning and immediately before apply. */
+function assertAcceptanceQueueEmpty(array $queueConfig, ?string $defaultConnection, array $databaseConnections, callable $countJobs, string $phase): void
+{
+    $target = acceptanceQueueTarget($queueConfig, $defaultConnection, $databaseConnections);
+    $count = $countJobs($target['connection'], $target['table'], $target['queue']);
+    if (!is_int($count) || $count < 0) throw new RuntimeException($phase . ': queue count is invalid');
+    if ($count !== 0) throw new RuntimeException($phase . ': dedicated acceptance queue is not empty');
+}
+
+function checkAcceptanceQueueOrStop(array $queueConfig, ?string $defaultConnection, array $databaseConnections, callable $countJobs, string $phase): void
+{
+    try {
+        assertAcceptanceQueueEmpty($queueConfig, $defaultConnection, $databaseConnections, $countJobs, $phase);
+    } catch (Throwable $error) {
+        stop($error->getMessage());
+    }
+}
+
 function safePath(string $path, string $root): void
 {
     if (is_link($path)) stop("symlink encountered: {$path}");
@@ -157,8 +202,12 @@ $service = trim((string) shell_exec('/usr/bin/systemctl is-active stoxla-ml-acce
 if (!in_array($service, ['inactive', 'failed'], true)) stop("dedicated worker must be stopped (state: " . ($service ?: 'unknown') . ')');
 $busy = DB::table('stox_ml_acceptance_campaigns')->whereIn('status', ['preflight', 'training'])->count();
 if ($busy !== 0) stop('an acceptance campaign is active');
-$queued = DB::table('jobs')->where('queue', 'ml-acceptance')->count();
-if ($queued !== 0) stop('dedicated acceptance queue is not empty');
+$queueConfig = config('queue.connections');
+$databaseConnections = config('database.connections');
+if (!is_array($queueConfig) || !is_array($databaseConnections)) stop('Laravel queue/database configuration is invalid');
+$countAcceptanceJobs = fn (string $connection, string $table, string $queue): int =>
+    DB::connection($connection)->table($table)->where('queue', $queue)->count();
+checkAcceptanceQueueOrStop($queueConfig, config('database.default'), $databaseConnections, $countAcceptanceJobs, 'initial safety check');
 
 $runuser = '/usr/sbin/runuser';
 if (!is_executable($runuser)) stop('runuser is unavailable; cannot verify www-data parent traversal');
@@ -207,14 +256,14 @@ foreach ($plan as $object) {
     }
 }
 $changes = array_values(array_filter($plan, fn ($o) => $o['before_mode'] !== $o['after_mode'] || $o['before_uid'] !== $uid || $o['before_gid'] !== $gid));
-printf("Plan: %d recognized objects, %d changes; service=%s; active campaigns=0; queued jobs=0; mode=%s\n", count($plan), count($changes), $service, $options['apply'] ? 'APPLY' : 'DRY-RUN');
+printf("Plan: %d recognized objects, %d changes; service=%s; active campaigns=0; dedicated queue empty; mode=%s\n", count($plan), count($changes), $service, $options['apply'] ? 'APPLY' : 'DRY-RUN');
 if (!$options['apply']) exit(0);
 if ($changes === []) { echo "No changes required.\n"; exit(0); }
 
 $currentService = trim((string) shell_exec('/usr/bin/systemctl is-active stoxla-ml-acceptance.service 2>/dev/null'));
 if (!in_array($currentService, ['inactive', 'failed'], true) || $currentService !== $service) stop('worker state changed after planning; rerun dry-run');
-if (DB::table('stox_ml_acceptance_campaigns')->whereIn('status', ['preflight', 'training'])->count() !== 0
-    || DB::table('jobs')->where('queue', 'ml-acceptance')->count() !== 0) stop('campaign/queue state changed after planning; rerun dry-run');
+if (DB::table('stox_ml_acceptance_campaigns')->whereIn('status', ['preflight', 'training'])->count() !== 0) stop('campaign state changed after planning; rerun dry-run');
+checkAcceptanceQueueOrStop($queueConfig, config('database.default'), $databaseConnections, $countAcceptanceJobs, 'pre-apply safety check');
 $sourceNow = DB::table('stox_ml_acceptance_sources')->get()->sortBy('id')->map(fn ($r) => [$r->id, $r->status, $r->updated_at, $r->manifest, $r->evidence])->values()->all();
 $campaignNow = DB::table('stox_ml_acceptance_campaigns')->get()->sortBy('id')->map(fn ($r) => [$r->id, $r->status, $r->updated_at])->values()->all();
 if (!hash_equals(hash('sha256', json_encode($sourceState)), hash('sha256', json_encode($sourceNow)))
