@@ -13,16 +13,28 @@ class DashboardLayoutController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $layouts = DashboardLayout::query()->where('user_id', $request->user()->id)->orderBy('name')->get();
-        foreach ($layouts as $layout) {
-            $normalized = DashboardLayoutDefinition::normalize($layout->definition);
-            if ($normalized !== $layout->definition || $layout->schema_version !== $normalized['version']) {
-                $layout->definition = $normalized;
-                $layout->schema_version = $normalized['version'];
-                $layout->revision++;
-                $layout->save();
+        $userId = (int) $request->user()->id;
+        $layouts = DB::transaction(function () use ($userId) {
+            // Serialize normalization with named-layout writes using the same account-then-record lock order.
+            DB::table('portfolio_users')->where('id', $userId)->lockForUpdate()->first();
+            $layouts = DashboardLayout::query()
+                ->where('user_id', $userId)
+                ->orderBy('name')
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($layouts as $layout) {
+                $normalized = DashboardLayoutDefinition::normalize($layout->definition);
+                if ($normalized !== $layout->definition || $layout->schema_version !== $normalized['version']) {
+                    $layout->definition = $normalized;
+                    $layout->schema_version = $normalized['version'];
+                    $layout->revision++;
+                    $layout->save();
+                }
             }
-        }
+            return $layouts;
+        });
+
         return response()->json(['data' => $layouts]);
     }
 
@@ -43,7 +55,7 @@ class DashboardLayoutController extends Controller
         abort_unless((int) $dashboardLayout->user_id === (int) $request->user()->id, 404);
         $data = $request->validate(['name' => ['sometimes', 'string', 'max:120'], 'definition' => ['sometimes', 'array'], 'expected_revision' => ['required_with:definition', 'integer', 'min:1'], 'is_default' => ['sometimes', 'boolean']]);
         if (array_key_exists('definition', $data)) $data['definition'] = $this->definition($data['definition']);
-        DB::transaction(function () use ($dashboardLayout, $request, $data) {
+        $saved = DB::transaction(function () use ($dashboardLayout, $request, $data) {
             DB::table('portfolio_users')->where('id', $request->user()->id)->lockForUpdate()->first();
             $current = DashboardLayout::query()->where('user_id', $request->user()->id)->whereKey($dashboardLayout->id)->lockForUpdate()->firstOrFail();
             if (array_key_exists('definition', $data)) {
@@ -54,9 +66,9 @@ class DashboardLayoutController extends Controller
             if (array_key_exists('definition', $data)) $current->schema_version = $data['definition']['version'];
             if ($current->is_default) DashboardLayout::query()->where('user_id', $request->user()->id)->where('id', '!=', $current->id)->update(['is_default' => false]);
             $current->save();
-            $dashboardLayout->setRawAttributes($current->getAttributes(), true);
+            return $current;
         });
-        return response()->json(['data' => $dashboardLayout->fresh()]);
+        return response()->json(['data' => $saved]);
     }
 
     public function duplicate(Request $request, DashboardLayout $dashboardLayout): JsonResponse

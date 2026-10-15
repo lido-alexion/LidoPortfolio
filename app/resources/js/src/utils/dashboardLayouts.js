@@ -77,6 +77,19 @@ export function inspectDashboardLayoutCompatibility(input) {
     return [...new Set(warnings)];
 }
 
+export function mergeDashboardLayoutRecord(existing, incoming) {
+    if (!existing) return incoming;
+    if (Number(existing.revision || 1) > Number(incoming.revision || 1)) {
+        return {
+            ...incoming,
+            definition: existing.definition,
+            schema_version: existing.schema_version,
+            revision: existing.revision,
+        };
+    }
+    return incoming;
+}
+
 export function accountLayoutStorageKey(userId) {
     return `stox_dashboard_layout_${String(userId || 'unknown')}`;
 }

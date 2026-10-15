@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class V9DashboardLayoutApiTest extends TestCase
@@ -18,6 +19,7 @@ class V9DashboardLayoutApiTest extends TestCase
 
         $response = $this->actingAs($user)->postJson('/api/dashboard-layouts', ['name' => 'Investor', 'definition' => $definition, 'is_default' => true]);
         $response->assertCreated()->assertJsonPath('data.name', 'Investor');
+        $response->assertJsonPath('data.revision', 1);
         $id = $response->json('data.id');
 
         $this->actingAs($other)->getJson('/api/dashboard-layouts')->assertOk()->assertJsonCount(0, 'data');
@@ -70,5 +72,49 @@ class V9DashboardLayoutApiTest extends TestCase
         $this->putJson("/api/dashboard-layouts/{$id}", ['definition' => $definition, 'expected_revision' => 1])
             ->assertConflict();
         $this->assertSame(2, \App\Models\DashboardLayout::findOrFail($id)->revision);
+    }
+
+    public function test_legacy_normalization_is_revisioned_once_before_stale_saves_are_checked(): void
+    {
+        $user = User::factory()->create(['is_admin' => false]);
+        $other = User::factory()->create(['is_admin' => false]);
+        $legacyDefinition = ['schema' => 'stox.dashboard.layout', 'version' => 1, 'desktop' => [], 'mobile' => []];
+        $legacyId = DB::table('portfolio_dashboard_layouts')->insertGetId([
+            'user_id' => $user->id,
+            'name' => 'Legacy',
+            'definition' => json_encode($legacyDefinition, JSON_THROW_ON_ERROR),
+            'schema_version' => 1,
+            'is_default' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $otherLegacyId = DB::table('portfolio_dashboard_layouts')->insertGetId([
+            'user_id' => $other->id,
+            'name' => 'Other account legacy',
+            'definition' => json_encode($legacyDefinition, JSON_THROW_ON_ERROR),
+            'schema_version' => 1,
+            'is_default' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $legacy = \App\Models\DashboardLayout::findOrFail($legacyId);
+        $otherLegacy = \App\Models\DashboardLayout::findOrFail($otherLegacyId);
+        $this->assertSame(1, $legacy->revision, 'the forward migration default must initialize existing/newly inserted rows at revision 1');
+
+        $firstRead = $this->actingAs($user)->getJson('/api/dashboard-layouts')->assertOk();
+        $firstRead->assertJsonPath('data.0.id', $legacy->id)
+            ->assertJsonPath('data.0.revision', 2)
+            ->assertJsonPath('data.0.definition.desktop.cards.0.id', 'portfolio-summary');
+        $this->assertSame(2, $legacy->fresh()->revision);
+        $this->assertSame(1, $otherLegacy->fresh()->revision, 'normalization must remain account-scoped');
+
+        $this->getJson('/api/dashboard-layouts')->assertOk()->assertJsonPath('data.0.revision', 2);
+        $this->putJson("/api/dashboard-layouts/{$legacy->id}", ['definition' => $legacyDefinition, 'expected_revision' => 1])->assertConflict();
+        $this->assertSame(2, $legacy->fresh()->revision, 'a stale save must not overwrite normalized state or reuse its revision');
+
+        $this->putJson("/api/dashboard-layouts/{$legacy->id}", ['definition' => $legacyDefinition, 'expected_revision' => 2])
+            ->assertOk()
+            ->assertJsonPath('data.revision', 3);
+        $this->getJson('/api/dashboard-layouts')->assertOk()->assertJsonPath('data.0.revision', 3);
     }
 }

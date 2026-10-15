@@ -3,7 +3,7 @@ import api from '../api';
 import { showToast } from '../toast';
 import ExportDataButton from './ExportDataButton';
 import ExportBasketPanel from './ExportBasketPanel';
-import { DASHBOARD_CARDS, DASHBOARD_SUMMARY_FIELDS, factoryDashboardLayout, hasLocalDashboardLayout, inspectDashboardLayoutCompatibility, migrateDashboardLayout, readLocalDashboardLayout, writeLocalDashboardLayout } from '../utils/dashboardLayouts';
+import { DASHBOARD_CARDS, DASHBOARD_SUMMARY_FIELDS, factoryDashboardLayout, hasLocalDashboardLayout, inspectDashboardLayoutCompatibility, mergeDashboardLayoutRecord, migrateDashboardLayout, readLocalDashboardLayout, writeLocalDashboardLayout } from '../utils/dashboardLayouts';
 
 export default function DashboardLayoutToolbar({ userId, onLayoutChange }) {
     const [layout, setLayout] = useState(() => readLocalDashboardLayout(userId));
@@ -38,11 +38,17 @@ export default function DashboardLayoutToolbar({ userId, onLayoutChange }) {
             try {
                 const expectedRevision = revisionsRef.current.get(pending.recordId) ?? pending.expectedRevision;
                 const response = await api.put(`/dashboard-layouts/${pending.recordId}`, { definition: pending.definition, expected_revision: expectedRevision });
-                setNamed((current) => current.map((item) => String(item.id) === pending.recordId ? response.data.data : item));
-                revisionsRef.current.set(pending.recordId, response.data.data.revision);
-                if (selectedRef.current === pending.recordId) selectedRevisionRef.current = response.data.data.revision;
+                const saved = response.data.data;
+                const savedRevision = Number(saved.revision) || 1;
+                setNamed((current) => current.map((item) => {
+                    if (String(item.id) !== pending.recordId || Number(item.revision || 1) > savedRevision) return item;
+                    return { ...item, definition: saved.definition, schema_version: saved.schema_version, revision: saved.revision, updated_at: saved.updated_at };
+                }));
+                const knownRevision = revisionsRef.current.get(pending.recordId) ?? 1;
+                if (savedRevision >= Number(knownRevision)) revisionsRef.current.set(pending.recordId, savedRevision);
+                if (selectedRef.current === pending.recordId && savedRevision >= Number(selectedRevisionRef.current)) selectedRevisionRef.current = savedRevision;
                 if (revisionRef.current === pending.revision && selectedRef.current === pending.recordId) {
-                    const latest = migrateDashboardLayout(response.data.data.definition);
+                    const latest = migrateDashboardLayout(saved.definition);
                     setLayout(latest);
                     layoutRef.current = latest;
                     onLayoutChange?.(latest);
@@ -56,7 +62,7 @@ export default function DashboardLayoutToolbar({ userId, onLayoutChange }) {
         });
     };
 
-    const loadNamedRecord = (record) => { if (selectedRef.current !== String(record.id)) flushSave(); setNamedActionError(''); const next = migrateDashboardLayout(record.definition); setSelectedNamed(String(record.id)); selectedRef.current = String(record.id); selectedRevisionRef.current = record.revision || 1; revisionsRef.current.set(String(record.id), record.revision || 1); setLayout(next); layoutRef.current = next; onLayoutChange?.(next); setSaveStatus('Saved'); };
+    const loadNamedRecord = (record) => { if (selectedRef.current !== String(record.id)) flushSave(); setNamedActionError(''); const next = migrateDashboardLayout(record.definition); const revision = Number(record.revision) || 1; setSelectedNamed(String(record.id)); selectedRef.current = String(record.id); selectedRevisionRef.current = revision; revisionsRef.current.set(String(record.id), revision); setLayout(next); layoutRef.current = next; onLayoutChange?.(next); setSaveStatus('Saved'); };
 
     const loadNamedRecords = async ({ allowDefault = false } = {}) => {
         const requestId = ++namedRequestRef.current;
@@ -66,7 +72,7 @@ export default function DashboardLayoutToolbar({ userId, onLayoutChange }) {
             const res = await api.get('/dashboard-layouts', { skipErrorToast: true });
             if (requestId !== namedRequestRef.current) return;
             const records = res.data?.data || [];
-            setNamed(records);
+            setNamed((current) => records.map((record) => mergeDashboardLayoutRecord(current.find((item) => String(item.id) === String(record.id)), record)));
             const fallback = records.find((item) => item.is_default);
             if (allowDefault && !hasLocalDashboardLayout(userId) && fallback) loadNamedRecord(fallback);
         } catch {
@@ -78,6 +84,9 @@ export default function DashboardLayoutToolbar({ userId, onLayoutChange }) {
 
     useEffect(() => {
         const next = readLocalDashboardLayout(userId);
+        setNamed([]);
+        revisionsRef.current = new Map();
+        selectedRevisionRef.current = 1;
         setLayout(next);
         layoutRef.current = next;
         onLayoutChange?.(next);
@@ -132,7 +141,7 @@ export default function DashboardLayoutToolbar({ userId, onLayoutChange }) {
         catch { showToast('Dashboard could not be saved.', 'danger'); } finally { setSaving(false); }
     };
     const loadNamed = (id) => { const record = named.find((item) => String(item.id) === String(id)); if (record) loadNamedRecord(record); };
-    const renameNamed = async () => { const record = named.find((item) => String(item.id) === selectedNamed); if (!record) return; const name = window.prompt('Rename dashboard', record.name); if (!name?.trim() || name.trim() === record.name) return; try { const response = await api.put(`/dashboard-layouts/${record.id}`, { name: name.trim() }); setNamed((current) => current.map((item) => item.id === record.id ? response.data.data : item).sort((a, b) => a.name.localeCompare(b.name))); } catch { showToast('Dashboard could not be renamed.', 'danger'); } };
+    const renameNamed = async () => { const record = named.find((item) => String(item.id) === selectedNamed); if (!record) return; const name = window.prompt('Rename dashboard', record.name); if (!name?.trim() || name.trim() === record.name) return; try { const response = await api.put(`/dashboard-layouts/${record.id}`, { name: name.trim() }); setNamed((current) => current.map((item) => String(item.id) === String(record.id) ? mergeDashboardLayoutRecord(item, response.data.data) : item).sort((a, b) => a.name.localeCompare(b.name))); } catch { showToast('Dashboard could not be renamed.', 'danger'); } };
     const duplicateToLocal = () => { const record = named.find((item) => String(item.id) === selectedNamed); if (!record) return; flushSave(); const next = migrateDashboardLayout(layoutRef.current); setSelectedNamed(''); selectedRef.current = ''; update(next); showToast('Dashboard copied to this device.'); };
     const setDefault = async () => {
         const record = named.find((item) => String(item.id) === selectedNamed);
@@ -142,7 +151,10 @@ export default function DashboardLayoutToolbar({ userId, onLayoutChange }) {
         try {
             const response = await api.put(`/dashboard-layouts/${record.id}`, { is_default: true });
             const confirmed = response.data?.data;
-            setNamed((current) => current.map((item) => ({ ...item, is_default: item.id === record.id, ...(item.id === record.id && confirmed ? confirmed : {}) })));
+            setNamed((current) => current.map((item) => {
+                if (String(item.id) !== String(record.id)) return { ...item, is_default: false };
+                return { ...mergeDashboardLayoutRecord(item, confirmed || item), is_default: confirmed?.is_default ?? true };
+            }));
             showToast('Default dashboard updated.');
         } catch {
             setNamedActionError('Default dashboard could not be confirmed. Review named dashboards before retrying.');
