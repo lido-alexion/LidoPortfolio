@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { allowProductionSmokeRequest as allowed, neutralizeProductionSmokeRequest as neutralized, productionSmokeBlockReason, summarizeProductionSmokeBlocks } from '../e2e/productionSmokePolicy.js';
+import { allowProductionSmokeRequest as allowed, allowTransientWelcomeSkipRequest as allowWelcomeSkip, createTransientWelcomeSkipGate, neutralizeProductionSmokeRequest as neutralized, productionSmokeBlockReason, summarizeProductionSmokeBlocks, transientWelcomeSkipPayload } from '../e2e/productionSmokePolicy.js';
 const base = 'https://stox.example.test';
 test('production smoke permits only same-origin reads and narrow login/telemetry POSTs', () => {
     assert.equal(allowed('GET', `${base}/api/v1/recommendations`, base), true);
@@ -47,6 +47,44 @@ test('automatic guided-tour persistence is answered in-browser without admitting
     assert.equal(neutralized('PUT', `${base}/api/guided-tour/reset`, base, welcome), false);
     assert.equal(neutralized('PUT', 'https://broker.example.test/api/guided-tour', base, welcome), false);
     assert.equal(neutralized('PUT', `${base}/api/transactions`, base, welcome), false);
+});
+
+test('only the exact welcome Skip UI action is eligible for transient local fulfillment', () => {
+    const endpoint = `${base}/api/guided-tour`;
+    const skip = JSON.stringify({ action: 'skip_prompt' });
+    assert.equal(allowWelcomeSkip('PUT', endpoint, base, skip, { uiActionInProgress: true }), true);
+    assert.equal(allowed('PUT', endpoint, base), false);
+    assert.equal(allowWelcomeSkip('PUT', endpoint, base, skip, { uiActionInProgress: false }), false, 'unsolicited skip remains blocked');
+    assert.equal(allowWelcomeSkip('PUT', endpoint, base, skip, { uiActionInProgress: 1 }), false, 'scope must be an explicit active boolean');
+    const oneUseGate = createTransientWelcomeSkipGate(base);
+    assert.equal(oneUseGate('PUT', endpoint, skip, { uiActionInProgress: false }), false);
+    assert.equal(oneUseGate('PUT', endpoint, skip, { uiActionInProgress: true }), true);
+    assert.equal(oneUseGate('PUT', endpoint, skip, { uiActionInProgress: true }), false, 'a second request cannot reuse the click scope');
+    for (const [method, url, body, inProgress] of [
+        ['POST', endpoint, skip, true],
+        ['PUT', `${endpoint}?source=welcome`, skip, true],
+        ['PUT', `${base}/api/guided-tour/reset`, skip, true],
+        ['PUT', 'https://broker.example.test/api/guided-tour', skip, true],
+        ['PUT', endpoint, '{', true],
+        ['PUT', endpoint, 'null', true],
+        ['PUT', endpoint, '[]', true],
+        ['PUT', endpoint, JSON.stringify({ action: 'skip_prompt', step_id: 'review' }), true],
+        ['PUT', endpoint, JSON.stringify({ action: 'dismiss_forever' }), true],
+        ['PUT', endpoint, JSON.stringify({ action: 'begin' }), true],
+        ['PUT', endpoint, JSON.stringify({ action: 'record_welcome_shown' }), true],
+    ]) assert.equal(allowWelcomeSkip(method, url, base, body, { uiActionInProgress: inProgress }), false, `${method} ${url} ${body}`);
+});
+
+test('transient welcome Skip mirrors the normal prompt-count transition without forcing dismissal', () => {
+    const baseState = { eligible: true, welcome_prompt_count: 0, max_auto_prompts: 3, show_welcome_prompt: true, can_manual_relaunch: true, tour_in_progress: false };
+    assert.deepEqual(transientWelcomeSkipPayload(baseState), { ...baseState, welcome_prompt_count: 1 });
+    assert.equal(transientWelcomeSkipPayload({ ...baseState, welcome_prompt_count: 2 }).show_welcome_prompt, false);
+    assert.equal(transientWelcomeSkipPayload({ ...baseState, permanently_dismissed: true }).show_welcome_prompt, false);
+    assert.equal(transientWelcomeSkipPayload({ ...baseState, completed: true }).show_welcome_prompt, false);
+    assert.equal(transientWelcomeSkipPayload({ ...baseState, tour_in_progress: true }).show_welcome_prompt, false);
+    for (const value of [null, [], {}, { ...baseState, welcome_prompt_count: 'unknown' }, { ...baseState, max_auto_prompts: NaN }]) {
+        assert.equal(transientWelcomeSkipPayload(value), null);
+    }
 });
 
 

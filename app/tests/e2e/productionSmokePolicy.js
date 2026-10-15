@@ -22,6 +22,49 @@ export function neutralizeProductionSmokeRequest(method, url, baseUrl, body) {
     }
 }
 
+/** Allow only the explicitly clicked welcome Skip action to be fulfilled locally. */
+export function allowTransientWelcomeSkipRequest(method, url, baseUrl, body, { uiActionInProgress = false } = {}) {
+    if (uiActionInProgress !== true || method !== 'PUT') return false;
+    try {
+        const target = new URL(url);
+        const base = new URL(baseUrl);
+        if (target.origin !== base.origin || target.pathname !== '/api/guided-tour' || target.search || target.hash) return false;
+        const data = JSON.parse(body);
+        return data !== null && typeof data === 'object' && !Array.isArray(data)
+            && Object.keys(data).length === 1 && data.action === 'skip_prompt';
+    } catch {
+        return false;
+    }
+}
+
+/** Create a one-use gate so a click cannot authorize concurrent Skip-shaped requests. */
+export function createTransientWelcomeSkipGate(baseUrl) {
+    let claimed = false;
+    return (method, url, body, { uiActionInProgress = false } = {}) => {
+        if (claimed || !allowTransientWelcomeSkipRequest(method, url, baseUrl, body, { uiActionInProgress })) return false;
+        claimed = true;
+        return true;
+    };
+}
+
+/** Mirror only the real skip_prompt state transition, without server persistence. */
+export function transientWelcomeSkipPayload(currentState) {
+    if (!currentState || typeof currentState !== 'object' || Array.isArray(currentState)) return null;
+    const currentCount = Number(currentState.welcome_prompt_count);
+    const maximumCount = Number(currentState.max_auto_prompts);
+    if (!Number.isFinite(currentCount) || !Number.isFinite(maximumCount)) return null;
+    const welcomePromptCount = currentCount + 1;
+    return {
+        ...currentState,
+        welcome_prompt_count: welcomePromptCount,
+        show_welcome_prompt: Boolean(currentState.eligible)
+            && currentState.completed !== true
+            && currentState.permanently_dismissed !== true
+            && welcomePromptCount < maximumCount
+            && currentState.tour_in_progress !== true,
+    };
+}
+
 
 // Diagnostics are fixed categories, never URLs, query strings, headers or bodies.
 const BLOCK_REASONS = ['cross_origin', 'guided_tour_write', 'late_login_write', 'other_write'];
