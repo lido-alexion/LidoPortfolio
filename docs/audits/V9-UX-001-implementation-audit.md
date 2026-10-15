@@ -1,11 +1,25 @@
 # V9-UX-001 Implementation Audit
 
-**Status:** IN PROGRESS — controlled real-Kite smoke and governed current-build ML acceptance remain unqualified. Current runtime CI, current-source nightly and mandatory public/authenticated production smoke are verified. The canonical tracker stays FROZEN / IMPLEMENTATION-READY until all frozen §19 gates pass.
-**Audit date:** 2026-10-11
+**Status:** IMPLEMENTATION IN PROGRESS — governed current-build ML acceptance, current real-Kite smoke and complete frozen §19 audit remain open. The canonical tracker stays FROZEN / IMPLEMENTATION-READY until all completion criteria pass.
+**Audit date:** 2026-10-15
 **Canonical scope:** [V9-UX-001 specification](../archive/specs/V9-User-Journey-Automation-E2E-Specification.md)
 **Journey sources:** [`docs/user-journeys/`](../user-journeys/)
 
-## Current release and remaining acceptance — 2026-10-11 20:30 UTC
+## Current release and remaining acceptance — 2026-10-15
+
+PR #169 safely expanded the private-object permission plan to recognize producer-defined retained datasets and both immutable historical plain and current gzip evidence journals. It merged as `56f8beb3f71dc0bcd879066e40522536933f8690`; master CI `38690307242` passed canonical PHPUnit/MySQL and Python AI/FastMCP, and normal deployment `38690307168` passed activation, exact-SHA health, and authenticated non-destructive production smoke. Build `build-539-attempt-1-56f8beb3f71dc0bcd879066e40522536933f8690` is the verified deployed build.
+
+The PO ran the reviewed repair with actor `nitty`. The operator reports all 1,276 planned objects succeeded, post-apply hashes verified, and the apply plan exactly matched dry-run. The operator's audit record is `20261015T065253Z-d170ea7d82.json`. The reviewed systemd identity override was installed and daemon-reloaded; root independently verified effective `User=www-data`, `Group=www-data`, and worker inactive. No training or lifecycle activation is implied.
+
+The first read-only worker access preflight failed because it was invoked from `/home/nitty`: a worker-run GNU `find` inherited that inaccessible working directory and reported “Failed to restore initial working directory: Permission denied.” A temporary local behavioral fixture reproduced the failure and passed after explicitly changing to `/` before executing the worker command. A narrowly scoped fix and regression are being prepared; they do not modify service state, data, permissions or production. Until that fix is deployed, retrying from `/var/www/stoxla/current` is the safe workaround already given to the PO. After deployment, the script will establish a neutral cwd itself.
+
+The permission audit validates planned object identity/integrity; it does not establish source provenance, historical date coverage or ML acceptance. The frozen acceptance contract still requires a genuine current-build queued preflight, complete requested-date membership, at least 90% mapping for each date, nonzero historical breadth, PIT-valid feature coverage/exclusions, and real adapter completion for all three horizons. Static review confirms the historical feature builder delegates TTM and comparable-period growth to the canonical point-in-time `FundamentalDataService`; code-level formula checks do not establish deployed historical data coverage. No payload was inspected for this audit.
+
+The protected worker remains inactive. Do not start it, queue acceptance work, mutate sources/campaigns, train, or enable lifecycle/schedules without the separate operator approvals and evidence required by the frozen contract. The next operator operation after the cwd fix reaches production is the stopped-worker read-only preflight. The last recorded Kite session was expired; a current authorized connection and the separate three-GET read-only Kite smoke remain required if not renewed since the last audit. No real order, cancellation, reconciliation or cash action is permitted.
+
+V9-UX-001 remains **IMPLEMENTATION IN PROGRESS**. Journey conformance and final scope reconciliation are still required; this audit, CI, deployment and smoke evidence do not close the epic. The canonical wishlist row remains unchanged.
+
+### Historical readiness snapshot — 2026-10-11 20:30 UTC
 
 PR #149's combined History/Registry/Admin execution passed 350 Chromium cases, PR #153 corrected the initialization fixture, PR #155 preserved deliberate Combo selections across equivalent availability refreshes and corrected exact telemetry paths, and PR #156 bounded browser-only welcome setup to the single-key `record_welcome_shown` action. Each current source head passes required scoped canonical checks and is retained through normal GitHub merge ancestry. PR #156 exact head `f7649cb24db87ecf1d0991716ecb767dfbf5fc91` passes [CI 38168244547](https://github.com/lido-alexion/LidoPortfolio/actions/runs/38168244547): 222 Node contracts, 278 components in 62 files, typecheck/build/static docs and 350 Chromium cases without failures/retries. The runtime merge `8cf83fd` also passes [CI 38170602783](https://github.com/lido-alexion/LidoPortfolio/actions/runs/38170602783) with the same 222/278/350 counts and no retries. Audit-only successor `a6a047e` passes scoped [CI 38171104903](https://github.com/lido-alexion/LidoPortfolio/actions/runs/38171104903); its [deployment 38171104883](https://github.com/lido-alexion/LidoPortfolio/actions/runs/38171104883) correctly skips frontend/backend/package/activation under the unchanged classifier. The qualified deployed runtime remains `8cf83fd`; audit-only commits do not imply a new production activation.
 
