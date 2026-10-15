@@ -1,11 +1,12 @@
 # V9-VIZ-001 Closure — Live Status
 
-**Updated:** 2026-10-15 08:51 UTC (runner clock)
+**Updated:** 2026-10-15 08:46 UTC (runner clock)
 **Owner:** Codex VIZ-001 closure session
 **Workspace:** `/home/nitty/stox-v9-viz001`
 **Branch / local base:** `fix/viz001-smoke-stage-diagnostics`, currently based at `47cd05132352d6fb46d483d38e1841f1a3ef56dc` (merged PR #172)
 **Latest upstream master observed through GitHub read-only connector:** `aeb4c3d0a200815e0537c2a1cb53ac95c137d8dc` (merged PR #174 documentation, after PR #170; not yet integrated locally)
 **Local diagnostic commit:** `015ae043b90e3c7800139f344ce1eee5dd064d3f` (not published; parent is `47cd051`)
+**Local branch tip:** `7c7de630` (three unpushed local commits: diagnostic code/test and two evidence-only status updates)
 **Session / process / log:** active conversation; no persistent shell PID, detached process, or durable log file. Prior frontend verifier exec session `11134` ended after the sandbox-denied child-process test.
 
 ## Goal and plan
@@ -16,7 +17,7 @@ Close frozen `docs/archive/specs/V9-Combo-Chart-Support-Specification.md` AC1–
 
 **Post-merge production acceptance remediation.** PR #172 merged normally as `47cd05132352d6fb46d483d38e1841f1a3ef56dc`. Master CI run `38698956743` passed. Production deployment build 540 / run `38698956653` activated that exact SHA and its post-deploy exact-SHA health check passed; its final non-destructive browser smoke failed at the coarse diagnostic stage `combo_chart`. The feature has therefore not passed live acceptance and the V9 register remains `IMPLEMENTATION IN PROGRESS`.
 
-This session created a clean local branch from then-recorded `origin/master` SHA `47cd051`. New upstream commits `51fec37` (PR #170) and `aeb4c3d` (PR #174 documentation) are visible via GitHub's read-only commit search. Both SSH and HTTPS `git fetch` attempts at 08:41 UTC failed because this runner cannot resolve `github.com`. The UX-003 worktree was not touched. Normal integration with current master `aeb4c3d` is required before publishing; do not push the stale-base branch. GitHub connector evidence confirms PR #172's merge and successful CI/health stages. The smoke artifact was not downloaded because it can contain browser evidence and is unnecessary for the first diagnostic step.
+This session created a clean local branch from then-recorded `origin/master` SHA `47cd051`. New upstream commits `51fec37` (PR #170) and `aeb4c3d` (PR #174 documentation) are visible via GitHub's read-only commit search. SSH and HTTPS fetch attempts at 08:41 and 08:46 UTC failed because this runner cannot resolve `github.com`. The UX-003 worktree was not touched. Normal integration with current master `aeb4c3d` is required before publishing; do not push the stale-base branch. GitHub connector evidence confirms PR #172's merge and successful CI/health stages. The smoke artifact was not downloaded because it can contain browser evidence and is unnecessary for the first diagnostic step.
 
 ## Acceptance audit (frozen AC1–AC16)
 
