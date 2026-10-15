@@ -34,6 +34,19 @@ export function resolveComboDefault(explicitId, availability = {}) {
     return available[0]?.id ?? null;
 }
 
+/** Keep the rendered selector aligned with newly available defaults in the same render. */
+export function resolveComboSelection(currentId, resolvedDefaultId, availability = {}, {
+    savedDefaultChanged = false,
+    defaultChanged = false,
+    userSelection = false,
+} = {}) {
+    const currentAvailable = availableComboPresets(availability)
+        .some((preset) => preset.id === currentId && preset.available);
+    return savedDefaultChanged || (!userSelection && defaultChanged) || !currentAvailable
+        ? resolvedDefaultId
+        : currentId;
+}
+
 export function comboPresetAvailability({ prices = [], series = {} } = {}) {
     const availability = {};
     const priceRows = prices.filter((point) => {

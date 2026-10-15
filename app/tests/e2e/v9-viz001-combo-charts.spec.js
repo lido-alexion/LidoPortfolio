@@ -203,12 +203,70 @@ test('renders price and volume while the saved metric history is delayed, then h
     await expect(chart.locator('.recharts-bar')).toBeVisible();
     await expect(chart.getByText(/Loading the saved default’s history/)).toBeVisible();
     await expect.poll(() => peRequested).toBe(true);
+    await page.evaluate(() => {
+        window.__viz001DefaultAvailabilityMismatch = false;
+        const selector = document.querySelector('#combo-chart-preset');
+        const observeAvailabilityCommit = () => {
+            const savedDefault = selector?.querySelector('option[value="price-pe"]');
+            if (savedDefault && !savedDefault.disabled && selector.value !== 'price-pe') {
+                window.__viz001DefaultAvailabilityMismatch = true;
+            }
+        };
+        new MutationObserver(observeAvailabilityCommit).observe(selector, { attributes: true, childList: true, subtree: true, attributeFilter: ['disabled'] });
+    });
     expect(safety.writes).toEqual([]);
     expect(safety.blocked).toEqual([]);
 
     releasePe();
     await expect(selector).toHaveValue('price-pe');
+    expect(await page.evaluate(() => window.__viz001DefaultAvailabilityMismatch)).toBe(false);
     await expect(chart.getByRole('button', { name: 'Default chart', exact: true })).toBeDisabled();
+});
+
+test('renders real combo series with 5,458 price rows while every unrelated history is pending', async ({ page }, testInfo) => {
+    journeyId(testInfo, 'VIZ-01');
+    const safety = await prepare(page, 'desktop');
+    const longPriceHistory = [];
+    const cursor = new Date('2005-10-03T00:00:00Z');
+    while (longPriceHistory.length < 5458) {
+        const weekday = cursor.getUTCDay();
+        if (weekday !== 0 && weekday !== 6) {
+            const price_date = cursor.toISOString().slice(0, 10);
+            const close_price = 100 + (longPriceHistory.length % 700) / 10;
+            longPriceHistory.push({ price_date, open_price: close_price - 1, high_price: close_price + 2, low_price: close_price - 2, close_price, volume: 1000 + longPriceHistory.length, data_source: 'SYNTHETIC_FIXTURE_ONLY' });
+        }
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    const historiesReady = new Promise(() => {});
+    let pendingHistoryRequests = 0;
+    await page.route('**/api/stocks/42/market-prices', route => route.fulfill({ json: { data: longPriceHistory, has_price_history: true, price_count: longPriceHistory.length } }));
+    await page.route('**/api/v1/stocks/42/fundamentals/metrics/*/history?*', async route => {
+        pendingHistoryRequests += 1;
+        await historiesReady;
+        return route.fulfill({ json: { data: { points } } });
+    });
+
+    await page.goto('/watchlist/TCS');
+    const chart = page.getByRole('region', { name: 'Stock Details combo chart', exact: true });
+    await expect(chart).toBeVisible({ timeout: 20_000 });
+    const selector = chart.getByLabel('Combo chart preset');
+    await expect(selector).toHaveValue('price-volume');
+    await expect(chart.getByText(/Loading the saved default’s history/)).toBeVisible();
+    await expect(chart.getByRole('group', { name: 'Combo chart sampling frequency' }).getByRole('button', { name: 'Monthly', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(chart.getByText(/Monthly sampling is selected for this long history/)).toBeVisible();
+    await expect(chart.locator('.recharts-line')).toBeVisible();
+    await expect(chart.locator('.recharts-bar')).toBeVisible();
+    const priceVolume = page.locator('.lido-price-volume-chart');
+    await expect(priceVolume.getByRole('group', { name: 'Chart sampling interval' }).getByRole('button', { name: '1 month', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    const sampling = chart.getByRole('group', { name: 'Combo chart sampling frequency' });
+    await sampling.getByRole('button', { name: 'Quarterly', exact: true }).click();
+    await expect(sampling.getByRole('button', { name: 'Quarterly', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await chart.scrollIntoViewIfNeeded();
+    await expect.poll(() => chart.locator('.recharts-line-curve').evaluateAll(paths => paths.filter(path => Boolean(path.getAttribute('d')?.trim())).length)).toBeGreaterThan(0);
+    await expect.poll(() => chart.locator('.recharts-bar-rectangle .recharts-rectangle').evaluateAll(rects => rects.filter(rect => Boolean(rect.getAttribute('d')?.trim())).length)).toBeGreaterThan(0);
+    expect(pendingHistoryRequests).toBeGreaterThanOrEqual(6);
+    expect(safety.writes).toEqual([]);
+    expect(safety.blocked).toEqual([]);
 });
 
 test.describe('VIZ-01 mobile and touch', () => {

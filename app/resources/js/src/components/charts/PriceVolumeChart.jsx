@@ -31,6 +31,7 @@ import {
     DEFAULT_TIME_RANGE,
 } from './priceVolumeChartTypes';
 import PriceVolumeChartControls from './PriceVolumeChartControls';
+import { DENSE_DAILY_CHART_POINT_THRESHOLD, resolveChartSampling } from './chartSampling';
 
 const chartTooltipStyle = {
     backgroundColor: 'var(--lido-chart-tooltip-bg)',
@@ -69,11 +70,15 @@ export default function PriceVolumeChart({
     showControls = true,
     showVolume = true,
     showPatterns = true,
+    adaptiveSampling = false,
     title = 'Close & Volume',
     className = '',
 }) {
     const [timeRange, setTimeRange] = useState(defaultTimeRange);
-    const [sampling, setSampling] = useState(defaultSampling);
+    const [samplingSelection, setSamplingSelection] = useState(null);
+    const useAdaptiveSampling = adaptiveSampling && ['all', '5y'].includes(timeRange);
+    const sampling = resolveChartSampling({ rowCount: rows.length, userSelection: samplingSelection, defaultSampling, adaptive: useAdaptiveSampling });
+    const autoSampled = useAdaptiveSampling && rows.length > DENSE_DAILY_CHART_POINT_THRESHOLD && samplingSelection === null && sampling === '1m';
 
     const { series, meta } = useMemo(
         () => buildPriceVolumeChartData(rows, { timeRange, sampling }),
@@ -199,6 +204,7 @@ export default function PriceVolumeChart({
                         {meta.pointCount} points · {meta.samplingStep}-row buckets · volume summed per bucket
                     </p>
                 ) : null}
+                {autoSampled ? <p className="text-muted small mb-0 mt-1" role="status">Monthly sampling is selected for this long history so price and volume remain readable. Daily sampling is available in the controls.</p> : null}
                 {!loading && series.length > 0 && showPatterns ? (
                     <div className="mt-3 pt-2 border-top">
                         <PatternMatchesList
@@ -215,7 +221,7 @@ export default function PriceVolumeChart({
                         timeRange={timeRange}
                         onTimeRangeChange={setTimeRange}
                         sampling={sampling}
-                        onSamplingChange={setSampling}
+                        onSamplingChange={setSamplingSelection}
                         disabled={loading}
                     />
                 </div>

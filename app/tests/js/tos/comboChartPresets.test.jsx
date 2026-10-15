@@ -3,7 +3,7 @@ import React from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import ComboChart from '../../../resources/js/src/components/charts/ComboChart.jsx';
 import { alignComboChartData, rangeAndSamplingRows } from '../../../resources/js/src/components/charts/comboChartData.js';
-import { COMBO_CHART_PRESETS, availableComboPresets, cycleComboPreset, resolveComboDefault, comboPresetAvailability } from '../../../resources/js/src/components/charts/comboChartPresets.js';
+import { COMBO_CHART_PRESETS, availableComboPresets, cycleComboPreset, resolveComboDefault, resolveComboSelection, comboPresetAvailability } from '../../../resources/js/src/components/charts/comboChartPresets.js';
 
 describe('combo chart preset contracts', () => {
     it('keeps the frozen catalogue deterministic and preserves unavailable entries', () => {
@@ -22,6 +22,15 @@ describe('combo chart preset contracts', () => {
         expect(resolveComboDefault('price-pe')).toBe('price-pe');
         expect(resolveComboDefault('price-pe', { 'price-pe': { available: false } })).toBe('price-volume');
         expect(resolveComboDefault(null, { 'price-volume': { available: false }, 'price-pe': { available: false }, 'price-pb': { available: true }, 'price-ps': { available: false }, 'price-eps': { available: false }, 'price-revenue': { available: false }, 'price-net-profit': { available: false } })).toBe('price-pb');
+    });
+
+    it('renders a newly available saved default in the same state update while preserving deliberate choice', () => {
+        const pending = { 'price-volume': { available: true }, 'price-pe': { available: false, reason: 'Loading P/E' } };
+        const ready = { 'price-volume': { available: true }, 'price-pe': { available: true } };
+        const resolvedDefault = resolveComboDefault('price-pe', ready);
+        expect(resolveComboSelection('price-volume', resolvedDefault, ready, { defaultChanged: true })).toBe('price-pe');
+        expect(resolveComboSelection('price-pb', resolvedDefault, ready, { defaultChanged: true, userSelection: true })).toBe('price-pb');
+        expect(resolveComboSelection('price-pb', 'price-pb', pending, { savedDefaultChanged: true, userSelection: true })).toBe('price-pb');
     });
 
     it('applies centralized coverage thresholds with an accessible reason', () => {

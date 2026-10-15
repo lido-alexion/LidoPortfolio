@@ -55,18 +55,44 @@ try {
     if (preferencePayload?.data?.scope !== 'account') throw new Error();
     const explicitDefault = preferencePayload?.data?.default_preset_id ?? null;
     const comboChart = page.getByRole('region', { name: 'Stock Details combo chart', exact: true });
+    const chartAcceptanceDeadline = Date.now() + 20_000;
+    const remainingChartAcceptanceMs = () => Math.max(1, chartAcceptanceDeadline - Date.now());
+    stage = 'combo_chart_attached';
+    await comboChart.waitFor({ state: 'attached', timeout: remainingChartAcceptanceMs() });
     stage = 'combo_chart_visible';
-    await comboChart.waitFor({ state: 'visible' });
+    await comboChart.waitFor({ state: 'visible', timeout: remainingChartAcceptanceMs() });
     const preset = comboChart.getByLabel('Combo chart preset');
+    stage = 'combo_default_options';
+    if (await preset.locator('option:not([value=""])').count() !== 7) throw new Error();
+    stage = 'combo_default_resolution';
+    const resolvedExpectedDefault = await page.waitForFunction((savedDefault) => {
+        const selector = document.querySelector('#combo-chart-preset');
+        if (!selector) return null;
+        const options = [...selector.options];
+        const saved = options.find(option => option.value === savedDefault);
+        if (saved?.textContent.includes('Loading historical')) return null;
+        const enabledIds = options.filter(option => !option.disabled).map(option => option.value);
+        if (savedDefault && enabledIds.includes(savedDefault)) return savedDefault;
+        return enabledIds.includes('price-volume') ? 'price-volume' : enabledIds[0] ?? null;
+    }, explicitDefault, { timeout: remainingChartAcceptanceMs() });
+    const expectedDefault = await resolvedExpectedDefault.jsonValue();
     stage = 'combo_default_selection';
     const openingPreset = await preset.inputValue();
-    stage = 'combo_default_options';
-    const expectedDefault = await preset.locator('option:not([disabled])').evaluateAll((options, savedDefault) => {
-        const ids = options.map(option => option.value);
-        return savedDefault && ids.includes(savedDefault) ? savedDefault : ids.includes('price-volume') ? 'price-volume' : ids[0] ?? null;
-    }, explicitDefault);
     stage = 'combo_default_precedence';
     if (!expectedDefault || openingPreset !== expectedDefault) throw new Error();
+    stage = 'combo_chart_data_rendered';
+    await comboChart.scrollIntoViewIfNeeded({ timeout: remainingChartAcceptanceMs() });
+    await page.waitForFunction((presetId) => {
+        const chart = document.querySelector('[role="region"][aria-label="Stock Details combo chart"]');
+        if (!chart) return false;
+        const linePaths = [...chart.querySelectorAll('.recharts-line-curve')]
+            .filter(path => Boolean(path.getAttribute('d')?.trim())).length;
+        const barRects = [...chart.querySelectorAll('.recharts-bar-rectangle .recharts-rectangle')]
+            .filter(rect => Boolean(rect.getAttribute('d')?.trim())).length;
+        return ['price-pe', 'price-pb', 'price-ps'].includes(presetId)
+            ? linePaths >= 2
+            : linePaths >= 1 && barRects >= 1;
+    }, openingPreset, { timeout: remainingChartAcceptanceMs() });
     stage = 'combo_keyboard_navigation';
     const nextPreset = comboChart.getByRole('button', { name: 'Next combo chart' });
     await nextPreset.focus();

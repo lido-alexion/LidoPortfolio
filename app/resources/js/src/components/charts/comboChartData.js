@@ -48,10 +48,15 @@ export function rangeAndSamplingRows(rows, timeRange, sampling) {
     const groups = new Map();
     subset.forEach((row) => {
         const key = keyForDate(row.date);
-        const group = groups.get(key) ?? { latestPrice: null, volume: 0, fundamentals: new Map() };
+        const group = groups.get(key) ?? { latestPrice: null, volume: 0, fundamentals: new Map(), latestValuation: null };
         if (row.price != null) {
             group.latestPrice = row;
             group.volume += Number.isFinite(Number(row.volume)) ? Number(row.volume) : 0;
+        }
+        const valuationValues = Object.fromEntries(Object.entries(row)
+            .filter(([field, value]) => PRICE_DERIVED_VALUATIONS.has(field) && value != null));
+        if (Object.keys(valuationValues).length) {
+            group.latestValuation = { date: row.date, price: row.price, values: valuationValues };
         }
         const metrics = Object.fromEntries(Object.entries(row).filter(([field, value]) => !['date', 'price', 'volume'].includes(field) && !PRICE_DERIVED_VALUATIONS.has(field) && value != null));
         if (Object.keys(metrics).length) group.fundamentals.set(row.date, { ...(group.fundamentals.get(row.date) ?? { date: row.date }), ...metrics });
@@ -62,7 +67,22 @@ export function rangeAndSamplingRows(rows, timeRange, sampling) {
         const observations = [...group.fundamentals.values()].map((observation) => observation.date === priceRow?.date
             ? { ...priceRow, ...observation }
             : { date: observation.date, price: null, volume: null, ...observation });
-        if (priceRow && !observations.some((row) => row.date === priceRow.date)) observations.push(priceRow);
+        if (group.latestValuation) {
+            const valuation = group.latestValuation;
+            if (priceRow?.date === valuation.date) {
+                Object.assign(priceRow, valuation.values);
+            } else {
+                const observation = { date: valuation.date, price: valuation.price ?? null, volume: null, ...valuation.values };
+                const existingIndex = observations.findIndex((row) => row.date === valuation.date);
+                if (existingIndex >= 0) observations[existingIndex] = { ...observation, ...observations[existingIndex] };
+                else observations.push(observation);
+            }
+        }
+        if (priceRow) {
+            const existingIndex = observations.findIndex((row) => row.date === priceRow.date);
+            if (existingIndex >= 0) observations[existingIndex] = { ...priceRow, ...observations[existingIndex] };
+            else observations.push(priceRow);
+        }
         return observations;
     }).sort((a, b) => a.date.localeCompare(b.date));
 }

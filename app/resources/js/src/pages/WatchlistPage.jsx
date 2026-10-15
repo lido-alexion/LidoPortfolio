@@ -309,6 +309,7 @@ function WatchlistStockPanel({
             ) : null}
 
             <PriceVolumeChart
+                adaptiveSampling
                 rows={prices}
                 loading={pricesLoading}
                 title={title}
