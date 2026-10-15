@@ -172,11 +172,16 @@ function walkCampaign(string $dir, string $root, int $uid, int $gid, string $sta
             $objects[] = recordObject($path, 0700, 'campaign-horizon-directory', 'terminal-campaign', $uid, $gid);
             $children = scandir($path);
             if ($children === false) stop("cannot list campaign horizon: {$path}");
+            $journalSeen = false;
             foreach (array_diff($children, ['.', '..']) as $child) {
                 $file = $path . DIRECTORY_SEPARATOR . $child;
                 safePath($file, $root);
-                if ($child === 'pit-evidence.jsonl.gz' && is_file($file)) {
-                    $objects[] = recordObject($file, 0400, 'sealed-evidence-journal', 'terminal-campaign', $uid, $gid);
+                if (in_array($child, ['pit-evidence.jsonl.gz', 'pit-evidence.jsonl'], true)) {
+                    if ($journalSeen) stop("multiple campaign evidence journals present: {$path}");
+                    if (!is_file($file)) stop("campaign evidence journal is not a regular file: {$file}");
+                    $kind = $child === 'pit-evidence.jsonl' ? 'legacy-plain-evidence-journal' : 'sealed-evidence-journal';
+                    $objects[] = recordObject($file, 0400, $kind, 'terminal-campaign', $uid, $gid);
+                    $journalSeen = true;
                     continue;
                 }
                 if ($child === 'dataset' && is_dir($file)) {

@@ -120,7 +120,7 @@ class MlAcceptancePrivatePermissionRepairScriptTest extends TestCase
                 file_put_contents($dataset.'/'.$name, $bytes);
                 $before[$horizonName.'/'.$name] = hash('sha256', $bytes);
             }
-            file_put_contents($horizon.'/pit-evidence.jsonl.gz', 'journal fixture bytes');
+            file_put_contents($horizon.'/pit-evidence.jsonl.gz', gzencode("journal fixture bytes\n"));
         }
 
         // This mirrors the producer's paths returned by buildStreamed and its finally-cleaned dataset child.
@@ -145,11 +145,77 @@ class MlAcceptancePrivatePermissionRepairScriptTest extends TestCase
             $this->assertSame(0400, $object['after_mode']);
             $this->assertSame(hash_file('sha256', $object['path']), $object['sha256']);
         }
+        $gzipJournals = array_values(array_filter($plan, fn ($item) => $item['kind'] === 'sealed-evidence-journal'));
+        $this->assertCount(3, $gzipJournals);
+        foreach ($gzipJournals as $journal) {
+            $this->assertSame(hash_file('sha256', $journal['path']), $journal['sha256']);
+            $this->assertSame("journal fixture bytes\n", gzdecode(file_get_contents($journal['path'])));
+        }
         $after = [];
         foreach (['1m', '3m', '6m'] as $horizonName) {
             foreach (array_keys($payloads) as $name) $after[$horizonName.'/'.$name] = hash_file('sha256', $campaign.'/'.$horizonName.'/dataset/'.$name);
         }
         $this->assertSame($before, $after);
+    }
+
+    public function test_terminal_campaign_preserves_historical_plain_jsonl_journals_as_immutable_files(): void
+    {
+        $campaignId = '62345678-1234-4234-8234-123456789abc';
+        $campaignRoot = $this->fixtureRoot.'/campaigns';
+        $sourcesRoot = $this->fixtureRoot.'/sources';
+        mkdir($campaignRoot, 0700, true);
+        mkdir($sourcesRoot, 0700, true);
+        $campaignPath = $campaignRoot.'/'.$campaignId;
+        $legacyBytes = json_encode(['stock_id' => 71, 'partition' => 'train', 'fact_inventory' => [['id' => 9, 'fact_key' => 'revenue']]], JSON_THROW_ON_ERROR)."\n"
+            .json_encode(['stock_id' => 71, 'reference_date' => '2026-01-05', 'partition' => 'train', 'fundamentals' => []], JSON_THROW_ON_ERROR)."\n";
+        foreach (['1m', '3m', '6m'] as $horizon) {
+            mkdir($campaignPath.'/'.$horizon, 0700, true);
+            file_put_contents($campaignPath.'/'.$horizon.'/pit-evidence.jsonl', $legacyBytes);
+        }
+
+        $planner = '$campaign = (object) '.var_export(['id' => $campaignId, 'status' => 'blocked'], true).'; $plan = planRegisteredObjects([], [$campaign], '.var_export($this->fixtureRoot, true).', '.var_export($sourcesRoot, true).', '.var_export($campaignRoot, true).', 33, 33); echo json_encode($plan);';
+        $planned = $this->runPlanner($planner);
+        $this->assertSame(0, $planned->getExitCode(), $planned->getErrorOutput());
+        $objects = json_decode($planned->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+        $journals = array_values(array_filter($objects, fn ($item) => $item['kind'] === 'legacy-plain-evidence-journal'));
+        $this->assertCount(3, $journals);
+        foreach ($journals as $journal) {
+            $this->assertSame(0400, $journal['after_mode']);
+            $this->assertSame(hash('sha256', $legacyBytes), $journal['sha256']);
+            $this->assertSame($legacyBytes, file_get_contents($journal['path']));
+        }
+
+        file_put_contents($campaignPath.'/1m/pit-evidence.jsonl.gz', gzencode($legacyBytes));
+        $duplicate = $this->runPlanner($planner);
+        $this->assertSame(2, $duplicate->getExitCode());
+        $this->assertStringContainsString('multiple campaign evidence journals', $duplicate->getErrorOutput());
+    }
+
+    public function test_empty_and_partial_retained_dataset_layouts_are_supported_and_hash_stable(): void
+    {
+        $campaignId = '72345678-1234-4234-8234-123456789abc';
+        $campaignRoot = $this->fixtureRoot.'/campaigns';
+        $sourcesRoot = $this->fixtureRoot.'/sources';
+        mkdir($campaignRoot, 0700, true);
+        mkdir($sourcesRoot, 0700, true);
+        $campaignPath = $campaignRoot.'/'.$campaignId;
+        mkdir($campaignPath.'/1m/dataset', 0700, true); // Interrupted after creating the directory.
+        mkdir($campaignPath.'/3m/dataset', 0700, true);
+        file_put_contents($campaignPath.'/3m/dataset/train.jsonl', ''); // Exact producer name, zero bytes.
+        mkdir($campaignPath.'/6m/dataset', 0700, true);
+        file_put_contents($campaignPath.'/6m/dataset/validation.jsonl', "{}\n"); // Partial output set.
+        file_put_contents($campaignPath.'/6m/dataset/test.jsonl', '');
+
+        $planner = '$campaign = (object) '.var_export(['id' => $campaignId, 'status' => 'cancelled'], true).'; $plan = planRegisteredObjects([], [$campaign], '.var_export($this->fixtureRoot, true).', '.var_export($sourcesRoot, true).', '.var_export($campaignRoot, true).', 33, 33); echo json_encode($plan);';
+        $planned = $this->runPlanner($planner);
+        $this->assertSame(0, $planned->getExitCode(), $planned->getErrorOutput());
+        $objects = json_decode($planned->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+        $datasets = array_values(array_filter($objects, fn ($item) => $item['kind'] === 'retained-temporary-dataset-directory'));
+        $partitions = array_values(array_filter($objects, fn ($item) => $item['kind'] === 'retained-temporary-dataset-partition'));
+        $this->assertCount(3, $datasets);
+        $this->assertCount(3, $partitions);
+        foreach ($partitions as $partition) $this->assertSame(hash_file('sha256', $partition['path']), $partition['sha256']);
+        $this->assertSame(hash('sha256', ''), collect($partitions)->firstWhere('path', $campaignPath.'/3m/dataset/train.jsonl')['sha256']);
     }
 
     public function test_campaign_planning_rejects_unexpected_nested_objects_symlinks_and_nonterminal_states(): void
@@ -168,10 +234,26 @@ class MlAcceptancePrivatePermissionRepairScriptTest extends TestCase
         $symlink = $this->runPlanner('walkCampaign('.var_export($campaign, true).', '.var_export($this->fixtureRoot, true).', 33, 33, "cancelled");');
         $this->assertSame(2, $symlink->getExitCode());
         $this->assertStringContainsString('symlink encountered', $symlink->getErrorOutput());
+        unlink($campaign.'/1m/dataset/validation.jsonl');
 
-        $active = $this->runPlanner('walkCampaign('.var_export($campaign, true).', '.var_export($this->fixtureRoot, true).', 33, 33, "training");');
+        $this->assertTrue(posix_mkfifo($campaign.'/1m/dataset/validation.jsonl', 0600));
+        $nonregular = $this->runPlanner('walkCampaign('.var_export($campaign, true).', '.var_export($this->fixtureRoot, true).', 33, 33, "cancelled");');
+        $this->assertSame(2, $nonregular->getExitCode());
+        $this->assertStringContainsString('unrecognized retained dataset object', $nonregular->getErrorOutput());
+        unlink($campaign.'/1m/dataset/validation.jsonl');
+
+        file_put_contents($campaign.'/1m/unexpected.jsonl', '{}');
+        $unknown = $this->runPlanner('walkCampaign('.var_export($campaign, true).', '.var_export($this->fixtureRoot, true).', 33, 33, "cancelled");');
+        $this->assertSame(2, $unknown->getExitCode());
+        $this->assertStringContainsString('unrecognized campaign evidence object', $unknown->getErrorOutput());
+        unlink($campaign.'/1m/unexpected.jsonl');
+
+        mkdir($this->fixtureRoot.'/sources', 0700, true);
+        $campaignRoot = $this->fixtureRoot.'/campaigns';
+        $campaignId = basename($campaign);
+        $active = $this->runPlanner('$activeRow = (object) '.var_export(['id' => $campaignId, 'status' => 'training'], true).'; planRegisteredObjects([], [$activeRow], '.var_export($this->fixtureRoot, true).', '.var_export($this->fixtureRoot.'/sources', true).', '.var_export($campaignRoot, true).', 33, 33);');
         $this->assertSame(2, $active->getExitCode());
-        $this->assertStringContainsString('not in a recognized terminal state', $active->getErrorOutput());
+        $this->assertStringContainsString('active campaign has private objects', $active->getErrorOutput());
     }
 
     private function runPlanner(string $body): Process
