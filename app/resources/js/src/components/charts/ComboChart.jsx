@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { availableComboPresets, COMBO_CHART_PRESETS, cycleComboPreset, resolveComboDefault } from './comboChartPresets';
+import { availableComboPresets, COMBO_CHART_PRESETS, cycleComboPreset, resolveComboDefault, resolveComboSelection } from './comboChartPresets';
 import { comboTooltipEntries, rangeAndSamplingRows } from './comboChartData';
 import { formatTransactionDateDisplay } from '../../utils/transactionDate';
+import { DENSE_DAILY_CHART_POINT_THRESHOLD, resolveChartSampling } from './chartSampling';
 
 const RANGE_OPTIONS = [['all', 'All'], ['1m', '1M'], ['3m', '3M'], ['6m', '6M'], ['1y', '1Y'], ['5y', '5Y']];
 const SAMPLING_OPTIONS = [['1d', 'Daily'], ['1m', 'Monthly'], ['1q', 'Quarterly']];
@@ -29,20 +30,31 @@ export default function ComboChart({ rows = [], availability = {}, defaultPreset
     const [presetId, setPresetId] = useState(initialPresetId);
     const [visible, setVisible] = useState({});
     const [range, setRange] = useState('all');
-    const [sampling, setSampling] = useState('1d');
+    const [samplingSelection, setSamplingSelection] = useState(null);
+    const useAdaptiveSampling = ['all', '5y'].includes(range);
+    const sampling = resolveChartSampling({ rowCount: rows.length, userSelection: samplingSelection, defaultSampling: '1d', adaptive: useAdaptiveSampling });
+    const autoSampled = useAdaptiveSampling && rows.length > DENSE_DAILY_CHART_POINT_THRESHOLD && samplingSelection === null && sampling === '1m';
     const userSelectionRef = useRef(false);
+    const resolvedDefaultId = resolveComboDefault(defaultPresetId, availability) ?? 'price-volume';
+    const defaultChanged = synchronizedDefaultRef.current !== resolvedDefaultId;
+    const savedDefaultChanged = previousDefaultPropRef.current !== defaultPresetId;
+    const displayedPresetId = resolveComboSelection(presetId, resolvedDefaultId, availability, {
+        savedDefaultChanged,
+        defaultChanged,
+        userSelection: userSelectionRef.current,
+    });
     useEffect(() => {
-        const resolvedDefault = resolveComboDefault(defaultPresetId, availability) ?? 'price-volume';
-        const defaultChanged = synchronizedDefaultRef.current !== resolvedDefault;
-        const savedDefaultChanged = previousDefaultPropRef.current !== defaultPresetId;
         setPresetId((current) => {
-            const currentAvailable = presets.some((item) => item.id === current && item.available);
-            return savedDefaultChanged || (!userSelectionRef.current && defaultChanged) || !currentAvailable ? resolvedDefault : current;
+            return resolveComboSelection(current, resolvedDefaultId, availability, {
+                savedDefaultChanged,
+                defaultChanged,
+                userSelection: userSelectionRef.current,
+            });
         });
-        synchronizedDefaultRef.current = resolvedDefault;
+        synchronizedDefaultRef.current = resolvedDefaultId;
         previousDefaultPropRef.current = defaultPresetId;
-    }, [defaultPresetId, availability, presets]);
-    const preset = presets.find((item) => item.id === presetId && item.available) || presets.find((item) => item.id === resolveComboDefault(null, availability));
+    }, [availability, defaultChanged, defaultPresetId, resolvedDefaultId, savedDefaultChanged]);
+    const preset = presets.find((item) => item.id === displayedPresetId && item.available) || presets.find((item) => item.id === resolveComboDefault(null, availability));
     const shownRows = useMemo(() => rangeAndSamplingRows(rows, range, sampling), [rows, range, sampling]);
     const activeSeries = preset?.series ?? [];
     const axisKeys = [...new Set(activeSeries.map((key) => preset.axes[key]))];
@@ -117,8 +129,9 @@ export default function ComboChart({ rows = [], availability = {}, defaultPreset
             </div>
             <div className="d-flex flex-wrap gap-3 mt-2">
                 <div className="d-flex flex-wrap align-items-center gap-1" role="group" aria-label="Combo chart time range">{RANGE_OPTIONS.map(([value, label]) => <button key={value} type="button" className={`btn btn-sm ${range === value ? 'btn-primary' : 'btn-outline-primary'}`} aria-pressed={range === value} onClick={() => setRange(value)}>{label}</button>)}</div>
-                <div className="d-flex flex-wrap align-items-center gap-1" role="group" aria-label="Combo chart sampling frequency">{SAMPLING_OPTIONS.map(([value, label]) => <button key={value} type="button" className={`btn btn-sm ${sampling === value ? 'btn-primary' : 'btn-outline-primary'}`} aria-pressed={sampling === value} onClick={() => setSampling(value)}>{label}</button>)}</div>
+                <div className="d-flex flex-wrap align-items-center gap-1" role="group" aria-label="Combo chart sampling frequency">{SAMPLING_OPTIONS.map(([value, label]) => <button key={value} type="button" className={`btn btn-sm ${sampling === value ? 'btn-primary' : 'btn-outline-primary'}`} aria-pressed={sampling === value} onClick={() => setSamplingSelection(value)}>{label}</button>)}</div>
             </div>
+            {autoSampled ? <p className="text-muted small mt-2 mb-0" role="status">Monthly sampling is selected for this long history so price and volume remain readable. Daily sampling is available in the controls.</p> : null}
             <p className="text-muted small mt-2 mb-0">Fundamental values stay on their reported observation dates. Monthly or quarterly sampling reduces price bars and sums volume without moving or filling fundamental observations.</p>
         </div>
     </section>;

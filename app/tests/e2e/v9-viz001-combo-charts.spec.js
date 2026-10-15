@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { hasPresetChartGeometry, waitForPresetChartGeometry } from './productionSmokeDiagnostics.js';
 
 const dates = ['2025-10-01', '2026-01-01', '2026-04-01', '2026-07-01'];
 const prices = dates.map((price_date, index) => ({
@@ -97,6 +98,55 @@ async function inspectChart(page, viewport, testInfo) {
 
 test('VIZ-01 supports desktop keyboard preset, legend and in-chart controls without writes', async ({ page }, testInfo) => {
     await inspectChart(page, 'desktop', testInfo);
+});
+
+test('production geometry predicate accepts plotted data in the labelled implicit section region', async ({ page }, testInfo) => {
+    journeyId(testInfo, 'VIZ-01');
+    await prepare(page, 'desktop');
+    await page.goto('/watchlist/TCS');
+    const chart = page.getByRole('region', { name: 'Stock Details combo chart', exact: true });
+    await expect(chart).toBeVisible();
+    const semantics = await chart.evaluate(region => ({ tagName: region.tagName, explicitRole: region.getAttribute('role') }));
+    expect(semantics).toEqual({ tagName: 'SECTION', explicitRole: null });
+    const readGeometry = () => chart.evaluate(region => ({
+        linePathData: [...region.querySelectorAll('.recharts-line-curve')].map(path => path.getAttribute('d')),
+        barPathData: [...region.querySelectorAll('.recharts-bar-rectangle .recharts-rectangle')].map(rect => rect.getAttribute('d')),
+    }));
+    await expect.poll(async () => hasPresetChartGeometry(await readGeometry(), 'price-pe')).toBe(true);
+    expect(hasPresetChartGeometry({ linePathData: [], barPathData: [] }, 'price-pe')).toBe(false);
+});
+
+test('production geometry polling terminates on an empty implicit section within its budget', async ({ page }, testInfo) => {
+    journeyId(testInfo, 'VIZ-01');
+    await prepare(page, 'desktop');
+    await page.goto('/watchlist/TCS');
+    const chart = page.getByRole('region', { name: 'Stock Details combo chart', exact: true });
+    await expect(chart).toBeVisible();
+    await expect(chart.locator('.recharts-line-curve')).toHaveCount(2);
+    await chart.evaluate(region => {
+        region.querySelectorAll('.recharts-line-curve, .recharts-bar-rectangle .recharts-rectangle')
+            .forEach(path => path.setAttribute('d', ''));
+    });
+    const semantics = await chart.evaluate(region => ({ tagName: region.tagName, explicitRole: region.getAttribute('role') }));
+    expect(semantics).toEqual({ tagName: 'SECTION', explicitRole: null });
+    let elapsedMs = 0;
+    const accepted = await waitForPresetChartGeometry({
+        presetId: 'price-pe',
+        deadline: 25,
+        now: () => elapsedMs,
+        wait: async milliseconds => {
+            elapsedMs += milliseconds;
+            if (elapsedMs > 25) throw new Error('geometry polling exceeded its deterministic deadline');
+        },
+        scheduleTimeout: () => 1,
+        cancelTimeout: () => {},
+        readGeometry: () => chart.evaluate(region => ({
+            linePathData: [...region.querySelectorAll('.recharts-line-curve')].map(path => path.getAttribute('d')),
+            barPathData: [...region.querySelectorAll('.recharts-bar-rectangle .recharts-rectangle')].map(rect => rect.getAttribute('d')),
+        })),
+    });
+    expect(accepted).toBe(false);
+    expect(elapsedMs).toBe(25);
 });
 
 test('symbol deep links prefer the data-bearing NSE listing over a BSE-first watchlist row', async ({ page }, testInfo) => {
@@ -203,12 +253,70 @@ test('renders price and volume while the saved metric history is delayed, then h
     await expect(chart.locator('.recharts-bar')).toBeVisible();
     await expect(chart.getByText(/Loading the saved default’s history/)).toBeVisible();
     await expect.poll(() => peRequested).toBe(true);
+    await page.evaluate(() => {
+        window.__viz001DefaultAvailabilityMismatch = false;
+        const selector = document.querySelector('#combo-chart-preset');
+        const observeAvailabilityCommit = () => {
+            const savedDefault = selector?.querySelector('option[value="price-pe"]');
+            if (savedDefault && !savedDefault.disabled && selector.value !== 'price-pe') {
+                window.__viz001DefaultAvailabilityMismatch = true;
+            }
+        };
+        new MutationObserver(observeAvailabilityCommit).observe(selector, { attributes: true, childList: true, subtree: true, attributeFilter: ['disabled'] });
+    });
     expect(safety.writes).toEqual([]);
     expect(safety.blocked).toEqual([]);
 
     releasePe();
     await expect(selector).toHaveValue('price-pe');
+    expect(await page.evaluate(() => window.__viz001DefaultAvailabilityMismatch)).toBe(false);
     await expect(chart.getByRole('button', { name: 'Default chart', exact: true })).toBeDisabled();
+});
+
+test('renders real combo series with 5,458 price rows while every unrelated history is pending', async ({ page }, testInfo) => {
+    journeyId(testInfo, 'VIZ-01');
+    const safety = await prepare(page, 'desktop');
+    const longPriceHistory = [];
+    const cursor = new Date('2005-10-03T00:00:00Z');
+    while (longPriceHistory.length < 5458) {
+        const weekday = cursor.getUTCDay();
+        if (weekday !== 0 && weekday !== 6) {
+            const price_date = cursor.toISOString().slice(0, 10);
+            const close_price = 100 + (longPriceHistory.length % 700) / 10;
+            longPriceHistory.push({ price_date, open_price: close_price - 1, high_price: close_price + 2, low_price: close_price - 2, close_price, volume: 1000 + longPriceHistory.length, data_source: 'SYNTHETIC_FIXTURE_ONLY' });
+        }
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    const historiesReady = new Promise(() => {});
+    let pendingHistoryRequests = 0;
+    await page.route('**/api/stocks/42/market-prices', route => route.fulfill({ json: { data: longPriceHistory, has_price_history: true, price_count: longPriceHistory.length } }));
+    await page.route('**/api/v1/stocks/42/fundamentals/metrics/*/history?*', async route => {
+        pendingHistoryRequests += 1;
+        await historiesReady;
+        return route.fulfill({ json: { data: { points } } });
+    });
+
+    await page.goto('/watchlist/TCS');
+    const chart = page.getByRole('region', { name: 'Stock Details combo chart', exact: true });
+    await expect(chart).toBeVisible({ timeout: 20_000 });
+    const selector = chart.getByLabel('Combo chart preset');
+    await expect(selector).toHaveValue('price-volume');
+    await expect(chart.getByText(/Loading the saved default’s history/)).toBeVisible();
+    await expect(chart.getByRole('group', { name: 'Combo chart sampling frequency' }).getByRole('button', { name: 'Monthly', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(chart.getByText(/Monthly sampling is selected for this long history/)).toBeVisible();
+    await expect(chart.locator('.recharts-line')).toBeVisible();
+    await expect(chart.locator('.recharts-bar')).toBeVisible();
+    const priceVolume = page.locator('.lido-price-volume-chart');
+    await expect(priceVolume.getByRole('group', { name: 'Chart sampling interval' }).getByRole('button', { name: '1 month', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    const sampling = chart.getByRole('group', { name: 'Combo chart sampling frequency' });
+    await sampling.getByRole('button', { name: 'Quarterly', exact: true }).click();
+    await expect(sampling.getByRole('button', { name: 'Quarterly', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await chart.scrollIntoViewIfNeeded();
+    await expect.poll(() => chart.locator('.recharts-line-curve').evaluateAll(paths => paths.filter(path => Boolean(path.getAttribute('d')?.trim())).length)).toBeGreaterThan(0);
+    await expect.poll(() => chart.locator('.recharts-bar-rectangle .recharts-rectangle').evaluateAll(rects => rects.filter(rect => Boolean(rect.getAttribute('d')?.trim())).length)).toBeGreaterThan(0);
+    expect(pendingHistoryRequests).toBeGreaterThanOrEqual(6);
+    expect(safety.writes).toEqual([]);
+    expect(safety.blocked).toEqual([]);
 });
 
 test.describe('VIZ-01 mobile and touch', () => {

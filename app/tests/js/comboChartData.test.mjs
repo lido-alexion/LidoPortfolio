@@ -49,6 +49,21 @@ test('cadence alignment leaves missing fundamentals empty and range sampling ret
     assert.equal(quarterly.find((row) => row.date === '2025-02-03').revenue, null);
 });
 
+test('monthly sampling keeps the last actual valuation observation without carrying it to month-end', () => {
+    const sourceRows = [
+        { date: '2026-01-10', price: 100, volume: 10, pe: 5 },
+        { date: '2026-01-29', price: 101, volume: 20, pe: 6 },
+        { date: '2026-01-31', price: 102, volume: 30, pe: null },
+    ];
+    const sourceSnapshot = structuredClone(sourceRows);
+    const sampled = rangeAndSamplingRows(sourceRows, 'all', '1m');
+    assert.deepEqual(sampled, [
+        { date: '2026-01-29', price: 101, volume: null, pe: 6 },
+        { date: '2026-01-31', price: 102, volume: 60, pe: null },
+    ]);
+    assert.deepEqual(sourceRows, sourceSnapshot);
+});
+
 test('tooltip receives price and fundamental values only at a shared source observation date', () => {
     const rows = alignComboChartData({
         prices: [{ price_date: '2025-06-30', close_price: 120, volume: 100 }, { price_date: '2025-07-01', close_price: 121, volume: 110 }],

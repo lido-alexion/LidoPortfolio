@@ -10,7 +10,7 @@
 2. Review the existing Price + Volume chart and the combo chart in the same Stock Details area. Individual metric charts elsewhere remain available.
 3. Use the grouped preset dropdown to choose Price + P/E, Price + P/B, Price + P/S, Price + EPS, Price + Revenue, or Price + Net Profit. Only the selected preset is drawn.
 4. If a preset is unavailable for the stock, read its disabled reason in the catalogue. Use the adjacent previous/next controls to cycle among available presets; navigation wraps at each end and stays synchronized with the dropdown.
-5. Choose a time range and sampling frequency inside the chart. Fundamental observations stay on their reported dates; price sampling and volume aggregation do not invent additional fundamental observations.
+5. Choose a time range and sampling frequency inside the chart. Long all-history views may open with monthly sampling for readability; choose Daily or narrow the range to inspect shorter intervals. Fundamental observations stay on their reported dates; price sampling and volume aggregation do not invent additional fundamental observations.
 6. Hover or tap the chart and compare the aligned date/period, visible series labels and formatted values. Use keyboard or touch to show/hide a legend series temporarily.
 7. To make the current available preset the account-wide default, select **Set as default** and wait for the saved state. This is an account preference, not a favorite.
 8. Reopen Stock Details. The explicit default opens when available for that stock. If it is unavailable, StoX uses Price + Volume, or the first available preset when Price + Volume is unavailable. Without an explicit default, StoX uses Price + Volume with the same safety fallback.
