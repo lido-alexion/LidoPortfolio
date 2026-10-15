@@ -24,17 +24,10 @@ import { patternGuideLink } from '../utils/patternGuideLinks';
 import { stockExchangeLabel } from '../utils/exchangeDisplay';
 import { formatInr, formatInrWhole } from '../utils/tableFormat';
 import { formatTransactionDateDisplay } from '../utils/transactionDate';
+import { resolvePreferredStockListing } from '../utils/stockListing';
 
 const SEARCH_PLACEHOLDER = 'Search for a stock here (min 2 characters) or pick one from your watchlist to view price history.';
 
-function resolveStockFromSearchRows(rows, symbol) {
-    const needle = String(symbol || '').toUpperCase();
-    const exact = (rows || []).filter((row) => String(row.symbol || '').toUpperCase() === needle);
-    if (exact.length === 0) {
-        return null;
-    }
-    return exact.find((row) => row.exchange === 'NSE') || exact[0];
-}
 const SORT_OPTIONS = [
     { value: 'symbol', label: 'Symbol A–Z' },
     { value: '-symbol', label: 'Symbol Z–A' },
@@ -580,14 +573,14 @@ export default function WatchlistPage() {
             return undefined;
         }
 
+        // A symbol-only route needs a canonical listing, but once the user has
+        // selected a listing for this symbol its exchange choice is authoritative.
         if (String(selectedStock?.symbol || '').toUpperCase() === symbolFromUrl) {
             return undefined;
         }
 
-        const fromItems = items.find(
-            (item) => String(item.stock?.symbol || '').toUpperCase() === symbolFromUrl,
-        )?.stock;
-        if (fromItems) {
+        const fromItems = resolvePreferredStockListing(items.map((item) => item.stock), symbolFromUrl);
+        if (String(fromItems?.exchange || '').toUpperCase() === 'NSE') {
             setSelectedStock(fromItems);
             setSearchSymbol(fromItems.symbol);
             return undefined;
@@ -611,7 +604,7 @@ export default function WatchlistPage() {
                 if (cancelled) {
                     return;
                 }
-                const stock = resolveStockFromSearchRows(res.data?.data || [], symbolFromUrl);
+                const stock = resolvePreferredStockListing(res.data?.data || [], symbolFromUrl) || fromItems;
                 if (stock) {
                     setSelectedStock(stock);
                     setSearchSymbol(stock.symbol);
@@ -621,6 +614,11 @@ export default function WatchlistPage() {
                 }
             } catch {
                 if (!cancelled) {
+                    if (fromItems) {
+                        setSelectedStock(fromItems);
+                        setSearchSymbol(fromItems.symbol);
+                        return;
+                    }
                     showToast(`Could not load stock ${symbolFromUrl}.`, 'danger');
                     navigate('/watchlist', { replace: true });
                 }

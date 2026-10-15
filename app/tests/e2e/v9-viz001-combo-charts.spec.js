@@ -99,6 +99,85 @@ test('VIZ-01 supports desktop keyboard preset, legend and in-chart controls with
     await inspectChart(page, 'desktop', testInfo);
 });
 
+test('symbol deep links prefer the data-bearing NSE listing over a BSE-first watchlist row', async ({ page }, testInfo) => {
+    journeyId(testInfo, 'VIZ-01');
+    const safety = await prepare(page, 'desktop');
+    const requestedPriceStockIds = [];
+    let searchCalled = false;
+
+    await page.route('**/api/watchlists/5/items*', route => route.fulfill({ json: { data: [{
+        id: 1,
+        stock_id: 4573,
+        stock: { id: 4573, symbol: 'TCS', name: 'Tata Consultancy Services', exchange: 'BSE' },
+    }] } }));
+    await page.route('**/api/stocks/search*', route => {
+        searchCalled = true;
+        return route.fulfill({ json: { data: [
+            { id: 4573, symbol: 'TCS', name: 'Tata Consultancy Services', exchange: 'BSE' },
+            { id: 1886, symbol: 'TCS', name: 'Tata Consultancy Services', exchange: 'NSE' },
+        ] } });
+    });
+    await page.route('**/api/stocks/*/market-prices', route => {
+        const stockId = Number(new URL(route.request().url()).pathname.match(/\/stocks\/(\d+)\/market-prices$/)?.[1]);
+        requestedPriceStockIds.push(stockId);
+        return route.fulfill({ json: { data: stockId === 1886 ? prices : [], has_price_history: stockId === 1886, price_count: stockId === 1886 ? prices.length : 0 } });
+    });
+    await page.route('**/api/v1/stocks/*/fundamentals/metrics/*/history*', route => route.fulfill({ json: { data: { points } } }));
+
+    await page.goto('/watchlist/TCS');
+    const chart = page.getByRole('region', { name: 'Stock Details combo chart', exact: true });
+    await expect(chart).toBeVisible();
+    expect(searchCalled).toBe(true);
+    expect(requestedPriceStockIds).toContain(1886);
+    expect(requestedPriceStockIds).not.toContain(4573);
+    await expect(chart.getByLabel('Combo chart preset')).toHaveValue('price-pe');
+    expect(safety.writes).toEqual([]);
+    expect(safety.blocked).toEqual([]);
+});
+
+test('a deliberate BSE selection survives late watchlist rows for the same symbol', async ({ page }, testInfo) => {
+    journeyId(testInfo, 'VIZ-01');
+    const safety = await prepare(page, 'desktop');
+    const requestedPriceStockIds = [];
+    let releaseWatchlistItems;
+    const watchlistItemsReady = new Promise(resolve => { releaseWatchlistItems = resolve; });
+
+    await page.route('**/api/watchlists/5/items*', async route => {
+        await watchlistItemsReady;
+        return route.fulfill({ json: { data: [
+            { id: 1, stock_id: 4573, stock: { id: 4573, symbol: 'TCS', name: 'Tata Consultancy Services', exchange: 'BSE' } },
+            { id: 2, stock_id: 1886, stock: { id: 1886, symbol: 'TCS', name: 'Tata Consultancy Services', exchange: 'NSE' } },
+        ] } });
+    });
+    await page.route('**/api/stocks/search*', route => route.fulfill({ json: { data: [
+        { id: 4573, symbol: 'TCS', name: 'Tata Consultancy Services', exchange: 'BSE' },
+        { id: 1886, symbol: 'TCS', name: 'Tata Consultancy Services', exchange: 'NSE' },
+    ] } }));
+    await page.route('**/api/stocks/*/market-prices', route => {
+        const stockId = Number(new URL(route.request().url()).pathname.match(/\/stocks\/(\d+)\/market-prices$/)?.[1]);
+        requestedPriceStockIds.push(stockId);
+        return route.fulfill({ json: { data: stockId === 1886 ? prices : [], has_price_history: stockId === 1886, price_count: stockId === 1886 ? prices.length : 0 } });
+    });
+    await page.route('**/api/v1/stocks/*/fundamentals/metrics/*/history*', route => route.fulfill({ json: { data: { points } } }));
+
+    await page.goto('/watchlist/TCS');
+    await expect(page.getByRole('region', { name: 'Stock Details combo chart', exact: true })).toBeVisible();
+    const search = page.getByLabel('Stock', { exact: true });
+    await search.fill('TC');
+    await search.fill('TCS');
+    const bseOption = page.getByRole('button', { name: /TCS.*BSE/ });
+    await expect(bseOption).toBeVisible();
+    await bseOption.click();
+    await expect.poll(() => requestedPriceStockIds.at(-1)).toBe(4573);
+
+    releaseWatchlistItems();
+    await expect.poll(() => requestedPriceStockIds.at(-1)).toBe(4573);
+    expect(requestedPriceStockIds).toContain(4573);
+    expect(requestedPriceStockIds.slice(-1)[0]).not.toBe(1886);
+    expect(safety.writes).toEqual([]);
+    expect(safety.blocked).toEqual([]);
+});
+
 test.describe('VIZ-01 mobile and touch', () => {
     test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
     test('keeps the combo chart and touch targets inside the mobile viewport without writes', async ({ page }, testInfo) => {
