@@ -248,10 +248,51 @@ Artisan::command('stox:fundamentals-bootstrap
     {--stocks= : Comma-separated stock symbols}
     {--status= : Rerun stocks from latest run with status failed or complete_partial}
     {--run= : Existing bootstrap run id to process}
+    {--cancel-run= : Cancel an existing run, preserving terminal jobs}
+    {--actor= : Required operator identity for cancellation audit}
+    {--reason= : Required cancellation reason for audit}
     {--batch=10 : Stock jobs to process in this slice}', function () {
     @set_time_limit(0);
     $service = app(FundamentalBootstrapService::class);
     $batch = max(1, min((int) $this->option('batch'), 100));
+
+    if ($this->option('cancel-run') !== null) {
+        if ($this->option('run') || $this->option('all') || $this->option('stock') || $this->option('stocks') || $this->option('status') || $this->option('dry-run')) {
+            $this->error('--cancel-run cannot be combined with processing, creation, or dry-run options.');
+
+            return 2;
+        }
+        if (! $this->option('actor') || ! $this->option('reason')) {
+            $this->error('--cancel-run requires both --actor and --reason.');
+
+            return 2;
+        }
+
+        $cancelRunId = filter_var((string) $this->option('cancel-run'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if ($cancelRunId === false) {
+            $this->error('--cancel-run must be a positive integer run id.');
+
+            return 2;
+        }
+
+        $run = \App\Models\V7\FundamentalBootstrapRun::query()->findOrFail($cancelRunId);
+        $result = $service->cancelRun($run, (string) $this->option('actor'), (string) $this->option('reason'));
+        if (isset($result['skipped_reason'])) {
+            $this->warn(sprintf('Bootstrap run #%d was not cancelled: %s.', $run->id, $result['skipped_reason']));
+
+            return 2;
+        }
+        $audit = $result['summary_json']['cancellation'] ?? [];
+        $this->info(sprintf(
+            'Bootstrap run #%d: %s; cancelled_jobs=%d; actor=%s.',
+            $run->id,
+            (string) ($result['status'] ?? 'unknown'),
+            (int) ($audit['cancelled_jobs'] ?? 0),
+            (string) ($audit['actor'] ?? $this->option('actor')),
+        ));
+
+        return 0;
+    }
 
     if ($this->option('run')) {
         $run = \App\Models\V7\FundamentalBootstrapRun::query()->findOrFail((int) $this->option('run'));
@@ -285,7 +326,7 @@ Artisan::command('stox:fundamentals-bootstrap
         $scope = 'stocks';
         $stockIds = $service->stockIdsFromSymbols(explode(',', (string) $this->option('stocks')));
     } elseif (! $this->option('all') && ! $this->option('dry-run')) {
-        $this->error('Specify --all, --stock, --stocks, --status, --dry-run, or --run.');
+        $this->error('Specify --all, --stock, --stocks, --status, --dry-run, --run, or --cancel-run.');
 
         return 1;
     }
@@ -320,7 +361,7 @@ Artisan::command('stox:fundamentals-bootstrap
     ));
 
     return 0;
-})->purpose('V8 historical fundamentals bootstrap (manual operator action only)');
+})->purpose('Process, retry, or safely cancel V8 historical fundamentals bootstrap runs');
 
 $cronTime = env('PORTFOLIO_CRON_TIME', '18:30');
 $timezone = env('PORTFOLIO_CRON_TIMEZONE', 'Asia/Kolkata');

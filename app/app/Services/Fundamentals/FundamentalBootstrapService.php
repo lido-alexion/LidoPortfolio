@@ -99,6 +99,11 @@ class FundamentalBootstrapService
      */
     public function process(FundamentalBootstrapRun $run, int $batch = 10): array
     {
+        $fresh = $run->fresh();
+        if (! $fresh || ! in_array($fresh->status, ['queued', 'running'], true)) {
+            return $fresh?->toArray() ?? [];
+        }
+
         $lock = Cache::lock(self::PROCESS_LOCK_KEY, 900);
         if (! $lock->get()) {
             return array_merge($run->fresh()->toArray(), [
@@ -114,15 +119,112 @@ class FundamentalBootstrapService
     }
 
     /**
+     * Cancel unfinished jobs under the same process lock used by bootstrap slices.
+     * Database row locks remain the durable fence if the cache lock lease expires mid-slice.
+     *
+     * @return array<string, mixed>
+     */
+    public function cancelRun(FundamentalBootstrapRun $run, string $actor, string $reason): array
+    {
+        $actor = trim($actor);
+        $reason = trim($reason);
+        if ($actor === '' || $reason === '') {
+            throw new \InvalidArgumentException('Cancellation requires a non-empty actor and reason.');
+        }
+        if (mb_strlen($actor) > 255 || mb_strlen($reason) > 2000) {
+            throw new \InvalidArgumentException('Cancellation actor must be at most 255 characters and reason at most 2000 characters.');
+        }
+
+        $lock = Cache::lock(self::PROCESS_LOCK_KEY, 900);
+        if (! $lock->get()) {
+            return [
+                'run_id' => $run->id,
+                'status' => $run->fresh()->status,
+                'skipped_reason' => 'another_bootstrap_slice_is_in_progress',
+            ];
+        }
+
+        try {
+            return DB::transaction(function () use ($run, $actor, $reason): array {
+                $lockedRun = FundamentalBootstrapRun::query()->whereKey($run->id)->lockForUpdate()->firstOrFail();
+                if ($lockedRun->status === 'cancelled') {
+                    return $lockedRun->toArray();
+                }
+                if (! in_array($lockedRun->status, ['queued', 'running'], true)) {
+                    return $lockedRun->toArray();
+                }
+
+                $unfinishedStatuses = [
+                    FundamentalBootstrapJob::STATUS_QUEUED,
+                    FundamentalBootstrapJob::STATUS_RETRY,
+                    FundamentalBootstrapJob::STATUS_RUNNING,
+                ];
+                $before = $lockedRun->jobs()
+                    ->selectRaw('status, COUNT(*) as count')
+                    ->groupBy('status')
+                    ->pluck('count', 'status')
+                    ->map(fn ($count): int => (int) $count)
+                    ->all();
+                $cancelledAt = now();
+                $cancelledCount = $lockedRun->jobs()
+                    ->whereIn('status', $unfinishedStatuses)
+                    ->update([
+                        'status' => FundamentalBootstrapJob::STATUS_CANCELLED,
+                        'completed_at' => $cancelledAt,
+                        'next_attempt_at' => null,
+                        'updated_at' => $cancelledAt,
+                    ]);
+
+                $this->refreshRunCounters($lockedRun);
+                $summary = $lockedRun->summary_json ?? [];
+                $summary['cancellation'] = [
+                    'actor' => $actor,
+                    'reason' => $reason,
+                    'cancelled_at' => $cancelledAt->toIso8601String(),
+                    'cancelled_jobs' => (int) $cancelledCount,
+                    'cancelled_by_previous_status' => collect($before)
+                        ->only($unfinishedStatuses)
+                        ->all(),
+                    'preserved_terminal_jobs' => collect($before)
+                        ->except($unfinishedStatuses)
+                        ->all(),
+                ];
+
+                $lockedRun->forceFill([
+                    'status' => 'cancelled',
+                    'summary_json' => $summary,
+                    'completed_at' => $cancelledAt,
+                ])->save();
+
+                return $lockedRun->fresh()->toArray();
+            });
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
      * @return array<string, mixed>
      */
     protected function processLocked(FundamentalBootstrapRun $run, int $batch): array
     {
+        $started = DB::transaction(function () use ($run): bool {
+            $lockedRun = FundamentalBootstrapRun::query()->whereKey($run->id)->lockForUpdate()->first();
+            if (! $lockedRun || ! in_array($lockedRun->status, ['queued', 'running'], true)) {
+                return false;
+            }
+            $lockedRun->forceFill([
+                'status' => 'running',
+                'started_at' => $lockedRun->started_at ?? now(),
+            ])->save();
+
+            return true;
+        });
+        if (! $started) {
+            return $run->fresh()?->toArray() ?? [];
+        }
+
         $settings = $this->fundamentals->settings();
-        $run->forceFill([
-            'status' => 'running',
-            'started_at' => $run->started_at ?? now(),
-        ])->save();
 
         $jobs = FundamentalBootstrapJob::query()
             ->where('run_id', $run->id)
@@ -135,24 +237,19 @@ class FundamentalBootstrapService
             ->get();
 
         foreach ($jobs as $job) {
-            $job->forceFill([
-                'status' => FundamentalBootstrapJob::STATUS_RUNNING,
-                'attempts' => $job->attempts + 1,
-                'started_at' => $job->started_at ?? now(),
-            ])->save();
+            $claimedJob = $this->claimJob($run->id, $job->id);
+            if (! $claimedJob) {
+                if (! in_array($run->fresh()->status, ['queued', 'running'], true)) {
+                    break;
+                }
+                continue;
+            }
 
             try {
-                $stock = Stock::query()->findOrFail($job->stock_id);
-                $this->bootstrapStock($job, $stock);
+                $stock = Stock::query()->findOrFail($claimedJob->stock_id);
+                $this->bootstrapStock($claimedJob, $stock);
             } catch (Throwable $error) {
-                $willRetry = $job->attempts < $settings->max_attempts;
-                $job->forceFill([
-                    'status' => $willRetry ? FundamentalBootstrapJob::STATUS_RETRY : FundamentalBootstrapJob::STATUS_FAILED,
-                    'completed_at' => $willRetry ? null : now(),
-                    'next_attempt_at' => $willRetry ? now()->addMinutes(min(60, 2 ** max(0, $job->attempts - 1))) : null,
-                    'last_error' => $error->getMessage(),
-                ])->save();
-                $run->forceFill(['last_error' => $error->getMessage()])->save();
+                $this->recordJobFailure($run->id, $claimedJob->id, $claimedJob->attempts, $settings->max_attempts, $error->getMessage());
             }
 
             if ($settings->request_delay_ms > 0) {
@@ -160,39 +257,24 @@ class FundamentalBootstrapService
             }
         }
 
-        $this->refreshRunCounters($run);
+        $this->finishRunSlice($run->id);
 
-        $remaining = FundamentalBootstrapJob::query()
-            ->where('run_id', $run->id)
-            ->whereIn('status', [
-                FundamentalBootstrapJob::STATUS_QUEUED,
-                FundamentalBootstrapJob::STATUS_RETRY,
-                FundamentalBootstrapJob::STATUS_RUNNING,
-            ])
-            ->count();
-
-        if ($remaining === 0) {
-            $run->forceFill([
-                'status' => 'completed',
-                'completed_at' => now(),
-                'summary_json' => $this->buildRunSummary($run),
-            ])->save();
-        }
-
-        return $run->fresh()->toArray();
+        return $run->fresh()?->toArray() ?? [];
     }
 
-    public function bootstrapStock(FundamentalBootstrapJob $job, Stock $stock): void
+    protected function bootstrapStock(FundamentalBootstrapJob $job, Stock $stock): bool
     {
+        if (! $this->isJobActive($job->run_id, $job->id)) {
+            return false;
+        }
+
         if ($stock->is_benchmark) {
-            $job->forceFill([
+            return $this->finishJob($job->run_id, $job->id, [
                 'status' => FundamentalBootstrapJob::STATUS_COMPLETE_NO_DATA,
                 'completed_at' => now(),
                 'next_attempt_at' => null,
                 'last_error' => 'benchmark instruments are excluded from bootstrap',
-            ])->save();
-
-            return;
+            ]);
         }
 
         $totals = [
@@ -205,6 +287,9 @@ class FundamentalBootstrapService
         $cadenceStats = [];
 
         foreach ([FundamentalDataService::CADENCE_QUARTERLY, FundamentalDataService::CADENCE_ANNUAL] as $cadence) {
+            if (! $this->isJobActive($job->run_id, $job->id)) {
+                return false;
+            }
             $rows = $this->historicalIngest->fetch($stock, $cadence);
             $accepted = [];
             $rejected = 0;
@@ -218,28 +303,35 @@ class FundamentalBootstrapService
                 $periodEnds[] = (string) $row['period_end'];
             }
 
-            $storeStats = $accepted === []
-                ? ['inserted' => 0, 'deduped' => 0, 'restated' => 0]
-                : $this->fundamentals->storeFacts($stock, $accepted);
+            $storeStats = $this->withActiveJob($job->run_id, $job->id, function () use ($stock, $cadence, $accepted, $rows): array {
+                $stats = $accepted === []
+                    ? ['inserted' => 0, 'deduped' => 0, 'restated' => 0]
+                    : $this->fundamentals->storeFacts($stock, $accepted);
 
-            if ($accepted !== []) {
-                $providers = collect($accepted)->pluck('provider')->filter()->unique()->values()->all();
-                $provider = count($providers) === 1 ? (string) $providers[0] : 'hybrid';
-                $responseHash = hash('sha256', json_encode($rows, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-                $this->fundamentals->recordSuccessfulProviderCheck(
-                    $stock,
-                    $cadence,
-                    now(),
-                    $provider,
-                    $responseHash,
-                    null,
-                    [
-                        'transport' => 'historical_ingest',
-                        'check_kind' => 'merged_source_rows',
-                        'providers' => $providers,
-                        'row_count' => count($rows),
-                    ],
-                );
+                if ($accepted !== []) {
+                    $providers = collect($accepted)->pluck('provider')->filter()->unique()->values()->all();
+                    $provider = count($providers) === 1 ? (string) $providers[0] : 'hybrid';
+                    $responseHash = hash('sha256', json_encode($rows, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+                    $this->fundamentals->recordSuccessfulProviderCheck(
+                        $stock,
+                        $cadence,
+                        now(),
+                        $provider,
+                        $responseHash,
+                        null,
+                        [
+                            'transport' => 'historical_ingest',
+                            'check_kind' => 'merged_source_rows',
+                            'providers' => $providers,
+                            'row_count' => count($rows),
+                        ],
+                    );
+                }
+
+                return $stats;
+            });
+            if ($storeStats === null) {
+                return false;
             }
 
             $totals['inserted'] += (int) ($storeStats['inserted'] ?? 0);
@@ -267,7 +359,7 @@ class FundamentalBootstrapService
             $status = FundamentalBootstrapJob::STATUS_COMPLETE_GOOD;
         }
 
-        $job->forceFill([
+        return $this->finishJob($job->run_id, $job->id, [
             'status' => $status,
             'completed_at' => now(),
             'next_attempt_at' => null,
@@ -285,7 +377,116 @@ class FundamentalBootstrapService
                 'cadences' => $cadenceStats,
                 'period_count' => count(array_unique($periodEnds)),
             ],
-        ])->save();
+        ]);
+    }
+
+    protected function claimJob(int $runId, int $jobId): ?FundamentalBootstrapJob
+    {
+        return DB::transaction(function () use ($runId, $jobId): ?FundamentalBootstrapJob {
+            $run = FundamentalBootstrapRun::query()->whereKey($runId)->lockForUpdate()->first();
+            if (! $run || $run->status !== 'running') {
+                return null;
+            }
+
+            $job = FundamentalBootstrapJob::query()->whereKey($jobId)->where('run_id', $runId)->lockForUpdate()->first();
+            if (! $job || ! in_array($job->status, [FundamentalBootstrapJob::STATUS_QUEUED, FundamentalBootstrapJob::STATUS_RETRY], true)) {
+                return null;
+            }
+
+            if ($job->next_attempt_at !== null && $job->next_attempt_at->isFuture()) {
+                return null;
+            }
+
+            $job->forceFill([
+                'status' => FundamentalBootstrapJob::STATUS_RUNNING,
+                'attempts' => $job->attempts + 1,
+                'started_at' => $job->started_at ?? now(),
+            ])->save();
+
+            return $job->fresh();
+        });
+    }
+
+    protected function isJobActive(int $runId, int $jobId): bool
+    {
+        return $this->withActiveJob(
+            $runId,
+            $jobId,
+            fn (FundamentalBootstrapJob $activeJob, FundamentalBootstrapRun $activeRun): bool => true,
+        ) === true;
+    }
+
+    /**
+     * Run and job locks serialize every durable worker write against cancellation.
+     * Provider I/O stays outside this transaction; stale workers fail closed here.
+     */
+    protected function withActiveJob(int $runId, int $jobId, callable $callback): mixed
+    {
+        return DB::transaction(function () use ($runId, $jobId, $callback): mixed {
+            $run = FundamentalBootstrapRun::query()->whereKey($runId)->lockForUpdate()->first();
+            if (! $run || $run->status !== 'running') {
+                return null;
+            }
+
+            $job = FundamentalBootstrapJob::query()->whereKey($jobId)->where('run_id', $runId)->lockForUpdate()->first();
+            if (! $job || $job->status !== FundamentalBootstrapJob::STATUS_RUNNING) {
+                return null;
+            }
+
+            return $callback($job, $run);
+        });
+    }
+
+    /** @param array<string, mixed> $attributes */
+    protected function finishJob(int $runId, int $jobId, array $attributes): bool
+    {
+        return $this->withActiveJob($runId, $jobId, function (FundamentalBootstrapJob $job) use ($attributes): bool {
+            $job->forceFill($attributes)->save();
+
+            return true;
+        }) === true;
+    }
+
+    protected function recordJobFailure(int $runId, int $jobId, int $attempts, int $maxAttempts, string $error): void
+    {
+        $this->withActiveJob($runId, $jobId, function (FundamentalBootstrapJob $job, FundamentalBootstrapRun $run) use ($attempts, $maxAttempts, $error): void {
+            $willRetry = $attempts < $maxAttempts;
+            $job->forceFill([
+                'status' => $willRetry ? FundamentalBootstrapJob::STATUS_RETRY : FundamentalBootstrapJob::STATUS_FAILED,
+                'completed_at' => $willRetry ? null : now(),
+                'next_attempt_at' => $willRetry ? now()->addMinutes(min(60, 2 ** max(0, $attempts - 1))) : null,
+                'last_error' => $error,
+            ])->save();
+            $run->forceFill(['last_error' => $error])->save();
+        });
+    }
+
+    protected function finishRunSlice(int $runId): void
+    {
+        DB::transaction(function () use ($runId): void {
+            $run = FundamentalBootstrapRun::query()->whereKey($runId)->lockForUpdate()->first();
+            if (! $run || $run->status !== 'running') {
+                return;
+            }
+
+            $this->refreshRunCounters($run);
+            $remaining = FundamentalBootstrapJob::query()
+                ->where('run_id', $run->id)
+                ->whereIn('status', [
+                    FundamentalBootstrapJob::STATUS_QUEUED,
+                    FundamentalBootstrapJob::STATUS_RETRY,
+                    FundamentalBootstrapJob::STATUS_RUNNING,
+                ])
+                ->count();
+
+            if ($remaining === 0) {
+                $run->forceFill([
+                    'status' => 'completed',
+                    'completed_at' => now(),
+                    'summary_json' => $this->buildRunSummary($run),
+                ])->save();
+            }
+        });
     }
 
     /**

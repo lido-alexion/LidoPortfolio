@@ -22,12 +22,15 @@ class FundamentalBootstrapJob extends Model
 
     public const STATUS_FAILED = 'failed';
 
+    public const STATUS_CANCELLED = 'cancelled';
+
     /** @var list<string> */
     public const TERMINAL_STATUSES = [
         self::STATUS_COMPLETE_GOOD,
         self::STATUS_COMPLETE_PARTIAL,
         self::STATUS_COMPLETE_NO_DATA,
         self::STATUS_FAILED,
+        self::STATUS_CANCELLED,
     ];
 
     protected $table = 'stox_fundamental_bootstrap_jobs';
