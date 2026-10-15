@@ -108,6 +108,16 @@ class V9DashboardLayoutApiTest extends TestCase
         $this->assertSame(2, $legacy->fresh()->revision);
         $this->assertSame(1, $otherLegacy->fresh()->revision, 'normalization must remain account-scoped');
 
+        $reorderObjectKeys = function (mixed $value) use (&$reorderObjectKeys): mixed {
+            if (!is_array($value)) return $value;
+            if (array_is_list($value)) return array_map($reorderObjectKeys, $value);
+            krsort($value, SORT_STRING);
+            foreach ($value as $key => $item) $value[$key] = $reorderObjectKeys($item);
+            return $value;
+        };
+        DB::table('portfolio_dashboard_layouts')->where('id', $legacy->id)->update([
+            'definition' => json_encode($reorderObjectKeys($firstRead->json('data.0.definition')), JSON_THROW_ON_ERROR),
+        ]);
         $this->getJson('/api/dashboard-layouts')->assertOk()->assertJsonPath('data.0.revision', 2);
         $this->putJson("/api/dashboard-layouts/{$legacy->id}", ['definition' => $legacyDefinition, 'expected_revision' => 1])->assertConflict();
         $this->assertSame(2, $legacy->fresh()->revision, 'a stale save must not overwrite normalized state or reuse its revision');

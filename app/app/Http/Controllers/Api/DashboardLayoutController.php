@@ -25,7 +25,7 @@ class DashboardLayoutController extends Controller
 
             foreach ($layouts as $layout) {
                 $normalized = DashboardLayoutDefinition::normalize($layout->definition);
-                if ($normalized !== $layout->definition || $layout->schema_version !== $normalized['version']) {
+                if ($this->canonicalize($normalized) !== $this->canonicalize($layout->definition) || $layout->schema_version !== $normalized['version']) {
                     $layout->definition = $normalized;
                     $layout->schema_version = $normalized['version'];
                     $layout->revision++;
@@ -95,6 +95,16 @@ class DashboardLayoutController extends Controller
     {
         abort_if(strlen(json_encode($definition, JSON_THROW_ON_ERROR)) > 32768, 422, 'Dashboard definition exceeds the 32 KB limit.');
         return DashboardLayoutDefinition::normalize($definition);
+    }
+
+    private function canonicalize(mixed $value): mixed
+    {
+        if (!is_array($value)) return $value;
+        if (array_is_list($value)) return array_map(fn ($item) => $this->canonicalize($item), $value);
+
+        ksort($value, SORT_STRING);
+        foreach ($value as $key => $item) $value[$key] = $this->canonicalize($item);
+        return $value;
     }
 
     private function lockAccountAndEnsureCapacity(int $userId): void
