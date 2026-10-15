@@ -24,6 +24,7 @@ production smoke remains non-destructive and separate from deterministic CI.
 | `04-execution-transactions.md` | `EXE-*` | `app/tests/e2e/` |
 | `05-end-to-end.md` | `E2E-*` | `app/tests/e2e/` |
 | `06-assistant.md` | `AI-01`–`AI-09` | `app/tests/e2e/assistant.spec.js`, `assistant-agent.spec.js`, and `embedded-ai.spec.js` |
+| `07-stock-details-combo-charts.md` | `VIZ-*` | `app/tests/e2e/v9-viz001-combo-charts.spec.js`; authenticated read-only production smoke |
 | `07-supporting-investor.md` | `E2E-09`–`E2E-13` | `app/tests/e2e/supporting-investor-journeys.spec.js` |
 | `08-investor-overview-alerts.md` | `E2E-14`–`E2E-17`, `E2E-48` | `app/tests/e2e/investor-overview-journeys.spec.js` and `optional-email-recovery.spec.js` |
 | `11-historical-analysis.md` | `E2E-23`–`E2E-24` | `app/tests/e2e/historical-analysis-journeys.spec.js` |
