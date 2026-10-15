@@ -1,4 +1,3 @@
-import { chromium } from 'playwright';
 import { allowProductionSmokeRequest, neutralizeProductionSmokeRequest, productionSmokeBlockReason } from './productionSmokePolicy.js';
 import { readOnlyReviewHeading } from './productionSmokeSelectors.js';
 
@@ -11,6 +10,7 @@ try {
     const password = process.env.STOX_SMOKE_PASSWORD;
     if (!baseURL || !email || !password || new URL(baseURL).protocol !== 'https:') throw new Error();
     stage = 'browser_launch';
+    const { chromium } = await import('playwright');
     browser = await chromium.launch({ headless: true });
     // No Playwright Test reporter/instrumentation, tracing, HAR, video or screenshot.
     const context = await browser.newContext({ baseURL, serviceWorkers: 'block' });
