@@ -767,7 +767,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
 
                 const acceptance = page.getByRole('heading', { name: 'Production ML acceptance' }).locator('..');
                 const activeStep = acceptance.locator('.acceptance-step-wrapper:not([hidden])');
-                await expect(acceptance.getByRole('heading', { name: 'Train candidates' })).toBeVisible();
+                await expect(activeStep.getByRole('heading', { name: 'Step 6: Train candidates', exact: true, level: 3 })).toBeVisible();
                 await expect(acceptance).toContainText(`The campaign ${terminalStatus}. Its run evidence is retained for review.`);
                 await acceptance.getByRole('button', { name: 'Start a fresh acceptance campaign' }).click();
                 const confirm = acceptance.getByRole('alertdialog');
