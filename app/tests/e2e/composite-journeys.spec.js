@@ -34,9 +34,20 @@ function acceptanceWizard(status, blockers) {
     };
 }
 
-async function installAdminMlMocks(page) {
-    let campaignStatus = null;
-    let report = acceptanceWizard(null, ['snapshot_unproven:2026-09-01']);
+function terminalTrainingWizard(status) {
+    const report = acceptanceWizard(status, []);
+    report.current_step = 6;
+    report.campaign.id = 'campaign-88';
+    report.campaign.cutoff_date = '2026-10-15';
+    report.steps = ['complete', 'complete', 'not_required', 'not_required', 'complete', status, status]
+        .map((stepStatus, index) => ({ id: ['readiness', 'discovery', 'sources', 'backfill', 'final_preflight', 'training', 'review'][index], status: stepStatus, reason_codes: [] }));
+    return report;
+}
+
+async function installAdminMlMocks(page, initialReport = null) {
+    let campaignId = initialReport ? 88 : 87;
+    let campaignStatus = initialReport?.campaign?.status || null;
+    let report = initialReport || acceptanceWizard(null, ['snapshot_unproven:2026-09-01']);
     const actions = [];
     await page.route(/\/(sanctum\/csrf-cookie|api\/)/, async (route) => {
         const { pathname, searchParams } = new URL(route.request().url());
@@ -58,14 +69,22 @@ async function installAdminMlMocks(page) {
         }
         if (pathname.endsWith('/api/v1/admin/ml/acceptance/campaigns') && method === 'POST') {
             actions.push('create_campaign');
+            campaignId += 1;
             campaignStatus = 'preflight';
             report = acceptanceWizard(campaignStatus, ['snapshot_unproven:2026-09-01']);
-            report.current_step = 3;
-            report.steps[1] = { id: 'discovery', status: 'complete', reason_codes: [] };
-            report.steps[2] = { id: 'sources', status: 'action_required', reason_codes: ['missing_required_source_date'] };
-            report.steps[3] = { id: 'backfill', status: 'action_required', reason_codes: [] };
-            report.required_sources = [{ date: '2026-09-01', horizons: ['1m', '3m', '6m'], accepted_families: ['nse_cash_bhavcopy'], sources: [{ id: 'sealed-1', status: 'sealed', family: 'nse_cash_bhavcopy', date: '2026-09-01' }] }];
-            return json({ success: true, data: { id: 88, status: campaignStatus } }, 201);
+            report.campaign.id = `campaign-${campaignId}`;
+            if (initialReport) {
+                report.current_step = 2;
+                report.steps[1] = { id: 'discovery', status: 'in_progress', reason_codes: [] };
+                report.required_sources = [];
+            } else {
+                report.current_step = 3;
+                report.steps[1] = { id: 'discovery', status: 'complete', reason_codes: [] };
+                report.steps[2] = { id: 'sources', status: 'action_required', reason_codes: ['missing_required_source_date'] };
+                report.steps[3] = { id: 'backfill', status: 'action_required', reason_codes: [] };
+                report.required_sources = [{ date: '2026-09-01', horizons: ['1m', '3m', '6m'], accepted_families: ['nse_cash_bhavcopy'], sources: [{ id: 'sealed-1', status: 'sealed', family: 'nse_cash_bhavcopy', date: '2026-09-01' }] }];
+            }
+            return json({ success: true, data: { id: `campaign-${campaignId}`, status: campaignStatus } }, 201);
         }
         if (pathname.endsWith('/api/v1/admin/ml/acceptance/backfills/preview') && method === 'POST') {
             actions.push('preview_backfill');
@@ -706,6 +725,13 @@ test.describe('V9-UX-001 composite journey coverage', () => {
             await acceptance.getByRole('button', { name: 'Apply reviewed backfill' }).click();
             const applyDialog = acceptance.getByRole('alertdialog');
             await expect(applyDialog).toContainText('Conflicting or unproven existing history will be blocked');
+            await expect(applyDialog).toHaveAttribute('aria-modal', 'false');
+            await expect(applyDialog.locator('[data-confirmation-title]')).toBeFocused();
+            await page.keyboard.press('Escape');
+            await expect(applyDialog).toHaveCount(0);
+            await expect(acceptance.getByRole('button', { name: 'Apply reviewed backfill' })).toBeFocused();
+            await acceptance.getByRole('button', { name: 'Apply reviewed backfill' }).click();
+            await expect(acceptance.getByRole('alertdialog')).toBeVisible();
             await applyDialog.getByRole('button', { name: 'Go back' }).focus();
             await page.keyboard.press('Enter');
             await expect(applyDialog).toHaveCount(0);
@@ -715,10 +741,39 @@ test.describe('V9-UX-001 composite journey coverage', () => {
             const workerHelp = acceptance.getByRole('button', { name: 'More information about worker' });
             await workerHelp.focus();
             await expect(acceptance.getByRole('tooltip')).toBeVisible();
+            await workerHelp.click();
+            await expect(workerHelp).toHaveAttribute('aria-expanded', 'true');
+            await page.keyboard.press('Escape');
+            await expect(workerHelp).toHaveAttribute('aria-expanded', 'false');
+            const helpBox = await workerHelp.boundingBox();
+            expect(helpBox.width).toBeGreaterThanOrEqual(44);
+            expect(helpBox.height).toBeGreaterThanOrEqual(44);
             expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
             // The fixture remains blocked; browser coverage never starts actual
             // production training or changes model/lifecycle state.
         });
+
+        for (const terminalStatus of ['failed', 'cancelled']) {
+            test(`E2E-08 recovers ${terminalStatus} training through a fresh reviewed campaign (${viewport.name})`, async ({ page }, testInfo) => {
+                journeyId(testInfo, 'E2E-08');
+                await seedDeterministicJourney(page, `e2e08-terminal-${terminalStatus}-${viewport.name}`);
+                await page.setViewportSize({ width: viewport.width, height: viewport.height });
+                const actions = await installAdminMlMocks(page, terminalTrainingWizard(terminalStatus));
+                await page.goto('/settings/ml-scoring');
+
+                const acceptance = page.getByRole('heading', { name: 'Production ML acceptance' }).locator('..');
+                await expect(acceptance.getByRole('heading', { name: 'Train candidates' })).toBeVisible();
+                await expect(acceptance).toContainText(`The campaign ${terminalStatus}. Its run evidence is retained for review.`);
+                await acceptance.getByRole('button', { name: 'Start a fresh acceptance campaign' }).click();
+                const confirm = acceptance.getByRole('alertdialog');
+                await expect(confirm).toContainText('The prior campaign and run evidence remain saved. No training starts');
+                await confirm.getByRole('button', { name: 'Start discovery preflight' }).click();
+                await expect(acceptance.getByText('campaign-89')).toBeVisible();
+                await expect(acceptance.getByText('Preflight is running. Closing this page will not stop it.')).toBeVisible();
+                expect(actions).toEqual(['create_campaign']);
+                expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+            });
+        }
     }
 });

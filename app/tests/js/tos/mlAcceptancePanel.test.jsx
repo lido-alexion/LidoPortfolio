@@ -63,6 +63,36 @@ describe('ML acceptance wizard', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
         expect(await screen.findByRole('button', { name: 'Resume backfill' })).toBeEnabled();
         expect(screen.queryByRole('button', { name: 'Run safe preview' })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Resume backfill' }));
+        await waitFor(() => expect(api.post).toHaveBeenCalledWith('/v1/admin/ml/acceptance/backfills/44/resume'));
+    });
+
+    it('offers a new safe preview after server-confirmed backfill cancellation', async () => {
+        state = wizard({ current_step: 4, campaign: { id: 'campaign-remediation', status: 'blocked' },
+            required_sources: [{ date: '2026-09-01', horizons: ['1m'], accepted_families: ['nse_cash_bhavcopy'], sources: [{ id: 'sealed-retry', status: 'sealed', family: 'nse_cash_bhavcopy', date: '2026-09-01' }] }],
+            steps: ['complete', 'complete', 'complete', 'cancelled', 'blocked', 'blocked', 'action_required'].map((status, i) => ({ id: steps()[i].id, status, reason_codes: [] })),
+            backfill: { id: 45, status: 'cancelled', mode: 'preview', cursor: 0, requested_dates: ['2026-09-01'], can_apply: false, can_retry_preview: true, resumable: false } });
+        render(<MlAcceptancePanel />);
+        expect(await screen.findByText((_, element) => element?.tagName === 'P' && element.textContent.includes('Backfill status: cancelled'))).toBeInTheDocument();
+        const preview = await screen.findByRole('button', { name: 'Run safe preview' });
+        expect(preview).toBeEnabled();
+        fireEvent.click(preview);
+        await waitFor(() => expect(api.post).toHaveBeenCalledWith('/v1/admin/ml/acceptance/backfills/preview', expect.objectContaining({
+            campaign_id: 'campaign-remediation', sources: ['sealed-retry'],
+        })));
+    });
+
+    it('shows how to recover a failed source validation with a new exact-date upload', async () => {
+        state = wizard({ current_step: 3, campaign: { id: 'campaign-sources', status: 'blocked' },
+            required_sources: [{ date: '2026-09-01', horizons: ['1m'], accepted_families: ['nse_cash_bhavcopy'], sources: [] }],
+            steps: ['complete', 'complete', 'action_required', 'blocked', 'blocked', 'blocked', 'action_required'].map((status, i) => ({ id: steps()[i].id, status, reason_codes: [] })) });
+        api.get.mockImplementation(async (url) => ({ data: { data: url.includes('/sources') ? { ...sourcePage, data: [{ id: 'bad-source', status: 'failed', received: 20, manifest: { filename: 'wrong.csv', date: '2026-09-01', source: 'nse_cash_bhavcopy' } }] } : state } }));
+        render(<MlAcceptancePanel />);
+        expect(await screen.findByText(/Validation failed\. Check the official filename and content date, then start a new upload\./)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Upload and queue validation' })).toBeDisabled();
+        fireEvent.change(screen.getByLabelText('Required date'), { target: { value: '2026-09-01' } });
+        fireEvent.change(screen.getByLabelText('Official CSV or ZIP'), { target: { files: [new File(['invalid fixture'], 'cm01SEP2026bhav.csv', { type: 'text/csv' })] } });
+        expect(screen.getByRole('button', { name: 'Upload and queue validation' })).toBeEnabled();
         expect(api.post).not.toHaveBeenCalled();
     });
 
@@ -132,11 +162,60 @@ describe('ML acceptance wizard', () => {
         state = wizard({ current_step: 6, campaign: { id: 'campaign-1', status: 'ready', cutoff_date: '2026-10-01', identity: { build_id: 'build-a', configuration_sha256: 'config-a' } },
             steps: ['complete', 'complete', 'not_required', 'not_required', 'complete', 'action_required', 'blocked'].map((status, i) => ({ id: steps()[i].id, status, reason_codes: [] })) });
         render(<MlAcceptancePanel />);
-        fireEvent.click(await screen.findByRole('button', { name: 'Start 1m/3m/6m candidate training' }));
-        expect(await screen.findByRole('alertdialog')).toHaveTextContent('active models, schedules and drift settings will not change');
+        const startTraining = await screen.findByRole('button', { name: 'Start 1m/3m/6m candidate training' });
+        startTraining.focus();
+        fireEvent.click(startTraining);
+        const dialog = await screen.findByRole('alertdialog');
+        expect(dialog).toHaveTextContent('active models, schedules and drift settings will not change');
+        expect(dialog).toHaveAttribute('aria-modal', 'false');
+        expect(dialog.querySelector('[data-confirmation-title]')).toHaveFocus();
+        fireEvent.keyDown(document, { key: 'Escape' });
+        await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+        expect(startTraining).toHaveFocus();
+        fireEvent.click(startTraining);
+        expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
         expect(api.post).not.toHaveBeenCalled();
         fireEvent.click(screen.getByRole('button', { name: 'Confirm and start' }));
         await waitFor(() => expect(api.post).toHaveBeenCalledWith('/v1/admin/ml/acceptance/campaigns/campaign-1/start'));
+    });
+
+    it.each(['failed', 'cancelled'])('offers a server-gated fresh campaign recovery after %s training', async (terminalStatus) => {
+        state = wizard({ current_step: 6, campaign: { id: `campaign-${terminalStatus}`, status: terminalStatus, cutoff_date: '2026-10-01' },
+            steps: ['complete', 'complete', 'not_required', 'not_required', 'complete', terminalStatus, 'action_required'].map((status, i) => ({ id: steps()[i].id, status, reason_codes: [] })) });
+        api.post.mockImplementation(async (url, payload) => {
+            if (url.endsWith('/campaigns')) {
+                expect(payload).toEqual({ cutoff_date: '2026-10-01' });
+                state = wizard({ current_step: 2, campaign: { id: 'campaign-fresh', status: 'preflight', cutoff_date: payload.cutoff_date }, steps: steps(2, 'in_progress') });
+            }
+            return { data: { data: { id: 'campaign-fresh' } } };
+        });
+        render(<MlAcceptancePanel />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Start a fresh acceptance campaign' }));
+        const dialog = await screen.findByRole('alertdialog');
+        expect(dialog).toHaveTextContent('prior campaign and run evidence remain saved');
+        expect(dialog).toHaveTextContent('No training starts');
+        fireEvent.click(screen.getByRole('button', { name: 'Start discovery preflight' }));
+        expect(await screen.findByText('campaign-fresh')).toBeInTheDocument();
+        expect(await screen.findByText('Preflight is running. Closing this page will not stop it.')).toBeInTheDocument();
+        expect(api.post).toHaveBeenCalledWith('/v1/admin/ml/acceptance/campaigns', { cutoff_date: '2026-10-01' });
+        expect(api.post).toHaveBeenCalledTimes(1);
+    });
+
+    it('opens information help on touch, closes it on outside touch and Escape', async () => {
+        render(<MlAcceptancePanel />);
+        const help = await screen.findByRole('button', { name: 'More information about training cutoff' });
+        expect(help).toHaveAttribute('aria-expanded', 'false');
+        expect(help).toHaveAttribute('aria-describedby');
+        expect(help).toHaveClass('acceptance-help');
+        fireEvent.click(help);
+        expect(help).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getByRole('tooltip')).toBeVisible();
+        fireEvent.pointerDown(document.body);
+        expect(help).toHaveAttribute('aria-expanded', 'false');
+        fireEvent.click(help);
+        expect(help).toHaveAttribute('aria-expanded', 'true');
+        fireEvent.keyDown(document, { key: 'Escape' });
+        expect(help).toHaveAttribute('aria-expanded', 'false');
     });
 
     it('distinguishes quality rejection from operational failure', async () => {

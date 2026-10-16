@@ -349,6 +349,42 @@ class MlProductionAcceptanceTest extends TestCase
             ->assertJsonPath('data.steps.6.status', 'action_required');
     }
 
+    public function test_failed_and_cancelled_campaigns_can_start_a_fresh_review_without_deleting_evidence(): void
+    {
+        $admin = $this->admin();
+        $previous = [];
+        foreach (['failed', 'cancelled'] as $index => $status) {
+            $previous[] = MlAcceptanceCampaign::query()->create([
+                'id' => (string) Str::uuid(), 'wizard_sequence' => $index + 1, 'actor_id' => $admin->id,
+                'cutoff_date' => '2026-09-30', 'status' => $status,
+                'identity' => ['build_id' => 'preserved-'.$status], 'active_models' => [],
+                'horizons' => ['1m' => ['run_id' => 100 + $index, 'status' => $status]],
+                'history' => [['action' => 'terminal_'.$status]],
+            ]);
+        }
+
+        $new = $this->actingAs($admin)->postJson('/api/v1/admin/ml/acceptance/campaigns', ['cutoff_date' => '2026-09-30'])
+            ->assertAccepted()
+            ->assertJsonPath('data.status', 'preflight')
+            ->json('data');
+
+        $this->assertNotSame($previous[1]->id, $new['id']);
+        $this->getJson('/api/v1/admin/ml/acceptance/wizard')->assertOk()
+            ->assertJsonPath('data.campaign.id', $new['id'])
+            ->assertJsonPath('data.campaign.status', 'preflight')
+            ->assertJsonPath('data.current_step', 2)
+            ->assertJsonPath('data.steps.1.status', 'in_progress');
+        foreach ($previous as $campaign) {
+            $this->assertDatabaseHas('stox_ml_acceptance_campaigns', [
+                'id' => $campaign->id,
+                'status' => $campaign->status,
+                'identity->build_id' => 'preserved-'.$campaign->status,
+            ]);
+        }
+        Bus::assertDispatched(\App\Jobs\MlAcceptanceJob::class);
+        Bus::assertNotDispatched(MlRetrainJob::class);
+    }
+
     public function test_source_create_response_starts_at_zero_and_api_upload_can_finalize(): void
     {
         $admin = $this->admin();

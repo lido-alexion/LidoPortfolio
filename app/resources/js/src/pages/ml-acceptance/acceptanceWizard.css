@@ -9,9 +9,10 @@
 .acceptance-step-wrapper[hidden] { display: none !important; }
 .acceptance-overview-list { columns: 2; }
 .acceptance-wizard pre { max-height: 28rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.acceptance-help-container { position: relative; }
 .acceptance-help { min-width: 44px; min-height: 44px; text-decoration: none; }
-.acceptance-help-text { position: absolute; z-index: 10; max-width: 20rem; padding: .5rem .75rem; border-radius: .25rem; background: var(--bs-dark); color: var(--bs-white); display: none; }
-.acceptance-help:hover + .acceptance-help-text, .acceptance-help:focus + .acceptance-help-text { display: block; }
+.acceptance-help-text { position: absolute; z-index: 10; top: 100%; left: 0; width: max-content; max-width: min(20rem, calc(100vw - 2rem)); padding: .5rem .75rem; border-radius: .25rem; background: var(--bs-dark); color: var(--bs-white); display: none; white-space: normal; box-shadow: 0 .25rem .75rem rgb(0 0 0 / 20%); }
+.acceptance-help:hover + .acceptance-help-text, .acceptance-help:focus + .acceptance-help-text, .acceptance-help[aria-expanded="true"] + .acceptance-help-text { display: block; }
 @media (max-width: 767.98px) {
     .acceptance-stepper ol { display: flex; flex-direction: column; }
     .acceptance-stepper li > button { min-height: 3.25rem; }

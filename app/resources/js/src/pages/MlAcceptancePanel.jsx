@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import useMlAcceptanceWizard from './ml-acceptance/useMlAcceptanceWizard';
 import AcceptanceStepper, { stepDefinitions } from './ml-acceptance/components/AcceptanceStepper';
 import ReadinessStep from './ml-acceptance/components/ReadinessStep';
@@ -34,7 +34,7 @@ export default function MlAcceptancePanel() {
         evidence_current: wizard.evidence_current === true,
     } : null;
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         if (!wizard) return;
         if (priorServerStep.current === null || priorServerStep.current !== wizard.current_step) {
             setActiveStep(wizard.current_step);
@@ -43,7 +43,7 @@ export default function MlAcceptancePanel() {
         if (wizard.campaign?.cutoff_date) setCutoff(wizard.campaign.cutoff_date);
     }, [wizard?.current_step, wizard?.campaign?.cutoff_date]);
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         if (activeStep !== null) heading.current?.focus();
     }, [activeStep]);
 
@@ -115,7 +115,7 @@ export default function MlAcceptancePanel() {
                             {number === 3 && <HistoricalSourcesStep wizard={wizard} sourcesPage={sourcesPage} page={page} setPage={setPage} base={base} run={run} busy={busyAction !== ''} canMutate={canMutate(3)} selected={selectedSources} setSelected={setSelectedSources} selectedDetails={selectedSourceDetails} onSourceToggle={(source, checked) => setSelectedSourceDetails((details) => { const nextDetails = { ...details }; if (checked) nextDetails[source.id] = { id: source.id, status: source.status, family: source.manifest.source, date: source.manifest.date }; else delete nextDetails[source.id]; return nextDetails; })} />}
                             {number === 4 && <BackfillStep wizard={wizard} selectedSources={selectedSources} base={base} api={api} run={run} busy={busyAction !== ''} canMutate={canMutate(4)} />}
                             {number === 5 && <FinalPreflightStep wizard={wizard} cutoff={cutoff} setCutoff={setCutoff} run={run} base={base} api={api} busy={busyAction !== ''} canMutate={canMutate(5)} />}
-                            {number === 6 && <CandidateTrainingStep wizard={wizard} base={base} api={api} run={run} busy={busyAction !== ''} canMutate={canMutate(6)} onCancel={cancelCampaign} />}
+                            {number === 6 && <CandidateTrainingStep wizard={wizard} base={base} api={api} run={run} busy={busyAction !== ''} canMutate={canMutate(6)} onCancel={cancelCampaign} onFreshCampaign={() => run('fresh-campaign', () => api.post(`${base}/campaigns`, { cutoff_date: cutoff }))} />}
                             {number === 7 && <AcceptanceReviewStep wizard={wizard} report={report} onFinish={() => setFinished(true)} finished={finished} />}
                             <div className="d-flex justify-content-between mt-3">
                                 <button type="button" className="btn btn-outline-secondary" onClick={previous} disabled={number <= 1}>Back</button>
