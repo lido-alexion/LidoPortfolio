@@ -706,15 +706,18 @@ test.describe('V9-UX-001 composite journey coverage', () => {
             await page.goto('/settings/ml-scoring');
 
             const acceptance = page.getByRole('heading', { name: 'Production ML acceptance' }).locator('..');
+            // Wizard panels and diagnostics stay mounted while hidden. Keep
+            // content assertions scoped to the currently visible step.
+            const activeStep = acceptance.locator('.acceptance-step-wrapper:not([hidden])');
             await expect(acceptance).toContainText('This wizard records production evidence. It will not activate a model or enable schedules.');
             await expect(acceptance.getByRole('navigation', { name: 'Production acceptance steps' })).toContainText('Discover required data');
             await expect(acceptance).toContainText('No production acceptance campaign');
             await expect(acceptance.getByRole('button', { name: 'Start 1m/3m/6m training' })).toHaveCount(0);
 
             await acceptance.getByRole('button', { name: 'Run discovery preflight' }).click();
-            await expect(acceptance.getByText('campaign-88')).toBeVisible();
-            await expect(acceptance).toContainText('preflight; cutoff');
-            await expect(acceptance).toContainText('Historical source evidence is missing or unproven');
+            await expect(activeStep.getByText('campaign-88', { exact: true })).toBeVisible();
+            await expect(activeStep).toContainText('preflight; cutoff');
+            await expect(activeStep).toContainText('Historical source evidence is missing or unproven');
             await expect(acceptance.getByRole('button', { name: 'Start 1m/3m/6m candidate training' })).toHaveCount(0);
             await expect(acceptance.getByRole('heading', { name: 'Add historical sources' })).toBeVisible();
             await expect(acceptance.getByRole('checkbox', { name: 'Select cm01SEP2026bhav.csv' })).toBeChecked();
@@ -763,14 +766,15 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                 await page.goto('/settings/ml-scoring');
 
                 const acceptance = page.getByRole('heading', { name: 'Production ML acceptance' }).locator('..');
+                const activeStep = acceptance.locator('.acceptance-step-wrapper:not([hidden])');
                 await expect(acceptance.getByRole('heading', { name: 'Train candidates' })).toBeVisible();
                 await expect(acceptance).toContainText(`The campaign ${terminalStatus}. Its run evidence is retained for review.`);
                 await acceptance.getByRole('button', { name: 'Start a fresh acceptance campaign' }).click();
                 const confirm = acceptance.getByRole('alertdialog');
                 await expect(confirm).toContainText('The prior campaign and run evidence remain saved. No training starts');
                 await confirm.getByRole('button', { name: 'Start discovery preflight' }).click();
-                await expect(acceptance.getByText('campaign-89')).toBeVisible();
-                await expect(acceptance.getByText('Preflight is running. Closing this page will not stop it.')).toBeVisible();
+                await expect(activeStep.getByText('campaign-89', { exact: true })).toBeVisible();
+                await expect(activeStep.getByText('Preflight is running. Closing this page will not stop it.', { exact: true })).toBeVisible();
                 expect(actions).toEqual(['create_campaign']);
                 expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
             });
