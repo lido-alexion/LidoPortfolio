@@ -243,6 +243,7 @@ class NotificationChannelSettingsService
         $config = $setting?->configuration ?? [];
         $data = [
             'channel' => $channel,
+            'configured' => (bool) $setting?->exists,
             'enabled' => (bool) $setting?->enabled,
             'health_status' => $setting?->health_status ?? 'unverified',
             'verified_at' => $setting?->verified_at?->toIso8601String(),

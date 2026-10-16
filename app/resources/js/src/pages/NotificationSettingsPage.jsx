@@ -14,6 +14,8 @@ export default function NotificationSettingsPage() {
     const [forms, setForms] = useState(defaults);
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(null);
+    const [saveErrors, setSaveErrors] = useState({});
+    const [testErrors, setTestErrors] = useState({});
     const busyRef = useRef(null);
     const beginOperation = key => { if (busyRef.current !== null) return false; busyRef.current = key; setBusy(key); return true; };
     const endOperation = () => { busyRef.current = null; setBusy(null); };
@@ -22,7 +24,19 @@ export default function NotificationSettingsPage() {
     const [loadError, setLoadError] = useState(null);
     const [optionalPrefs, setOptionalPrefs] = useState({ enabled: false, categories: {}, quiet_start: '', quiet_end: '', digest_time: '09:00', timezone: 'UTC', catalogue: {} });
 
-    const load = async () => {
+    const updateChannelForm = (channel, patch) => {
+        if (Object.keys(patch).some((key) => ['bot_token', 'chat_id', 'url'].includes(key))) {
+            setTestErrors((currentErrors) => ({ ...currentErrors, [channel]: null }));
+            setSaveErrors((currentErrors) => ({ ...currentErrors, [channel]: null }));
+        }
+        setForms((current) => {
+            const form = current[channel] || {};
+            const materialEdit = Object.keys(patch).some((key) => ['bot_token', 'chat_id', 'url'].includes(key) && patch[key] !== form[key]);
+            return { ...current, [channel]: { ...form, ...patch, ...(materialEdit ? { enabled: false } : {}) } };
+        });
+    };
+
+    const load = async (resetChannel = null) => {
         setLoading(true);
         setLoadError(null);
         try {
@@ -34,7 +48,9 @@ export default function NotificationSettingsPage() {
             setEmailDestinations(destinations.data?.data || []);
             setForms((current) => Object.fromEntries(next.filter((item) => item.channel !== 'in_app').map((item) => [
                 item.channel,
-                { ...current[item.channel], enabled: !!item.enabled, chat_id: item.chat_id || '', url: item.url || '' },
+                typeof resetChannel === 'string' && item.channel !== resetChannel
+                    ? current[item.channel]
+                    : { ...defaults[item.channel], enabled: !!item.enabled, chat_id: item.chat_id || '', url: item.url || '' },
             ])));
         } catch (error) {
             setLoadError(error);
@@ -89,6 +105,7 @@ export default function NotificationSettingsPage() {
 
     const save = async (channel) => {
         if (!beginOperation(channel)) return;
+        setSaveErrors((current) => ({ ...current, [channel]: null }));
         try {
             const payload = { ...forms[channel] };
             if (channel === 'telegram' && !payload.bot_token && channels.find((item) => item.channel === channel)?.bot_token_configured) {
@@ -100,9 +117,11 @@ export default function NotificationSettingsPage() {
             } else {
                 showToast(`${channel[0].toUpperCase() + channel.slice(1)} settings saved.`, 'success');
             }
-            await load();
+            await load(channel);
         } catch (error) {
-            showToast(error.response?.data?.message || `Could not save ${channel} settings.`, 'danger');
+            const message = error.response?.data?.message || `Could not save ${channel} settings. Check your settings and try again.`;
+            setSaveErrors((current) => ({ ...current, [channel]: message }));
+            showToast(message, 'danger');
         } finally {
             endOperation();
         }
@@ -110,12 +129,15 @@ export default function NotificationSettingsPage() {
 
     const test = async (channel) => {
         if (!beginOperation(`${channel}-test`)) return;
+        setTestErrors((current) => ({ ...current, [channel]: null }));
         try {
             const response = await api.post(`/notification-settings/${channel}/test`, null, { skipErrorToast: true });
             showToast(response.data?.data?.message || 'Channel verified.', 'success');
-            await load();
+            await load(channel);
         } catch (error) {
-            showToast(error.response?.data?.message || 'Channel test failed.', 'danger');
+            const message = error.response?.data?.message || 'Channel test failed. Check the saved settings and try again.';
+            setTestErrors((current) => ({ ...current, [channel]: message }));
+            showToast(message, 'danger');
         } finally {
             endOperation();
         }
@@ -169,11 +191,34 @@ export default function NotificationSettingsPage() {
             <div className="row g-3">
                 {channels.filter((item) => item.channel !== 'in_app').map((channel) => {
                     const form = forms[channel.channel] || {};
+                    const isDirty = channel.channel === 'telegram'
+                        ? Boolean(form.bot_token) || (form.chat_id || '') !== (channel.chat_id || '')
+                        : channel.channel === 'webhook'
+                            ? (form.url || '') !== (channel.url || '')
+                            : false;
+                    const isEnabledDirty = !!form.enabled !== !!channel.enabled;
                     const canTest = channel.channel === 'email'
                         ? !!channel.account_email
                         : channel.channel === 'telegram'
                             ? !!(form.bot_token || channel.bot_token_configured) && !!form.chat_id
                             : !!(form.url || channel.url);
+                    const canEnable = !isDirty && (!!channel.verified_at || (!!channel.enabled && !!form.enabled));
+                    const enableHelp = isDirty
+                        ? 'These edits are not tested yet. Save them, then test the saved settings before enabling delivery.'
+                        : channel.verified_at
+                            ? 'This channel has passed its latest test.'
+                            : 'Save these settings and test the channel before enabling delivery.';
+                    const statusText = isDirty
+                        ? 'Unsaved changes · save before testing'
+                        : !channel.configured
+                            ? 'Not saved · save settings before testing'
+                            : isEnabledDirty
+                                ? 'Enablement change · save to apply'
+                            : testErrors[channel.channel] || channel.last_test_status === 'failed'
+                                ? 'Test failed · check the saved settings and try again'
+                                : channel.verified_at
+                                    ? 'Test passed · ready to enable'
+                                    : 'Saved · test before enabling';
                     return (
                         <div className="col-12 col-xl-4" key={channel.channel}>
                             <section className="card h-100" aria-labelledby={`notification-channel-${channel.channel}`}>
@@ -184,20 +229,24 @@ export default function NotificationSettingsPage() {
                                     </div>
                                     {channel.channel === 'telegram' && <>
                                         <label className="form-label" htmlFor="notification-telegram-token">Bot token</label>
-                                        <input id="notification-telegram-token" type="password" className="form-control mb-2" value={form.bot_token || ''} onChange={(event) => setForms({ ...forms, telegram: { ...form, bot_token: event.target.value } })} placeholder={channel.bot_token_configured ? 'Configured — enter to replace' : ''} />
+                                        <input id="notification-telegram-token" type="password" className="form-control mb-2" value={form.bot_token || ''} onChange={(event) => updateChannelForm('telegram', { bot_token: event.target.value })} placeholder={channel.bot_token_configured ? 'Configured — enter to replace' : ''} autoComplete="new-password" />
                                         <label className="form-label" htmlFor="notification-telegram-chat">Chat ID</label>
-                                        <input id="notification-telegram-chat" className="form-control mb-2" value={form.chat_id || ''} onChange={(event) => setForms({ ...forms, telegram: { ...form, chat_id: event.target.value } })} />
+                                        <input id="notification-telegram-chat" className="form-control mb-2" value={form.chat_id || ''} onChange={(event) => updateChannelForm('telegram', { chat_id: event.target.value })} />
                                     </>}
                                     {channel.channel === 'email' && <p className="small">Account email: <strong>{channel.account_email}</strong><br />Verification: {channel.account_email_verified ? 'verified' : 'unverified'}</p>}
                                     {channel.channel === 'webhook' && <>
                                         <label className="form-label" htmlFor="notification-webhook-url">HTTPS endpoint</label>
-                                        <input id="notification-webhook-url" type="url" className="form-control mb-2" value={form.url || ''} onChange={(event) => setForms({ ...forms, webhook: { ...form, url: event.target.value } })} placeholder="https://example.com/stox" />
+                                        <input id="notification-webhook-url" type="url" className="form-control mb-2" value={form.url || ''} onChange={(event) => updateChannelForm('webhook', { url: event.target.value })} placeholder="https://example.com/stox" />
                                         {channel.signing_secret_configured && <p className="small text-muted">Signing secret configured and hidden.</p>}
                                     </>}
-                                    <label className="form-check mb-3"><input className="form-check-input" type="checkbox" checked={!!form.enabled} onChange={(event) => setForms({ ...forms, [channel.channel]: { ...form, enabled: event.target.checked } })} /> <span className="form-check-label">Enabled</span></label>
+                                    <p className="small text-muted mb-2" role="status">{statusText}</p>
+                                    {saveErrors[channel.channel] && <p className="small text-danger" role="alert">{saveErrors[channel.channel]}</p>}
+                                    {testErrors[channel.channel] && <p className="small text-danger" role="alert">{testErrors[channel.channel]}</p>}
+                                    <label className="form-check mb-1"><span className="d-inline-block" tabIndex={canEnable ? undefined : 0} title={canEnable ? undefined : enableHelp} aria-label={canEnable ? undefined : enableHelp}><input className="form-check-input" type="checkbox" checked={!!form.enabled} disabled={!canEnable} aria-describedby={`notification-${channel.channel}-enable-help`} onChange={(event) => updateChannelForm(channel.channel, { enabled: event.target.checked })} /></span> <span className="form-check-label">Enabled</span></label>
+                                    <p className="small text-muted mb-3" id={`notification-${channel.channel}-enable-help`}>{enableHelp}</p>
                                     <div className="d-flex gap-2">
                                         <button type="button" className="btn btn-primary btn-sm" disabled={busy === channel.channel} onClick={() => save(channel.channel)}>Save</button>
-                                        <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy === `${channel.channel}-test` || !canTest} onClick={() => test(channel.channel)}>Test channel</button>
+                                        {channel.configured && !isDirty && <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy === `${channel.channel}-test` || !canTest} onClick={() => test(channel.channel)}>Test channel</button>}
                                     </div>
                                 </div>
                             </section>
