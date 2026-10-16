@@ -37,7 +37,10 @@ service_state="$("$SYSTEMCTL_BIN" is-active "$SERVICE" || true)"
   || fail "worker must remain stopped during access preflight (state: $service_state)"
 
 as_worker() {
-  "$RUNUSER_BIN" -u "$WORKER_USER" -- "$@"
+  # The invoking admin may run this from a private home directory. GNU find
+  # (and other worker tools) cannot restore an inherited cwd that www-data
+  # cannot traverse, so establish a neutral cwd before executing any checks.
+  "$RUNUSER_BIN" -u "$WORKER_USER" -- /bin/sh -c 'cd / && exec "$@"' stoxla-ml-acceptance-worker "$@"
 }
 
 as_worker test -r "$APP_ROOT/current/artisan" && as_worker test -r "$ADAPTER" && as_worker test -x "$PYTHON" \
