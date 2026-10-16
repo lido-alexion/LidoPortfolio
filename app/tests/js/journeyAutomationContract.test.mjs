@@ -47,6 +47,22 @@ function declarationNames(statements) {
     return names;
 }
 
+function functionVarNames(node, names = new Set()) {
+    if (!node || typeof node !== 'object') return names;
+    if (Array.isArray(node)) {
+        node.forEach((child) => functionVarNames(child, names));
+        return names;
+    }
+    if (['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression', 'ClassDeclaration', 'ClassExpression'].includes(node.type)) return names;
+    if (node.type === 'VariableDeclaration' && node.kind === 'var') {
+        node.declarations.forEach(({ id }) => namesInPattern(id).forEach((name) => names.add(name)));
+    }
+    for (const [key, value] of Object.entries(node)) {
+        if (key !== 'type' && key !== 'start' && key !== 'end') functionVarNames(value, names);
+    }
+    return names;
+}
+
 function scopeWithBindings(parent, bindings = new Map()) {
     return { parent, bindings };
 }
@@ -71,7 +87,10 @@ function visitSource(node, scope, file, documented, automated) {
     if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression' || node.type === 'ArrowFunctionExpression') {
         const names = new Set(node.params.flatMap((param) => namesInPattern(param)));
         if (node.id) names.add(node.id.name);
-        if (node.body.type === 'BlockStatement') declarationNames(node.body.body).forEach((name) => names.add(name));
+        if (node.body.type === 'BlockStatement') {
+            declarationNames(node.body.body).forEach((name) => names.add(name));
+            functionVarNames(node.body).forEach((name) => names.add(name));
+        }
         const functionScope = scopeWithBindings(scope, new Map([...names].map((name) => [name, { kind: 'unsupported' }])));
         for (const [key, value] of Object.entries(node)) {
             if (key !== 'type' && key !== 'start' && key !== 'end') visitSource(value, functionScope, file, documented, automated);
@@ -203,6 +222,15 @@ test('annotation contract fixtures enforce literal and lexical loop coverage', (
     }, documented), /unsupported or shadowed journeyId binding/);
     assert.throws(() => collectAutomatedIds({
         'shadowed-destructuring.spec.js': "for (const journey of ['E2E-01']) { { const { journey } = source; journeyId(testInfo, journey); } }",
+    }, documented), /unsupported or shadowed journeyId binding/);
+    assert.throws(() => collectAutomatedIds({
+        'nested-var-before.spec.js': "for (const journey of ['E2E-01']) { function callback() { if (true) { var journey = 'E2E-02'; } journeyId(testInfo, journey); } }",
+    }, documented), /unsupported or shadowed journeyId binding/);
+    assert.throws(() => collectAutomatedIds({
+        'nested-var-after.spec.js': "for (const journey of ['E2E-01']) { function callback() { journeyId(testInfo, journey); if (true) { var journey = 'E2E-02'; } } }",
+    }, documented), /unsupported or shadowed journeyId binding/);
+    assert.throws(() => collectAutomatedIds({
+        'for-init-var.spec.js': "for (const journey of ['E2E-01']) { function callback() { for (var journey = 'E2E-02'; false;) {} journeyId(testInfo, journey); } }",
     }, documented), /unsupported or shadowed journeyId binding/);
     assert.throws(() => collectAutomatedIds({
         'mutable-array.spec.js': "const journeys = ['E2E-01']; journeys.push('E2E-02'); for (const journey of journeys) { journeyId(testInfo, journey); }",
