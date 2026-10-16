@@ -1235,22 +1235,22 @@ class MlTrainingDatasetBuilder
         $equityLatest = isset($byKey['equity'][0]) ? (float) ($byKey['equity'][0]['value'] ?? 0) : null;
 
         return [
-            'roe' => $netIncome !== null && $equity ? ($netIncome / $equity) * 100 : null,
-            'debt_equity' => $debt !== null && $equity ? $debt / $equity : null,
-            'net_debt_equity' => $netDebt !== null && $equity && $equity != 0.0 ? $netDebt / $equity : null,
+            'roe' => $netIncome !== null && $equity !== null && $equity > 0 ? ($netIncome / $equity) * 100 : null,
+            'debt_equity' => $debt !== null && $equity !== null && $equity > 0 ? $debt / $equity : null,
+            'net_debt_equity' => $netDebt !== null && $equity !== null && $equity > 0 ? $netDebt / $equity : null,
             'revenue_growth' => $growth,
             'eps_growth_yoy' => $this->yoyGrowthPercent($epsSeries),
             'net_income_growth_yoy' => $this->yoyGrowthPercent($netIncomeSeries),
-            'operating_margin' => $revenueTtm && $operatingProfitTtm !== null ? ($operatingProfitTtm / $revenueTtm) * 100 : null,
-            'net_margin' => $revenueTtm && $netIncome !== null ? ($netIncome / $revenueTtm) * 100 : null,
-            'fcf_margin' => $revenueTtm && $fcfTtm !== null ? ($fcfTtm / $revenueTtm) * 100 : null,
+            'operating_margin' => $revenueTtm !== null && $revenueTtm > 0 && $operatingProfitTtm !== null ? ($operatingProfitTtm / $revenueTtm) * 100 : null,
+            'net_margin' => $revenueTtm !== null && $revenueTtm > 0 && $netIncome !== null ? ($netIncome / $revenueTtm) * 100 : null,
+            'fcf_margin' => $revenueTtm !== null && $revenueTtm > 0 && $fcfTtm !== null ? ($fcfTtm / $revenueTtm) * 100 : null,
             'ocf_to_net_income_ratio' => $netIncome !== null && $ocfTtm !== null && $netIncome != 0.0 ? $ocfTtm / $netIncome : null,
             'pe_ratio' => $close !== null && $epsTtm !== null && $epsTtm > 0 ? $close / $epsTtm : null,
             'pb_ratio' => $close !== null && $equityLatest !== null && $equityLatest > 0 ? $close / $equityLatest : null,
             'current_ratio' => $currentAssets !== null && $currentLiabilities !== null && $currentLiabilities > 0
                 ? $currentAssets / $currentLiabilities
                 : null,
-            'gross_margin' => $revenueTtm && $grossProfitTtm !== null ? ($grossProfitTtm / $revenueTtm) * 100 : null,
+            'gross_margin' => $revenueTtm !== null && $revenueTtm > 0 && $grossProfitTtm !== null ? ($grossProfitTtm / $revenueTtm) * 100 : null,
             ...$this->bankMetrics->metricsFromFactRows($facts, $asOf),
         ];
     }
