@@ -715,7 +715,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
             await expect(acceptance.getByRole('button', { name: 'Start 1m/3m/6m training' })).toHaveCount(0);
 
             await acceptance.getByRole('button', { name: 'Run discovery preflight' }).click();
-            await expect(activeStep.getByText('campaign-88', { exact: true })).toBeVisible();
+            await expect(acceptance.getByRole('group', { name: 'Current acceptance campaign' }).getByText('campaign-88', { exact: true })).toBeVisible();
             await expect(activeStep).toContainText('preflight; cutoff');
             await expect(activeStep).toContainText('Historical source evidence is missing or unproven');
             await expect(acceptance.getByRole('button', { name: 'Start 1m/3m/6m candidate training' })).toHaveCount(0);

@@ -96,6 +96,9 @@ export default function MlAcceptancePanel() {
                     <p className={`mb-0 ${stale ? 'text-warning' : 'text-muted'}`}>{stale ? 'Showing last known state; it may be stale.' : 'Server state loaded.'} {lastChecked && <>Last checked <time dateTime={lastChecked.toISOString()}>{lastChecked.toLocaleTimeString()}</time>.</>}</p>
                     <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busyAction !== ''} onClick={refresh}>Refresh</button>
                 </div>
+                {wizard.campaign && expanded !== 2 && <div className="small text-muted acceptance-campaign-summary mb-3" role="group" aria-label="Current acceptance campaign">
+                    Current campaign <code>{wizard.campaign.id}</code> · {wizard.campaign.status} · cutoff {wizard.campaign.cutoff_date || 'unknown'}.
+                </div>}
                 {finished ? <div className="alert alert-success acceptance-completion-summary" role="status"><h3 className="h6">Production acceptance review finished</h3><p className="mb-2">{wizard.campaign?.status === 'qualified' && wizard.evidence_current === true ? 'Production acceptance is current for this build and configuration.' : 'The campaign review is saved. Check the status and evidence before taking any separate model or lifecycle action.'}</p><button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => { setFinished(false); setActiveStep(7); }}>Reopen completion review</button></div> : <>
                 <AcceptanceStepper steps={wizard.steps} currentStep={wizard.current_step} activeStep={expanded} onSelect={setActiveStep} />
                 <div className="acceptance-content" aria-live="off">

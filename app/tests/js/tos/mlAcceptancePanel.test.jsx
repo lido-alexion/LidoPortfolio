@@ -40,6 +40,15 @@ describe('ML acceptance wizard', () => {
         expect(api.put).not.toHaveBeenCalled();
     });
 
+    it('keeps the authoritative campaign identity visible after discovery advances to sources', async () => {
+        state = wizard({ current_step: 3, campaign: { id: 'campaign-88', status: 'preflight', cutoff_date: '2026-10-01' }, steps: steps(3, 'complete') });
+        render(<MlAcceptancePanel />);
+        const summary = await screen.findByRole('group', { name: 'Current acceptance campaign' });
+        expect(summary).toHaveTextContent('campaign-88');
+        expect(summary).toHaveTextContent('preflight');
+        expect(summary).toHaveTextContent('2026-10-01');
+    });
+
     it('allows discovery before source upload and clearly explains that it does not train', async () => {
         render(<MlAcceptancePanel />);
         await screen.findByRole('button', { name: 'Run discovery preflight' });
