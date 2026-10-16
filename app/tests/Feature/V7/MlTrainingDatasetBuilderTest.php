@@ -358,6 +358,9 @@ class MlTrainingDatasetBuilderTest extends TestCase
         $dataset = app(MlTrainingDatasetBuilder::class)->buildStreamed('3m', Carbon::parse('2026-09-30'), $directory);
         $repeat = app(MlTrainingDatasetBuilder::class)->buildStreamed('3m', Carbon::parse('2026-09-30'), $secondDirectory);
         $this->assertSame($dataset['partitions'], $repeat['partitions']);
+        foreach (['train', 'validation', 'test'] as $partition) {
+            $this->assertSame(hash_file('sha256', $dataset['paths'][$partition]), hash_file('sha256', $repeat['paths'][$partition]));
+        }
 
         foreach (['train', 'validation', 'test'] as $partition) {
             $this->assertGreaterThan(0, $dataset['partitions']['row_counts'][$partition]);
