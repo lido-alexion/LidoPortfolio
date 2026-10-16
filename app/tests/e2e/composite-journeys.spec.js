@@ -53,13 +53,25 @@ async function installAdminMlMocks(page) {
         if (pathname.endsWith('/api/guided-tour')) return json({ success: true, data: { eligible: false, show_welcome_prompt: false } });
         if (pathname.endsWith('/api/v1/admin/ml/acceptance/wizard') && method === 'GET') return json({ success: true, data: report });
         if (pathname.endsWith('/api/v1/admin/ml/acceptance/sources') && method === 'GET') {
-            return json({ success: true, data: { data: [], current_page: Number(searchParams.get('page') || 1), last_page: 1 } });
+            const rows = campaignStatus ? [{ id: 'sealed-1', status: 'sealed', received: 10, manifest: { filename: 'cm01SEP2026bhav.csv', date: '2026-09-01', source: 'nse_cash_bhavcopy' } }] : [];
+            return json({ success: true, data: { data: rows, current_page: Number(searchParams.get('page') || 1), last_page: 1 } });
         }
         if (pathname.endsWith('/api/v1/admin/ml/acceptance/campaigns') && method === 'POST') {
             actions.push('create_campaign');
             campaignStatus = 'preflight';
             report = acceptanceWizard(campaignStatus, ['snapshot_unproven:2026-09-01']);
+            report.current_step = 3;
+            report.steps[1] = { id: 'discovery', status: 'complete', reason_codes: [] };
+            report.steps[2] = { id: 'sources', status: 'action_required', reason_codes: ['missing_required_source_date'] };
+            report.steps[3] = { id: 'backfill', status: 'action_required', reason_codes: [] };
+            report.required_sources = [{ date: '2026-09-01', horizons: ['1m', '3m', '6m'], accepted_families: ['nse_cash_bhavcopy'], sources: [{ id: 'sealed-1', status: 'sealed', family: 'nse_cash_bhavcopy', date: '2026-09-01' }] }];
             return json({ success: true, data: { id: 88, status: campaignStatus } }, 201);
+        }
+        if (pathname.endsWith('/api/v1/admin/ml/acceptance/backfills/preview') && method === 'POST') {
+            actions.push('preview_backfill');
+            report.current_step = 4;
+            report.backfill = { id: 410, status: 'completed', mode: 'preview', cursor: 1, requested_dates: ['2026-09-01'], can_apply: true, can_retry_preview: false, resumable: false, results: { '2026-09-01': { snapshot_sha256: 'fixture-snapshot', diagnostics: { mapping_percentage: 100 } } } };
+            return json({ success: true, data: report.backfill }, 202);
         }
         const campaignAction = pathname.match(/\/api\/v1\/admin\/ml\/acceptance\/campaigns\/88\/(start|resume|cancel)$/);
         if (campaignAction && method === 'POST') {
@@ -685,7 +697,19 @@ test.describe('V9-UX-001 composite journey coverage', () => {
             await expect(acceptance).toContainText('preflight; cutoff');
             await expect(acceptance).toContainText('Historical source evidence is missing or unproven');
             await expect(acceptance.getByRole('button', { name: 'Start 1m/3m/6m candidate training' })).toHaveCount(0);
-            expect(actions).toEqual(['create_campaign']);
+            await expect(acceptance.getByRole('heading', { name: 'Add historical sources' })).toBeVisible();
+            await expect(acceptance.getByRole('checkbox', { name: 'Select cm01SEP2026bhav.csv' })).toBeChecked();
+            await acceptance.getByRole('button', { name: 'Continue' }).click();
+            await expect(acceptance.getByRole('heading', { name: 'Preview & apply backfill' })).toBeVisible();
+            await acceptance.getByRole('button', { name: 'Run safe preview' }).click();
+            await expect(acceptance).toContainText('Backfill status: completed');
+            await acceptance.getByRole('button', { name: 'Apply reviewed backfill' }).click();
+            const applyDialog = acceptance.getByRole('alertdialog');
+            await expect(applyDialog).toContainText('Conflicting or unproven existing history will be blocked');
+            await applyDialog.getByRole('button', { name: 'Go back' }).focus();
+            await page.keyboard.press('Enter');
+            await expect(applyDialog).toHaveCount(0);
+            expect(actions).toEqual(['create_campaign', 'preview_backfill']);
 
             await acceptance.getByRole('button', { name: /Understand & check readiness/ }).click();
             const workerHelp = acceptance.getByRole('button', { name: 'More information about worker' });

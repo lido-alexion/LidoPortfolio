@@ -80,7 +80,7 @@ export default function MlAcceptancePanel() {
     const canContinue = canAdvance(currentStatus) || (expanded === 3 && localBackfillReady);
     const previous = () => setActiveStep(Math.max(1, expanded - 1));
     const next = () => {
-        if (canAdvance(currentStatus)) setActiveStep(Math.min(7, expanded + 1));
+        if (canContinue) setActiveStep(Math.min(7, expanded + 1));
     };
     const cancelCampaign = () => run('campaign-cancel', () => api.post(`${base}/campaigns/${wizard.campaign.id}/cancel`));
 

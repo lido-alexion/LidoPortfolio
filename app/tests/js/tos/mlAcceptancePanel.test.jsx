@@ -92,6 +92,29 @@ describe('ML acceptance wizard', () => {
         expect(api.post).not.toHaveBeenCalled();
     });
 
+    it('continues from selected sealed sources into Backfill and runs an explicit safe preview', async () => {
+        state = wizard({ current_step: 3, campaign: { id: 'campaign-sources', status: 'blocked', cutoff_date: '2026-10-01' }, steps: [
+            { id: 'readiness', status: 'complete', reason_codes: [] }, { id: 'discovery', status: 'complete', reason_codes: [] },
+            { id: 'sources', status: 'action_required', reason_codes: ['missing_required_source_date'] }, { id: 'backfill', status: 'action_required', reason_codes: [] }, ...steps().slice(4),
+        ], required_sources: [{ date: '2026-09-01', horizons: ['1m'], accepted_families: ['nse_cash_bhavcopy'],
+            sources: [{ id: 'sealed-1', status: 'sealed', family: 'nse_cash_bhavcopy', date: '2026-09-01' }] }] });
+        api.get.mockImplementation(async (url) => ({ data: { data: url.includes('/sources')
+            ? { ...sourcePage, data: [{ id: 'sealed-1', status: 'sealed', received: 10, manifest: { filename: 'cm01SEP2026bhav.csv', date: '2026-09-01', source: 'nse_cash_bhavcopy' } }] }
+            : state } }));
+        render(<MlAcceptancePanel />);
+
+        await screen.findByText('2026-09-01 — 1m horizon(s)');
+        const source = await screen.findByRole('checkbox', { name: 'Select cm01SEP2026bhav.csv' });
+        await waitFor(() => expect(source).toBeChecked());
+        fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+        expect(await screen.findByRole('heading', { name: 'Preview & apply backfill' })).toBeInTheDocument();
+        const preview = await screen.findByRole('button', { name: 'Run safe preview' });
+        fireEvent.click(preview);
+        await waitFor(() => expect(api.post).toHaveBeenCalledWith('/v1/admin/ml/acceptance/backfills/preview', expect.objectContaining({
+            campaign_id: 'campaign-sources', sources: ['sealed-1'],
+        })));
+    });
+
     it('requires a successful preview and explicit confirmation before backfill apply', async () => {
         state = wizard({ current_step: 4, steps: [
             { id: 'readiness', status: 'complete', reason_codes: [] }, { id: 'discovery', status: 'complete', reason_codes: [] },
