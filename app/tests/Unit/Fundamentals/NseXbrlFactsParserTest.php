@@ -53,7 +53,11 @@ XML;
             $values,
         ));
 
-        return str_replace('</xbrli:xbrl>', $facts."\n</xbrli:xbrl>", $this->document());
+        return str_replace(
+            '<ind:RevenueFromOperations contextRef="quarter" unitRef="INR" decimals="-3">858634000</ind:RevenueFromOperations>',
+            $facts,
+            $this->document(),
+        );
     }
 
     public function test_parses_only_comparable_quarter_and_instant_facts_without_dimensions(): void
@@ -138,6 +142,7 @@ HTML;
 
             $this->assertArrayNotHasKey('revenue', $byKey->all(), 'Any conflicting values must quarantine the canonical fact, regardless of order.');
             $this->assertArrayHasKey('net_income', $byKey->all(), 'An independent valid fact must remain available.');
+            $this->assertArrayHasKey('equity', $byKey->all(), 'A separate instant fact must remain available.');
             $this->assertSame('non_pit', $byKey['net_income']['source_meta']['availability_quality']);
         }
     }
