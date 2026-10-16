@@ -9,30 +9,34 @@ const VIEWPORTS = [
     { name: 'desktop', width: 1440, height: 900 },
 ];
 
-function acceptanceReport(status, blockers) {
+function acceptanceWizard(status, blockers) {
+    const current = status === 'preflight' ? 2 : 2;
+    const blocked = blockers.length > 0;
     return {
-        campaign_id: 88,
-        campaign_status: status,
-        readiness: { ready: status === 'ready', reason: blockers.length ? 'Required production evidence is missing.' : 'All production gates passed.' },
+        current_step: current,
+        reported_at: new Date().toISOString(),
+        steps: [
+            { id: 'readiness', status: 'complete', reason_codes: [] },
+            { id: 'discovery', status: status === 'preflight' ? 'in_progress' : 'action_required', reason_codes: blocked ? ['preflight_blocked'] : [] },
+            { id: 'sources', status: 'blocked', reason_codes: [] }, { id: 'backfill', status: 'blocked', reason_codes: [] },
+            { id: 'final_preflight', status: 'blocked', reason_codes: [] }, { id: 'training', status: 'blocked', reason_codes: [] },
+            { id: 'review', status: 'action_required', reason_codes: [] },
+        ],
+        campaign: status ? { id: 'campaign-88', status, cutoff_date: '2026-10-15', identity: { build_id: 'fixture-build', registry: 'fixture-registry', configuration_sha256: 'fixture-config' } } : null,
+        backfill: null,
+        required_sources: [{ date: '2026-09-01', horizons: ['1m', '3m', '6m'], sources: [] }],
         runtime: { queue_configuration_ready: true },
-        horizons: ['1m', '3m', '6m'].map((horizon) => ({
-            horizon,
-            ready: blockers.length === 0,
-            blocking_reasons: blockers,
-            required_source_dates: ['2026-09-01', '2026-09-02'],
-        })),
-        linked_runs: [],
-        feature_coverage: { status: 'unknown' },
-        calibration: { status: 'unknown' },
-        folds: [],
-        baseline: { status: 'unknown' },
-        candidate: { status: 'unknown' },
+        readiness: { ready: false, reason: 'current_production_acceptance_required' },
+        identity: { build_id: 'fixture-build', environment: 'production', registry: 'fixture-registry', configuration_sha256: 'fixture-config', commit_sha: 'a'.repeat(40) },
+        migrations: {},
+        horizons: Object.fromEntries(['1m', '3m', '6m'].map((horizon) => [horizon, { reference_dates: ['2026-09-01'], blocking_reasons: blockers, coverage: null }])),
+        lifecycle: { enabled: false, drift_trigger_enabled: false, horizons: {} },
     };
 }
 
 async function installAdminMlMocks(page) {
     let campaignStatus = null;
-    let report = acceptanceReport('blocked', ['Production source-date evidence is unknown.']);
+    let report = acceptanceWizard(null, ['snapshot_unproven:2026-09-01']);
     const actions = [];
     await page.route(/\/(sanctum\/csrf-cookie|api\/)/, async (route) => {
         const { pathname, searchParams } = new URL(route.request().url());
@@ -47,13 +51,14 @@ async function installAdminMlMocks(page) {
         if (pathname.endsWith('/api/auth/me')) return json({ user: { ...TEST_USER, is_admin: true } });
         if (pathname.endsWith('/api/portfolios')) return json({ data: [] });
         if (pathname.endsWith('/api/guided-tour')) return json({ success: true, data: { eligible: false, show_welcome_prompt: false } });
-        if (pathname.endsWith('/api/v1/admin/ml/acceptance') && method === 'GET') return json({ success: true, data: report });
+        if (pathname.endsWith('/api/v1/admin/ml/acceptance/wizard') && method === 'GET') return json({ success: true, data: report });
         if (pathname.endsWith('/api/v1/admin/ml/acceptance/sources') && method === 'GET') {
             return json({ success: true, data: { data: [], current_page: Number(searchParams.get('page') || 1), last_page: 1 } });
         }
         if (pathname.endsWith('/api/v1/admin/ml/acceptance/campaigns') && method === 'POST') {
+            actions.push('create_campaign');
             campaignStatus = 'preflight';
-            report = acceptanceReport(campaignStatus, ['Required dated source mapping is unresolved.']);
+            report = acceptanceWizard(campaignStatus, ['snapshot_unproven:2026-09-01']);
             return json({ success: true, data: { id: 88, status: campaignStatus } }, 201);
         }
         const campaignAction = pathname.match(/\/api\/v1\/admin\/ml\/acceptance\/campaigns\/88\/(start|resume|cancel)$/);
@@ -61,7 +66,7 @@ async function installAdminMlMocks(page) {
             actions.push(campaignAction[1]);
             if (campaignAction[1] === 'start') {
                 campaignStatus = 'training';
-                report = acceptanceReport(campaignStatus, []);
+                report = acceptanceWizard(campaignStatus, []);
             }
             return json({ success: true, data: { id: 88, status: campaignStatus } });
         }
@@ -662,7 +667,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
     }
 
     for (const viewport of VIEWPORTS) {
-        test(`E2E-08 uses production ML acceptance preflight and explicit training controls (${viewport.name})`, async ({ page }, testInfo) => {
+        test(`E2E-08 uses the seven-step production acceptance wizard without starting unqualified training (${viewport.name})`, async ({ page }, testInfo) => {
             journeyId(testInfo, 'E2E-08');
             await seedDeterministicJourney(page, `e2e08-production-ml-${viewport.name}`);
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -670,19 +675,26 @@ test.describe('V9-UX-001 composite journey coverage', () => {
             await page.goto('/settings/ml-scoring');
 
             const acceptance = page.getByRole('heading', { name: 'Production ML acceptance' }).locator('..');
-            await expect(acceptance).toContainText('Campaign: blocked');
-            await expect(acceptance).toContainText('Production source-date evidence is unknown.');
+            await expect(acceptance).toContainText('This wizard records production evidence. It will not activate a model or enable schedules.');
+            await expect(acceptance.getByRole('navigation', { name: 'Production acceptance steps' })).toContainText('Discover required data');
+            await expect(acceptance).toContainText('No production acceptance campaign');
             await expect(acceptance.getByRole('button', { name: 'Start 1m/3m/6m training' })).toHaveCount(0);
 
-            await acceptance.getByRole('button', { name: 'Queue campaign preflight' }).click();
-            await expect(acceptance).toContainText('Campaign: preflight');
-            await expect(acceptance).toContainText('Required dated source mapping is unresolved.');
-            await expect(acceptance.getByRole('button', { name: 'Start 1m/3m/6m training' })).toHaveCount(0);
-            expect(actions).toEqual([]);
+            await acceptance.getByRole('button', { name: 'Run discovery preflight' }).click();
+            await expect(acceptance.getByText('campaign-88')).toBeVisible();
+            await expect(acceptance).toContainText('preflight; cutoff');
+            await expect(acceptance).toContainText('Historical source evidence is missing or unproven');
+            await expect(acceptance.getByRole('button', { name: 'Start 1m/3m/6m candidate training' })).toHaveCount(0);
+            expect(actions).toEqual(['create_campaign']);
 
-            // The guided panel exposes Start only after a fresh passing preflight.
-            // Keep the mocked campaign blocked here: actual source validation and
-            // production qualification require the protected admin acceptance service.
+            await acceptance.getByRole('button', { name: /Understand & check readiness/ }).click();
+            const workerHelp = acceptance.getByRole('button', { name: 'More information about worker' });
+            await workerHelp.focus();
+            await expect(acceptance.getByRole('tooltip')).toBeVisible();
+            expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+            // The fixture remains blocked; browser coverage never starts actual
+            // production training or changes model/lifecycle state.
         });
     }
 });

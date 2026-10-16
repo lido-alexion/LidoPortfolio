@@ -1,0 +1,22 @@
+import React, { useState } from 'react';
+import StepCard from './StepCard';
+import InfoHelp from './InfoHelp';
+
+export default function CandidateTrainingStep({ wizard, base, api, run, busy, canMutate, onCancel }) {
+    const [confirm, setConfirm] = useState(false);
+    const [confirmCancel, setConfirmCancel] = useState(false);
+    const campaign = wizard?.campaign;
+    const identity = campaign?.identity || wizard?.identity || {};
+    const ready = campaign?.status === 'ready' && (wizard?.steps?.[4]?.status === 'complete' || wizard?.steps?.[4]?.status === 'action_required');
+    return <StepCard number={6} title="Train candidates" what="After final preflight, this action queues a separate candidate run for 1m, 3m and 6m. Long-running work continues on the server if you close the browser." learn="Each horizon gets a separate candidate because useful signals and outcomes differ by time period. A candidate may pass or fail quality gates, and it never becomes active automatically.">
+        <p>Training creates candidate models for all three horizons. It does not promote candidates or change active models, schedules or drift settings. <InfoHelp label="candidate model">A newly trained model awaiting evidence review. It never becomes active automatically, even when training completes successfully.</InfoHelp></p>
+        <dl className="row"><dt className="col-sm-4">Cutoff</dt><dd className="col-sm-8">{campaign?.cutoff_date || 'Not set'}</dd><dt className="col-sm-4">Build</dt><dd className="col-sm-8">{identity.build_id || 'Unknown'}</dd><dt className="col-sm-4">Registry / profile</dt><dd className="col-sm-8">{identity.registry_version || identity.profile_sha256 || 'Unknown'}</dd><dt className="col-sm-4">Configuration</dt><dd className="col-sm-8">{identity.configuration_sha256 || 'Unknown'}</dd></dl>
+        {canMutate && ready && <button type="button" className="btn btn-warning" disabled={busy} onClick={() => setConfirm(true)}>Start 1m/3m/6m candidate training</button>}
+        {campaign?.status === 'training' && <p role="status" aria-live="polite">Training is running. Progress and run IDs are saved on the server; reconnecting reloads current status.</p>}
+        {campaign?.status === 'training' && canMutate && <button type="button" className="btn btn-outline-danger" disabled={busy} onClick={() => setConfirmCancel(true)}>Cancel candidate training</button>}
+        {campaign?.status === 'ready' && canMutate && <button type="button" className="btn btn-outline-danger ms-2" disabled={busy} onClick={() => setConfirmCancel(true)}>Cancel ready campaign</button>}
+        {['failed', 'cancelled'].includes(campaign?.status) && <p>The campaign {campaign.status}. Failed training requires a fresh reviewed campaign; existing run evidence remains available.</p>}
+        {confirm && <div className="alert alert-warning mt-3" role="alertdialog" aria-labelledby="train-confirm-title" aria-describedby="train-confirm-copy"><h4 className="h6" id="train-confirm-title">Confirm candidate training</h4><p id="train-confirm-copy">Three horizon runs (1m, 3m and 6m) will be queued. StoX will recheck the datasets and configuration. The resulting models remain candidates; active models, schedules and drift settings will not change.</p><p>Cutoff: {campaign?.cutoff_date || 'Unknown'} · Build: {identity.build_id || 'Unknown'} · Configuration: {identity.configuration_sha256 || 'Unknown'}</p><button type="button" className="btn btn-warning me-2" disabled={busy} onClick={async () => { setConfirm(false); await run('training-start', () => api.post(`${base}/campaigns/${campaign.id}/start`)); }}>Confirm and start</button><button type="button" className="btn btn-outline-secondary" onClick={() => setConfirm(false)}>Cancel</button></div>}
+        {confirmCancel && <div className="alert alert-warning mt-3" role="alertdialog" aria-labelledby="cancel-training-title"><h4 className="h6" id="cancel-training-title">Confirm campaign cancellation</h4><p>{campaign?.status === 'ready' ? 'The ready preflight evidence is retained. No training will start.' : 'This requests cancellation through the existing training controls. Completed run evidence is retained; no candidate is promoted.'}</p><button type="button" className="btn btn-outline-danger me-2" disabled={busy} onClick={async () => { setConfirmCancel(false); await onCancel(); }}>Confirm cancellation</button><button type="button" className="btn btn-outline-secondary" onClick={() => setConfirmCancel(false)}>Keep campaign running</button></div>}
+    </StepCard>;
+}

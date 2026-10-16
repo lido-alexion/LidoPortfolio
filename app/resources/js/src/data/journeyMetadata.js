@@ -856,12 +856,13 @@ export const JOURNEY_TOPICS = Object.freeze([
     "route": "/settings/ml-scoring",
     "guide": "/docs/journeys/05-end-to-end.html#e2e-08-admin-production-ml-acceptance",
     "steps": [
-      "As StoX Admin, open Settings → ML Scoring (`/settings/ml-scoring`) and refresh Production ML acceptance. Unknown evidence remains blocking.",
-      "Queue campaign preflight for the desired cutoff; inspect each horizon's exact required source dates and blocking reasons.",
-      "Upload official dated NSE CSV/ZIP sources in the private upload panel. Reselect the identical file to resume an incomplete upload. Refresh to see queued validation results; resume queued validation after interrupted dispatch if needed.",
-      "Select sealed sources, queue a backfill dry-run, and review each date's mapping and provenance. Apply only after preview succeeds. Save the backfill ID to reopen status, resume completed progress, or cancel between dates.",
-      "Create a fresh campaign preflight after resolving blockers. When all three horizons pass, explicitly choose Start 1m/3m/6m training.",
-      "Refresh progress and inspect linked run, feature coverage/exclusion, calibration, fold, baseline and candidate evidence. Cancel requests cancellation through the existing training controls."
+      "As StoX Admin, open Settings → ML Scoring (`/settings/ml-scoring`). The seven-step wizard reloads saved server state; refresh is read-only and unknown evidence stays blocking.",
+      "Check the build, registry, configuration, migrations and dedicated queue readiness. Run discovery preflight for the desired cutoff; inspect the three horizon cards and the exact missing dates. Preflight prepares/checks datasets but does not train.",
+      "For each required date, select the official NSE source family and local CSV or single-CSV ZIP. Upload and validation remain explicit; reselect the identical file to resume an incomplete upload. StoX does not fetch an archive URL.",
+      "Select one sealed, matching source for every required date and run the safe preview. Review per-date mapping and provenance evidence. Confirm Apply only after the preview completes successfully; conflicting or unproven history remains blocked and is not overwritten.",
+      "After an apply, run a fresh final preflight. Continue only when all 1m/3m/6m horizons are ready. Changed inputs require fresh server evidence.",
+      "Confirm the cutoff, build and configuration before explicitly starting the three candidate runs. Progress is durable; refresh or reopen the page to recover. Cancel uses the existing campaign/training cancellation controls and retains completed evidence.",
+      "Review production qualification separately from candidate quality. Promotion, active models, lifecycle, schedules and drift remain separate explicit decisions; finishing the wizard only collapses the review."
     ],
     "prerequisites": [],
     "warnings": []

@@ -1,0 +1,20 @@
+.acceptance-wizard .acceptance-stepper { margin: 1rem 0 1.5rem; }
+.acceptance-stepper ol { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .4rem; }
+.acceptance-stepper li { min-width: 0; }
+.acceptance-stepper li > button { color: inherit; min-height: 4.25rem; border: 1px solid var(--bs-border-color); border-radius: .5rem; text-decoration: none; padding: .5rem; display: flex; gap: .5rem; align-items: flex-start; }
+.acceptance-stepper li.is-open > button { border-color: var(--bs-primary); box-shadow: 0 0 0 .15rem color-mix(in srgb, var(--bs-primary) 25%, transparent); }
+.acceptance-stepper small { color: var(--bs-secondary-color); }
+.acceptance-step-number { border: 1px solid currentColor; border-radius: 50%; flex: 0 0 1.65rem; height: 1.65rem; display: inline-grid; place-items: center; font-weight: 700; }
+.acceptance-step-card { border-color: var(--bs-border-color); }
+.acceptance-step-wrapper[hidden] { display: none !important; }
+.acceptance-overview-list { columns: 2; }
+.acceptance-wizard pre { max-height: 28rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.acceptance-help { min-width: 44px; min-height: 44px; text-decoration: none; }
+.acceptance-help-text { position: absolute; z-index: 10; max-width: 20rem; padding: .5rem .75rem; border-radius: .25rem; background: var(--bs-dark); color: var(--bs-white); display: none; }
+.acceptance-help:hover + .acceptance-help-text, .acceptance-help:focus + .acceptance-help-text { display: block; }
+@media (max-width: 767.98px) {
+    .acceptance-stepper ol { display: flex; flex-direction: column; }
+    .acceptance-stepper li > button { min-height: 3.25rem; }
+    .acceptance-overview-list { columns: 1; }
+    .acceptance-wizard .table { min-width: 0; }
+}

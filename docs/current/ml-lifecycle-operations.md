@@ -152,3 +152,9 @@ the normal verified-SHA GitHub Actions process):
 No migration is required. The repair never changes status, evaluation evidence,
 artifact digests or promotion metadata. A digest mismatch cannot be repaired by
 path canonicalization alone.
+
+## Production acceptance in Settings → ML Scoring
+
+Use the seven-step acceptance wizard to inspect production readiness, run discovery preflight, resolve exact dated-source and historical-membership blockers, run a fresh final preflight, explicitly train the three candidate horizons, and review the persisted qualification evidence. Wizard state comes from the existing acceptance report and durable campaign/source/backfill records. Refreshing or reopening the page is read-only and does not start, resume, cancel, promote or schedule ML work.
+
+The wizard does not change lifecycle authority. Production acceptance does not promote a candidate or enable lifecycle, schedules or drift. Follow the existing explicit model-review and lifecycle procedures after reviewing current qualification evidence.
