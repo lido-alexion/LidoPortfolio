@@ -718,7 +718,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
 
             await acceptance.getByRole('button', { name: 'Run discovery preflight' }).click();
             await expect(acceptance.getByRole('group', { name: 'Current acceptance campaign' }).getByText('campaign-88', { exact: true })).toBeVisible();
-            await expect(acceptance.getByRole('group', { name: 'Current acceptance campaign' })).toContainText('preflight');
+            await expect(acceptance.getByRole('group', { name: 'Current acceptance campaign' })).toContainText('blocked');
             await expect(activeStep).toContainText('A dated source is required');
             await expect(acceptance.getByRole('button', { name: 'Start 1m/3m/6m candidate training' })).toHaveCount(0);
             await expect(activeStep.getByRole('heading', { name: 'Step 3: Add historical sources', exact: true, level: 3 })).toBeVisible();
