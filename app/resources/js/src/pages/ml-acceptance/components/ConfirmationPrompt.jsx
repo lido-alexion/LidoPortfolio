@@ -5,9 +5,12 @@ import React, { useEffect, useRef } from 'react';
 export default function ConfirmationPrompt({ titleId, descriptionId, onDismiss, children }) {
     const prompt = useRef(null);
     const dismiss = useRef(onDismiss);
+    const lifecycle = useRef(0);
+    const returnFocus = useRef(null);
     dismiss.current = onDismiss;
     useEffect(() => {
-        const returnFocus = document.activeElement;
+        const generation = ++lifecycle.current;
+        if (!returnFocus.current) returnFocus.current = document.activeElement;
         prompt.current?.querySelector('[data-confirmation-title]')?.focus();
         const onKeyDown = (event) => {
             if (event.key === 'Escape') {
@@ -19,9 +22,12 @@ export default function ConfirmationPrompt({ titleId, descriptionId, onDismiss, 
         document.addEventListener('keydown', onKeyDown);
         return () => {
             document.removeEventListener('keydown', onKeyDown);
-            window.setTimeout(() => {
-                if (returnFocus instanceof HTMLElement && returnFocus.isConnected) returnFocus.focus();
-            }, 0);
+            queueMicrotask(() => {
+                // StrictMode runs setup → cleanup → setup on mount. Ignore the
+                // simulated cleanup when a newer effect generation owns focus.
+                if (lifecycle.current !== generation) return;
+                if (returnFocus.current instanceof HTMLElement && returnFocus.current.isConnected) returnFocus.current.focus();
+            });
         };
     }, []);
 

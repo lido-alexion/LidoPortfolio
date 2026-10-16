@@ -159,9 +159,19 @@ describe('ML acceptance wizard', () => {
             { id: 'readiness', status: 'complete', reason_codes: [] }, { id: 'discovery', status: 'complete', reason_codes: [] },
             { id: 'sources', status: 'complete', reason_codes: [] }, { id: 'backfill', status: 'action_required', reason_codes: [] }, ...steps().slice(4),
         ], backfill: { id: 42, status: 'completed', mode: 'preview', can_apply: true, cursor: 1, requested_dates: ['2026-09-01'], results: { '2026-09-01': { snapshot_sha256: 'abc', diagnostics: { mapping_percentage: 95 } } } } });
-        render(<MlAcceptancePanel />);
-        fireEvent.click(await screen.findByRole('button', { name: 'Apply reviewed backfill' }));
-        expect(await screen.findByRole('alertdialog')).toHaveTextContent('Matching proven data is idempotent');
+        render(<React.StrictMode><MlAcceptancePanel /></React.StrictMode>);
+        const apply = await screen.findByRole('button', { name: 'Apply reviewed backfill' });
+        apply.focus();
+        fireEvent.click(apply);
+        let dialog = await screen.findByRole('alertdialog');
+        expect(dialog).toHaveTextContent('Matching proven data is idempotent');
+        expect(dialog.querySelector('[data-confirmation-title]')).toHaveFocus();
+        fireEvent.keyDown(document, { key: 'Escape' });
+        await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+        expect(apply).toHaveFocus();
+        fireEvent.click(apply);
+        dialog = await screen.findByRole('alertdialog');
+        expect(dialog.querySelector('[data-confirmation-title]')).toHaveFocus();
         expect(api.post).not.toHaveBeenCalled();
         fireEvent.click(screen.getByRole('button', { name: 'Confirm apply' }));
         await waitFor(() => expect(api.post).toHaveBeenCalledWith('/v1/admin/ml/acceptance/backfills/42/apply'));

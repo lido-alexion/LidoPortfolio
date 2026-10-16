@@ -70,7 +70,9 @@ async function installAdminMlMocks(page, initialReport = null) {
         if (pathname.endsWith('/api/v1/admin/ml/acceptance/campaigns') && method === 'POST') {
             actions.push('create_campaign');
             campaignId += 1;
-            campaignStatus = 'preflight';
+            // A fresh campaign that has finished discovery but still needs
+            // historical sources is blocked until that remediation completes.
+            campaignStatus = initialReport ? 'preflight' : 'blocked';
             report = acceptanceWizard(campaignStatus, ['snapshot_unproven:2026-09-01']);
             report.campaign.id = `campaign-${campaignId}`;
             if (initialReport) {
@@ -716,13 +718,13 @@ test.describe('V9-UX-001 composite journey coverage', () => {
 
             await acceptance.getByRole('button', { name: 'Run discovery preflight' }).click();
             await expect(acceptance.getByRole('group', { name: 'Current acceptance campaign' }).getByText('campaign-88', { exact: true })).toBeVisible();
-            await expect(activeStep).toContainText('preflight; cutoff');
-            await expect(activeStep).toContainText('Historical source evidence is missing or unproven');
+            await expect(acceptance.getByRole('group', { name: 'Current acceptance campaign' })).toContainText('preflight');
+            await expect(activeStep).toContainText('A dated source is required');
             await expect(acceptance.getByRole('button', { name: 'Start 1m/3m/6m candidate training' })).toHaveCount(0);
-            await expect(acceptance.getByRole('heading', { name: 'Add historical sources' })).toBeVisible();
+            await expect(activeStep.getByRole('heading', { name: 'Step 3: Add historical sources', exact: true, level: 3 })).toBeVisible();
             await expect(acceptance.getByRole('checkbox', { name: 'Select cm01SEP2026bhav.csv' })).toBeChecked();
             await acceptance.getByRole('button', { name: 'Continue' }).click();
-            await expect(acceptance.getByRole('heading', { name: 'Preview & apply backfill' })).toBeVisible();
+            await expect(activeStep.getByRole('heading', { name: 'Step 4: Preview & apply backfill', exact: true, level: 3 })).toBeVisible();
             await acceptance.getByRole('button', { name: 'Run safe preview' }).click();
             await expect(acceptance).toContainText('Backfill status: completed');
             await acceptance.getByRole('button', { name: 'Apply reviewed backfill' }).click();
