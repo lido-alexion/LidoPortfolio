@@ -91,11 +91,32 @@ it('ignores an obsolete detail rejection and keeps the current route loading sta
     await waitFor(() => expect(apiMock.get).toHaveBeenCalledWith(`/v1/artifact-library/${UUID_A}`));
     fireEvent.click(screen.getByRole('button', { name: 'Route B' }));
     await waitFor(() => expect(apiMock.get).toHaveBeenCalledWith(`/v1/artifact-library/${UUID_B}`));
+    await act(async () => oldA.reject(new Error('obsolete synthetic A failure')));
+    expect(screen.getByText('Loading artifact…')).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'A' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     await act(async () => currentB.resolve({ data: { data: detail('B current') } }));
     expect(await screen.findByRole('heading', { name: 'B current' })).toBeVisible();
-    await act(async () => oldA.reject(new Error('obsolete synthetic A failure')));
-    expect(screen.getByRole('heading', { name: 'B current' })).toBeVisible();
+    expect(screen.queryByText('Loading artifact…')).not.toBeInTheDocument();
+});
+
+it('keeps the new route loading while an obsolete detail success settles', async () => {
+    const oldA = deferred();
+    const currentB = deferred();
+    apiMock.get.mockImplementation((path) => String(path).endsWith(UUID_A) ? oldA.promise : currentB.promise);
+    render(<MemoryRouter initialEntries={[`/artifact-library/${UUID_A}`]}><RouteHarness /></MemoryRouter>);
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledWith(`/v1/artifact-library/${UUID_A}`));
+    fireEvent.click(screen.getByRole('button', { name: 'Route B' }));
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledWith(`/v1/artifact-library/${UUID_B}`));
+
+    await act(async () => oldA.resolve({ data: { data: detail('A obsolete') } }));
+    expect(screen.getByText('Loading artifact…')).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'A obsolete' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'B current' })).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    await act(async () => currentB.resolve({ data: { data: detail('B current') } }));
+    expect(await screen.findByRole('heading', { name: 'B current' })).toBeVisible();
     expect(screen.queryByText('Loading artifact…')).not.toBeInTheDocument();
 });
 
