@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import AlertPolicyForm from '../components/AlertPolicyForm';
+import { usePortfolio } from '../context/PortfolioContext';
 import usePortfolioChanged from '../hooks/usePortfolioChanged';
+import { getActivePortfolioId } from '../portfolio/activePortfolioStorage';
 import { showToast } from '../toast';
 
 function validationMessage(error) {
@@ -53,7 +55,23 @@ function formatEvalNum(value) {
     return num.toFixed(2);
 }
 
+function isValidPolicyMeta(meta) {
+    if (!meta || typeof meta !== 'object' || Array.isArray(meta)) {
+        return false;
+    }
+    const optionLists = ['stock_universes', 'condition_operators', 'compare_types', 'action_types'];
+    const isOptionalArray = (key, validItem) => meta[key] == null
+        || (Array.isArray(meta[key]) && meta[key].every(validItem));
+    return isOptionalArray('columns', (column) => column
+            && typeof column.key === 'string'
+            && typeof column.label === 'string')
+        && optionLists.every((key) => isOptionalArray(key, (option) => option
+            && typeof option.value === 'string'
+            && typeof option.label === 'string'));
+}
+
 export default function AlertPoliciesPage() {
+    const { activePortfolioId } = usePortfolio();
     const [meta, setMeta] = useState(null);
     const [policies, setPolicies] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -64,6 +82,28 @@ export default function AlertPoliciesPage() {
     const [deletingId, setDeletingId] = useState(null);
     const [evalReport, setEvalReport] = useState(null);
     const [fieldErrors, setFieldErrors] = useState({});
+    const [listConfirmed, setListConfirmed] = useState(false);
+    const [loadError, setLoadError] = useState(false);
+    const [waitingForPortfolio, setWaitingForPortfolio] = useState(
+        () => getActivePortfolioId() == null,
+    );
+    const loadGenerationRef = React.useRef(0);
+    const scopeRef = React.useRef({ id: getActivePortfolioId() });
+    const startupBridgePendingRef = React.useRef(getActivePortfolioId() == null);
+    const startupBridgeLoadedByEventRef = React.useRef(null);
+    const initialLoadDispatchedRef = React.useRef(false);
+    const hasConfirmedScopeRef = React.useRef(getActivePortfolioId() != null);
+
+    const resetScopePresentation = useCallback((scopeId) => {
+        scopeRef.current.id = scopeId;
+        setPolicies([]);
+        setListConfirmed(false);
+        setEditing(null);
+        setCreating(false);
+        setEvalReport(null);
+        setFieldErrors({});
+        setDeletingId(null);
+    }, []);
 
     const clearFieldError = (key) => {
         setFieldErrors((prev) => {
@@ -77,27 +117,141 @@ export default function AlertPoliciesPage() {
     };
 
     const load = useCallback(async () => {
+        const scopeId = getActivePortfolioId();
+        if (!scopeId) {
+            loadGenerationRef.current += 1;
+            if (scopeRef.current.id !== null) {
+                resetScopePresentation(null);
+            }
+            setWaitingForPortfolio(true);
+            setLoading(false);
+            setLoadError(false);
+            return;
+        }
+        const generation = ++loadGenerationRef.current;
+        setWaitingForPortfolio(false);
+        if (scopeRef.current.id !== scopeId) {
+            if (scopeRef.current.id === null && !hasConfirmedScopeRef.current) {
+                scopeRef.current.id = scopeId;
+                hasConfirmedScopeRef.current = true;
+            } else {
+                resetScopePresentation(scopeId);
+            }
+        }
         setLoading(true);
+        setLoadError(false);
         try {
             const [metaRes, listRes] = await Promise.all([
                 api.get('/alert-policies/meta', { skipErrorToast: true }),
                 api.get('/alert-policies', { skipErrorToast: true }),
             ]);
-            setMeta(metaRes.data?.data ?? null);
-            setPolicies(listRes.data?.data ?? []);
+            const nextMeta = metaRes.data?.data;
+            const nextPolicies = listRes.data?.data;
+            if (!isValidPolicyMeta(nextMeta) || !Array.isArray(nextPolicies)) {
+                throw new Error('Alert policy response was invalid.');
+            }
+            if (generation !== loadGenerationRef.current) {
+                return;
+            }
+            if (getActivePortfolioId() !== scopeId) {
+                resetScopePresentation(getActivePortfolioId());
+                setLoadError(true);
+                setLoading(false);
+                return;
+            }
+            setMeta(nextMeta);
+            setPolicies(nextPolicies);
+            setListConfirmed(true);
         } catch (error) {
+            if (generation !== loadGenerationRef.current) {
+                return;
+            }
+            if (getActivePortfolioId() !== scopeId) {
+                resetScopePresentation(getActivePortfolioId());
+                setLoadError(true);
+                setLoading(false);
+                return;
+            }
             showToast(validationMessage(error), 'danger');
-            setPolicies([]);
+            setLoadError(true);
         } finally {
-            setLoading(false);
+            if (generation === loadGenerationRef.current && getActivePortfolioId() === scopeId) {
+                setLoading(false);
+            }
         }
-    }, []);
+    }, [resetScopePresentation]);
 
     useEffect(() => {
+        const activeId = activePortfolioId == null ? null : String(activePortfolioId);
+        const canonicalId = getActivePortfolioId();
+
+        if (startupBridgePendingRef.current) {
+            if (!activeId || canonicalId !== activeId) {
+                setWaitingForPortfolio(true);
+                setLoading(false);
+                return;
+            }
+            startupBridgePendingRef.current = false;
+            setWaitingForPortfolio(false);
+        } else if (activeId && startupBridgeLoadedByEventRef.current === activeId) {
+            startupBridgeLoadedByEventRef.current = null;
+            setWaitingForPortfolio(false);
+            return;
+        }
+
+        if (!activeId) {
+            if (canonicalId) {
+                loadGenerationRef.current += 1;
+                resetScopePresentation(null);
+                setWaitingForPortfolio(true);
+                setLoading(false);
+                setLoadError(false);
+                return;
+            }
+            if (scopeRef.current.id !== null) {
+                load();
+            } else {
+                setWaitingForPortfolio(true);
+                setLoading(false);
+            }
+            return;
+        }
+
+        if (canonicalId !== activeId) {
+            loadGenerationRef.current += 1;
+            resetScopePresentation(null);
+            setWaitingForPortfolio(true);
+            setLoading(false);
+            setLoadError(false);
+            return;
+        }
+
+        if (initialLoadDispatchedRef.current) {
+            if (scopeRef.current.id !== activeId) {
+                loadGenerationRef.current += 1;
+                resetScopePresentation(null);
+                setLoadError(true);
+                setLoading(false);
+                setWaitingForPortfolio(false);
+            }
+            return;
+        }
+
+        initialLoadDispatchedRef.current = true;
+        load();
+    }, [activePortfolioId, load, resetScopePresentation]);
+
+    const handlePortfolioChanged = useCallback(() => {
+        const activeId = getActivePortfolioId();
+        if (startupBridgePendingRef.current && activeId) {
+            startupBridgePendingRef.current = false;
+            startupBridgeLoadedByEventRef.current = activeId;
+            initialLoadDispatchedRef.current = true;
+        }
         load();
     }, [load]);
 
-    usePortfolioChanged(load);
+    usePortfolioChanged(handlePortfolioChanged);
 
     const runPolicies = async () => {
         setEvaluating(true);
@@ -160,6 +314,9 @@ export default function AlertPoliciesPage() {
     };
 
     const showForm = creating || editing;
+    const loadErrorMessage = policies.length > 0
+        ? 'Could not refresh alert policies. Showing the last successfully loaded policies; they may be out of date.'
+        : 'Alert policies could not be loaded. Retry to check this portfolio’s policies.';
 
     return (
         <div className="container py-4">
@@ -260,7 +417,7 @@ export default function AlertPoliciesPage() {
                 </div>
             )}
 
-            {showForm && meta && (
+            {showForm && meta && !waitingForPortfolio && (
                 <div className="card mb-4">
                     <div className="card-header">
                         {editing ? `Edit: ${editing.name}` : 'New alert policy'}
@@ -283,9 +440,18 @@ export default function AlertPoliciesPage() {
                 </div>
             )}
 
+            {loadError && (
+                <div className="alert alert-warning d-flex flex-wrap align-items-center justify-content-between gap-2" role="alert">
+                    <span>{loadErrorMessage}</span>
+                    <button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={load}>Retry policies</button>
+                </div>
+            )}
+
             <div className="card">
                 <div className="card-body p-0">
-                    {loading ? (
+                    {waitingForPortfolio ? (
+                        <p className="text-muted p-3 mb-0">Waiting for a selected portfolio to load alert policies…</p>
+                    ) : loading ? (
                         <p className="text-muted p-3 mb-0">Loading policies…</p>
                     ) : (
                         <ul className="list-group list-group-flush">
@@ -332,7 +498,7 @@ export default function AlertPoliciesPage() {
                                     </div>
                                 </li>
                             ))}
-                            {!policies.length && (
+                            {!loading && !loadError && listConfirmed && !policies.length && (
                                 <li className="list-group-item text-muted">
                                     No alert policies yet. Create one to generate alerts from holdings.
                                 </li>
