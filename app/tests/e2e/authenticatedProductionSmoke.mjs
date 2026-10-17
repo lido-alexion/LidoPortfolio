@@ -1,6 +1,6 @@
 import { allowProductionSmokeRequest, createTransientWelcomeSkipGate, neutralizeProductionSmokeRequest, productionSmokeBlockReason, transientWelcomeSkipPayload } from './productionSmokePolicy.js';
 import { readOnlyReviewHeading } from './productionSmokeSelectors.js';
-import { readGuidedTourPayload, safeAuthenticatedSmokeStage, waitForPresetChartGeometry } from './productionSmokeDiagnostics.js';
+import { createGuidedTourResponseCapture, readGuidedTourPayload, safeAuthenticatedSmokeStage, waitForPresetChartGeometry } from './productionSmokeDiagnostics.js';
 
 let stage = 'configuration';
 let browser;
@@ -61,15 +61,16 @@ try {
     await page.getByRole('heading', { name: 'Login', exact: true }).waitFor({ state: 'hidden', timeout: 30_000 });
     login = false;
     stage = 'review';
-    const guidedTourResponsePromise = page.waitForResponse(response => {
-        const request = response.request();
-        const target = new URL(response.url());
-        return request.method() === 'GET' && target.origin === new URL(baseURL).origin && target.pathname === '/api/guided-tour';
-    });
-    await page.goto('/review');
-    await readOnlyReviewHeading(page).waitFor({ state: 'visible' });
-    stage = 'guided_tour_response_wait';
-    const guidedTourResponse = await guidedTourResponsePromise;
+    const guidedTourCapture = createGuidedTourResponseCapture(page, baseURL);
+    let guidedTourResponse;
+    try {
+        await page.goto('/review');
+        await readOnlyReviewHeading(page).waitFor({ state: 'visible' });
+        stage = 'guided_tour_response_wait';
+        guidedTourResponse = await guidedTourCapture.response;
+    } finally {
+        guidedTourCapture.dispose();
+    }
     stage = 'guided_tour_response_status';
     if (!guidedTourResponse.ok()) throw new Error();
     stage = 'guided_tour_payload_parse';

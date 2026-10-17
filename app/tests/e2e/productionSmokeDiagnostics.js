@@ -53,6 +53,75 @@ export async function readGuidedTourPayload(response) {
     }
 }
 
+/** Capture only a guided-tour request observed after the Review document commits. */
+export function createGuidedTourResponseCapture(page, baseURL, timeoutMs = 20_000) {
+    const baseOrigin = new URL(baseURL).origin;
+    let acceptedRequests = new WeakSet();
+    let reviewDocumentCommitted = false;
+    let settled = false;
+    let resolveResponse;
+    let rejectResponse;
+    let timeout;
+
+    const response = new Promise((resolve, reject) => {
+        resolveResponse = resolve;
+        rejectResponse = reject;
+    });
+    // A navigation failure may dispose the capture before the caller awaits it.
+    response.catch(() => {});
+
+    const finish = (callback, value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        page.off('framenavigated', onFrameNavigated);
+        page.off('request', onRequest);
+        page.off('response', onResponse);
+        callback(value);
+    };
+
+    const onFrameNavigated = frame => {
+        if (frame !== page.mainFrame()) return;
+        acceptedRequests = new WeakSet();
+        try {
+            const target = new URL(frame.url());
+            reviewDocumentCommitted = target.origin === baseOrigin && target.pathname === '/review';
+        } catch {
+            reviewDocumentCommitted = false;
+        }
+    };
+
+    const onRequest = request => {
+        if (!reviewDocumentCommitted) return;
+        try {
+            const target = new URL(request.url());
+            if (request.frame() !== page.mainFrame()
+                || request.method() !== 'GET'
+                || target.origin !== baseOrigin
+                || target.pathname !== '/api/guided-tour') return;
+            acceptedRequests.add(request);
+        } catch {
+            // Requests without a readable page frame or URL are not eligible.
+        }
+    };
+
+    const onResponse = received => {
+        if (acceptedRequests.has(received.request())) finish(resolveResponse, received);
+    };
+
+    page.on('framenavigated', onFrameNavigated);
+    page.on('request', onRequest);
+    page.on('response', onResponse);
+    timeout = setTimeout(() => finish(rejectResponse, new Error()), timeoutMs);
+
+    return {
+        response,
+        dispose() {
+            finish(rejectResponse, new Error());
+        },
+    };
+}
+
 // Keep the production acceptance rule shared with browser regression coverage.
 // The caller scopes these paths to the Playwright-located combo chart region.
 export function hasPresetChartGeometry({ linePathData = [], barPathData = [] }, presetId) {
