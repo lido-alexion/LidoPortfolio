@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { hasPresetChartGeometry, readGuidedTourPayload, safeAuthenticatedSmokeStage, waitForPresetChartGeometry } from '../e2e/productionSmokeDiagnostics.js';
+import { createGuidedTourResponseCapture, hasPresetChartGeometry, readGuidedTourPayload, safeAuthenticatedSmokeStage, waitForPresetChartGeometry } from '../e2e/productionSmokeDiagnostics.js';
 import { allowProductionSmokeRequest, allowTransientWelcomeSkipRequest } from '../e2e/productionSmokePolicy.js';
+import { EventEmitter } from 'node:events';
 
 test('authenticated smoke reports only fixed, stage-level diagnostics', () => {
     for (const stage of [
@@ -34,6 +35,118 @@ test('guided-tour JSON diagnostics separate syntax from other read failures with
     assert.equal(safeAuthenticatedSmokeStage(invalidJson.failureStage), invalidJson.failureStage);
     assert.equal(safeAuthenticatedSmokeStage(unavailableBody.failureStage), unavailableBody.failureStage);
     assert.equal(JSON.stringify([invalidJson, unavailableBody]).includes('private'), false);
+});
+
+test('guided-tour capture ignores pre-navigation responses and accepts a post-commit request across child-frame navigation', async () => {
+    const origin = 'https://stox.example.test';
+    const frame = { currentURL: `${origin}/login`, url() { return this.currentURL; } };
+    const childFrame = { url: () => `${origin}/review` };
+    const page = new EventEmitter();
+    page.mainFrame = () => frame;
+    const capture = createGuidedTourResponseCapture(page, origin, 20);
+    const staleRequest = { method: () => 'GET', url: () => `${origin}/api/guided-tour`, frame: () => frame };
+    let staleBodyRead = false;
+    const staleResponse = {
+        request: () => staleRequest,
+        json: async () => { staleBodyRead = true; throw new Error('stale document body'); },
+    };
+    let selected = false;
+    const result = capture.response.then(value => { selected = true; return value; });
+
+    page.emit('request', staleRequest);
+    frame.currentURL = `${origin}/review`;
+    page.emit('framenavigated', childFrame);
+    page.emit('framenavigated', frame);
+    page.emit('response', staleResponse);
+    await Promise.resolve();
+    assert.equal(selected, false);
+    assert.equal(staleBodyRead, false);
+
+    const currentRequest = { method: () => 'GET', url: () => `${origin}/api/guided-tour`, frame: () => frame };
+    const currentResponse = { request: () => currentRequest, json: async () => ({ data: { show_welcome_prompt: false } }) };
+    page.emit('request', currentRequest);
+    page.emit('framenavigated', childFrame);
+    page.emit('response', currentResponse);
+    assert.strictEqual(await result, currentResponse);
+    assert.equal(page.listenerCount('request'), 0);
+    assert.equal(page.listenerCount('response'), 0);
+    assert.equal(page.listenerCount('framenavigated'), 0);
+    capture.dispose();
+});
+
+test('guided-tour capture resets request identity across main-frame documents and fails closed on body-read errors', async () => {
+    const origin = 'https://stox.example.test';
+    const frame = { currentURL: `${origin}/login`, url() { return this.currentURL; } };
+    const page = new EventEmitter();
+    page.mainFrame = () => frame;
+    frame.currentURL = `${origin}/review`;
+    const capture = createGuidedTourResponseCapture(page, origin, 20);
+    page.emit('framenavigated', frame);
+    const oldDocumentRequest = { method: () => 'GET', url: () => `${origin}/api/guided-tour`, frame: () => frame };
+    page.emit('request', oldDocumentRequest);
+    frame.currentURL = `${origin}/login`;
+    page.emit('framenavigated', frame);
+    page.emit('response', { request: () => oldDocumentRequest });
+    frame.currentURL = `${origin}/review`;
+    page.emit('framenavigated', frame);
+
+    const wrongFrameRequest = { method: () => 'GET', url: () => `${origin}/api/guided-tour`, frame: () => ({}) };
+    const wrongOriginRequest = { method: () => 'GET', url: () => 'https://other.test/api/guided-tour', frame: () => frame };
+    const wrongMethodRequest = { method: () => 'POST', url: () => `${origin}/api/guided-tour`, frame: () => frame };
+    page.emit('request', wrongFrameRequest);
+    page.emit('request', wrongOriginRequest);
+    page.emit('request', wrongMethodRequest);
+    page.emit('response', { request: () => wrongFrameRequest });
+    page.emit('response', { request: () => wrongOriginRequest });
+    page.emit('response', { request: () => wrongMethodRequest });
+    const oldDocumentOutcome = capture.response.then(() => 'resolved', () => 'rejected');
+    const timedOut = await oldDocumentOutcome;
+    assert.equal(timedOut, 'rejected');
+    assert.equal(page.listenerCount('request'), 0);
+    assert.equal(page.listenerCount('response'), 0);
+    assert.equal(page.listenerCount('framenavigated'), 0);
+
+    const currentCapture = createGuidedTourResponseCapture(page, origin, 1000);
+    page.emit('framenavigated', frame);
+    const currentRequest = { method: () => 'GET', url: () => `${origin}/api/guided-tour`, frame: () => frame };
+    const currentResponse = { request: () => currentRequest, json: async () => { throw new Error('private body detail'); } };
+    page.emit('request', currentRequest);
+    page.emit('response', currentResponse);
+    const failedRead = await readGuidedTourPayload(await currentCapture.response);
+    currentCapture.dispose();
+    assert.deepEqual(failedRead, { payload: null, failureStage: 'guided_tour_payload_read_failed' });
+    assert.equal(JSON.stringify(failedRead).includes('private'), false);
+});
+
+test('a response from a previous committed Review document cannot satisfy a later Review capture', async () => {
+    const origin = 'https://stox.example.test';
+    const frame = { currentURL: `${origin}/login`, url() { return this.currentURL; } };
+    const page = new EventEmitter();
+    page.mainFrame = () => frame;
+    const capture = createGuidedTourResponseCapture(page, origin, 1000);
+    frame.currentURL = `${origin}/review`;
+    page.emit('framenavigated', frame);
+    const firstDocumentRequest = { method: () => 'GET', url: () => `${origin}/api/guided-tour`, frame: () => frame };
+    page.emit('request', firstDocumentRequest);
+
+    frame.currentURL = `${origin}/account`;
+    page.emit('framenavigated', frame);
+    const staleResponse = { request: () => firstDocumentRequest };
+    frame.currentURL = `${origin}/review`;
+    page.emit('framenavigated', frame);
+    page.emit('response', staleResponse);
+
+    let selected = false;
+    const result = capture.response.then(value => { selected = true; return value; });
+    await Promise.resolve();
+    assert.equal(selected, false);
+
+    const secondDocumentRequest = { method: () => 'GET', url: () => `${origin}/api/guided-tour`, frame: () => frame };
+    const secondDocumentResponse = { request: () => secondDocumentRequest };
+    page.emit('request', secondDocumentRequest);
+    page.emit('response', secondDocumentResponse);
+    assert.strictEqual(await result, secondDocumentResponse);
+    capture.dispose();
 });
 
 test('readiness diagnostics preserve the existing read-only and one-use welcome policy', () => {
