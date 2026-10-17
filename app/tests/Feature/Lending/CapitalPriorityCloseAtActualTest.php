@@ -210,7 +210,7 @@ class CapitalPriorityCloseAtActualTest extends TestCase
         $invalidAmounts = [
             'zero' => [0, 0],
             'negative' => [-1, -1],
-            'non_finite' => [NAN, INF],
+            'non_finite' => ['NaN', '1e999'],
             'above_target' => [20_001, 20_001],
             'missing' => [null, null],
         ];
