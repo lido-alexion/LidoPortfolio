@@ -10,6 +10,95 @@ const VIEWPORTS = [
 
 test.describe('V9-UX-001 execution journeys', () => {
     for (const viewport of VIEWPORTS) {
+        test(`EXE-05 recovers pending execution reads without treating an unavailable queue as empty (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'EXE-05');
+            await seedDeterministicJourney(page, `execution-exe05-read-recovery-${viewport.name}`);
+            await page.setViewportSize({ width: viewport.width, height: viewport.height });
+            const recommendation = {
+                ...OPEN_BUY_RECOMMENDATION,
+                id: 805,
+                status: 'pending_execution',
+                lifecycle_status: 'pending_execution',
+                execution_status: 'pending',
+                order_side: 'buy',
+                suggested_quantity: 5,
+                suggested_investment_amount: 17500,
+                reserved_amount: 17500,
+                strategy_name: 'Momentum Core',
+            };
+            await installTosApiMocks(page, { recommendations: [recommendation] });
+
+            let pendingAttempts = 0;
+            const reads = [];
+            const writes = [];
+            const blockedOrigins = [];
+            const appOrigin = 'http://127.0.0.1:4177';
+            await page.route('**/api/v1/recommendations/pending-execution', async route => {
+                pendingAttempts++;
+                if (pendingAttempts === 1 || pendingAttempts === 3) {
+                    return route.fulfill({ status: 503, json: { message: 'Synthetic pending queue read failure.' } });
+                }
+                return route.fulfill({
+                    json: {
+                        success: true,
+                        data: pendingAttempts === 2 ? [recommendation] : [],
+                        meta: { cash: { cash_balance: 17500, reserved_cash: pendingAttempts === 2 ? 17500 : 0, available_investable_cash: pendingAttempts === 2 ? 0 : 17500 } },
+                    },
+                });
+            });
+            page.on('request', request => {
+                const url = new URL(request.url());
+                if (['/api/v1/recommendations/pending-execution', '/api/v1/execution/mode', '/api/v1/orders'].includes(url.pathname)) reads.push(url.pathname);
+                if (/^(POST|PUT|PATCH|DELETE)$/.test(request.method()) && url.pathname !== '/api/logs/frontend') {
+                    writes.push({ method: request.method(), path: url.pathname });
+                }
+            });
+            await page.route('**/*', async route => {
+                const request = route.request();
+                const url = new URL(request.url());
+                if (url.origin !== appOrigin) {
+                    blockedOrigins.push(url.origin);
+                    return route.abort();
+                }
+                if (/^(POST|PUT|PATCH|DELETE)$/.test(request.method()) && url.pathname !== '/api/logs/frontend') {
+                    return route.abort();
+                }
+                return route.fallback();
+            });
+
+            const pendingPanel = page.locator('.card').filter({ has: page.getByText('Pending Execution', { exact: true }) });
+            await page.goto('/transactions/pending');
+            await expect(pendingPanel.getByRole('alert')).toContainText('Pending executions could not be loaded. Retry to check the current list.');
+            await expect(page.getByText('No recommendations awaiting execution.')).toHaveCount(0);
+            expect(pendingAttempts).toBe(1);
+
+            await page.getByRole('button', { name: 'Retry', exact: true }).click();
+            const row = page.getByRole('row').filter({ hasText: 'INFY' });
+            await expect(row).toBeVisible();
+            await expect(row.getByRole('button', { name: 'Execute manually' })).toBeVisible();
+            await expect(pendingPanel.getByRole('alert')).toHaveCount(0);
+            expect(pendingAttempts).toBe(2);
+
+            await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+            await expect(pendingPanel.getByRole('alert')).toContainText('Could not refresh pending executions. Showing the last successfully loaded list; it may be out of date.');
+            await expect(row).toBeVisible();
+            expect(pendingAttempts).toBe(3);
+
+            await page.getByRole('button', { name: 'Retry', exact: true }).click();
+            await expect(page.getByText('No recommendations awaiting execution.')).toBeVisible();
+            await expect(pendingPanel.getByRole('alert')).toHaveCount(0);
+            expect(pendingAttempts).toBe(4);
+
+            expect(reads).toHaveLength(12);
+            expect(reads.slice().sort()).toEqual([
+                ...Array(4).fill('/api/v1/recommendations/pending-execution'),
+                ...Array(4).fill('/api/v1/execution/mode'),
+                ...Array(4).fill('/api/v1/orders'),
+            ].sort());
+            expect(writes).toEqual([]);
+            expect(blockedOrigins).toEqual([]);
+        });
+
         test(`EXE-05 reviews the approved pending execution before action (${viewport.name})`, async ({ page }, testInfo) => {
             journeyId(testInfo, 'EXE-05');
             await seedDeterministicJourney(page, `execution-exe05-${viewport.name}`);
