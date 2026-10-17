@@ -60,7 +60,7 @@ const renderPage = ({ portfoliosPromise, portfolioList, strictMode = false } = {
                     </>
                 </PortfolioProvider>
             </AuthContext.Provider>
-        </MemoryRouter>,
+        </MemoryRouter>
     );
     return render(strictMode ? <React.StrictMode>{content}</React.StrictMode> : content);
 };
