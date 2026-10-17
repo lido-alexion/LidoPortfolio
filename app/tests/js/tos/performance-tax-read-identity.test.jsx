@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import AuthContext from '../../../resources/js/src/context/AuthContext.jsx';
@@ -212,7 +212,9 @@ describe('PerformanceTaxPage read identity', () => {
         finalBatch.forEach(expectedOptions);
         expect(screen.getByLabelText('Account risk-free rate')).toHaveValue(0.05);
         expect(screen.getByLabelText('Annual risk-free rate')).toHaveValue(0.05);
-        expect(screen.getByText(/Incomplete/).first()).toBeVisible();
+        const xirrCard = screen.getByText('XIRR', { exact: true }).closest('.card');
+        expect(xirrCard).not.toBeNull();
+        expect(within(xirrCard).getByText('Incomplete', { exact: true })).toBeVisible();
 
         const settledCount = reads.length;
         const fromInput = screen.getByLabelText('Performance from');
