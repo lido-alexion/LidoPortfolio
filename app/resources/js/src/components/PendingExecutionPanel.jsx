@@ -71,7 +71,7 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
     const [totp, setTotp] = useState('');
     const [executingSelected, setExecutingSelected] = useState(false);
 
-    const { data, loading, reload: load } = useApiGet({
+    const { data, loading, error, reload: load } = useApiGet({
         errorFallback: 'Failed to load pending execution',
         request: async () => {
             const [response, modeRes, ordersRes] = await Promise.all([
@@ -202,10 +202,17 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
                         onChange={(e) => setSearch(e.target.value)}
                     />
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load} disabled={loading}>
-                        Refresh
+                        {error ? 'Retry' : 'Refresh'}
                     </button>
                 </div>
             </div>
+            {error && (
+                <p className="px-3 pt-3 mb-0 text-danger" role="alert">
+                    {data
+                        ? 'Could not refresh pending executions. Showing the last successfully loaded list; it may be out of date.'
+                        : 'Pending executions could not be loaded. Retry to check the current list.'}
+                </p>
+            )}
             {cash && (
                 <div className="px-3 pt-3 small text-muted d-flex flex-wrap gap-3">
                     <span>Cash balance: <strong className="text-body">{money(cash.cash_balance)}</strong></span>
@@ -254,7 +261,7 @@ export default function PendingExecutionPanel({ onExecuteStarted }) {
             <div className="card-body p-0">
                 {loading ? (
                     <p className="p-3 text-muted mb-0">Loading…</p>
-                ) : filtered.length === 0 ? (
+                ) : error && filtered.length === 0 ? null : filtered.length === 0 ? (
                     <p className="p-3 text-muted mb-0">
                         No recommendations awaiting execution.
                         {' '}

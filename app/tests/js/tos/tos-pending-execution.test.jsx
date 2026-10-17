@@ -4,8 +4,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import PendingExecutionPanel from '../../../resources/js/src/components/PendingExecutionPanel.jsx';
-import { PENDING_BUY_RECOMMENDATION } from './fixtures/tosApi.js';
-import { apiMock, installDefaultTosHandlers } from './helpers/mockApi.js';
+import { apiEnvelope, axiosOk, PENDING_BUY_RECOMMENDATION } from './fixtures/tosApi.js';
+import { apiMock, axiosError, installDefaultTosHandlers } from './helpers/mockApi.js';
 
 vi.mock('../../../resources/js/src/toast.js', () => ({ showToast: vi.fn() }));
 import { showToast } from '../../../resources/js/src/toast.js';
@@ -20,7 +20,116 @@ function renderPanel() {
     );
 }
 
+const pendingPath = '/v1/recommendations/pending-execution';
+const pendingReads = () => apiMock.get.mock.calls.filter(([url]) => url === pendingPath);
+const expectReadAttempts = count => {
+    const oneAttempt = [pendingPath, '/v1/execution/mode', '/v1/orders'];
+    expect(apiMock.get.mock.calls.map(([url]) => url)).toEqual(Array.from({ length: count }, () => oneAttempt).flat());
+};
+const expectReadOnly = () => {
+    expect(apiMock.post).not.toHaveBeenCalled();
+    expect(apiMock.put).not.toHaveBeenCalled();
+    expect(apiMock.patch).not.toHaveBeenCalled();
+    expect(apiMock.delete).not.toHaveBeenCalled();
+};
+const expectCash = ({ balance, reserved, available }) => {
+    const displayedAmount = label => screen.getByText(new RegExp(`^${label}:`)).textContent.replace(/\D/g, '');
+    expect(displayedAmount('Cash balance')).toBe(String(balance));
+    expect(displayedAmount('Reserved')).toBe(String(reserved));
+    expect(displayedAmount('Available')).toBe(String(available));
+};
+function servePendingResponses(responses) {
+    const defaultGet = apiMock.get.getMockImplementation();
+    apiMock.get.mockImplementation(async (url, config) => {
+        if (url === pendingPath) {
+            const next = responses.shift();
+            if (!next) throw new Error('Unexpected pending execution read.');
+            return next();
+        }
+        return defaultGet(url, config);
+    });
+}
+
 describe('Pending Execution TOS smoke', () => {
+    it('distinguishes an unavailable initial read from a confirmed empty queue and retries only on request', async () => {
+        const user = userEvent.setup();
+        installDefaultTosHandlers({ recommendations: [] });
+        servePendingResponses([
+            () => { throw axiosError('Private server detail', { status: 503 }); },
+            () => axiosOk(apiEnvelope([], { cash: { cash_balance: 0, reserved_cash: 0, available_investable_cash: 0 } })),
+        ]);
+        renderPanel();
+
+        const alert = await screen.findByRole('alert');
+        expect(alert).toHaveTextContent('Pending executions could not be loaded. Retry to check the current list.');
+        expect(alert).not.toHaveTextContent('Private server detail');
+        expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+        expect(screen.queryByText(/^No recommendations awaiting execution\./)).not.toBeInTheDocument();
+        expect(pendingReads()).toHaveLength(1);
+
+        await user.click(screen.getByRole('button', { name: 'Retry' }));
+        expect(await screen.findByText(/^No recommendations awaiting execution\./)).toBeInTheDocument();
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+        expect(pendingReads()).toHaveLength(2);
+        expectReadAttempts(2);
+        expectReadOnly();
+    });
+
+    it('keeps the last successful rows and cash visible as stale after refresh failure until an explicit recovery', async () => {
+        const user = userEvent.setup();
+        installDefaultTosHandlers({ recommendations: [PENDING_BUY_RECOMMENDATION] });
+        servePendingResponses([
+            () => axiosOk(apiEnvelope([PENDING_BUY_RECOMMENDATION], { cash: { cash_balance: 5000, reserved_cash: 1200, available_investable_cash: 3800 } })),
+            () => { throw axiosError('Private server detail', { status: 503 }); },
+            () => axiosOk(apiEnvelope([
+                { ...PENDING_BUY_RECOMMENDATION, id: 802, symbol: 'TCS', name: 'Tata Consultancy Services' },
+            ], { cash: { cash_balance: 6000, reserved_cash: 1300, available_investable_cash: 4700 } })),
+        ]);
+        renderPanel();
+        expect(await screen.findByText('INFY')).toBeInTheDocument();
+        expectCash({ balance: 5000, reserved: 1200, available: 3800 });
+
+        await user.click(screen.getByRole('button', { name: 'Refresh' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent('Could not refresh pending executions. Showing the last successfully loaded list; it may be out of date.');
+        expect(screen.getByText('INFY')).toBeInTheDocument();
+        expectCash({ balance: 5000, reserved: 1200, available: 3800 });
+        expect(screen.queryByText(/^No recommendations awaiting execution\./)).not.toBeInTheDocument();
+        expect(pendingReads()).toHaveLength(2);
+
+        await user.click(screen.getByRole('button', { name: 'Retry' }));
+        expect(await screen.findByText('TCS')).toBeInTheDocument();
+        expect(screen.queryByText('INFY')).not.toBeInTheDocument();
+        expectCash({ balance: 6000, reserved: 1300, available: 4700 });
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+        expect(pendingReads()).toHaveLength(3);
+        expectReadAttempts(3);
+        expectReadOnly();
+    });
+
+    it('does not call a previously empty queue genuinely empty when its refresh fails', async () => {
+        const user = userEvent.setup();
+        installDefaultTosHandlers({ recommendations: [] });
+        servePendingResponses([
+            () => axiosOk(apiEnvelope([], { cash: { cash_balance: 0, reserved_cash: 0, available_investable_cash: 0 } })),
+            () => { throw axiosError('Private server detail', { status: 503 }); },
+            () => axiosOk(apiEnvelope([], { cash: { cash_balance: 0, reserved_cash: 0, available_investable_cash: 0 } })),
+        ]);
+        renderPanel();
+        expect(await screen.findByText(/^No recommendations awaiting execution\./)).toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: 'Refresh' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent('Could not refresh pending executions. Showing the last successfully loaded list; it may be out of date.');
+        expect(screen.queryByText(/^No recommendations awaiting execution\./)).not.toBeInTheDocument();
+        expect(pendingReads()).toHaveLength(2);
+
+        await user.click(screen.getByRole('button', { name: 'Retry' }));
+        expect(await screen.findByText(/^No recommendations awaiting execution\./)).toBeInTheDocument();
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+        expect(pendingReads()).toHaveLength(3);
+        expectReadAttempts(3);
+        expectReadOnly();
+    });
+
     it('manual mode records a ledger fill and does not show broker submit', async () => {
         installDefaultTosHandlers({
             recommendations: [PENDING_BUY_RECOMMENDATION],
