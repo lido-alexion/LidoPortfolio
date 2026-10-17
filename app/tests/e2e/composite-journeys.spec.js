@@ -680,7 +680,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
             await page.getByLabel('Quantity').fill('9');
             await page.getByRole('button', { name: 'Validate symbol' }).click();
             await expect(page.getByText(/Validated via test fixture/)).toBeVisible();
-            await expect(page.getByRole('status', { name: 'Fees (₹)' })).toHaveText('37.4');
+            await expect(page.getByRole('status', { name: 'Fees (₹)' })).toHaveText('37.40');
             await page.getByRole('button', { name: 'Save Transaction' }).click();
             await expect.poll(() => savedTransaction).toMatchObject({ recommendation_id: recommendationId, strategy_id: 8, type: 'buy', quantity: 9, price: 3500, fees: 37.4 });
             expect(transactionPayload).toMatchObject({ recommendation_id: recommendationId, source: 'recommendation', type: 'buy', quantity: 9, price: 3500, fees: 37.4 });
