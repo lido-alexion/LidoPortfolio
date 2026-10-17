@@ -215,5 +215,51 @@ for (const viewport of VIEWPORTS) {
             expect(policies).toEqual([]);
             expect(rejected).toEqual([]);
         });
+
+        test(`E2E-16 distinguishes unavailable policy reads from empty and retries the same portfolio (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'E2E-16');
+            const { rejected, seal } = await prepare(page, viewport);
+            await page.addInitScript(() => sessionStorage.setItem('portfolio_active_id', '1'));
+            const meta = { columns: [{ key: 'latest_close', label: 'Latest close' }], condition_operators: [{ value: 'lt', label: 'Less than' }], compare_types: [{ value: 'constant', label: 'Constant' }], action_types: [{ value: 'track', label: 'Track' }] };
+            const savedPolicy = { id: 73, name: 'Recovered policy', is_system: false, is_enabled: true, alert_definition: 'Review the latest close.' };
+            let listReads = 0;
+            let metaReads = 0;
+            const profileHeaders = [];
+            await page.route('**/api/alert-policies/meta', route => {
+                expect(route.request().method()).toBe('GET');
+                metaReads++;
+                profileHeaders.push(route.request().headers()['x-profile-id']);
+                return route.fulfill({ json: { data: meta } });
+            });
+            await page.route('**/api/alert-policies', route => {
+                expect(route.request().method()).toBe('GET');
+                listReads++;
+                profileHeaders.push(route.request().headers()['x-profile-id']);
+                if (listReads === 1 || listReads === 3) {
+                    return route.fulfill({ status: 503, json: { message: 'Synthetic policy list unavailable.' } });
+                }
+                return route.fulfill({ json: { data: listReads === 2 ? [savedPolicy] : [] } });
+            });
+            await seal();
+            await page.goto('/settings/alert-policies');
+            await expect(page.getByRole('alert').filter({ hasText: 'Alert policies could not be loaded.' })).toBeVisible();
+            await expect(page.getByText('No alert policies yet. Create one to generate alerts from holdings.', { exact: true })).toHaveCount(0);
+            await page.getByRole('button', { name: 'Retry policies', exact: true }).click();
+            await expect(page.getByText('Recovered policy', { exact: true })).toBeVisible();
+
+            const scopeId = await page.evaluate(() => sessionStorage.getItem('portfolio_active_id'));
+            expect(scopeId).toBe('1');
+            await page.evaluate((portfolioId) => {
+                window.dispatchEvent(new CustomEvent('portfolio-changed', { detail: { portfolioId } }));
+            }, scopeId);
+            await expect(page.getByRole('alert').filter({ hasText: 'Showing the last successfully loaded policies' })).toBeVisible();
+            await expect(page.getByText('Recovered policy', { exact: true })).toBeVisible();
+            await page.getByRole('button', { name: 'Retry policies', exact: true }).click();
+            await expect(page.getByText('No alert policies yet. Create one to generate alerts from holdings.', { exact: true })).toBeVisible();
+            await expect(page.getByRole('alert').filter({ hasText: 'Could not refresh alert policies' })).toHaveCount(0);
+            expect({ metaReads, listReads }).toEqual({ metaReads: 4, listReads: 4 });
+            expect(profileHeaders).toEqual(Array(8).fill('1'));
+            expect(rejected).toEqual([]);
+        });
     });
 }
