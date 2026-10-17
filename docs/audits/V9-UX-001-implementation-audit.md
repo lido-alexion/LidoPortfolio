@@ -1,11 +1,73 @@
 # V9-UX-001 Implementation Audit
 
-**Status:** IMPLEMENTATION IN PROGRESS — frozen §19 completion is not established. At the root-verified 2026-10-16 19:10:55 IST snapshot, campaign `d441ee0e-7221-4178-abfd-2e59801554ed` had final **BLOCKED** preflight results on all three horizons because four core fundamentals remain unavailable; training has never started and readiness is not qualified. Membership coverage is 100% on every horizon, and all three worker identity receipts are valid. The controlled three-GET real-Kite receipt passed on build 523 / `8cf83fd0dfc14284af48bec5ecc6baa4233cdb85` on 2026-10-12; relevance to current build 551 remains unresolved. Final frozen §19 conformance and UX004 owner follow-up also remain open. The canonical wishlist row remains IMPLEMENTATION IN PROGRESS under PR #171.
-**Audit date:** 2026-10-16
+**Status:** IMPLEMENTATION IN PROGRESS — frozen §19 completion is not established. The current release is build 560 on `89d18dc00c816dc8e5b316d1f2c797b9e5328a0f`, with the normal deployment and authenticated smoke passing. The pinned acceptance campaign remains final **BLOCKED** on all three horizons for four unavailable core fundamentals; it was a build-551 campaign and its receipts do not qualify build 560. Training has never started. Complete journey conformance remains open: the 129-ID route/automation crosswalk is static traceability evidence, not proof of behavior coverage; UX004 PR #186 and UX005 PR #187 remain open. The Oct 12 three-GET real-Kite receipt passed on build 523 / `8cf83fd0dfc14284af48bec5ecc6baa4233cdb85`; current-build relevance remains unresolved. The canonical wishlist row remains IMPLEMENTATION IN PROGRESS.
+**Audit date:** 2026-10-17
 **Canonical scope:** [V9-UX-001 specification](../archive/specs/V9-User-Journey-Automation-E2E-Specification.md)
 **Journey sources:** [`docs/user-journeys/`](../user-journeys/)
 
-## Current release and remaining acceptance — 2026-10-16
+## Current release and remaining acceptance — 2026-10-17
+
+### Verified release evidence — 2026-10-17
+
+Build 560 is live on exact commit `89d18dc00c816dc8e5b316d1f2c797b9e5328a0f`. Normal deployment [39024909475](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39024909475) passed release packaging, runtime SHA health, public smoke, and the mandatory authenticated smoke: 2/2 cases passed on the first attempt in 36.1 seconds. Authenticated job `117374350429` completed at 2026-10-17 10:31:14 UTC; retained smoke artifact `12098241348` has SHA-256 `35fd92a5c8207ed53386fa3723ba11afb5d54330568545416e5c8dd672e9af99`. Root's 2026-10-17 16:30:03 IST observation reports `/api/build-info` matching build 560 and `/up` HTTP 200. The worker is inactive with MainPID 0. This release evidence qualifies the deployment smoke gate for build 560; it does not qualify the separately governed ML campaign or current-build Kite integration.
+
+Recent source release gates, all using their normal workflows:
+
+| Change | Exact merged SHA / hosted evidence | Result |
+| --- | --- | --- |
+| PR188 | `292103ff151bf8a4b09292b78856e54fb7fd7641` | Merged normally; this structural scan change does not prove the production four-hour bottleneck is solved. |
+| PR189 | `36b27791d6725b49cc16b64c5bf68724ecae9e50`; PR CI [39020171588](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39020171588) | PHPUnit/MySQL passed: 2,347 tests, 16,245 assertions, 5 notices, 2 skipped. Master CI [39021669038](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39021669038) passed; deployment [39021669027](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39021669027) passed exact-SHA health and public/authenticated smoke 2/2 on the first attempt. |
+| PR192 | `c81c8715801f5e25e63ed4c26da3de44513810fa`; PR CI [39021751855](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39021751855) | PHPUnit/MySQL passed: 2,349 tests, 16,269 assertions, 5 notices, 2 skipped. Master CI [39023215077](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39023215077) passed; deployment [39023215056](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39023215056) passed exact-SHA health and public/authenticated smoke 2/2 on the first attempt. |
+| PR191 | Merged as `89d18dc00c816dc8e5b316d1f2c797b9e5328a0f`; premerge head `b61cfb39cd42e26e7b0fb38d3c91a4a7b9ba1474`, CI [39023276270](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39023276270) | Premerge PR CI passed: 247 Node tests, 287 component tests, 365 Chromium cases, 57 governed skips, 22.3 minutes. The static AST-backed 129-ID crosswalk and this browser run do not establish complete per-journey product/domain conformance. |
+
+PR193/194 introduced more specific fixed-stage smoke reporting after earlier failures; these did not establish their underlying production causes. PR195 then corrected response capture so an old in-flight guided-tour response cannot satisfy the current Review-document wait. PR195 CI [39017972568](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39017972568) passed (246 Node, 287 component, 365 browser, 57 governed skips, 15.4 minutes); master CI [39019762880](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39019762880) passed the same counts in 21.5 minutes; deployment [39019762872](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39019762872) passed exact-SHA health and authenticated smoke on the first attempt. The synthetic mutation oracle verifies response-selection behavior, not the cause of earlier live failures or all browser timing.
+
+The Oct 17 deployment-smoke failures are recorded here:
+
+| Build / SHA | Normal deployment / authenticated job | Observed result | Smoke artifact |
+| --- | --- | --- | --- |
+| 554 / `292103ff` | [38912649051](https://github.com/lido-alexion/LidoPortfolio/actions/runs/38912649051), attempt 2 / `117342768874` | Public smoke passed; authenticated `account_onboarding_readiness` failed twice. | `12093938174`, SHA-256 `8a3c5f055233f448302dba82b954ea29d4bd55b4b2cb7c0401b07dd62ae9a739` |
+| 555 / `a5a21914` | [39015784774](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39015784774) / `117347993757` | Public smoke passed; authenticated `guided_tour_payload_parse` failed twice. | `12094852000`, SHA-256 `ed6043e10fafb6871ae38141e203d40ae72ffc6b8e90b2a7b9d124637df8910c` |
+| 556 / `af3f1f14` | [39017371227](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39017371227) / `117352589946` | Public smoke passed; authenticated `guided_tour_payload_read_failed` failed twice. | `12095701344`, SHA-256 `1db1b7c91b35fb94f54f4dbb1890cd6263270d2335bc26b35bc3061378beeb60` |
+
+The build-556 label denotes a response-body read exception; no evidence proved malformed JSON, an account-state problem, or a navigation race as the production cause. Build 557 was the first operational pass after the response-capture correction. These records preserve the observed stages and artifacts without assigning an unproven cause.
+
+Master CI [39024909463](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39024909463) on exact build-560 SHA `89d18dc00c816dc8e5b316d1f2c797b9e5328a0f` completed successfully. Change detection and Python/FastMCP passed; canonical frontend job `117373902912` passed 247 Node tests, 287 component tests, and 365 Chromium cases, with 57 governed skips in 20.7 minutes. Root read the completed frontend logs and found no retry-case or flaky lines. PHPUnit and VPS-health were scope-skipped. The earlier PR191 premerge CI result is listed separately above; this is the completed master run on SHA `89d18dc`.
+
+### Governed ML campaign — final historical result; not current-build qualification
+
+Campaign `d441ee0e-7221-4178-abfd-2e59801554ed` is pinned to build 551/cutoff 2026-10-12 and has final **BLOCKED** results for 1m, 3m, and 6m. Each horizon is blocked on `roe`, `debt_equity`, `operating_margin`, and `net_margin`, with zero training rows present for each feature. The exact saved report timestamp, split sizes, 64-character dataset/journal digests, and membership-date coverage are retained in the historical Oct 16 snapshot below. Those worker receipts were valid at their observed build-551 identity snapshot; they do not establish build-560 identity qualification. Root's 2026-10-17 15:25 IST summary reported queue 0 and active campaigns 0. The PO had stopped the worker; root verified it inactive with MainPID 0 at 13:05:12 IST. The PO's stop time is not established. No new attempt, campaign, training run, or activation is claimed. Do not restart the worker or retry the campaign as part of this audit.
+
+### §19 completion and acceptance — current evidence
+
+The rows below restate the frozen §19 criteria as evidence status. The separate governed ML and real-Kite prerequisites are described in their relevant evidence rows and do not add criteria to the frozen §19 table.
+
+| Frozen §19 criterion | Current evidence | Status |
+| --- | --- | --- |
+| 100% of all in-scope major journeys, including newly discovered journeys, are documented | The route/automation source crosswalk has 129 IDs under a parser-backed static contract. This proves annotation presence and traceability only; final full journey inventory and review remain open. | Open |
+| Each journey has been reviewed against the implemented product | Static maps and targeted browser cases exist, but do not establish complete product/domain conformance for every journey. | Open |
+| Every documented difference has been resolved | UX004 PR #186 and UX005 PR #187 remain open. Remaining owner follow-up and final deviation reconciliation are not complete. | Open |
+| Behavior-changing journey updates have received required PO approval | Existing recorded PO decisions remain in force; this refresh adds no behavior change or new waiver. Final audit must confirm every remaining behavior-changing difference. | Open for final reconciliation |
+| Happy paths and key recovery/error paths are automated | Hosted PR191 CI passed 247 Node, 287 component, and 365 Chromium cases with 57 governed skips. This is evidence for the executed suite, not proof that every required journey has happy/recovery coverage. | Partial; full matrix open |
+| Chromium desktop coverage exists for all required scenarios | Current canonical Chromium run passed 365 cases; per-journey scope and required scenarios have not all been reviewed to completion. | Partial; full matrix open |
+| Representative mobile coverage exists for major journeys | The canonical suite passed desktop and representative mobile viewport cases, but complete major-journey coverage remains unverified. | Partial; full matrix open |
+| Targeted visual-regression coverage is in place | Existing canonical visual checks ran in the passing frontend suites. This is not an exhaustive visual certification; remaining coverage review is open. | Partial |
+| Lightweight accessibility checks are in place for key journey pages | Existing canonical accessibility assertions ran in the passing frontend suites; final key-page scope review is open. | Partial |
+| Deterministic seeded data and safe setup/teardown are implemented | Existing journey fixtures and request guards are exercised in CI. Final cross-journey setup/teardown review remains open. | Partial |
+| Broker behavior is deterministic in CI and real-Kite smoke is non-destructive | Mocked broker coverage remains in CI. The retained 3-GET Kite receipt passed 2026-10-12 on build 523 / `8cf83fd0dfc14284af48bec5ecc6baa4233cdb85`; current build relevance has not been established. | Partial; Kite relevance unresolved |
+| Blocking CI, one-retry flaky policy, and nightly regression execution are operational | PR191 premerge CI 39023276270 passed on head `b61cfb39cd42e26e7b0fb38d3c91a4a7b9ba1474` (247 Node, 287 component, 365 Chromium, 57 governed skips, 22.3 minutes). Current master CI 39024909463 passed on merged SHA `89d18dc` (247 Node, 287 component, 365 Chromium, 57 governed skips, 20.7 minutes); completed logs had no retry-case/flaky lines. Latest separately recorded nightly 38858064119 is on `eebb297e` at Oct 16, not on build 560. | PR and exact-current-master CI passed; nightly is not on current SHA |
+| Production smoke tests are non-destructive and act as deployment health gates | Build 560 normal deployment 39024909475 passed exact-SHA health and public/authenticated smoke 2/2 on the first attempt. | Passed for build 560 |
+| Failed runs preserve useful diagnostic evidence | Hosted workflows retain allowlisted failure artifacts and the dated 554/555/556 failures are preserved. The earlier labels did not prove underlying production cause. | Evidence preserved; final policy review open |
+| No real money-moving automation exists | Existing broker/request guards prohibit destructive money-moving test actions; no such action is claimed here. | Preserved; final audit review open |
+| Documentation-to-test traceability is complete | The 129-ID AST-backed crosswalk validates static annotation presence, including loop/composite bindings. Static traceability is distinct from behavior execution and full conformance. | Partial; full conformance open |
+
+### Remaining acceptance boundaries
+
+The canonical wishlist row stays **IMPLEMENTATION IN PROGRESS**; do not mark this epic implemented. The final conformance review, UX004/UX005 owner work, build-560-specific ML qualification, and current-build real-Kite relevance remain separate open evidence. Preserve the 2026-10-12 Kite receipt as passed historical evidence; do not call it expired, missing, or request reconnect without new evidence. Preserve the October 16 three-horizon receipts and digests as historical and do not backdate later source availability. No feed/source/PIT classification, formula, campaign, worker, lifecycle, model, schedule, or trading change is authorized by this documentation update.
+
+No private payload, credential, raw production log, or private host path is included. This documentation update performs no production query or mutation and does not execute production tests, services, campaigns, or training.
+
+## Historical release and acceptance snapshot — 2026-10-16 (superseded by this dated 2026-10-17 refresh)
 
 ### Current release and engineering evidence
 
