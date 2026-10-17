@@ -306,11 +306,15 @@ class NseXbrlFactsParser
     private function deduplicate(array $rows): array
     {
         $unique = [];
+        $conflicts = [];
         foreach ($rows as $row) {
             $key = implode('|', [
                 $row['statement_type'], $row['cadence'], $row['statement_basis'],
                 $row['fact_key'], $row['period_end'], $row['period_start'] ?? '',
             ]);
+            if (isset($conflicts[$key])) {
+                continue;
+            }
             if (! isset($unique[$key])) {
                 $unique[$key] = $row;
 
@@ -319,11 +323,11 @@ class NseXbrlFactsParser
             if ((string) $unique[$key]['value'] !== (string) $row['value']) {
                 unset($unique[$key]);
                 // Conflicting duplicate concept/context values are ambiguous; do not guess.
-                $unique[$key.'|conflict'] = ['_conflict' => true];
+                $conflicts[$key] = true;
             }
         }
 
-        return array_values(array_filter($unique, static fn (array $row): bool => ! isset($row['_conflict'])));
+        return array_values($unique);
     }
 
     private function basis(string $value): string
