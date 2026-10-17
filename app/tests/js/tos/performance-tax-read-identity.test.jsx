@@ -282,6 +282,58 @@ describe('PerformanceTaxPage read identity', () => {
         expect(apiMock.post).not.toHaveBeenCalled(); expect(apiMock.put).not.toHaveBeenCalled();
     });
 
+    it('does not present old A attribution while the returning A batch is pending after B fails', async () => {
+        const returnedA = deferred(); let holdReturnedA = false; let returnedAPerformanceStarted = false;
+        let attributionReads = 0;
+        apiMock.get.mockImplementation(async (path, options) => {
+            const normalizedPath = String(path).split('?')[0];
+            const profile = sessionStorage.getItem('portfolio_active_id');
+            if (normalizedPath === '/analysis/performance') {
+                if (profile === '2') throw axiosError('Synthetic B performance unavailable', { status: 503 });
+                if (profile === '1' && holdReturnedA) {
+                    returnedAPerformanceStarted = true;
+                    return returnedA.promise;
+                }
+            }
+            if (normalizedPath === '/analysis/attribution') {
+                attributionReads += 1;
+                const result = responseFor(normalizedPath, profile);
+                result.data.data.method = profile === '1'
+                    ? (attributionReads === 1 ? 'A confirmed attribution' : 'Fresh A attribution')
+                    : 'B attribution';
+                return result;
+            }
+            return responseFor(normalizedPath, normalizedPath === '/analysis/preferences' ? options?.params?.scope : profile);
+        });
+        renderPage();
+        await screen.findByText(/Method: A confirmed attribution/);
+
+        fireEvent.click(screen.getByTitle('Switch portfolio (per tab)'));
+        fireEvent.click(screen.getByRole('button', { name: 'Retirement', exact: true }));
+        await screen.findByText('Portfolio performance is unavailable for the current portfolio and date range.');
+        expect(screen.queryByText(/Method: A confirmed attribution/)).not.toBeInTheDocument();
+
+        holdReturnedA = true;
+        fireEvent.click(screen.getByTitle('Switch portfolio (per tab)'));
+        fireEvent.click(screen.getByRole('button', { name: 'Main', exact: true }));
+        await waitFor(() => expect(returnedAPerformanceStarted).toBe(true));
+        expect(screen.getByRole('status')).toHaveTextContent(/Refreshing analysis/);
+        expect(screen.queryByText(/Method: A confirmed attribution/)).not.toBeInTheDocument();
+
+        await act(async () => {
+            const current = responseFor('/analysis/performance', '1');
+            current.data.data.benchmark.name = 'Fresh A after B failure';
+            returnedA.resolve(current);
+            await Promise.resolve();
+        });
+        await screen.findByText(/Method: Fresh A attribution/);
+        expect(screen.getByText(/Benchmark: Fresh A after B failure ·/)).toBeVisible();
+        expect(apiMock.post).not.toHaveBeenCalled();
+        expect(apiMock.put).not.toHaveBeenCalled();
+        expect(apiMock.patch).not.toHaveBeenCalled();
+        expect(apiMock.delete).not.toHaveBeenCalled();
+    });
+
     it('ignores a pending read failure after the page unmounts', async () => {
         const pending = deferred(); let pendingStarted = false; const toastEvents = [];
         const onToast = (event) => toastEvents.push(event.detail);

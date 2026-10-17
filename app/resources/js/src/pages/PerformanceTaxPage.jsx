@@ -46,6 +46,7 @@ export default function PerformanceTaxPage() {
     const accountId = user?.id == null ? 'account' : String(user.id);
     const resourceKeys = useMemo(() => ({
         portfolioPerformance: JSON.stringify([portfolioId, from, to]),
+        attribution: JSON.stringify([portfolioId, from, to]),
         portfolioPreferences: JSON.stringify([portfolioId]),
         accountPerformance: JSON.stringify([accountId, from, to, whatIf ? 'what-if' : 'configured', ...(whatIf ? sortedSelectedIds : [])]),
         tax: JSON.stringify([accountId, financialYear, whatIf ? 'what-if' : 'configured', ...(whatIf ? sortedSelectedIds : [])]),
@@ -129,7 +130,7 @@ export default function PerformanceTaxPage() {
             if (!isCurrent()) return null;
             const records = {
                 portfolioPerformance: { key: current.resourceKeys.portfolioPerformance, epoch: resourceEpochsRef.current.portfolioPerformance, value: result.performance },
-                attribution: { key: current.resourceKeys.portfolioPerformance, epoch: resourceEpochsRef.current.attribution, value: result.attribution },
+                attribution: { key: current.resourceKeys.attribution, epoch: resourceEpochsRef.current.attribution, value: result.attribution },
                 portfolioPreferences: { key: current.resourceKeys.portfolioPreferences, epoch: resourceEpochsRef.current.portfolioPreferences, value: result.preferences },
                 accountPerformance: { key: current.resourceKeys.accountPerformance, epoch: resourceEpochsRef.current.accountPerformance, value: result.accountPerformance },
                 tax: { key: current.resourceKeys.tax, epoch: resourceEpochsRef.current.tax, value: result.tax },
@@ -175,7 +176,7 @@ export default function PerformanceTaxPage() {
         && resourceData[name]?.epoch === resourceEpochsRef.current[name];
     const matches = (name, key) => hasMatchingRecord(name, key) ? resourceData[name].value : null;
     const portfolioPerformance = matches('portfolioPerformance', resourceKeys.portfolioPerformance);
-    const attribution = matches('attribution', resourceKeys.portfolioPerformance);
+    const attribution = matches('attribution', resourceKeys.attribution);
     const portfolioPreferences = matches('portfolioPreferences', resourceKeys.portfolioPreferences);
     const accountPerformance = matches('accountPerformance', resourceKeys.accountPerformance);
     const tax = matches('tax', resourceKeys.tax);
