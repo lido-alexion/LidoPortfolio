@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import usePortfolioChanged from '../hooks/usePortfolioChanged';
+import { getActivePortfolioId } from '../portfolio/activePortfolioStorage';
 import { showToast } from '../toast';
 
 export default function KnowledgeBoardTagsPage() {
@@ -14,20 +15,69 @@ export default function KnowledgeBoardTagsPage() {
     const [mergeSourceId, setMergeSourceId] = useState('');
     const [mergeTargetId, setMergeTargetId] = useState('');
     const [newName, setNewName] = useState('');
+    const mountedRef = useRef(false);
+    const scopeRef = useRef(getActivePortfolioId());
+    const scopeEpochRef = useRef(0);
+    const loadGenerationRef = useRef(0);
+
+    const captureScope = () => ({ scope: getActivePortfolioId(), epoch: scopeEpochRef.current });
+    const isCurrentScope = ({ scope, epoch }) => (
+        mountedRef.current
+        && scopeRef.current === scope
+        && scopeEpochRef.current === epoch
+        && getActivePortfolioId() === scope
+    );
 
     const load = useCallback(async () => {
+        const scope = getActivePortfolioId();
+        if (scope !== scopeRef.current) {
+            scopeRef.current = scope;
+            scopeEpochRef.current += 1;
+            loadGenerationRef.current += 1;
+            setTags([]);
+            setEditingId(null);
+            setEditName('');
+            setEditColor('#0d6efd');
+            setMergeSourceId('');
+            setMergeTargetId('');
+            setNewName('');
+            setLoadError('');
+        }
+        const requestEpoch = scopeEpochRef.current;
+        const requestGeneration = ++loadGenerationRef.current;
+        const isCurrentRequest = () => (
+            mountedRef.current
+            && requestGeneration === loadGenerationRef.current
+            && scopeRef.current === scope
+            && scopeEpochRef.current === requestEpoch
+            && getActivePortfolioId() === scope
+        );
+
         setLoading(true);
         setLoadError('');
         try {
             const res = await api.get('/knowledge-board/tags');
-            setTags(res.data.data || []);
+            if (!Array.isArray(res?.data?.data)) {
+                throw new Error('Invalid knowledge tag response.');
+            }
+            if (isCurrentRequest()) setTags(res.data.data);
         } catch {
-            setLoadError('Knowledge tags could not be loaded.');
-            showToast('Failed to load tags.', 'danger');
-            setTags([]);
+            if (isCurrentRequest()) {
+                setLoadError('Knowledge tags could not be loaded.');
+                showToast('Failed to load tags.', 'danger');
+            }
         } finally {
-            setLoading(false);
+            if (isCurrentRequest()) setLoading(false);
         }
+    }, []);
+
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+            scopeEpochRef.current += 1;
+            loadGenerationRef.current += 1;
+        };
     }, []);
 
     useEffect(() => { load(); }, [load]);
@@ -43,15 +93,19 @@ export default function KnowledgeBoardTagsPage() {
         if (!editingId) {
             return;
         }
+        const scopeToken = captureScope();
+        const editingTagId = editingId;
         try {
-            const res = await api.put(`/knowledge-board/tags/${editingId}`, {
+            const res = await api.put(`/knowledge-board/tags/${editingTagId}`, {
                 name: editName,
                 color: editColor,
             });
-            setTags((prev) => prev.map((tag) => (tag.id === editingId ? res.data.data : tag)));
+            if (!isCurrentScope(scopeToken)) return;
+            setTags((prev) => prev.map((tag) => (tag.id === editingTagId ? res.data.data : tag)));
             setEditingId(null);
             showToast('Tag updated.');
         } catch (err) {
+            if (!isCurrentScope(scopeToken)) return;
             const message = err?.response?.data?.errors?.name?.[0] || 'Could not update tag.';
             showToast(message, 'danger');
         }
@@ -61,11 +115,14 @@ export default function KnowledgeBoardTagsPage() {
         if (!window.confirm(`Delete tag "${tag.name}"? It will be removed from all notes.`)) {
             return;
         }
+        const scopeToken = captureScope();
         try {
             await api.delete(`/knowledge-board/tags/${tag.id}`);
+            if (!isCurrentScope(scopeToken)) return;
             setTags((prev) => prev.filter((row) => row.id !== tag.id));
             showToast('Tag deleted.');
         } catch {
+            if (!isCurrentScope(scopeToken)) return;
             showToast('Could not delete tag.', 'danger');
         }
     };
@@ -75,12 +132,15 @@ export default function KnowledgeBoardTagsPage() {
         if (!name) {
             return;
         }
+        const scopeToken = captureScope();
         try {
             const res = await api.post('/knowledge-board/tags', { name });
+            if (!isCurrentScope(scopeToken)) return;
             setTags((prev) => [...prev, res.data.data].sort((a, b) => a.name.localeCompare(b.name)));
             setNewName('');
             showToast('Tag created.');
         } catch (err) {
+            if (!isCurrentScope(scopeToken)) return;
             const message = err?.response?.data?.errors?.name?.[0] || 'Could not create tag.';
             showToast(message, 'danger');
         }
@@ -91,16 +151,20 @@ export default function KnowledgeBoardTagsPage() {
             showToast('Pick two different tags to merge.', 'danger');
             return;
         }
+        const scopeToken = captureScope();
         try {
             await api.post('/knowledge-board/tags/merge', {
                 source_id: Number(mergeSourceId),
                 target_id: Number(mergeTargetId),
             });
+            if (!isCurrentScope(scopeToken)) return;
             await load();
+            if (!isCurrentScope(scopeToken)) return;
             setMergeSourceId('');
             setMergeTargetId('');
             showToast('Tags merged.');
         } catch {
+            if (!isCurrentScope(scopeToken)) return;
             showToast('Could not merge tags.', 'danger');
         }
     };
@@ -158,10 +222,11 @@ export default function KnowledgeBoardTagsPage() {
             <div className="card">
                 <div className="card-header">All tags</div>
                 <div className="card-body p-0">
-                    {loadError ? <div className="alert alert-danger" role="alert"><p>{loadError}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={load}>Retry knowledge tags</button></div> : loading ? (
+                    {loadError && <div className="alert alert-danger" role="alert"><p>{loadError}{tags.length > 0 ? ' Showing the last successfully loaded tags; they may be out of date.' : ''}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={load}>Retry knowledge tags</button></div>}
+                    {loading && tags.length === 0 ? (
                         <div className="p-3 text-muted small">Loading…</div>
                     ) : tags.length === 0 ? (
-                        <div className="p-3 text-muted small">No tags yet.</div>
+                        loadError ? null : <div className="p-3 text-muted small">No tags yet.</div>
                     ) : (
                         <ul className="list-group list-group-flush">
                             {tags.map((tag) => (
