@@ -23,6 +23,8 @@ export default function ClosedTransactionsPage() {
     const readRequestRef = useRef(0);
     const deletingRef = useRef(false);
     const scopeRef = useRef(0);
+    const currentViewRef = useRef({ page, stockSearch });
+    currentViewRef.current = { page, stockSearch };
 
     const load = useCallback(async (pageNum, search) => {
         const request = ++readRequestRef.current;
@@ -91,14 +93,15 @@ export default function ClosedTransactionsPage() {
             setTransactions(current => current.filter(item => item.id !== id));
             showToast('Transaction deleted');
             notifyPortfolioDashboardRefresh();
-            await load(page, stockSearch);
+            const currentView = currentViewRef.current;
+            await load(currentView.page, currentView.stockSearch);
         } catch {
             if (scope !== scopeRef.current) return;
             setActionError('Transaction deletion could not be confirmed. Inspect the stored transaction before retrying.');
         } finally {
             deletingRef.current = false;
         }
-    }, [load, page, stockSearch]);
+    }, [load]);
 
     const columns = useMemo(
         () => buildTransactionTableColumns({
