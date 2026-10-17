@@ -68,25 +68,30 @@ test.describe('V9-UX-001 execution journeys', () => {
 
             const pendingPanel = page.locator('.card').filter({ has: page.getByText('Pending Execution', { exact: true }) });
             await page.goto('/transactions/pending');
-            await expect(pendingPanel.getByRole('alert')).toContainText('Pending executions could not be loaded. Retry to check the current list.');
-            await expect(page.getByText('No recommendations awaiting execution.')).toHaveCount(0);
+            await expect(pendingPanel.getByRole('alert')).toHaveText('Pending executions could not be loaded. Retry to check the current list.');
+            await expect(pendingPanel.getByText('No recommendations awaiting execution.')).toHaveCount(0);
             expect(pendingAttempts).toBe(1);
 
-            await page.getByRole('button', { name: 'Retry', exact: true }).click();
-            const row = page.getByRole('row').filter({ hasText: 'INFY' });
+            await pendingPanel.getByRole('button', { name: 'Retry', exact: true }).click();
+            const row = pendingPanel.getByRole('row').filter({ hasText: 'INFY' });
             await expect(row).toBeVisible();
             await expect(row.getByRole('button', { name: 'Execute manually' })).toBeVisible();
             await expect(pendingPanel.getByRole('alert')).toHaveCount(0);
+            await expect(pendingPanel.getByText(/Cash balance:/)).toContainText(/17,?500/);
+            await expect(pendingPanel.getByText(/Reserved:/)).toContainText(/17,?500/);
+            await expect(pendingPanel.getByText(/Available:/)).toHaveText(/Available:\s*0$/);
             expect(pendingAttempts).toBe(2);
 
-            await page.getByRole('button', { name: 'Refresh', exact: true }).click();
-            await expect(pendingPanel.getByRole('alert')).toContainText('Could not refresh pending executions. Showing the last successfully loaded list; it may be out of date.');
+            await pendingPanel.getByRole('button', { name: 'Refresh', exact: true }).click();
+            await expect(pendingPanel.getByRole('alert')).toHaveText('Could not refresh pending executions. Showing the last successfully loaded list; it may be out of date.');
             await expect(row).toBeVisible();
             expect(pendingAttempts).toBe(3);
 
-            await page.getByRole('button', { name: 'Retry', exact: true }).click();
-            await expect(page.getByText('No recommendations awaiting execution.')).toBeVisible();
+            await pendingPanel.getByRole('button', { name: 'Retry', exact: true }).click();
+            await expect(pendingPanel.getByText('No recommendations awaiting execution.')).toBeVisible();
             await expect(pendingPanel.getByRole('alert')).toHaveCount(0);
+            await expect(pendingPanel.getByText(/Reserved:/)).toHaveText(/Reserved:\s*0$/);
+            await expect(pendingPanel.getByText(/Available:/)).toContainText(/17,?500/);
             expect(pendingAttempts).toBe(4);
 
             expect(reads).toHaveLength(12);

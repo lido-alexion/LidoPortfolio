@@ -32,6 +32,12 @@ const expectReadOnly = () => {
     expect(apiMock.patch).not.toHaveBeenCalled();
     expect(apiMock.delete).not.toHaveBeenCalled();
 };
+const expectCash = ({ balance, reserved, available }) => {
+    const displayedAmount = label => screen.getByText(new RegExp(`^${label}:`)).textContent.replace(/\D/g, '');
+    expect(displayedAmount('Cash balance')).toBe(String(balance));
+    expect(displayedAmount('Reserved')).toBe(String(reserved));
+    expect(displayedAmount('Available')).toBe(String(available));
+};
 function servePendingResponses(responses) {
     const defaultGet = apiMock.get.getMockImplementation();
     apiMock.get.mockImplementation(async (url, config) => {
@@ -54,13 +60,15 @@ describe('Pending Execution TOS smoke', () => {
         ]);
         renderPanel();
 
-        expect(await screen.findByRole('alert')).toHaveTextContent('Pending executions could not be loaded. Retry to check the current list.');
+        const alert = await screen.findByRole('alert');
+        expect(alert).toHaveTextContent('Pending executions could not be loaded. Retry to check the current list.');
+        expect(alert).not.toHaveTextContent('Private server detail');
         expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
-        expect(screen.queryByText('No recommendations awaiting execution.')).not.toBeInTheDocument();
+        expect(screen.queryByText(/^No recommendations awaiting execution\./)).not.toBeInTheDocument();
         expect(pendingReads()).toHaveLength(1);
 
         await user.click(screen.getByRole('button', { name: 'Retry' }));
-        expect(await screen.findByText('No recommendations awaiting execution.')).toBeInTheDocument();
+        expect(await screen.findByText(/^No recommendations awaiting execution\./)).toBeInTheDocument();
         expect(screen.queryByRole('alert')).not.toBeInTheDocument();
         expect(pendingReads()).toHaveLength(2);
         expectReadAttempts(2);
@@ -73,21 +81,25 @@ describe('Pending Execution TOS smoke', () => {
         servePendingResponses([
             () => axiosOk(apiEnvelope([PENDING_BUY_RECOMMENDATION], { cash: { cash_balance: 5000, reserved_cash: 1200, available_investable_cash: 3800 } })),
             () => { throw axiosError('Private server detail', { status: 503 }); },
-            () => axiosOk(apiEnvelope([PENDING_BUY_RECOMMENDATION], { cash: { cash_balance: 5000, reserved_cash: 1200, available_investable_cash: 3800 } })),
+            () => axiosOk(apiEnvelope([
+                { ...PENDING_BUY_RECOMMENDATION, id: 802, symbol: 'TCS', name: 'Tata Consultancy Services' },
+            ], { cash: { cash_balance: 6000, reserved_cash: 1300, available_investable_cash: 4700 } })),
         ]);
         renderPanel();
-        expect(await screen.findByRole('button', { name: 'Execute manually' })).toBeInTheDocument();
-        expect(screen.getByText(/Cash balance:/)).toBeInTheDocument();
+        expect(await screen.findByText('INFY')).toBeInTheDocument();
+        expectCash({ balance: 5000, reserved: 1200, available: 3800 });
 
         await user.click(screen.getByRole('button', { name: 'Refresh' }));
         expect(await screen.findByRole('alert')).toHaveTextContent('Could not refresh pending executions. Showing the last successfully loaded list; it may be out of date.');
         expect(screen.getByText('INFY')).toBeInTheDocument();
-        expect(screen.getByText(/Cash balance:/)).toBeInTheDocument();
-        expect(screen.queryByText('No recommendations awaiting execution.')).not.toBeInTheDocument();
+        expectCash({ balance: 5000, reserved: 1200, available: 3800 });
+        expect(screen.queryByText(/^No recommendations awaiting execution\./)).not.toBeInTheDocument();
         expect(pendingReads()).toHaveLength(2);
 
         await user.click(screen.getByRole('button', { name: 'Retry' }));
-        expect(await screen.findByRole('button', { name: 'Execute manually' })).toBeInTheDocument();
+        expect(await screen.findByText('TCS')).toBeInTheDocument();
+        expect(screen.queryByText('INFY')).not.toBeInTheDocument();
+        expectCash({ balance: 6000, reserved: 1300, available: 4700 });
         expect(screen.queryByRole('alert')).not.toBeInTheDocument();
         expect(pendingReads()).toHaveLength(3);
         expectReadAttempts(3);
@@ -103,15 +115,15 @@ describe('Pending Execution TOS smoke', () => {
             () => axiosOk(apiEnvelope([], { cash: { cash_balance: 0, reserved_cash: 0, available_investable_cash: 0 } })),
         ]);
         renderPanel();
-        expect(await screen.findByText('No recommendations awaiting execution.')).toBeInTheDocument();
+        expect(await screen.findByText(/^No recommendations awaiting execution\./)).toBeInTheDocument();
 
         await user.click(screen.getByRole('button', { name: 'Refresh' }));
         expect(await screen.findByRole('alert')).toHaveTextContent('Could not refresh pending executions. Showing the last successfully loaded list; it may be out of date.');
-        expect(screen.queryByText('No recommendations awaiting execution.')).not.toBeInTheDocument();
+        expect(screen.queryByText(/^No recommendations awaiting execution\./)).not.toBeInTheDocument();
         expect(pendingReads()).toHaveLength(2);
 
         await user.click(screen.getByRole('button', { name: 'Retry' }));
-        expect(await screen.findByText('No recommendations awaiting execution.')).toBeInTheDocument();
+        expect(await screen.findByText(/^No recommendations awaiting execution\./)).toBeInTheDocument();
         expect(screen.queryByRole('alert')).not.toBeInTheDocument();
         expect(pendingReads()).toHaveLength(3);
         expectReadAttempts(3);
