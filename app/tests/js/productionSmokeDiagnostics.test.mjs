@@ -1,10 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { hasPresetChartGeometry, safeAuthenticatedSmokeStage, waitForPresetChartGeometry } from '../e2e/productionSmokeDiagnostics.js';
+import { allowProductionSmokeRequest, allowTransientWelcomeSkipRequest } from '../e2e/productionSmokePolicy.js';
 
 test('authenticated smoke reports only fixed, stage-level diagnostics', () => {
     for (const stage of [
-        'configuration', 'browser_launch', 'login', 'review', 'account_onboarding_readiness', 'combo_navigation',
+        'configuration', 'browser_launch', 'login', 'review',
+        'guided_tour_response_wait', 'guided_tour_response_status', 'guided_tour_payload_parse', 'guided_tour_payload_shape',
+        'welcome_skip_payload', 'welcome_modal_render', 'welcome_modal_visibility', 'resume_modal_visibility', 'combo_navigation',
         'combo_preference_response', 'combo_preference_scope', 'combo_chart_attached', 'combo_chart_visible',
         'combo_default_selection', 'combo_default_options', 'combo_default_resolution', 'combo_default_precedence', 'combo_chart_data_rendered', 'combo_keyboard_navigation',
         'combo_legend_control', 'combo_legend_read', 'combo_legend_toggle_off',
@@ -15,6 +18,17 @@ test('authenticated smoke reports only fixed, stage-level diagnostics', () => {
     }
     assert.equal(safeAuthenticatedSmokeStage('secret@example.test'), 'unknown');
     assert.equal(safeAuthenticatedSmokeStage('provider-response-with-private-data'), 'unknown');
+    assert.equal(safeAuthenticatedSmokeStage('https://example.test/path?token=private'), 'unknown');
+});
+
+test('readiness diagnostics preserve the existing read-only and one-use welcome policy', () => {
+    const base = 'https://stox.example.test';
+    const endpoint = `${base}/api/guided-tour`;
+    assert.equal(allowProductionSmokeRequest('GET', endpoint, base), true);
+    assert.equal(allowProductionSmokeRequest('PUT', endpoint, base), false);
+    assert.equal(allowProductionSmokeRequest('POST', `${base}/api/v1/orders`, base, { login: true }), false);
+    assert.equal(allowTransientWelcomeSkipRequest('PUT', endpoint, base, '{"action":"skip_prompt"}', { uiActionInProgress: false }), false);
+    assert.equal(allowTransientWelcomeSkipRequest('PUT', endpoint, base, '{"action":"skip_prompt"}', { uiActionInProgress: true }), true);
 });
 
 test('combo geometry acceptance requires non-empty preset-appropriate plotted paths', () => {
