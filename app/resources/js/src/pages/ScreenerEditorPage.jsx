@@ -807,6 +807,9 @@ export default function ScreenerEditorPage() {
                     fetchedRun = full.data?.data;
                 } catch {
                     // A failed detail read cannot confirm completion; retain the last valid run state.
+                    const notice = runCompletionNotice(null);
+                    showToast(notice.message, notice.variant);
+                    return;
                 }
                 if (hasScreenerRunId(fetchedRun) && screenerRunIdsMatch(fetchedRun.id, run.id)) {
                     setRunResult(fetchedRun);
@@ -823,8 +826,9 @@ export default function ScreenerEditorPage() {
                     showToast(notice.message, notice.variant);
                 }
             } else {
-                const notice = runCompletionNotice(run);
+                const notice = runCompletionNotice(null);
                 showToast(notice.message, notice.variant);
+                return;
             }
             const runsRes = await api.get(`/screeners/${id}/runs`);
             setHistory(runsRes.data?.data ?? []);

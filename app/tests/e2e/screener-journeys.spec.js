@@ -98,7 +98,7 @@ async function prepareScreenerJourney(page, viewport, seedName, mockOptions = {}
     const requests = [];
     await page.route('**/*', (route) => {
         if (new URL(route.request().url()).origin !== allowedOrigin) {
-            externalRequests.push(route.request().url());
+            externalRequests.push(new URL(route.request().url()).origin);
             return route.abort();
         }
         return route.fallback();
@@ -418,13 +418,13 @@ test.describe('V9-UX-001 screener journeys', () => {
                 }
 
                 expect(runSequence.getRequestCount()).toBe(sequence.length);
-                assertSafeScreenerJourney(safety);
                 await page.goto('/screeners/41');
                 const failedHistory = page.getByRole('button', { name: /Run ID 601 · Manual · failed/ });
                 await expect(failedHistory).toBeVisible();
                 await failedHistory.click();
                 await expect(page.getByRole('region', { name: 'Screener run results', exact: true }))
                     .toContainText('Synthetic evaluator failure.');
+                assertSafeScreenerJourney(safety);
             });
         }
         if (viewport.name === 'desktop') {
