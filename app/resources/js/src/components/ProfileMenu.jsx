@@ -1,21 +1,37 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { userDisplayName } from '../utils/userDisplay';
 import ProfileAvatar from './ProfileAvatar';
 import ThemeToggle from './ThemeToggle';
 
+const LOGOUT_FAILURE_MESSAGE = 'Logout could not be confirmed. Your session may still be active. Please retry.';
+
 export default function ProfileMenu({ user }) {
     const { logout } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
+    const [logoutPending, setLogoutPending] = useState(false);
+    const [logoutFailed, setLogoutFailed] = useState(false);
+    const logoutInFlight = useRef(false);
 
     const displayName = userDisplayName(user);
     const hasName = Boolean(user?.name?.trim());
 
     const handleLogout = async () => {
-        setIsOpen(false);
-        await logout();
-        window.location.href = '/';
+        if (logoutInFlight.current) return;
+        logoutInFlight.current = true;
+        setLogoutPending(true);
+        setLogoutFailed(false);
+        try {
+            await logout();
+            setIsOpen(false);
+            window.location.href = '/';
+        } catch {
+            setLogoutFailed(true);
+        } finally {
+            logoutInFlight.current = false;
+            setLogoutPending(false);
+        }
     };
 
     return (
@@ -96,13 +112,19 @@ export default function ProfileMenu({ user }) {
                             Settings
                         </Link>
                         <hr className="dropdown-divider border-secondary my-1 opacity-25" />
+                        {logoutFailed && (
+                            <div className="alert alert-danger mx-2 my-2 py-2" role="alert">
+                                {LOGOUT_FAILURE_MESSAGE}
+                            </div>
+                        )}
                         <button
                             type="button"
                             className="dropdown-item text-danger py-2 small d-flex align-items-center lido-profile-menu-action"
                             onClick={handleLogout}
+                            disabled={logoutPending}
                         >
                             <span className="me-2">🚪</span>
-                            Logout
+                            {logoutPending ? 'Logging out…' : logoutFailed ? 'Retry logout' : 'Logout'}
                         </button>
                     </div>
                 </>
