@@ -65,13 +65,13 @@ it('retains same-profile tags as stale on read failure and accepts only a confir
         .mockRejectedValueOnce(unavailable())
         .mockResolvedValueOnce({ data: { data: [tag(2, 'Updated tag')] } });
     render(<MemoryRouter><KnowledgeBoardTagsPage /></MemoryRouter>);
-    expect(await screen.findByText('Known tag')).toBeVisible();
+    expect(await screen.findByText('Known tag', { selector: '.badge' })).toBeVisible();
     act(() => window.dispatchEvent(new CustomEvent('portfolio-changed', { detail: { portfolioId: 1 } })));
     expect(await screen.findByRole('alert')).toHaveTextContent('may be out of date');
-    expect(screen.getByText('Known tag')).toBeVisible(); expect(screen.queryByText('No tags yet.')).toBeNull();
+    expect(screen.getByText('Known tag', { selector: '.badge' })).toBeVisible(); expect(screen.queryByText('No tags yet.')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Retry knowledge tags' }));
-    expect(await screen.findByText('Updated tag')).toBeVisible(); expect(screen.queryByRole('alert')).toBeNull();
-    expect(screen.queryByText('Known tag')).toBeNull(); expect(api.get).toHaveBeenCalledTimes(3);
+    expect(await screen.findByText('Updated tag', { selector: '.badge' })).toBeVisible(); expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText('Known tag', { selector: '.badge' })).toBeNull(); expect(api.get).toHaveBeenCalledTimes(3);
 });
 it('does not treat a malformed successful tag envelope as a confirmed empty list', async () => {
     api.get.mockResolvedValueOnce({ data: { data: null } }).mockResolvedValueOnce({ data: { data: [] } });
@@ -87,12 +87,12 @@ it('does not let late tag reads or errors win after A-to-B-to-A profile changes'
     render(<MemoryRouter><KnowledgeBoardTagsPage /></MemoryRouter>);
     act(() => switchProfile(2));
     await act(async () => { firstB.resolve({ data: { data: [tag(22, 'B current')] } }); });
-    expect(screen.getByText('B current')).toBeVisible();
+    expect(screen.getByText('B current', { selector: '.badge' })).toBeVisible();
     act(() => switchProfile(1));
     await act(async () => { secondA.resolve({ data: { data: [tag(12, 'A current')] } }); });
-    expect(screen.getByText('A current')).toBeVisible();
+    expect(screen.getByText('A current', { selector: '.badge' })).toBeVisible();
     await act(async () => { firstA.reject(unavailable()); });
-    expect(screen.getByText('A current')).toBeVisible(); expect(screen.queryByText('B current')).toBeNull();
+    expect(screen.getByText('A current', { selector: '.badge' })).toBeVisible(); expect(screen.queryByText('B current', { selector: '.badge' })).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull(); expect(screen.queryByText('Loading…')).toBeNull();
     expect(showToast).not.toHaveBeenCalledWith('Failed to load tags.', 'danger');
 });
@@ -104,7 +104,7 @@ it('does not let an old read finally clear the active profile loading state', as
     await act(async () => { oldA.reject(unavailable()); });
     expect(screen.getByText('Loading…')).toBeVisible(); expect(screen.queryByRole('alert')).toBeNull();
     await act(async () => { currentB.resolve({ data: { data: [tag(22, 'B settled')] } }); });
-    expect(screen.getByText('B settled')).toBeVisible(); expect(screen.queryByText('Loading…')).toBeNull();
+    expect(screen.getByText('B settled', { selector: '.badge' })).toBeVisible(); expect(screen.queryByText('Loading…')).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull(); expect(showToast).not.toHaveBeenCalled();
 });
 it('ignores late A and B successes after an A-to-B-to-A read sequence', async () => {
@@ -115,8 +115,8 @@ it('ignores late A and B successes after an A-to-B-to-A read sequence', async ()
     await act(async () => { currentA.resolve({ data: { data: [tag(12, 'Current A')] } }); });
     await act(async () => { oldA.resolve({ data: { data: [tag(11, 'Old A')] } }); });
     await act(async () => { oldB.resolve({ data: { data: [tag(22, 'Old B')] } }); });
-    expect(screen.getByText('Current A')).toBeVisible(); expect(screen.queryByText('Old A')).toBeNull();
-    expect(screen.queryByText('Old B')).toBeNull(); expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByText('Current A', { selector: '.badge' })).toBeVisible(); expect(screen.queryByText('Old A', { selector: '.badge' })).toBeNull();
+    expect(screen.queryByText('Old B', { selector: '.badge' })).toBeNull(); expect(screen.queryByRole('alert')).toBeNull();
 });
 it.each(['create', 'rename', 'delete', 'merge'].flatMap(kind => ['success', 'failure'].map(outcome => [kind, outcome])))('ignores a late %s %s from the prior profile without changing the new profile draft', async (kind, outcome) => {
     const pending = deferred();
@@ -126,7 +126,7 @@ it.each(['create', 'rename', 'delete', 'merge'].flatMap(kind => ['success', 'fai
     if (kind === 'delete') api.delete.mockReturnValue(pending.promise);
     if (kind === 'delete') vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<MemoryRouter><KnowledgeBoardTagsPage /></MemoryRouter>);
-    expect(await screen.findByText('A tag')).toBeVisible();
+    expect(await screen.findByText('A tag', { selector: '.badge' })).toBeVisible();
 
     if (kind === 'create') {
         fireEvent.change(screen.getByRole('textbox', { name: 'New tag name' }), { target: { value: 'A draft' } });
@@ -144,7 +144,7 @@ it.each(['create', 'rename', 'delete', 'merge'].flatMap(kind => ['success', 'fai
     }
 
     act(() => switchProfile(2));
-    expect(await screen.findByText('B tag')).toBeVisible();
+    expect(await screen.findByText('B tag', { selector: '.badge' })).toBeVisible();
     if (kind === 'create') expect(screen.getByRole('textbox', { name: 'New tag name' })).toHaveValue('');
     if (kind === 'rename') expect(screen.queryByRole('textbox', { name: 'Rename tag' })).toBeNull();
     if (kind === 'merge') {
@@ -167,8 +167,12 @@ it.each(['create', 'rename', 'delete', 'merge'].flatMap(kind => ['success', 'fai
         else if (kind === 'rename') pending.resolve({ data: { data: tag(1, 'A renamed late') } });
         else pending.resolve({ data: { data: {} } });
     });
-    expect(screen.getByText('B tag')).toBeVisible();
-    expect(screen.queryByText('A created late')).toBeNull(); expect(screen.queryByText('A renamed late')).toBeNull();
+    if (kind === 'rename') {
+        expect(screen.getByRole('textbox', { name: 'Rename tag' })).toHaveValue('B draft');
+    } else {
+        expect(screen.getByText('B tag', { selector: '.badge' })).toBeVisible();
+    }
+    expect(screen.queryByText('A created late', { selector: '.badge' })).toBeNull(); expect(screen.queryByText('A renamed late', { selector: '.badge' })).toBeNull();
     if (kind === 'create') expect(screen.getByRole('textbox', { name: 'New tag name' })).toHaveValue('B draft');
     if (kind === 'rename') expect(screen.getByRole('textbox', { name: 'Rename tag' })).toHaveValue('B draft');
     if (kind === 'merge') {
@@ -193,7 +197,7 @@ it('ignores pending tag reads and writes after the component unmounts', async ()
 
     const pendingCreate = deferred(); api.get.mockResolvedValue({ data: { data: [tag(1, 'A tag')] } }); api.post.mockReturnValue(pendingCreate.promise);
     render(<MemoryRouter><KnowledgeBoardTagsPage /></MemoryRouter>);
-    expect(await screen.findByText('A tag')).toBeVisible();
+    expect(await screen.findByText('A tag', { selector: '.badge' })).toBeVisible();
     fireEvent.change(screen.getByRole('textbox', { name: 'New tag name' }), { target: { value: 'A pending tag' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add', exact: true }));
     await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1)); cleanup();
@@ -203,7 +207,7 @@ it('ignores pending tag reads and writes after the component unmounts', async ()
 it('keeps the active tag read through React StrictMode effect replay', async () => {
     api.get.mockResolvedValue({ data: { data: [tag(1, 'StrictMode tag')] } });
     render(<React.StrictMode><MemoryRouter><KnowledgeBoardTagsPage /></MemoryRouter></React.StrictMode>);
-    expect(await screen.findByText('StrictMode tag')).toBeVisible();
+    expect(await screen.findByText('StrictMode tag', { selector: '.badge' })).toBeVisible();
     expect(screen.queryByText('Loading…')).toBeNull(); expect(screen.queryByRole('alert')).toBeNull();
 });
 it('keeps both acknowledged same-profile creates when their responses finish out of order', async () => {
@@ -216,7 +220,7 @@ it('keeps both acknowledged same-profile creates when their responses finish out
     fireEvent.change(input, { target: { value: 'Second tag' } }); fireEvent.click(add);
     await act(async () => { second.resolve({ data: { data: tag(2, 'Second tag') } }); });
     await act(async () => { first.resolve({ data: { data: tag(1, 'First tag') } }); });
-    expect(screen.getByText('First tag')).toBeVisible(); expect(screen.getByText('Second tag')).toBeVisible();
+    expect(screen.getByText('First tag', { selector: '.badge' })).toBeVisible(); expect(screen.getByText('Second tag', { selector: '.badge' })).toBeVisible();
     expect(showToast).toHaveBeenCalledWith('Tag created.'); expect(showToast).toHaveBeenCalledTimes(2);
 });
 it('keeps a confirmed same-profile merge acknowledgement when its follow-up read fails and Retry repeats only the GET', async () => {
@@ -225,15 +229,49 @@ it('keeps a confirmed same-profile merge acknowledgement when its follow-up read
         .mockResolvedValueOnce({ data: { data: [tag(2, 'Target')] } });
     api.post.mockResolvedValue({ data: { data: {} } });
     render(<MemoryRouter><KnowledgeBoardTagsPage /></MemoryRouter>);
-    expect(await screen.findByText('Source')).toBeVisible();
+    expect(await screen.findByText('Source', { selector: '.badge' })).toBeVisible();
     fireEvent.change(screen.getByLabelText('Source (removed)'), { target: { value: '1' } });
     fireEvent.change(screen.getByLabelText('Target (kept)'), { target: { value: '2' } });
     fireEvent.click(screen.getByRole('button', { name: 'Merge', exact: true }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Knowledge tags could not be loaded');
     expect(showToast).toHaveBeenCalledWith('Tags merged.'); expect(api.post).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: 'Retry knowledge tags' }));
-    expect(await screen.findByText('Target')).toBeVisible(); expect(screen.queryByText('Source')).toBeNull();
+    expect(await screen.findByText('Target', { selector: '.badge' })).toBeVisible(); expect(screen.queryByText('Source', { selector: '.badge' })).toBeNull();
     expect(api.get).toHaveBeenCalledTimes(3); expect(api.post).toHaveBeenCalledTimes(1);
+});
+it('does not clear the new profile merge form or acknowledge an old merge after its follow-up read', async () => {
+    const oldFollowup = deferred();
+    let reads = 0;
+    api.get.mockImplementation(() => {
+        reads += 1;
+        if (reads === 2) return oldFollowup.promise;
+        const rows = sessionStorage.getItem('portfolio_active_id') === '1'
+            ? [tag(1, 'A source'), tag(2, 'A target')]
+            : [tag(22, 'B source'), tag(23, 'B target')];
+        return Promise.resolve({ data: { data: rows } });
+    });
+    api.post.mockResolvedValue({ data: { data: {} } });
+    render(<MemoryRouter><KnowledgeBoardTagsPage /></MemoryRouter>);
+    expect(await screen.findByText('A source', { selector: '.badge' })).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Source (removed)'), { target: { value: '1' } });
+    fireEvent.change(screen.getByLabelText('Target (kept)'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Merge', exact: true }));
+    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
+    expect(api.post).toHaveBeenCalledTimes(1);
+
+    act(() => switchProfile(2));
+    expect(await screen.findByText('B source', { selector: '.badge' })).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Source (removed)'), { target: { value: '22' } });
+    fireEvent.change(screen.getByLabelText('Target (kept)'), { target: { value: '23' } });
+
+    await act(async () => { oldFollowup.resolve({ data: { data: [tag(2, 'A target')] } }); });
+    expect(screen.getByText('B source', { selector: '.badge' })).toBeVisible();
+    expect(screen.getByText('B target', { selector: '.badge' })).toBeVisible();
+    expect(screen.getByLabelText('Source (removed)')).toHaveValue('22');
+    expect(screen.getByLabelText('Target (kept)')).toHaveValue('23');
+    expect(showToast).not.toHaveBeenCalledWith('Tags merged.');
+    expect(api.get).toHaveBeenCalledTimes(3);
+    expect(api.post).toHaveBeenCalledTimes(1);
 });
 it('keeps the requested Wiki route after unavailable detail and retries it', async () => {
     let failed = true; api.get.mockImplementation(async path => { if (path.endsWith('/wiki/pages')) return { data: { data: [] } }; if (failed) throw unavailable(); return { data: { data: { uuid: 'page-one', title: 'Recovered Wiki', markdown: 'Retained source', rendered_html: '', revisions: [] } } }; });

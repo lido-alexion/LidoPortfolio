@@ -52,6 +52,7 @@ for (const viewport of VIEWPORTS) {
         test(`E2E-41 keeps tag writes and deferred reads bound to the selected Portfolio (${viewport.name})`, async ({ page }, testInfo) => {
             journeyId(testInfo, 'E2E-41');
             const safety = await prepare(page, viewport, 'tag-scope-races', (method, path) => method === 'POST' && path === '/api/knowledge-board/tags');
+            const tagBadge = (name) => page.locator('.badge').filter({ hasText: new RegExp(`^${name}$`) });
             const rows = {
                 1: [{ id: 11, name: 'A base', color: '#198754' }],
                 2: [{ id: 22, name: 'B base', color: '#0d6efd' }],
@@ -99,36 +100,36 @@ for (const viewport of VIEWPORTS) {
             });
 
             await safety.seal(); await page.goto('/knowledge-board/tags');
-            await expect(page.getByText('A base', { exact: true })).toBeVisible();
+            await expect(tagBadge('A base')).toBeVisible();
             await page.getByRole('textbox', { name: 'New tag name' }).fill('A delayed tag');
             const aCreateResponse = responseFor('POST', '1');
             await page.getByRole('button', { name: 'Add', exact: true }).click(); await aCreateStarted;
 
-            await switchTo('Long Term'); await expect(page.getByText('B base', { exact: true })).toBeVisible();
+            await switchTo('Long Term'); await expect(tagBadge('B base')).toBeVisible();
             await page.getByRole('textbox', { name: 'New tag name' }).fill('B draft');
             const lateAResponse = aCreateResponse;
             releaseACreate();
             const finishedA = await lateAResponse; await finishedA.finished();
             await expect(page.getByRole('textbox', { name: 'New tag name' })).toHaveValue('B draft');
-            await expect(page.getByText('A delayed tag', { exact: true })).toHaveCount(0);
+            await expect(tagBadge('A delayed tag')).toHaveCount(0);
             await expect(page.getByText('Tag created.', { exact: true })).toHaveCount(0);
 
             await page.getByRole('textbox', { name: 'New tag name' }).fill('B explicit tag');
             await page.getByRole('button', { name: 'Add', exact: true }).click();
-            await expect(page.getByText('B explicit tag', { exact: true })).toBeVisible();
+            await expect(tagBadge('B explicit tag')).toBeVisible();
             await expect(page.getByText('Tag created.', { exact: true })).toHaveCount(1);
             expect(posts).toEqual([{ profileId: '1', body: { name: 'A delayed tag' } }, { profileId: '2', body: { name: 'B explicit tag' } }]);
 
-            await switchTo('Main'); await expect(page.getByText('A delayed tag', { exact: true })).toBeVisible();
+            await switchTo('Main'); await expect(tagBadge('A delayed tag')).toBeVisible();
             delayNextBRead = true; const lateBResponse = responseFor('GET', '2');
             await switchTo('Long Term'); await bReadStarted;
             const currentAResponse = responseFor('GET', '1');
-            await switchTo('Main'); await expect(page.getByText('A delayed tag', { exact: true })).toBeVisible();
-            await expect(page.getByText('B base', { exact: true })).toHaveCount(0);
+            await switchTo('Main'); await expect(tagBadge('A delayed tag')).toBeVisible();
+            await expect(tagBadge('B base')).toHaveCount(0);
             const finishedCurrentA = await currentAResponse; await finishedCurrentA.finished();
             releaseBRead(); const finishedLateB = await lateBResponse; await finishedLateB.finished();
-            await expect(page.getByText('A delayed tag', { exact: true })).toBeVisible();
-            await expect(page.getByText('B base', { exact: true })).toHaveCount(0);
+            await expect(tagBadge('A delayed tag')).toBeVisible();
+            await expect(tagBadge('B base')).toHaveCount(0);
             expect(reads).toContain('1'); expect(reads).toContain('2');
             expect(safety.writes).toEqual([{ method: 'POST', path: '/api/knowledge-board/tags' }, { method: 'POST', path: '/api/knowledge-board/tags' }]);
             expect(safety.blocked).toEqual([]);
