@@ -159,11 +159,49 @@ for (const viewport of VIEWPORTS) {
         test(`E2E-16 retries alert creation/evaluation, persists disable and respects delete confirmation (${viewport.name})`, async ({ page }, testInfo) => {
             journeyId(testInfo, 'E2E-16');
             const { rejected, seal } = await prepare(page, viewport, [['POST', '/api/alert-policies'], ['PUT', '/api/alert-policies/73'], ['DELETE', '/api/alert-policies/73'], ['POST', '/api/alert-policies/evaluate']]);
+            let releasePortfolios;
+            let markPortfolioRequestStarted;
+            const portfolioGate = new Promise(resolve => { releasePortfolios = resolve; });
+            const portfolioRequestStarted = new Promise(resolve => { markPortfolioRequestStarted = resolve; });
+            let portfolioRequests = 0;
+            const alertReadPaths = ['/api/alert-policies/meta', '/api/alert-policies'];
+            const alertReads = [];
+            const pendingAlertReads = new Set();
+            const pendingAlertReadWaiters = [];
+            const settleAlertRead = request => {
+                if (pendingAlertReads.delete(request) && pendingAlertReads.size === 0) {
+                    pendingAlertReadWaiters.splice(0).forEach(resolve => resolve());
+                }
+            };
+            page.on('request', request => {
+                const url = new URL(request.url());
+                if (request.method() === 'GET' && alertReadPaths.includes(url.pathname)) {
+                    alertReads.push({ path: url.pathname, profileId: request.headers()['x-profile-id'] });
+                    pendingAlertReads.add(request);
+                }
+            });
+            page.on('requestfinished', settleAlertRead);
+            page.on('requestfailed', settleAlertRead);
+            const waitForAlertReadsToSettle = async () => {
+                while (pendingAlertReads.size > 0) {
+                    await new Promise(resolve => pendingAlertReadWaiters.push(resolve));
+                }
+            };
+            await page.route('**/api/portfolios', async route => {
+                expect(route.request().method()).toBe('GET');
+                portfolioRequests++;
+                markPortfolioRequestStarted();
+                await portfolioGate;
+                return route.fulfill({ json: { data: [{ id: 1, name: 'Main', is_default: true }] } });
+            });
             let policies = [];
             let failSave = true;
             let failEvaluation = true;
             const meta = { columns: [{ key: 'latest_close', label: 'Latest close' }], condition_operators: [{ value: 'lt', label: 'Less than' }], compare_types: [{ value: 'constant', label: 'Constant' }], action_types: [{ value: 'sell', label: 'Sell' }] };
-            await page.route('**/api/alert-policies/meta', route => route.fulfill({ json: { data: meta } }));
+            await page.route('**/api/alert-policies/meta', route => {
+                expect(route.request().method()).toBe('GET');
+                return route.fulfill({ json: { data: meta } });
+            });
             await page.route('**/api/alert-policies', route => {
                 if (route.request().method() === 'GET') return route.fulfill({ json: { data: policies } });
                 if (failSave) { failSave = false; return route.fulfill({ status: 503, json: { message: 'Synthetic alert save unavailable.' } }); }
@@ -184,7 +222,19 @@ for (const viewport of VIEWPORTS) {
             });
             await seal();
             await page.goto('/settings/alert-policies');
+            await portfolioRequestStarted;
+            expect(await page.evaluate(() => sessionStorage.getItem('portfolio_active_id'))).toBeNull();
+            expect(alertReads).toEqual([]);
             await page.getByRole('button', { name: 'New policy', exact: true }).click();
+            await expect(page.getByText('Waiting for a selected portfolio to load alert policies…', { exact: true })).toBeVisible();
+            expect(alertReads).toEqual([]);
+            releasePortfolios();
+            await expect(page.getByLabel('Alert name', { exact: true })).toBeVisible();
+            await waitForAlertReadsToSettle();
+            const initialReadCounts = Object.fromEntries(alertReadPaths.map(path => [path, alertReads.filter(read => read.path === path).length]));
+            expect(initialReadCounts).toEqual({ '/api/alert-policies/meta': 1, '/api/alert-policies': 1 });
+            expect(alertReads.every(read => read.profileId === '1')).toBe(true);
+            expect(portfolioRequests).toBeGreaterThan(0);
             await page.getByLabel('Alert name', { exact: true }).fill('Close below threshold');
             await page.getByLabel('Alert definition', { exact: true }).fill('Observe a close below 100.');
             await page.getByLabel('Column', { exact: true }).selectOption('latest_close');
@@ -213,6 +263,97 @@ for (const viewport of VIEWPORTS) {
             await page.getByRole('button', { name: 'Delete', exact: true }).click();
             await expect(page.getByText('No alert policies yet. Create one to generate alerts from holdings.', { exact: true })).toBeVisible();
             expect(policies).toEqual([]);
+            expect(rejected).toEqual([]);
+        });
+
+        test(`E2E-16 distinguishes unavailable policy reads from empty and retries the same portfolio (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'E2E-16');
+            const { rejected, seal } = await prepare(page, viewport);
+            await page.addInitScript(() => sessionStorage.setItem('portfolio_active_id', '1'));
+            const meta = { columns: [{ key: 'latest_close', label: 'Latest close' }], condition_operators: [{ value: 'lt', label: 'Less than' }], compare_types: [{ value: 'constant', label: 'Constant' }], action_types: [{ value: 'track', label: 'Track' }] };
+            const savedPolicy = { id: 73, name: 'Recovered policy', is_system: false, is_enabled: true, alert_definition: 'Review the latest close.' };
+            let readPhase = 'initial-unavailable';
+            const trackedReadPaths = ['/api/alert-policies/meta', '/api/alert-policies'];
+            const reads = [];
+            const trackedReadRequests = new Set();
+            const trackedReadWaiters = [];
+            const profileHeaders = [];
+            await page.route('**/api/alert-policies/meta', route => {
+                expect(route.request().method()).toBe('GET');
+                reads.push('/api/alert-policies/meta');
+                profileHeaders.push(route.request().headers()['x-profile-id']);
+                return route.fulfill({ json: { data: meta } });
+            });
+            await page.route('**/api/alert-policies', route => {
+                expect(route.request().method()).toBe('GET');
+                reads.push('/api/alert-policies');
+                profileHeaders.push(route.request().headers()['x-profile-id']);
+                if (readPhase === 'initial-unavailable' || readPhase === 'refresh-unavailable') {
+                    return route.fulfill({ status: 503, json: { message: 'Synthetic policy list unavailable.' } });
+                }
+                return route.fulfill({ json: { data: readPhase === 'rows' ? [savedPolicy] : [] } });
+            });
+            const settleTrackedRead = request => {
+                if (trackedReadRequests.delete(request) && trackedReadRequests.size === 0) {
+                    trackedReadWaiters.splice(0).forEach(resolve => resolve());
+                }
+            };
+            page.on('request', request => {
+                const url = new URL(request.url());
+                if (request.method() === 'GET' && trackedReadPaths.includes(url.pathname)) {
+                    trackedReadRequests.add(request);
+                }
+            });
+            page.on('requestfinished', settleTrackedRead);
+            page.on('requestfailed', settleTrackedRead);
+            const waitForTrackedReadsToSettle = async () => {
+                while (trackedReadRequests.size > 0) {
+                    await new Promise(resolve => trackedReadWaiters.push(resolve));
+                }
+            };
+            await seal();
+            await page.goto('/settings/alert-policies');
+            await expect(page.getByRole('alert').filter({ hasText: 'Alert policies could not be loaded.' })).toBeVisible();
+            await expect(page.getByText('No alert policies yet. Create one to generate alerts from holdings.', { exact: true })).toHaveCount(0);
+            await waitForTrackedReadsToSettle();
+            const readCount = path => reads.filter(read => read === path).length;
+            const initialReadCounts = Object.fromEntries(trackedReadPaths.map(path => [path, readCount(path)]));
+            expect(Object.values(initialReadCounts).every(count => count > 0)).toBe(true);
+            expect(new Set(Object.values(initialReadCounts)).size).toBe(1);
+            const assertOneReadPairAdded = before => {
+                for (const path of trackedReadPaths) expect(readCount(path)).toBe(before[path] + 1);
+            };
+
+            const beforeRetry = Object.fromEntries(trackedReadPaths.map(path => [path, readCount(path)]));
+            readPhase = 'rows';
+            await page.getByRole('button', { name: 'Retry policies', exact: true }).click();
+            await expect(page.getByText('Recovered policy', { exact: true })).toBeVisible();
+            await waitForTrackedReadsToSettle();
+            assertOneReadPairAdded(beforeRetry);
+
+            const scopeId = await page.evaluate(() => sessionStorage.getItem('portfolio_active_id'));
+            expect(scopeId).toBe('1');
+            const beforePortfolioEvent = Object.fromEntries(trackedReadPaths.map(path => [path, readCount(path)]));
+            readPhase = 'refresh-unavailable';
+            await page.evaluate((portfolioId) => {
+                window.dispatchEvent(new CustomEvent('portfolio-changed', { detail: { portfolioId } }));
+            }, scopeId);
+            await expect(page.getByRole('alert').filter({ hasText: 'Showing the last successfully loaded policies' })).toBeVisible();
+            await expect(page.getByText('Recovered policy', { exact: true })).toBeVisible();
+            await waitForTrackedReadsToSettle();
+            assertOneReadPairAdded(beforePortfolioEvent);
+
+            const beforeEmptyRetry = Object.fromEntries(trackedReadPaths.map(path => [path, readCount(path)]));
+            readPhase = 'empty';
+            await page.getByRole('button', { name: 'Retry policies', exact: true }).click();
+            await expect(page.getByText('No alert policies yet. Create one to generate alerts from holdings.', { exact: true })).toBeVisible();
+            await expect(page.getByRole('alert').filter({ hasText: 'Could not refresh alert policies' })).toHaveCount(0);
+            await waitForTrackedReadsToSettle();
+            assertOneReadPairAdded(beforeEmptyRetry);
+            const expectedReadCounts = Object.fromEntries(trackedReadPaths.map(path => [path, initialReadCounts[path] + 3]));
+            expect(reads).toHaveLength(Object.values(initialReadCounts).reduce((total, count) => total + count, 0) + 6);
+            expect(reads.slice().sort()).toEqual(trackedReadPaths.flatMap(path => Array(expectedReadCounts[path]).fill(path)).sort());
+            expect(profileHeaders).toEqual(Array(reads.length).fill('1'));
             expect(rejected).toEqual([]);
         });
     });
