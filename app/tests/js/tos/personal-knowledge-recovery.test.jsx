@@ -19,7 +19,7 @@ vi.mock('../../../resources/js/src/context/AuthContext', () => ({ useAuth: () =>
 vi.mock('../../../resources/js/src/toast', () => ({ showToast: vi.fn() }));
 vi.mock('../../../resources/js/src/components/knowledgeBoard/KnowledgeNoteGrid', () => ({ default: ({ notes, onArchive }) => <>{notes.map(note => <div key={note.id}>{note.title}<button onClick={() => onArchive(note)}>Archive fixture</button></div>)}</> }));
 vi.mock('../../../resources/js/src/components/knowledgeBoard/KnowledgeNoteEditorModal', () => ({ default: () => null }));
-beforeEach(() => { cleanup(); vi.clearAllMocks(); localStorage.clear(); portfolioState.id = 1; });
+beforeEach(() => { cleanup(); vi.resetAllMocks(); localStorage.clear(); portfolioState.id = 1; });
 const unavailable = () => ({ response: { status: 503 }, message: 'Synthetic unavailable' });
 const at = (path, route, node) => render(<MemoryRouter initialEntries={[path]}><Routes><Route path={route} element={node} /></Routes></MemoryRouter>);
 function ContextualNotesNavigation() {
@@ -95,6 +95,38 @@ it('blocks unknown contextual-note overwrite until a failed read is recovered', 
     render(<MemoryRouter><ContextualNotesContent onClose={() => {}} /></MemoryRouter>);
     expect(await screen.findByRole('alert')).toHaveTextContent('Contextual note could not be loaded'); expect(screen.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Retry contextual note' })); expect(await screen.findByLabelText('Contextual note')).toHaveValue('Existing private evidence'); expect(api.post).not.toHaveBeenCalled();
+});
+it.each(['save', 'delete'])('preserves same-scope %s success acknowledgement and rejected draft', async action => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    api.get.mockResolvedValue(contextualNoteList(11, 'Retained same-scope note'));
+    const view = render(<React.StrictMode>{contextualNotesTree()}</React.StrictMode>);
+    const editor = await screen.findByLabelText('Contextual note');
+    await waitFor(() => expect(editor).toHaveValue('Retained same-scope note'));
+    const initialReadCount = api.get.mock.calls.length;
+
+    if (action === 'save') {
+        fireEvent.change(editor, { target: { value: 'Same-scope draft' } });
+        api.put.mockRejectedValueOnce(unavailable()).mockResolvedValueOnce(contextualNoteWrite(11, 'Same-scope draft'));
+        fireEvent.click(screen.getByRole('button', { name: 'Save', exact: true }));
+        await waitFor(() => expect(showToast).toHaveBeenCalledWith('Synthetic unavailable', 'danger'));
+        expect(editor).toHaveValue('Same-scope draft');
+        fireEvent.click(screen.getByRole('button', { name: 'Save', exact: true }));
+        await waitFor(() => expect(showToast).toHaveBeenCalledWith('Note saved'));
+        expect(api.put).toHaveBeenCalledTimes(2);
+        expect(api.put).toHaveBeenLastCalledWith('/contextual-notes/11', { body: 'Same-scope draft' });
+    } else {
+        api.delete.mockRejectedValueOnce(unavailable()).mockResolvedValueOnce({ data: {} });
+        fireEvent.click(screen.getByRole('button', { name: 'Delete', exact: true }));
+        await waitFor(() => expect(showToast).toHaveBeenCalledWith('Synthetic unavailable', 'danger'));
+        expect(editor).toHaveValue('Retained same-scope note');
+        fireEvent.click(screen.getByRole('button', { name: 'Delete', exact: true }));
+        await waitFor(() => expect(showToast).toHaveBeenCalledWith('Note deleted'));
+        expect(api.delete).toHaveBeenCalledTimes(2);
+        expect(api.delete).toHaveBeenLastCalledWith('/contextual-notes/11');
+        expect(editor).toHaveValue('');
+    }
+    expect(api.get).toHaveBeenCalledTimes(initialReadCount);
+    view.unmount();
 });
 it.each(['success', 'error'])('ignores a stale PUT %s after the active Portfolio changes and keeps B saves on B identity', async outcome => {
     api.get.mockImplementation(async (_url, config) => Number(config.params.profile_id) === 1

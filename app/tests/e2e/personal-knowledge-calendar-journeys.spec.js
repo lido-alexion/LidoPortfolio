@@ -91,6 +91,7 @@ for (const viewport of VIEWPORTS) {
                 [1, { id: 701, context_key: 'screeners', profile_id: 1, body: 'Portfolio A note' }],
                 [2, { id: 702, context_key: 'screeners', profile_id: 2, body: 'Portfolio B note' }],
             ]);
+            const writeRequests = [];
             let finishDelayedA;
             const delayedA = new Promise(resolve => { finishDelayedA = resolve; });
             let firstAUpdate = true;
@@ -110,6 +111,7 @@ for (const viewport of VIEWPORTS) {
             await page.route('**/api/contextual-notes/701', async route => {
                 expect(route.request().method()).toBe('PUT');
                 expect(route.request().postDataJSON()).toEqual({ body: 'Delayed A edit' });
+                writeRequests.push({ id: route.request().headers()['x-request-id'], profile: route.request().headers()['x-profile-id'], path: new URL(route.request().url()).pathname });
                 if (firstAUpdate) {
                     firstAUpdate = false;
                     await delayedA;
@@ -121,6 +123,7 @@ for (const viewport of VIEWPORTS) {
             await page.route('**/api/contextual-notes/702', route => {
                 expect(route.request().method()).toBe('PUT');
                 expect(route.request().postDataJSON()).toEqual({ body: 'Saved from B' });
+                writeRequests.push({ id: route.request().headers()['x-request-id'], profile: route.request().headers()['x-profile-id'], path: new URL(route.request().url()).pathname });
                 const updated = { ...records.get(2), body: 'Saved from B' };
                 records.set(2, updated);
                 return route.fulfill({ json: { data: updated } });
@@ -138,22 +141,39 @@ for (const viewport of VIEWPORTS) {
             await pane.getByRole('button', { name: 'Save', exact: true }).click();
             await delayedRequest;
 
+            if (viewport.name === 'mobile') {
+                await pane.getByRole('button', { name: 'Close notes', exact: true }).click();
+            }
             await page.locator('.lido-portfolio-switcher').click();
             await page.getByRole('button', { name: 'Research', exact: true }).click();
             await expect(page.locator('.lido-portfolio-switcher')).toContainText('Research');
-            await expect(editor).toHaveValue('Portfolio B note');
+            if (viewport.name === 'mobile') await open();
+            const currentPane = page.locator('.lido-context-notes-pane');
+            const currentEditor = currentPane.getByLabel('Contextual note');
+            await expect(currentEditor).toHaveValue('Portfolio B note');
 
             const delayedResponse = page.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).pathname === '/api/contextual-notes/701');
             finishDelayedA();
-            await delayedResponse;
-            await expect(editor).toHaveValue('Portfolio B note');
+            const completedDelayedResponse = await delayedResponse;
+            await completedDelayedResponse.finished();
+            await expect(currentEditor).toHaveValue('Portfolio B note');
             await expect(page.getByText('Note saved', { exact: true })).toHaveCount(0);
+            expect(records.get(1)).toMatchObject({ id: 701, profile_id: 1, body: 'Delayed A edit' });
 
-            await editor.fill('Saved from B');
+            await currentEditor.fill('Saved from B');
             const bResponse = page.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).pathname === '/api/contextual-notes/702');
-            await pane.getByRole('button', { name: 'Save', exact: true }).click();
-            await bResponse;
+            await currentPane.getByRole('button', { name: 'Save', exact: true }).click();
+            const completedBResponse = await bResponse;
+            await completedBResponse.finished();
+            await expect(page.getByText('Note saved', { exact: true })).toHaveCount(1);
             expect(records.get(2)).toMatchObject({ id: 702, profile_id: 2, body: 'Saved from B' });
+            expect(writeRequests).toHaveLength(2);
+            expect(writeRequests.map(({ profile, path }) => ({ profile, path }))).toEqual([
+                { profile: '1', path: '/api/contextual-notes/701' },
+                { profile: '2', path: '/api/contextual-notes/702' },
+            ]);
+            expect(writeRequests.every(request => request.id)).toBe(true);
+            expect(new Set(writeRequests.map(request => request.id)).size).toBe(2);
             expect(safety.writes).toEqual([
                 { method: 'PUT', path: '/api/contextual-notes/701' },
                 { method: 'PUT', path: '/api/contextual-notes/702' },
