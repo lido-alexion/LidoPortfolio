@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import api from '../api';
 import usePortfolioChanged from '../hooks/usePortfolioChanged';
 import { showToast } from '../toast';
-import { formatRunListLabel, formatRunResultsHeading, lastRunSummaryText, operatorLabel, runStatsWarning } from '../components/screener/screenerTableHelpers';
+import { formatRunListLabel, formatRunResultsHeading, hasScreenerRunId, lastRunSummaryText, operatorLabel, runCompletionNotice, runStatsWarning, screenerRunIdsMatch } from '../components/screener/screenerTableHelpers';
 import ScreenerRunsCompareTable from '../components/screener/ScreenerRunsCompareTable';
 import NumberInput from '../components/NumberInput';
 import ComboButton from '../components/ComboButton';
@@ -768,7 +768,7 @@ export default function ScreenerEditorPage() {
         while (guard < 500) {
             guard += 1;
             const cont = await api.post(`/screener-runs/${runId}/continue`);
-            setRunResult(cont.data?.data ?? null);
+            if (hasScreenerRunId(cont.data?.data)) setRunResult(cont.data.data);
             if (cont.data?.completed) return cont.data.data;
             if (!cont.data?.continued) return cont.data?.data;
         }
@@ -795,17 +795,41 @@ export default function ScreenerEditorPage() {
             }
             const res = await api.post(`/screeners/${id}/run`);
             let run = res.data?.data;
-            setRunResult(run);
-            if (res.data?.continued && run?.id) {
+            if (hasScreenerRunId(run)) setRunResult(run);
+            if (res.data?.continued && hasScreenerRunId(run)) {
                 showToast('Scanning universe in chunks…');
                 run = await pollContinue(run.id);
             }
-            const full = await api.get(`/screener-runs/${run.id}`);
-            const fullRun = full.data?.data ?? run;
-            setRunResult(fullRun);
-            navigate(`/screeners/${id}?run=${fullRun.id}`, { replace: true });
-            const matched = fullRun?.stats?.matched ?? 0;
-            showToast(`Run ID ${fullRun.id} finished with ${matched} match(es).`);
+            if (hasScreenerRunId(run)) {
+                let fetchedRun = null;
+                try {
+                    const full = await api.get(`/screener-runs/${run.id}`, { skipErrorToast: true });
+                    fetchedRun = full.data?.data;
+                } catch {
+                    // A failed detail read cannot confirm completion; retain the last valid run state.
+                    const notice = runCompletionNotice(null);
+                    showToast(notice.message, notice.variant);
+                    return;
+                }
+                if (hasScreenerRunId(fetchedRun) && screenerRunIdsMatch(fetchedRun.id, run.id)) {
+                    setRunResult(fetchedRun);
+                    navigate(`/screeners/${id}?run=${fetchedRun.id}`, { replace: true });
+                    const notice = runCompletionNotice(fetchedRun);
+                    if (notice) {
+                        showToast(notice.message, notice.variant);
+                    } else {
+                        const matched = fetchedRun.stats?.matched ?? 0;
+                        showToast(`Run ID ${fetchedRun.id} finished with ${matched} match(es).`);
+                    }
+                } else {
+                    const notice = runCompletionNotice(null);
+                    showToast(notice.message, notice.variant);
+                }
+            } else {
+                const notice = runCompletionNotice(null);
+                showToast(notice.message, notice.variant);
+                return;
+            }
             const runsRes = await api.get(`/screeners/${id}/runs`);
             setHistory(runsRes.data?.data ?? []);
             setHistoryTotal(runsRes.data?.total ?? runsRes.data?.data?.length ?? 0);

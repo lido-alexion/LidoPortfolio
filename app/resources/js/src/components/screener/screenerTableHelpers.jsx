@@ -145,6 +145,45 @@ export function runStatsWarning(stats, errorMessage = null) {
     return null;
 }
 
+export function hasScreenerRunId(run) {
+    const id = run?.id;
+    if (typeof id === 'number') return Number.isSafeInteger(id) && id > 0;
+    if (typeof id !== 'string' || !/^[1-9]\d*$/.test(id)) return false;
+    const numericId = Number(id);
+    return Number.isSafeInteger(numericId) && numericId > 0;
+}
+
+export function screenerRunIdsMatch(left, right) {
+    if (!hasScreenerRunId({ id: left }) || !hasScreenerRunId({ id: right })) return false;
+    return Number(left) === Number(right);
+}
+
+export function runCompletionNotice(run) {
+    if (!hasScreenerRunId(run) || typeof run?.status !== 'string' || run.status.trim() === '') {
+        return {
+            message: 'Run completion could not be confirmed. Review run history before retrying.',
+            variant: 'warning',
+        };
+    }
+    if (run.status === 'completed') return null;
+    if (run.status === 'failed') {
+        return {
+            message: `Run ID ${run.id} failed. Review run details for the recorded error.`,
+            variant: 'danger',
+        };
+    }
+    if (run.status === 'running') {
+        return {
+            message: `Run ID ${run.id} is not complete yet. Review run details before retrying.`,
+            variant: 'warning',
+        };
+    }
+    return {
+        message: 'Run completion could not be confirmed. Review run history before retrying.',
+        variant: 'warning',
+    };
+}
+
 export function lastRunWarningMessage(row) {
     const fromRun = runStatsWarning(row.last_run?.stats, row.last_run?.error_message);
     if (fromRun) {
