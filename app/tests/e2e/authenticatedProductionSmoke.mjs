@@ -1,6 +1,6 @@
 import { allowProductionSmokeRequest, createTransientWelcomeSkipGate, neutralizeProductionSmokeRequest, productionSmokeBlockReason, transientWelcomeSkipPayload } from './productionSmokePolicy.js';
 import { readOnlyReviewHeading } from './productionSmokeSelectors.js';
-import { safeAuthenticatedSmokeStage, waitForPresetChartGeometry } from './productionSmokeDiagnostics.js';
+import { readGuidedTourPayload, safeAuthenticatedSmokeStage, waitForPresetChartGeometry } from './productionSmokeDiagnostics.js';
 
 let stage = 'configuration';
 let browser;
@@ -73,7 +73,12 @@ try {
     stage = 'guided_tour_response_status';
     if (!guidedTourResponse.ok()) throw new Error();
     stage = 'guided_tour_payload_parse';
-    const guidedTourPayload = await guidedTourResponse.json();
+    const parsedGuidedTourPayload = await readGuidedTourPayload(guidedTourResponse);
+    if (parsedGuidedTourPayload.failureStage) {
+        stage = parsedGuidedTourPayload.failureStage;
+        throw new Error();
+    }
+    const guidedTourPayload = parsedGuidedTourPayload.payload;
     stage = 'guided_tour_payload_shape';
     const welcomeExpected = guidedTourPayload?.data?.show_welcome_prompt;
     if (typeof welcomeExpected !== 'boolean') throw new Error();

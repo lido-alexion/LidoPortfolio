@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { hasPresetChartGeometry, safeAuthenticatedSmokeStage, waitForPresetChartGeometry } from '../e2e/productionSmokeDiagnostics.js';
+import { hasPresetChartGeometry, readGuidedTourPayload, safeAuthenticatedSmokeStage, waitForPresetChartGeometry } from '../e2e/productionSmokeDiagnostics.js';
 import { allowProductionSmokeRequest, allowTransientWelcomeSkipRequest } from '../e2e/productionSmokePolicy.js';
 
 test('authenticated smoke reports only fixed, stage-level diagnostics', () => {
     for (const stage of [
         'configuration', 'browser_launch', 'login', 'review',
         'guided_tour_response_wait', 'guided_tour_response_status', 'guided_tour_payload_parse', 'guided_tour_payload_shape',
+        'guided_tour_payload_invalid_json', 'guided_tour_payload_read_failed',
         'welcome_skip_payload', 'welcome_modal_render', 'welcome_modal_visibility', 'resume_modal_visibility', 'combo_navigation',
         'combo_preference_response', 'combo_preference_scope', 'combo_chart_attached', 'combo_chart_visible',
         'combo_default_selection', 'combo_default_options', 'combo_default_resolution', 'combo_default_precedence', 'combo_chart_data_rendered', 'combo_keyboard_navigation',
@@ -19,6 +20,20 @@ test('authenticated smoke reports only fixed, stage-level diagnostics', () => {
     assert.equal(safeAuthenticatedSmokeStage('secret@example.test'), 'unknown');
     assert.equal(safeAuthenticatedSmokeStage('provider-response-with-private-data'), 'unknown');
     assert.equal(safeAuthenticatedSmokeStage('https://example.test/path?token=private'), 'unknown');
+});
+
+test('guided-tour JSON diagnostics separate syntax from other read failures without exposing details', async () => {
+    const valid = await readGuidedTourPayload({ json: async () => ({ data: { show_welcome_prompt: false } }) });
+    assert.deepEqual(valid, { payload: { data: { show_welcome_prompt: false } }, failureStage: null });
+
+    const invalidJson = await readGuidedTourPayload({ json: async () => { throw new SyntaxError('private response bytes'); } });
+    assert.deepEqual(invalidJson, { payload: null, failureStage: 'guided_tour_payload_invalid_json' });
+
+    const unavailableBody = await readGuidedTourPayload({ json: async () => { throw new Error('private body/session detail'); } });
+    assert.deepEqual(unavailableBody, { payload: null, failureStage: 'guided_tour_payload_read_failed' });
+    assert.equal(safeAuthenticatedSmokeStage(invalidJson.failureStage), invalidJson.failureStage);
+    assert.equal(safeAuthenticatedSmokeStage(unavailableBody.failureStage), unavailableBody.failureStage);
+    assert.equal(JSON.stringify([invalidJson, unavailableBody]).includes('private'), false);
 });
 
 test('readiness diagnostics preserve the existing read-only and one-use welcome policy', () => {
