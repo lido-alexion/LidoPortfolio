@@ -28,31 +28,51 @@ test.describe('V9-UX-001 execution journeys', () => {
             };
             await installTosApiMocks(page, { recommendations: [recommendation] });
 
-            let pendingAttempts = 0;
+            // React.StrictMode can repeat development mount effects. Keep every
+            // pre-action read in the unavailable phase; advance only when the
+            // test is about to click the corresponding explicit user action.
+            let readPhase = 'initial-unavailable';
+            const trackedReadPaths = ['/api/v1/recommendations/pending-execution', '/api/v1/execution/mode', '/api/v1/orders'];
             const reads = [];
+            const trackedReadRequests = new Set();
+            const trackedReadWaiters = [];
             const writes = [];
             const blockedOrigins = [];
             const appOrigin = 'http://127.0.0.1:4177';
             await page.route('**/api/v1/recommendations/pending-execution', async route => {
-                pendingAttempts++;
-                if (pendingAttempts === 1 || pendingAttempts === 3) {
+                if (readPhase === 'initial-unavailable' || readPhase === 'refresh-unavailable') {
                     return route.fulfill({ status: 503, json: { message: 'Synthetic pending queue read failure.' } });
                 }
                 return route.fulfill({
                     json: {
                         success: true,
-                        data: pendingAttempts === 2 ? [recommendation] : [],
-                        meta: { cash: { cash_balance: 17500, reserved_cash: pendingAttempts === 2 ? 17500 : 0, available_investable_cash: pendingAttempts === 2 ? 0 : 17500 } },
+                        data: readPhase === 'rows' ? [recommendation] : [],
+                        meta: { cash: { cash_balance: 17500, reserved_cash: readPhase === 'rows' ? 17500 : 0, available_investable_cash: readPhase === 'rows' ? 0 : 17500 } },
                     },
                 });
             });
             page.on('request', request => {
                 const url = new URL(request.url());
-                if (['/api/v1/recommendations/pending-execution', '/api/v1/execution/mode', '/api/v1/orders'].includes(url.pathname)) reads.push(url.pathname);
+                if (request.method() === 'GET' && trackedReadPaths.includes(url.pathname)) {
+                    reads.push(url.pathname);
+                    trackedReadRequests.add(request);
+                }
                 if (/^(POST|PUT|PATCH|DELETE)$/.test(request.method()) && url.pathname !== '/api/logs/frontend') {
                     writes.push({ method: request.method(), path: url.pathname });
                 }
             });
+            const settleTrackedRead = request => {
+                if (trackedReadRequests.delete(request) && trackedReadRequests.size === 0) {
+                    trackedReadWaiters.splice(0).forEach(resolve => resolve());
+                }
+            };
+            page.on('requestfinished', settleTrackedRead);
+            page.on('requestfailed', settleTrackedRead);
+            const waitForTrackedReadsToSettle = async () => {
+                while (trackedReadRequests.size > 0) {
+                    await new Promise(resolve => trackedReadWaiters.push(resolve));
+                }
+            };
             await page.route('**/*', async route => {
                 const request = route.request();
                 const url = new URL(request.url());
@@ -70,8 +90,17 @@ test.describe('V9-UX-001 execution journeys', () => {
             await page.goto('/transactions/pending');
             await expect(pendingPanel.getByRole('alert')).toHaveText('Pending executions could not be loaded. Retry to check the current list.');
             await expect(pendingPanel.getByText('No recommendations awaiting execution.')).toHaveCount(0);
-            expect(pendingAttempts).toBe(1);
+            await waitForTrackedReadsToSettle();
+            const readCount = path => reads.filter(read => read === path).length;
+            const initialReadCounts = Object.fromEntries(trackedReadPaths.map(path => [path, readCount(path)]));
+            expect(Object.values(initialReadCounts).every(count => count > 0)).toBe(true);
+            expect(new Set(Object.values(initialReadCounts)).size).toBe(1);
+            const assertOneReadTripletAdded = before => {
+                for (const path of trackedReadPaths) expect(readCount(path)).toBe(before[path] + 1);
+            };
 
+            const beforeRetry = Object.fromEntries(trackedReadPaths.map(path => [path, readCount(path)]));
+            readPhase = 'rows';
             await pendingPanel.getByRole('button', { name: 'Retry', exact: true }).click();
             const row = pendingPanel.getByRole('row').filter({ hasText: 'INFY' });
             await expect(row).toBeVisible();
@@ -80,26 +109,30 @@ test.describe('V9-UX-001 execution journeys', () => {
             await expect(pendingPanel.getByText(/Cash balance:/)).toContainText(/17,?500/);
             await expect(pendingPanel.getByText(/Reserved:/)).toContainText(/17,?500/);
             await expect(pendingPanel.getByText(/Available:/)).toHaveText(/Available:\s*0$/);
-            expect(pendingAttempts).toBe(2);
+            await waitForTrackedReadsToSettle();
+            assertOneReadTripletAdded(beforeRetry);
 
+            const beforeRefresh = Object.fromEntries(trackedReadPaths.map(path => [path, readCount(path)]));
+            readPhase = 'refresh-unavailable';
             await pendingPanel.getByRole('button', { name: 'Refresh', exact: true }).click();
             await expect(pendingPanel.getByRole('alert')).toHaveText('Could not refresh pending executions. Showing the last successfully loaded list; it may be out of date.');
             await expect(row).toBeVisible();
-            expect(pendingAttempts).toBe(3);
+            await waitForTrackedReadsToSettle();
+            assertOneReadTripletAdded(beforeRefresh);
 
+            const beforeEmptyRetry = Object.fromEntries(trackedReadPaths.map(path => [path, readCount(path)]));
+            readPhase = 'empty';
             await pendingPanel.getByRole('button', { name: 'Retry', exact: true }).click();
             await expect(pendingPanel.getByText('No recommendations awaiting execution.')).toBeVisible();
             await expect(pendingPanel.getByRole('alert')).toHaveCount(0);
             await expect(pendingPanel.getByText(/Reserved:/)).toHaveText(/Reserved:\s*0$/);
             await expect(pendingPanel.getByText(/Available:/)).toContainText(/17,?500/);
-            expect(pendingAttempts).toBe(4);
+            await waitForTrackedReadsToSettle();
+            assertOneReadTripletAdded(beforeEmptyRetry);
 
-            expect(reads).toHaveLength(12);
-            expect(reads.slice().sort()).toEqual([
-                ...Array(4).fill('/api/v1/recommendations/pending-execution'),
-                ...Array(4).fill('/api/v1/execution/mode'),
-                ...Array(4).fill('/api/v1/orders'),
-            ].sort());
+            const expectedReadCounts = Object.fromEntries(trackedReadPaths.map(path => [path, initialReadCounts[path] + 3]));
+            expect(reads).toHaveLength(Object.values(initialReadCounts).reduce((total, count) => total + count, 0) + 9);
+            expect(reads.slice().sort()).toEqual(trackedReadPaths.flatMap(path => Array(expectedReadCounts[path]).fill(path)).sort());
             expect(writes).toEqual([]);
             expect(blockedOrigins).toEqual([]);
         });
