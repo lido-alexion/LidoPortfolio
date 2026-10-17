@@ -72,7 +72,7 @@ for (const viewport of VIEWPORTS) {
             page.once('dialog', dialog => dialog.accept()); await row.getByRole('button', { name: 'Delete', exact: true }).click(); await expect(row).toHaveCount(0); expect(runs.map(r => r.id)).toEqual([12]); expect(safety.blocked).toEqual([]); expect(safety.writes).toHaveLength(5);
         });
 
-        test(`E2E-24 distinguishes unavailable replay history from confirmed empty history and retries only on request (${viewport.name})`, async ({ page }, testInfo) => {
+        test(`E2E-24 recovers unavailable replay history through an explicit GET retry (${viewport.name})`, async ({ page }, testInfo) => {
             journeyId(testInfo, 'E2E-24');
             const safety = await prepare(page, viewport, 'replay-list-read', () => false);
             const replay = { id: 41, created_at: '2026-10-10T10:00:00Z', period_start: '2026-09-01', period_end: '2026-10-01', starting_mode: 'new_simulated', price_method: 'next_close', adverse_slippage_percent: 0.25, status: 'completed' };

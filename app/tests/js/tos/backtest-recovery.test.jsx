@@ -132,7 +132,6 @@ describe('Historical analysis recovery', () => {
                     : staleDetail.promise;
             }
             if (path === '/replays/2') return Promise.resolve({ data: { data: { id: 2, status: 'completed' } } });
-            if (path === '/replays/3') return Promise.resolve({ data: { data: [replay(3, 'Portfolio B run')] } });
             return Promise.reject(new Error(`Unexpected read ${path}`));
         });
         api.post.mockResolvedValue({ data: { data: { compatible: true, runs: [], disclosure: 'Synthetic comparison.' } } });
@@ -177,5 +176,51 @@ describe('Historical analysis recovery', () => {
         expect(screen.queryByRole('alert')).toBeNull();
         expect(showToast).not.toHaveBeenCalled();
         expect(api.get).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not repopulate history when a prior-scope list succeeds late', async () => {
+        const staleList = deferred();
+        let listReads = 0;
+        api.get.mockImplementation((path) => {
+            if (path !== '/replays') return Promise.reject(new Error(`Unexpected read ${path}`));
+            listReads += 1;
+            return listReads === 1
+                ? staleList.promise
+                : Promise.resolve({ data: { data: [replay(3, 'Portfolio B run')] } });
+        });
+        const view = render(<PortfolioReplayPanel portfolio={{ id: 1, name: 'Portfolio A' }} />);
+        view.rerender(<PortfolioReplayPanel portfolio={{ id: 3, name: 'Portfolio B' }} />);
+        expect(await screen.findByLabelText('Compare Replay 3')).toBeVisible();
+        await act(async () => staleList.resolve({ data: { data: [replay(1, 'Portfolio A late run')] } }));
+        expect(screen.getByLabelText('Compare Replay 3')).toBeVisible();
+        expect(screen.queryByLabelText('Compare Replay 1')).toBeNull();
+        expect(screen.queryByRole('alert')).toBeNull();
+        expect(api.get).toHaveBeenCalledTimes(2);
+    });
+
+    it('ignores a late comparison response from the previous portfolio scope', async () => {
+        const staleComparison = deferred();
+        let listReads = 0;
+        api.get.mockImplementation((path) => {
+            if (path !== '/replays') return Promise.reject(new Error(`Unexpected read ${path}`));
+            listReads += 1;
+            return Promise.resolve({ data: { data: listReads === 1
+                ? [replay(1), replay(2)]
+                : [replay(3, 'Portfolio B run')] } });
+        });
+        api.post.mockReturnValueOnce(staleComparison.promise);
+        const view = render(<PortfolioReplayPanel portfolio={{ id: 1, name: 'Portfolio A' }} />);
+        expect(await screen.findByLabelText('Compare Replay 1')).toBeVisible();
+        fireEvent.click(screen.getByLabelText('Compare Replay 1'));
+        fireEvent.click(screen.getByLabelText('Compare Replay 2'));
+        fireEvent.click(screen.getByRole('button', { name: 'Compare selected (2)' }));
+        await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+        view.rerender(<PortfolioReplayPanel portfolio={{ id: 3, name: 'Portfolio B' }} />);
+        expect(await screen.findByLabelText('Compare Replay 3')).toBeVisible();
+        expect(screen.getByRole('button', { name: 'Compare selected (0)' })).toBeDisabled();
+        await act(async () => staleComparison.resolve({ data: { data: { compatible: true, runs: [], disclosure: 'Stale comparison.' } } }));
+        expect(screen.queryByTestId('replay-comparison')).toBeNull();
+        expect(screen.getByLabelText('Compare Replay 3')).toBeVisible();
+        expect(api.post).toHaveBeenCalledTimes(1);
     });
 });
