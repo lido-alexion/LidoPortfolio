@@ -14,6 +14,7 @@ use App\Models\TradingStrategy;
 use App\Models\TradingStrategyVersion;
 use App\Models\User;
 use App\Services\CashManagementService;
+use App\Services\Lending\LenderEligibilityService;
 use App\Services\Lending\CapitalRequestApprovalService;
 use App\Services\Lending\CapitalResolutionService;
 use App\Services\Lending\RecommendationLendingCoordinator;
@@ -257,7 +258,7 @@ class CapitalPriorityCloseAtActualTest extends TestCase
 
     public function test_real_executed_amount_takes_precedence_over_committed_projection(): void
     {
-        [$user, $profile, $borrower, $lender] = $this->twoStrategyPortfolio(2_000_000);
+        [$user, $profile, $lender, $borrower] = $this->twoStrategyPortfolio(2_000_000);
         $rec = $this->makeBuyRecommendation($profile, $borrower, [
             'status' => TradingRecommendation::ALLOCATION_PARTIALLY_FUNDED,
             'target_amount' => 50_000,
@@ -267,6 +268,23 @@ class CapitalPriorityCloseAtActualTest extends TestCase
         app(RecommendationLendingCoordinator::class)->syncAfterGenerated($rec);
         $request = app(RecommendationLendingCoordinator::class)->activeRequestFor($rec->fresh());
         $this->assertNotNull($request);
+
+        $this->assertSame((int) $borrower->id, (int) $request->borrower_strategy_id);
+        $eligibleLenders = app(LenderEligibilityService::class)->eligibleLenders(
+            $profile,
+            (int) $borrower->id,
+            (float) $request->amount,
+        );
+        $matchingLender = array_values(array_filter(
+            $eligibleLenders,
+            fn (array $candidate): bool => (int) $candidate['strategy_id'] === (int) $lender->id,
+        ));
+        $this->assertCount(1, $matchingLender);
+        $this->assertGreaterThanOrEqual(
+            (float) $request->amount,
+            (float) $matchingLender[0]['available_for_lending'],
+        );
+
         $loan = app(CapitalRequestApprovalService::class)->approve($request, $lender, $user);
         $this->assertEqualsWithDelta(20_000.0, (float) $loan->principal, 0.0001);
 
