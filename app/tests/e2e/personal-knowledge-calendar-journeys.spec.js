@@ -84,5 +84,81 @@ for (const viewport of VIEWPORTS) {
             await page.route('**/api/contextual-notes?*', route => { const params = new URL(route.request().url()).searchParams; expect(params.get('context_key')).toBe('screeners'); expect(params.get('profile_id')).toBe('1'); if (readFails) return fail(route); return route.fulfill({ json: { data: record ? [record] : [] } }); }); await page.route('**/api/contextual-notes', route => { const body = route.request().postDataJSON(); expect(body).toEqual({ context_key: 'screeners', profile_id: 1, body: 'Private screen rationale' }); if (createFails) { createFails = false; return fail(route); } record = { id: 701, ...body }; return route.fulfill({ status: 201, json: { data: record } }); }); await page.route('**/api/contextual-notes/701', route => { if (route.request().method() === 'DELETE') { if (deleteFails) { deleteFails = false; return fail(route); } record = null; return route.fulfill({ json: { data: {} } }); } expect(route.request().postDataJSON()).toEqual({ body: 'Updated private rationale' }); if (updateFails) { updateFails = false; return fail(route); } record.body = 'Updated private rationale'; return route.fulfill({ json: { data: record } }); });
             await safety.seal(); await page.goto('/screeners'); const open = () => page.locator(`.lido-notes-utility-action--${viewport.name}`).click(); await open(); let pane = page.locator('.lido-context-notes-pane'); await expect(pane.getByRole('alert')).toContainText('Contextual note could not be loaded'); await expect(pane.getByRole('button', { name: 'Save', exact: true })).toBeDisabled(); readFails = false; await pane.getByRole('button', { name: 'Retry contextual note' }).click(); await pane.getByLabel('Contextual note').fill('Private screen rationale'); await pane.getByRole('button', { name: 'Save', exact: true }).click(); await expect(page.getByText('Synthetic knowledge unavailable.', { exact: true })).toBeVisible(); await expect(pane.getByLabel('Contextual note')).toHaveValue('Private screen rationale'); expect(record).toBeNull(); await pane.getByRole('button', { name: 'Save', exact: true }).click(); await expect.poll(() => record?.id).toBe(701); await pane.getByRole('button', { name: 'Close notes', exact: true }).click(); await open(); pane = page.locator('.lido-context-notes-pane'); await expect(pane.getByLabel('Contextual note')).toHaveValue('Private screen rationale'); await pane.getByLabel('Contextual note').fill('Updated private rationale'); await pane.getByRole('button', { name: 'Save', exact: true }).click(); await expect(page.getByText('Synthetic knowledge unavailable.', { exact: true }).last()).toBeVisible(); expect(record.body).toBe('Private screen rationale'); await pane.getByRole('button', { name: 'Save', exact: true }).click(); await expect.poll(() => record?.body).toBe('Updated private rationale'); await nativeAction(page, () => pane.getByRole('button', { name: 'Delete', exact: true }).click(), 'dismiss'); expect(safety.writes.filter(w => w.method === 'DELETE')).toHaveLength(0); await nativeAction(page, () => pane.getByRole('button', { name: 'Delete', exact: true }).click(), 'accept'); await expect(page.getByText('Synthetic knowledge unavailable.', { exact: true }).last()).toBeVisible(); expect(record).not.toBeNull(); await nativeAction(page, () => pane.getByRole('button', { name: 'Delete', exact: true }).click(), 'accept'); await expect(pane.getByLabel('Contextual note')).toHaveValue(''); expect(record).toBeNull(); expect(safety.writes).toHaveLength(6); expect(safety.blocked).toEqual([]);
         });
+        test(`E2E-45 discards a delayed save from the previous Portfolio and keeps B note identity (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'E2E-45');
+            const safety = await prepare(page, viewport, 'contextual-portfolio-write-race', (method, path) => method === 'PUT' && ['/api/contextual-notes/701', '/api/contextual-notes/702'].includes(path));
+            const records = new Map([
+                [1, { id: 701, context_key: 'screeners', profile_id: 1, body: 'Portfolio A note' }],
+                [2, { id: 702, context_key: 'screeners', profile_id: 2, body: 'Portfolio B note' }],
+            ]);
+            let finishDelayedA;
+            const delayedA = new Promise(resolve => { finishDelayedA = resolve; });
+            let firstAUpdate = true;
+
+            await page.route('**/api/portfolios', route => route.fulfill({ json: { data: [
+                { id: 1, name: 'Main', is_default: true },
+                { id: 2, name: 'Research', is_default: false },
+            ] } }));
+            await page.route('**/api/contextual-notes?*', route => {
+                const params = new URL(route.request().url()).searchParams;
+                expect(params.get('context_key')).toBe('screeners');
+                const profileId = Number(params.get('profile_id'));
+                expect([1, 2]).toContain(profileId);
+                const current = records.get(profileId);
+                return route.fulfill({ json: { data: current ? [current] : [] } });
+            });
+            await page.route('**/api/contextual-notes/701', async route => {
+                expect(route.request().method()).toBe('PUT');
+                expect(route.request().postDataJSON()).toEqual({ body: 'Delayed A edit' });
+                if (firstAUpdate) {
+                    firstAUpdate = false;
+                    await delayedA;
+                }
+                const updated = { ...records.get(1), body: 'Delayed A edit' };
+                records.set(1, updated);
+                return route.fulfill({ json: { data: updated } });
+            });
+            await page.route('**/api/contextual-notes/702', route => {
+                expect(route.request().method()).toBe('PUT');
+                expect(route.request().postDataJSON()).toEqual({ body: 'Saved from B' });
+                const updated = { ...records.get(2), body: 'Saved from B' };
+                records.set(2, updated);
+                return route.fulfill({ json: { data: updated } });
+            });
+
+            await safety.seal();
+            await page.goto('/screeners');
+            const open = () => page.locator(`.lido-notes-utility-action--${viewport.name}`).click();
+            await open();
+            const pane = page.locator('.lido-context-notes-pane');
+            const editor = pane.getByLabel('Contextual note');
+            await expect(editor).toHaveValue('Portfolio A note');
+            await editor.fill('Delayed A edit');
+            const delayedRequest = page.waitForRequest(request => request.method() === 'PUT' && new URL(request.url()).pathname === '/api/contextual-notes/701');
+            await pane.getByRole('button', { name: 'Save', exact: true }).click();
+            await delayedRequest;
+
+            await page.locator('.lido-portfolio-switcher').click();
+            await page.getByRole('button', { name: 'Research', exact: true }).click();
+            await expect(page.locator('.lido-portfolio-switcher')).toContainText('Research');
+            await expect(editor).toHaveValue('Portfolio B note');
+
+            const delayedResponse = page.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).pathname === '/api/contextual-notes/701');
+            finishDelayedA();
+            await delayedResponse;
+            await expect(editor).toHaveValue('Portfolio B note');
+            await expect(page.getByText('Note saved', { exact: true })).toHaveCount(0);
+
+            await editor.fill('Saved from B');
+            const bResponse = page.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).pathname === '/api/contextual-notes/702');
+            await pane.getByRole('button', { name: 'Save', exact: true }).click();
+            await bResponse;
+            expect(records.get(2)).toMatchObject({ id: 702, profile_id: 2, body: 'Saved from B' });
+            expect(safety.writes).toEqual([
+                { method: 'PUT', path: '/api/contextual-notes/701' },
+                { method: 'PUT', path: '/api/contextual-notes/702' },
+            ]);
+            expect(safety.blocked).toEqual([]);
+        });
     });
 }
