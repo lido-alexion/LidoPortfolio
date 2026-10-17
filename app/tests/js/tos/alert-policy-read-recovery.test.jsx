@@ -8,6 +8,9 @@ vi.mock('../../../resources/js/src/api', () => ({ default: apiMock }));
 vi.mock('../../../resources/js/src/toast', () => ({ showToast: vi.fn() }));
 
 import AlertPoliciesPage from '../../../resources/js/src/pages/AlertPoliciesPage.jsx';
+import AuthContext from '../../../resources/js/src/context/AuthContext.jsx';
+import { PortfolioProvider } from '../../../resources/js/src/context/PortfolioContext.jsx';
+import PortfolioSwitcher from '../../../resources/js/src/components/PortfolioSwitcher.jsx';
 
 const meta = {
     stock_universes: [{ value: 'holdings', label: 'Holdings' }],
@@ -35,7 +38,33 @@ const policy = (id, name) => ({
 const metaResponse = (data = meta) => ({ data: { data } });
 const listResponse = (data) => ({ data: { data } });
 const unavailable = () => Promise.reject({ response: { status: 503, data: { message: 'Synthetic private server detail' } } });
-const renderPage = () => render(<MemoryRouter><AlertPoliciesPage /></MemoryRouter>);
+const renderPage = ({ portfoliosPromise, portfolioList, strictMode = false } = {}) => {
+    const configuredGet = apiMock.get.getMockImplementation();
+    apiMock.get.mockImplementation((path, ...args) => {
+        if (path === '/portfolios') {
+            return portfoliosPromise ?? Promise.resolve({ data: { data: portfolioList ?? [{ id: 1, name: 'Main', is_default: true }] } });
+        }
+        return configuredGet?.(path, ...args);
+    });
+    const content = (
+        <MemoryRouter>
+            <AuthContext.Provider value={{
+                isAuthenticated: true,
+                user: { id: 1, default_portfolio_id: 1 },
+                loading: false,
+            }}>
+                <PortfolioProvider>
+                    <>
+                        <PortfolioSwitcher />
+                        <AlertPoliciesPage />
+                    </>
+                </PortfolioProvider>
+            </AuthContext.Provider>
+        </MemoryRouter>,
+    );
+    return render(strictMode ? <React.StrictMode>{content}</React.StrictMode> : content);
+};
+const alertReadCalls = () => apiMock.get.mock.calls.filter(([path]) => path.startsWith('/alert-policies'));
 const refreshSamePortfolio = async () => {
     await act(async () => {
         window.dispatchEvent(new CustomEvent('portfolio-changed', { detail: { portfolioId: 1 } }));
@@ -55,6 +84,85 @@ beforeEach(() => {
 });
 
 describe('alert policy list read recovery', () => {
+    it('waits for the real portfolio provider to choose a canonical startup scope before reading policies', async () => {
+        sessionStorage.clear();
+        const portfolios = deferred();
+        const startupScopes = [];
+        apiMock.get.mockImplementation((path) => {
+            if (path.endsWith('/meta')) {
+                startupScopes.push(sessionStorage.getItem('portfolio_active_id'));
+                return Promise.resolve(metaResponse());
+            }
+            if (path === '/alert-policies') {
+                startupScopes.push(sessionStorage.getItem('portfolio_active_id'));
+                return Promise.resolve(listResponse([]));
+            }
+            throw new Error(`Unexpected GET ${path}`);
+        });
+
+        renderPage({ portfoliosPromise: portfolios.promise });
+        await waitFor(() => expect(apiMock.get.mock.calls.some(([path]) => path === '/portfolios')).toBe(true));
+        expect(screen.getByText('Waiting for a selected portfolio to load alert policies…')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'New policy' }));
+        expect(alertReadCalls()).toHaveLength(0);
+        expect(screen.queryByLabelText('Alert name')).toBeNull();
+        expect(screen.queryByText('No alert policies yet. Create one to generate alerts from holdings.')).toBeNull();
+
+        await act(async () => portfolios.resolve({ data: { data: [{ id: 1, name: 'Main', is_default: true }] } }));
+
+        expect(await screen.findByLabelText('Alert name')).toBeInTheDocument();
+        expect(alertReadCalls().map(([path]) => path)).toEqual(['/alert-policies/meta', '/alert-policies']);
+        expect(startupScopes).toEqual(['1', '1']);
+        expect(sessionStorage.getItem('portfolio_active_id')).toBe('1');
+        expect(screen.getByText('No alert policies yet. Create one to generate alerts from holdings.')).toBeInTheDocument();
+    });
+
+    it('bridges cold-start scope once when the real provider effects replay under StrictMode', async () => {
+        sessionStorage.clear();
+        const portfolios = deferred();
+        apiMock.get.mockImplementation((path) => {
+            if (path.endsWith('/meta')) return Promise.resolve(metaResponse());
+            if (path === '/alert-policies') return Promise.resolve(listResponse([]));
+            throw new Error(`Unexpected GET ${path}`);
+        });
+
+        renderPage({ portfoliosPromise: portfolios.promise, strictMode: true });
+        await waitFor(() => expect(apiMock.get.mock.calls.filter(([path]) => path === '/portfolios').length).toBeGreaterThan(0));
+        expect(alertReadCalls()).toHaveLength(0);
+        await act(async () => portfolios.resolve({ data: { data: [{ id: 1, name: 'Main', is_default: true }] } }));
+
+        await screen.findByText('No alert policies yet. Create one to generate alerts from holdings.');
+        expect(alertReadCalls().map(([path]) => path)).toEqual(['/alert-policies/meta', '/alert-policies']);
+    });
+
+    it('uses one existing read pair for a real portfolio switch after startup', async () => {
+        const readScopes = [];
+        apiMock.get.mockImplementation((path) => {
+            if (path === '/portfolios') throw new Error('Portfolio GET is handled by the provider fixture.');
+            readScopes.push(sessionStorage.getItem('portfolio_active_id'));
+            return path.endsWith('/meta')
+                ? Promise.resolve(metaResponse())
+                : Promise.resolve(listResponse([]));
+        });
+
+        renderPage({
+            portfolioList: [
+                { id: 1, name: 'Main', is_default: true },
+                { id: 2, name: 'Research', is_default: false },
+            ],
+        });
+        await screen.findByText('No alert policies yet. Create one to generate alerts from holdings.');
+        expect(alertReadCalls()).toHaveLength(2);
+
+        fireEvent.click(await screen.findByTitle('Switch portfolio (per tab)'));
+        fireEvent.click(await screen.findByRole('button', { name: /Research/ }));
+
+        await waitFor(() => expect(alertReadCalls()).toHaveLength(4));
+        expect(alertReadCalls().slice(2).map(([path]) => path)).toEqual(['/alert-policies/meta', '/alert-policies']);
+        expect(readScopes).toEqual(['1', '1', '2', '2']);
+        expect(sessionStorage.getItem('portfolio_active_id')).toBe('2');
+    });
+
     it('distinguishes an initial list failure from confirmed empty and retries the existing GET pair', async () => {
         let listAttempts = 0;
         apiMock.get.mockImplementation((path) => {
@@ -70,7 +178,7 @@ describe('alert policy list read recovery', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Retry policies' }));
         expect(await screen.findByText('No alert policies yet. Create one to generate alerts from holdings.')).toBeInTheDocument();
-        expect(apiMock.get.mock.calls.map(([path]) => path)).toEqual([
+        expect(alertReadCalls().map(([path]) => path)).toEqual([
             '/alert-policies/meta', '/alert-policies', '/alert-policies/meta', '/alert-policies',
         ]);
         expect(apiMock.post).not.toHaveBeenCalled();
@@ -109,7 +217,7 @@ describe('alert policy list read recovery', () => {
         failMeta = false;
         fireEvent.click(screen.getByRole('button', { name: 'Retry policies' }));
         expect(await screen.findByText('No alert policies yet. Create one to generate alerts from holdings.')).toBeInTheDocument();
-        expect(apiMock.get).toHaveBeenCalledTimes(4);
+        expect(alertReadCalls()).toHaveLength(4);
     });
 
     it('keeps a confirmed empty list unconfirmed after a later read failure', async () => {
@@ -167,7 +275,7 @@ describe('alert policy list read recovery', () => {
         expect(await screen.findByText('Updated policy')).toBeInTheDocument();
         expect(screen.queryByText('Original policy')).toBeNull();
         expect(screen.getByLabelText('Alert name')).toHaveValue('Unsaved draft');
-        expect(apiMock.get).toHaveBeenCalledTimes(6);
+        expect(alertReadCalls()).toHaveLength(6);
         expect(apiMock.post).not.toHaveBeenCalled();
         expect(apiMock.put).not.toHaveBeenCalled();
         expect(apiMock.delete).not.toHaveBeenCalled();
@@ -192,9 +300,9 @@ describe('alert policy list read recovery', () => {
         expect(await screen.findByText('Portfolio A policy')).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Edit', exact: true }));
         await refreshSamePortfolio();
-        await waitFor(() => expect(apiMock.get).toHaveBeenCalledTimes(4));
+        await waitFor(() => expect(alertReadCalls()).toHaveLength(4));
         await refreshSamePortfolio();
-        await waitFor(() => expect(apiMock.get).toHaveBeenCalledTimes(6));
+        await waitFor(() => expect(alertReadCalls()).toHaveLength(6));
 
         sessionStorage.setItem('portfolio_active_id', '2');
         await act(async () => {
@@ -230,7 +338,7 @@ describe('alert policy list read recovery', () => {
         renderPage();
         expect(await screen.findByText('Old portfolio policy')).toBeInTheDocument();
         await refreshSamePortfolio();
-        await waitFor(() => expect(apiMock.get).toHaveBeenCalledTimes(4));
+        await waitFor(() => expect(alertReadCalls()).toHaveLength(4));
         sessionStorage.setItem('portfolio_active_id', '2');
 
         if (outcome === 'resolve') {
@@ -242,11 +350,11 @@ describe('alert policy list read recovery', () => {
         expect(await screen.findByRole('alert')).toHaveTextContent('Alert policies could not be loaded.');
         expect(screen.queryByText('Old portfolio policy')).toBeNull();
         expect(screen.queryByText('Late old-scope policy')).toBeNull();
-        expect(apiMock.get).toHaveBeenCalledTimes(4);
+        expect(alertReadCalls()).toHaveLength(4);
 
         fireEvent.click(screen.getByRole('button', { name: 'Retry policies' }));
         expect(await screen.findByText('New portfolio policy')).toBeInTheDocument();
-        expect(apiMock.get).toHaveBeenCalledTimes(6);
+        expect(alertReadCalls()).toHaveLength(6);
     });
 
     it('does not replay a successful create when its follow-up read fails and is retried', async () => {
@@ -275,6 +383,6 @@ describe('alert policy list read recovery', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Retry policies' }));
         expect(await screen.findByText('Created policy')).toBeInTheDocument();
         expect(apiMock.post).toHaveBeenCalledTimes(1);
-        expect(apiMock.get).toHaveBeenCalledTimes(6);
+        expect(alertReadCalls()).toHaveLength(6);
     });
 });

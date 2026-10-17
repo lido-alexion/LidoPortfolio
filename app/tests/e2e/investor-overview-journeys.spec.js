@@ -159,11 +159,49 @@ for (const viewport of VIEWPORTS) {
         test(`E2E-16 retries alert creation/evaluation, persists disable and respects delete confirmation (${viewport.name})`, async ({ page }, testInfo) => {
             journeyId(testInfo, 'E2E-16');
             const { rejected, seal } = await prepare(page, viewport, [['POST', '/api/alert-policies'], ['PUT', '/api/alert-policies/73'], ['DELETE', '/api/alert-policies/73'], ['POST', '/api/alert-policies/evaluate']]);
+            let releasePortfolios;
+            let markPortfolioRequestStarted;
+            const portfolioGate = new Promise(resolve => { releasePortfolios = resolve; });
+            const portfolioRequestStarted = new Promise(resolve => { markPortfolioRequestStarted = resolve; });
+            let portfolioRequests = 0;
+            const alertReadPaths = ['/api/alert-policies/meta', '/api/alert-policies'];
+            const alertReads = [];
+            const pendingAlertReads = new Set();
+            const pendingAlertReadWaiters = [];
+            const settleAlertRead = request => {
+                if (pendingAlertReads.delete(request) && pendingAlertReads.size === 0) {
+                    pendingAlertReadWaiters.splice(0).forEach(resolve => resolve());
+                }
+            };
+            page.on('request', request => {
+                const url = new URL(request.url());
+                if (request.method() === 'GET' && alertReadPaths.includes(url.pathname)) {
+                    alertReads.push({ path: url.pathname, profileId: request.headers()['x-profile-id'] });
+                    pendingAlertReads.add(request);
+                }
+            });
+            page.on('requestfinished', settleAlertRead);
+            page.on('requestfailed', settleAlertRead);
+            const waitForAlertReadsToSettle = async () => {
+                while (pendingAlertReads.size > 0) {
+                    await new Promise(resolve => pendingAlertReadWaiters.push(resolve));
+                }
+            };
+            await page.route('**/api/portfolios', async route => {
+                expect(route.request().method()).toBe('GET');
+                portfolioRequests++;
+                markPortfolioRequestStarted();
+                await portfolioGate;
+                return route.fulfill({ json: { data: [{ id: 1, name: 'Main', is_default: true }] } });
+            });
             let policies = [];
             let failSave = true;
             let failEvaluation = true;
             const meta = { columns: [{ key: 'latest_close', label: 'Latest close' }], condition_operators: [{ value: 'lt', label: 'Less than' }], compare_types: [{ value: 'constant', label: 'Constant' }], action_types: [{ value: 'sell', label: 'Sell' }] };
-            await page.route('**/api/alert-policies/meta', route => route.fulfill({ json: { data: meta } }));
+            await page.route('**/api/alert-policies/meta', route => {
+                expect(route.request().method()).toBe('GET');
+                return route.fulfill({ json: { data: meta } });
+            });
             await page.route('**/api/alert-policies', route => {
                 if (route.request().method() === 'GET') return route.fulfill({ json: { data: policies } });
                 if (failSave) { failSave = false; return route.fulfill({ status: 503, json: { message: 'Synthetic alert save unavailable.' } }); }
@@ -184,7 +222,19 @@ for (const viewport of VIEWPORTS) {
             });
             await seal();
             await page.goto('/settings/alert-policies');
+            await portfolioRequestStarted;
+            expect(await page.evaluate(() => sessionStorage.getItem('portfolio_active_id'))).toBeNull();
+            expect(alertReads).toEqual([]);
             await page.getByRole('button', { name: 'New policy', exact: true }).click();
+            await expect(page.getByText('Waiting for a selected portfolio to load alert policies…', { exact: true })).toBeVisible();
+            expect(alertReads).toEqual([]);
+            releasePortfolios();
+            await expect(page.getByLabel('Alert name', { exact: true })).toBeVisible();
+            await waitForAlertReadsToSettle();
+            const initialReadCounts = Object.fromEntries(alertReadPaths.map(path => [path, alertReads.filter(read => read.path === path).length]));
+            expect(initialReadCounts).toEqual({ '/api/alert-policies/meta': 1, '/api/alert-policies': 1 });
+            expect(alertReads.every(read => read.profileId === '1')).toBe(true);
+            expect(portfolioRequests).toBeGreaterThan(0);
             await page.getByLabel('Alert name', { exact: true }).fill('Close below threshold');
             await page.getByLabel('Alert definition', { exact: true }).fill('Observe a close below 100.');
             await page.getByLabel('Column', { exact: true }).selectOption('latest_close');

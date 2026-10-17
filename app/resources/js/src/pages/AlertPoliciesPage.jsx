@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import AlertPolicyForm from '../components/AlertPolicyForm';
+import { usePortfolio } from '../context/PortfolioContext';
 import usePortfolioChanged from '../hooks/usePortfolioChanged';
 import { getActivePortfolioId } from '../portfolio/activePortfolioStorage';
 import { showToast } from '../toast';
@@ -70,6 +71,7 @@ function isValidPolicyMeta(meta) {
 }
 
 export default function AlertPoliciesPage() {
+    const { activePortfolioId } = usePortfolio();
     const [meta, setMeta] = useState(null);
     const [policies, setPolicies] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -82,8 +84,15 @@ export default function AlertPoliciesPage() {
     const [fieldErrors, setFieldErrors] = useState({});
     const [listConfirmed, setListConfirmed] = useState(false);
     const [loadError, setLoadError] = useState(false);
+    const [waitingForPortfolio, setWaitingForPortfolio] = useState(
+        () => getActivePortfolioId() == null,
+    );
     const loadGenerationRef = React.useRef(0);
     const scopeRef = React.useRef({ id: getActivePortfolioId() });
+    const startupBridgePendingRef = React.useRef(getActivePortfolioId() == null);
+    const startupBridgeLoadedByEventRef = React.useRef(null);
+    const initialLoadDispatchedRef = React.useRef(false);
+    const hasConfirmedScopeRef = React.useRef(getActivePortfolioId() != null);
 
     const resetScopePresentation = useCallback((scopeId) => {
         scopeRef.current.id = scopeId;
@@ -109,9 +118,25 @@ export default function AlertPoliciesPage() {
 
     const load = useCallback(async () => {
         const scopeId = getActivePortfolioId();
+        if (!scopeId) {
+            loadGenerationRef.current += 1;
+            if (scopeRef.current.id !== null) {
+                resetScopePresentation(null);
+            }
+            setWaitingForPortfolio(true);
+            setLoading(false);
+            setLoadError(false);
+            return;
+        }
         const generation = ++loadGenerationRef.current;
+        setWaitingForPortfolio(false);
         if (scopeRef.current.id !== scopeId) {
-            resetScopePresentation(scopeId);
+            if (scopeRef.current.id === null && !hasConfirmedScopeRef.current) {
+                scopeRef.current.id = scopeId;
+                hasConfirmedScopeRef.current = true;
+            } else {
+                resetScopePresentation(scopeId);
+            }
         }
         setLoading(true);
         setLoadError(false);
@@ -157,10 +182,76 @@ export default function AlertPoliciesPage() {
     }, [resetScopePresentation]);
 
     useEffect(() => {
+        const activeId = activePortfolioId == null ? null : String(activePortfolioId);
+        const canonicalId = getActivePortfolioId();
+
+        if (startupBridgePendingRef.current) {
+            if (!activeId || canonicalId !== activeId) {
+                setWaitingForPortfolio(true);
+                setLoading(false);
+                return;
+            }
+            startupBridgePendingRef.current = false;
+            setWaitingForPortfolio(false);
+        } else if (activeId && startupBridgeLoadedByEventRef.current === activeId) {
+            startupBridgeLoadedByEventRef.current = null;
+            setWaitingForPortfolio(false);
+            return;
+        }
+
+        if (!activeId) {
+            if (canonicalId) {
+                loadGenerationRef.current += 1;
+                resetScopePresentation(null);
+                setWaitingForPortfolio(true);
+                setLoading(false);
+                setLoadError(false);
+                return;
+            }
+            if (scopeRef.current.id !== null) {
+                load();
+            } else {
+                setWaitingForPortfolio(true);
+                setLoading(false);
+            }
+            return;
+        }
+
+        if (canonicalId !== activeId) {
+            loadGenerationRef.current += 1;
+            resetScopePresentation(null);
+            setWaitingForPortfolio(true);
+            setLoading(false);
+            setLoadError(false);
+            return;
+        }
+
+        if (initialLoadDispatchedRef.current) {
+            if (scopeRef.current.id !== activeId) {
+                loadGenerationRef.current += 1;
+                resetScopePresentation(null);
+                setLoadError(true);
+                setLoading(false);
+                setWaitingForPortfolio(false);
+            }
+            return;
+        }
+
+        initialLoadDispatchedRef.current = true;
+        load();
+    }, [activePortfolioId, load, resetScopePresentation]);
+
+    const handlePortfolioChanged = useCallback(() => {
+        const activeId = getActivePortfolioId();
+        if (startupBridgePendingRef.current && activeId) {
+            startupBridgePendingRef.current = false;
+            startupBridgeLoadedByEventRef.current = activeId;
+            initialLoadDispatchedRef.current = true;
+        }
         load();
     }, [load]);
 
-    usePortfolioChanged(load);
+    usePortfolioChanged(handlePortfolioChanged);
 
     const runPolicies = async () => {
         setEvaluating(true);
@@ -326,7 +417,7 @@ export default function AlertPoliciesPage() {
                 </div>
             )}
 
-            {showForm && meta && (
+            {showForm && meta && !waitingForPortfolio && (
                 <div className="card mb-4">
                     <div className="card-header">
                         {editing ? `Edit: ${editing.name}` : 'New alert policy'}
@@ -358,7 +449,9 @@ export default function AlertPoliciesPage() {
 
             <div className="card">
                 <div className="card-body p-0">
-                    {loading ? (
+                    {waitingForPortfolio ? (
+                        <p className="text-muted p-3 mb-0">Waiting for a selected portfolio to load alert policies…</p>
+                    ) : loading ? (
                         <p className="text-muted p-3 mb-0">Loading policies…</p>
                     ) : (
                         <ul className="list-group list-group-flush">
