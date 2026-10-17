@@ -8,6 +8,117 @@ const VIEWPORTS = [
     { name: 'desktop', width: 1440, height: 900 },
 ];
 
+function screenerRunFixture({ id, status }) {
+    return {
+        id,
+        screener_id: 41,
+        status,
+        triggered_by: 'manual',
+        started_at: '2026-10-17T09:00:00Z',
+        finished_at: status === 'running' ? null : '2026-10-17T09:00:02Z',
+        progress_pct: status === 'running' ? 50 : 100,
+        error_message: status === 'failed' ? 'Synthetic evaluator failure.' : null,
+        stats: { scanned: status === 'completed' ? 7 : 0, matched: 0,
+            skipped_insufficient_data: 0, errors: 0, warnings: [] },
+        hits: { data: [], current_page: 1, last_page: 1, total: 0 },
+    };
+}
+
+async function installScreenerRunSequence(page, sequence, initialRuns = []) {
+    const runsById = new Map();
+    const detailModesById = new Map();
+    initialRuns.forEach((run) => {
+        const fixture = screenerRunFixture(run);
+        runsById.set(fixture.id, fixture);
+        detailModesById.set(fixture.id, 'normal');
+    });
+    let requestCount = 0;
+    const fulfill = (route, body, status = 200) => route.fulfill({
+        status,
+        contentType: 'application/json',
+        body: JSON.stringify(body),
+    });
+
+    await page.route('**/api/screeners/41/run', async (route) => {
+        const next = sequence[requestCount++];
+        const run = next ? screenerRunFixture(next) : null;
+        if (run) {
+            runsById.set(run.id, run);
+            detailModesById.set(run.id, next.detailMode ?? 'normal');
+        }
+        await fulfill(route, { data: run }, 201);
+    });
+    await page.route('**/api/screener-runs/*', async (route) => {
+        const id = Number(new URL(route.request().url()).pathname.split('/').at(-1));
+        const detailMode = detailModesById.get(id);
+        if (detailMode === 'missing') {
+            await fulfill(route, { data: null });
+        } else if (detailMode === 'mismatched') {
+            await fulfill(route, { data: screenerRunFixture({ id: id + 1000, status: 'completed' }) });
+        } else if (detailMode === 'error') {
+            await fulfill(route, { message: 'Synthetic detail read failure.' }, 500);
+        } else if (detailMode === 'string-equivalent') {
+            const run = runsById.get(id);
+            await fulfill(route, { data: run ? { ...run, id: String(run.id) } : null });
+        } else {
+            await fulfill(route, { data: runsById.get(id) ?? null });
+        }
+    });
+    await page.route('**/api/screeners/41/runs', async (route) => {
+        const data = [...runsById.values()]
+            .sort((left, right) => right.id - left.id)
+            .map(({ hits, ...summary }) => summary);
+        await fulfill(route, { data, total: data.length, limit: 30 });
+    });
+
+    return { getRequestCount: () => requestCount };
+}
+
+function screenerFixture() {
+    return {
+        id: 41,
+        name: 'Price Above MA200',
+        scope: 'holdings',
+        is_enabled: true,
+        definition_json: { root: { type: 'group', op: 'AND', children: [{
+            type: 'condition', left: { indicator: 'close', params: {} }, operator: 'gt', weight_factor: 1,
+            right: { indicator: 'sma', params: { period: 200 } },
+        }] } },
+        description: 'Deterministic run fixture.',
+        watchlist_id: null,
+        index_symbol: null,
+    };
+}
+
+async function prepareScreenerJourney(page, viewport, seedName, mockOptions = {}) {
+    await seedDeterministicJourney(page, seedName);
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    const allowedOrigin = new URL(process.env.STOX_E2E_BASE_URL || 'http://127.0.0.1:4177').origin;
+    const externalRequests = [];
+    const requests = [];
+    await page.route('**/*', (route) => {
+        if (new URL(route.request().url()).origin !== allowedOrigin) {
+            externalRequests.push(route.request().url());
+            return route.abort();
+        }
+        return route.fallback();
+    });
+    await installInvestorWorkflowApiMocks(page, mockOptions);
+    page.on('request', (request) => {
+        const url = new URL(request.url());
+        requests.push({ method: request.method(), path: url.pathname });
+    });
+    return { externalRequests, requests };
+}
+
+function assertSafeScreenerJourney(evidence) {
+    expect(evidence.externalRequests).toEqual([]);
+    expect(evidence.requests.filter(({ method, path }) => (
+        /^(POST|PUT|PATCH|DELETE)$/.test(method)
+        && /\/(orders|transactions|holdings|broker|kite|execution|pipeline)(?:\/|$)/.test(path)
+    ))).toEqual([]);
+}
+
 test.describe('V9-UX-001 screener journeys', () => {
     for (const viewport of VIEWPORTS) {
         test(`SCR-01 creates and saves Close > SMA(200) (${viewport.name})`, async ({ page }, testInfo) => {
@@ -211,9 +322,7 @@ test.describe('V9-UX-001 screener journeys', () => {
         });
         test('SCR-06 runs a screener and inspects matching evidence (' + viewport.name + ')', async ({ page }, testInfo) => {
             journeyId(testInfo, 'SCR-06');
-            await seedDeterministicJourney(page, 'screener-scr06-' + viewport.name);
-            await page.setViewportSize({ width: viewport.width, height: viewport.height });
-            await installInvestorWorkflowApiMocks(page, {
+            const safety = await prepareScreenerJourney(page, viewport, 'screener-scr06-' + viewport.name, {
                 initialScreeners: [{ id: 41, name: 'Price Above MA200', scope: 'holdings', is_enabled: true,
                     definition_json: { root: { type: 'group', op: 'AND', children: [{
                         type: 'condition', left: { indicator: 'close', params: {} }, operator: 'gt',
@@ -229,8 +338,6 @@ test.describe('V9-UX-001 screener journeys', () => {
                         current_page: 1, last_page: 1, total: 1 },
                 },
             });
-            const observedRequests = [];
-            page.on('request', (request) => observedRequests.push(new URL(request.url()).pathname));
             await page.goto('/screeners/41');
             const runRequest = page.waitForRequest((request) => (
                 request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/api/screeners/41/run')
@@ -253,8 +360,135 @@ test.describe('V9-UX-001 screener journeys', () => {
             await expect(results).toHaveScreenshot(`scr-06-results-${viewport.name}.png`, { animations: 'disabled', caret: 'hide' });
             const accessibility = await new AxeBuilder({ page }).include('[aria-label="Screener run results"]').withTags(['wcag2a', 'wcag2aa']).analyze();
             expect(accessibility.violations).toEqual([]);
-            expect(observedRequests.some((path) => /\/orders(?:\/|$)/.test(path))).toBe(false);
+            assertSafeScreenerJourney(safety);
         });
+        for (const entrypoint of ['My Screens', 'editor']) {
+            test(`SCR-06 acknowledges only confirmed run completion (${entrypoint}, ${viewport.name})`, async ({ page }, testInfo) => {
+                journeyId(testInfo, 'SCR-06');
+                const safety = await prepareScreenerJourney(
+                    page, viewport, `screener-scr06-status-${entrypoint}-${viewport.name}`,
+                    { initialScreeners: [screenerFixture()] },
+                );
+                const sequence = [
+                    { id: 601, status: 'failed' },
+                    { id: 602, status: 'running' },
+                    { id: 603, status: 'completed', detailMode: 'string-equivalent' },
+                    { id: 604, status: 'unexpected_status' },
+                ];
+                const runSequence = await installScreenerRunSequence(page, sequence);
+
+                if (entrypoint === 'editor') await page.goto('/screeners/41');
+                for (const scenario of sequence) {
+                    if (entrypoint === 'My Screens') {
+                        await page.goto('/screeners');
+                        await page.getByRole('button', { name: 'Run', exact: true }).click();
+                    } else {
+                        await page.getByRole('button', { name: 'Run now' }).click();
+                    }
+
+                    if (scenario) {
+                        await expect(page).toHaveURL(new RegExp(`/screeners/41\\?run=${scenario.id}$`));
+                        const results = page.getByRole('region', { name: 'Screener run results', exact: true });
+                        await expect(results).toContainText(`Run ID ${scenario.id}`);
+                        if (scenario.status === 'failed') {
+                            await expect(results).toContainText('failed');
+                            await expect(results).toContainText('Synthetic evaluator failure.');
+                            await expect(page.getByText(
+                                'Run ID 601 failed. Review run details for the recorded error.', { exact: true },
+                            )).toBeVisible();
+                            await expect(page.locator('.lido-toast').filter({ hasText: /finished/i })).toHaveCount(0);
+                        } else if (scenario.status === 'running') {
+                            await expect(results).toContainText('running');
+                            await expect(page.getByText(
+                                'Run ID 602 is not complete yet. Review run details before retrying.', { exact: true },
+                            )).toBeVisible();
+                        } else if (scenario.status === 'completed') {
+                            await expect(results).toContainText('completed');
+                            const completionText = entrypoint === 'My Screens'
+                                ? 'Run finished: 0 match(es) / 7 scanned'
+                                : 'Run ID 603 finished with 0 match(es).';
+                            await expect(page.getByText(completionText, { exact: true })).toBeVisible();
+                        } else {
+                            await expect(results).toContainText('unexpected_status');
+                            await expect(page.getByText(
+                                'Run completion could not be confirmed. Review run history before retrying.', { exact: true },
+                            )).toBeVisible();
+                        }
+                    }
+                }
+
+                expect(runSequence.getRequestCount()).toBe(sequence.length);
+                assertSafeScreenerJourney(safety);
+                await page.goto('/screeners/41');
+                const failedHistory = page.getByRole('button', { name: /Run ID 601 · Manual · failed/ });
+                await expect(failedHistory).toBeVisible();
+                await failedHistory.click();
+                await expect(page.getByRole('region', { name: 'Screener run results', exact: true }))
+                    .toContainText('Synthetic evaluator failure.');
+            });
+        }
+        if (viewport.name === 'desktop') {
+            for (const entrypoint of ['My Screens', 'editor']) {
+                test(`SCR-06 reports an unavailable run response (${entrypoint})`, async ({ page }, testInfo) => {
+                    journeyId(testInfo, 'SCR-06');
+                    const safety = await prepareScreenerJourney(
+                        page, viewport, `screener-scr06-missing-${entrypoint}-${viewport.name}`,
+                        { initialScreeners: [screenerFixture()] },
+                    );
+                    const runSequence = await installScreenerRunSequence(page, [null], entrypoint === 'editor'
+                        ? [{ id: 700, status: 'completed' }]
+                        : []);
+                    const observedPageErrors = [];
+                    page.on('pageerror', (error) => observedPageErrors.push(error));
+                    if (entrypoint === 'editor') {
+                        await page.goto('/screeners/41?run=700');
+                        await expect(page.getByRole('region', { name: 'Screener run results', exact: true }))
+                            .toContainText('Run ID 700');
+                    } else {
+                        await page.goto('/screeners');
+                    }
+
+                    if (entrypoint === 'My Screens') {
+                        await page.getByRole('button', { name: 'Run', exact: true }).click();
+                        await expect(page).toHaveURL('/screeners');
+                    } else {
+                        await page.getByRole('button', { name: 'Run now' }).click();
+                        await expect(page).toHaveURL('/screeners/41?run=700');
+                        await expect(page.getByRole('region', { name: 'Screener run results', exact: true }))
+                            .toContainText('Run ID 700');
+                    }
+                    await expect(page.getByText(
+                        'Run completion could not be confirmed. Review run history before retrying.', { exact: true },
+                    )).toBeVisible();
+                    expect(observedPageErrors).toEqual([]);
+                    expect(runSequence.getRequestCount()).toBe(1);
+                    assertSafeScreenerJourney(safety);
+                });
+            }
+            for (const detailMode of ['missing', 'mismatched', 'error']) {
+                test(`SCR-06 does not confirm unusable run details (${detailMode})`, async ({ page }, testInfo) => {
+                    journeyId(testInfo, 'SCR-06');
+                    const safety = await prepareScreenerJourney(
+                        page, viewport, `screener-scr06-detail-${detailMode}-${viewport.name}`,
+                        { initialScreeners: [screenerFixture()] },
+                    );
+                    const runSequence = await installScreenerRunSequence(page, [{ id: 605, status: 'completed', detailMode }]);
+                    await page.goto('/screeners/41');
+                    await page.getByRole('button', { name: 'Run now' }).click();
+
+                    await expect(page).toHaveURL('/screeners/41');
+                    await expect(page.getByRole('region', { name: 'Screener run results', exact: true }))
+                        .toContainText('Run ID 605');
+                    await expect(page.getByText(
+                        'Run completion could not be confirmed. Review run history before retrying.', { exact: true },
+                    )).toBeVisible();
+                    await expect(page.locator('.lido-toast').filter({ hasText: /finished/i })).toHaveCount(0);
+                    await expect(page.locator('.lido-toast').filter({ hasText: 'Synthetic detail read failure.' })).toHaveCount(0);
+                    expect(runSequence.getRequestCount()).toBe(1);
+                    assertSafeScreenerJourney(safety);
+                });
+            }
+        }
         test('SCR-09 explains non-matches and unavailable inputs from the saved run snapshot (' + viewport.name + ')', async ({ page }, testInfo) => {
             journeyId(testInfo, 'SCR-09');
             await seedDeterministicJourney(page, 'screener-scr09-' + viewport.name);
