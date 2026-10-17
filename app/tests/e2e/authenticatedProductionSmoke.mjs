@@ -1,6 +1,6 @@
 import { allowProductionSmokeRequest, createTransientWelcomeSkipGate, neutralizeProductionSmokeRequest, productionSmokeBlockReason, transientWelcomeSkipPayload } from './productionSmokePolicy.js';
 import { readOnlyReviewHeading } from './productionSmokeSelectors.js';
-import { safeAuthenticatedSmokeStage, waitForPresetChartGeometry } from './productionSmokeDiagnostics.js';
+import { createGuidedTourResponseCapture, readGuidedTourPayload, safeAuthenticatedSmokeStage, waitForPresetChartGeometry } from './productionSmokeDiagnostics.js';
 
 let stage = 'configuration';
 let browser;
@@ -61,26 +61,39 @@ try {
     await page.getByRole('heading', { name: 'Login', exact: true }).waitFor({ state: 'hidden', timeout: 30_000 });
     login = false;
     stage = 'review';
-    const guidedTourResponsePromise = page.waitForResponse(response => {
-        const request = response.request();
-        const target = new URL(response.url());
-        return response.ok() && request.method() === 'GET' && target.origin === new URL(baseURL).origin && target.pathname === '/api/guided-tour';
-    });
-    await page.goto('/review');
-    await readOnlyReviewHeading(page).waitFor({ state: 'visible' });
-    stage = 'account_onboarding_readiness';
-    const guidedTourResponse = await guidedTourResponsePromise;
+    const guidedTourCapture = createGuidedTourResponseCapture(page, baseURL);
+    let guidedTourResponse;
+    try {
+        await page.goto('/review');
+        await readOnlyReviewHeading(page).waitFor({ state: 'visible' });
+        stage = 'guided_tour_response_wait';
+        guidedTourResponse = await guidedTourCapture.response;
+    } finally {
+        guidedTourCapture.dispose();
+    }
+    stage = 'guided_tour_response_status';
     if (!guidedTourResponse.ok()) throw new Error();
-    const guidedTourPayload = await guidedTourResponse.json();
+    stage = 'guided_tour_payload_parse';
+    const parsedGuidedTourPayload = await readGuidedTourPayload(guidedTourResponse);
+    if (parsedGuidedTourPayload.failureStage) {
+        stage = parsedGuidedTourPayload.failureStage;
+        throw new Error();
+    }
+    const guidedTourPayload = parsedGuidedTourPayload.payload;
+    stage = 'guided_tour_payload_shape';
     const welcomeExpected = guidedTourPayload?.data?.show_welcome_prompt;
     if (typeof welcomeExpected !== 'boolean') throw new Error();
+    stage = 'welcome_skip_payload';
     welcomeSkipResponsePayload = transientWelcomeSkipPayload(guidedTourPayload.data);
     if (!welcomeSkipResponsePayload) throw new Error();
+    stage = 'welcome_modal_render';
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const welcome = page.locator('.lido-guided-tour-modal[aria-labelledby="guided-tour-welcome-title"]');
     const resume = page.locator('.lido-guided-tour-modal[aria-labelledby="guided-tour-resume-title"]');
+    stage = 'welcome_modal_visibility';
     if (welcomeExpected) await welcome.waitFor({ state: 'visible' });
     else if (await welcome.count()) throw new Error();
+    stage = 'resume_modal_visibility';
     if (await resume.count()) throw new Error();
     stage = 'combo_navigation';
     const preferenceResponsePromise = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/v1/stock-details/combo-chart-preference');
