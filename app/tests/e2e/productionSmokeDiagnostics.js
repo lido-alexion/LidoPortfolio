@@ -6,6 +6,8 @@ const AUTHENTICATED_SMOKE_STAGES = new Set([
     'guided_tour_response_wait',
     'guided_tour_response_status',
     'guided_tour_payload_parse',
+    'guided_tour_payload_invalid_json',
+    'guided_tour_payload_read_failed',
     'guided_tour_payload_shape',
     'welcome_skip_payload',
     'welcome_modal_render',
@@ -35,6 +37,20 @@ const AUTHENTICATED_SMOKE_STAGES = new Set([
 // Only fixed labels may cross the production-smoke logging boundary.
 export function safeAuthenticatedSmokeStage(stage) {
     return AUTHENTICATED_SMOKE_STAGES.has(stage) ? stage : 'unknown';
+}
+
+// Return only fixed categories; never propagate browser error text or response data.
+export async function readGuidedTourPayload(response) {
+    try {
+        return { payload: await response.json(), failureStage: null };
+    } catch (error) {
+        return {
+            payload: null,
+            failureStage: error instanceof SyntaxError
+                ? 'guided_tour_payload_invalid_json'
+                : 'guided_tour_payload_read_failed',
+        };
+    }
 }
 
 // Keep the production acceptance rule shared with browser regression coverage.
