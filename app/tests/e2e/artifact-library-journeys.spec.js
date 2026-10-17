@@ -62,3 +62,46 @@ for (const viewport of VIEWPORTS) {
         });
     });
 }
+
+for (const viewport of VIEWPORTS) {
+    test.describe(`Artifact detail route identity ${viewport.name}`, () => {
+        test.use({ hasTouch: viewport.name === 'mobile' });
+        test(`E2E-32 keeps the in-place BrowserRouter detail route bound to its UUID (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'E2E-32');
+            const routeA = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+            const routeB = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+            const safety = await prepare(page, viewport, 'detail-route-identity', () => false);
+            let releaseA;
+            let releaseB;
+            let startA;
+            let startB;
+            const gateA = new Promise(resolve => { releaseA = resolve; });
+            const gateB = new Promise(resolve => { releaseB = resolve; });
+            const startedA = new Promise(resolve => { startA = resolve; });
+            const startedB = new Promise(resolve => { startB = resolve; });
+            await page.route(/\/api\/v1\/artifact-library\/(dddddddd-dddd-4ddd-8ddd-dddddddddddd|eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee)$/, async route => {
+                const uuid = new URL(route.request().url()).pathname.split('/').at(-1);
+                if (uuid === routeA) { startA(); await gateA; }
+                else { startB(); await gateB; }
+                return route.fulfill({ json: { data: artifact([], { artifact_uuid: uuid, name: uuid === routeA ? 'Route A detail' : 'Route B detail' }) } });
+            });
+            await safety.seal();
+            await page.goto(`/artifact-library/${routeA}`);
+            await startedA;
+            await page.evaluate(uuid => {
+                window.history.pushState({}, '', `/artifact-library/${uuid}`);
+                window.dispatchEvent(new PopStateEvent('popstate'));
+            }, routeB);
+            await startedB;
+            await expect(page.getByRole('heading', { name: 'Route A detail' })).toHaveCount(0);
+            await expect(page.getByRole('heading', { name: 'Artifact', exact: true })).toBeVisible();
+            releaseB();
+            await expect(page.getByRole('heading', { name: 'Route B detail' })).toBeVisible();
+            releaseA();
+            await expect(page.getByRole('heading', { name: 'Route B detail' })).toBeVisible();
+            await expect(page.getByRole('heading', { name: 'Route A detail' })).toHaveCount(0);
+            expect(safety.writes).toHaveLength(0);
+            expect(safety.blocked).toEqual([]);
+        });
+    });
+}
