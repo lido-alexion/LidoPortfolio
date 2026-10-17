@@ -1,111 +1,136 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import useMlAcceptanceWizard from './ml-acceptance/useMlAcceptanceWizard';
+import AcceptanceStepper, { stepDefinitions } from './ml-acceptance/components/AcceptanceStepper';
+import ReadinessStep from './ml-acceptance/components/ReadinessStep';
+import DiscoveryPreflightStep from './ml-acceptance/components/DiscoveryPreflightStep';
+import HistoricalSourcesStep from './ml-acceptance/components/HistoricalSourcesStep';
+import BackfillStep from './ml-acceptance/components/BackfillStep';
+import FinalPreflightStep from './ml-acceptance/components/FinalPreflightStep';
+import CandidateTrainingStep from './ml-acceptance/components/CandidateTrainingStep';
+import AcceptanceReviewStep from './ml-acceptance/components/AcceptanceReviewStep';
+import AdvancedDiagnostics from './ml-acceptance/components/AdvancedDiagnostics';
 import api from '../api';
+import { canAdvance } from './ml-acceptance/reasonStatus';
+import { describeAcceptanceReason } from './ml-acceptance/acceptanceReasonRegistry';
+import './ml-acceptance/acceptanceWizard.css';
 
-const base = '/v1/admin/ml/acceptance';
-const initialDate = () => new Date().toISOString().slice(0, 10);
+const today = () => new Date().toISOString().slice(0, 10);
 
 export default function MlAcceptancePanel() {
-    const [report, setReport] = useState(null);
-    const [sources, setSources] = useState([]);
-    const [sourcePage, setSourcePage] = useState(1);
-    const [sourceLastPage, setSourceLastPage] = useState(1);
-    const [selected, setSelected] = useState([]);
-    const [date, setDate] = useState(initialDate);
-    const [cutoff, setCutoff] = useState(initialDate);
-    const [family, setFamily] = useState('nse_cash_bhavcopy');
-    const [file, setFile] = useState(null);
-    const [resumeId, setResumeId] = useState('');
-    const [backfillId, setBackfillId] = useState('');
-    const [backfill, setBackfill] = useState(null);
-    const [busy, setBusy] = useState(false);
-    const [message, setMessage] = useState('');
+    const state = useMlAcceptanceWizard();
+    const { wizard, base, sourcesPage, page, setPage, busyAction, error, stale, lastChecked, refresh, run } = state;
+    const [activeStep, setActiveStep] = useState(null);
+    const [cutoff, setCutoff] = useState(today);
+    const [selectedSources, setSelectedSources] = useState([]);
+    const [selectedSourceDetails, setSelectedSourceDetails] = useState({});
+    const [finished, setFinished] = useState(false);
+    const heading = useRef(null);
+    const errorSummary = useRef(null);
+    const priorServerStep = useRef(null);
+    const autoSelectedOptions = useRef('');
+    const expanded = activeStep || wizard?.current_step || 1;
+    const report = wizard ? {
+        migrations: wizard.migrations || {},
+        evidence_current: wizard.evidence_current === true,
+    } : null;
 
-    const refresh = async (page = sourcePage) => {
-        const [r, s] = await Promise.all([api.get(base), api.get(`${base}/sources${page > 1 ? `?page=${page}` : ''}`)]);
-        setReport(r.data.data); setSources(s.data.data.data || []);
-        setSourcePage(s.data.data.current_page || page);
-        setSourceLastPage(s.data.data.last_page || 1);
-        if (backfillId) setBackfill((await api.get(`${base}/backfills/${backfillId}`)).data.data);
-    };
-    const perform = async (work, page = sourcePage) => {
-        setBusy(true); setMessage('');
-        try { await work(); await refresh(page); }
-        catch (error) { setMessage(Object.values(error.response?.data?.errors || {}).flat().join(' ') || error.response?.data?.message || error.message); }
-        finally { setBusy(false); }
-    };
-    useEffect(() => { perform(async () => {}); }, []); // Only explicit controls mutate operations.
+    useLayoutEffect(() => {
+        if (!wizard) return;
+        if (priorServerStep.current === null || priorServerStep.current !== wizard.current_step) {
+            setActiveStep(wizard.current_step);
+            priorServerStep.current = wizard.current_step;
+        }
+        if (wizard.campaign?.cutoff_date) setCutoff(wizard.campaign.cutoff_date);
+    }, [wizard?.current_step, wizard?.campaign?.cutoff_date]);
 
-    const upload = async () => {
-        if (!file || file.size > 16 * 1024 * 1024) throw new Error('Choose a CSV or ZIP up to 16 MiB.');
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        const digest = await crypto.subtle.digest('SHA-256', bytes);
-        const sha256 = Array.from(new Uint8Array(digest), (v) => v.toString(16).padStart(2, '0')).join('');
-        let source;
-        const isNewUpload = !resumeId;
-        if (resumeId) {
-            source = (await api.get(`${base}/sources/${resumeId}`)).data.data;
-            if (source.manifest.sha256 !== sha256 || source.manifest.bytes !== file.size) throw new Error('Reselect the identical original file to resume.');
-        } else {
-            source = (await api.post(`${base}/sources`, { version: 1, source: family, date, filename: file.name, bytes: file.size, sha256 })).data.data;
-            setResumeId(source.id);
-        }
-        const received = isNewUpload && source.received === undefined ? 0 : source.received;
-        if (!Number.isSafeInteger(received) || received < 0 || received > bytes.length || received > source.manifest.bytes) {
-            throw new Error('Could not read a valid current upload offset. Refresh the source list and resume the upload again.');
-        }
-        for (let offset = received; offset < bytes.length; offset += 1024 * 1024) {
-            const chunk = bytes.subarray(offset, Math.min(offset + 1024 * 1024, bytes.length));
-            let binary = ''; for (const byte of chunk) binary += String.fromCharCode(byte);
-            await api.put(`${base}/sources/${source.id}/chunks`, { offset, chunk: btoa(binary) });
-            setMessage(`Uploaded ${Math.min(offset + chunk.length, bytes.length)} of ${bytes.length} bytes`);
-        }
-        await api.post(`${base}/sources/${source.id}/finalize`);
-        setResumeId(''); setMessage('Validation queued. Refresh to inspect its result.');
-    };
-    const preview = async () => {
-        const result = (await api.post(`${base}/backfills/preview`, { sources: selected })).data.data;
-        setBackfill(result); setBackfillId(String(result.id));
-    };
-    const campaignAction = async (action) => { await api.post(`${base}/campaigns/${report.campaign_id}/${action}`); };
+    useLayoutEffect(() => {
+        if (activeStep !== null) heading.current?.focus();
+    }, [activeStep]);
 
-    return <section className="card mb-3"><div className="card-body">
-        <h2 className="h5">Production ML acceptance</h2>
-        <p className="text-muted">Stage dated NSE files, preview historical membership changes, then explicitly run the linked 1m, 3m and 6m acceptance campaign. Models remain candidates. Scheduling requires current production evidence.</p>
-        <button className="btn btn-outline-secondary btn-sm mb-2" disabled={busy} onClick={() => perform(async () => {})}>Refresh acceptance report</button>
-        {message && <p role="status">{message}</p>}
-        {report && <p>Campaign: {report.campaign_status}. Lifecycle readiness: {report.readiness.ready ? 'Ready' : report.readiness.reason}. Queue configuration: {report.runtime.queue_configuration_ready ? 'Ready; worker execution requires evidence' : 'Not ready'}.</p>}
-        <fieldset disabled={busy}>
-            <legend className="h6">Private NSE source upload</legend>
-            <label className="me-2">Source family <select className="form-select form-select-sm" value={family} onChange={(e) => setFamily(e.target.value)}><option value="nse_cash_bhavcopy">Cash bhavcopy</option><option value="nse_mii_security_file">MII security file</option></select></label>
-            <label className="me-2">Source date <input className="form-control form-control-sm" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
-            <label className="me-2">Official CSV or ZIP <input className="form-control form-control-sm" type="file" accept=".csv,.zip" onChange={(e) => setFile(e.target.files?.[0] || null)} /></label>
-            <label className="me-2">Resume upload <select className="form-select form-select-sm" value={resumeId} onChange={(e) => setResumeId(e.target.value)}><option value="">New upload</option>{sources.filter((s) => s.status === 'uploading').map((s) => <option key={s.id} value={s.id}>{s.manifest.filename} ({s.received} bytes)</option>)}</select></label>
-            <button className="btn btn-outline-primary btn-sm" disabled={!file} onClick={() => perform(upload)}>Upload and queue validation</button>
-            <div className="table-responsive mt-3"><table className="table table-sm"><thead><tr><th>Select</th><th>Source</th><th>Status</th><th>Action</th></tr></thead><tbody>{sources.map((s) => <tr key={s.id}>
-                <td><input aria-label={`Select ${s.manifest.filename}`} type="checkbox" disabled={s.status !== 'sealed'} checked={selected.includes(s.id)} onChange={(e) => setSelected((ids) => e.target.checked ? [...ids, s.id] : ids.filter((id) => id !== s.id))} /></td>
-                <td>{s.manifest.filename}<br /><small>{s.manifest.date}</small></td><td>{s.status}</td>
-                <td>{s.status === 'queued' && <button className="btn btn-outline-secondary btn-sm me-2" onClick={() => perform(() => api.post(`${base}/sources/${s.id}/resume`))}>Resume validation</button>}{['uploading', 'queued'].includes(s.status) && <button className="btn btn-outline-danger btn-sm" onClick={() => perform(() => api.post(`${base}/sources/${s.id}/cancel`))}>Cancel upload</button>}</td>
-            </tr>)}</tbody></table></div>
-            <div className="mb-2">
-                <button className="btn btn-outline-secondary btn-sm me-2" disabled={sourcePage <= 1} onClick={() => perform(async () => {}, sourcePage - 1)}>Previous sources</button>
-                <span>Source page {sourcePage} of {sourceLastPage}</span>
-                <button className="btn btn-outline-secondary btn-sm ms-2" disabled={sourcePage >= sourceLastPage} onClick={() => perform(async () => {}, sourcePage + 1)}>Next sources</button>
-            </div>
-            <button className="btn btn-outline-primary btn-sm" disabled={!selected.length} onClick={() => perform(preview)}>Queue backfill dry-run</button>
-            <label className="ms-2">Backfill ID <input type="number" min="1" value={backfillId} onChange={(e) => setBackfillId(e.target.value)} /></label>
-            <button className="btn btn-outline-secondary btn-sm ms-2" onClick={() => perform(async () => {})}>Load backfill status</button>
-            {backfill && <div className="mt-2"><p>Backfill {backfill.id}: {backfill.status}, {backfill.acceptance.mode}; {backfill.acceptance.cursor} of {backfill.requested_dates.length} dates.</p>
-                {backfill.status === 'completed' && backfill.acceptance.mode === 'preview' && <button className="btn btn-warning btn-sm me-2" onClick={() => perform(async () => { setBackfill((await api.post(`${base}/backfills/${backfill.id}/apply`)).data.data); })}>Apply reviewed backfill</button>}
-                {['queued', 'running', 'failed'].includes(backfill.status) && ['resume', 'cancel'].map((action) => <button key={action} className="btn btn-outline-secondary btn-sm me-2" onClick={() => perform(async () => { setBackfill((await api.post(`${base}/backfills/${backfill.id}/${action}`)).data.data); })}>{action} backfill</button>)}
-                <details><summary>Backfill evidence</summary><pre>{JSON.stringify(backfill.acceptance.results, null, 2)}</pre></details>
-            </div>}
-            <hr /><legend className="h6">Acceptance campaign</legend>
-            <label className="me-2">Training cutoff <input type="date" value={cutoff} onChange={(e) => setCutoff(e.target.value)} /></label>
-            <button className="btn btn-outline-primary btn-sm me-2" disabled={['preflight', 'ready', 'training'].includes(report?.campaign_status)} onClick={() => perform(() => api.post(`${base}/campaigns`, { cutoff_date: cutoff }))}>Queue campaign preflight</button>
-            {report?.campaign_status === 'ready' && <button className="btn btn-warning btn-sm me-2" onClick={() => perform(() => campaignAction('start'))}>Start 1m/3m/6m training</button>}
-            {['preflight', 'training', 'cancelled'].includes(report?.campaign_status) && <button className="btn btn-outline-secondary btn-sm me-2" onClick={() => perform(() => campaignAction('resume'))}>Resume campaign</button>}
-            {['preflight', 'ready', 'training'].includes(report?.campaign_status) && <button className="btn btn-outline-danger btn-sm" onClick={() => perform(() => campaignAction('cancel'))}>Cancel campaign</button>}
-        </fieldset>
-        {report && <details className="mt-3"><summary>Read-only acceptance evidence and blocking reasons</summary><pre style={{ maxHeight: 500, overflow: 'auto' }}>{JSON.stringify(report, null, 2)}</pre></details>}
-    </div></section>;
+    useEffect(() => { if (error) errorSummary.current?.focus(); }, [error]);
+
+    const statusFor = (number) => wizard?.steps?.[number - 1]?.status || 'not_started';
+    const sourceOptionsKey = JSON.stringify([wizard?.campaign?.id || null, (wizard?.required_sources || []).map((requirement) => [
+        requirement.date, (requirement.sources || []).filter((source) => source.status === 'sealed' && requirement.accepted_families?.includes(source.family)).map((source) => source.id),
+    ])]);
+    useEffect(() => {
+        if (!wizard || autoSelectedOptions.current === sourceOptionsKey) return;
+        autoSelectedOptions.current = sourceOptionsKey;
+        const requirements = wizard.required_sources || [];
+        const retained = selectedSources.filter((id) => {
+            const source = selectedSourceDetails[id];
+            return source?.status === 'sealed' && requirements.some((requirement) => requirement.date === source.date && requirement.accepted_families?.includes(source.family));
+        });
+        const additions = [];
+        for (const requirement of requirements) {
+            const alreadySelected = retained.some((id) => selectedSourceDetails[id]?.date === requirement.date);
+            if (alreadySelected) continue;
+            const source = requirement.sources?.find((item) => item.status === 'sealed' && requirement.accepted_families?.includes(item.family));
+            if (source) additions.push({ id: source.id, status: source.status, family: source.family, date: source.date });
+        }
+        setSelectedSources([...retained, ...additions.map((source) => source.id)]);
+        setSelectedSourceDetails((previous) => ({ ...Object.fromEntries(retained.map((id) => [id, previous[id]])), ...Object.fromEntries(additions.map((source) => [source.id, source])) }));
+    }, [sourceOptionsKey, wizard, selectedSources, selectedSourceDetails]);
+    const selectedRecords = selectedSources.map((id) => selectedSourceDetails[id]).filter((source) => source?.status === 'sealed');
+    const localBackfillReady = Boolean(wizard?.required_sources?.length)
+        && selectedRecords.length === wizard.required_sources.length
+        && wizard.required_sources.every((requirement) => selectedRecords.some((source) => source.date === requirement.date && requirement.accepted_families?.includes(source.family)));
+    const canMutate = (number) => (wizard?.current_step === number || (number === 4 && wizard?.current_step === 3 && localBackfillReady)) && !stale;
+    const currentStatus = statusFor(expanded);
+    const canContinue = canAdvance(currentStatus) || (expanded === 3 && localBackfillReady);
+    const previous = () => setActiveStep(Math.max(1, expanded - 1));
+    const next = () => {
+        if (canContinue) setActiveStep(Math.min(7, expanded + 1));
+    };
+    const cancelCampaign = () => run('campaign-cancel', () => api.post(`${base}/campaigns/${wizard.campaign.id}/cancel`));
+
+    return <section className="card mb-3 acceptance-wizard" aria-labelledby="acceptance-wizard-title">
+        <div className="card-body">
+            <h2 className="h5" id="acceptance-wizard-title">Production ML acceptance</h2>
+            <p className="text-muted">This wizard records production evidence. It will not activate a model or enable schedules.</p>
+            {error && <div className="alert alert-danger" role="alert" tabIndex={-1} ref={errorSummary}>{error}</div>}
+            {!wizard && !error && <p role="status">Loading saved acceptance state…</p>}
+            {!wizard && error && <button type="button" className="btn btn-outline-secondary mb-3" onClick={refresh}>Retry status</button>}
+            {wizard && <>
+                <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                    <p className={`mb-0 ${stale ? 'text-warning' : 'text-muted'}`}>{stale ? 'Showing last known state; it may be stale.' : 'Server state loaded.'} {lastChecked && <>Last checked <time dateTime={lastChecked.toISOString()}>{lastChecked.toLocaleTimeString()}</time>.</>}</p>
+                    <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busyAction !== ''} onClick={refresh}>Refresh</button>
+                </div>
+                {wizard.campaign && expanded !== 2 && <div className="small text-muted acceptance-campaign-summary mb-3" role="group" aria-label="Current acceptance campaign">
+                    Current campaign <code>{wizard.campaign.id}</code> · {wizard.campaign.status} · cutoff {wizard.campaign.cutoff_date || 'unknown'}.
+                </div>}
+                {finished ? <div className="alert alert-success acceptance-completion-summary" role="status"><h3 className="h6">Production acceptance review finished</h3><p className="mb-2">{wizard.campaign?.status === 'qualified' && wizard.evidence_current === true ? 'Production acceptance is current for this build and configuration.' : 'The campaign review is saved. Check the status and evidence before taking any separate model or lifecycle action.'}</p><button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => { setFinished(false); setActiveStep(7); }}>Reopen completion review</button></div> : <>
+                <AcceptanceStepper steps={wizard.steps} currentStep={wizard.current_step} activeStep={expanded} onSelect={setActiveStep} />
+                <div className="acceptance-content" aria-live="off">
+                    {[1, 2, 3, 4, 5, 6, 7].map((number) => {
+                        const [id, title] = stepDefinitions[number - 1];
+                        const isOpen = expanded === number;
+                        const step = wizard.steps?.[number - 1] || {};
+                            const blockedFuture = number > wizard.current_step && !canAdvance(step.status) && !(number === 4 && localBackfillReady);
+                        const reasonMessages = (step.reason_codes || []).map((code) => ({ code, ...describeAcceptanceReason(String(code).split(':')[0]) }));
+                        return <div key={id} className="acceptance-step-wrapper" hidden={!isOpen}>
+                            {isOpen && <>
+                            <h2 ref={heading} tabIndex={-1} className="visually-hidden">{title}</h2>
+                            {blockedFuture && <div className="alert alert-info"><strong>This step is waiting for a prerequisite.</strong> Complete the current step first. No mutation controls are available here.</div>}
+                            {reasonMessages.length > 0 && <div className="alert alert-warning"><h3 className="h6">Why this step needs attention</h3><ul className="mb-0">{reasonMessages.map((reason, i) => <li key={`${reason.code}-${i}`}><strong>{reason.title}:</strong> {reason.explanation} <code>{reason.code}</code></li>)}</ul></div>}
+                            {number === 1 && <ReadinessStep wizard={wizard} report={report} onRefresh={refresh} canMutate={canMutate(1)} busy={busyAction !== ''} />}
+                            {number === 2 && <DiscoveryPreflightStep wizard={wizard} cutoff={cutoff} setCutoff={setCutoff} onRun={() => run('discovery', () => api.post(`${base}/campaigns`, { cutoff_date: cutoff }))} onCancel={cancelCampaign} busy={busyAction !== ''} canMutate={canMutate(2)} />}
+                            {number === 3 && <HistoricalSourcesStep wizard={wizard} sourcesPage={sourcesPage} page={page} setPage={setPage} base={base} run={run} busy={busyAction !== ''} canMutate={canMutate(3)} selected={selectedSources} setSelected={setSelectedSources} selectedDetails={selectedSourceDetails} onSourceToggle={(source, checked) => setSelectedSourceDetails((details) => { const nextDetails = { ...details }; if (checked) nextDetails[source.id] = { id: source.id, status: source.status, family: source.manifest.source, date: source.manifest.date }; else delete nextDetails[source.id]; return nextDetails; })} />}
+                            {number === 4 && <BackfillStep wizard={wizard} selectedSources={selectedSources} base={base} api={api} run={run} busy={busyAction !== ''} canMutate={canMutate(4)} />}
+                            {number === 5 && <FinalPreflightStep wizard={wizard} cutoff={cutoff} setCutoff={setCutoff} run={run} base={base} api={api} busy={busyAction !== ''} canMutate={canMutate(5)} />}
+                            {number === 6 && <CandidateTrainingStep wizard={wizard} base={base} api={api} run={run} busy={busyAction !== ''} canMutate={canMutate(6)} onCancel={cancelCampaign} onFreshCampaign={() => run('fresh-campaign', () => api.post(`${base}/campaigns`, { cutoff_date: cutoff }))} />}
+                            {number === 7 && <AcceptanceReviewStep wizard={wizard} report={report} onFinish={() => setFinished(true)} finished={finished} />}
+                            <div className="d-flex justify-content-between mt-3">
+                                <button type="button" className="btn btn-outline-secondary" onClick={previous} disabled={number <= 1}>Back</button>
+                                {number < 7 && <button type="button" className="btn btn-primary" onClick={next} disabled={!canContinue}>Continue</button>}
+                            </div>
+                            </>}
+                        </div>;
+                    })}
+                </div>
+                </>}
+                <AdvancedDiagnostics data={wizard} report={report} />
+            </>}
+        </div>
+    </section>;
 }

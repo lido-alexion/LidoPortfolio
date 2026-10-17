@@ -1952,11 +1952,11 @@
     "url": "/docs/settings-ml-scoring.html"
   },
   {
-    "source_id": "product:settings-ml-scoring:control:production-acceptance-report",
+    "source_id": "product:settings-ml-scoring:control:seven-step-production-acceptance-wizard",
     "title": "ML Scoring (admin)",
     "path": "app/resources/js/src/data/appDocumentation.js",
-    "section": "Production acceptance report",
-    "snippet": "Refresh reads recorded evidence only. Unknown worker, Python, source, or feature evidence remains blocking. Expand evidence for per-horizon reference dates, coverage, exclusions and reasons.",
+    "section": "Seven-step production acceptance wizard",
+    "snippet": "The wizard reloads readiness, discovery, source, backfill, final preflight, candidate training and completion state from the server. Refresh is read-only; closing the page does not change background work.",
     "url": "/docs/settings-ml-scoring.html"
   },
   {
@@ -1964,23 +1964,31 @@
     "title": "ML Scoring (admin)",
     "path": "app/resources/js/src/data/appDocumentation.js",
     "section": "Private NSE upload",
-    "snippet": "Choose the official dated CSV or single-CSV ZIP (up to 16 MiB), source family and date. Upload queues validation. To resume, choose the incomplete upload and reselect the identical file. Files are stored privately; sealed files cannot be replaced.",
+    "snippet": "Choose an official source family and exact date reported by preflight, then select a local CSV or single-CSV ZIP up to 16 MiB. Upload queues validation. Resume an incomplete upload with the identical file; StoX never downloads an archive URL.",
     "url": "/docs/settings-ml-scoring.html"
   },
   {
-    "source_id": "product:settings-ml-scoring:control:backfill-dry-run-and-apply",
+    "source_id": "product:settings-ml-scoring:control:backfill-preview-and-apply",
     "title": "ML Scoring (admin)",
     "path": "app/resources/js/src/data/appDocumentation.js",
-    "section": "Backfill dry-run and apply",
-    "snippet": "Select sealed sources and queue a dry-run. Review mapping/provenance evidence before Apply reviewed backfill. Save the backfill ID to reopen status. Resume preserves completed dates; cancel stops between work units.",
+    "section": "Backfill preview and apply",
+    "snippet": "Select one sealed source for every missing date and run a safe preview. Review per-date mapping and provenance before confirming Apply. The wizard recovers the campaign-linked backfill ID from server state; conflicting or unproven history is not overwritten.",
     "url": "/docs/settings-ml-scoring.html"
   },
   {
-    "source_id": "product:settings-ml-scoring:control:acceptance-campaign",
+    "source_id": "product:settings-ml-scoring:control:discovery-and-final-preflight",
     "title": "ML Scoring (admin)",
     "path": "app/resources/js/src/data/appDocumentation.js",
-    "section": "Acceptance campaign",
-    "snippet": "Choose a cutoff and queue preflight. All 1m/3m/6m gates must pass before Start training becomes available. Campaigns retain linked runs and evidence; local runs never qualify as production acceptance. Cancel requests training cancellation.",
+    "section": "Discovery and final preflight",
+    "snippet": "Discovery preflight identifies dates and blockers but does not train. After resolving missing historical data, a fresh final preflight must pass all 1m/3m/6m horizons before training.",
+    "url": "/docs/settings-ml-scoring.html"
+  },
+  {
+    "source_id": "product:settings-ml-scoring:control:candidate-training-and-review",
+    "title": "ML Scoring (admin)",
+    "path": "app/resources/js/src/data/appDocumentation.js",
+    "section": "Candidate training and review",
+    "snippet": "Starting training requires confirmation and queues all three canonical horizon runs. Results remain candidates. Promotion, active models, schedules, lifecycle and drift stay separate explicit decisions.",
     "url": "/docs/settings-ml-scoring.html"
   },
   {
