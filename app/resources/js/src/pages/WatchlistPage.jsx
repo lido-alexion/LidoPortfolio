@@ -510,8 +510,7 @@ export default function WatchlistPage() {
         }
     }, [activeWatchlistId, itemSearch, itemSort, loadItems]);
 
-    const loadPrices = useCallback(async (stock) => {
-        const stockId = stock?.id;
+    const loadPrices = useCallback(async (stockId, stockSymbol) => {
         if (!stockId) {
             priceReadGenerationRef.current += 1;
             setPriceRead(null);
@@ -537,7 +536,7 @@ export default function WatchlistPage() {
                 || !validPriceMeta
                 || (payload?.stock != null && (
                     String(returnedId) !== String(stockId)
-                    || String(payload.stock.symbol || '').toUpperCase() !== String(stock.symbol || '').toUpperCase()
+                    || String(payload.stock.symbol || '').toUpperCase() !== String(stockSymbol || '').toUpperCase()
                 ))) {
                 throw new Error('Price history response did not match the requested stock.');
             }
@@ -599,7 +598,7 @@ export default function WatchlistPage() {
 
     useEffect(() => {
         if (selectedStock?.id) {
-            loadPrices(selectedStock);
+            loadPrices(selectedStock.id, selectedStock.symbol);
             loadMembership(selectedStock.id);
             loadStockPatterns(selectedStock.id);
         } else {
@@ -611,7 +610,7 @@ export default function WatchlistPage() {
         return () => {
             priceReadGenerationRef.current += 1;
         };
-    }, [selectedStock, loadPrices, loadMembership, loadStockPatterns]);
+    }, [selectedStock?.id, loadPrices, loadMembership, loadStockPatterns]);
 
     useEffect(() => {
         setNote(activeEntry?.note || '');
@@ -909,7 +908,7 @@ export default function WatchlistPage() {
                 pricesLoading={pricesLoading}
                 priceMeta={priceMeta}
                 priceStatus={priceStatus}
-                onRetryPrices={() => loadPrices(selectedStock)}
+                onRetryPrices={() => loadPrices(selectedStock?.id, selectedStock?.symbol)}
                 patternScan={patternScan}
                 patternScanLoading={patternScanLoading}
             />
