@@ -64,6 +64,80 @@ for (const viewport of VIEWPORTS) {
             page.once('dialog', async dialog => { expect(dialog.message()).toContain('transactions and stock prices'); await dialog.dismiss(); }); await page.getByRole('button', { name: 'Rebuild history', exact: true }).click(); expect(safety.writes).toHaveLength(0);
             page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Rebuild history', exact: true }).click(); await expect(page.getByText('Failed to rebuild portfolio history', { exact: true })).toBeVisible(); await expect(row).toBeVisible(); page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Rebuild history', exact: true }).click(); await expect(page.getByText('Portfolio history rebuilt (2 snapshots).', { exact: true })).toBeVisible(); expect(JSON.stringify(source)).toBe(originalSource); expect(safety.writes).toHaveLength(2); expect(safety.blocked).toEqual([]);
         });
+        test(`E2E-26 scopes reports to matching profile inputs during an explicit read retry (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'E2E-26'); const safety = await prepare(page, viewport, 'performance-read-identity'); await analysisReads(page);
+            const targetPaths = new Set(['/api/analysis/performance', '/api/analysis/account-performance', '/api/analysis/attribution', '/api/tax/report', '/api/analysis/preferences', '/api/analysis/benchmarks']);
+            const expectedBatch = ['/api/analysis/performance', '/api/analysis/account-performance', '/api/analysis/attribution', '/api/tax/report', '/api/analysis/preferences:portfolio', '/api/analysis/preferences:account', '/api/analysis/benchmarks'];
+            const observed = []; const pendingReads = new Set(); let retirementUnavailable = true;
+            page.on('request', request => {
+                const url = new URL(request.url());
+                if (url.origin === 'http://127.0.0.1:4177' && targetPaths.has(url.pathname) && request.method() === 'GET') {
+                    observed.push({ path: url.pathname, profile: request.headers()['x-profile-id'] ?? null, params: url.searchParams });
+                    pendingReads.add(request);
+                }
+            });
+            page.on('requestfinished', request => pendingReads.delete(request));
+            page.on('requestfailed', request => pendingReads.delete(request));
+            const signature = read => read.path === '/api/analysis/preferences'
+                ? `${read.path}:${read.params.get('scope') ?? 'portfolio'}` : read.path;
+            const assertBatch = (batch, expectedProfile) => {
+                expect(batch.map(signature)).toEqual(expectedBatch);
+                expect(batch).toHaveLength(expectedBatch.length);
+                for (const read of batch) {
+                    expect(read.profile).toBe(expectedProfile);
+                    if (['/api/analysis/performance', '/api/analysis/account-performance', '/api/analysis/attribution'].includes(read.path)) {
+                        expect(read.params.get('from')).toBeTruthy(); expect(read.params.get('to')).toBeTruthy();
+                        expect([...read.params.keys()].sort()).toEqual(['from', 'to']);
+                    }
+                    if (read.path === '/api/tax/report') {
+                        expect(read.params.get('financial_year')).toMatch(/^\d{4}-\d{2}$/);
+                        expect([...read.params.keys()]).toEqual(['financial_year']);
+                    }
+                    if (read.path === '/api/analysis/preferences' && read.params.get('scope') === 'account') {
+                        expect([...read.params.keys()]).toEqual(['scope']);
+                    }
+                    if ((read.path === '/api/analysis/preferences' && !read.params.has('scope')) || read.path === '/api/analysis/benchmarks') {
+                        expect([...read.params.keys()]).toEqual([]);
+                    }
+                }
+            };
+            const assertCompleteBatches = (batchReads, expectedProfile) => {
+                expect(batchReads.length).toBeGreaterThan(0);
+                expect(batchReads.length % expectedBatch.length).toBe(0);
+                for (let index = 0; index < batchReads.length; index += expectedBatch.length) {
+                    assertBatch(batchReads.slice(index, index + expectedBatch.length), expectedProfile);
+                }
+            };
+            const settleTargetReads = async () => expect.poll(() => pendingReads.size).toBe(0);
+            await page.route('**/api/analysis/performance?*', route => {
+                const profile = route.request().headers()['x-profile-id'];
+                if (profile === '2' && retirementUnavailable) return route.fulfill({ status: 503, json: { message: 'Synthetic retirement analysis unavailable.' } });
+                return route.fulfill({ json: { data: {
+                    xirr_percent: null, twr_percent: null, excess_return_percent: null, maximum_drawdown_percent: null,
+                    benchmark: { name: profile === '2' ? 'Retirement current report' : 'Main portfolio report' },
+                    volatility_percent: null, sharpe_ratio: null, completeness: 'incomplete',
+                } } });
+            });
+            await safety.seal(); await page.goto('/portfolio/performance-tax');
+            await expect(page.getByText(/Benchmark: Main portfolio report ·/)).toBeVisible(); await settleTargetReads();
+            assertCompleteBatches(observed, '1'); // Development StrictMode may replay the full initial seven-read batch.
+            await page.locator('.lido-portfolio-switcher').click();
+            const retirementStart = observed.length;
+            await page.getByRole('button', { name: 'Retirement', exact: true }).click();
+            await expect(page.getByText('Portfolio performance is unavailable for the current portfolio and date range.', { exact: true })).toBeVisible();
+            await settleTargetReads();
+            assertBatch(observed.slice(retirementStart), '2');
+            await expect(page.getByText(/Benchmark: Main portfolio report ·/)).toHaveCount(0);
+            await expect(page.getByText(/Some current analysis reads are unavailable/)).toBeVisible();
+            await expect(page.getByText(/Account performance · configured/)).toBeVisible();
+            retirementUnavailable = false;
+            const retryStart = observed.length;
+            await page.getByRole('button', { name: 'Calculate', exact: true }).click();
+            await expect(page.getByText(/Benchmark: Retirement current report ·/)).toBeVisible(); await settleTargetReads();
+            assertBatch(observed.slice(retryStart), '2');
+            await expect(page.getByText(/Benchmark: Main portfolio report ·/)).toHaveCount(0);
+            expect(safety.writes).toEqual([]); expect(safety.blocked).toEqual([]);
+        });
         test(`E2E-26 retries incomplete reports/settings/evidence and keeps what-if inclusion separate from saved preferences (${viewport.name})`, async ({ page }, testInfo) => {
             test.setTimeout(60000); journeyId(testInfo, 'E2E-26'); const safety = await prepare(page, viewport, 'performance', (method, path) => (method === 'PUT' && path === '/api/analysis/preferences') || (method === 'POST' && path === '/api/analysis/evidence')); const state = await analysisReads(page); state.unavailable = true; let preferencesFail = true; let accountFail = true; let evidenceFail = true; let exportFail = true;
             await page.route('**/api/analysis/preferences', route => { if (route.request().method() === 'GET') return route.fallback(); const body = route.request().postDataJSON(); if (body.scope === 'account') { expect(body).toMatchObject({ primary_benchmark_id: 2, risk_free_rate: 0.03, annualization_days: 252 }); expect(body).not.toHaveProperty('include_in_account_tax'); if (accountFail) { accountFail = false; return route.fulfill({ status: 503, json: { message: 'Synthetic account preferences unavailable.' } }); } state.accountPreferences = body; } else { expect(body).toMatchObject({ primary_benchmark_id: 2, risk_free_rate: 0.05, include_in_account_performance: false, include_in_account_tax: true }); if (preferencesFail) { preferencesFail = false; return route.fulfill({ status: 503, json: { message: 'Synthetic preferences unavailable.' } }); } state.preferences = body; } return route.fulfill({ json: { data: body } }); });
