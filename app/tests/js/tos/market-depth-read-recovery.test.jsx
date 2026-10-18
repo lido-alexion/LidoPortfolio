@@ -91,7 +91,7 @@ it('keeps the newest StrictMode request loading until its own response confirms 
     expect(document.querySelector('.lido-market-depth-cell')).toBeNull();
     await act(async () => requests[1].resolve(breadth('2026-10-01', 75)));
     expect(document.querySelector('.lido-market-depth-cell')).toHaveTextContent('75%');
-    expect(screen.queryByRole('status', { name: /Loading market breadth/ })).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
     expect(api.post).not.toHaveBeenCalled();
 });
 
