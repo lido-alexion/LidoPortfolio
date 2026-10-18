@@ -32,6 +32,11 @@ async function analysisReads(page) {
     });
     return state;
 }
+function deferredResponse() {
+    let resolve;
+    const promise = new Promise((yes) => { resolve = yes; });
+    return { promise, resolve };
+}
 for (const viewport of VIEWPORTS) {
     test.describe(`Portfolio analysis and tax ${viewport.name}`, () => {
         test.use({ hasTouch: viewport.name === 'mobile' });
@@ -40,7 +45,7 @@ for (const viewport of VIEWPORTS) {
             await page.route('**/api/portfolio/historical-holdings?*', route => {
                 dates.push(new URL(route.request().url()).searchParams.get('as_of'));
                 if (historicalUnavailable) return route.fulfill({ status: 503, json: { message: 'Synthetic historical read unavailable.' } });
-                return route.fulfill({ json: { holdings: [{ stock_id: 42, symbol: 'TCS', name: 'Tata Consultancy Services', quantity: 10, avg_buy_price: 100, invested_amount: 1000, price_available: false, as_of_price: null, market_value: null }], warnings: [], totals: { invested_value: 1000, valuation_complete: false }, completeness: { valuation_complete: false, total_value_complete: false, missing_price_count: 1 } } });
+                return route.fulfill({ json: { as_of: dates[dates.length - 1], holdings: [{ stock_id: 42, symbol: 'TCS', name: 'Tata Consultancy Services', quantity: 10, avg_buy_price: 100, invested_amount: 1000, price_available: false, as_of_price: null, market_value: null }], warnings: [], totals: { invested_value: 1000, market_value: null, cash_balance: 0, total_value: null, unrealized_profit: null, valuation_complete: false }, completeness: { valuation_complete: false, total_value_complete: false, missing_price_count: 1 } } });
             });
             await page.route('**/api/portfolio/compare?*', route => {
                 if (compareUnavailable) return route.fulfill({ status: 503, json: { message: 'Synthetic comparison unavailable.' } });
@@ -63,6 +68,105 @@ for (const viewport of VIEWPORTS) {
             await page.getByRole('button', { name: '90 days', exact: true }).click(); await expect.poll(() => limits.includes('90')).toBe(true); readFails = true; await page.getByRole('button', { name: 'Refresh', exact: true }).click(); await expect(page.getByRole('alert').filter({ hasText: 'Could not load portfolio snapshots' })).toBeVisible(); await expect(row).toContainText('1,20,000'); await page.getByRole('button', { name: 'Refresh', exact: true }).click(); await expect(page.getByRole('alert').filter({ hasText: 'Could not load portfolio snapshots' })).toHaveCount(0);
             page.once('dialog', async dialog => { expect(dialog.message()).toContain('transactions and stock prices'); await dialog.dismiss(); }); await page.getByRole('button', { name: 'Rebuild history', exact: true }).click(); expect(safety.writes).toHaveLength(0);
             page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Rebuild history', exact: true }).click(); await expect(page.getByText('Failed to rebuild portfolio history', { exact: true })).toBeVisible(); await expect(row).toBeVisible(); page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Rebuild history', exact: true }).click(); await expect(page.getByText('Portfolio history rebuilt (2 snapshots).', { exact: true })).toBeVisible(); expect(JSON.stringify(source)).toBe(originalSource); expect(safety.writes).toHaveLength(2); expect(safety.blocked).toEqual([]);
+        });
+        test(`E2E-25 hides historical and snapshot values until the current profile and query are confirmed (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'E2E-25');
+            const safety = await prepare(page, viewport, `history-identity-${viewport.name}`);
+            const requests = [];
+            const pendingB = deferredResponse();
+            const pendingRange = deferredResponse();
+            let bReadStarted;
+            const bReadStartedPromise = new Promise(resolve => { bReadStarted = resolve; });
+            let rangeReadStarted;
+            const rangeReadStartedPromise = new Promise(resolve => { rangeReadStarted = resolve; });
+            let rangeReadCount = 0;
+            await page.route('**/api/portfolios', route => route.fulfill({ json: { data: [
+                { id: 1, name: 'Main', is_default: true },
+                { id: 2, name: 'Research', is_default: false },
+            ] } }));
+            await page.route('**/api/portfolio/historical-holdings?*', async route => {
+                const request = route.request();
+                const params = new URL(request.url()).searchParams;
+                const profile = request.headers()['x-profile-id'];
+                requests.push({ path: 'historical', profile, asOf: params.get('as_of') });
+                if (profile === '2' && params.get('as_of') !== '2026-10-01') {
+                    bReadStarted();
+                    const payload = await pendingB.promise;
+                    return route.fulfill({ json: payload });
+                }
+                if (profile === '2' && params.get('as_of') === '2026-10-01') {
+                    if (requests.filter(item => item.path === 'historical' && item.asOf === '2026-10-01').length === 1) {
+                        return route.fulfill({ status: 503, json: { message: 'Synthetic date read unavailable.' } });
+                    }
+                    return route.fulfill({ json: { as_of: '2026-10-01', holdings: [], warnings: [], totals: { invested_value: 0, market_value: null, cash_balance: 0, total_value: 0, unrealized_profit: null, unrealized_gain_percent: null, valuation_complete: true }, completeness: { valuation_complete: true, total_value_complete: true, missing_price_count: 0, holding_count: 0 } } });
+                }
+                return route.fulfill({ json: { as_of: params.get('as_of'), holdings: [{ stock_id: 42, symbol: 'TCS', name: 'Main source row', quantity: 2, avg_buy_price: 500, invested_amount: 1000, price_available: false, as_of_price: null, market_value: null, unrealized_profit: null }], warnings: [], totals: { invested_value: 1000, market_value: null, cash_balance: 500, total_value: null, unrealized_profit: null, unrealized_gain_percent: null, valuation_complete: false }, completeness: { valuation_complete: false, total_value_complete: false, missing_price_count: 1, holding_count: 1 } } });
+            });
+            await page.route('**/api/portfolio/snapshots?*', async route => {
+                const request = route.request();
+                const params = new URL(request.url()).searchParams;
+                const profile = request.headers()['x-profile-id'];
+                requests.push({ path: 'snapshots', profile, limit: params.get('limit') });
+                if (params.get('limit') === '90') {
+                    rangeReadCount += 1;
+                    if (rangeReadCount === 1) {
+                        rangeReadStarted();
+                        await pendingRange.promise;
+                        return route.fulfill({ status: 503, json: { message: 'Synthetic range read unavailable.' } });
+                    }
+                    return route.fulfill({ json: { snapshots: [], meta: { count: 0, from_date: null, to_date: null, limit: 90 } } });
+                }
+                return route.fulfill({ json: { snapshots: [{ id: '72', snapshot_date: '2026-10-10', portfolio_value: '120000', invested_value: '100000' }], meta: { count: 1, from_date: '2026-10-10', to_date: '2026-10-10', limit: Number(params.get('limit')) } } });
+            });
+            await safety.seal();
+            await page.goto('/portfolio/historical-holdings');
+            await expect(page.getByRole('row').filter({ hasText: 'TCS' })).toBeVisible();
+            await page.getByTitle('Switch portfolio (per tab)').click();
+            await page.getByRole('button', { name: 'Research', exact: true }).click();
+            await bReadStartedPromise;
+            await expect(page.getByRole('status').filter({ hasText: 'Loading historical holdings' })).toBeVisible();
+            await expect(page.getByRole('row').filter({ hasText: 'TCS' })).toHaveCount(0);
+            await expect(page.locator('.card-header').filter({ hasText: 'Invested:' })).toContainText('Unavailable');
+            const bResponse = page.waitForResponse(response => response.url().includes('/api/portfolio/historical-holdings') && response.request().headers()['x-profile-id'] === '2');
+            pendingB.resolve({ as_of: requests.find(item => item.path === 'historical' && item.profile === '2').asOf, holdings: [{ stock_id: 84, symbol: 'INFY', name: 'Research source row', quantity: 2, avg_buy_price: 1000, invested_amount: 2000, price_available: false, as_of_price: null, market_value: null, unrealized_profit: null }], warnings: [], totals: { invested_value: 2000, market_value: null, cash_balance: 700, total_value: null, unrealized_profit: null, unrealized_gain_percent: null, valuation_complete: false }, completeness: { valuation_complete: false, total_value_complete: false, missing_price_count: 1, holding_count: 1 } });
+            const settledB = await bResponse;
+            expect(await settledB.finished()).toBeNull();
+            await expect(page.getByRole('row').filter({ hasText: 'INFY' })).toBeVisible();
+            await expect(page.getByRole('row').filter({ hasText: 'TCS' })).toHaveCount(0);
+            expect(requests.filter(item => item.path === 'historical').map(item => item.profile)).toEqual(['1', '2']);
+
+            await page.getByLabel('As-of date', { exact: true }).fill('01-Oct-2026');
+            await page.getByLabel('As-of date', { exact: true }).press('Tab');
+            await expect(page.locator('.container-fluid [role="alert"]').filter({ hasText: 'Synthetic date read unavailable.' })).toBeVisible();
+            await expect(page.getByRole('row').filter({ hasText: 'INFY' })).toHaveCount(0);
+            await expect(page.locator('.card-header').filter({ hasText: 'Invested:' })).toContainText('Unavailable');
+            await expect(page.getByText(/No open holdings on this date/)).toHaveCount(0);
+            await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+            await expect(page.getByText(/No open holdings on this date/)).toBeVisible();
+            expect(requests.filter(item => item.path === 'historical' && item.profile === '2').map(item => item.asOf)).toEqual([requests[1].asOf, '2026-10-01', '2026-10-01']);
+
+            await page.goto('/portfolio/snapshots');
+            const snapshotRow = page.getByRole('row').filter({ has: page.getByLabel('Select snapshot 2026-10-10') });
+            await expect(snapshotRow).toBeVisible();
+            expect(requests.at(-1)).toMatchObject({ path: 'snapshots', profile: '2', limit: '365' });
+            await page.getByRole('button', { name: '90 days', exact: true }).click();
+            await rangeReadStartedPromise;
+            await expect(page.getByRole('row').filter({ has: page.getByLabel('Select snapshot 2026-10-10') })).toHaveCount(0);
+            await expect(page.locator('.card-header').filter({ hasText: 'Portfolio growth' })).toContainText('Loading…');
+            await expect(page.getByText(/No portfolio snapshots yet/)).toHaveCount(0);
+            const rangeResponse = page.waitForResponse(response => response.url().includes('/api/portfolio/snapshots') && response.request().method() === 'GET' && new URL(response.url()).searchParams.get('limit') === '90');
+            pendingRange.resolve();
+            const settledRange = await rangeResponse;
+            expect(await settledRange.finished()).toBeNull();
+            await expect(page.getByRole('alert').filter({ hasText: 'Could not load portfolio snapshots' })).toBeVisible();
+            await expect(page.locator('.card-header').filter({ hasText: 'Portfolio growth' })).toContainText('Unavailable');
+            await expect(page.getByText(/No portfolio snapshots yet/)).toHaveCount(0);
+            await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+            await expect(page.getByText(/No portfolio snapshots yet/)).toBeVisible();
+            await expect(page.locator('.card-header').filter({ hasText: 'Portfolio growth' })).toContainText('0 snapshot(s)');
+            expect(requests.filter(item => item.path === 'snapshots').map(item => [item.profile, item.limit])).toEqual([['2', '365'], ['2', '90'], ['2', '90']]);
+            expect(safety.writes).toEqual([]);
+            expect(safety.blocked).toEqual([]);
         });
         test(`E2E-26 scopes reports to matching profile inputs during an explicit read retry (${viewport.name})`, async ({ page }, testInfo) => {
             journeyId(testInfo, 'E2E-26'); const safety = await prepare(page, viewport, 'performance-read-identity'); await analysisReads(page);
