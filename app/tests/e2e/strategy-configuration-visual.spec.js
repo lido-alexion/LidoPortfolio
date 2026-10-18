@@ -52,21 +52,34 @@ test.describe('V9-UX-001 strategy configuration visual regression', () => {
 
             expect(externalRequests).toEqual([]);
             expect(mutationRequests).toEqual([]);
-            await expect(thresholdPanel).toHaveScreenshot(
-                `str-06-recommendation-threshold-configuration-${viewport.name}.png`,
-                {
-                    animations: 'disabled',
-                    caret: 'hide',
-                    style: `
-                        .lido-header,
-                        .lido-page-history-rail,
-                        .lido-notes-utility-action--desktop,
-                        .lido-mobile-utility-actions {
-                            display: none !important;
-                        }
-                    `,
-                },
-            );
+            const captureNormalization = await page.addStyleTag({
+                content: `
+                    .lido-header,
+                    .lido-page-history-rail,
+                    .lido-notes-utility-action--desktop,
+                    .lido-mobile-utility-actions {
+                        display: none !important;
+                    }
+
+                    .contentPane:has(.lido-app-frame),
+                    .lido-app-frame,
+                    .lido-shell,
+                    .lido-shell > .lido-main {
+                        height: auto !important;
+                        max-height: none !important;
+                        min-height: 0 !important;
+                        overflow: visible !important;
+                    }
+                `,
+            });
+            try {
+                await expect(thresholdPanel).toHaveScreenshot(
+                    `str-06-recommendation-threshold-configuration-${viewport.name}.png`,
+                    { animations: 'disabled', caret: 'hide' },
+                );
+            } finally {
+                await captureNormalization.evaluate((element) => element.remove());
+            }
         });
     }
 });
