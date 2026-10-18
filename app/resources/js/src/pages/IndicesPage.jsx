@@ -40,6 +40,44 @@ function IndexTierList({ exchange, indexes, expandedKey, setExpandedKey }) {
     );
 }
 
+function isIndexOverview(payload) {
+    return Boolean(
+        payload
+        && Array.isArray(payload.indexes)
+        && payload.indexes.every((index) => (
+            index
+            && typeof index.symbol === 'string'
+            && index.symbol.trim() !== ''
+            && typeof index.name === 'string'
+            && typeof index.exchange === 'string'
+            && Number.isFinite(Number(index.stock_id))
+            && Number(index.stock_id) > 0
+            && typeof index.has_price_history === 'boolean'
+            && typeof index.constituents_available === 'boolean'
+        ))
+    );
+}
+
+function isIndexComparison(payload) {
+    return Boolean(
+        payload
+        && Array.isArray(payload.series)
+        && payload.series.every((series) => (
+            series
+            && typeof series.symbol === 'string'
+            && typeof series.name === 'string'
+            && Array.isArray(series.points)
+            && series.points.every((point) => (
+                point
+                && typeof point.date === 'string'
+                && point.date.trim() !== ''
+                && typeof point.gain_percent === 'number'
+                && Number.isFinite(point.gain_percent)
+            ))
+        ))
+    );
+}
+
 export default function IndicesPage() {
     const [loading, setLoading] = useState(true);
     const [comparisonLoading, setComparisonLoading] = useState(true);
@@ -63,8 +101,13 @@ export default function IndicesPage() {
                 if (cancelled) {
                     return;
                 }
-                setIndexes(pageRes.data?.data?.indexes || []);
-                setComparison(comparisonRes.data?.data || null);
+                const overview = pageRes.data?.data;
+                const comparisonData = comparisonRes.data?.data;
+                if (!isIndexOverview(overview) || !isIndexComparison(comparisonData)) {
+                    throw new Error('Invalid index response');
+                }
+                setIndexes(overview.indexes);
+                setComparison(comparisonData);
             })
             .catch(() => {
                 if (!cancelled) {
@@ -108,15 +151,19 @@ export default function IndicesPage() {
             {loading ? (
                 <div className="text-muted py-4 text-center">Loading indexes…</div>
             ) : (
-                exchangeOrder.filter((exchange) => groups[exchange]?.length).map((exchange) => (
-                    <IndexTierList
-                        key={exchange}
-                        exchange={exchange}
-                        indexes={groups[exchange]}
-                        expandedKey={expandedKey}
-                        setExpandedKey={setExpandedKey}
-                    />
-                ))
+                indexes.length === 0 ? (
+                    <div className="text-muted py-4" role="status">No index records are available.</div>
+                ) : (
+                    exchangeOrder.filter((exchange) => groups[exchange]?.length).map((exchange) => (
+                        <IndexTierList
+                            key={exchange}
+                            exchange={exchange}
+                            indexes={groups[exchange]}
+                            expandedKey={expandedKey}
+                            setExpandedKey={setExpandedKey}
+                        />
+                    ))
+                )
             )}
         </div>
     );

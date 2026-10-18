@@ -66,7 +66,17 @@ export default function IndexSection({ index, panelId, expanded, onToggle }) {
         api.get(`/stocks/${index.stock_id}/market-prices`)
             .then((res) => {
                 if (!cancelled) {
-                    setPriceRows(res.data?.data || []);
+                    const stock = res.data?.stock;
+                    const rows = res.data?.data;
+                    if (
+                        !stock
+                        || String(stock.id) !== String(index.stock_id)
+                        || String(stock.symbol || '').toUpperCase() !== String(index.symbol || '').toUpperCase()
+                        || !Array.isArray(rows)
+                    ) {
+                        throw new Error('Invalid index history response');
+                    }
+                    setPriceRows(rows);
                     setPriceLoaded(true);
                 }
             })
@@ -95,8 +105,24 @@ export default function IndexSection({ index, panelId, expanded, onToggle }) {
         api.get(`/indexes/${index.symbol}/constituents`)
             .then((res) => {
                 if (!cancelled) {
-                    setConstituents(res.data?.data?.constituents || []);
-                    setConstituentsMessage(res.data?.data?.message || '');
+                    const payload = res.data?.data;
+                    if (
+                        !payload
+                        || String(payload.symbol || '').toUpperCase() !== String(index.symbol || '').toUpperCase()
+                        || typeof payload.available !== 'boolean'
+                        || !Array.isArray(payload.constituents)
+                    ) {
+                        throw new Error('Invalid index constituents response');
+                    }
+                    if (payload.available && payload.constituents.length === 0 && payload.message) {
+                        setConstituents([]);
+                        setConstituentsMessage('');
+                        setConstituentsError(payload.message);
+                        setConstituentsLoaded(true);
+                        return;
+                    }
+                    setConstituents(payload.constituents);
+                    setConstituentsMessage(payload.message || '');
                     setConstituentsLoaded(true);
                 }
             })
