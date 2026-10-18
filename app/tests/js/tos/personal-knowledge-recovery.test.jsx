@@ -49,7 +49,11 @@ const renderWithRealPortfolioProvider = ({ portfoliosPromise, strictMode = false
     realPortfolioProvider.enabled = true;
     const configuredGet = api.get.getMockImplementation();
     api.get.mockImplementation((path) => {
-        if (path === '/portfolios') return portfoliosPromise ?? Promise.resolve({ data: { data: [{ id: 1, name: 'Main', is_default: true }] } });
+        if (path === '/portfolios') {
+            if (portfoliosPromise) return portfoliosPromise;
+            if (configuredGet) return configuredGet(path);
+            return Promise.resolve({ data: { data: [{ id: 1, name: 'Main', is_default: true }] } });
+        }
         return configuredGet?.(path);
     });
     const content = (
