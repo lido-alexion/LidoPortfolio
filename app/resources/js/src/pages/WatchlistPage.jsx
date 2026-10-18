@@ -534,10 +534,9 @@ export default function WatchlistPage() {
 
             if (!Array.isArray(rows)
                 || !validPriceMeta
-                || (payload?.stock != null && (
-                    String(returnedId) !== String(stockId)
-                    || String(payload.stock.symbol || '').toUpperCase() !== String(stockSymbol || '').toUpperCase()
-                ))) {
+                || payload?.stock == null
+                || String(returnedId) !== String(stockId)
+                || String(payload.stock.symbol || '').toUpperCase() !== String(stockSymbol || '').toUpperCase()) {
                 throw new Error('Price history response did not match the requested stock.');
             }
 

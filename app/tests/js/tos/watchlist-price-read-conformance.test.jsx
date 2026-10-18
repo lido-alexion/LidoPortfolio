@@ -200,7 +200,8 @@ it('keeps malformed history unavailable and distinguishes a confirmed empty read
     const requested = installBaseReads((stockId) => {
         attempts += 1;
         if (attempts === 1) return Promise.resolve({ data: { price_count: 0, has_price_history: false } });
-        if (attempts === 2) return Promise.resolve({ data: { stock: stocks[84], data: [], price_count: 0, has_price_history: false } });
+        if (attempts === 2) return Promise.resolve({ data: { data: [], price_count: 0, has_price_history: false, latest_close: null, latest_price_date: null, from_date: null, to_date: null } });
+        if (attempts === 3) return Promise.resolve({ data: { stock: stocks[84], data: [], price_count: 0, has_price_history: false } });
         return Promise.resolve({ data: { stock: stocks[stockId], data: [], price_count: 0, has_price_history: false, latest_close: null, latest_price_date: null, from_date: null, to_date: null } });
     });
 
@@ -212,10 +213,13 @@ it('keeps malformed history unavailable and distinguishes a confirmed empty read
     expect(await screen.findByRole('alert')).toHaveTextContent('Price history could not be confirmed');
     expect(screen.queryByText(/No cached OHLCV/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Retry price history' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Price history could not be confirmed');
+    expect(screen.queryByText(/No cached OHLCV/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry price history' }));
     await waitFor(() => expect(screen.getByTestId('price-chart')).toHaveTextContent('No cached price history'));
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByText(/No cached OHLCV/)).toBeVisible();
-    expect(requested).toEqual([42, 42, 42]);
+    expect(requested).toEqual([42, 42, 42, 42]);
     expect(api.post).not.toHaveBeenCalled();
     expect(api.put).not.toHaveBeenCalled();
     expect(api.delete).not.toHaveBeenCalled();

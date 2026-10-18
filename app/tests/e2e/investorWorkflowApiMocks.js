@@ -254,7 +254,13 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
             return json(route, { data: { label: 'P/B (TTM)', points: [{ period: '2026-06-30', value: 5.1 }] } });
         }
         if (path.endsWith('/api/stocks/42/market-prices') && method === 'GET') {
-            return json(route, { data: [], meta: { has_price_history: false } });
+            return json(route, {
+                stock: { id: 42, symbol: 'TCS', name: 'Tata Consultancy Services', exchange: 'NSE' },
+                data: [],
+                price_count: 0,
+                has_price_history: false,
+                meta: { has_price_history: false },
+            });
         }
         if (path.endsWith('/api/guided-tour') && (method === 'GET' || method === 'PUT')) {
             if (method === 'PUT') {

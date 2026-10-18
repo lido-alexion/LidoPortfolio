@@ -33,6 +33,7 @@ async function prepare(page, viewport, seed) {
     const blocked = [];
     const requests = [];
     const priceRequests = [];
+    const priceRequestsByStock = new Map();
     await page.route('**/*', (route) => {
         const url = new URL(route.request().url());
         if (url.origin !== allowedOrigin) {
@@ -45,7 +46,13 @@ async function prepare(page, viewport, seed) {
     page.on('request', (request) => {
         const url = new URL(request.url());
         requests.push({ method: request.method(), path: url.pathname, origin: url.origin });
-        if (/^\/api\/stocks\/\d+\/market-prices$/.test(url.pathname)) priceRequests.push(request);
+        const priceMatch = url.pathname.match(/^\/api\/stocks\/(\d+)\/market-prices$/);
+        if (priceMatch) {
+            priceRequests.push(request);
+            const stockId = Number(priceMatch[1]);
+            if (!priceRequestsByStock.has(stockId)) priceRequestsByStock.set(stockId, []);
+            priceRequestsByStock.get(stockId).push(request);
+        }
     });
     await page.route('**/api/watchlists', (route) => route.fulfill({
         json: { data: [{ id: 5, name: 'Research', item_count: 2 }] },
@@ -62,13 +69,21 @@ async function prepare(page, viewport, seed) {
         return route.fulfill({ json: { data: stock ? [stock] : [] } });
     });
     await page.route('**/api/stocks/*/pattern-scan*', (route) => route.fulfill({ json: { data: { matches: [] } } }));
-    return { allowedOrigin, blocked, requests, priceRequests };
+    return { allowedOrigin, blocked, requests, priceRequests, priceRequestsByStock };
 }
 
-async function settle(requests) {
+async function settle(requests, evidence, stockId) {
+    expect(requests.length).toBeGreaterThan(0);
     await Promise.all(requests.map(async (request) => {
+        const url = new URL(request.url());
+        expect(request.method()).toBe('GET');
+        expect(url.origin).toBe(evidence.allowedOrigin);
+        expect(url.pathname).toBe(`/api/stocks/${stockId}/market-prices`);
         const response = await request.response();
-        if (response) await response.finished();
+        expect(response).not.toBeNull();
+        expect(response.status()).toBe(200);
+        expect(await response.finished()).toBeNull();
+        expect((await response.body()).length).toBeGreaterThan(0);
     }));
 }
 
@@ -109,23 +124,23 @@ for (const viewport of VIEWPORTS) {
             await page.goto('/watchlist');
             await expect(page.getByLabel('Active watchlist', { exact: true })).toHaveValue('5');
             await selectStock(page, 'TCS');
-            await expect.poll(() => evidence.priceRequests.filter((request) => new URL(request.url()).pathname.endsWith('/42/market-prices')).length).toBeGreaterThan(0);
-            const tcsRequests = evidence.priceRequests.filter((request) => new URL(request.url()).pathname.endsWith('/42/market-prices'));
+            await expect.poll(() => evidence.priceRequestsByStock.get(42)?.length || 0).toBeGreaterThan(0);
+            const tcsRequests = evidence.priceRequestsByStock.get(42);
             await expect(page.getByText('Loading chart…', { exact: true })).toBeVisible();
 
             await selectStock(page, 'INFY');
-            await expect.poll(() => evidence.priceRequests.filter((request) => new URL(request.url()).pathname.endsWith('/84/market-prices')).length).toBeGreaterThan(0);
-            const infyRequests = evidence.priceRequests.filter((request) => new URL(request.url()).pathname.endsWith('/84/market-prices'));
+            await expect.poll(() => evidence.priceRequestsByStock.get(84)?.length || 0).toBeGreaterThan(0);
+            const infyRequests = evidence.priceRequestsByStock.get(84);
             await expect(page.getByText('Loading chart…', { exact: true })).toBeVisible();
 
             tcsGate.resolve();
-            await settle(tcsRequests);
+            await settle(tcsRequests, evidence, 42);
             await expect(page.getByText('Loading chart…', { exact: true })).toBeVisible();
             await expect(page.getByText('Latest close', { exact: true })).toHaveCount(0);
             await expect(page.getByRole('alert')).toHaveCount(0);
 
             infyGate.resolve();
-            await settle(infyRequests);
+            await settle(infyRequests, evidence, 84);
             await expect(page.getByText('Latest close', { exact: true })).toBeVisible();
             await expect(page.getByText('₹ 200', { exact: true })).toBeVisible();
             expectReadOnly(evidence);
@@ -136,8 +151,20 @@ for (const viewport of VIEWPORTS) {
             const evidence = await prepare(page, viewport, `e2e09-price-retry-${viewport.name}`);
             let mode = 'malformed';
             await page.route('**/api/stocks/42/market-prices', async (route) => {
+                expect(route.request().method()).toBe('GET');
                 if (mode === 'malformed') {
                     return route.fulfill({ json: { price_count: 0, has_price_history: false } });
+                }
+                if (mode === 'missing-identity') {
+                    return route.fulfill({ json: {
+                        data: [],
+                        price_count: 0,
+                        has_price_history: false,
+                        latest_close: null,
+                        latest_price_date: null,
+                        from_date: null,
+                        to_date: null,
+                    } });
                 }
                 if (mode === 'mismatched') {
                     return route.fulfill({ json: { stock: STOCKS.INFY, data: [], price_count: 0, has_price_history: false } });
@@ -159,28 +186,42 @@ for (const viewport of VIEWPORTS) {
             await expect(page.getByRole('alert')).toContainText('Price history could not be confirmed');
             await expect(page.getByText('Price history is unavailable until a current read succeeds.', { exact: true })).toBeVisible();
             await expect(page.getByText(/No cached OHLCV/)).toHaveCount(0);
-            const initialReads = [...evidence.priceRequests];
-            await settle(initialReads);
+            const initialReads = evidence.priceRequestsByStock.get(42);
+            await settle(initialReads, evidence, 42);
+
+            mode = 'missing-identity';
+            let phaseStart = evidence.priceRequestsByStock.get(42).length;
+            const missingIdentityRequest = page.waitForRequest((request) => request.method() === 'GET'
+                && new URL(request.url()).pathname === '/api/stocks/42/market-prices');
+            await page.getByRole('button', { name: 'Retry price history', exact: true }).click();
+            const missingIdentity = await missingIdentityRequest;
+            await settle(evidence.priceRequestsByStock.get(42).slice(phaseStart), evidence, 42);
+            expect(evidence.priceRequestsByStock.get(42).slice(phaseStart)).toContain(missingIdentity);
+            await expect(page.getByRole('alert')).toContainText('Price history could not be confirmed');
+            await expect(page.getByText(/No cached OHLCV/)).toHaveCount(0);
 
             mode = 'mismatched';
+            phaseStart = evidence.priceRequestsByStock.get(42).length;
             const mismatchRequest = page.waitForRequest((request) => request.method() === 'GET'
                 && new URL(request.url()).pathname === '/api/stocks/42/market-prices');
             await page.getByRole('button', { name: 'Retry price history', exact: true }).click();
             const mismatched = await mismatchRequest;
-            await settle([mismatched]);
+            await settle(evidence.priceRequestsByStock.get(42).slice(phaseStart), evidence, 42);
+            expect(evidence.priceRequestsByStock.get(42).slice(phaseStart)).toContain(mismatched);
             await expect(page.getByRole('alert')).toContainText('Price history could not be confirmed');
             await expect(page.getByText(/No cached OHLCV/)).toHaveCount(0);
 
             mode = 'empty';
+            phaseStart = evidence.priceRequestsByStock.get(42).length;
             const emptyRequest = page.waitForRequest((request) => request.method() === 'GET'
                 && new URL(request.url()).pathname === '/api/stocks/42/market-prices');
             await page.getByRole('button', { name: 'Retry price history', exact: true }).click();
             const retried = await emptyRequest;
-            await settle([retried]);
+            await settle(evidence.priceRequestsByStock.get(42).slice(phaseStart), evidence, 42);
+            expect(evidence.priceRequestsByStock.get(42).slice(phaseStart)).toContain(retried);
             await expect(page.getByRole('alert')).toHaveCount(0);
             await expect(page.getByText(/No cached OHLCV/)).toBeVisible();
             await expect(page.getByText('No cached price history for this stock.', { exact: true })).toBeVisible();
-            expect(evidence.priceRequests.some((request) => request === retried)).toBe(true);
             expectReadOnly(evidence);
         });
     });
