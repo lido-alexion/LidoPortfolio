@@ -86,7 +86,7 @@ for (const viewport of VIEWPORTS) {
             await expect.poll(() => reads.includes(43)).toBe(true);
             await expect(symbolInput).toHaveValue('INFY');
             await expect(page.getByRole('status')).toHaveText('Loading insights…');
-            await expect(page.getByRole('heading', { name: /^INFY\s+Infosys Limited$/ })).toHaveCount(0);
+            await expect(page.getByRole('heading', { name: 'INFYInfosys Limited', exact: true })).toHaveCount(0);
             const oldARequestCount = oldARequests.length;
             expect(oldARequestCount).toBeGreaterThan(0);
             const oldAResponse = page.waitForResponse(response => response.url().includes('/api/v1/stocks/42/fundamentals') && response.status() === 503);
@@ -104,7 +104,7 @@ for (const viewport of VIEWPORTS) {
             const settledB = await currentBResponse;
             expect(await settledB.finished()).toBeNull();
             await expect(page.getByText('As of 2026-10-18 · Freshness: current', { exact: true })).toBeVisible(); await expect(page.getByText('No insight payload returned for this symbol.', { exact: true })).toBeVisible();
-            await expect(page.getByRole('heading', { name: /^INFY\s+Infosys Limited$/ })).toBeVisible();
+            await expect(page.getByRole('heading', { name: 'INFYInfosys Limited', exact: true })).toBeVisible();
             expect(reads[0]).toBe(42); expect(reads).toContain(43); expect(safety.writes).toEqual([]); expect(safety.blocked).toEqual([]);
         });
     });
