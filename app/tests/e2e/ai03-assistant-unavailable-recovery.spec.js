@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
@@ -64,6 +65,7 @@ for (const viewport of VIEWPORTS) {
         const payloads = [];
         const mountedQuestions = [];
         const settledResponses = [];
+        const overviewDocument = await readFile(new URL('../../public/docs/overview.html', import.meta.url));
 
         await page.route('**/*', (route) => {
             const origin = new URL(route.request().url()).origin;
@@ -96,6 +98,22 @@ for (const viewport of VIEWPORTS) {
                 body: JSON.stringify({ message: 'Runtime temporarily unavailable' }),
             });
         });
+        await page.route('**/docs/overview.html', async (route) => {
+            const request = route.request();
+            const url = new URL(request.url());
+            if (request.method() !== 'GET'
+                || url.origin !== allowedOrigin
+                || url.pathname !== '/docs/overview.html'
+                || !request.isNavigationRequest()) {
+                await route.fallback();
+                return;
+            }
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/html; charset=utf-8',
+                body: overviewDocument,
+            });
+        });
 
         await page.goto('/');
         const trigger = page.getByRole('button', { name: 'Open StoX assistant' });
@@ -125,7 +143,23 @@ for (const viewport of VIEWPORTS) {
             await expect(drawer.getByRole('link', { name: 'Browse documentation' })).toBeInViewport();
         }
 
+        const documentationResponsePromise = page.waitForResponse((response) => {
+            const request = response.request();
+            const url = new URL(response.url());
+            return request.method() === 'GET'
+                && request.isNavigationRequest()
+                && url.origin === allowedOrigin
+                && url.pathname === '/docs/overview.html';
+        });
         await drawer.getByRole('link', { name: 'Browse documentation' }).click();
+        const documentationResponse = await documentationResponsePromise;
+        expect(documentationResponse.status()).toBe(200);
+        expect(await documentationResponse.finished()).toBeNull();
+        expect(await documentationResponse.body()).toEqual(overviewDocument);
+        expect(documentationResponse.request().method()).toBe('GET');
+        expect(documentationResponse.request().isNavigationRequest()).toBe(true);
+        expect(new URL(documentationResponse.url()).origin).toBe(allowedOrigin);
+        expect(new URL(documentationResponse.url()).pathname).toBe('/docs/overview.html');
         await expect(page).toHaveURL(/\/docs\/overview\.html$/);
         await expect(page.getByRole('heading', { name: 'App documentation', exact: true })).toBeVisible();
         await expect(page.getByText('How contextual help works and how to browse topics for every screen.', { exact: true })).toBeVisible();
@@ -158,6 +192,10 @@ for (const viewport of VIEWPORTS) {
         const httpRequests = observedRequests.filter(({ request }) => /^https?:/i.test(request.url()));
         expect(httpRequests.length).toBeGreaterThan(0);
         expect(httpRequests.every(({ origin }) => origin === allowedOrigin)).toBe(true);
+        expect(observedRequests.filter(({ method, origin, path, request }) => method === 'GET'
+            && origin === allowedOrigin
+            && path === '/docs/overview.html'
+            && request.isNavigationRequest())).toHaveLength(1);
         const mutations = observedRequests.filter(({ method }) => /^(POST|PUT|PATCH|DELETE)$/.test(method));
         expect(mutations.map(({ method, origin, path }) => ({ method, origin, path }))).toEqual([
             { method: 'POST', origin: allowedOrigin, path: STREAM_PATH },
