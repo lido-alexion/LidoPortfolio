@@ -139,7 +139,9 @@ for (const viewport of VIEWPORTS) {
 
         await expect(drawer.getByText('Current answer remains authoritative', { exact: true })).toBeVisible();
         await expect(drawer.getByText('Grounded', { exact: true })).toBeVisible();
+        await drawer.getByText('Sources used (1)', { exact: true }).click();
         await expect(drawer.getByRole('link', { name: 'current source — Reviewed section' })).toHaveAttribute('href', /docs\/current\.html/);
+        await expect(drawer.getByText('Current answer remains authoritative support', { exact: true })).toBeVisible();
         await expect(drawer.getByText('First pending documentation question', { exact: true })).toHaveCount(0);
         await expect(drawer.getByText('Current question after clear', { exact: true })).toBeVisible();
 
