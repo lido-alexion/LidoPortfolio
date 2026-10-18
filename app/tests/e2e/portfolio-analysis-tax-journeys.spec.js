@@ -152,13 +152,14 @@ for (const viewport of VIEWPORTS) {
             await page.getByRole('button', { name: '90 days', exact: true }).click();
             await rangeReadStartedPromise;
             await expect(page.getByRole('row').filter({ has: page.getByLabel('Select snapshot 2026-10-10') })).toHaveCount(0);
-            await expect(page.locator('.card-header').filter({ hasText: 'Portfolio growth' })).toContainText('Unavailable');
+            await expect(page.locator('.card-header').filter({ hasText: 'Portfolio growth' })).toContainText('Loading…');
             await expect(page.getByText(/No portfolio snapshots yet/)).toHaveCount(0);
             const rangeResponse = page.waitForResponse(response => response.url().includes('/api/portfolio/snapshots') && response.request().method() === 'GET' && new URL(response.url()).searchParams.get('limit') === '90');
             pendingRange.resolve();
             const settledRange = await rangeResponse;
             expect(await settledRange.finished()).toBeNull();
             await expect(page.getByRole('alert').filter({ hasText: 'Could not load portfolio snapshots' })).toBeVisible();
+            await expect(page.locator('.card-header').filter({ hasText: 'Portfolio growth' })).toContainText('Unavailable');
             await expect(page.getByText(/No portfolio snapshots yet/)).toHaveCount(0);
             await page.getByRole('button', { name: 'Refresh', exact: true }).click();
             await expect(page.getByText(/No portfolio snapshots yet/)).toBeVisible();
