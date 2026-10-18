@@ -223,6 +223,23 @@ it('retains a same-date last-good holdings result with a separate stale label an
     expect(api.post).not.toHaveBeenCalled();
 });
 
+it('does not turn an absent missing-price count into a confirmed zero', async () => {
+    api.get.mockImplementation(async (path, options) => {
+        if (path === '/portfolios') return { data: { data: [selectedPortfolios[0]] } };
+        if (path === '/portfolio/historical-holdings') {
+            const payload = historical(options.params.as_of, 'TCS', 1000);
+            delete payload.completeness.missing_price_count;
+            return { data: payload };
+        }
+        throw new Error(`Unexpected GET ${path}`);
+    });
+    renderWithProvider(<HistoricalHoldingsPage />);
+    await waitFor(() => expect(rowContaining('TCS')).toBeVisible());
+    expect(screen.getByRole('status')).toHaveTextContent('the missing-price count is unavailable');
+    expect(screen.getByRole('status')).not.toHaveTextContent('0 holding(s)');
+    expect(api.post).not.toHaveBeenCalled();
+});
+
 it('keeps invalid date text from presenting the prior date result as current', async () => {
     api.get.mockImplementation(async (path, options) => {
         if (path === '/portfolios') return { data: { data: [selectedPortfolios[0]] } };

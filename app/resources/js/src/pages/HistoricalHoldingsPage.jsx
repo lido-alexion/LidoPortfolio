@@ -105,9 +105,11 @@ export default function HistoricalHoldingsPage() {
     const valuationComplete = confirmed
         && completeness.valuation_complete !== false
         && totals.valuation_complete !== false;
-    const missingPriceCount = completeness.missing_price_count == null
+    const rawMissingPriceCount = completeness.missing_price_count;
+    const missingPriceCount = rawMissingPriceCount == null || rawMissingPriceCount === ''
+        || !Number.isInteger(Number(rawMissingPriceCount)) || Number(rawMissingPriceCount) < 0
         ? null
-        : Number(completeness.missing_price_count);
+        : Number(rawMissingPriceCount);
 
     const empty = confirmed && holdings.length === 0;
 
