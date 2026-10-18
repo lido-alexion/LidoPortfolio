@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Save, Trash2, X } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import api, { getApiErrorMessage } from '../api';
@@ -20,6 +20,56 @@ export default function ContextualNotesContent({ onClose, headingId = 'lido-cont
     const [loadError, setLoadError] = useState('');
     const requestIdRef = useRef(0);
     const contextKey = useMemo(() => contextFromPath(pathname), [pathname]);
+    const scopeIdentity = JSON.stringify([contextKey, activePortfolio?.id ?? null]);
+    const scopeStateRef = useRef({ identity: null, epoch: 0, mounted: false });
+    const operationSequenceRef = useRef(0);
+    const activeOperationRef = useRef(null);
+
+    // Replace the committed scope object so A→B→A and unmount invalidate old writes.
+    useLayoutEffect(() => {
+        const previousScope = scopeStateRef.current;
+        const currentScope = {
+            identity: scopeIdentity,
+            epoch: previousScope.epoch + 1,
+            mounted: true,
+        };
+        scopeStateRef.current = currentScope;
+        activeOperationRef.current = null;
+        if (previousScope.identity !== null && previousScope.identity !== scopeIdentity) {
+            setBusy(false);
+        }
+
+        return () => {
+            if (scopeStateRef.current === currentScope) {
+                currentScope.mounted = false;
+                currentScope.epoch += 1;
+                activeOperationRef.current = null;
+            }
+        };
+    }, [scopeIdentity]);
+
+    const beginOperation = () => {
+        const scope = scopeStateRef.current;
+        if (!scope.mounted || scope.identity !== scopeIdentity) return null;
+
+        const operation = {
+            scope,
+            epoch: scope.epoch,
+            token: ++operationSequenceRef.current,
+        };
+        activeOperationRef.current = operation.token;
+        setBusy(true);
+        return operation;
+    };
+
+    const isCurrentOperation = (operation) => Boolean(
+        operation
+        && operation.scope.mounted
+        && operation.scope.epoch === operation.epoch
+        && scopeStateRef.current === operation.scope
+        && operation.scope.identity === scopeIdentity
+        && activeOperationRef.current === operation.token
+    );
 
     const load = useCallback(async () => {
         const requestId = ++requestIdRef.current;
@@ -53,7 +103,8 @@ export default function ContextualNotesContent({ onClose, headingId = 'lido-cont
     }, [load]);
 
     const save = async () => {
-        setBusy(true);
+        const operation = beginOperation();
+        if (!operation) return;
         try {
             const response = note
                 ? await api.put(`/contextual-notes/${note.id}`, { body })
@@ -62,27 +113,42 @@ export default function ContextualNotesContent({ onClose, headingId = 'lido-cont
                     profile_id: activePortfolio?.id || null,
                     body,
                 });
-            setNote(response.data?.data || null);
-            showToast('Note saved');
+            if (isCurrentOperation(operation)) {
+                setNote(response.data?.data || null);
+                showToast('Note saved');
+            }
         } catch (error) {
-            showToast(getApiErrorMessage(error, 'Could not save note'), 'danger');
+            if (isCurrentOperation(operation)) {
+                showToast(getApiErrorMessage(error, 'Could not save note'), 'danger');
+            }
         } finally {
-            setBusy(false);
+            if (isCurrentOperation(operation)) {
+                activeOperationRef.current = null;
+                setBusy(false);
+            }
         }
     };
 
     const remove = async () => {
         if (!note || !window.confirm('Delete this contextual note?')) return;
-        setBusy(true);
+        const operation = beginOperation();
+        if (!operation) return;
         try {
             await api.delete(`/contextual-notes/${note.id}`);
-            setNote(null);
-            setBody('');
-            showToast('Note deleted');
+            if (isCurrentOperation(operation)) {
+                setNote(null);
+                setBody('');
+                showToast('Note deleted');
+            }
         } catch (error) {
-            showToast(getApiErrorMessage(error, 'Could not delete note'), 'danger');
+            if (isCurrentOperation(operation)) {
+                showToast(getApiErrorMessage(error, 'Could not delete note'), 'danger');
+            }
         } finally {
-            setBusy(false);
+            if (isCurrentOperation(operation)) {
+                activeOperationRef.current = null;
+                setBusy(false);
+            }
         }
     };
 
