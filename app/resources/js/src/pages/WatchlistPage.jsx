@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import api from '../api';
 import AddToWatchlistComboButton from '../components/AddToWatchlistComboButton';
@@ -190,6 +190,8 @@ function WatchlistStockPanel({
     prices,
     pricesLoading,
     priceMeta,
+    priceStatus,
+    onRetryPrices,
     patternScan,
     patternScanLoading,
 }) {
@@ -301,7 +303,16 @@ function WatchlistStockPanel({
                 </div>
             </div>
 
-            {priceMeta && !priceMeta.has_price_history && !pricesLoading ? (
+            {priceStatus === 'error' ? (
+                <div className="alert alert-danger small mb-0" role="alert">
+                    <p className="mb-2">Price history could not be confirmed for this stock.</p>
+                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={onRetryPrices}>
+                        Retry price history
+                    </button>
+                </div>
+            ) : null}
+
+            {priceMeta && !priceMeta.has_price_history && priceStatus === 'ready' ? (
                 <div className="alert alert-warning small mb-0">
                     No cached OHLCV for this symbol yet. Prices appear after universe sync or when
                     the stock is validated and backfilled.
@@ -313,7 +324,9 @@ function WatchlistStockPanel({
                 rows={prices}
                 loading={pricesLoading}
                 title={title}
-                emptyMessage="No cached price history for this stock."
+                emptyMessage={priceStatus === 'error'
+                    ? 'Price history is unavailable until a current read succeeds.'
+                    : 'No cached price history for this stock.'}
             />
 
             <StockDetailsComboChart key={stock.id} stockId={stock.id} prices={prices} />
@@ -340,9 +353,9 @@ export default function WatchlistPage() {
     const [searchSymbol, setSearchSymbol] = useState('');
     const [note, setNote] = useState('');
     const [membershipIds, setMembershipIds] = useState([]);
-    const [prices, setPrices] = useState([]);
-    const [priceMeta, setPriceMeta] = useState(null);
-    const [pricesLoading, setPricesLoading] = useState(false);
+    const [priceRead, setPriceRead] = useState(null);
+    const priceReadGenerationRef = useRef(0);
+    const priceReadMountedRef = useRef(false);
     const [saving, setSaving] = useState(false);
     const [scanning, setScanning] = useState(false);
     const [manageOpen, setManageOpen] = useState(false);
@@ -364,6 +377,23 @@ export default function WatchlistPage() {
         () => items.find((item) => item.stock_id === selectedStock?.id) ?? null,
         [items, selectedStock],
     );
+
+    const currentPriceRead = selectedStock?.id != null
+        && String(priceRead?.stockId) === String(selectedStock.id)
+        ? priceRead
+        : null;
+    const priceStatus = currentPriceRead?.status || (selectedStock?.id != null ? 'loading' : 'idle');
+    const prices = currentPriceRead?.status === 'ready' ? currentPriceRead.rows : [];
+    const priceMeta = currentPriceRead?.status === 'ready' ? currentPriceRead.meta : null;
+    const pricesLoading = priceStatus === 'loading';
+
+    useEffect(() => {
+        priceReadMountedRef.current = true;
+        return () => {
+            priceReadMountedRef.current = false;
+            priceReadGenerationRef.current += 1;
+        };
+    }, []);
 
     const loadWatchlists = useCallback(async () => {
         setLoadingLists(true);
@@ -480,31 +510,60 @@ export default function WatchlistPage() {
         }
     }, [activeWatchlistId, itemSearch, itemSort, loadItems]);
 
-    const loadPrices = useCallback(async (stockId) => {
+    const loadPrices = useCallback(async (stock) => {
+        const stockId = stock?.id;
         if (!stockId) {
-            setPrices([]);
-            setPriceMeta(null);
+            priceReadGenerationRef.current += 1;
+            setPriceRead(null);
             return;
         }
 
-        setPricesLoading(true);
+        const generation = ++priceReadGenerationRef.current;
+        setPriceRead({ stockId, status: 'loading' });
         try {
             const res = await api.get(`/stocks/${stockId}/market-prices`);
-            setPrices(res.data.data || []);
-            setPriceMeta({
-                has_price_history: res.data.has_price_history,
-                price_count: res.data.price_count,
-                latest_close: res.data.latest_close,
-                latest_price_date: res.data.latest_price_date,
-                from_date: res.data.from_date,
-                to_date: res.data.to_date,
+            const payload = res?.data;
+            const rows = payload?.data;
+            const returnedId = payload?.stock?.id;
+            const count = payload?.price_count;
+            const hasHistory = payload?.has_price_history;
+            const validPriceMeta = Number.isInteger(count)
+                && count >= 0
+                && typeof hasHistory === 'boolean'
+                && count === rows?.length
+                && hasHistory === (count > 0);
+
+            if (!Array.isArray(rows)
+                || !validPriceMeta
+                || (payload?.stock != null && (
+                    String(returnedId) !== String(stockId)
+                    || String(payload.stock.symbol || '').toUpperCase() !== String(stock.symbol || '').toUpperCase()
+                ))) {
+                throw new Error('Price history response did not match the requested stock.');
+            }
+
+            if (!priceReadMountedRef.current || generation !== priceReadGenerationRef.current) {
+                return;
+            }
+
+            setPriceRead({
+                stockId,
+                status: 'ready',
+                rows,
+                meta: {
+                    has_price_history: hasHistory,
+                    price_count: count,
+                    latest_close: payload.latest_close,
+                    latest_price_date: payload.latest_price_date,
+                    from_date: payload.from_date,
+                    to_date: payload.to_date,
+                },
             });
         } catch {
-            setPrices([]);
-            setPriceMeta(null);
-            showToast('Failed to load price history.', 'danger');
-        } finally {
-            setPricesLoading(false);
+            if (!priceReadMountedRef.current || generation !== priceReadGenerationRef.current) {
+                return;
+            }
+            setPriceRead({ stockId, status: 'error' });
         }
     }, []);
 
@@ -540,16 +599,19 @@ export default function WatchlistPage() {
 
     useEffect(() => {
         if (selectedStock?.id) {
-            loadPrices(selectedStock.id);
+            loadPrices(selectedStock);
             loadMembership(selectedStock.id);
             loadStockPatterns(selectedStock.id);
         } else {
-            setPrices([]);
-            setPriceMeta(null);
+            priceReadGenerationRef.current += 1;
+            setPriceRead(null);
             setMembershipIds([]);
             setPatternScan(null);
         }
-    }, [selectedStock?.id, loadPrices, loadMembership, loadStockPatterns]);
+        return () => {
+            priceReadGenerationRef.current += 1;
+        };
+    }, [selectedStock, loadPrices, loadMembership, loadStockPatterns]);
 
     useEffect(() => {
         setNote(activeEntry?.note || '');
@@ -846,6 +908,8 @@ export default function WatchlistPage() {
                 prices={prices}
                 pricesLoading={pricesLoading}
                 priceMeta={priceMeta}
+                priceStatus={priceStatus}
+                onRetryPrices={() => loadPrices(selectedStock)}
                 patternScan={patternScan}
                 patternScanLoading={patternScanLoading}
             />
