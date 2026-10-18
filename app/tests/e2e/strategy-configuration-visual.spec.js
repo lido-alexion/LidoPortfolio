@@ -48,12 +48,24 @@ test.describe('V9-UX-001 strategy configuration visual regression', () => {
                 await inputs.nth(index).fill(String(value));
                 await expect(inputs.nth(index)).toHaveValue(String(value));
             }
+            await inputs.nth(thresholds.length - 1).blur();
 
             expect(externalRequests).toEqual([]);
             expect(mutationRequests).toEqual([]);
             await expect(thresholdPanel).toHaveScreenshot(
                 `str-06-recommendation-threshold-configuration-${viewport.name}.png`,
-                { animations: 'disabled', caret: 'hide' },
+                {
+                    animations: 'disabled',
+                    caret: 'hide',
+                    style: `
+                        .lido-header,
+                        .lido-page-history-rail,
+                        .lido-notes-utility-action--desktop,
+                        .lido-mobile-utility-actions {
+                            display: none !important;
+                        }
+                    `,
+                },
             );
         });
     }
