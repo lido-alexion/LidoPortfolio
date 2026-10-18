@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import api from '../api';
-import useApiGet from '../hooks/useApiGet';
+import api, { getApiErrorMessage } from '../api';
 import { ROUTES } from '../navigation/routes';
 import { formatInrCompactWhole, formatTableInteger } from '../utils/tableFormat';
 import { tosData } from '../utils/tosEnvelope';
+import { usePortfolio } from '../context/PortfolioContext';
+import { getActivePortfolioId } from '../portfolio/activePortfolioStorage';
+import { showToast } from '../toast';
 import ScrollToTop from '../components/ScrollToTop';
 import {
     METRIC_LABELS,
@@ -61,19 +63,79 @@ function MetricCard({ title, children }) {
 
 export default function ReviewReportDetailPage() {
     const { id } = useParams();
-    const { data, loading, error, reload } = useApiGet({
-        errorFallback: 'Review report not found',
-        deps: [id],
-        request: async () => {
-            const response = await api.get(`/v1/reviews/${id}`, { skipErrorToast: true });
-            return tosData(response);
-        },
-    });
+    const { activePortfolio, activePortfolioId, loading: portfoliosLoading } = usePortfolio();
+    const storedPortfolioId = getActivePortfolioId();
+    const profileMatches = activePortfolioId != null
+        && storedPortfolioId != null
+        && String(activePortfolioId) === String(storedPortfolioId);
+    const scopeKey = profileMatches && !portfoliosLoading && activePortfolio && id
+        ? `${String(activePortfolioId)}:${String(id)}`
+        : null;
+    const [read, setRead] = useState(null);
+    const currentScopeRef = useRef(null);
+    const generationRef = useRef(0);
 
-    const notFound = !loading && Boolean(error) && (
-        error?.response?.status === 404
-    );
-    const report = notFound ? null : data;
+    useLayoutEffect(() => {
+        currentScopeRef.current = scopeKey;
+        generationRef.current += 1;
+    }, [scopeKey]);
+
+    const loadReport = useCallback(async (requestedScope) => {
+        if (!requestedScope || currentScopeRef.current !== requestedScope) return;
+        const generation = ++generationRef.current;
+        setRead(previous => ({
+            scope: requestedScope,
+            state: 'loading',
+            report: previous?.scope === requestedScope ? previous.report : null,
+            error: null,
+        }));
+        try {
+            const [, reportId] = requestedScope.split(':');
+            const response = await api.get(`/v1/reviews/${reportId}`, { skipErrorToast: true });
+            const report = tosData(response);
+            if (generationRef.current !== generation || currentScopeRef.current !== requestedScope) return;
+            setRead(report
+                ? { scope: requestedScope, state: 'confirmed', report, error: null }
+                : { scope: requestedScope, state: 'unavailable', report: null, error: null });
+        } catch (error) {
+            if (generationRef.current !== generation || currentScopeRef.current !== requestedScope) return;
+            if (error?.response?.status === 404) {
+                setRead({ scope: requestedScope, state: 'not-found', report: null, error });
+            } else {
+                setRead(previous => ({
+                    scope: requestedScope,
+                    state: 'unavailable',
+                    report: previous?.scope === requestedScope ? previous.report : null,
+                    error,
+                }));
+            }
+            showToast(getApiErrorMessage(error, 'Review report could not be loaded'), 'danger');
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!scopeKey) {
+            setRead({ scope: null, state: 'waiting', report: null, error: null });
+            return undefined;
+        }
+        loadReport(scopeKey);
+        return () => {
+            if (currentScopeRef.current === scopeKey) generationRef.current += 1;
+        };
+    }, [scopeKey, loadReport]);
+
+    const reload = useCallback(() => {
+        const latestScope = currentScopeRef.current;
+        if (latestScope) return loadReport(latestScope);
+        return undefined;
+    }, [loadReport]);
+
+    const currentRead = read?.scope === scopeKey ? read : null;
+    const loading = !scopeKey || !currentRead || currentRead.state === 'loading';
+    const unavailable = currentRead?.state === 'unavailable';
+    const error = unavailable ? currentRead.error : null;
+    const notFound = currentRead?.state === 'not-found';
+    const report = currentRead?.report ?? null;
     const metrics = metricsByName(report);
     const remaining = remainingMetricKeys(report);
     const methodology = methodologyEntries(report);
@@ -93,9 +155,13 @@ export default function ReviewReportDetailPage() {
                 </Link>
             </div>
 
-            {loading && !report ? (
-                <p className="text-muted">Loading…</p>
-            ) : error && !notFound ? (
+            {!scopeKey ? (
+                <p className="text-muted" role="status">
+                    {portfoliosLoading ? 'Waiting for the selected portfolio…' : 'Select a portfolio to load this report.'}
+                </p>
+            ) : loading && !report ? (
+                <p className="text-muted" role="status">Loading review report…</p>
+            ) : unavailable && !report ? (
                 <div className="alert alert-danger" role="alert"><p>Review report could not be loaded. Please retry.</p><button type="button" className="btn btn-sm btn-outline-primary" onClick={reload}>Retry review report</button></div>
             ) : notFound ? (
                 <div data-testid="review-report-not-found">
@@ -105,9 +171,20 @@ export default function ReviewReportDetailPage() {
                     </Link>
                 </div>
             ) : !report ? (
-                <p className="text-muted">Review report not found.</p>
+                <p className="text-muted" role="status">Review report is unavailable.</p>
             ) : (
                 <>
+                    {loading || error ? (
+                        <p className="alert alert-warning small" role="status">
+                            Showing the last confirmed report for this portfolio and report ID; it may be out of date.
+                        </p>
+                    ) : null}
+                    {error ? (
+                        <div className="alert alert-danger" role="alert">
+                            <p>Review report could not be loaded. Please retry.</p>
+                            <button type="button" className="btn btn-sm btn-outline-primary" onClick={reload}>Retry review report</button>
+                        </div>
+                    ) : null}
                     <div className="border rounded p-3 mb-4">
                         <div className="row g-2 small">
                             <div className="col-md-3"><span className="text-muted">Report ID</span><div>{report.id}</div></div>
