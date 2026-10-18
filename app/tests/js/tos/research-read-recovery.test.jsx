@@ -3,6 +3,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import api from '../../../resources/js/src/api';
+import { showToast } from '../../../resources/js/src/toast';
 import StockPricesPage from '../../../resources/js/src/pages/StockPricesPage';
 import IndicesPage from '../../../resources/js/src/pages/IndicesPage';
 import IndexSection from '../../../resources/js/src/components/indices/IndexSection';
@@ -155,6 +156,26 @@ it('waits for the real portfolio bootstrap before requesting a portfolio-scoped 
     await waitFor(() => expect(scopes).toEqual(['2']));
     await act(async () => reportRead.resolve({ data: { data: { id: 12, status: 'bootstrapped report', period_start: '2026-10-01', period_end: '2026-10-31', metrics: {}, methodology: {} } } }));
     expect(await screen.findByText('bootstrapped report', { exact: true })).toBeVisible();
+    expect(api.post).not.toHaveBeenCalled();
+});
+
+it('ignores pending report failures after StrictMode cleanup and page unmount', async () => {
+    const reportReads = [];
+    api.get.mockImplementation(path => {
+        if (path === '/portfolios') return Promise.resolve({ data: { data: [{ id: 1, name: 'Main', is_default: true }] } });
+        if (path === '/v1/reviews/12') {
+            const read = deferred(); reportReads.push(read); return read.promise;
+        }
+        throw new Error(`Unexpected GET ${path}`);
+    });
+    const mounted = atReport('/review/reports/12', true);
+    await waitFor(() => expect(reportReads.length).toBeGreaterThan(0));
+    mounted.unmount();
+    await act(async () => {
+        reportReads.forEach(read => read.reject(unavailable()));
+        await Promise.all(reportReads.map(read => read.promise.catch(() => null)));
+    });
+    expect(showToast).not.toHaveBeenCalled();
     expect(api.post).not.toHaveBeenCalled();
 });
 it('stops loading after a failed observational review and recovers through Refresh', async () => {
