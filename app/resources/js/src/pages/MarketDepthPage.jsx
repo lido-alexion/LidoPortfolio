@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     CartesianGrid,
     Line,
@@ -32,39 +32,75 @@ export default function MarketDepthPage() {
     const [valueMode, setValueMode] = useState('pct');
     const [selectedDate, setSelectedDate] = useState('');
     const [availableDates, setAvailableDates] = useState([]);
-    const [matrix, setMatrix] = useState(null);
+    const [datesConfirmed, setDatesConfirmed] = useState(false);
+    const [confirmedSnapshot, setConfirmedSnapshot] = useState(null);
     const [chartHistory, setChartHistory] = useState([]);
     const [chartSymbol, setChartSymbol] = useState('NIFTY50');
     const [enabledSeries, setEnabledSeries] = useState({});
-    const [loading, setLoading] = useState(true);
-    const [loadError, setLoadError] = useState('');
+    const [readState, setReadState] = useState({ key: '', status: 'loading', error: '' });
+    const matrixGenerationRef = useRef(0);
+    const chartGenerationRef = useRef(0);
+    const mountedRef = useRef(false);
+    const requestedDateRef = useRef('');
+
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+            matrixGenerationRef.current += 1;
+            chartGenerationRef.current += 1;
+        };
+    }, []);
 
     const load = useCallback(async (date, options = {}) => {
         const { updateChart = true } = options;
-        setLoading(true);
-        setLoadError('');
+        const requestedDate = date || '';
+        requestedDateRef.current = requestedDate;
+        const matrixGeneration = ++matrixGenerationRef.current;
+        const chartGeneration = updateChart ? ++chartGenerationRef.current : null;
+        setReadState({ key: requestedDate, status: 'loading', error: '' });
         try {
             const params = {};
-            if (date) {
-                params.date = date;
+            if (requestedDate) {
+                params.date = requestedDate;
             }
             const { data } = await api.get('/market-depth', { params });
-            setAvailableDates(data.available_dates ?? []);
-            setSelectedDate(data.as_of_date ?? '');
-            setMatrix(data.matrix ?? null);
-            if (updateChart) {
-                setChartHistory(data.chart_history ?? data.nifty50_history ?? []);
+            const matrixIsUsable = data?.matrix === null || (
+                data?.matrix
+                && typeof data.matrix === 'object'
+                && !Array.isArray(data.matrix)
+                && Array.isArray(data.matrix.columns)
+                && Array.isArray(data.matrix.rows)
+            );
+            if (!data || !Array.isArray(data.available_dates) || !Object.prototype.hasOwnProperty.call(data, 'matrix') || !matrixIsUsable) {
+                throw new Error('Invalid market depth response');
+            }
+            const latestDate = String(data.as_of_date ?? requestedDate);
+            const matrixIsCurrent = mountedRef.current
+                && matrixGenerationRef.current === matrixGeneration
+                && requestedDateRef.current === requestedDate;
+            if (matrixIsCurrent) {
+                const selected = data.available_dates.includes(latestDate) || requestedDate ? latestDate : '';
+                setAvailableDates(data.available_dates);
+                setDatesConfirmed(true);
+                setConfirmedSnapshot({ date: selected, matrix: data.matrix });
+                requestedDateRef.current = selected;
+                setSelectedDate(selected);
+                setReadState({ key: selected, status: 'confirmed', error: '' });
+            }
+            const responseChart = data.chart_history ?? data.nifty50_history ?? [];
+            if (updateChart && Array.isArray(responseChart) && mountedRef.current && chartGenerationRef.current === chartGeneration) {
+                setChartHistory(responseChart);
                 setChartSymbol(data.chart_symbol || 'NIFTY50');
             }
         } catch (e) {
-            setLoadError('Market breadth could not be loaded.');
-            showToast(e?.response?.data?.message || e.message || 'Failed to load market depth', 'error');
-            setMatrix(null);
-            if (updateChart) {
-                setChartHistory([]);
+            const isCurrent = mountedRef.current
+                && matrixGenerationRef.current === matrixGeneration
+                && requestedDateRef.current === requestedDate;
+            if (isCurrent) {
+                setReadState({ key: requestedDate, status: 'error', error: 'Market breadth could not be loaded.' });
+                showToast(e?.response?.data?.message || e.message || 'Failed to load market depth', 'error');
             }
-        } finally {
-            setLoading(false);
         }
     }, []);
 
@@ -74,9 +110,18 @@ export default function MarketDepthPage() {
     }, [load]);
 
     const onDateChange = (next) => {
+        requestedDateRef.current = next;
         setSelectedDate(next);
         load(next || undefined, { updateChart: false });
     };
+
+    const currentSnapshot = confirmedSnapshot?.date === selectedDate ? confirmedSnapshot : null;
+    const currentReadState = readState.key === selectedDate
+        ? readState
+        : { key: selectedDate, status: 'loading', error: '' };
+    const loading = currentReadState.status === 'loading';
+    const loadError = currentReadState.status === 'error' ? currentReadState.error : '';
+    const staleSnapshot = Boolean(currentSnapshot && (loading || loadError));
 
     const chartData = useMemo(() => {
         return (chartHistory ?? []).map((point) => {
@@ -92,6 +137,7 @@ export default function MarketDepthPage() {
         });
     }, [chartHistory, valueMode]);
 
+    const matrix = currentSnapshot?.matrix ?? null;
     const seriesKeys = useMemo(() => matrix?.columns?.map((c) => c.key) ?? Object.keys(SERIES_COLORS), [matrix]);
     const visibleSeriesKeys = useMemo(() => {
         if (!seriesKeys.length) {
@@ -142,7 +188,7 @@ export default function MarketDepthPage() {
                         disabled={!availableDates.length}
                     >
                         {availableDates.length === 0 ? (
-                            <option value="">No snapshots</option>
+                            <option value="">{datesConfirmed ? 'No snapshots' : (loading ? 'Loading snapshots…' : 'Snapshots unavailable')}</option>
                         ) : (
                             availableDates.map((d) => (
                                 <option key={d} value={d}>
@@ -154,10 +200,12 @@ export default function MarketDepthPage() {
                 </div>
             </div>
 
-            {loadError ? <div className="alert alert-danger" role="alert"><p>{loadError}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={() => load(selectedDate || undefined)}>Retry market breadth</button></div> : loading ? (
-                <div className="text-muted py-4">Loading market breadth…</div>
-            ) : (
-                <>
+            {loadError ? <div className="alert alert-danger" role="alert"><p>{loadError}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={() => load(selectedDate || undefined)}>Retry market breadth</button></div> : null}
+            {loading && !currentSnapshot ? <div className="text-muted py-4" role="status">Loading market breadth…</div> : null}
+            {!datesConfirmed && !loading && !loadError ? <div className="text-muted py-4" role="status">Waiting for a confirmed snapshot list.</div> : null}
+            {staleSnapshot ? <div className="alert alert-warning small" role="status">Showing the last confirmed matrix for this date; it may be out of date.</div> : null}
+            {loadError && !currentSnapshot ? <div className="text-muted py-4" role="status">No confirmed matrix is available for the selected date.</div> : null}
+            <>
                     {chartData.length > 0 ? (
                         <div className="mb-4">
                             <div className="text-muted small mb-2">
@@ -248,16 +296,15 @@ export default function MarketDepthPage() {
                             title=""
                             hideFooter={false}
                         />
-                    ) : (
+                    ) : currentSnapshot && !loadError ? (
                         <div className="text-muted">
                             No NSE indexes in this snapshot
                             {availableDates.length === 0
                                 ? '. Ask an administrator to review source coverage.'
                                 : '.'}
                         </div>
-                    )}
-                </>
-            )}
+                    ) : null}
+            </>
         </div>
     );
 }
