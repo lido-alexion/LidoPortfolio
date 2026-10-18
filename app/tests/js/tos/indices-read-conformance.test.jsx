@@ -90,6 +90,7 @@ it.each(['overview', 'comparison-series', 'comparison-point'])('retries a malfor
         expect(screen.getByRole('status')).toHaveTextContent('No index records are available.');
     } else {
         expect(screen.getByRole('button', { name: /Nifty 50 \(NIFTY50\)/ })).toBeVisible();
+        expect(screen.queryByRole('status')).toBeNull();
     }
     expect(pageRead).toBe(2);
     expect(comparisonRead).toBe(2);
@@ -106,7 +107,7 @@ it('rejects a malformed history body, retries the same index, and accepts a conf
                 has_price_history: false,
             },
         }));
-    render(<MemoryRouter><IndexSection index={{ ...index, has_price_history: false, price_count: 0, price_from: null, price_to: null }} panelId="index-history-fixture" expanded onToggle={() => {}} /></MemoryRouter>);
+    render(<MemoryRouter><IndexSection index={{ ...index, has_price_history: false, price_count: 0, price_from: null, price_to: null, constituents_available: false }} panelId="index-history-fixture" expanded onToggle={() => {}} /></MemoryRouter>);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Index history could not be loaded');
     expect(screen.getByRole('button', { name: 'Retry index history' })).toBeVisible();
@@ -147,6 +148,7 @@ it('offers Retry for the service’s HTTP-200 constituent failure and then rende
     fireEvent.click(screen.getByRole('button', { name: 'Retry index constituents' }));
     expect(await screen.findByRole('link', { name: 'TCS', exact: true })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Retry index constituents' })).toBeNull();
+    expect(screen.getByRole('searchbox', { name: 'Search NIFTY50 constituents' })).toBeEnabled();
     expect(api.get).toHaveBeenCalledTimes(3);
     expect(api.get).toHaveBeenNthCalledWith(2, '/indexes/NIFTY50/constituents');
     expect(api.get).toHaveBeenNthCalledWith(3, '/indexes/NIFTY50/constituents');

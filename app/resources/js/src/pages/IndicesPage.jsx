@@ -83,6 +83,8 @@ export default function IndicesPage() {
     const [comparisonLoading, setComparisonLoading] = useState(true);
     const [indexes, setIndexes] = useState([]);
     const [comparison, setComparison] = useState(null);
+    const [overviewReady, setOverviewReady] = useState(false);
+    const [comparisonReady, setComparisonReady] = useState(false);
     const [error, setError] = useState('');
     const [expandedKey, setExpandedKey] = useState(null);
     const [retryKey, setRetryKey] = useState(0);
@@ -92,25 +94,30 @@ export default function IndicesPage() {
         setLoading(true);
         setComparisonLoading(true);
         setError('');
+        setOverviewReady(false);
+        setComparisonReady(false);
 
-        Promise.all([
+        Promise.allSettled([
             api.get('/indexes/page'),
             api.get('/indexes/comparison', { params: { months: 12 } }),
         ])
-            .then(([pageRes, comparisonRes]) => {
+            .then(([pageResult, comparisonResult]) => {
                 if (cancelled) {
                     return;
                 }
-                const overview = pageRes.data?.data;
-                const comparisonData = comparisonRes.data?.data;
-                if (!isIndexOverview(overview) || !isIndexComparison(comparisonData)) {
-                    throw new Error('Invalid index response');
+                const overview = pageResult.status === 'fulfilled' ? pageResult.value.data?.data : null;
+                const comparisonData = comparisonResult.status === 'fulfilled' ? comparisonResult.value.data?.data : null;
+                const overviewValid = isIndexOverview(overview);
+                const comparisonValid = isIndexComparison(comparisonData);
+                if (overviewValid) {
+                    setIndexes(overview.indexes);
                 }
-                setIndexes(overview.indexes);
-                setComparison(comparisonData);
-            })
-            .catch(() => {
-                if (!cancelled) {
+                if (comparisonValid) {
+                    setComparison(comparisonData);
+                }
+                setOverviewReady(overviewValid);
+                setComparisonReady(comparisonValid);
+                if (!overviewValid || !comparisonValid) {
                     setError('Failed to load index data.');
                 }
             })
@@ -127,12 +134,13 @@ export default function IndicesPage() {
     const groups = useMemo(() => groupIndexesByExchange(indexes), [indexes]);
     const exchangeOrder = ['NSE', 'BSE'];
 
-    if (error) {
+    if (error && !overviewReady) {
         return <div className="alert alert-danger" role="alert"><p>{error}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={() => setRetryKey(key => key + 1)}>Retry index data</button></div>;
     }
 
     return (
         <div className="indices-page">
+            {error ? <div className="alert alert-danger" role="alert"><p>{error}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={() => setRetryKey(key => key + 1)}>Retry index data</button></div> : null}
             <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
                 <div>
                     <h1 className="h3 mb-1">Indices</h1>
@@ -142,11 +150,15 @@ export default function IndicesPage() {
                 </div>
             </div>
 
-            <IndexComparisonChart
-                comparison={comparison}
-                indexes={indexes}
-                loading={comparisonLoading || loading}
-            />
+            {comparisonReady ? (
+                <IndexComparisonChart
+                    comparison={comparison}
+                    indexes={indexes}
+                    loading={comparisonLoading || loading}
+                />
+            ) : (
+                <div className="text-muted small py-4 text-center" role="status">Relative performance comparison is unavailable.</div>
+            )}
 
             {loading ? (
                 <div className="text-muted py-4 text-center">Loading indexes…</div>
