@@ -7,7 +7,7 @@ import IndicesPage from '../../../resources/js/src/pages/IndicesPage';
 import IndexSection from '../../../resources/js/src/components/indices/IndexSection';
 
 vi.mock('../../../resources/js/src/api', () => ({ default: { get: vi.fn(), post: vi.fn(), put: vi.fn() } }));
-vi.mock('../../../resources/js/src/components/indices/IndexComparisonChart', () => ({ default: () => null }));
+vi.mock('../../../resources/js/src/components/indices/IndexComparisonChart', () => ({ default: ({ indexes = [], loading }) => <div data-testid="index-comparison-owner" data-symbols={indexes.map(item => item.symbol).join(',')} data-loading={String(loading)} /> }));
 vi.mock('../../../resources/js/src/components/indices/IndiaVixAlertSettings', () => ({ default: () => null }));
 vi.mock('../../../resources/js/src/components/charts/PriceVolumeChart', async () => {
     const ReactModule = await import('react');
@@ -56,6 +56,29 @@ function deferred() {
     const promise = new Promise((yes) => { resolve = yes; });
     return { promise, resolve };
 }
+
+it('keeps the comparison owner mounted while its read is unavailable, then reveals it after a confirmed retry', async () => {
+    api.get.mockImplementationOnce(() => Promise.reject(new Error('Synthetic overview unavailable')))
+        .mockImplementationOnce(() => Promise.reject(new Error('Synthetic comparison unavailable')))
+        .mockImplementationOnce(() => Promise.resolve(indexOverview([index])))
+        .mockImplementationOnce(() => Promise.resolve(indexComparison([])));
+
+    const { container } = render(<MemoryRouter><IndicesPage /></MemoryRouter>);
+    const comparisonOwner = await screen.findByTestId('index-comparison-owner');
+    const ownerNode = comparisonOwner;
+    expect(ownerNode.parentElement).toHaveAttribute('hidden');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Failed to load index data');
+    expect(screen.getByText('Index records are unavailable.')).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry index data' }));
+    await screen.findByRole('button', { name: /Nifty 50 \(NIFTY50\)/ });
+    expect(container.querySelector('[data-testid="index-comparison-owner"]')).toBe(ownerNode);
+    expect(ownerNode.parentElement).not.toHaveAttribute('hidden');
+    expect(ownerNode).toHaveAttribute('data-symbols', 'NIFTY50');
+    expect(api.get).toHaveBeenCalledTimes(4);
+    expect(api.post).not.toHaveBeenCalled();
+    expect(api.put).not.toHaveBeenCalled();
+});
 
 it.each(['overview', 'comparison-series', 'comparison-point'])('retries a malformed %s success without confusing it with a valid empty result', async (invalidPart) => {
     const pageResponses = invalidPart === 'overview'

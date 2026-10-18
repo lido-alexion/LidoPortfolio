@@ -185,7 +185,7 @@ for (const viewport of VIEWPORTS) {
             });
             await safety.seal();
             await page.goto('/indices');
-            await expect(page.getByRole('heading', { name: 'Indices', exact: true })).toBeVisible();
+            await expect(page.locator('.indices-page').getByRole('heading', { name: 'Indices', exact: true })).toBeVisible();
             await page.getByRole('button', { name: /^Nifty 50 \(NIFTY50\)/ }).click();
             const panel = page.getByRole('region', { name: /^Nifty 50 \(NIFTY50\)/ });
             await expect(panel.getByRole('alert').filter({ hasText: 'Index history could not be loaded' })).toBeVisible();

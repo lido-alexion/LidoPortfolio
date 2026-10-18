@@ -134,10 +134,6 @@ export default function IndicesPage() {
     const groups = useMemo(() => groupIndexesByExchange(indexes), [indexes]);
     const exchangeOrder = ['NSE', 'BSE'];
 
-    if (error && !overviewReady) {
-        return <div className="alert alert-danger" role="alert"><p>{error}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={() => setRetryKey(key => key + 1)}>Retry index data</button></div>;
-    }
-
     return (
         <div className="indices-page">
             {error ? <div className="alert alert-danger" role="alert"><p>{error}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={() => setRetryKey(key => key + 1)}>Retry index data</button></div> : null}
@@ -150,20 +146,25 @@ export default function IndicesPage() {
                 </div>
             </div>
 
-            {comparisonReady ? (
+            <div hidden={!overviewReady || !comparisonReady} aria-hidden={!overviewReady || !comparisonReady}>
                 <IndexComparisonChart
-                    comparison={comparison}
-                    indexes={indexes}
+                    comparison={overviewReady && comparisonReady ? comparison : null}
+                    indexes={overviewReady ? indexes : []}
                     loading={comparisonLoading || loading}
                 />
-            ) : (
-                <div className="text-muted small py-4 text-center" role="status">Relative performance comparison is unavailable.</div>
-            )}
+            </div>
+            {!comparisonReady ? (
+                <div className="text-muted small py-4 text-center" role="status">
+                    {comparisonLoading ? 'Loading relative performance comparison…' : 'Relative performance comparison is unavailable.'}
+                </div>
+            ) : null}
 
             {loading ? (
                 <div className="text-muted py-4 text-center">Loading indexes…</div>
             ) : (
-                indexes.length === 0 ? (
+                !overviewReady ? (
+                    <div className="text-muted py-4 text-center" role="status">Index records are unavailable.</div>
+                ) : indexes.length === 0 ? (
                     <div className="text-muted py-4" role="status">No index records are available.</div>
                 ) : (
                     exchangeOrder.filter((exchange) => groups[exchange]?.length).map((exchange) => (
