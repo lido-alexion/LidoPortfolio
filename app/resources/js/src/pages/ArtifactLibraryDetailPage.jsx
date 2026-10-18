@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api, { getApiErrorMessage } from '../api';
 import { showToast } from '../toast';
@@ -45,35 +45,104 @@ function DraftEditor({ artifact, version, busy, onSaved }) {
 
 export default function ArtifactLibraryDetailPage() {
     const { uuid } = useParams();
-    const [artifact, setArtifact] = useState(null);
+    const [loadedArtifact, setLoadedArtifact] = useState(null);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
     const [changes, setChanges] = useState(null);
+    const [artifactUuid, setArtifactUuid] = useState(uuid);
+    const routeIdentity = useMemo(() => ({ uuid }), [uuid]);
+    const comparisonSelection = useMemo(() => ({ routeIdentity, from, to }), [routeIdentity, from, to]);
+    const committedRouteRef = useRef(null);
+    const committedComparisonRef = useRef(null);
+    const routeEpochRef = useRef(0);
+    const loadGenerationRef = useRef(0);
+    const comparisonGenerationRef = useRef(0);
+    const activeComparisonRef = useRef(null);
+    const comparisonBusyRef = useRef(false);
+    const mountedRef = useRef(false);
 
-    const load = async () => {
+    const invalidateComparison = useCallback(() => {
+        const comparisonOwnedBusy = comparisonBusyRef.current && activeComparisonRef.current !== null;
+        comparisonGenerationRef.current++;
+        activeComparisonRef.current = null;
+        comparisonBusyRef.current = false;
+        setChanges(null);
+        if (comparisonOwnedBusy) setBusy(false);
+    }, []);
+
+    useLayoutEffect(() => {
+        if (committedRouteRef.current === routeIdentity) return;
+        committedRouteRef.current = routeIdentity;
+        routeEpochRef.current++;
+        loadGenerationRef.current++;
+        invalidateComparison();
+        setLoadedArtifact(null);
+        setArtifactUuid(uuid);
+        setError('');
+        setLoading(true);
+        setFrom('');
+        setTo('');
+    }, [routeIdentity, uuid, invalidateComparison]);
+
+    useLayoutEffect(() => {
+        if (committedComparisonRef.current === comparisonSelection) return;
+        committedComparisonRef.current = comparisonSelection;
+        invalidateComparison();
+    }, [comparisonSelection, invalidateComparison]);
+
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+            routeEpochRef.current++;
+            loadGenerationRef.current++;
+            comparisonGenerationRef.current++;
+            activeComparisonRef.current = null;
+        };
+    }, []);
+
+    const load = useCallback(async () => {
+        const requestedUuid = uuid;
+        const requestedRoute = routeIdentity;
+        if (!mountedRef.current || committedRouteRef.current !== requestedRoute) return;
+        const epoch = routeEpochRef.current;
+        const generation = ++loadGenerationRef.current;
+        const isCurrent = () => mountedRef.current
+            && committedRouteRef.current === requestedRoute
+            && routeEpochRef.current === epoch
+            && loadGenerationRef.current === generation;
         setLoading(true);
         setError('');
         try {
-            const response = await api.get(`/v1/artifact-library/${uuid}`);
+            const response = await api.get(`/v1/artifact-library/${requestedUuid}`);
             const data = response.data?.data || null;
-            setArtifact(data);
+            if (!isCurrent()) return;
+            setLoadedArtifact(data);
+            setArtifactUuid(requestedUuid);
             const published = (data?.versions || []).filter((version) => version.status === 'published');
             if (published.length >= 2) {
                 setTo((current) => current || published[0].semver);
                 setFrom((current) => current || published[1].semver);
             }
         } catch (requestError) {
-            setError(getApiErrorMessage(requestError, 'Failed to load artifact details.'));
+            if (isCurrent()) setError(getApiErrorMessage(requestError, 'Failed to load artifact details.'));
         } finally {
-            setLoading(false);
+            if (isCurrent()) setLoading(false);
         }
-    };
+    }, [uuid, routeIdentity]);
 
-    useEffect(() => { load(); }, [uuid]); // eslint-disable-line react-hooks/exhaustive-deps
-    const published = useMemo(() => (artifact?.versions || []).filter((version) => version.status === 'published'), [artifact]);
+    useEffect(() => {
+        load();
+        return () => { loadGenerationRef.current++; };
+    }, [load]);
+    const currentArtifact = artifactUuid === uuid ? loadedArtifact : null;
+    const artifact = currentArtifact;
+    const currentError = artifactUuid === uuid ? error : '';
+    const routeLoading = artifactUuid !== uuid || loading;
+    const published = useMemo(() => (currentArtifact?.versions || []).filter((version) => version.status === 'published'), [currentArtifact]);
 
     const act = async (operation, message) => {
         setBusy(true); setError('');
@@ -82,12 +151,36 @@ export default function ArtifactLibraryDetailPage() {
 
     const compare = async () => {
         if (!from || !to || from === to) return;
+        const requestedUuid = uuid;
+        const requestedFrom = from;
+        const requestedTo = to;
+        const requestedRoute = routeIdentity;
+        const requestedSelection = comparisonSelection;
+        const epoch = routeEpochRef.current;
+        const generation = ++comparisonGenerationRef.current;
+        const comparison = { uuid: requestedUuid, from: requestedFrom, to: requestedTo, epoch, generation };
+        activeComparisonRef.current = comparison;
+        comparisonBusyRef.current = true;
+        const isCurrent = () => mountedRef.current
+            && committedRouteRef.current === requestedRoute
+            && committedComparisonRef.current === requestedSelection
+            && routeEpochRef.current === epoch
+            && comparisonGenerationRef.current === generation
+            && activeComparisonRef.current === comparison;
         setBusy(true); setError('');
         try {
-            const response = await api.get(`/v1/artifact-library/${uuid}/diff`, { params: { from, to } });
-            setChanges(response.data?.data?.changes || []);
-        } catch (requestError) { setError(getApiErrorMessage(requestError)); } finally { setBusy(false); }
+            const response = await api.get(`/v1/artifact-library/${requestedUuid}/diff`, { params: { from: requestedFrom, to: requestedTo } });
+            if (isCurrent()) setChanges({ uuid: requestedUuid, from: requestedFrom, to: requestedTo, rows: response.data?.data?.changes || [] });
+        } catch (requestError) { if (isCurrent()) setError(getApiErrorMessage(requestError)); } finally {
+            if (activeComparisonRef.current === comparison && comparisonBusyRef.current) {
+                activeComparisonRef.current = null;
+                comparisonBusyRef.current = false;
+                setBusy(false);
+            }
+        }
     };
+
+    const visibleChanges = changes?.uuid === uuid && changes?.from === from && changes?.to === to ? changes.rows : null;
 
     const exportVersion = async (version) => {
         setBusy(true); setError('');
@@ -155,9 +248,9 @@ export default function ArtifactLibraryDetailPage() {
                 <div><h2 className="h4 mb-1">{artifact?.name || 'Artifact'}</h2><p className="small text-muted mb-0"><code>{artifact?.slug || uuid}</code>{artifact && ` · ${artifact.type} · ${artifact.permission} · ${artifact.origin}`}</p></div>
                 <Link className="btn btn-sm btn-outline-secondary align-self-start" to="/artifact-library">Back to Library</Link>
             </div>
-            {error && <div className="alert alert-danger mb-0" role="alert">{error}{!artifact && <button type="button" className="btn btn-sm btn-outline-secondary ms-2" disabled={loading || busy} onClick={load}>Retry artifact</button>}</div>}
-            {loading && <div className="text-muted">Loading artifact…</div>}
-            {!loading && artifact && <>
+            {currentError && <div className="alert alert-danger mb-0" role="alert">{currentError}{!artifact && <button type="button" className="btn btn-sm btn-outline-secondary ms-2" disabled={routeLoading || busy} onClick={load}>Retry artifact</button>}</div>}
+            {routeLoading && <div className="text-muted">Loading artifact…</div>}
+            {!routeLoading && artifact && <>
                 <div className="card"><div className="card-body">
                     <h3 className="h6">Portfolio deployment</h3>
                     {artifact.portfolio_binding ? <div className="d-flex flex-wrap gap-2 align-items-center"><span className={`badge ${stateBadge(artifact.portfolio_binding.usability_state)}`}>{artifact.portfolio_binding.usability_state}</span><span>{artifact.portfolio_binding.status} on {artifact.portfolio_binding.active_version}</span>{(artifact.portfolio_binding.usability_reasons || []).map((reason) => <code className="small" key={reason}>{reason}</code>)}<button type="button" className="btn btn-sm btn-outline-secondary" onClick={toggleBinding} disabled={busy || artifact.portfolio_binding.usability_state === 'blocked' && artifact.portfolio_binding.status !== 'enabled'}>{artifact.portfolio_binding.status === 'enabled' ? 'Disable' : 'Enable'}</button></div> : <span className="text-muted">This artifact is not bound to the active Portfolio.</span>}
@@ -171,7 +264,7 @@ export default function ArtifactLibraryDetailPage() {
                         <select className="form-select form-select-sm w-auto" aria-label="Compare to version" value={to} onChange={(event) => setTo(event.target.value)}>{published.map((version) => <option key={version.id}>{version.semver}</option>)}</select>
                         <button className="btn btn-sm btn-outline-primary" type="button" onClick={compare} disabled={busy || from === to}>Compare</button>
                     </div>
-                    {changes && <div className="table-responsive mt-3"><table className="table table-sm"><thead><tr><th>Path</th><th>Change</th><th>Before</th><th>After</th></tr></thead><tbody>{changes.map((change, index) => <tr key={`${change.path}-${index}`}><td><code>{change.path}</code></td><td>{change.change}</td><td><code>{JSON.stringify(change.before)}</code></td><td><code>{JSON.stringify(change.after)}</code></td></tr>)}</tbody></table>{changes.length === 0 && <p className="text-muted small mb-0">No structural changes.</p>}</div>}
+                    {visibleChanges && <div className="table-responsive mt-3"><table className="table table-sm"><thead><tr><th>Path</th><th>Change</th><th>Before</th><th>After</th></tr></thead><tbody>{visibleChanges.map((change, index) => <tr key={`${change.path}-${index}`}><td><code>{change.path}</code></td><td>{change.change}</td><td><code>{JSON.stringify(change.before)}</code></td><td><code>{JSON.stringify(change.after)}</code></td></tr>)}</tbody></table>{visibleChanges.length === 0 && <p className="text-muted small mb-0">No structural changes.</p>}</div>}
                 </div></div>}
 
                 <div className="d-grid gap-3">{artifact.versions.map((version) => <div className="card" key={version.id}><div className="card-body">
