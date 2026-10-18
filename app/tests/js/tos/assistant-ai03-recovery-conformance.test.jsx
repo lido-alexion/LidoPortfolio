@@ -81,7 +81,7 @@ it('returns focus to Ask StoX when Escape closes the unavailable-state dialog', 
     const drawer = await openUnavailableAssistant();
 
     await act(async () => {
-        fireEvent.cancel(drawer);
+        fireEvent(drawer, new Event('cancel', { bubbles: false, cancelable: true }));
     });
 
     await waitFor(() => expect(drawer).not.toBeVisible());

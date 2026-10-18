@@ -9,8 +9,10 @@ const VIEWPORTS = [
 const STREAM_PATH = '/api/ai/assistant/stream';
 const TEMPORARY_UNAVAILABLE = 'The assistant is temporarily unavailable. You can still use How do I? help.';
 const QUESTION = 'How do I find maintained StoX documentation when the assistant is unavailable? Please explain how to create a screener, configure its criteria, build a strategy from it, review recommendations, understand portfolio analysis, find supported execution steps, and return to the current page. I need to keep the recovery context while scrolling the help drawer on a narrow screen.';
+const CLOSE_QUESTION = 'Where can I browse maintained StoX help after the assistant becomes unavailable?';
+const ESCAPE_QUESTION = 'Which documentation page explains how StoX help works during an outage?';
 
-async function askAndSettleUnavailable(page, drawer, payloads, settledResponses) {
+async function askAndSettleUnavailable(page, drawer, question, payloads, settledResponses) {
     const input = drawer.getByRole('textbox', { name: 'Ask about StoX' });
     const responsePromise = page.waitForResponse((response) => {
         const request = response.request();
@@ -18,9 +20,9 @@ async function askAndSettleUnavailable(page, drawer, payloads, settledResponses)
         return request.method() === 'POST'
             && url.origin === new URL(page.url()).origin
             && url.pathname === STREAM_PATH
-            && request.postDataJSON()?.question === QUESTION;
+            && request.postDataJSON()?.question === question;
     });
-    await input.fill(QUESTION);
+    await input.fill(question);
     await drawer.getByRole('button', { name: 'Ask', exact: true }).click();
 
     const response = await responsePromise;
@@ -30,10 +32,22 @@ async function askAndSettleUnavailable(page, drawer, payloads, settledResponses)
     expect(body.toString()).toContain('temporarily unavailable');
     settledResponses.push(response);
 
-    await expect(drawer.getByText(TEMPORARY_UNAVAILABLE, { exact: true })).toBeVisible();
-    await expect(drawer.getByText('Insufficient documentation', { exact: true })).toBeVisible();
+    const currentArticle = drawer.locator('article').filter({
+        has: drawer.getByRole('heading', { name: question, exact: true }),
+    });
+    await expect(currentArticle).toHaveCount(1);
+    await expect(currentArticle.getByText(TEMPORARY_UNAVAILABLE, { exact: true })).toBeVisible();
+    await expect(currentArticle.getByText('Insufficient documentation', { exact: true })).toBeVisible();
     await expect(drawer.getByRole('navigation', { name: 'How do I? deterministic help' })).toBeVisible();
-    expect(payloads.at(-1)?.question).toBe(QUESTION);
+    expect(payloads.at(-1)?.question).toBe(question);
+    for (const { question: priorQuestion } of payloads) {
+        const priorArticle = drawer.locator('article').filter({
+            has: drawer.getByRole('heading', { name: priorQuestion, exact: true }),
+        });
+        await expect(priorArticle).toHaveCount(1);
+        await expect(priorArticle.getByText(TEMPORARY_UNAVAILABLE, { exact: true })).toBeVisible();
+        await expect(priorArticle.getByText('Insufficient documentation', { exact: true })).toBeVisible();
+    }
 }
 
 for (const viewport of VIEWPORTS) {
@@ -83,17 +97,26 @@ for (const viewport of VIEWPORTS) {
         await trigger.click();
         let drawer = page.getByRole('dialog', { name: 'StoX assistant' });
         await expect(drawer).toBeVisible();
-        await askAndSettleUnavailable(page, drawer, payloads, settledResponses);
+        await askAndSettleUnavailable(page, drawer, QUESTION, payloads, settledResponses);
 
         if (viewport.name === 'mobile') {
             const dimensions = await drawer.evaluate((element) => ({
                 scrollHeight: element.scrollHeight,
                 clientHeight: element.clientHeight,
+                scrollTop: element.scrollTop,
             }));
             expect(dimensions.scrollHeight).toBeGreaterThan(dimensions.clientHeight);
             await drawer.hover();
-            await page.mouse.wheel(0, 640);
-            await expect.poll(() => drawer.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+            if (dimensions.scrollTop >= dimensions.scrollHeight - dimensions.clientHeight - 1) {
+                await page.mouse.wheel(0, -640);
+                await expect.poll(() => drawer.evaluate((element) => element.scrollTop)).toBeLessThan(dimensions.scrollTop);
+                const beforeDownwardWheel = await drawer.evaluate((element) => element.scrollTop);
+                await page.mouse.wheel(0, 640);
+                await expect.poll(() => drawer.evaluate((element) => element.scrollTop)).toBeGreaterThan(beforeDownwardWheel);
+            } else {
+                await page.mouse.wheel(0, 640);
+                await expect.poll(() => drawer.evaluate((element) => element.scrollTop)).toBeGreaterThan(dimensions.scrollTop);
+            }
             await expect(drawer.getByRole('link', { name: 'Browse documentation' })).toBeInViewport();
         }
 
@@ -106,14 +129,14 @@ for (const viewport of VIEWPORTS) {
         await page.goto('/');
         await trigger.click();
         drawer = page.getByRole('dialog', { name: 'StoX assistant' });
-        await askAndSettleUnavailable(page, drawer, payloads, settledResponses);
+        await askAndSettleUnavailable(page, drawer, CLOSE_QUESTION, payloads, settledResponses);
         await drawer.getByRole('button', { name: 'Close assistant', exact: true }).click();
         await expect(drawer).not.toBeVisible();
         await expect(trigger).toBeFocused();
 
         await trigger.click();
         drawer = page.getByRole('dialog', { name: 'StoX assistant' });
-        await askAndSettleUnavailable(page, drawer, payloads, settledResponses);
+        await askAndSettleUnavailable(page, drawer, ESCAPE_QUESTION, payloads, settledResponses);
         await page.keyboard.press('Escape');
         await expect(drawer).not.toBeVisible();
         await expect(trigger).toBeFocused();
@@ -126,13 +149,16 @@ for (const viewport of VIEWPORTS) {
             expect((await response.body()).toString()).toContain('temporarily unavailable');
         }
         expect(blockedOrigins).toEqual([]);
+        const httpRequests = observedRequests.filter(({ request }) => /^https?:/i.test(request.url()));
+        expect(httpRequests.length).toBeGreaterThan(0);
+        expect(httpRequests.every(({ origin }) => origin === allowedOrigin)).toBe(true);
         const mutations = observedRequests.filter(({ method }) => /^(POST|PUT|PATCH|DELETE)$/.test(method));
         expect(mutations.map(({ method, origin, path }) => ({ method, origin, path }))).toEqual([
             { method: 'POST', origin: allowedOrigin, path: STREAM_PATH },
             { method: 'POST', origin: allowedOrigin, path: STREAM_PATH },
             { method: 'POST', origin: allowedOrigin, path: STREAM_PATH },
         ]);
-        expect(payloads.map(({ question }) => question)).toEqual([QUESTION, QUESTION, QUESTION]);
+        expect(payloads.map(({ question }) => question)).toEqual([QUESTION, CLOSE_QUESTION, ESCAPE_QUESTION]);
         expect(payloads.every(({ conversation }) => Array.isArray(conversation))).toBe(true);
     });
 }
