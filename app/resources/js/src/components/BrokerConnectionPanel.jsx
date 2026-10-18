@@ -3,17 +3,38 @@ import api from '../api';
 import { runApiMutation } from '../hooks/useApiMutation';
 import { tosData } from '../utils/tosEnvelope';
 
+function isBrokerStatus(value) {
+    return value && typeof value === 'object'
+        && typeof value.configured === 'boolean'
+        && typeof value.connected === 'boolean'
+        && typeof value.usable === 'boolean';
+}
+
 export default function BrokerConnectionPanel() {
     const [status, setStatus] = useState(null);
+    const [statusState, setStatusState] = useState('loading');
     const [busy, setBusy] = useState(false);
 
     const load = async () => {
-        const res = await api.get('/v1/broker/status', { skipErrorToast: true });
-        setStatus(tosData(res) || null);
+        setStatusState('loading');
+        try {
+            const res = await api.get('/v1/broker/status', { skipErrorToast: true });
+            const nextStatus = tosData(res);
+            if (!isBrokerStatus(nextStatus)) {
+                setStatus(null);
+                setStatusState('unavailable');
+                return;
+            }
+            setStatus(nextStatus);
+            setStatusState('confirmed');
+        } catch {
+            setStatus(null);
+            setStatusState('unavailable');
+        }
     };
 
     useEffect(() => {
-        load().catch(() => setStatus({ configured: false, connected: false, usable: false }));
+        void load();
     }, []);
 
     const connect = async () => {
@@ -38,6 +59,7 @@ export default function BrokerConnectionPanel() {
                 await api.post('/v1/broker/kite/disconnect', {}, { skipErrorToast: true });
             }, { successMessage: 'Kite disconnected', errorFallback: 'Could not disconnect Kite' });
             if (ok) {
+                setStatus(null);
                 await load();
             }
         } finally {
@@ -54,10 +76,21 @@ export default function BrokerConnectionPanel() {
                     Manual mode works without a broker connection. Kite sessions typically expire around 6:00 AM IST.
                     If Kite asks for a Kite login OTP, enter it only on the Kite/Zerodha login page; StoX never uses that OTP as an execution code.
                 </p>
-                {status?.configured === false && (
+                {statusState === 'loading' && (
+                    <p className="mb-2" role="status">Checking Kite connection status…</p>
+                )}
+                {statusState === 'unavailable' && (
+                    <div className="alert alert-warning" role="alert">
+                        <p className="mb-2">Kite connection status is unavailable. Retry to check the current connection.</p>
+                        <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load} disabled={busy}>
+                            Retry status
+                        </button>
+                    </div>
+                )}
+                {statusState === 'confirmed' && status?.configured === false && (
                     <p className="small text-warning mb-2">Kite API keys are not configured on this server.</p>
                 )}
-                {status?.usable ? (
+                {statusState === 'confirmed' && status?.usable ? (
                     <p className="mb-2">
                         <span className="badge text-bg-success">Connected</span>
                         {status.expires_at && (
@@ -66,16 +99,16 @@ export default function BrokerConnectionPanel() {
                             </span>
                         )}
                     </p>
-                ) : status?.connected ? (
+                ) : statusState === 'confirmed' && status?.connected ? (
                     <p className="mb-2"><span className="badge text-bg-warning">Session expired</span></p>
-                ) : (
+                ) : statusState === 'confirmed' ? (
                     <p className="mb-2"><span className="badge text-bg-secondary">Not connected</span></p>
-                )}
+                ) : null}
                 <div className="d-flex flex-wrap gap-2">
-                    <button type="button" className="btn btn-primary btn-sm" onClick={connect} disabled={busy || status?.configured === false}>
+                    <button type="button" className="btn btn-primary btn-sm" onClick={connect} disabled={busy || statusState !== 'confirmed' || status?.configured === false}>
                         Connect Kite
                     </button>
-                    <button type="button" className="btn btn-outline-secondary btn-sm" onClick={disconnect} disabled={busy || !status?.connected}>
+                    <button type="button" className="btn btn-outline-secondary btn-sm" onClick={disconnect} disabled={busy || statusState !== 'confirmed' || !status?.connected}>
                         Disconnect
                     </button>
                 </div>
