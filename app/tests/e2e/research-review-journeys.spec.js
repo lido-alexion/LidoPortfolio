@@ -99,5 +99,58 @@ for (const viewport of VIEWPORTS) {
             await page.route('**/api/stocks/search?*', route => { if (resolutionUnavailable) return failure(route, 'Synthetic symbol resolution unavailable.'); return route.fulfill({ json: { data: [{ id: 42, symbol: 'TCS', exchange: 'NSE', name: 'Tata Consultancy Services' }] } }); }); await page.route('**/api/v1/stocks/42/fundamentals?*', route => { if (insightUnavailable) return failure(route, 'Synthetic fundamental read unavailable.'); return route.fulfill({ json: { data: { as_of: '2026-10-01', freshness: { status: 'stale' }, insights: null } } }); });
             await safety.seal(); await page.goto('/fundamentals/insights/TCS'); await expect(page.getByRole('alert')).toContainText('Synthetic symbol resolution unavailable'); resolutionUnavailable = false; await page.getByRole('button', { name: 'Retry fundamental insights' }).click(); await expect(page.getByRole('alert')).toContainText('Synthetic fundamental read unavailable'); insightUnavailable = false; await page.getByRole('button', { name: 'Retry fundamental insights' }).click(); await expect(page.getByText('As of 2026-10-01 · Freshness: stale', { exact: true })).toBeVisible(); await expect(page.getByText('No insight payload returned for this symbol.', { exact: true })).toBeVisible(); await expect(page.getByText('Not investment advice.', { exact: false })).toBeVisible(); await page.goto('/patterns'); await expect(page.getByText('This page is educational only — not trading advice.', { exact: false })).toBeVisible(); await page.getByLabel('Filter', { exact: true }).fill('no-synthetic-pattern-exists'); await expect(page.getByText('No patterns match your search.', { exact: true })).toBeVisible(); await page.getByLabel('Filter', { exact: true }).fill(''); await page.getByRole('group', { name: 'Pattern guide section' }).getByRole('button', { name: 'Candlesticks', exact: true }).click(); await expect(page.getByText('Candle OHLCV terms', { exact: true })).toBeVisible(); await page.reload(); await expect(page.getByText('Candle OHLCV terms', { exact: true })).toBeVisible(); expect(safety.writes).toHaveLength(0); expect(safety.blocked).toEqual([]);
         });
+        test(`E2E-39 ignores late symbol evidence while the selected stock read is pending (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'E2E-39'); const safety = await prepare(page, viewport, 'fundamental-read-identity');
+            let releaseOldA; let releaseCurrentB; let oldAReleased = false; let currentBReleased = false;
+            const oldA = new Promise(resolve => { releaseOldA = resolve; });
+            const currentB = new Promise(resolve => { releaseCurrentB = resolve; });
+            const reads = []; const oldARequests = [];
+            page.on('request', request => {
+                const url = new URL(request.url());
+                if (url.origin === 'http://127.0.0.1:4177' && url.pathname === '/api/v1/stocks/42/fundamentals' && request.method() === 'GET') oldARequests.push(request);
+            });
+            await page.route('**/api/stocks/search?*', async route => {
+                const url = new URL(route.request().url()); const query = url.searchParams.get('q'); const limit = url.searchParams.get('limit');
+                if (query === 'TCS' && limit === '8') return route.fulfill({ json: { data: [{ id: 42, symbol: 'TCS', exchange: 'NSE', name: 'Tata Consultancy Services' }] } });
+                if (query === 'INFY' && limit === '20') return route.fulfill({ json: { data: [{ id: 43, symbol: 'INFY', exchange: 'NSE', name: 'Infosys Limited' }] } });
+                if (query === 'INFY' && limit === '8') return route.fulfill({ json: { data: [{ id: 43, symbol: 'INFY', exchange: 'NSE', name: 'Infosys Limited' }] } });
+                throw new Error(`Unexpected symbol search ${url.pathname}${url.search}`);
+            });
+            await page.route('**/api/v1/stocks/42/fundamentals?*', async route => {
+                const url = new URL(route.request().url()); expect(url.searchParams.get('include_insights')).toBe('1'); expect(url.searchParams.get('include_ai_insights')).toBe('1'); reads.push(42);
+                if (!oldAReleased) await oldA;
+                return route.fulfill({ status: 503, json: { message: 'Synthetic superseded TCS read failure.' } });
+            });
+            await page.route('**/api/v1/stocks/43/fundamentals?*', async route => {
+                const url = new URL(route.request().url()); expect(url.searchParams.get('include_insights')).toBe('1'); expect(url.searchParams.get('include_ai_insights')).toBe('1'); reads.push(43);
+                if (!currentBReleased) await currentB;
+                return route.fulfill({ json: { data: { as_of: '2026-10-18', freshness: { status: 'current' }, insights: null } } });
+            });
+            await safety.seal(); await page.goto('/fundamentals/insights/TCS'); await expect.poll(() => reads.includes(42)).toBe(true);
+            const symbolInput = page.getByLabel('Stock', { exact: true }); await symbolInput.fill('INFY'); await page.getByRole('button', { name: /INFY.*NSE/ }).click();
+            await expect.poll(() => reads.includes(43)).toBe(true);
+            await expect(symbolInput).toHaveValue('INFY');
+            await expect(page.getByRole('status')).toHaveText('Loading insights…');
+            await expect(page.getByRole('heading', { name: 'INFYInfosys Limited', exact: true })).toHaveCount(0);
+            const oldARequestCount = oldARequests.length;
+            expect(oldARequestCount).toBeGreaterThan(0);
+            const oldAResponse = page.waitForResponse(response => response.url().includes('/api/v1/stocks/42/fundamentals') && response.status() === 503);
+            oldAReleased = true; releaseOldA();
+            const settledOldA = await oldAResponse;
+            expect(await settledOldA.finished()).toBeNull();
+            await Promise.all(oldARequests.slice(0, oldARequestCount).map(async request => {
+                const response = await request.response();
+                expect(response).not.toBeNull();
+                expect(await response.finished()).toBeNull();
+            }));
+            await expect(page.getByRole('status')).toHaveText('Loading insights…'); await expect(page.getByRole('alert')).toHaveCount(0); await expect(page.getByText('Synthetic superseded TCS read failure.')).toHaveCount(0);
+            const currentBResponse = page.waitForResponse(response => response.url().includes('/api/v1/stocks/43/fundamentals') && response.status() === 200);
+            currentBReleased = true; releaseCurrentB();
+            const settledB = await currentBResponse;
+            expect(await settledB.finished()).toBeNull();
+            await expect(page.getByText('As of 2026-10-18 · Freshness: current', { exact: true })).toBeVisible(); await expect(page.getByText('No insight payload returned for this symbol.', { exact: true })).toBeVisible();
+            await expect(page.getByRole('heading', { name: 'INFYInfosys Limited', exact: true })).toBeVisible();
+            expect(reads[0]).toBe(42); expect(reads).toContain(43); expect(safety.writes).toEqual([]); expect(safety.blocked).toEqual([]);
+        });
     });
 }
