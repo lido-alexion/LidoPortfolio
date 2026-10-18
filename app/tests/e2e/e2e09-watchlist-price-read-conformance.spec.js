@@ -98,6 +98,7 @@ for (const viewport of VIEWPORTS) {
             const tcsGate = deferred();
             const infyGate = deferred();
             await page.route('**/api/stocks/*/market-prices', async (route) => {
+                expect(route.request().method()).toBe('GET');
                 const stockId = Number(new URL(route.request().url()).pathname.match(/\/stocks\/(\d+)\/market-prices$/)?.[1]);
                 if (stockId === STOCKS.TCS.id) await tcsGate.promise;
                 if (stockId === STOCKS.INFY.id) await infyGate.promise;
@@ -163,8 +164,7 @@ for (const viewport of VIEWPORTS) {
 
             mode = 'mismatched';
             const mismatchRequest = page.waitForRequest((request) => request.method() === 'GET'
-                && new URL(request.url()).pathname === '/api/stocks/42/market-prices'
-                && !evidence.priceRequests.includes(request));
+                && new URL(request.url()).pathname === '/api/stocks/42/market-prices');
             await page.getByRole('button', { name: 'Retry price history', exact: true }).click();
             const mismatched = await mismatchRequest;
             await settle([mismatched]);
@@ -173,8 +173,7 @@ for (const viewport of VIEWPORTS) {
 
             mode = 'empty';
             const emptyRequest = page.waitForRequest((request) => request.method() === 'GET'
-                && new URL(request.url()).pathname === '/api/stocks/42/market-prices'
-                && !evidence.priceRequests.includes(request));
+                && new URL(request.url()).pathname === '/api/stocks/42/market-prices');
             await page.getByRole('button', { name: 'Retry price history', exact: true }).click();
             const retried = await emptyRequest;
             await settle([retried]);
