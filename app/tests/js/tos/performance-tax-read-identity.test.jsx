@@ -40,7 +40,7 @@ function responseFor(path, scope) {
     } : {
         primary_benchmark_id: 1, comparison_benchmark_ids: [], include_in_account_performance: true,
         include_in_account_tax: false, risk_free_rate: 0.04, annualization_days: 252,
-    } } } };
+    } } };
     if (path === '/analysis/benchmarks') return { data: { data: [{ id: 1, name: 'Nifty', return_type: 'price' }] } };
     if (path === '/analysis/performance') return { data: { data: {
         xirr_percent: null, twr_percent: null, excess_return_percent: null, maximum_drawdown_percent: null,

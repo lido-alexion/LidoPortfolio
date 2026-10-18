@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import api, { getApiErrorMessage } from '../api';
 import { usePortfolio } from '../context/PortfolioContext';
-import { useAuth } from '../context/AuthContext';
+import AuthContext from '../context/AuthContext';
 import { formatTableMoney2, formatTablePercent2 } from '../utils/tableFormat';
 import { getLocalTodayDateString } from '../utils/transactionDate';
 import { downloadTaxCsv } from '../utils/taxCsvExport';
@@ -22,7 +22,7 @@ function Metric({ label, value, kind = 'percent' }) {
 
 export default function PerformanceTaxPage() {
     const { activePortfolio, portfolios } = usePortfolio();
-    const { user } = useAuth();
+    const user = useContext(AuthContext)?.user;
     const today = getLocalTodayDateString();
     const [from, setFrom] = useState(`${today.slice(0, 4)}-01-01`);
     const [to, setTo] = useState(today);
