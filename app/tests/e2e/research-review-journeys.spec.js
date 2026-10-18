@@ -59,7 +59,11 @@ for (const viewport of VIEWPORTS) {
             let releaseOldA; let releaseCurrentB; let oldAReleased = false; let currentBReleased = false;
             const oldA = new Promise(resolve => { releaseOldA = resolve; });
             const currentB = new Promise(resolve => { releaseCurrentB = resolve; });
-            const reads = [];
+            const reads = []; const oldARequests = [];
+            page.on('request', request => {
+                const url = new URL(request.url());
+                if (url.origin === 'http://127.0.0.1:4177' && url.pathname === '/api/v1/stocks/42/fundamentals' && request.method() === 'GET') oldARequests.push(request);
+            });
             await page.route('**/api/stocks/search?*', async route => {
                 const url = new URL(route.request().url()); const query = url.searchParams.get('q'); const limit = url.searchParams.get('limit');
                 if (query === 'TCS' && limit === '8') return route.fulfill({ json: { data: [{ id: 42, symbol: 'TCS', exchange: 'NSE', name: 'Tata Consultancy Services' }] } });
@@ -78,14 +82,29 @@ for (const viewport of VIEWPORTS) {
                 return route.fulfill({ json: { data: { as_of: '2026-10-18', freshness: { status: 'current' }, insights: null } } });
             });
             await safety.seal(); await page.goto('/fundamentals/insights/TCS'); await expect.poll(() => reads.includes(42)).toBe(true);
-            const symbolInput = page.getByLabel('Symbol', { exact: true }); await symbolInput.fill('INFY'); await page.getByRole('button', { name: /INFY.*NSE/ }).click();
-            await expect.poll(() => reads.includes(43)).toBe(true); await expect(page.getByRole('heading', { name: 'INFY' })).toBeVisible();
+            const symbolInput = page.getByLabel('Stock', { exact: true }); await symbolInput.fill('INFY'); await page.getByRole('button', { name: /INFY.*NSE/ }).click();
+            await expect.poll(() => reads.includes(43)).toBe(true);
+            await expect(symbolInput).toHaveValue('INFY');
+            await expect(page.getByRole('status')).toHaveText('Loading insights…');
+            await expect(page.getByRole('heading', { name: 'INFY', exact: true })).toHaveCount(0);
+            const oldARequestCount = oldARequests.length;
+            expect(oldARequestCount).toBeGreaterThan(0);
             const oldAResponse = page.waitForResponse(response => response.url().includes('/api/v1/stocks/42/fundamentals') && response.status() === 503);
-            oldAReleased = true; releaseOldA(); await oldAResponse;
+            oldAReleased = true; releaseOldA();
+            const settledOldA = await oldAResponse;
+            expect(await settledOldA.finished()).toBeNull();
+            await Promise.all(oldARequests.slice(0, oldARequestCount).map(async request => {
+                const response = await request.response();
+                expect(response).not.toBeNull();
+                expect(await response.finished()).toBeNull();
+            }));
             await expect(page.getByRole('status')).toHaveText('Loading insights…'); await expect(page.getByRole('alert')).toHaveCount(0); await expect(page.getByText('Synthetic superseded TCS read failure.')).toHaveCount(0);
             const currentBResponse = page.waitForResponse(response => response.url().includes('/api/v1/stocks/43/fundamentals') && response.status() === 200);
-            currentBReleased = true; releaseCurrentB(); await currentBResponse;
+            currentBReleased = true; releaseCurrentB();
+            const settledB = await currentBResponse;
+            expect(await settledB.finished()).toBeNull();
             await expect(page.getByText('As of 2026-10-18 · Freshness: current', { exact: true })).toBeVisible(); await expect(page.getByText('No insight payload returned for this symbol.', { exact: true })).toBeVisible();
+            await expect(page.getByRole('heading', { name: 'INFY', exact: true })).toBeVisible();
             expect(reads[0]).toBe(42); expect(reads).toContain(43); expect(safety.writes).toEqual([]); expect(safety.blocked).toEqual([]);
         });
     });
