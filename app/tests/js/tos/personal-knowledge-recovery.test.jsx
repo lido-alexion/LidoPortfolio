@@ -11,20 +11,59 @@ import PublicWikiPage from '../../../resources/js/src/pages/PublicWikiPage';
 import ContextualNotesContent from '../../../resources/js/src/components/ContextualNotesContent';
 import CalendarPage from '../../../resources/js/src/pages/CalendarPage';
 import KnowledgeNoteCard from '../../../resources/js/src/components/knowledgeBoard/KnowledgeNoteCard';
+import AuthContext from '../../../resources/js/src/context/AuthContext';
+import { PortfolioProvider } from '../../../resources/js/src/context/PortfolioContext';
+import PortfolioSwitcher from '../../../resources/js/src/components/PortfolioSwitcher';
 
 vi.mock('../../../resources/js/src/api', () => ({ default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() }, getApiErrorMessage: () => 'Synthetic unavailable' }));
 const portfolioState = vi.hoisted(() => ({ id: 1 }));
-vi.mock('../../../resources/js/src/context/PortfolioContext', () => ({ usePortfolio: () => ({ activePortfolio: { id: portfolioState.id } }) }));
-vi.mock('../../../resources/js/src/context/AuthContext', () => ({ useAuth: () => ({ user: { is_admin: false } }) }));
+const realPortfolioProvider = vi.hoisted(() => ({ enabled: false }));
+vi.mock('../../../resources/js/src/context/PortfolioContext', async importOriginal => {
+    const actual = await importOriginal();
+    return {
+        ...actual,
+        usePortfolio: (...args) => realPortfolioProvider.enabled
+            ? actual.usePortfolio(...args)
+            : { activePortfolio: { id: portfolioState.id }, activePortfolioId: portfolioState.id, loading: false, portfolios: [{ id: portfolioState.id, name: 'Main' }] },
+    };
+});
+vi.mock('../../../resources/js/src/context/AuthContext', async importOriginal => {
+    const actual = await importOriginal();
+    return {
+        ...actual,
+        useAuth: (...args) => realPortfolioProvider.enabled
+            ? actual.useAuth(...args)
+            : { user: { is_admin: false } },
+    };
+});
 vi.mock('../../../resources/js/src/toast', () => ({ showToast: vi.fn() }));
 vi.mock('../../../resources/js/src/components/knowledgeBoard/KnowledgeNoteGrid', () => ({ default: ({ notes, onArchive }) => <>{notes.map(note => <div key={note.id}>{note.title}<button onClick={() => onArchive(note)}>Archive fixture</button></div>)}</> }));
 vi.mock('../../../resources/js/src/components/knowledgeBoard/KnowledgeNoteEditorModal', () => ({ default: () => null }));
-beforeEach(() => { cleanup(); vi.resetAllMocks(); localStorage.clear(); sessionStorage.clear(); portfolioState.id = 1; sessionStorage.setItem('portfolio_active_id', '1'); });
+beforeEach(() => { cleanup(); vi.resetAllMocks(); localStorage.clear(); sessionStorage.clear(); portfolioState.id = 1; realPortfolioProvider.enabled = false; sessionStorage.setItem('portfolio_active_id', '1'); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 const unavailable = () => ({ response: { status: 503 }, message: 'Synthetic unavailable' });
 const at = (path, route, node) => render(<MemoryRouter initialEntries={[path]}><Routes><Route path={route} element={node} /></Routes></MemoryRouter>);
 const tag = (id, name) => ({ id, name, color: '#198754' });
 const deferred = () => { let resolve; let reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
+const renderWithRealPortfolioProvider = ({ portfoliosPromise, strictMode = false } = {}) => {
+    realPortfolioProvider.enabled = true;
+    const configuredGet = api.get.getMockImplementation();
+    api.get.mockImplementation((path) => {
+        if (path === '/portfolios') return portfoliosPromise ?? Promise.resolve({ data: { data: [{ id: 1, name: 'Main', is_default: true }] } });
+        return configuredGet?.(path);
+    });
+    const content = (
+        <MemoryRouter>
+            <AuthContext.Provider value={{ loading: false, isAuthenticated: true, user: { id: 1, default_portfolio_id: 1, is_admin: false } }}>
+                <PortfolioProvider>
+                    <PortfolioSwitcher />
+                    <KnowledgeBoardTagsPage />
+                </PortfolioProvider>
+            </AuthContext.Provider>
+        </MemoryRouter>
+    );
+    return render(strictMode ? <React.StrictMode>{content}</React.StrictMode> : content);
+};
 const switchProfile = (id) => {
     sessionStorage.setItem('portfolio_active_id', String(id));
     window.dispatchEvent(new CustomEvent('portfolio-changed', { detail: { portfolioId: id } }));
@@ -61,6 +100,110 @@ it('does not remove or announce an archive when the write is rejected', async ()
     render(<MemoryRouter><KnowledgeBoardPage /></MemoryRouter>); fireEvent.click(await screen.findByRole('button', { name: 'Archive fixture' }));
     await waitFor(() => expect(showToast).toHaveBeenCalledWith('Could not update note.', 'danger')); expect(screen.getByText('Retained note')).toBeVisible(); expect(showToast).not.toHaveBeenCalledWith('Note archived.');
 });
+it('waits for the real provider cold start and preserves an early tag creation draft through its first scoped read', async () => {
+    sessionStorage.clear();
+    const portfolios = deferred(); const initialTags = deferred();
+    const requestedScopes = [];
+    api.get.mockImplementation((path) => {
+        if (path === '/portfolios') return portfolios.promise;
+        if (path === '/knowledge-board/tags') {
+            requestedScopes.push(sessionStorage.getItem('portfolio_active_id'));
+            return initialTags.promise;
+        }
+        throw new Error(`Unexpected GET ${path}`);
+    });
+
+    renderWithRealPortfolioProvider({ portfoliosPromise: portfolios.promise });
+    await waitFor(() => expect(api.get.mock.calls.some(([path]) => path === '/portfolios')).toBe(true));
+    expect(screen.getByRole('status')).toHaveTextContent('Waiting for a selected portfolio');
+    expect(api.get.mock.calls.filter(([path]) => path === '/knowledge-board/tags')).toHaveLength(0);
+    fireEvent.change(screen.getByRole('textbox', { name: 'New tag name' }), { target: { value: 'Early tag draft' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add', exact: true }));
+    expect(api.post).not.toHaveBeenCalled();
+
+    await act(async () => portfolios.resolve({ data: { data: [{ id: 7, name: 'Selected', is_default: true }] } }));
+    await waitFor(() => expect(api.get.mock.calls.filter(([path]) => path === '/knowledge-board/tags')).toHaveLength(1));
+    expect(sessionStorage.getItem('portfolio_active_id')).toBe('7');
+    expect(requestedScopes).toEqual(['7']);
+    await act(async () => initialTags.resolve({ data: { data: [tag(70, 'Loaded tag')] } }));
+
+    expect(await screen.findByText('Loaded tag', { selector: '.badge' })).toBeVisible();
+    expect(screen.getByRole('textbox', { name: 'New tag name' })).toHaveValue('Early tag draft');
+    expect(api.get.mock.calls.filter(([path]) => path === '/knowledge-board/tags')).toHaveLength(1);
+});
+
+it('bridges the real provider cold start once in StrictMode and retries a failed first scoped list read', async () => {
+    sessionStorage.clear();
+    const portfolios = deferred(); const requestedScopes = []; let tagReads = 0;
+    api.get.mockImplementation((path) => {
+        if (path === '/portfolios') return portfolios.promise;
+        if (path === '/knowledge-board/tags') {
+            requestedScopes.push(sessionStorage.getItem('portfolio_active_id'));
+            tagReads += 1;
+            return tagReads === 1 ? Promise.reject(unavailable()) : Promise.resolve({ data: { data: [] } });
+        }
+        throw new Error(`Unexpected GET ${path}`);
+    });
+
+    renderWithRealPortfolioProvider({ portfoliosPromise: portfolios.promise, strictMode: true });
+    await waitFor(() => expect(api.get.mock.calls.filter(([path]) => path === '/portfolios').length).toBeGreaterThan(0));
+    expect(api.get.mock.calls.filter(([path]) => path === '/knowledge-board/tags')).toHaveLength(0);
+    await act(async () => portfolios.resolve({ data: { data: [{ id: 1, name: 'Main', is_default: true }] } }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Knowledge tags could not be loaded');
+    expect(screen.queryByText('No tags yet.')).toBeNull();
+    expect(requestedScopes).toEqual(['1']);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry knowledge tags' }));
+    expect(await screen.findByText('No tags yet.')).toBeVisible();
+    expect(requestedScopes).toEqual(['1', '1']);
+    expect(api.get.mock.calls.filter(([path]) => path === '/knowledge-board/tags')).toHaveLength(2);
+    expect(api.post).not.toHaveBeenCalled();
+});
+
+it('waits without issuing tag reads when the real provider confirms no available portfolio', async () => {
+    sessionStorage.clear();
+    api.get.mockImplementation((path) => path === '/portfolios'
+        ? Promise.resolve({ data: { data: [] } })
+        : Promise.reject(new Error(`Unexpected GET ${path}`)));
+    renderWithRealPortfolioProvider();
+    expect(await screen.findByRole('status')).toHaveTextContent('Tags will load after a portfolio is selected');
+    expect(api.get.mock.calls.filter(([path]) => path === '/knowledge-board/tags')).toHaveLength(0);
+    expect(screen.queryByText('No tags yet.')).toBeNull();
+});
+
+it('uses exactly one existing tag read for each real provider portfolio selection event', async () => {
+    const requestedScopes = [];
+    api.get.mockImplementation((path) => {
+        if (path === '/portfolios') return Promise.resolve({ data: { data: [
+            { id: 1, name: 'Main', is_default: true },
+            { id: 2, name: 'Research', is_default: false },
+        ] } });
+        if (path === '/knowledge-board/tags') {
+            const scope = sessionStorage.getItem('portfolio_active_id');
+            requestedScopes.push(scope);
+            return Promise.resolve({ data: { data: [tag(Number(scope), `Tags for ${scope}`)] } });
+        }
+        throw new Error(`Unexpected GET ${path}`);
+    });
+    renderWithRealPortfolioProvider();
+    expect(await screen.findByText('Tags for 1', { selector: '.badge' })).toBeVisible();
+    expect(api.get.mock.calls.filter(([path]) => path === '/knowledge-board/tags')).toHaveLength(1);
+
+    fireEvent.click(screen.getByTitle('Switch portfolio (per tab)'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Research', exact: true }));
+    expect(await screen.findByText('Tags for 2', { selector: '.badge' })).toBeVisible();
+    expect(requestedScopes).toEqual(['1', '2']);
+    expect(api.get.mock.calls.filter(([path]) => path === '/knowledge-board/tags')).toHaveLength(2);
+});
+
+it('keeps tag reads unknown when portfolio bootstrap itself fails', async () => {
+    sessionStorage.clear();
+    api.get.mockRejectedValue(unavailable());
+    renderWithRealPortfolioProvider();
+    expect(await screen.findByRole('status')).toHaveTextContent('Tags will load after a portfolio is selected');
+    expect(api.get.mock.calls.filter(([path]) => path === '/knowledge-board/tags')).toHaveLength(0);
+    expect(screen.queryByText('No tags yet.')).toBeNull();
+});
+
 it('does not label failed tag reads empty and offers read recovery', async () => {
     api.get.mockRejectedValueOnce(unavailable()).mockResolvedValue({ data: { data: [] } });
     render(<MemoryRouter><KnowledgeBoardTagsPage /></MemoryRouter>);
