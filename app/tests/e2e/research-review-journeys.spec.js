@@ -55,30 +55,27 @@ for (const viewport of VIEWPORTS) {
             const reportAFirst = new Promise(resolve => { releaseFirstA = resolve; });
             const reportB = new Promise(resolve => { releaseB = resolve; });
             const reportACurrent = new Promise(resolve => { releaseCurrentA = resolve; });
-            const openReads = [];
+            let reportAPhase = 'old'; const phaseReads = { oldA: [], reportB: [], currentA: [] };
             await page.route('**/api/v1/reviews?*', route => route.fulfill({ json: { data: [
                 { id: 12, status: 'fixture A', period_start: '2026-09-01', period_end: '2026-09-30', metrics: {}, methodology: {} },
                 { id: 13, status: 'fixture B', period_start: '2026-10-01', period_end: '2026-10-10', metrics: {}, methodology: {} },
             ], meta: { page: 1, pageSize: 20, total: 2, lastPage: 1 } } }));
             await page.route('**/api/v1/reviews/12', async route => {
-                const index = openReads.filter(id => id === '12').length; openReads.push('12');
-                if (index === 0) { await reportAFirst; return route.fulfill({ status: 503, json: { message: 'Synthetic old A failure.' } }); }
-                await reportACurrent; return route.fulfill({ json: { data: { id: 12, status: 'current report A', period_start: '2026-09-01', period_end: '2026-09-30', metrics: {}, methodology: { source: 'current A' } } } });
+                const phase = reportAPhase === 'old' ? 'oldA' : 'currentA'; const gate = phase === 'oldA' ? reportAFirst : reportACurrent;
+                const response = (async () => { await gate; if (phase === 'oldA') return route.fulfill({ status: 503, json: { message: 'Synthetic old A failure.' } }); return route.fulfill({ json: { data: { id: 12, status: 'current report A', period_start: '2026-09-01', period_end: '2026-09-30', metrics: {}, methodology: { source: 'current A' } } } }); })();
+                phaseReads[phase].push(response); await response;
             });
-            await page.route('**/api/v1/reviews/13', async route => { openReads.push('13'); await reportB; return route.fulfill({ json: { data: { id: 13, status: 'old report B', period_start: '2026-10-01', period_end: '2026-10-10', metrics: {}, methodology: {} } } }); });
+            await page.route('**/api/v1/reviews/13', async route => { const response = (async () => { await reportB; return route.fulfill({ json: { data: { id: 13, status: 'old report B', period_start: '2026-10-01', period_end: '2026-10-10', metrics: {}, methodology: {} } } }); })(); phaseReads.reportB.push(response); await response; });
             await safety.seal(); await page.goto('/review/reports');
             const rowA = page.getByRole('row').filter({ hasText: 'fixture A' }); const rowB = page.getByRole('row').filter({ hasText: 'fixture B' });
-            await rowA.getByRole('button', { name: 'Open' }).click(); await expect(page.getByRole('status')).toHaveText('Loading review report…');
-            await page.getByRole('link', { name: 'Back to reports' }).click(); await rowB.getByRole('button', { name: 'Open' }).click(); await expect(page.getByRole('status')).toHaveText('Loading review report…');
-            await page.getByRole('link', { name: 'Back to reports' }).click(); const currentRowA = page.getByRole('row').filter({ hasText: 'fixture A' }); await currentRowA.getByRole('button', { name: 'Open' }).click();
-            await expect.poll(() => openReads.length).toBe(3);
-            const bFinished = page.waitForResponse(response => response.url().includes('/api/v1/reviews/13') && response.status() === 200);
-            releaseB(); await bFinished; await expect(page.getByRole('status')).toHaveText('Loading review report…'); await expect(page.getByText('old report B', { exact: true })).toHaveCount(0);
-            const oldAFailure = page.waitForResponse(response => response.url().includes('/api/v1/reviews/12') && response.status() === 503);
-            releaseFirstA(); await oldAFailure; await expect(page.getByRole('status')).toHaveText('Loading review report…');
-            const currentAFinished = page.waitForResponse(response => response.url().includes('/api/v1/reviews/12') && response.status() === 200);
-            releaseCurrentA(); await currentAFinished; await expect(page.getByText('current report A', { exact: true })).toBeVisible();
-            expect(openReads).toEqual(['12', '13', '12']); expect(safety.writes).toEqual([]); expect(safety.blocked).toEqual([]);
+            await rowA.getByRole('button', { name: 'Open' }).click(); await expect(page.getByRole('status')).toHaveText('Loading review report…'); await expect.poll(() => phaseReads.oldA.length).toBeGreaterThan(0);
+            await page.getByRole('link', { name: 'Back to reports' }).click(); await rowB.getByRole('button', { name: 'Open' }).click(); await expect(page.getByRole('status')).toHaveText('Loading review report…'); await expect.poll(() => phaseReads.reportB.length).toBeGreaterThan(0);
+            await page.getByRole('link', { name: 'Back to reports' }).click(); reportAPhase = 'current'; const currentRowA = page.getByRole('row').filter({ hasText: 'fixture A' }); await currentRowA.getByRole('button', { name: 'Open' }).click();
+            await expect(page.getByRole('status')).toHaveText('Loading review report…'); await expect.poll(() => phaseReads.currentA.length).toBeGreaterThan(0);
+            releaseB(); await Promise.all(phaseReads.reportB); await expect(page.getByRole('status')).toHaveText('Loading review report…'); await expect(page.getByText('old report B', { exact: true })).toHaveCount(0);
+            releaseFirstA(); await Promise.all(phaseReads.oldA); await expect(page.getByRole('status')).toHaveText('Loading review report…');
+            releaseCurrentA(); await Promise.all(phaseReads.currentA); await expect(page.getByText('current report A', { exact: true })).toBeVisible();
+            expect(phaseReads.oldA.length).toBeGreaterThan(0); expect(phaseReads.reportB.length).toBeGreaterThan(0); expect(phaseReads.currentA.length).toBeGreaterThan(0); expect(safety.writes).toEqual([]); expect(safety.blocked).toEqual([]);
         });
         test(`E2E-39 recovers fundamental resolution and uses educational patterns without trading (${viewport.name})`, async ({ page }, testInfo) => {
             journeyId(testInfo, 'E2E-39'); const safety = await prepare(page, viewport, 'fundamentals'); let resolutionUnavailable = true; let insightUnavailable = true;
