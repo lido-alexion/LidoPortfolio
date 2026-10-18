@@ -7,7 +7,16 @@ import IndicesPage from '../../../resources/js/src/pages/IndicesPage';
 import IndexSection from '../../../resources/js/src/components/indices/IndexSection';
 
 vi.mock('../../../resources/js/src/api', () => ({ default: { get: vi.fn(), post: vi.fn(), put: vi.fn() } }));
-vi.mock('../../../resources/js/src/components/indices/IndexComparisonChart', () => ({ default: ({ indexes = [], loading }) => <div data-testid="index-comparison-owner" data-symbols={indexes.map(item => item.symbol).join(',')} data-loading={String(loading)} /> }));
+vi.mock('../../../resources/js/src/components/indices/IndexComparisonChart', async () => {
+    const ReactModule = await import('react');
+    return {
+        default: ({ indexes = [], loading }) => ReactModule.createElement('div', {
+            'data-testid': 'index-comparison-owner',
+            'data-symbols': indexes.map(item => item.symbol).join(','),
+            'data-loading': String(loading),
+        }),
+    };
+});
 vi.mock('../../../resources/js/src/components/indices/IndiaVixAlertSettings', () => ({ default: () => null }));
 vi.mock('../../../resources/js/src/components/charts/PriceVolumeChart', async () => {
     const ReactModule = await import('react');
