@@ -544,7 +544,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
             let tradeApproved = false;
             let savedTransaction = null;
             let transactionPayload = null;
-            let cashBalance = 30000;
+            let cashBalance = 50000;
             let holdings = [];
             const observedRequests = [];
             const externalRequests = [];
@@ -552,9 +552,13 @@ test.describe('V9-UX-001 composite journey coverage', () => {
             await installTosApiMocks(page, { recommendations: [recommendation], pipelineRecommendations: [recommendation], retainApprovedRecommendations: true });
             await page.route('**/api/stocks/search**', (route) => route.fulfill({ json: { data: [] } }));
             await page.route('**/api/stocks/validate', (route) => route.fulfill({ json: { source: 'test fixture', data: { id: 42, symbol: 'INFY', name: 'Infosys Limited', exchange: 'NSE' }, meta: { cached: false } } }));
-            await page.route('**/api/v1/recommendations/pending-execution', (route) => route.fulfill({
-                json: { success: true, data: tradeApproved && !savedTransaction ? [{ ...recommendation, status: 'pending_execution', lifecycle_status: 'pending_execution', can_review: false, can_execute_manually: true, suggested_quantity: 14, suggested_investment_amount: 50000 }] : [], meta: { cash: { cash_balance: cashBalance, reserved_cash: tradeApproved ? 50000 : 0, available_investable_cash: cashBalance } } },
-            }));
+            await page.route('**/api/v1/recommendations/pending-execution', (route) => {
+                const reservedCash = tradeApproved && !savedTransaction ? 50000 : 0;
+                const availableCash = Math.max(0, cashBalance - reservedCash);
+                return route.fulfill({
+                    json: { success: true, data: tradeApproved && !savedTransaction ? [{ ...recommendation, status: 'pending_execution', lifecycle_status: 'pending_execution', can_review: false, can_execute_manually: true, suggested_quantity: 14, suggested_investment_amount: 50000 }] : [], meta: { cash: { cash_balance: cashBalance, reserved_cash: reservedCash, available_investable_cash: availableCash } } },
+                });
+            });
             await page.route(/\/api\/v1\/recommendations(?:\?.*)?$/, async (route) => {
                 if (route.request().method() !== 'GET') return route.fulfill({ status: 501, json: { error: 'Unexpected recommendation collection method' } });
                 return route.fulfill({ json: { success: true, data: [{ ...recommendation, capital_allocation_status: lenderApproved ? 'CAPITAL_COMMITTED' : 'AWAITING_LENDER_SELECTION', can_review: !tradeApproved, status: tradeApproved ? 'pending_execution' : 'pending_review' }] } });
@@ -569,7 +573,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                 return route.fulfill({ json: { success: true, data: { status: 'pending_execution' } } });
             });
             await page.route(`**/api/v1/recommendations/${recommendationId}/capital-resolution`, (route) => route.fulfill({
-                json: { success: true, data: { recommendation_id: recommendationId, requested_investment_amount: 50000, own_capital_used: 30000, recalled_capital_requested: 0, recalled_capital_received: 0, bridge_capital_used: lenderApproved ? 20000 : 0, total_immediately_available: lenderApproved ? 50000 : 30000, unresolved_amount: lenderApproved ? 0 : 20000, capital_resolution_state: lenderApproved ? 'funded' : 'unfunded' } },
+                json: { success: true, data: { recommendation_id: recommendationId, requested_investment_amount: 50000, own_capital_used: 30000, recalled_capital_requested: 0, recalled_capital_received: 0, bridge_capital_used: 0, total_immediately_available: lenderApproved ? 50000 : 30000, actual_execution_amount: lenderApproved ? 50000 : 30000, unresolved_amount: lenderApproved ? 0 : 20000, capital_resolution_state: lenderApproved ? 'resolved_at_actual' : 'closed_at_actual_with_shortfall' } },
             }));
             await page.route(`**/api/v1/capital/requests/${requestId}/lenders`, (route) => route.fulfill({
                 json: { success: true, data: { amount: 20000, lenders: [{ strategy_id: 18, name: 'Dividend Core', available_for_lending: 30000 }] } },
@@ -577,7 +581,6 @@ test.describe('V9-UX-001 composite journey coverage', () => {
             await page.route(`**/api/v1/capital/requests/${requestId}/approve`, async (route) => {
                 if (route.request().postDataJSON()?.lender_strategy_id !== 18) return route.fulfill({ status: 422, json: { success: false, error: { code: 'INVALID_LENDER' } } });
                 lenderApproved = true;
-                cashBalance += 20000;
                 return route.fulfill({ json: { success: true, data: { status: 'committed', lender_strategy_id: 18, amount: 20000 } } });
             });
             await page.route('**/api/transactions**', async (route) => {
@@ -594,11 +597,21 @@ test.describe('V9-UX-001 composite journey coverage', () => {
             await page.route('**/api/holdings**', (route) => route.fulfill({ json: { data: holdings } }));
             await page.route('**/api/settings', (route) => route.fulfill({ json: { data: { fee_components: [] } } }));
             await page.route('**/api/cash/statement*', (route) => route.fulfill({ json: { data: { entries: [] }, meta: { current_page: 1, last_page: 1 } } }));
-            await page.route(/\/api\/cash(?:\?.*)?$/, (route) => route.fulfill({ json: { data: { cash_balance: cashBalance, reserved_cash: tradeApproved ? 50000 : 0, available_investable_cash: cashBalance, available_physical_cash: cashBalance } } }));
+            await page.route(/\/api\/cash(?:\?.*)?$/, (route) => {
+                const reservedCash = tradeApproved && !savedTransaction ? 50000 : 0;
+                const availableCash = Math.max(0, cashBalance - reservedCash);
+                return route.fulfill({ json: { data: { cash_balance: cashBalance, reserved_cash: reservedCash, available_investable_cash: availableCash, available_physical_cash: availableCash } } });
+            });
             await page.route('**/*', async (route) => {
-                if (new URL(route.request().url()).origin !== allowedOrigin) { externalRequests.push(route.request().url()); return route.abort(); }
+                const requestOrigin = new URL(route.request().url()).origin;
+                if (requestOrigin !== allowedOrigin) { externalRequests.push(requestOrigin); return route.abort(); }
                 return route.fallback();
             });
+
+            await page.goto('/cash');
+            await expect(page.getByText('Cash balance', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 50,000');
+            await expect(page.getByText('Reserved cash', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 0');
+            await expect(page.getByText('Available cash', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 50,000');
 
             await page.goto('/recommendations');
             const pipelineRun = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/api/v1/pipeline/run'));
@@ -618,12 +631,18 @@ test.describe('V9-UX-001 composite journey coverage', () => {
             const lenderPanel = page.getByText('Approving commits capital; you still Approve the trade separately.');
             await expect(lenderPanel).toBeVisible();
             await expect(lenderPanel).toContainText('20,000');
+            expect(cashBalance).toBe(50000);
             const lenderSelect = page.getByLabel('Lender strategy');
             await expect(lenderSelect).toHaveValue('18');
             const lenderApproval = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname.endsWith(`/api/v1/capital/requests/${requestId}/approve`));
             await page.getByRole('button', { name: 'Approve lender' }).click();
             expect((await lenderApproval).postDataJSON()).toEqual({ lender_strategy_id: 18 });
             expect(lenderApproved).toBe(true);
+            expect(cashBalance).toBe(50000);
+            expect(tradeApproved).toBe(false);
+            expect(savedTransaction).toBeNull();
+            expect(holdings).toEqual([]);
+            expect(observedRequests.some(({ method, path }) => method === 'POST' && path === '/api/transactions')).toBe(false);
             const detail = page.getByRole('dialog');
             await expect(detail.getByText('Position target (OD-12)')).toBeVisible();
             await expect(detail).toContainText('Target ₹50000');
@@ -631,11 +650,28 @@ test.describe('V9-UX-001 composite journey coverage', () => {
             await expect(detail).toContainText('50,000');
             await expect(detail).toContainText('Target ₹50000');
             await expect(detail.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
+            await detail.getByText('Close', { exact: true }).click();
 
-            await detail.getByRole('button', { name: 'Approve', exact: true }).click();
+            // A normal loan changes deployable recommendation capital, not the one-pool cash balance.
+            await page.goto('/cash');
+            await expect(page.getByText('Cash balance', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 50,000');
+            await expect(page.getByText('Reserved cash', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 0');
+            await expect(page.getByText('Available cash', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 50,000');
+
+            await page.goto('/recommendations');
+            const committedRow = page.getByRole('row').filter({ hasText: 'Momentum Core' });
+            await committedRow.getByRole('button', { name: 'Review' }).click();
+            const committedDetail = page.getByRole('dialog');
+            await expect(committedDetail).toContainText('50,000');
+
+            await committedDetail.getByRole('button', { name: 'Approve', exact: true }).click();
             expect(tradeApproved).toBe(true);
             await expect(page.getByRole('row').filter({ hasText: 'Momentum Core' })).toContainText('pending_execution');
             await page.goto('/transactions/pending', { waitUntil: 'domcontentloaded' });
+            const cashSummary = page.locator('span');
+            await expect(cashSummary.filter({ hasText: /^Cash balance:/ })).toContainText('50,000');
+            await expect(cashSummary.filter({ hasText: /^Reserved:/ })).toContainText('50,000');
+            await expect(cashSummary.filter({ hasText: /^Available:/ })).toHaveText(/^Available:\s*0$/);
             const pendingRow = page.getByRole('row').filter({ hasText: 'INFY' });
             await expect(pendingRow).toContainText('50,000');
             await pendingRow.getByRole('button', { name: 'Execute manually' }).click();
@@ -644,13 +680,18 @@ test.describe('V9-UX-001 composite journey coverage', () => {
             await page.getByLabel('Quantity').fill('9');
             await page.getByRole('button', { name: 'Validate symbol' }).click();
             await expect(page.getByText(/Validated via test fixture/)).toBeVisible();
+            await expect(page.getByRole('status', { name: 'Fees (₹)' })).toHaveText('37.40');
             await page.getByRole('button', { name: 'Save Transaction' }).click();
-            await expect.poll(() => savedTransaction).toMatchObject({ recommendation_id: recommendationId, strategy_id: 8, type: 'buy', quantity: 9, price: 3500 });
-            expect(transactionPayload).toMatchObject({ recommendation_id: recommendationId, source: 'recommendation', type: 'buy', quantity: 9, price: 3500 });
+            await expect.poll(() => savedTransaction).toMatchObject({ recommendation_id: recommendationId, strategy_id: 8, type: 'buy', quantity: 9, price: 3500, fees: 37.4 });
+            expect(transactionPayload).toMatchObject({ recommendation_id: recommendationId, source: 'recommendation', type: 'buy', quantity: 9, price: 3500, fees: 37.4 });
+            expect(observedRequests.filter(({ method, path }) => method === 'POST' && path === '/api/transactions')).toHaveLength(1);
+            expect(cashBalance).toBe(18462.6);
             await page.goto('/transactions');
             await expect(page.getByRole('row').filter({ hasText: 'INFY' })).toContainText('9');
             await page.goto('/cash');
-            await expect(page.getByText(Math.round(cashBalance).toLocaleString('en-IN')).first()).toBeVisible();
+            await expect(page.getByText('Cash balance', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 18,463');
+            await expect(page.getByText('Reserved cash', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 0');
+            await expect(page.getByText('Available cash', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 18,463');
             await page.goto('/holdings');
             const holding = page.getByRole('row').filter({ hasText: 'INFY' });
             await expect(holding).toContainText('Momentum Core');
