@@ -24,11 +24,12 @@ function RouteControls() {
     return <><button type="button" onClick={() => navigate('/fundamentals/insights/INFY')}>Select INFY</button><button type="button" onClick={() => navigate('/fundamentals/insights/TCS')}>Select TCS</button></>;
 }
 
-function renderPage() {
-    return render(<MemoryRouter initialEntries={['/fundamentals/insights/TCS']}>
+function renderPage(strictMode = false) {
+    const tree = <MemoryRouter initialEntries={['/fundamentals/insights/TCS']}>
         <RouteControls />
         <Routes><Route path="/fundamentals/insights/:symbol" element={<FundamentalInsightsPage />} /></Routes>
-    </MemoryRouter>);
+    </MemoryRouter>;
+    return render(strictMode ? <React.StrictMode>{tree}</React.StrictMode> : tree);
 }
 
 it('ignores stale route reads and their failure/finally while the current A→B→A read is pending', async () => {
@@ -94,5 +95,24 @@ it('retains only same-symbol confirmed fundamentals as explicitly stale on refre
     expect(screen.getByText(/Showing last confirmed fundamentals for TCS/)).toBeVisible();
     expect(screen.getByText('confirmed TCS evidence', { exact: true })).toBeVisible();
     expect(calls).toBe(2);
+    expect(api.post).not.toHaveBeenCalled();
+});
+
+it('ignores a pending fundamentals response after StrictMode cleanup and unmount', async () => {
+    const reads = [];
+    api.get.mockImplementation(path => {
+        if (path === '/stocks/search') return Promise.resolve({ data: { data: [{ id: 42, symbol: 'TCS', exchange: 'NSE', name: 'TCS fixture' }] } });
+        if (path === '/v1/stocks/42/fundamentals') {
+            const read = deferred(); reads.push(read); return read.promise;
+        }
+        throw new Error(`Unexpected GET ${path}`);
+    });
+    const mounted = renderPage(true);
+    await waitFor(() => expect(reads.length).toBeGreaterThan(0));
+    mounted.unmount();
+    await act(async () => {
+        reads.forEach(read => read.resolve({ data: { data: { as_of: '2026-10-18', insights: { summary: 'late unmounted evidence' } } } }));
+        await Promise.all(reads.map(read => read.promise));
+    });
     expect(api.post).not.toHaveBeenCalled();
 });
