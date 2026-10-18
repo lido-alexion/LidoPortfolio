@@ -1,9 +1,34 @@
 # V9-UX-001 Implementation Audit
 
-**Status:** IMPLEMENTATION IN PROGRESS — frozen §19 completion is not established. The latest dated evidence update is [2026-10-18](#current-release-and-acceptance-update--2026-10-18). Build 578 was independently release-qualified by root on `828de2ba50f1674579d3e65c7bb41d373992cbeb`; PR #214 was then merged as `e889321a44934687e14d94f54262f89357efe82a` as test-only visual-baseline coverage, with no new runtime build or deployment. PRs #205–#209 and #211–#214 are merged; #210 remains an explicitly held draft. The pinned build-551 campaign remains final **BLOCKED** on all three horizons for unavailable core fundamentals; training has not started. The 129-ID route/automation crosswalk is static traceability, not behavior proof. UX004 #186 and UX005 #187 remain parallel-owner work. The Oct 12 three-GET real-Kite receipt was on build 523 and does not waive the required fresh final-deployed-SHA receipt. The canonical wishlist row remains IMPLEMENTATION IN PROGRESS.
-**Audit date:** 2026-10-18
+**Status:** IMPLEMENTATION IN PROGRESS — frozen §19 completion is not established. The latest dated evidence update is [2026-10-19](#current-release-and-acceptance-update--2026-10-19). Build 582 on `bdf4dc216c0a4f1d0c29a2d34a5da8567bd11cfd` was independently release-qualified by root. PRs #216 and #217 are normally merged into that source head; PR #218 is a test-only AI-02 pending-clear draft with exact-head hosted CI still running. PR #210 remains an explicitly held draft. The pinned build-551 campaign remains historical **BLOCKED** on all three horizons for unavailable core fundamentals; no unchanged retry or training is implied. The 129-ID route/automation crosswalk is static traceability, not behavior proof. UX004 #186 and UX005 #187 remain parallel-owner work. The Oct 12 three-GET real-Kite receipt was on build 523 and does not waive the required fresh final-deployed-SHA receipt. The canonical wishlist row remains IMPLEMENTATION IN PROGRESS.
+**Audit date:** 2026-10-19
 **Canonical scope:** [V9-UX-001 specification](../archive/specs/V9-User-Journey-Automation-E2E-Specification.md)
 **Journey sources:** [`docs/user-journeys/`](../user-journeys/)
+
+## Current release and acceptance update — 2026-10-19
+
+This dated update supersedes the current-state summary and §19 status in the 2026-10-18 section below. Prior dated CI failures, the STR-06 artifact provenance, the historical campaign receipts, and the build-523 Kite receipt remain unchanged as historical evidence.
+
+### Current source and runtime qualification
+
+Root independently qualified build 582 on exact commit `bdf4dc216c0a4f1d0c29a2d34a5da8567bd11cfd`. Master CI39153322827 completed on attempt 1 with 247 Node tests, 438 component tests in 74 files, type/build checks, and 412 Chromium cases with 57 governed skips in 24.5 minutes; no retry or flaky-case evidence was reported. Normal deploy39153322904 passed exact-SHA health and mandatory authenticated smoke 2/2 on the first attempt in 31.4 seconds. These are root-verified receipts; this documentation refresh did not query or change production.
+
+### New read-conformance merges
+
+| PR / journey | Exact PR head → normal merge commit | Exact PR CI | Evidence boundary |
+| --- | --- | --- | --- |
+| [#216 E2E-36 index research reads](https://github.com/lido-alexion/LidoPortfolio/pull/216) | `b4ee7df3e9e721a8a05b77ce9c36a93dcc396b82` → `87c1b0f91997535898b535482dadbb8a87e78729` | [39137141949](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39137141949), success | Root-reviewed page-local read recovery and index identity fixtures; the run jobs show detector, Python, and frontend success, with PHP/VPS scope-skipped. Synthetic CI does not prove live market-data completeness. |
+| [#217 E2E-09 watchlist price-history reads](https://github.com/lido-alexion/LidoPortfolio/pull/217) | `c93c00f604fc0fe0e7bb25908545c79b96f1b980` → `bdf4dc216c0a4f1d0c29a2d34a5da8567bd11cfd` | [39148495721](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39148495721), success | Root-reviewed selected-stock identity/settlement fixtures; detector, Python, and frontend jobs passed, with PHP/VPS scope-skipped. Synthetic responses do not establish live price history or provider state. |
+
+The corresponding merge commits are present in the current master ancestry. PR #217's test-only changes did not themselves create a runtime deployment; build 582 qualification is separately tied to the current master SHA above.
+
+### AI-02 pending-clear conformance draft
+
+Draft [#218](https://github.com/lido-alexion/LidoPortfolio/pull/218) adds two focused fixtures for clearing a pending documentation answer, cancellation of its stream, a subsequent empty-context question, stale callback/finally isolation, and session refresh. The drawer source already had generation invalidation and abort-on-clear, so the draft changes no product source or stream utility. Its first exact-head run39153776308 failed exactly the two new desktop/mobile cases at the closed “Sources used” disclosure: the test tried to locate a source link before expanding it. The latest head `36a1e7e1de19063a0b7d2b329a3f6738f5365df2` expands the real disclosure and asserts the current source link and snippet. Exact-head CI39159335961 is in progress: detector117769134126 and Python117769133951 passed; frontend117769168266 is running; PHP117769169275 and VPS117769169267 were scope-skipped at the last observed status. The new result is not yet known. Both runs are synthetic documentation-mode evidence, not live AI/provider or account evidence.
+
+### Remaining acceptance boundaries
+
+Frozen §19/20 semantic conformance and the full parallel-owner crosswalk remain open; the 129-ID static traceability count is not behavioral proof. UX004 #186 and UX005 #187 remain independent open owner work. The build-551 three-horizon campaign remains a historical blocked receipt for unavailable core fundamentals, not a current production qualification or authorization to retry/train. The Oct 16 nightly is not current-master evidence. Final Kite evidence still requires `passed=true`, `stage=complete`, `evidence_kind=real_kite_read_only`, and `read_requests=3` for the final expected deployed SHA; the older build-523 receipt is not a waiver. No real Kite/provider request, account operation, source acquisition, training, or lifecycle action is claimed here. The wishlist remains IMPLEMENTATION IN PROGRESS; no acceptance waiver is made.
 
 ## Current release and acceptance update — 2026-10-18
 
