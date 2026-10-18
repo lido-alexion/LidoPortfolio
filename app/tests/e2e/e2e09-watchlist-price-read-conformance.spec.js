@@ -141,8 +141,13 @@ for (const viewport of VIEWPORTS) {
 
             infyGate.resolve();
             await settle(infyRequests, evidence, 84);
+            await expect(
+                page.locator('.lido-stock-symbol-with-analyse').getByText('INFY', { exact: true }),
+            ).toBeVisible();
             await expect(page.getByText('Latest close', { exact: true })).toBeVisible();
-            await expect(page.getByText('₹ 200', { exact: true })).toBeVisible();
+            const latestCloseValue = page.getByText('Latest close', { exact: true }).locator('..').locator('.fw-semibold');
+            await expect(latestCloseValue).toHaveCount(1);
+            await expect(latestCloseValue).toHaveText('₹ 200');
             expectReadOnly(evidence);
         });
 
