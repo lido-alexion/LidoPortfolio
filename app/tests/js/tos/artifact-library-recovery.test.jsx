@@ -1,10 +1,48 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { expect, it } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
+import { beforeEach, expect, it } from 'vitest';
 import ArtifactLibraryPage from '../../../resources/js/src/pages/ArtifactLibraryPage.jsx';
 import ArtifactLibraryDetailPage from '../../../resources/js/src/pages/ArtifactLibraryDetailPage.jsx';
 import { apiMock } from './helpers/mockApi.js';
+
+const UUID_A = 'synthetic-artifact-a';
+const UUID_B = 'synthetic-artifact-b';
+const detail = (name, draft = false) => ({
+    name,
+    slug: name.toLowerCase().replaceAll(' ', '-'),
+    type: 'screener',
+    permission: 'owner',
+    origin: 'user',
+    versions: [
+        { id: `${name}-v1`, semver: '1.0.0', status: 'published', content: {}, documentation: {}, dependencies: [], definition_hash: 'fixture-only', lock_version: 1 },
+        { id: `${name}-v2`, semver: '1.1.0', status: 'published', content: {}, documentation: {}, dependencies: [], definition_hash: 'fixture-only', lock_version: 1 },
+        ...(draft ? [{ id: `${name}-draft`, semver: '1.2.0', status: 'draft', content: { draft: name }, documentation: {}, change_summary: '', dependencies: [], definition_hash: 'fixture-only', lock_version: 1 }] : []),
+    ],
+    draft_version: draft ? '1.2.0' : null,
+    portfolio_binding: null,
+});
+const deferred = () => {
+    let resolve;
+    let reject;
+    const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+    return { promise, resolve, reject };
+};
+
+function RouteHarness() {
+    const navigate = useNavigate();
+    return <>
+        <button type="button" onClick={() => navigate(`/artifact-library/${UUID_A}`)}>Route A</button>
+        <button type="button" onClick={() => navigate(`/artifact-library/${UUID_B}`)}>Route B</button>
+        <Routes><Route path="/artifact-library/:uuid" element={<ArtifactLibraryDetailPage />} /></Routes>
+    </>;
+}
+
+beforeEach(() => {
+    apiMock.get.mockReset();
+    apiMock.post.mockReset();
+    apiMock.put.mockReset();
+});
 
 it('does not label an unavailable library as empty and retries the read explicitly', async () => {
     apiMock.get.mockRejectedValueOnce({ response: { status: 503, data: { message: 'Synthetic Library unavailable.' } } }).mockResolvedValueOnce({ data: { data: [] } });
@@ -16,4 +54,157 @@ it('retries an unavailable artifact without enabling any mutation before a confi
     apiMock.get.mockRejectedValueOnce({ response: { status: 503, data: { message: 'Synthetic artifact unavailable.' } } }).mockResolvedValueOnce({ data: { data: { name: 'Confirmed artifact', slug: 'confirmed', type: 'screener', permission: 'shared', origin: 'user', versions: [] } } });
     render(<MemoryRouter initialEntries={['/artifact-library/synthetic-uuid']}><Routes><Route path="/artifact-library/:uuid" element={<ArtifactLibraryDetailPage />} /></Routes></MemoryRouter>);
     expect(await screen.findByRole('alert')).toHaveTextContent('Synthetic artifact unavailable.'); expect(apiMock.post).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole('button', { name: 'Retry artifact', exact: true })); expect(await screen.findByRole('heading', { name: 'Confirmed artifact' })).toBeVisible(); expect(apiMock.post).not.toHaveBeenCalled();
+});
+
+it('keeps the committed UUID detail through reverse A/B completions and an A→B→A route sequence', async () => {
+    const firstA = deferred();
+    const requestB = deferred();
+    const latestA = deferred();
+    const requests = { [UUID_A]: [firstA, latestA], [UUID_B]: [requestB] };
+    apiMock.get.mockImplementation((path) => {
+        const uuid = String(path).split('/').at(-1);
+        const request = requests[uuid]?.shift();
+        if (!request) throw new Error(`Unexpected synthetic detail GET ${path}`);
+        return request.promise;
+    });
+    render(<MemoryRouter initialEntries={[`/artifact-library/${UUID_A}`]}><RouteHarness /></MemoryRouter>);
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledWith(`/v1/artifact-library/${UUID_A}`));
+    fireEvent.click(screen.getByRole('button', { name: 'Route B' }));
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledWith(`/v1/artifact-library/${UUID_B}`));
+    fireEvent.click(screen.getByRole('button', { name: 'Route A' }));
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledTimes(3));
+
+    await act(async () => latestA.resolve({ data: { data: detail('A current') } }));
+    expect(await screen.findByRole('heading', { name: 'A current' })).toBeVisible();
+    await act(async () => requestB.resolve({ data: { data: detail('B stale') } }));
+    await act(async () => firstA.resolve({ data: { data: detail('A oldest') } }));
+    expect(screen.getByRole('heading', { name: 'A current' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'B stale' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'A oldest' })).not.toBeInTheDocument();
+});
+
+it('ignores an obsolete detail rejection and keeps the current route loading state independent', async () => {
+    const oldA = deferred();
+    const currentB = deferred();
+    apiMock.get.mockImplementation((path) => String(path).endsWith(UUID_A) ? oldA.promise : currentB.promise);
+    render(<MemoryRouter initialEntries={[`/artifact-library/${UUID_A}`]}><RouteHarness /></MemoryRouter>);
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledWith(`/v1/artifact-library/${UUID_A}`));
+    fireEvent.click(screen.getByRole('button', { name: 'Route B' }));
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledWith(`/v1/artifact-library/${UUID_B}`));
+    await act(async () => oldA.reject(new Error('obsolete synthetic A failure')));
+    expect(screen.getByText('Loading artifact…')).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'A' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await act(async () => currentB.resolve({ data: { data: detail('B current') } }));
+    expect(await screen.findByRole('heading', { name: 'B current' })).toBeVisible();
+    expect(screen.queryByText('Loading artifact…')).not.toBeInTheDocument();
+});
+
+it('keeps the new route loading while an obsolete detail success settles', async () => {
+    const oldA = deferred();
+    const currentB = deferred();
+    apiMock.get.mockImplementation((path) => String(path).endsWith(UUID_A) ? oldA.promise : currentB.promise);
+    render(<MemoryRouter initialEntries={[`/artifact-library/${UUID_A}`]}><RouteHarness /></MemoryRouter>);
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledWith(`/v1/artifact-library/${UUID_A}`));
+    fireEvent.click(screen.getByRole('button', { name: 'Route B' }));
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledWith(`/v1/artifact-library/${UUID_B}`));
+
+    await act(async () => oldA.resolve({ data: { data: detail('A obsolete') } }));
+    expect(screen.getByText('Loading artifact…')).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'A obsolete' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'B current' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    await act(async () => currentB.resolve({ data: { data: detail('B current') } }));
+    expect(await screen.findByRole('heading', { name: 'B current' })).toBeVisible();
+    expect(screen.queryByText('Loading artifact…')).not.toBeInTheDocument();
+});
+
+it('does not render a completed comparison after the artifact route changes', async () => {
+    const comparison = deferred();
+    apiMock.get.mockImplementation((path) => {
+        if (String(path).endsWith('/diff')) return comparison.promise;
+        const uuid = String(path).split('/').at(-1);
+        return Promise.resolve({ data: { data: detail(uuid === UUID_A ? 'A comparison source' : 'B comparison target') } });
+    });
+    render(<MemoryRouter initialEntries={[`/artifact-library/${UUID_A}`]}><RouteHarness /></MemoryRouter>);
+    expect(await screen.findByRole('heading', { name: 'A comparison source' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Compare', exact: true }));
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledWith(`/v1/artifact-library/${UUID_A}/diff`, { params: { from: '1.1.0', to: '1.0.0' } }));
+    fireEvent.click(screen.getByRole('button', { name: 'Route B' }));
+    expect(await screen.findByRole('heading', { name: 'B comparison target' })).toBeVisible();
+    await act(async () => comparison.resolve({ data: { data: { changes: [{ path: '/stale/A', change: 'changed', before: 1, after: 2 }] } } }));
+    expect(screen.queryByText('/stale/A')).not.toBeInTheDocument();
+    expect(screen.queryByText('No structural changes.')).not.toBeInTheDocument();
+});
+
+it('discards a comparison when its from/to selection changes before the read completes', async () => {
+    const comparison = deferred();
+    apiMock.get.mockImplementation((path) => String(path).endsWith('/diff')
+        ? comparison.promise
+        : Promise.resolve({ data: { data: detail('Selection comparison') } }));
+    render(<MemoryRouter initialEntries={[`/artifact-library/${UUID_A}`]}><RouteHarness /></MemoryRouter>);
+    expect(await screen.findByRole('heading', { name: 'Selection comparison' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Compare', exact: true }));
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledWith(`/v1/artifact-library/${UUID_A}/diff`, { params: { from: '1.1.0', to: '1.0.0' } }));
+    fireEvent.change(screen.getByLabelText('Compare from version'), { target: { value: '1.0.0' } });
+    await act(async () => comparison.resolve({ data: { data: { changes: [{ path: '/obsolete-selection', change: 'changed', before: 1, after: 2 }] } } }));
+    expect(screen.queryByText('/obsolete-selection')).not.toBeInTheDocument();
+    expect(apiMock.get).toHaveBeenCalledTimes(2);
+});
+
+it('does not surface an obsolete comparison failure after the selection changes', async () => {
+    const comparison = deferred();
+    apiMock.get.mockImplementation((path) => String(path).endsWith('/diff')
+        ? comparison.promise
+        : Promise.resolve({ data: { data: detail('Changed comparison') } }));
+    render(<MemoryRouter initialEntries={[`/artifact-library/${UUID_A}`]}><RouteHarness /></MemoryRouter>);
+    expect(await screen.findByRole('heading', { name: 'Changed comparison' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Compare', exact: true }));
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledTimes(2));
+    fireEvent.change(screen.getByLabelText('Compare from version'), { target: { value: '1.0.0' } });
+    fireEvent.change(screen.getByLabelText('Compare to version'), { target: { value: '1.1.0' } });
+    expect(screen.getByRole('button', { name: 'Compare', exact: true })).toBeEnabled();
+    await act(async () => comparison.reject(new Error('obsolete synthetic compare failure')));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Compare', exact: true })).toBeEnabled();
+});
+
+it('accepts only the current StrictMode detail effect and ignores its replayed predecessor', async () => {
+    const obsoleteEffect = deferred();
+    const committedEffect = deferred();
+    const queue = [obsoleteEffect, committedEffect];
+    apiMock.get.mockImplementation(() => queue.shift().promise);
+    render(<React.StrictMode><MemoryRouter initialEntries={[`/artifact-library/${UUID_A}`]}><Routes><Route path="/artifact-library/:uuid" element={<ArtifactLibraryDetailPage />} /></Routes></MemoryRouter></React.StrictMode>);
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledTimes(2));
+    await act(async () => committedEffect.resolve({ data: { data: detail('Strict current') } }));
+    expect(await screen.findByRole('heading', { name: 'Strict current' })).toBeVisible();
+    await act(async () => obsoleteEffect.reject(new Error('obsolete StrictMode request')));
+    expect(screen.getByRole('heading', { name: 'Strict current' })).toBeVisible();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+
+it('ignores a detail response after the page unmounts', async () => {
+    const request = deferred();
+    apiMock.get.mockReturnValue(request.promise);
+    const view = render(<MemoryRouter initialEntries={[`/artifact-library/${UUID_A}`]}><Routes><Route path="/artifact-library/:uuid" element={<ArtifactLibraryDetailPage />} /></Routes></MemoryRouter>);
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledTimes(1));
+    view.unmount();
+    await act(async () => request.resolve({ data: { data: detail('Unmounted detail') } }));
+    expect(apiMock.post).not.toHaveBeenCalled();
+    expect(apiMock.put).not.toHaveBeenCalled();
+});
+
+it('preserves same-UUID DraftEditor text across an unrelated parent rerender', async () => {
+    apiMock.get.mockResolvedValue({ data: { data: detail('Draft identity', true) } });
+    function RerenderHarness() {
+        const [count, setCount] = React.useState(0);
+        return <><button type="button" onClick={() => setCount(value => value + 1)}>Rerender parent</button><span>{count}</span><MemoryRouter initialEntries={[`/artifact-library/${UUID_A}`]}><Routes><Route path="/artifact-library/:uuid" element={<ArtifactLibraryDetailPage />} /></Routes></MemoryRouter></>;
+    }
+    render(<RerenderHarness />);
+    const editor = await screen.findByLabelText('Artifact envelope JSON');
+    fireEvent.change(editor, { target: { value: '{"unsaved":"same uuid"}' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Rerender parent' }));
+    expect(screen.getByLabelText('Artifact envelope JSON')).toHaveValue('{"unsaved":"same uuid"}');
+    expect(apiMock.get).toHaveBeenCalledTimes(1);
 });
