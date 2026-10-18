@@ -137,7 +137,7 @@ for (const viewport of VIEWPORTS) {
 
             await page.getByLabel('As-of date', { exact: true }).fill('01-Oct-2026');
             await page.getByLabel('As-of date', { exact: true }).press('Tab');
-            await expect(page.getByRole('alert').filter({ hasText: 'Synthetic date read unavailable.' })).toBeVisible();
+            await expect(page.locator('.container-fluid [role="alert"]').filter({ hasText: 'Synthetic date read unavailable.' })).toBeVisible();
             await expect(page.getByRole('row').filter({ hasText: 'INFY' })).toHaveCount(0);
             await expect(page.locator('.card-header').filter({ hasText: 'Invested:' })).toContainText('Unavailable');
             await expect(page.getByText(/No open holdings on this date/)).toHaveCount(0);
