@@ -77,7 +77,7 @@ it('keeps the comparison owner mounted while its read is unavailable, then revea
     const ownerNode = comparisonOwner;
     expect(ownerNode.parentElement).toHaveAttribute('hidden');
     expect(await screen.findByRole('alert')).toHaveTextContent('Failed to load index data');
-    expect(screen.getByText('Index records are unavailable.')).toBeVisible();
+    expect(screen.getByText('Index records are unavailable.')).not.toBeVisible();
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry index data' }));
     await screen.findByRole('button', { name: /Nifty 50 \(NIFTY50\)/ });

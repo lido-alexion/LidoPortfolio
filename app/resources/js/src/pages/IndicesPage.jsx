@@ -133,51 +133,55 @@ export default function IndicesPage() {
 
     const groups = useMemo(() => groupIndexesByExchange(indexes), [indexes]);
     const exchangeOrder = ['NSE', 'BSE'];
+    const overviewUnavailable = Boolean(error && !overviewReady);
 
     return (
         <div className="indices-page">
-            {error ? <div className="alert alert-danger" role="alert"><p>{error}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={() => setRetryKey(key => key + 1)}>Retry index data</button></div> : null}
-            <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-                <div>
-                    <h1 className="h3 mb-1">Indices</h1>
-                    <p className="text-muted mb-0">
-                        Compare broad, sector, and India VIX (expand any index below for history). VIX is omitted from the relative-performance charts.
-                    </p>
+            {overviewUnavailable ? <div className="alert alert-danger" role="alert"><p>{error}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={() => setRetryKey(key => key + 1)}>Retry index data</button></div> : null}
+            <div hidden={overviewUnavailable}>
+                {error && !overviewUnavailable ? <div className="alert alert-danger" role="alert"><p>{error}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={() => setRetryKey(key => key + 1)}>Retry index data</button></div> : null}
+                <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                    <div>
+                        <h1 className="h3 mb-1">Indices</h1>
+                        <p className="text-muted mb-0">
+                            Compare broad, sector, and India VIX (expand any index below for history). VIX is omitted from the relative-performance charts.
+                        </p>
+                    </div>
                 </div>
-            </div>
 
-            <div hidden={!overviewReady || !comparisonReady} aria-hidden={!overviewReady || !comparisonReady}>
-                <IndexComparisonChart
-                    comparison={overviewReady && comparisonReady ? comparison : null}
-                    indexes={overviewReady ? indexes : []}
-                    loading={comparisonLoading || loading}
-                />
-            </div>
-            {!comparisonReady ? (
-                <div className="text-muted small py-4 text-center" role="status">
-                    {comparisonLoading ? 'Loading relative performance comparison…' : 'Relative performance comparison is unavailable.'}
+                <div hidden={!overviewReady || !comparisonReady} aria-hidden={!overviewReady || !comparisonReady}>
+                    <IndexComparisonChart
+                        comparison={overviewReady && comparisonReady ? comparison : null}
+                        indexes={overviewReady ? indexes : []}
+                        loading={comparisonLoading || loading}
+                    />
                 </div>
-            ) : null}
+                {!comparisonReady ? (
+                    <div className="text-muted small py-4 text-center" role="status">
+                        {comparisonLoading ? 'Loading relative performance comparison…' : 'Relative performance comparison is unavailable.'}
+                    </div>
+                ) : null}
 
-            {loading ? (
-                <div className="text-muted py-4 text-center">Loading indexes…</div>
-            ) : (
-                !overviewReady ? (
-                    <div className="text-muted py-4 text-center" role="status">Index records are unavailable.</div>
-                ) : indexes.length === 0 ? (
-                    <div className="text-muted py-4" role="status">No index records are available.</div>
+                {loading ? (
+                    <div className="text-muted py-4 text-center">Loading indexes…</div>
                 ) : (
-                    exchangeOrder.filter((exchange) => groups[exchange]?.length).map((exchange) => (
-                        <IndexTierList
-                            key={exchange}
-                            exchange={exchange}
-                            indexes={groups[exchange]}
-                            expandedKey={expandedKey}
-                            setExpandedKey={setExpandedKey}
-                        />
-                    ))
-                )
-            )}
+                    !overviewReady ? (
+                        <div className="text-muted py-4 text-center" role="status">Index records are unavailable.</div>
+                    ) : indexes.length === 0 ? (
+                        <div className="text-muted py-4" role="status">No index records are available.</div>
+                    ) : (
+                        exchangeOrder.filter((exchange) => groups[exchange]?.length).map((exchange) => (
+                            <IndexTierList
+                                key={exchange}
+                                exchange={exchange}
+                                indexes={groups[exchange]}
+                                expandedKey={expandedKey}
+                                setExpandedKey={setExpandedKey}
+                            />
+                        ))
+                    )
+                )}
+            </div>
         </div>
     );
 }
