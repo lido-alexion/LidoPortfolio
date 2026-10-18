@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 import AxeBuilder from '@axe-core/playwright';
+import { TEST_PORTFOLIO } from '../js/tos/fixtures/tosApi.js';
 
 const VIEWPORTS = [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }];
 const ROOT = '33333333-3333-4333-8333-333333333333';
@@ -46,8 +47,100 @@ for (const viewport of VIEWPORTS) {
         });
         test(`E2E-41 recovers profile tags and retains rejected rename/merge/delete drafts (${viewport.name})`, async ({ page }, testInfo) => {
             journeyId(testInfo, 'E2E-41'); const safety = await prepare(page, viewport, 'tags', (method, path) => method === 'POST' && ['/api/knowledge-board/tags', '/api/knowledge-board/tags/merge'].includes(path) || ['PUT', 'DELETE'].includes(method) && /^\/api\/knowledge-board\/tags\/[12]$/.test(path)); let tags = [{ id: 1, name: 'Dividend', color: '#198754' }, { id: 2, name: 'Research', color: '#0d6efd' }]; let readFails = true; let createFails = true; let renameFails = true; let mergeFails = true; let deleteFails = true;
-            await page.route('**/api/knowledge-board/tags', route => { if (route.request().method() === 'GET') { if (readFails) return fail(route); return route.fulfill({ json: { data: tags } }); } expect(route.request().postDataJSON()).toEqual({ name: 'Reviewed tag' }); if (createFails) { createFails = false; return fail(route); } const created = { id: 3, name: 'Reviewed tag', color: '#198754' }; tags.push(created); return route.fulfill({ status: 201, json: { data: created } }); }); await page.route('**/api/knowledge-board/tags/1', route => { const body = route.request().postDataJSON(); if (renameFails) { renameFails = false; return fail(route); } expect(body.name).toBe('Reviewed dividend'); tags[0] = { ...tags[0], ...body }; return route.fulfill({ json: { data: tags[0] } }); }); await page.route('**/api/knowledge-board/tags/merge', route => { expect(route.request().postDataJSON()).toEqual({ source_id: 3, target_id: 1 }); if (mergeFails) { mergeFails = false; return fail(route); } tags = tags.filter(tag => tag.id !== 3); return route.fulfill({ json: { data: {} } }); }); await page.route('**/api/knowledge-board/tags/2', route => { expect(route.request().method()).toBe('DELETE'); if (deleteFails) { deleteFails = false; return fail(route); } tags = tags.filter(tag => tag.id !== 2); return route.fulfill({ json: { data: {} } }); });
-            await safety.seal(); await page.goto('/knowledge-board/tags'); await expect(page.getByRole('alert').filter({ hasText: 'Knowledge tags could not be loaded' })).toBeVisible(); readFails = false; await page.getByRole('button', { name: 'Retry knowledge tags' }).click(); await page.getByRole('button', { name: 'Add', exact: true }).click(); expect(safety.writes).toHaveLength(0); await page.getByRole('textbox', { name: 'New tag name' }).fill('Reviewed tag'); await page.getByRole('button', { name: 'Add', exact: true }).click(); await expect(page.getByText('Could not create tag.', { exact: true })).toBeVisible(); await expect(page.getByRole('textbox', { name: 'New tag name' })).toHaveValue('Reviewed tag'); await page.getByRole('button', { name: 'Add', exact: true }).click(); await expect(page.getByRole('textbox', { name: 'New tag name' })).toHaveValue(''); let row = page.getByRole('listitem').filter({ hasText: 'Dividend' }); await row.getByRole('button', { name: 'Rename', exact: true }).click(); await page.getByRole('textbox', { name: 'Rename tag' }).fill('Discarded name'); await page.getByRole('button', { name: 'Cancel', exact: true }).click(); expect(safety.writes.filter(w => w.method === 'PUT')).toHaveLength(0); await row.getByRole('button', { name: 'Rename', exact: true }).click(); await page.getByRole('textbox', { name: 'Rename tag' }).fill('Reviewed dividend'); await page.getByRole('button', { name: 'Save', exact: true }).click(); await expect(page.getByText('Could not update tag.', { exact: true })).toBeVisible(); await expect(page.getByRole('textbox', { name: 'Rename tag' })).toHaveValue('Reviewed dividend'); await page.getByRole('button', { name: 'Save', exact: true }).click(); await expect(page.locator('.badge').filter({ hasText: /^Reviewed dividend$/ })).toBeVisible(); await page.getByLabel('Source (removed)').selectOption('1'); await page.getByLabel('Target (kept)').selectOption('1'); await page.getByRole('button', { name: 'Merge', exact: true }).click(); expect(safety.writes.filter(w => w.path.endsWith('/merge'))).toHaveLength(0); await page.getByLabel('Source (removed)').selectOption('3'); await page.getByRole('button', { name: 'Merge', exact: true }).click(); await expect(page.getByText('Could not merge tags.', { exact: true })).toBeVisible(); await expect(page.getByLabel('Source (removed)')).toHaveValue('3'); await page.getByRole('button', { name: 'Merge', exact: true }).click(); await expect(page.getByLabel('Source (removed)')).toHaveValue(''); row = page.getByRole('listitem').filter({ hasText: 'Research' }); await nativeAction(page, () => row.getByRole('button', { name: 'Delete', exact: true }).click(), 'dismiss'); expect(safety.writes.filter(w => w.method === 'DELETE')).toHaveLength(0); await nativeAction(page, () => row.getByRole('button', { name: 'Delete', exact: true }).click(), 'accept'); await expect(page.getByText('Could not delete tag.', { exact: true })).toBeVisible(); await expect(row).toBeVisible(); await nativeAction(page, () => row.getByRole('button', { name: 'Delete', exact: true }).click(), 'accept'); await expect(row).toHaveCount(0); expect(tags.map(tag => tag.id)).toEqual([1]); expect(safety.writes).toHaveLength(8); expect(safety.blocked).toEqual([]);
+            let releaseBootstrap; let markBootstrapStarted;
+            const bootstrapGate = new Promise(resolve => { releaseBootstrap = resolve; });
+            const bootstrapStarted = new Promise(resolve => { markBootstrapStarted = resolve; });
+            const tagReadScopes = [];
+            await page.addInitScript(() => sessionStorage.removeItem('portfolio_active_id'));
+            await page.route('**/api/portfolios', async route => { markBootstrapStarted(); await bootstrapGate; return route.fulfill({ json: { data: [{ ...TEST_PORTFOLIO, is_default: true }] } }); });
+            await page.route('**/api/knowledge-board/tags', route => { if (route.request().method() === 'GET') { tagReadScopes.push(route.request().headers()['x-profile-id'] ?? null); if (readFails) return fail(route); return route.fulfill({ json: { data: tags } }); } expect(route.request().postDataJSON()).toEqual({ name: 'Reviewed tag' }); if (createFails) { createFails = false; return fail(route); } const created = { id: 3, name: 'Reviewed tag', color: '#198754' }; tags.push(created); return route.fulfill({ status: 201, json: { data: created } }); }); await page.route('**/api/knowledge-board/tags/1', route => { const body = route.request().postDataJSON(); if (renameFails) { renameFails = false; return fail(route); } expect(body.name).toBe('Reviewed dividend'); tags[0] = { ...tags[0], ...body }; return route.fulfill({ json: { data: tags[0] } }); }); await page.route('**/api/knowledge-board/tags/merge', route => { expect(route.request().postDataJSON()).toEqual({ source_id: 3, target_id: 1 }); if (mergeFails) { mergeFails = false; return fail(route); } tags = tags.filter(tag => tag.id !== 3); return route.fulfill({ json: { data: {} } }); }); await page.route('**/api/knowledge-board/tags/2', route => { expect(route.request().method()).toBe('DELETE'); if (deleteFails) { deleteFails = false; return fail(route); } tags = tags.filter(tag => tag.id !== 2); return route.fulfill({ json: { data: {} } }); });
+            await safety.seal(); await page.goto('/knowledge-board/tags'); await bootstrapStarted; await expect(page.getByRole('status')).toContainText('Waiting for a selected portfolio'); expect(tagReadScopes).toEqual([]); await page.getByRole('textbox', { name: 'New tag name' }).fill('Reviewed tag'); await page.getByRole('button', { name: 'Add', exact: true }).click(); expect(safety.writes).toHaveLength(0); await expect(page.getByRole('textbox', { name: 'New tag name' })).toHaveValue('Reviewed tag'); releaseBootstrap(); await expect(page.getByRole('alert').filter({ hasText: 'Knowledge tags could not be loaded' })).toBeVisible(); expect(tagReadScopes).toEqual(['1']); await expect(page.getByRole('textbox', { name: 'New tag name' })).toHaveValue('Reviewed tag'); readFails = false; await page.getByRole('button', { name: 'Retry knowledge tags' }).click(); await expect(page.getByRole('listitem').filter({ hasText: 'Dividend' })).toBeVisible(); expect(tagReadScopes).toEqual(['1', '1']); await page.getByRole('button', { name: 'Add', exact: true }).click(); await expect(page.getByText('Could not create tag.', { exact: true })).toBeVisible(); await expect(page.getByRole('textbox', { name: 'New tag name' })).toHaveValue('Reviewed tag'); await page.getByRole('button', { name: 'Add', exact: true }).click(); await expect(page.getByRole('textbox', { name: 'New tag name' })).toHaveValue(''); let row = page.getByRole('listitem').filter({ hasText: 'Dividend' }); await row.getByRole('button', { name: 'Rename', exact: true }).click(); await page.getByRole('textbox', { name: 'Rename tag' }).fill('Discarded name'); await page.getByRole('button', { name: 'Cancel', exact: true }).click(); expect(safety.writes.filter(w => w.method === 'PUT')).toHaveLength(0); await row.getByRole('button', { name: 'Rename', exact: true }).click(); await page.getByRole('textbox', { name: 'Rename tag' }).fill('Reviewed dividend'); await page.getByRole('button', { name: 'Save', exact: true }).click(); await expect(page.getByText('Could not update tag.', { exact: true })).toBeVisible(); await expect(page.getByRole('textbox', { name: 'Rename tag' })).toHaveValue('Reviewed dividend'); await page.getByRole('button', { name: 'Save', exact: true }).click(); await expect(page.locator('.badge').filter({ hasText: /^Reviewed dividend$/ })).toBeVisible(); await page.getByLabel('Source (removed)').selectOption('1'); await page.getByLabel('Target (kept)').selectOption('1'); await page.getByRole('button', { name: 'Merge', exact: true }).click(); expect(safety.writes.filter(w => w.path.endsWith('/merge'))).toHaveLength(0); await page.getByLabel('Source (removed)').selectOption('3'); await page.getByRole('button', { name: 'Merge', exact: true }).click(); await expect(page.getByText('Could not merge tags.', { exact: true })).toBeVisible(); await expect(page.getByLabel('Source (removed)')).toHaveValue('3'); await page.getByRole('button', { name: 'Merge', exact: true }).click(); await expect(page.getByLabel('Source (removed)')).toHaveValue(''); row = page.getByRole('listitem').filter({ hasText: 'Research' }); await nativeAction(page, () => row.getByRole('button', { name: 'Delete', exact: true }).click(), 'dismiss'); expect(safety.writes.filter(w => w.method === 'DELETE')).toHaveLength(0); await nativeAction(page, () => row.getByRole('button', { name: 'Delete', exact: true }).click(), 'accept'); await expect(page.getByText('Could not delete tag.', { exact: true })).toBeVisible(); await expect(row).toBeVisible(); await nativeAction(page, () => row.getByRole('button', { name: 'Delete', exact: true }).click(), 'accept'); await expect(row).toHaveCount(0); expect(tags.map(tag => tag.id)).toEqual([1]); expect(safety.writes).toHaveLength(8); expect(safety.blocked).toEqual([]);
+
+        });
+        test(`E2E-41 keeps tag writes and deferred reads bound to the selected Portfolio (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'E2E-41');
+            const safety = await prepare(page, viewport, 'tag-scope-races', (method, path) => method === 'POST' && path === '/api/knowledge-board/tags');
+            const tagBadge = (name) => page.locator('.badge').filter({ hasText: new RegExp(`^${name}$`) });
+            const rows = {
+                1: [{ id: 11, name: 'A base', color: '#198754' }],
+                2: [{ id: 22, name: 'B base', color: '#0d6efd' }],
+            };
+            const reads = []; const posts = [];
+            let releaseACreate; let markACreateStarted;
+            const aCreateGate = new Promise(resolve => { releaseACreate = resolve; });
+            const aCreateStarted = new Promise(resolve => { markACreateStarted = resolve; });
+            let delayNextBRead = false; let releaseBRead; let markBReadStarted;
+            const bReadGate = new Promise(resolve => { releaseBRead = resolve; });
+            const bReadStarted = new Promise(resolve => { markBReadStarted = resolve; });
+
+            await page.route('**/api/portfolios', route => route.fulfill({ json: { data: [TEST_PORTFOLIO, { ...TEST_PORTFOLIO, id: 2, name: 'Long Term', is_default: false }] } }));
+            await page.route('**/api/knowledge-board/tags', async route => {
+                const request = route.request(); const profileId = request.headers()['x-profile-id'];
+                expect(['1', '2']).toContain(profileId);
+                if (request.method() === 'GET') {
+                    reads.push(profileId);
+                    if (profileId === '2' && delayNextBRead) {
+                        delayNextBRead = false; markBReadStarted(); await bReadGate;
+                    }
+                    return route.fulfill({ json: { data: rows[profileId] } });
+                }
+                const body = request.postDataJSON(); posts.push({ profileId, body });
+                if (profileId === '1') {
+                    expect(body).toEqual({ name: 'A delayed tag' }); markACreateStarted(); await aCreateGate;
+                    const created = { id: 12, name: 'A delayed tag', color: '#198754' }; rows[1].push(created);
+                    return route.fulfill({ status: 201, json: { data: created } });
+                }
+                expect(body).toEqual({ name: 'B explicit tag' });
+                const created = { id: 23, name: 'B explicit tag', color: '#0d6efd' }; rows[2].push(created);
+                return route.fulfill({ status: 201, json: { data: created } });
+            });
+
+            const switchTo = async (next) => {
+                await page.locator('.lido-portfolio-switcher').click();
+                await page.locator('.lido-portfolio-menu').getByRole('button', { name: next, exact: true }).click();
+                await expect(page.locator('.lido-portfolio-switcher')).toHaveText(next);
+            };
+            const responseFor = (method, profileId) => page.waitForResponse(response => {
+                const request = response.request();
+                return new URL(response.url()).pathname === '/api/knowledge-board/tags'
+                    && request.method() === method
+                    && request.headers()['x-profile-id'] === profileId;
+            });
+
+            await safety.seal(); await page.goto('/knowledge-board/tags');
+            await expect(tagBadge('A base')).toBeVisible();
+            await page.getByRole('textbox', { name: 'New tag name' }).fill('A delayed tag');
+            const aCreateResponse = responseFor('POST', '1');
+            await page.getByRole('button', { name: 'Add', exact: true }).click(); await aCreateStarted;
+
+            await switchTo('Long Term'); await expect(tagBadge('B base')).toBeVisible();
+            await page.getByRole('textbox', { name: 'New tag name' }).fill('B draft');
+            const lateAResponse = aCreateResponse;
+            releaseACreate();
+            const finishedA = await lateAResponse; await finishedA.finished();
+            await expect(page.getByRole('textbox', { name: 'New tag name' })).toHaveValue('B draft');
+            await expect(tagBadge('A delayed tag')).toHaveCount(0);
+            await expect(page.getByText('Tag created.', { exact: true })).toHaveCount(0);
+
+            await page.getByRole('textbox', { name: 'New tag name' }).fill('B explicit tag');
+            await page.getByRole('button', { name: 'Add', exact: true }).click();
+            await expect(tagBadge('B explicit tag')).toBeVisible();
+            await expect(page.getByText('Tag created.', { exact: true })).toHaveCount(1);
+            expect(posts).toEqual([{ profileId: '1', body: { name: 'A delayed tag' } }, { profileId: '2', body: { name: 'B explicit tag' } }]);
+
+            await switchTo('Main'); await expect(tagBadge('A delayed tag')).toBeVisible();
+            delayNextBRead = true; const lateBResponse = responseFor('GET', '2');
+            await switchTo('Long Term'); await bReadStarted;
+            const currentAResponse = responseFor('GET', '1');
+            await switchTo('Main'); await expect(tagBadge('A delayed tag')).toBeVisible();
+            await expect(tagBadge('B base')).toHaveCount(0);
+            const finishedCurrentA = await currentAResponse; await finishedCurrentA.finished();
+            releaseBRead(); const finishedLateB = await lateBResponse; await finishedLateB.finished();
+            await expect(tagBadge('A delayed tag')).toBeVisible();
+            await expect(tagBadge('B base')).toHaveCount(0);
+            expect(reads).toEqual(['1', '2', '1', '2', '1']);
+            expect(safety.writes).toEqual([{ method: 'POST', path: '/api/knowledge-board/tags' }, { method: 'POST', path: '/api/knowledge-board/tags' }]);
+            expect(safety.blocked).toEqual([]);
         });
         test(`E2E-42 recovers Wiki creation/edit/history and preserves explicit move/branch-delete boundaries (${viewport.name})`, async ({ page }, testInfo) => {
             test.setTimeout(60000); journeyId(testInfo, 'E2E-42'); const safety = await prepare(page, viewport, 'wiki-lifecycle', (method, path) => method === 'POST' && ['/api/knowledge-board/wiki/pages', `/api/knowledge-board/wiki/pages/${ROOT}/preview`, `/api/knowledge-board/wiki/pages/${ROOT}/revisions/1/restore`].includes(path) || method === 'PUT' && [ `/api/knowledge-board/wiki/pages/${ROOT}`, `/api/knowledge-board/wiki/pages/${CHILD}/move` ].includes(path) || method === 'DELETE' && path === `/api/knowledge-board/wiki/pages/${ROOT}`);
