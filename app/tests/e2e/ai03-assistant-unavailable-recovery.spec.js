@@ -11,8 +11,9 @@ const TEMPORARY_UNAVAILABLE = 'The assistant is temporarily unavailable. You can
 const QUESTION = 'How do I find maintained StoX documentation when the assistant is unavailable? Please explain how to create a screener, configure its criteria, build a strategy from it, review recommendations, understand portfolio analysis, find supported execution steps, and return to the current page. I need to keep the recovery context while scrolling the help drawer on a narrow screen.';
 const CLOSE_QUESTION = 'Where can I browse maintained StoX help after the assistant becomes unavailable?';
 const ESCAPE_QUESTION = 'Which documentation page explains how StoX help works during an outage?';
+const EXPECTED_QUESTIONS = [QUESTION, CLOSE_QUESTION, ESCAPE_QUESTION];
 
-async function askAndSettleUnavailable(page, drawer, question, payloads, settledResponses) {
+async function askAndSettleUnavailable(page, drawer, question, payloads, mountedQuestions, settledResponses) {
     const input = drawer.getByRole('textbox', { name: 'Ask about StoX' });
     const responsePromise = page.waitForResponse((response) => {
         const request = response.request();
@@ -33,16 +34,17 @@ async function askAndSettleUnavailable(page, drawer, question, payloads, settled
     settledResponses.push(response);
 
     const currentArticle = drawer.locator('article').filter({
-        has: drawer.getByRole('heading', { name: question, exact: true }),
+        has: page.getByRole('heading', { name: question, exact: true }),
     });
     await expect(currentArticle).toHaveCount(1);
     await expect(currentArticle.getByText(TEMPORARY_UNAVAILABLE, { exact: true })).toBeVisible();
     await expect(currentArticle.getByText('Insufficient documentation', { exact: true })).toBeVisible();
     await expect(drawer.getByRole('navigation', { name: 'How do I? deterministic help' })).toBeVisible();
     expect(payloads.at(-1)?.question).toBe(question);
-    for (const { question: priorQuestion } of payloads) {
+    mountedQuestions.push(question);
+    for (const priorQuestion of mountedQuestions) {
         const priorArticle = drawer.locator('article').filter({
-            has: drawer.getByRole('heading', { name: priorQuestion, exact: true }),
+            has: page.getByRole('heading', { name: priorQuestion, exact: true }),
         });
         await expect(priorArticle).toHaveCount(1);
         await expect(priorArticle.getByText(TEMPORARY_UNAVAILABLE, { exact: true })).toBeVisible();
@@ -60,6 +62,7 @@ for (const viewport of VIEWPORTS) {
         const blockedOrigins = [];
         const observedRequests = [];
         const payloads = [];
+        const mountedQuestions = [];
         const settledResponses = [];
 
         await page.route('**/*', (route) => {
@@ -82,7 +85,9 @@ for (const viewport of VIEWPORTS) {
             expect(url.origin).toBe(allowedOrigin);
             expect(url.pathname).toBe(STREAM_PATH);
             const payload = request.postDataJSON();
-            expect(payload.question).toBe(QUESTION);
+            const expectedQuestion = EXPECTED_QUESTIONS[payloads.length];
+            expect(expectedQuestion).toBeDefined();
+            expect(payload.question).toBe(expectedQuestion);
             expect(Array.isArray(payload.conversation)).toBe(true);
             payloads.push(payload);
             await route.fulfill({
@@ -97,7 +102,7 @@ for (const viewport of VIEWPORTS) {
         await trigger.click();
         let drawer = page.getByRole('dialog', { name: 'StoX assistant' });
         await expect(drawer).toBeVisible();
-        await askAndSettleUnavailable(page, drawer, QUESTION, payloads, settledResponses);
+        await askAndSettleUnavailable(page, drawer, QUESTION, payloads, mountedQuestions, settledResponses);
 
         if (viewport.name === 'mobile') {
             const dimensions = await drawer.evaluate((element) => ({
@@ -127,16 +132,17 @@ for (const viewport of VIEWPORTS) {
 
         // Re-enter the ordinary application route and verify close/focus recovery from the same unavailable state.
         await page.goto('/');
+        mountedQuestions.length = 0;
         await trigger.click();
         drawer = page.getByRole('dialog', { name: 'StoX assistant' });
-        await askAndSettleUnavailable(page, drawer, CLOSE_QUESTION, payloads, settledResponses);
+        await askAndSettleUnavailable(page, drawer, CLOSE_QUESTION, payloads, mountedQuestions, settledResponses);
         await drawer.getByRole('button', { name: 'Close assistant', exact: true }).click();
         await expect(drawer).not.toBeVisible();
         await expect(trigger).toBeFocused();
 
         await trigger.click();
         drawer = page.getByRole('dialog', { name: 'StoX assistant' });
-        await askAndSettleUnavailable(page, drawer, ESCAPE_QUESTION, payloads, settledResponses);
+        await askAndSettleUnavailable(page, drawer, ESCAPE_QUESTION, payloads, mountedQuestions, settledResponses);
         await page.keyboard.press('Escape');
         await expect(drawer).not.toBeVisible();
         await expect(trigger).toBeFocused();
@@ -158,7 +164,7 @@ for (const viewport of VIEWPORTS) {
             { method: 'POST', origin: allowedOrigin, path: STREAM_PATH },
             { method: 'POST', origin: allowedOrigin, path: STREAM_PATH },
         ]);
-        expect(payloads.map(({ question }) => question)).toEqual([QUESTION, CLOSE_QUESTION, ESCAPE_QUESTION]);
+        expect(payloads.map(({ question }) => question)).toEqual(EXPECTED_QUESTIONS);
         expect(payloads.every(({ conversation }) => Array.isArray(conversation))).toBe(true);
     });
 }
