@@ -128,7 +128,7 @@ it('rebuilds expired and stale history as distinct fresh previews before explici
         const expectedActionResult = phase.fresh.preview[0].affected_object_id
             ? `watchlist rename — verified (object ${phase.fresh.preview[0].affected_object_id})`
             : 'watchlist create — verified (object 77)';
-        expect(freshRunCard.getByRole('list', { name: 'Action results' }).getByText(expectedActionResult, { exact: true })).toBeInTheDocument();
+        expect(within(freshRunCard.getByRole('list', { name: 'Action results' })).getByText(expectedActionResult, { exact: true })).toBeInTheDocument();
     }
 
     expect(api.post.mock.calls).toEqual([
