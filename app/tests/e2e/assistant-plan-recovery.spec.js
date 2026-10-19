@@ -159,6 +159,10 @@ for (const viewport of [
             await expect(freshCard.getByText('Approval required', { exact: true })).toBeVisible();
             await freshCard.getByText(/Review field changes/).click();
             await expect(freshCard.getByText(`${freshRun.preview[0].changes[0].before ?? 'Unset'} → ${freshRun.preview[0].changes[0].after}`, { exact: true })).toBeVisible();
+            if (freshRun.preview[0].affected_object_id) {
+                await expect(freshCard.getByText(`Object: ${freshRun.preview[0].affected_object_id}`, { exact: true })).toBeVisible();
+                await expect(freshCard.getByText(`Object: ${oldRun.preview[0].affected_object_id}`, { exact: true })).toHaveCount(0);
+            }
             await expect(freshCard.getByRole('button', { name: 'Approve changes' })).toBeEnabled();
             await expect(oldCard.getByRole('button', { name: 'Approve changes' })).toHaveCount(0);
 
@@ -176,7 +180,10 @@ for (const viewport of [
             };
             await expectSettledJson(await approveResponse, envelope(completed));
             await expect(freshCard.getByText(completed.answer, { exact: true })).toBeVisible();
-            await expect(freshCard.getByText(/— verified/)).toBeVisible();
+            const expectedActionResult = freshRun.preview[0].affected_object_id
+                ? `watchlist rename — verified (object ${freshRun.preview[0].affected_object_id})`
+                : 'watchlist create — verified (object 77)';
+            await expect(freshCard.getByRole('list', { name: 'Action results' }).getByText(expectedActionResult, { exact: true })).toBeVisible();
             await expect(oldCard.getByRole('button', { name: 'Approve changes' })).toHaveCount(0);
         };
 

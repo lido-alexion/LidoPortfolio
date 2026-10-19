@@ -103,6 +103,9 @@ it('rebuilds expired and stale history as distinct fresh previews before explici
         const oldCard = runCardContaining(phase.old.preview[0].consequence);
         expect(oldCard.queryByRole('button', { name: 'Approve changes' })).not.toBeInTheDocument();
         expect(oldCard.queryByRole('button', { name: 'Reject plan' })).not.toBeInTheDocument();
+        if (phase.old.preview[0].affected_object_id) {
+            expect(oldCard.getByText(`Object: ${phase.old.preview[0].affected_object_id}`, { exact: true })).toBeInTheDocument();
+        }
         fireEvent.click(oldCard.getByText(/Review field changes/));
         expect(oldCard.getByText(`${phase.old.preview[0].changes[0].before ?? 'Unset'} → ${phase.old.preview[0].changes[0].after}`, { exact: true })).toBeInTheDocument();
         fireEvent.click(oldCard.getByRole('button', { name: 'Build a fresh plan' }));
@@ -113,12 +116,19 @@ it('rebuilds expired and stale history as distinct fresh previews before explici
         expect(freshRunCard.getByText('Approval required', { exact: true })).toBeInTheDocument();
         fireEvent.click(freshRunCard.getByText(/Review field changes/));
         expect(freshRunCard.getByText(`${phase.fresh.preview[0].changes[0].before ?? 'Unset'} → ${phase.fresh.preview[0].changes[0].after}`, { exact: true })).toBeInTheDocument();
+        if (phase.fresh.preview[0].affected_object_id) {
+            expect(freshRunCard.getByText(`Object: ${phase.fresh.preview[0].affected_object_id}`, { exact: true })).toBeInTheDocument();
+            expect(freshRunCard.queryByText(`Object: ${phase.old.preview[0].affected_object_id}`, { exact: true })).not.toBeInTheDocument();
+        }
         expect(oldCard.getByText(phase.old.preview[0].consequence, { exact: true })).toBeInTheDocument();
         expect(oldCard.queryByRole('button', { name: 'Approve changes' })).not.toBeInTheDocument();
 
         fireEvent.click(freshRunCard.getByRole('button', { name: 'Approve changes' }));
-        expect(await within(drawer).findByText('The reviewed changes were completed and verified.')).toBeInTheDocument();
-        expect(freshRunCard.getByText(/— verified/)).toBeInTheDocument();
+        expect(await freshRunCard.findByText('The reviewed changes were completed and verified.', { exact: true })).toBeInTheDocument();
+        const expectedActionResult = phase.fresh.preview[0].affected_object_id
+            ? `watchlist rename — verified (object ${phase.fresh.preview[0].affected_object_id})`
+            : 'watchlist create — verified (object 77)';
+        expect(freshRunCard.getByRole('list', { name: 'Action results' }).getByText(expectedActionResult, { exact: true })).toBeInTheDocument();
     }
 
     expect(api.post.mock.calls).toEqual([
