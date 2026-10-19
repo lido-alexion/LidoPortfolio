@@ -254,18 +254,40 @@ async function openSavedHistory(page, record, savedRun, evidence) {
     return resultRegion;
 }
 
+async function resolveArchiveDialog(page, row, outcome) {
+    const dialogPromise = page.waitForEvent('dialog').then(async (dialog) => {
+        let assertionError = null;
+        try {
+            expect(dialog.type()).toBe('confirm');
+            expect(dialog.message()).toBe('Archive this screener? Its run history will be preserved.');
+        } catch (error) {
+            assertionError = error;
+        } finally {
+            if (outcome === 'dismiss') {
+                await dialog.dismiss();
+            } else {
+                await dialog.accept();
+            }
+        }
+        if (assertionError) throw assertionError;
+        return { type: dialog.type(), message: dialog.message() };
+    });
+    const clickPromise = row.getByRole('button', { name: 'Archive', exact: true }).click();
+    const [, dialog] = await Promise.all([clickPromise, dialogPromise]);
+    expect(dialog).toEqual({
+        type: 'confirm',
+        message: 'Archive this screener? Its run history will be preserved.',
+    });
+}
+
 test.describe('SCR-08 runtime screener archive conformance', () => {
     for (const viewport of VIEWPORTS) {
         test(`SCR-08 cancels archive, then shows the Strategy dependency rejection without losing run history (${viewport.name})`, async ({ page }, testInfo) => {
             journeyId(testInfo, 'SCR-08');
             const { evidence, record, savedRun, row, pathForRecord } = await prepareRuntimeArchive(page, viewport, 41, 'dependency');
 
-            const cancelDialog = page.waitForEvent('dialog');
-            await row.getByRole('button', { name: 'Archive', exact: true }).click();
-            const dialog = await cancelDialog;
-            expect(dialog.type()).toBe('confirm');
-            expect(dialog.message()).toBe('Archive this screener? Its run history will be preserved.');
-            await dialog.dismiss();
+            await resolveArchiveDialog(page, row, 'dismiss');
+            await evidence.settleAllObserved();
             await expect(row.getByText('Strategy-dependent momentum screener', { exact: true })).toBeVisible();
             evidence.assertBoundary(null);
 
@@ -274,11 +296,7 @@ test.describe('SCR-08 runtime screener archive conformance', () => {
                 && new URL(response.url()).origin === new URL(process.env.STOX_E2E_BASE_URL || 'http://127.0.0.1:4177').origin
                 && new URL(response.url()).pathname === pathForRecord
             ));
-            const confirmDialog = page.waitForEvent('dialog');
-            await row.getByRole('button', { name: 'Archive', exact: true }).click();
-            const acceptedDialog = await confirmDialog;
-            expect(acceptedDialog.message()).toBe('Archive this screener? Its run history will be preserved.');
-            await acceptedDialog.accept();
+            await resolveArchiveDialog(page, row, 'accept');
             const response = await deleteResponse;
             expect(response.status()).toBe(422);
             expect(await response.finished()).toBeNull();
@@ -301,11 +319,7 @@ test.describe('SCR-08 runtime screener archive conformance', () => {
                 response.request().method() === 'DELETE'
                 && new URL(response.url()).pathname === pathForRecord
             ));
-            const confirmDialog = page.waitForEvent('dialog');
-            await row.getByRole('button', { name: 'Archive', exact: true }).click();
-            const dialog = await confirmDialog;
-            expect(dialog.message()).toBe('Archive this screener? Its run history will be preserved.');
-            await dialog.accept();
+            await resolveArchiveDialog(page, row, 'accept');
             const response = await deleteResponse;
             expect(response.status()).toBe(200);
             expect(await response.finished()).toBeNull();
