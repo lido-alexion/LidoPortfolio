@@ -205,7 +205,7 @@ for (const viewport of [
             expect(failedRequests.has(phase.request), failedRequests.get(phase.request)).toBe(false);
             const response = allResponses.get(phase.request);
             expect(response).toBeTruthy();
-            await response.finished();
+            expect(await response.finished()).toBeNull();
             if (!finishedRequests.has(phase.request)) {
                 await page.waitForEvent('requestfinished', { predicate: request => request === phase.request });
             }
