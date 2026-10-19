@@ -2,10 +2,10 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { BrowserRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
-import AuthContext from '../../../resources/js/src/context/AuthContext.jsx';
+import AuthContext, { AuthProvider } from '../../../resources/js/src/context/AuthContext.jsx';
 import { PortfolioProvider, usePortfolio } from '../../../resources/js/src/context/PortfolioContext.jsx';
 import StrategyPage from '../../../resources/js/src/pages/StrategyPage.jsx';
-import { getActivePortfolioId, setActivePortfolioId } from '../../../resources/js/src/portfolio/activePortfolioStorage.js';
+import { clearActivePortfolioId, getActivePortfolioId, setActivePortfolioId } from '../../../resources/js/src/portfolio/activePortfolioStorage.js';
 import { readStrategyScreenerReturnDraft, writeStrategyScreenerReturnDraft } from '../../../resources/js/src/utils/strategyScreenerReturnFlow.js';
 import { TEST_USER } from './fixtures/tosApi.js';
 import { apiMock } from './helpers/mockApi.js';
@@ -72,7 +72,10 @@ function strategyResponse(id, name, overrides = {}) {
 }
 
 function installDeferredStrategyReads(reads) {
+    const portfolioReads = [];
+    let nextPortfolioRead = null;
     apiMock.get.mockImplementation((path, config) => {
+        if (path === '/auth/me') return Promise.resolve({ data: { user: TEST_USER } });
         if (path === '/v1/strategy') {
             const pending = deferred();
             reads.push({
@@ -84,6 +87,12 @@ function installDeferredStrategyReads(reads) {
             return pending.promise;
         }
         if (path === '/portfolios') {
+            if (nextPortfolioRead) {
+                const pending = nextPortfolioRead;
+                nextPortfolioRead = null;
+                portfolioReads.push(pending);
+                return pending.promise;
+            }
             return Promise.resolve({ data: { data: [
                 { id: 1, name: 'Profile one', is_default: true },
                 { id: 2, name: 'Profile two', is_default: false },
@@ -101,18 +110,30 @@ function installDeferredStrategyReads(reads) {
         }
         throw new Error(`Unexpected GET ${path}`);
     });
+
+    return {
+        portfolioReads,
+        deferNextPortfolioRead() {
+            if (nextPortfolioRead) throw new Error('A deferred Portfolio read is already queued.');
+            nextPortfolioRead = deferred();
+            return nextPortfolioRead;
+        },
+    };
 }
 
 function RouteProbeAndControls() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { setActivePortfolio } = usePortfolio();
+    const { setActivePortfolio, bootstrap, loading: portfolioLoading } = usePortfolio();
     return (
         <>
             <output data-testid="router-location">{location.pathname}{location.search}</output>
+            <output data-testid="portfolio-loading">{portfolioLoading ? 'loading' : 'idle'}</output>
             <button type="button" onClick={() => navigate('/strategy?strategy_id=8')}>Navigate to Strategy 8</button>
             <button type="button" onClick={() => navigate('/strategy?strategy_id=7')}>Navigate to Strategy 7</button>
             <button type="button" onClick={() => setActivePortfolio(2)}>Switch to Profile 2</button>
+            <button type="button" onClick={() => setActivePortfolio(1)}>Re-select Profile 1</button>
+            <button type="button" onClick={() => bootstrap()}>Refresh Profiles</button>
             <Routes>
                 <Route path="/strategy" element={<StrategyPage />} />
             </Routes>
@@ -131,6 +152,21 @@ function renderActualStrategyPage(initialUrl) {
                         <RouteProbeAndControls />
                     </PortfolioProvider>
                 </AuthContext.Provider>
+            </BrowserRouter>
+        </React.StrictMode>,
+    );
+}
+
+function renderStrategyPageWithActualAuthProvider(initialUrl) {
+    window.history.replaceState({}, '', initialUrl);
+    return render(
+        <React.StrictMode>
+            <BrowserRouter>
+                <AuthProvider>
+                    <PortfolioProvider>
+                        <RouteProbeAndControls />
+                    </PortfolioProvider>
+                </AuthProvider>
             </BrowserRouter>
         </React.StrictMode>,
     );
@@ -172,16 +208,51 @@ async function resolveRead(read, id, name, overrides = {}) {
 }
 
 describe('STR-02 contextual Strategy recovery concurrency', () => {
+    it('waits for initial PortfolioProvider ownership before hydrating the Strategy', async () => {
+        const reads = [];
+        installDeferredStrategyReads(reads);
+        clearActivePortfolioId();
+        renderStrategyPageWithActualAuthProvider('/strategy?strategy_id=7');
+
+        expect(screen.getByText('Loading strategy…')).toBeInTheDocument();
+        await waitFor(() => expect(getActivePortfolioId()).toBe('1'));
+        await waitFor(() => expect(reads.length).toBeGreaterThan(0));
+        const profileOneReads = reads.filter((read) => read.strategyId === '7' && read.portfolioId === '1');
+        expect(profileOneReads.length).toBeGreaterThan(0);
+        expect(reads.every((read) => read.portfolioId === '1')).toBe(true);
+
+        const currentRead = profileOneReads.at(-1);
+        await resolveRead(currentRead, 7, 'Profile one current Strategy');
+        await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Profile one current Strategy'));
+        expect(screen.queryByText('Loading strategy…')).not.toBeInTheDocument();
+
+        for (const staleDuplicate of profileOneReads.slice(0, -1).reverse()) {
+            await resolveRead(staleDuplicate, 7, 'Late pre-current duplicate');
+        }
+        expect(screen.getByLabelText('Name')).toHaveValue('Profile one current Strategy');
+        expect(screen.getByTestId('router-location')).toHaveTextContent('/strategy?strategy_id=7');
+        expect(apiMock.put).not.toHaveBeenCalled();
+    });
+
     it('consumes the real return route once and ignores late StrictMode and old-Strategy reads', async () => {
         const reads = [];
         installDeferredStrategyReads(reads);
         seedReturnDraft();
         renderActualStrategyPage('/strategy?strategy_id=7&screener_created=99');
 
-        await waitFor(() => expect(reads.length).toBeGreaterThanOrEqual(2));
-        const initialStrategyReads = reads.filter((read) => read.strategyId === '7' && read.portfolioId === '1');
-        expect(initialStrategyReads.length).toBeGreaterThanOrEqual(2);
-        const newestReturnRead = initialStrategyReads.at(-1);
+        await waitFor(() => expect(reads.length).toBeGreaterThan(0));
+        const beforeReselectCount = reads.length;
+        fireEvent.click(screen.getByRole('button', { name: 'Re-select Profile 1' }));
+        await waitFor(() => expect(reads.length).toBeGreaterThan(beforeReselectCount));
+        const overlappingStrategyReads = reads.filter((read) => read.strategyId === '7' && read.portfolioId === '1');
+        expect(overlappingStrategyReads.length).toBeGreaterThanOrEqual(2);
+        expect(reads.every((read) => read.portfolioId === '1')).toBe(true);
+
+        const newestReturnRead = overlappingStrategyReads.at(-1);
+        for (const staleRead of overlappingStrategyReads.slice(0, -1).reverse()) {
+            await resolveRead(staleRead, 7, 'Late old response');
+        }
+        expect(screen.getByText('Loading strategy…')).toBeInTheDocument();
         await resolveRead(newestReturnRead, 7, 'Server seven');
         await waitFor(() => expect(screen.getByTestId('router-location')).toHaveTextContent('/strategy?strategy_id=7'));
         expect(screen.getByRole('button', { name: 'Eligibility Sources' })).toHaveClass('btn-primary');
@@ -189,10 +260,7 @@ describe('STR-02 contextual Strategy recovery concurrency', () => {
         expect(readStrategyScreenerReturnDraft()).toBeNull();
 
         const readsAfterReturnCleanup = reads.length;
-        expect(readsAfterReturnCleanup).toBe(initialStrategyReads.length);
-        for (const staleRead of initialStrategyReads.slice(0, -1).reverse()) {
-            await resolveRead(staleRead, 7, 'Late old response');
-        }
+        expect(readsAfterReturnCleanup).toBe(overlappingStrategyReads.length);
         expect(reads.length).toBe(readsAfterReturnCleanup);
         expect(screen.getByRole('button', { name: 'Eligibility Sources' })).toHaveClass('btn-primary');
         expect(screen.getByRole('row', { name: /Contextual screen/ })).toBeInTheDocument();
@@ -233,15 +301,49 @@ describe('STR-02 contextual Strategy recovery concurrency', () => {
         expect(apiMock.put).not.toHaveBeenCalled();
     });
 
+    it('keeps the unsaved Strategy form while the same profile refreshes in the background', async () => {
+        const reads = [];
+        const portfolioRequests = installDeferredStrategyReads(reads);
+        seedReturnDraft();
+        renderActualStrategyPage('/strategy?strategy_id=7');
+
+        await waitFor(() => expect(reads.length).toBeGreaterThan(0));
+        const initialRead = reads.at(-1);
+        await resolveRead(initialRead, 7, 'Server seven');
+        await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Server seven'));
+
+        fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Unsaved same-profile edit' } });
+        expect(screen.getByLabelText('Name')).toHaveValue('Unsaved same-profile edit');
+        const strategyReadCount = reads.length;
+        const pendingPortfolioRefresh = portfolioRequests.deferNextPortfolioRead();
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh Profiles' }));
+        await waitFor(() => expect(screen.getByTestId('portfolio-loading')).toHaveTextContent('loading'));
+        expect(portfolioRequests.portfolioReads).toContain(pendingPortfolioRefresh);
+        expect(screen.getByLabelText('Name')).toHaveValue('Unsaved same-profile edit');
+        expect(reads).toHaveLength(strategyReadCount);
+
+        await act(async () => {
+            pendingPortfolioRefresh.resolve({ data: { data: [
+                { id: 1, name: 'Profile one refreshed', is_default: true },
+                { id: 2, name: 'Profile two', is_default: false },
+            ] } });
+        });
+        await waitFor(() => expect(screen.getByTestId('portfolio-loading')).toHaveTextContent('idle'));
+        expect(screen.getByLabelText('Name')).toHaveValue('Unsaved same-profile edit');
+        expect(reads).toHaveLength(strategyReadCount);
+        expect(getActivePortfolioId()).toBe('1');
+        expect(apiMock.put).not.toHaveBeenCalled();
+    });
+
     it('binds draft restoration to the request profile and refetches on the real profile-change event', async () => {
         const reads = [];
         installDeferredStrategyReads(reads);
         seedReturnDraft('1');
         renderActualStrategyPage('/strategy?strategy_id=7&screener_return=cancel');
 
-        await waitFor(() => expect(reads.length).toBeGreaterThanOrEqual(2));
+        await waitFor(() => expect(reads.length).toBeGreaterThan(0));
         const profileOneReads = reads.filter((read) => read.strategyId === '7' && read.portfolioId === '1');
-        expect(profileOneReads.length).toBeGreaterThanOrEqual(2);
+        expect(profileOneReads.length).toBeGreaterThan(0);
         const profileTwoStart = reads.length;
         fireEvent.click(screen.getByRole('button', { name: 'Switch to Profile 2' }));
         await waitFor(() => expect(reads.slice(profileTwoStart).some((read) => read.portfolioId === '2')).toBe(true));

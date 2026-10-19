@@ -8,6 +8,7 @@ import AIStrategyPromptBuilder from '../components/strategy/AIStrategyPromptBuil
 import CreateStrategyPanel, { createdArtifactPath, createdStrategyId } from '../components/strategy/CreateStrategyPanel';
 import useApiGet from '../hooks/useApiGet';
 import usePortfolioChanged from '../hooks/usePortfolioChanged';
+import { usePortfolio } from '../context/PortfolioContext';
 import { runApiMutation } from '../hooks/useApiMutation';
 import { showToast } from '../toast';
 import {
@@ -213,12 +214,14 @@ function strategyListLabel(row) {
 export default function StrategyPage() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
+    const { activePortfolio } = usePortfolio();
     const strategyId = searchParams.get('strategy_id') || '';
     const screenerCreatedId = searchParams.get(STRATEGY_SCREENER_CREATED_PARAM) || '';
     const screenerReturn = searchParams.get(STRATEGY_SCREENER_RETURN_PARAM) || '';
     const strategyReadSequence = useRef(0);
     const requestContextRef = useRef(null);
-    requestContextRef.current = { strategyId, portfolioId: getActivePortfolioId() };
+    const currentPortfolioId = activePortfolio?.id == null ? null : String(activePortfolio.id);
+    requestContextRef.current = { strategyId, portfolioId: currentPortfolioId };
     const [section, setSection] = useState('general');
     const [saving, setSaving] = useState(false);
     const [strategyLoadPending, setStrategyLoadPending] = useState(true);
@@ -236,12 +239,17 @@ export default function StrategyPage() {
     const { loading, reload: load } = useApiGet({
         // Return parameters are consumed by the current load. Removing them from
         // the URL must not start a second server hydration over the restored draft.
-        deps: [strategyId],
+        // Wait for PortfolioProvider to resolve an initially empty selection, and
+        // reload when its real active profile changes. Do not bind request enablement
+        // to PortfolioProvider's background loading flag: same-profile refreshes
+        // must not rehydrate over an unsaved Strategy draft.
+        deps: [strategyId, currentPortfolioId],
+        enabled: Boolean(currentPortfolioId),
         errorFallback: 'Failed to load strategy',
         request: async () => {
             const requestSequence = ++strategyReadSequence.current;
             const requestedStrategyId = strategyId;
-            const requestedPortfolioId = getActivePortfolioId();
+            const requestedPortfolioId = currentPortfolioId;
             const requestStillOwnsContext = () => (
                 requestSequence === strategyReadSequence.current
                 && String(requestContextRef.current?.strategyId ?? '') === String(requestedStrategyId ?? '')
@@ -928,7 +936,7 @@ export default function StrategyPage() {
         );
     };
 
-    if (loading || strategyLoadPending) {
+    if (loading || strategyLoadPending || !currentPortfolioId) {
         return <div className="container-fluid py-3 text-muted">Loading strategy…</div>;
     }
 

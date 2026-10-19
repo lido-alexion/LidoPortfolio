@@ -7,6 +7,23 @@ const VIEWPORTS = [
     { name: 'desktop', width: 1440, height: 900 },
 ];
 
+test.afterEach(async ({ page }, testInfo) => {
+    if (testInfo.status === testInfo.expectedStatus) return;
+
+    const errors = (testInfo.errors || []).map((error) => ({
+        message: error.message,
+        stack: error.stack,
+        location: error.location,
+    }));
+    console.error(`[STR-02 owned failure diagnostic] ${JSON.stringify({
+        title: testInfo.title,
+        retry: testInfo.retry,
+        status: testInfo.status,
+        url: page.url(),
+        errors,
+    })}`);
+});
+
 const EXISTING_SCREENER = {
     id: 41,
     name: 'Existing entry screen',
