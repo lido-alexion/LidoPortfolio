@@ -121,7 +121,7 @@ class Str16SiblingSellIsolationTest extends TestCase
         $this->assertSame(TradingRecommendation::STATUS_EXECUTED, $buyA->fresh()->status);
         $this->assertSame(TradingRecommendation::STATUS_EXECUTED, $buyB->fresh()->status);
         $this->assertSame((int) $strategyB->active_version_id, (int) $buyB->fresh()->strategy_version_id);
-        $this->assertSame((int) $buyB->id, (int) $buyB->fresh()->executed_transaction_id);
+        $this->assertSame((int) $buyBTransaction->id, (int) $buyB->fresh()->executed_transaction_id);
         $this->assertSame($ownerB, $buyBTransaction->fresh()->owner_key);
         $this->assertSame((int) $buyB->id, (int) $buyBTransaction->fresh()->recommendation_id);
         $this->assertEqualsWithDelta(9.0, (float) $buyBTransaction->fresh()->quantity, 0.0001);
