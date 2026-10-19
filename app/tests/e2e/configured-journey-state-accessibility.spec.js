@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { OPEN_BUY_RECOMMENDATION } from '../js/tos/fixtures/tosApi.js';
+import { OPEN_BUY_RECOMMENDATION, apiEnvelope } from '../js/tos/fixtures/tosApi.js';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 import { installTosApiMocks } from './tosApiMocks.js';
@@ -11,6 +11,36 @@ const VIEWPORTS = [
 ];
 
 const ORIGIN = new URL(process.env.STOX_E2E_BASE_URL || 'http://127.0.0.1:4177').origin;
+const REVIEW_RECOMMENDATION = {
+    ...OPEN_BUY_RECOMMENDATION,
+    strategy_id: 7,
+    strategy_version_id: 12,
+    strategy_version: 3,
+    evidence: {
+        ...OPEN_BUY_RECOMMENDATION.evidence,
+        screener_id: 31,
+        screener_version: 4,
+    },
+};
+const EXECUTION_STATE_RESPONSE = apiEnvelope({
+    execution_state: 'normal',
+    broker_connected: false,
+    active_orders: 0,
+});
+const NOTIFICATION_CENTER_RESPONSE = {
+    data: [{
+        id: 17,
+        attention_state: 'read',
+        condition_state: 'na',
+        type: 'recommendation.changed',
+        severity: 'info',
+        title: 'Recommendation changed',
+        message: 'A product update is ready.',
+        latest_activity_at: '2026-10-04T10:00:00Z',
+        deliveries: [],
+    }],
+    meta: { unread_count: 0, active_critical_count: 0 },
+};
 const COMMON_READS = new Set([
     '/api/auth/csrf-token',
     '/api/auth/me',
@@ -20,8 +50,21 @@ const COMMON_READS = new Set([
     '/api/patterns/scan',
     '/api/v1/protections',
     '/api/indexes',
+    '/api/v1/execution/state',
+    '/api/notification-center',
     '/sanctum/csrf-cookie',
 ]);
+
+async function installNotificationCenterShellMock(page) {
+    await page.route(/\/api\/notification-center\?per_page=5(?:&|$)/, async (route) => {
+        if (route.request().method() !== 'GET') return route.fallback();
+        return route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(NOTIFICATION_CENTER_RESPONSE),
+        });
+    });
+}
 
 async function installReadOnlyBoundary(page, pageReads) {
     const requests = [];
@@ -110,6 +153,7 @@ test.describe('V9-UX-001 configured journey state accessibility', () => {
             await seedDeterministicJourney(page, `configured-state-a11y-str06-${viewport.name}`);
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
             await installInvestorWorkflowApiMocks(page);
+            await installNotificationCenterShellMock(page);
             const finishBoundary = await installReadOnlyBoundary(page, new Set([
                 '/api/screeners',
                 '/api/screeners/meta',
@@ -195,16 +239,29 @@ test.describe('V9-UX-001 configured journey state accessibility', () => {
                     },
                 });
             }
+            const executionStateReads = responses.filter((item) => item.path === '/api/v1/execution/state');
+            expect(executionStateReads.length).toBeGreaterThan(0);
+            for (const item of executionStateReads) {
+                expect(item.status).toBe(200);
+                expect(item.body).toEqual(EXECUTION_STATE_RESPONSE);
+            }
+            const notificationReads = responses.filter((item) => item.path === '/api/notification-center');
+            expect(notificationReads.length).toBeGreaterThan(0);
+            for (const item of notificationReads) {
+                expect(item.status).toBe(200);
+                expect(item.body).toEqual(NOTIFICATION_CENTER_RESPONSE);
+            }
         });
 
         test(`REC-02 opened recommendation review dialog has no WCAG 2A/2AA violations (${viewport.name})`, async ({ page }, testInfo) => {
             journeyId(testInfo, 'REC-02');
             await seedDeterministicJourney(page, `configured-state-a11y-rec02-${viewport.name}`);
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
-            await installTosApiMocks(page, { recommendations: [OPEN_BUY_RECOMMENDATION] });
+            await installTosApiMocks(page, { recommendations: [REVIEW_RECOMMENDATION] });
+            await installNotificationCenterShellMock(page);
             const finishBoundary = await installReadOnlyBoundary(page, new Set([
                 '/api/v1/recommendations',
-                `/api/v1/recommendations/${OPEN_BUY_RECOMMENDATION.id}`,
+                `/api/v1/recommendations/${REVIEW_RECOMMENDATION.id}`,
             ]));
 
             await page.goto('/recommendations');
@@ -223,7 +280,10 @@ test.describe('V9-UX-001 configured journey state accessibility', () => {
             await expect(dialog).toHaveCount(1);
             await expect(dialog).toBeVisible();
             await expect(dialog.getByRole('heading', { name: 'Open INFY', exact: true })).toBeVisible();
-            await expect(dialog.getByText('Minervini Strategy', { exact: true })).toBeVisible();
+            const marketOpinion = dialog.getByRole('heading', { name: 'Market opinion', exact: true })
+                .locator('xpath=following-sibling::p[1]');
+            await expect(marketOpinion).toHaveText('bullish · strong · Confidence 82% · Score 78 · Minervini Strategy · Version 3');
+            await expect(dialog.getByTestId('recommendation-provenance')).toHaveText('Source screener #31 · Version 4 · Strategy #7 · Strategy version #12');
             await expectNoScopedViolations(page, '.lido-tos-review-modal');
 
             const closeButton = dialog.getByRole('button', { name: 'Close', exact: true }).last();
@@ -232,16 +292,28 @@ test.describe('V9-UX-001 configured journey state accessibility', () => {
             await expect(dialog).toBeHidden();
             const responses = await finishBoundary();
             const listReads = responses.filter((item) => item.path === '/api/v1/recommendations');
-            const detailReads = responses.filter((item) => item.path === `/api/v1/recommendations/${OPEN_BUY_RECOMMENDATION.id}`);
+            const detailReads = responses.filter((item) => item.path === `/api/v1/recommendations/${REVIEW_RECOMMENDATION.id}`);
             expect(listReads.length).toBeGreaterThan(0);
             expect(detailReads.length).toBeGreaterThan(0);
             for (const item of listReads) {
                 expect(item.status).toBe(200);
-                expect(item.body).toEqual({ success: true, data: [OPEN_BUY_RECOMMENDATION], meta: {} });
+                expect(item.body).toEqual({ success: true, data: [REVIEW_RECOMMENDATION], meta: {} });
             }
             for (const item of detailReads) {
                 expect(item.status).toBe(200);
-                expect(item.body).toEqual({ success: true, data: OPEN_BUY_RECOMMENDATION, meta: {} });
+                expect(item.body).toEqual({ success: true, data: REVIEW_RECOMMENDATION, meta: {} });
+            }
+            const executionStateReads = responses.filter((item) => item.path === '/api/v1/execution/state');
+            expect(executionStateReads.length).toBeGreaterThan(0);
+            for (const item of executionStateReads) {
+                expect(item.status).toBe(200);
+                expect(item.body).toEqual(EXECUTION_STATE_RESPONSE);
+            }
+            const notificationReads = responses.filter((item) => item.path === '/api/notification-center');
+            expect(notificationReads.length).toBeGreaterThan(0);
+            for (const item of notificationReads) {
+                expect(item.status).toBe(200);
+                expect(item.body).toEqual(NOTIFICATION_CENTER_RESPONSE);
             }
         });
     }
