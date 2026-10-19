@@ -258,12 +258,33 @@ for (const viewport of VIEWPORTS) {
         assertReturnReads(guard, returnReadStart, 'screener_created', '99');
         expect(receipts.filter(({ method, path }) => method === 'POST' && path === '/api/screeners').map(({ status }) => status)).toEqual([201]);
         expect(guard.screenerWrites).toHaveLength(1);
-        expect(guard.screenerWrites[0].payload).toMatchObject({
+        expect(guard.screenerWrites[0].payload).toEqual({
             name: 'Contextual momentum screen',
+            description: null,
             scope: 'holdings',
-            definition_json: { root: { type: 'group', op: 'AND', children: [expect.objectContaining({ type: 'condition' })] } },
+            watchlist_id: null,
+            index_symbol: null,
+            definition_json: {
+                root: {
+                    type: 'group',
+                    op: 'AND',
+                    children: [{
+                        type: 'condition',
+                        left: { indicator: 'close', params: {} },
+                        operator: 'gt',
+                        weight_factor: 1,
+                        right: { indicator: 'sma', params: { period: 200 } },
+                    }],
+                },
+            },
+            schedule_enabled: false,
+            schedule_time: '18:30',
+            schedule_days: [],
+            telegram_enabled: false,
+            is_enabled: true,
+            is_shared: false,
+            max_lookback: null,
         });
-        expect(guard.screenerWrites[0].payload.definition_json.root.children).toHaveLength(1);
         assertNoStrategySave(guard);
         await assertRestoredDraft(page, openThreshold, 1);
     });
