@@ -122,9 +122,9 @@ it('rebuilds expired and stale history as distinct fresh previews before explici
     }
 
     expect(api.post.mock.calls).toEqual([
-        ['/ai/assistant/runs', { objective: expiredRun.objective, retry_run_id: expiredRun.id }],
+        ['/ai/assistant/runs', { objective: expiredRun.objective, retry_run_id: expiredRun.id }, { signal: expect.any(AbortSignal) }],
         [`/ai/assistant/runs/${freshExpiredPlan.id}/approve`, { plan_hash: freshExpiredPlan.plan_hash }],
-        ['/ai/assistant/runs', { objective: staleRun.objective, retry_run_id: staleRun.id }],
+        ['/ai/assistant/runs', { objective: staleRun.objective, retry_run_id: staleRun.id }, { signal: expect.any(AbortSignal) }],
         [`/ai/assistant/runs/${freshStalePlan.id}/approve`, { plan_hash: freshStalePlan.plan_hash }],
     ]);
 });
