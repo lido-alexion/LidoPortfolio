@@ -7,6 +7,7 @@ import NumberInput from '../components/NumberInput';
 import AIStrategyPromptBuilder from '../components/strategy/AIStrategyPromptBuilder';
 import CreateStrategyPanel, { createdArtifactPath, createdStrategyId } from '../components/strategy/CreateStrategyPanel';
 import useApiGet from '../hooks/useApiGet';
+import usePortfolioChanged from '../hooks/usePortfolioChanged';
 import { runApiMutation } from '../hooks/useApiMutation';
 import { showToast } from '../toast';
 import {
@@ -164,6 +165,7 @@ function applyPayload(payload, setMeta, setConfig) {
         description: payload.description || '',
         modified_at: payload.modified_at,
         status: payload.status,
+        is_enabled: Boolean(payload.is_enabled),
         enabled_indicator_count: payload.enabled_indicator_count ?? payload.enabled_factor_count,
         weight_total: payload.weight_total,
         weights_valid: payload.weights_valid,
@@ -215,6 +217,8 @@ export default function StrategyPage() {
     const screenerCreatedId = searchParams.get(STRATEGY_SCREENER_CREATED_PARAM) || '';
     const screenerReturn = searchParams.get(STRATEGY_SCREENER_RETURN_PARAM) || '';
     const strategyReadSequence = useRef(0);
+    const requestContextRef = useRef(null);
+    requestContextRef.current = { strategyId, portfolioId: getActivePortfolioId() };
     const [section, setSection] = useState('general');
     const [saving, setSaving] = useState(false);
     const [strategyLoadPending, setStrategyLoadPending] = useState(true);
@@ -236,6 +240,14 @@ export default function StrategyPage() {
         errorFallback: 'Failed to load strategy',
         request: async () => {
             const requestSequence = ++strategyReadSequence.current;
+            const requestedStrategyId = strategyId;
+            const requestedPortfolioId = getActivePortfolioId();
+            const requestStillOwnsContext = () => (
+                requestSequence === strategyReadSequence.current
+                && String(requestContextRef.current?.strategyId ?? '') === String(requestedStrategyId ?? '')
+                && String(requestContextRef.current?.portfolioId ?? '') === String(requestedPortfolioId ?? '')
+                && String(getActivePortfolioId() ?? '') === String(requestedPortfolioId ?? '')
+            );
             setStrategyLoadPending(true);
             try {
                 const [{ data }, screenersRes, indexesRes, registryRes] = await Promise.all([
@@ -247,7 +259,7 @@ export default function StrategyPage() {
                     api.get('/indexes', { skipErrorToast: true }).catch(() => ({ data: {} })),
                     api.get('/v1/strategy-registry', { skipErrorToast: true }).catch(() => ({ data: { data: [] } })),
                 ]);
-                if (requestSequence !== strategyReadSequence.current) return data?.data;
+                if (!requestStillOwnsContext()) return data?.data;
 
                 const payload = data?.data || {};
                 applyPayload(payload, setMeta, setConfig);
@@ -267,6 +279,7 @@ export default function StrategyPage() {
                 const draftMatchesCurrentContext = draft
                     && String(draft.strategyId) === String(effectiveStrategyId)
                     && draft.portfolioId != null
+                    && String(draft.portfolioId) === String(requestedPortfolioId)
                     && String(draft.portfolioId) === String(activePortfolioId);
 
                 if (shouldRestoreDraft && draft && !draftMatchesCurrentContext) {
@@ -277,6 +290,7 @@ export default function StrategyPage() {
                         ...draft.meta,
                         id: payload.id ?? payload.strategy_id ?? draft.meta.id,
                         status: payload.status,
+                        is_enabled: Boolean(payload.is_enabled),
                         setup_required: Boolean(payload.setup_required),
                         readiness: payload.readiness || null,
                         reusable_artifact_uuid: payload.reusable_artifact_uuid,
@@ -303,10 +317,11 @@ export default function StrategyPage() {
 
                 return data?.data;
             } finally {
-                if (requestSequence === strategyReadSequence.current) setStrategyLoadPending(false);
+                if (requestStillOwnsContext()) setStrategyLoadPending(false);
             }
         },
     });
+    usePortfolioChanged(load);
 
     const grouped = useMemo(() => {
         const map = {};
