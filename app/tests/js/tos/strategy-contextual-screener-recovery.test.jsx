@@ -241,15 +241,30 @@ describe('STR-02 contextual Strategy recovery concurrency', () => {
         renderActualStrategyPage('/strategy?strategy_id=7&screener_created=99');
 
         await waitFor(() => expect(reads.length).toBeGreaterThan(0));
-        const beforeReselectCount = reads.length;
+        const afterInitialPhase = reads.length;
         fireEvent.click(screen.getByRole('button', { name: 'Re-select Profile 1' }));
-        await waitFor(() => expect(reads.length).toBeGreaterThan(beforeReselectCount));
+        await waitFor(() => expect(reads.length).toBeGreaterThan(afterInitialPhase));
+        const firstProfileEventReads = reads.slice(afterInitialPhase);
+
+        const beforeSecondProfileEvent = reads.length;
+        fireEvent.click(screen.getByRole('button', { name: 'Re-select Profile 1' }));
+        await waitFor(() => expect(reads.length).toBeGreaterThan(beforeSecondProfileEvent));
+        const secondProfileEventReads = reads.slice(beforeSecondProfileEvent);
         const overlappingStrategyReads = reads.filter((read) => read.strategyId === '7' && read.portfolioId === '1');
-        expect(overlappingStrategyReads.length).toBeGreaterThanOrEqual(2);
+        expect(firstProfileEventReads.length).toBeGreaterThan(0);
+        expect(secondProfileEventReads.length).toBeGreaterThan(0);
+        expect(overlappingStrategyReads.length).toBeGreaterThanOrEqual(3);
         expect(reads.every((read) => read.portfolioId === '1')).toBe(true);
 
         const newestReturnRead = overlappingStrategyReads.at(-1);
-        for (const staleRead of overlappingStrategyReads.slice(0, -1).reverse()) {
+        const staleReads = overlappingStrategyReads.filter((read) => read !== newestReturnRead);
+        const staleReadAfterCurrent = firstProfileEventReads.at(-1);
+        const staleReadsBeforeCurrent = staleReads
+            .filter((read) => read !== staleReadAfterCurrent)
+            .slice()
+            .reverse();
+        expect(staleReadsBeforeCurrent.length).toBeGreaterThan(0);
+        for (const staleRead of staleReadsBeforeCurrent) {
             await resolveRead(staleRead, 7, 'Late old response');
         }
         expect(screen.getByText('Loading strategy…')).toBeInTheDocument();
@@ -258,14 +273,23 @@ describe('STR-02 contextual Strategy recovery concurrency', () => {
         expect(screen.getByRole('button', { name: 'Eligibility Sources' })).toHaveClass('btn-primary');
         expect(screen.getByRole('row', { name: /Contextual screen/ })).toBeInTheDocument();
         expect(readStrategyScreenerReturnDraft()).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'General' }));
+        expect(screen.getByLabelText('Name')).toHaveValue('Unsaved contextual strategy');
+        fireEvent.click(screen.getByRole('button', { name: 'Eligibility Sources' }));
+        expect(screen.getByRole('row', { name: /Contextual screen/ })).toBeInTheDocument();
+
+        await resolveRead(staleReadAfterCurrent, 7, 'Late post-restoration duplicate');
+        expect(screen.getByTestId('router-location')).toHaveTextContent('/strategy?strategy_id=7');
+        expect(screen.getByRole('button', { name: 'Eligibility Sources' })).toHaveClass('btn-primary');
+        expect(screen.getByRole('row', { name: /Contextual screen/ })).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'General' }));
+        expect(screen.getByLabelText('Name')).toHaveValue('Unsaved contextual strategy');
 
         const readsAfterReturnCleanup = reads.length;
         expect(readsAfterReturnCleanup).toBe(overlappingStrategyReads.length);
         expect(reads.length).toBe(readsAfterReturnCleanup);
         expect(screen.getByRole('button', { name: 'Eligibility Sources' })).toHaveClass('btn-primary');
         expect(screen.getByRole('row', { name: /Contextual screen/ })).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'General' }));
-        expect(screen.getByLabelText('Name')).toHaveValue('Unsaved contextual strategy');
         fireEvent.click(screen.getByRole('button', { name: 'Recommendation Thresholds' }));
         fireEvent.change(screen.getByDisplayValue('68'), { target: { value: '73' } });
         expect(screen.getByDisplayValue('73')).toBeInTheDocument();
