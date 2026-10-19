@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { OPEN_BUY_RECOMMENDATION, apiEnvelope } from '../js/tos/fixtures/tosApi.js';
+import { CAPITAL_RESOLUTION, OPEN_BUY_RECOMMENDATION, apiEnvelope } from '../js/tos/fixtures/tosApi.js';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 import { installTosApiMocks } from './tosApiMocks.js';
@@ -27,6 +27,7 @@ const EXECUTION_STATE_RESPONSE = apiEnvelope({
     broker_connected: false,
     active_orders: 0,
 });
+const CAPITAL_RESOLUTION_RESPONSE = apiEnvelope(CAPITAL_RESOLUTION);
 const NOTIFICATION_CENTER_RESPONSE = {
     data: [{
         id: 17,
@@ -259,9 +260,11 @@ test.describe('V9-UX-001 configured journey state accessibility', () => {
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
             await installTosApiMocks(page, { recommendations: [REVIEW_RECOMMENDATION] });
             await installNotificationCenterShellMock(page);
+            const capitalResolutionPath = `/api/v1/recommendations/${REVIEW_RECOMMENDATION.id}/capital-resolution`;
             const finishBoundary = await installReadOnlyBoundary(page, new Set([
                 '/api/v1/recommendations',
                 `/api/v1/recommendations/${REVIEW_RECOMMENDATION.id}`,
+                capitalResolutionPath,
             ]));
 
             await page.goto('/recommendations');
@@ -302,6 +305,12 @@ test.describe('V9-UX-001 configured journey state accessibility', () => {
             for (const item of detailReads) {
                 expect(item.status).toBe(200);
                 expect(item.body).toEqual({ success: true, data: REVIEW_RECOMMENDATION, meta: {} });
+            }
+            const capitalResolutionReads = responses.filter((item) => item.path === capitalResolutionPath);
+            expect(capitalResolutionReads.length).toBeGreaterThan(0);
+            for (const item of capitalResolutionReads) {
+                expect(item.status).toBe(200);
+                expect(item.body).toEqual(CAPITAL_RESOLUTION_RESPONSE);
             }
             const executionStateReads = responses.filter((item) => item.path === '/api/v1/execution/state');
             expect(executionStateReads.length).toBeGreaterThan(0);
