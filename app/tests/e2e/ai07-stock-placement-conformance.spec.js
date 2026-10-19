@@ -167,12 +167,12 @@ async function prepare(page, viewport, dashboardKind = null, setupPageRoutes = a
             portfolio_growth: [],
             alerts,
         } }));
-        await page.route('**/api/patterns/scan', (route) => route.fulfill({ json: { results: patternResults } }));
+        await page.route('**/api/patterns/scan**', (route) => route.fulfill({ json: { results: patternResults } }));
     }
 
     if (dashboardKind === 'watchlist') {
         await page.route('**/api/watchlists', (route) => route.fulfill({ json: { data: [WATCHLIST] } }));
-        await page.route('**/api/watchlists/5/items', (route) => route.fulfill({ json: { data: [WATCHLIST_ITEM] } }));
+        await page.route('**/api/watchlists/5/items**', (route) => route.fulfill({ json: { data: [WATCHLIST_ITEM] } }));
         await page.route('**/api/watchlist/membership**', (route) => route.fulfill({ json: { data: { watchlist_ids: [WATCHLIST.id] } } }));
     }
 
