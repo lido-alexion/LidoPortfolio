@@ -1255,8 +1255,9 @@ export default function StrategyPage() {
                             ['watch', 'Watch'],
                         ].map(([key, label]) => (
                             <div className="col-md-4" key={key}>
-                                <label className="form-label">{label}</label>
+                                <label className="form-label" htmlFor={`strategy-threshold-${key}`}>{label}</label>
                                 <NumberInput
+                                    id={`strategy-threshold-${key}`}
                                     step="1"
                                     allowDecimals={false}
                                     buttonVariant="secondary"

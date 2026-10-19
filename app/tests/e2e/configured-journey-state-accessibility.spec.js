@@ -37,15 +37,21 @@ async function installReadOnlyBoundary(page, pageReads) {
     await page.route('**/*', async (route) => {
         const request = route.request();
         const url = new URL(request.url());
+        if (!['http:', 'https:'].includes(url.protocol)) {
+            return route.fallback();
+        }
         if (url.origin !== ORIGIN) {
             blocked.push(`${request.method()} ${url.origin}${url.pathname}`);
             return route.abort();
         }
+        if (request.method() !== 'GET') {
+            blocked.push(`${request.method()} ${url.origin}${url.pathname}`);
+            return route.abort();
+        }
         if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/sanctum/')) {
-            const allowed = request.method() === 'GET'
-                && (COMMON_READS.has(url.pathname) || pageReads.has(url.pathname));
+            const allowed = COMMON_READS.has(url.pathname) || pageReads.has(url.pathname);
             if (!allowed) {
-                blocked.push(`${request.method()} ${url.pathname}`);
+                blocked.push(`${request.method()} ${url.origin}${url.pathname}`);
                 return route.abort();
             }
         }
@@ -54,7 +60,13 @@ async function installReadOnlyBoundary(page, pageReads) {
 
     return async () => {
         expect(blocked).toEqual([]);
-        const apiEntries = requests.filter(({ request }) => {
+        const httpEntries = requests.filter(({ request }) => ['http:', 'https:'].includes(new URL(request.url()).protocol));
+        for (const { request } of httpEntries) {
+            const url = new URL(request.url());
+            expect(url.origin, `${request.method()} ${url.pathname} uses the fixture origin`).toBe(ORIGIN);
+            expect(request.method(), `${url.origin}${url.pathname} is read-only`).toBe('GET');
+        }
+        const apiEntries = httpEntries.filter(({ request }) => {
             const url = new URL(request.url());
             return url.pathname.startsWith('/api/') || url.pathname.startsWith('/sanctum/');
         });
@@ -126,11 +138,15 @@ test.describe('V9-UX-001 configured journey state accessibility', () => {
                 await inputs.nth(index).fill(String(value));
                 await expect(inputs.nth(index)).toHaveValue(String(value));
             }
-            for (const label of [
+            const labels = [
                 'Minimum Overall Score', 'Open Position', 'Increase Position',
                 'Reduce Position', 'Exit Position', 'Watch',
-            ]) {
+            ];
+            for (const [index, label] of labels.entries()) {
                 await expect(thresholdPanel.getByText(label, { exact: true })).toBeVisible();
+                const field = thresholdPanel.getByLabel(label, { exact: true });
+                await expect(field).toHaveCount(1);
+                await expect(field).toHaveValue(String(values[index]));
             }
 
             const axePanel = page.locator('.card.card-body:has(> p.text-muted.small.mb-3)');
@@ -203,9 +219,10 @@ test.describe('V9-UX-001 configured journey state accessibility', () => {
             await tabTo(page, reviewButton, 'the recommendation Review action');
             await page.keyboard.press('Enter');
 
-            const dialog = page.locator('.lido-tos-review-modal');
+            const dialog = page.getByRole('dialog', { name: 'Open INFY', exact: true });
+            await expect(dialog).toHaveCount(1);
             await expect(dialog).toBeVisible();
-            await expect(dialog.getByRole('heading', { name: /Open INFY/ })).toBeVisible();
+            await expect(dialog.getByRole('heading', { name: 'Open INFY', exact: true })).toBeVisible();
             await expect(dialog.getByText('Minervini Strategy', { exact: true })).toBeVisible();
             await expectNoScopedViolations(page, '.lido-tos-review-modal');
 
