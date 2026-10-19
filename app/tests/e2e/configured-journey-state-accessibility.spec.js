@@ -23,7 +23,7 @@ const COMMON_READS = new Set([
     '/sanctum/csrf-cookie',
 ]);
 
-function installReadOnlyBoundary(page, pageReads) {
+async function installReadOnlyBoundary(page, pageReads) {
     const requests = [];
     const blocked = [];
     page.on('request', (request) => requests.push({ request, response: null }));
@@ -33,8 +33,8 @@ function installReadOnlyBoundary(page, pageReads) {
     });
 
     // This guard runs before the existing route mocks and falls through only for
-    // explicitly allowed same-origin GET fixtures. Unknown requests are blocked.
-    page.route('**/*', async (route) => {
+    // explicitly allowed same-origin GET fixtures. Unknown API requests are blocked.
+    await page.route('**/*', async (route) => {
         const request = route.request();
         const url = new URL(request.url());
         if (url.origin !== ORIGIN) {
@@ -98,7 +98,7 @@ test.describe('V9-UX-001 configured journey state accessibility', () => {
             await seedDeterministicJourney(page, `configured-state-a11y-str06-${viewport.name}`);
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
             await installInvestorWorkflowApiMocks(page);
-            const finishBoundary = installReadOnlyBoundary(page, new Set([
+            const finishBoundary = await installReadOnlyBoundary(page, new Set([
                 '/api/screeners',
                 '/api/screeners/meta',
                 '/api/v1/strategy',
@@ -116,6 +116,7 @@ test.describe('V9-UX-001 configured journey state accessibility', () => {
             const thresholdPanel = page.locator('.card.card-body').filter({
                 has: page.getByText(/These cutoffs are compared against the strategy's overall score/),
             });
+            await expect(thresholdPanel).toHaveCount(1);
             await expect(thresholdPanel).toBeVisible();
             const values = [35, 70, 80, 40, 25, 55];
             const inputs = thresholdPanel.locator('.lido-number-input-field');
@@ -132,13 +133,51 @@ test.describe('V9-UX-001 configured journey state accessibility', () => {
                 await expect(thresholdPanel.getByText(label, { exact: true })).toBeVisible();
             }
 
+            const axePanel = page.locator('.card.card-body:has(> p.text-muted.small.mb-3)');
+            await expect(axePanel).toHaveCount(1);
+            await expect(axePanel).toBeVisible();
+            await expect(axePanel.getByText(/These cutoffs are compared against the strategy's overall score/)).toHaveCount(1);
+            expect(await thresholdPanel.evaluate((panel) => panel.matches('.card.card-body:has(> p.text-muted.small.mb-3)'))).toBe(true);
             await expectNoScopedViolations(page, '.card.card-body:has(> p.text-muted.small.mb-3)');
             const responses = await finishBoundary();
             const strategyReads = responses.filter((item) => item.path === '/api/v1/strategy');
             expect(strategyReads.length).toBeGreaterThan(0);
             for (const item of strategyReads) {
                 expect(item.status).toBe(200);
-                expect(item.body.data).toMatchObject({ id: 7, strategy_id: 7, name: 'Incomplete E2E Strategy' });
+                expect(item.body).toEqual({
+                    data: {
+                        strategy_id: 7,
+                        id: 7,
+                        name: 'Incomplete E2E Strategy',
+                        description: 'Saved but not executable',
+                        status: 'draft',
+                        is_enabled: false,
+                        setup_required: true,
+                        readiness: {
+                            requirements: [{
+                                code: 'eligibility_source_required',
+                                message: 'Add at least one eligibility Screener.',
+                            }],
+                        },
+                        indicators: [
+                            { key: 'momentum_score', category: 'Momentum', display_name: 'Momentum', label: 'Momentum', enabled: true, weight: 100 },
+                            { key: 'rsi_score', category: 'Momentum', display_name: 'RSI', label: 'RSI', enabled: false, weight: 0 },
+                        ],
+                        eligibility_sources: [],
+                        portfolio_rules: { horizon_calendar_days: null, first_entry_pct: 50, max_holdings: 10 },
+                        exit_strategy: {
+                            enabled: true,
+                            mode: 'any',
+                            rules: [
+                                { key: 'trend_weakening', display_name: 'Trend Weakening', description: 'Trend score falls below threshold.', enabled: true, value: 40 },
+                                { key: 'score_exit', display_name: 'Overall Score Exit', description: 'Strategy score at or below exit threshold.', enabled: true, value: 20 },
+                                { key: 'atr_stop', display_name: 'ATR Stop', description: 'Unrealized loss exceeds N × ATR%.', enabled: false, atr_multiple: 2 },
+                                { key: 'screener_exit', display_name: 'Screener Exit', description: 'Exit when the holding appears in the selected screener latest completed results.', enabled: false, screener_id: null, screener_name: null },
+                            ],
+                        },
+                        market_gates: [],
+                    },
+                });
             }
         });
 
@@ -147,15 +186,20 @@ test.describe('V9-UX-001 configured journey state accessibility', () => {
             await seedDeterministicJourney(page, `configured-state-a11y-rec02-${viewport.name}`);
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
             await installTosApiMocks(page, { recommendations: [OPEN_BUY_RECOMMENDATION] });
-            const finishBoundary = installReadOnlyBoundary(page, new Set([
+            const finishBoundary = await installReadOnlyBoundary(page, new Set([
                 '/api/v1/recommendations',
                 `/api/v1/recommendations/${OPEN_BUY_RECOMMENDATION.id}`,
             ]));
 
             await page.goto('/recommendations');
             await expect(page.getByRole('heading', { name: 'Recommendations' }).first()).toBeVisible();
-            await expect(page.getByRole('row').filter({ hasText: 'INFY' })).toBeVisible();
-            const reviewButton = page.getByRole('button', { name: 'Review', exact: true }).first();
+            const recommendationRow = page.getByRole('row').filter({
+                has: page.getByText('INFY', { exact: true }),
+            });
+            await expect(recommendationRow).toHaveCount(1);
+            await expect(recommendationRow).toBeVisible();
+            const reviewButton = recommendationRow.getByRole('button', { name: 'Review', exact: true });
+            await expect(reviewButton).toHaveCount(1);
             await tabTo(page, reviewButton, 'the recommendation Review action');
             await page.keyboard.press('Enter');
 
@@ -170,12 +214,18 @@ test.describe('V9-UX-001 configured journey state accessibility', () => {
             await page.keyboard.press('Enter');
             await expect(dialog).toBeHidden();
             const responses = await finishBoundary();
-            const listRead = responses.find((item) => item.path === '/api/v1/recommendations');
-            const detailRead = responses.find((item) => item.path === `/api/v1/recommendations/${OPEN_BUY_RECOMMENDATION.id}`);
-            expect(listRead).toMatchObject({ status: 200, body: { success: true } });
-            expect(listRead.body.data).toEqual([expect.objectContaining({ id: OPEN_BUY_RECOMMENDATION.id, symbol: 'INFY', status: 'pending_review' })]);
-            expect(detailRead).toMatchObject({ status: 200, body: { success: true } });
-            expect(detailRead.body.data).toMatchObject({ id: OPEN_BUY_RECOMMENDATION.id, symbol: 'INFY', status: 'pending_review' });
+            const listReads = responses.filter((item) => item.path === '/api/v1/recommendations');
+            const detailReads = responses.filter((item) => item.path === `/api/v1/recommendations/${OPEN_BUY_RECOMMENDATION.id}`);
+            expect(listReads.length).toBeGreaterThan(0);
+            expect(detailReads.length).toBeGreaterThan(0);
+            for (const item of listReads) {
+                expect(item.status).toBe(200);
+                expect(item.body).toEqual({ success: true, data: [OPEN_BUY_RECOMMENDATION], meta: {} });
+            }
+            for (const item of detailReads) {
+                expect(item.status).toBe(200);
+                expect(item.body).toEqual({ success: true, data: OPEN_BUY_RECOMMENDATION, meta: {} });
+            }
         });
     }
 });
