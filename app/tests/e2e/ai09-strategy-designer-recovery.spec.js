@@ -144,7 +144,9 @@ async function installBoundaries(page, mode) {
             const matchingCache = mode === 'cached-a-then-b' && sameJson(payload.inputs, INPUT_A);
             entry.expected = {
                 status: 200,
-                body: { data: { data: matchingCache ? CACHED_A : { status: 'missing' } } },
+                // The HTTP route returns the API's single `data` envelope; Axios
+                // supplies its own response.data wrapper to the component.
+                body: { data: matchingCache ? CACHED_A : { status: 'missing' } },
             };
         } else if (payload.refresh === true) {
             if (mode !== 'cached-a-then-b' || !sameJson(payload.inputs, INPUT_A)) invalidPayloads.push(payload);
