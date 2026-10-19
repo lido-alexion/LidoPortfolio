@@ -112,7 +112,7 @@ function createNetworkEvidence(page, allowedOrigin) {
     page.on('request', (request) => {
         const url = new URL(request.url());
         if (!['http:', 'https:'].includes(url.protocol)) return;
-        const receipt = { request, url, method: request.method(), response: null, failure: null };
+        const receipt = { request, url, method: request.method(), response: null };
         requests.push(receipt);
         byRequest.set(request, receipt);
     });
@@ -120,11 +120,6 @@ function createNetworkEvidence(page, allowedOrigin) {
         const receipt = byRequest.get(response.request());
         if (receipt) receipt.response = response;
     });
-    page.on('requestfailed', (request) => {
-        const receipt = byRequest.get(request);
-        if (receipt) receipt.failure = request.failure()?.errorText ?? 'unknown request failure';
-    });
-
     async function settleAllObserved() {
         let cursor = 0;
         while (cursor < requests.length) {
@@ -132,14 +127,10 @@ function createNetworkEvidence(page, allowedOrigin) {
             const batch = requests.slice(cursor, end);
             await Promise.all(batch.map(async (receipt) => {
                 const response = receipt.response ?? await receipt.request.response();
-                if (response) {
-                    receipt.response = response;
-                    expect(await response.finished(), `${receipt.method} ${new URL(receipt.request.url()).pathname} must finish cleanly`).toBeNull();
-                    await response.body();
-                    return;
-                }
-                receipt.failure = receipt.request.failure()?.errorText ?? receipt.failure;
-                expect(receipt.failure, `${receipt.method} ${new URL(receipt.request.url()).pathname} may fail only as an observed abort`).toBe('net::ERR_ABORTED');
+                expect(response, `${receipt.method} ${new URL(receipt.request.url()).pathname} must have a response receipt`).toBeTruthy();
+                receipt.response = response;
+                expect(await response.finished(), `${receipt.method} ${new URL(receipt.request.url()).pathname} must finish cleanly`).toBeNull();
+                await response.body();
             }));
             cursor = end;
         }
