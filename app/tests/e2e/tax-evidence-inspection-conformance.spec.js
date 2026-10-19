@@ -5,6 +5,9 @@ import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 const ORIGIN = 'http://127.0.0.1:4177';
 const FINANCIAL_YEAR = '2026-27';
 const DATE = '2026-10-01';
+// Eloquent's date cast serializes through Carbon::toJSON(); this app and its
+// locked Laravel/Carbon dependencies use UTC ISO-8601 with microseconds.
+const SERIALIZED_DATE = '2026-10-01T00:00:00.000000Z';
 const AMOUNT = '125';
 const REFERENCE = 'synthetic-bank-dividend-2026-10';
 const IMPORT_REFERENCE = 'broker-statement-import-771';
@@ -21,6 +24,42 @@ const preferences = {
     risk_free_rate: 0.04,
     annualization_days: 252,
 };
+
+function receiptKey(request) {
+    const url = new URL(request.url());
+    const query = url.pathname === '/api/analysis/preferences'
+        ? (url.searchParams.get('scope') === 'account' ? '?scope=account' : '')
+        : url.pathname === '/api/tax/report' || url.pathname === '/api/tax/exports/dividends'
+            ? `?financial_year=${url.searchParams.get('financial_year')}`
+            : url.pathname === '/api/stocks'
+                ? `?limit=${url.searchParams.get('limit')}`
+                : '';
+    return `${request.method()} ${url.pathname}${query}`;
+}
+
+const INITIAL_RECEIPT_KEYS = [
+    'GET /api/portfolios',
+    'GET /api/stocks?limit=100',
+    'GET /api/analysis/performance',
+    'GET /api/analysis/account-performance',
+    'GET /api/analysis/attribution',
+    `GET /api/tax/report?financial_year=${FINANCIAL_YEAR}`,
+    'GET /api/analysis/preferences',
+    'GET /api/analysis/preferences?scope=account',
+    'GET /api/analysis/benchmarks',
+];
+
+function isReceiptRelevant(request) {
+    const path = new URL(request.url()).pathname;
+    return path === '/api/portfolios'
+        || path === '/api/stocks'
+        || /^\/api\/analysis\/(performance|account-performance|attribution|preferences|benchmarks)$/.test(path)
+        || path === '/api/tax/report'
+        || path === '/api/tax/dividends'
+        || path === '/api/tax/dividends/import'
+        || path === '/api/tax/exports/dividends'
+        || path === '/api/ops/api-failures';
+}
 
 const taxReport = {
     financial_year: FINANCIAL_YEAR,
@@ -74,7 +113,7 @@ async function prepareTaxEvidenceJourney(page, viewport, mode) {
     const dividends = [{
         id: 640,
         stock_id: null,
-        received_on: '2026-09-15',
+        received_on: '2026-09-15T00:00:00.000000Z',
         amount: '25.0000',
         currency: 'INR',
         source: 'manual',
@@ -88,13 +127,29 @@ async function prepareTaxEvidenceJourney(page, viewport, mode) {
     const requests = new Map();
     const responses = [];
     const diagnosticReports = [];
+    const analysisReads = [];
     let commitOnNextAttempt = mode === 'commit-uncertain';
     let nextId = 701;
+    let nextRequestSequence = 0;
+    const expectedReceipts = new Map();
+    const verifiedReceipts = new Set();
+
+    function recordReceipt(request, status, kind, body) {
+        expectedReceipts.set(request, { status, kind, body: kind === 'json' ? structuredClone(body) : body });
+    }
+    function fulfillJson(route, body, status = 200) {
+        recordReceipt(route.request(), status, 'json', body);
+        return route.fulfill({ status, json: body });
+    }
+    function fulfillText(route, body, status, contentType, headers = {}) {
+        recordReceipt(route.request(), status, 'text', body);
+        return route.fulfill({ status, ...(contentType ? { contentType } : {}), headers, body });
+    }
 
     page.on('request', request => {
         const url = new URL(request.url());
         if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
-        const record = { request, url, terminal: false, response: null, failure: null };
+        const record = { request, url, sequence: nextRequestSequence++, terminal: false, response: null, failure: null };
         requests.set(request, record);
         if (url.origin !== ORIGIN) blocked.push(`origin ${url.origin}`);
     });
@@ -118,8 +173,17 @@ async function prepareTaxEvidenceJourney(page, viewport, mode) {
         }
     });
 
-    await page.route('**/api/portfolios', route => route.fulfill({ json: { data: [{ id: 1, name: 'Main', is_default: true }] } }));
-    await page.route('**/api/stocks?*', route => route.fulfill({ json: { data: [{ id: 42, symbol: 'TCS', name: 'Tata Consultancy Services' }] } }));
+    await page.route('**/api/portfolios', route => {
+        expect(route.request().method()).toBe('GET');
+        return fulfillJson(route, { data: [{ id: 1, name: 'Main', is_default: true }] });
+    });
+    await page.route('**/api/stocks?*', route => {
+        const request = route.request();
+        expect(request.method()).toBe('GET');
+        expect(request.headers()['x-profile-id']).toBe('1');
+        expect([...new URL(request.url()).searchParams.entries()]).toEqual([['limit', '100']]);
+        return fulfillJson(route, { data: [{ id: 42, symbol: 'TCS', name: 'Tata Consultancy Services' }] });
+    });
     await page.route(/\/api\/(analysis\/(performance|account-performance|attribution|preferences|benchmarks)|tax\/report)(\?.*)?$/, route => {
         const request = route.request();
         const url = new URL(request.url());
@@ -129,8 +193,14 @@ async function prepareTaxEvidenceJourney(page, viewport, mode) {
             expect([...url.searchParams.entries()]).toEqual([['financial_year', FINANCIAL_YEAR]]);
         } else if (url.pathname === '/api/analysis/preferences') {
             expect([...url.searchParams.entries()]).toEqual(url.searchParams.has('scope') ? [['scope', 'account']] : []);
-        } else if (url.pathname === '/api/analysis/performance' || url.pathname === '/api/analysis/account-performance') {
+        } else if (['/api/analysis/performance', '/api/analysis/account-performance', '/api/analysis/attribution'].includes(url.pathname)) {
             expect([...url.searchParams.keys()].sort()).toEqual(['from', 'to']);
+            const from = url.searchParams.get('from');
+            const to = url.searchParams.get('to');
+            expect(from).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+            expect(to).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+            expect(from < to).toBe(true);
+            analysisReads.push({ path: url.pathname, from, to });
         } else {
             expect([...url.searchParams.entries()]).toEqual([]);
         }
@@ -157,7 +227,7 @@ async function prepareTaxEvidenceJourney(page, viewport, mode) {
                             reportReads.push({ financialYear: url.searchParams.get('financial_year'), dividendIds: dividends.map(row => row.id), report });
                             return report;
                         })();
-        return route.fulfill({ json: { data } });
+        return fulfillJson(route, { data });
     });
 
     await page.route('**/api/tax/dividends', route => {
@@ -169,16 +239,16 @@ async function prepareTaxEvidenceJourney(page, viewport, mode) {
         attempts.push(structuredClone(body));
         if (attempts.length === 1) {
             if (commitOnNextAttempt) {
-                dividends.push({ id: nextId++, stock_id: null, received_on: DATE, amount: '125.0000', currency: 'INR', source: 'manual', source_reference: REFERENCE });
+                dividends.push({ id: nextId++, stock_id: null, received_on: SERIALIZED_DATE, amount: '125.0000', currency: 'INR', source: 'manual', source_reference: REFERENCE });
             }
-            return route.fulfill({ status: 503, json: { message: 'Synthetic dividend write could not be confirmed.' } });
+            return fulfillJson(route, { message: 'Synthetic dividend write could not be confirmed.' }, 503);
         }
         expect(mode).toBe('not-committed-then-retried');
         expect(attempts).toHaveLength(2);
         expect(dividends.some(row => row.source_reference === REFERENCE)).toBe(false);
-        const row = { id: nextId++, stock_id: null, received_on: DATE, amount: '125.0000', currency: 'INR', source: 'manual', source_reference: REFERENCE };
+        const row = { id: nextId++, stock_id: null, received_on: SERIALIZED_DATE, amount: '125.0000', currency: 'INR', source: 'manual', source_reference: REFERENCE };
         dividends.push(row);
-        return route.fulfill({ status: 201, json: { data: row } });
+        return fulfillJson(route, { data: { ...row, received_on: SERIALIZED_DATE, stock: null } }, 201);
     });
 
     await page.route('**/api/tax/dividends/import', route => {
@@ -194,19 +264,19 @@ async function prepareTaxEvidenceJourney(page, viewport, mode) {
         if (!dryRun) expect(body).toContain('name="dry_run"\r\n\r\n0');
         imports.push({ dryRun, body });
         if (dryRun) {
-            return route.fulfill({ json: { data: {
+            return fulfillJson(route, { data: {
                 definition_version: 'generic-dividend-csv.v1', dry_run: true, valid: true,
                 candidate_rows: 1, duplicates: 0, imported: 0, errors: [],
-            } } });
+            } });
         }
         expect(mode).toBe('import-uncertain');
         expect(imports.filter(item => !item.dryRun)).toHaveLength(1);
         const row = {
-            id: nextId++, stock_id: 42, received_on: '2026-10-02', amount: '37.5000',
+            id: nextId++, stock_id: 42, received_on: '2026-10-02T00:00:00.000000Z', amount: '37.5000',
             currency: 'INR', source: 'broker_statement', source_reference: IMPORT_REFERENCE,
         };
         dividends.push(row);
-        return route.fulfill({ status: 503, json: { message: 'Synthetic dividend import could not be confirmed.' } });
+        return fulfillJson(route, { message: 'Synthetic dividend import could not be confirmed.' }, 503);
     });
 
     await page.route('**/api/tax/exports/dividends?*', route => {
@@ -218,25 +288,21 @@ async function prepareTaxEvidenceJourney(page, viewport, mode) {
         const body = dividendExport(dividends);
         const filename = `stox-tax-dividends-${FINANCIAL_YEAR}-20261019-100000.csv`;
         exports.push({ rows: structuredClone(dividends), body, filename, query: url.search });
-        return route.fulfill({
-            status: 200,
-            contentType: 'text/csv; charset=UTF-8',
-            headers: {
+        return fulfillText(route, body, 200, 'text/csv; charset=UTF-8', {
                 'content-disposition': `attachment; filename="${filename}"`,
                 'cache-control': 'private, no-store',
                 'x-content-type-options': 'nosniff',
-            },
-            body,
         });
     });
 
     await page.route('**/api/ops/api-failures', route => {
         const body = route.request().postDataJSON();
         expect(route.request().method()).toBe('POST');
+        expect(route.request().headers()['x-profile-id']).toBe('1');
         expect(body).toMatchObject({ method: 'post', status: 503 });
         expect(['/api/tax/dividends', '/api/tax/dividends/import']).toContain(body.endpoint);
         diagnosticReports.push(body);
-        return route.fulfill({ status: 204, body: '' });
+        return fulfillText(route, '', 204);
     });
 
     await page.route('**/*', route => {
@@ -258,6 +324,41 @@ async function prepareTaxEvidenceJourney(page, viewport, mode) {
         return route.fallback();
     });
 
+    async function settlePhase(startSequence = 0, requiredKeys = []) {
+        await expect.poll(() => {
+            const phaseReceipts = [...requests.values()]
+                .filter(record => record.sequence >= startSequence && isReceiptRelevant(record.request))
+                .map(record => record.request);
+            const keys = new Set(phaseReceipts.map(receiptKey));
+            return requiredKeys.every(key => keys.has(key))
+                && phaseReceipts.every(request => {
+                    const record = requests.get(request);
+                    return expectedReceipts.has(request) && record?.terminal === true && record.response !== null;
+                });
+        }).toBe(true);
+
+        const phaseReceipts = [...requests.values()]
+            .filter(record => record.sequence >= startSequence && isReceiptRelevant(record.request))
+            .map(record => record.request);
+        for (const request of phaseReceipts) {
+            if (verifiedReceipts.has(request)) continue;
+            const record = requests.get(request);
+            const expected = expectedReceipts.get(request);
+            expect(record, `${request.method()} ${record?.url.pathname} must have an observed request receipt`).toBeDefined();
+            expect(record.failure).toBeNull();
+            expect(record.response, `${request.method()} ${record.url.pathname} must receive its HTTP response`).not.toBeNull();
+            expect(record.response.status()).toBe(expected.status);
+            expect(await record.response.finished()).toBeNull();
+            const responseBody = await record.response.body();
+            if (expected.kind === 'json') {
+                expect(JSON.parse(responseBody.toString('utf8'))).toEqual(expected.body);
+            } else {
+                expect(responseBody.toString('utf8')).toBe(expected.body);
+            }
+            verifiedReceipts.add(request);
+        }
+    }
+
     return {
         attempts,
         blocked,
@@ -268,11 +369,23 @@ async function prepareTaxEvidenceJourney(page, viewport, mode) {
         reportReads,
         requests,
         responses,
+        startPhase: () => nextRequestSequence,
+        settlePhase,
+        assertAnalysisRange: async (page) => {
+            const from = await page.getByLabel('Performance from', { exact: true }).inputValue();
+            const to = await page.getByLabel('Performance to', { exact: true }).inputValue();
+            const paths = new Set(analysisReads.map(read => read.path));
+            expect([...paths].sort()).toEqual([
+                '/api/analysis/performance',
+                '/api/analysis/account-performance',
+                '/api/analysis/attribution',
+            ].sort());
+            for (const read of analysisReads) expect({ from: read.from, to: read.to }).toEqual({ from, to });
+        },
         finish: async () => {
             await expect.poll(() => [...requests.values()].every(record => record.terminal)).toBe(true);
-            for (const response of responses) {
-                expect(await response.finished()).toBeNull();
-            }
+            await settlePhase(0);
+            for (const response of responses) expect(await response.finished()).toBeNull();
             for (const record of requests.values()) expect(record.failure).toBeNull();
             for (const { request, url } of requests.values()) {
                 expect(url.origin).toBe(ORIGIN);
@@ -287,10 +400,12 @@ async function prepareTaxEvidenceJourney(page, viewport, mode) {
 }
 
 async function readDividendExport(page, fixture) {
+    const phase = fixture.startPhase();
     const responsePromise = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/tax/exports/dividends');
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export dividends', exact: true }).click();
     const [response, download] = await Promise.all([responsePromise, downloadPromise]);
+    await fixture.settlePhase(phase, [`GET /api/tax/exports/dividends?financial_year=${FINANCIAL_YEAR}`]);
     expect(response.status()).toBe(200);
     expect(await response.finished()).toBeNull();
     const responseBytes = await response.body();
@@ -302,7 +417,12 @@ async function readDividendExport(page, fixture) {
     expect(download.suggestedFilename()).toBe(fixture.filename);
     expect(downloadedBytes).toEqual(responseBytes);
     expect(responseBytes.toString('utf8')).toBe(fixture.body);
-    expect(response.headers()['content-disposition']).toBe(`attachment; filename="${fixture.filename}"`);
+    expect(response.headers()).toMatchObject({
+        'content-type': 'text/csv; charset=UTF-8',
+        'content-disposition': `attachment; filename="${fixture.filename}"`,
+        'cache-control': 'private, no-store',
+        'x-content-type-options': 'nosniff',
+    });
     return responseBytes.toString('utf8');
 }
 
@@ -318,7 +438,10 @@ for (const viewport of VIEWPORTS) {
         test('inspects an existing dividend after an uncertain save before deciding not to repeat it', async ({ page }, testInfo) => {
             journeyId(testInfo, 'E2E-27');
             const fixture = await prepareTaxEvidenceJourney(page, viewport, 'commit-uncertain');
+            const initialPhase = fixture.startPhase();
             await page.goto('/portfolio/performance-tax');
+            await fixture.settlePhase(initialPhase, INITIAL_RECEIPT_KEYS);
+            await fixture.assertAnalysisRange(page);
             const panel = page.getByRole('region', { name: 'Record tax evidence', exact: true });
             await expect(panel).toBeVisible();
             await expect(page.getByRole('heading', { name: 'Account Tax · FY 2026-27', exact: true })).toBeVisible();
@@ -328,9 +451,11 @@ for (const viewport of VIEWPORTS) {
             await panel.getByLabel('Dividend date', { exact: true }).fill(DATE);
             await panel.getByLabel('Dividend amount', { exact: true }).fill(AMOUNT);
             await panel.getByLabel('Dividend reference', { exact: true }).fill(REFERENCE);
+            const failedSavePhase = fixture.startPhase();
             const failedSavePromise = waitForManualDividendResponse(page);
             await panel.getByRole('button', { name: 'Record dividend', exact: true }).click();
             const failedSave = await failedSavePromise;
+            await fixture.settlePhase(failedSavePhase, ['POST /api/tax/dividends']);
             expect(failedSave.status()).toBe(503);
             expect(await failedSave.finished()).toBeNull();
             expect(await failedSave.json()).toEqual({ message: 'Synthetic dividend write could not be confirmed.' });
@@ -343,7 +468,7 @@ for (const viewport of VIEWPORTS) {
             expect(fixture.dividends.filter(row => row.source_reference === REFERENCE)).toHaveLength(1);
 
             const currentExport = fixture.exports.length;
-            const expectedRow = { id: 701, stock_id: null, received_on: DATE, amount: '125.0000', currency: 'INR', source: 'manual', source_reference: REFERENCE };
+            const expectedRow = { id: 701, stock_id: null, received_on: SERIALIZED_DATE, amount: '125.0000', currency: 'INR', source: 'manual', source_reference: REFERENCE };
             const expected = dividendExport([fixture.dividends[0], expectedRow]);
             await readDividendExport(page, { body: expected, filename: `stox-tax-dividends-${FINANCIAL_YEAR}-20261019-100000.csv` });
             expect(fixture.exports).toHaveLength(currentExport + 1);
@@ -357,7 +482,10 @@ for (const viewport of VIEWPORTS) {
         test('checks the exact candidate is absent before an explicit retry, then verifies one exported record', async ({ page }, testInfo) => {
             journeyId(testInfo, 'E2E-27');
             const fixture = await prepareTaxEvidenceJourney(page, viewport, 'not-committed-then-retried');
+            const initialPhase = fixture.startPhase();
             await page.goto('/portfolio/performance-tax');
+            await fixture.settlePhase(initialPhase, INITIAL_RECEIPT_KEYS);
+            await fixture.assertAnalysisRange(page);
             const panel = page.getByRole('region', { name: 'Record tax evidence', exact: true });
             await expect(panel).toBeVisible();
             await expect(page.getByRole('heading', { name: 'Account Tax · FY 2026-27', exact: true })).toBeVisible();
@@ -365,9 +493,11 @@ for (const viewport of VIEWPORTS) {
             await panel.getByLabel('Dividend date', { exact: true }).fill(DATE);
             await panel.getByLabel('Dividend amount', { exact: true }).fill(AMOUNT);
             await panel.getByLabel('Dividend reference', { exact: true }).fill(REFERENCE);
+            const failedSavePhase = fixture.startPhase();
             const failedSavePromise = waitForManualDividendResponse(page);
             await panel.getByRole('button', { name: 'Record dividend', exact: true }).click();
             const failedSave = await failedSavePromise;
+            await fixture.settlePhase(failedSavePhase, ['POST /api/tax/dividends']);
             expect(failedSave.status()).toBe(503);
             expect(await failedSave.finished()).toBeNull();
             expect(await failedSave.json()).toEqual({ message: 'Synthetic dividend write could not be confirmed.' });
@@ -379,33 +509,40 @@ for (const viewport of VIEWPORTS) {
             const absentBody = dividendExport(fixture.dividends);
             await readDividendExport(page, { body: absentBody, filename: `stox-tax-dividends-${FINANCIAL_YEAR}-20261019-100000.csv` });
             expect(fixture.exports.at(-1).rows).toEqual([{
-                id: 640, stock_id: null, received_on: '2026-09-15', amount: '25.0000', currency: 'INR',
+                id: 640, stock_id: null, received_on: '2026-09-15T00:00:00.000000Z', amount: '25.0000', currency: 'INR',
                 source: 'manual', source_reference: 'unrelated-existing-evidence',
             }]);
-            expect(absentBody).toContain('640,,2026-09-15,25.0000,INR,manual,unrelated-existing-evidence');
+            expect(absentBody).toContain('640,,2026-09-15T00:00:00.000000Z,25.0000,INR,manual,unrelated-existing-evidence');
             expect(absentBody).not.toContain(REFERENCE);
 
+            const savedPhase = fixture.startPhase();
+            const refreshedReportPromise = page.waitForResponse(response => response.request().method() === 'GET'
+                && new URL(response.url()).pathname === '/api/tax/report'
+                && new URL(response.url()).searchParams.get('financial_year') === FINANCIAL_YEAR);
             const savedPromise = waitForManualDividendResponse(page);
             await panel.getByRole('button', { name: 'Record dividend', exact: true }).click();
             const saved = await savedPromise;
+            const refreshedReportResponse = await refreshedReportPromise;
+            await fixture.settlePhase(savedPhase, ['POST /api/tax/dividends', `GET /api/tax/report?financial_year=${FINANCIAL_YEAR}`]);
             expect(saved.status()).toBe(201);
             expect(await saved.finished()).toBeNull();
             expect(await saved.json()).toEqual({ data: {
-                id: 701, stock_id: null, received_on: DATE, amount: '125.0000', currency: 'INR',
-                source: 'manual', source_reference: REFERENCE,
+                id: 701, stock_id: null, received_on: SERIALIZED_DATE, amount: '125.0000', currency: 'INR',
+                source: 'manual', source_reference: REFERENCE, stock: null,
             } });
             await expect(panel.getByRole('alert')).toHaveCount(0);
             await expect.poll(() => fixture.attempts.length).toBe(2);
             await expect.poll(() => fixture.dividends.filter(row => row.source_reference === REFERENCE).length).toBe(1);
             expect(fixture.attempts[1]).toEqual(fixture.attempts[0]);
-            await expect.poll(() => fixture.reportReads.some(read => read.dividendIds.includes(701))).toBe(true);
+            expect(refreshedReportResponse.status()).toBe(200);
+            expect(fixture.reportReads.at(-1).dividendIds).toContain(701);
             expect(fixture.reportReads.at(-1).financialYear).toBe(FINANCIAL_YEAR);
             expect(fixture.reportReads.at(-1).report.summary.dividend_income).toBe(150);
             await expect(page.getByText('₹ 150.00', { exact: true })).toBeVisible();
 
-            const savedRow = { id: 701, stock_id: null, received_on: DATE, amount: '125.0000', currency: 'INR', source: 'manual', source_reference: REFERENCE };
+            const savedRow = { id: 701, stock_id: null, received_on: SERIALIZED_DATE, amount: '125.0000', currency: 'INR', source: 'manual', source_reference: REFERENCE };
             const savedBody = dividendExport([...fixture.dividends]);
-            expect(savedBody).toContain('701,,2026-10-01,125.0000,INR,manual,synthetic-bank-dividend-2026-10');
+            expect(savedBody).toContain(`701,,${SERIALIZED_DATE},125.0000,INR,manual,synthetic-bank-dividend-2026-10`);
             await readDividendExport(page, { body: savedBody, filename: `stox-tax-dividends-${FINANCIAL_YEAR}-20261019-100000.csv` });
             expect(fixture.exports.at(-1).rows).toEqual([fixture.dividends[0], savedRow]);
             expect(fixture.dividends.filter(row => row.source_reference === REFERENCE)).toHaveLength(1);
@@ -417,7 +554,10 @@ for (const viewport of VIEWPORTS) {
         test('inspects existing rows after an uncertain validated CSV import without applying twice', async ({ page }, testInfo) => {
             journeyId(testInfo, 'E2E-27');
             const fixture = await prepareTaxEvidenceJourney(page, viewport, 'import-uncertain');
+            const initialPhase = fixture.startPhase();
             await page.goto('/portfolio/performance-tax');
+            await fixture.settlePhase(initialPhase, INITIAL_RECEIPT_KEYS);
+            await fixture.assertAnalysisRange(page);
             const panel = page.getByRole('region', { name: 'Record tax evidence', exact: true });
             await expect(panel).toBeVisible();
             await expect(page.getByRole('heading', { name: 'Account Tax · FY 2026-27', exact: true })).toBeVisible();
@@ -427,16 +567,24 @@ for (const viewport of VIEWPORTS) {
                 mimeType: 'text/csv',
                 buffer: Buffer.from('date,symbol,amount,reference\n2026-10-02,TCS,37.50,broker-statement-import-771\n'),
             });
+            const previewPhase = fixture.startPhase();
+            const previewPromise = page.waitForResponse(response => response.request().method() === 'POST'
+                && new URL(response.url()).pathname === '/api/tax/dividends/import');
             await panel.getByRole('button', { name: 'Preview', exact: true }).click();
+            const previewResponse = await previewPromise;
+            await fixture.settlePhase(previewPhase, ['POST /api/tax/dividends/import']);
+            expect(previewResponse.status()).toBe(200);
             await expect(panel).toContainText('Valid true · candidates 1 · duplicates 0 · imported 0');
             expect(fixture.imports.map(item => item.dryRun)).toEqual([true]);
             expect(fixture.dividends.some(row => row.source_reference === IMPORT_REFERENCE)).toBe(false);
             await expect(panel.getByRole('button', { name: 'Import validated rows', exact: true })).toBeEnabled();
 
+            const failedImportPhase = fixture.startPhase();
             const failedImportPromise = page.waitForResponse(response => response.request().method() === 'POST'
                 && new URL(response.url()).pathname === '/api/tax/dividends/import');
             await panel.getByRole('button', { name: 'Import validated rows', exact: true }).click();
             const failedImport = await failedImportPromise;
+            await fixture.settlePhase(failedImportPhase, ['POST /api/tax/dividends/import']);
             expect(failedImport.status()).toBe(503);
             expect(await failedImport.finished()).toBeNull();
             expect(await failedImport.json()).toEqual({ message: 'Synthetic dividend import could not be confirmed.' });
@@ -446,13 +594,13 @@ for (const viewport of VIEWPORTS) {
             expect(fixture.dividends.filter(row => row.source_reference === IMPORT_REFERENCE)).toHaveLength(1);
 
             const importedRow = {
-                id: 701, stock_id: 42, received_on: '2026-10-02', amount: '37.5000', currency: 'INR',
+                id: 701, stock_id: 42, received_on: '2026-10-02T00:00:00.000000Z', amount: '37.5000', currency: 'INR',
                 source: 'broker_statement', source_reference: IMPORT_REFERENCE,
             };
             const expected = dividendExport([fixture.dividends[0], importedRow]);
             await readDividendExport(page, { body: expected, filename: `stox-tax-dividends-${FINANCIAL_YEAR}-20261019-100000.csv` });
             expect(fixture.exports.at(-1).rows).toEqual([fixture.dividends[0], importedRow]);
-            expect(fixture.exports.at(-1).body).toContain('701,42,2026-10-02,37.5000,INR,broker_statement,broker-statement-import-771');
+            expect(fixture.exports.at(-1).body).toContain('701,42,2026-10-02T00:00:00.000000Z,37.5000,INR,broker_statement,broker-statement-import-771');
             expect(fixture.imports.map(item => item.dryRun)).toEqual([true, false]);
             expect(fixture.dividends.filter(row => row.source_reference === IMPORT_REFERENCE)).toHaveLength(1);
             await fixture.finish();
