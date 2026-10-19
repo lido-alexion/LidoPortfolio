@@ -470,7 +470,8 @@ for (const viewport of VIEWPORTS) {
             const currentExport = fixture.exports.length;
             const expectedRow = { id: 701, stock_id: null, received_on: SERIALIZED_DATE, amount: '125.0000', currency: 'INR', source: 'manual', source_reference: REFERENCE };
             const expected = dividendExport([fixture.dividends[0], expectedRow]);
-            await readDividendExport(page, { body: expected, filename: `stox-tax-dividends-${FINANCIAL_YEAR}-20261019-100000.csv` });
+            const committedExport = await readDividendExport(page, { body: expected, filename: `stox-tax-dividends-${FINANCIAL_YEAR}-20261019-100000.csv` });
+            expect(committedExport.split(`701,,${SERIALIZED_DATE},125.0000,INR,manual,${REFERENCE}`)).toHaveLength(2);
             expect(fixture.exports).toHaveLength(currentExport + 1);
             expect(fixture.exports.at(-1).rows).toEqual([fixture.dividends[0], expectedRow]);
             expect(fixture.attempts).toHaveLength(1);
@@ -507,13 +508,13 @@ for (const viewport of VIEWPORTS) {
             expect(fixture.dividends.filter(row => row.source_reference === REFERENCE)).toHaveLength(0);
 
             const absentBody = dividendExport(fixture.dividends);
-            await readDividendExport(page, { body: absentBody, filename: `stox-tax-dividends-${FINANCIAL_YEAR}-20261019-100000.csv` });
+            const absentExport = await readDividendExport(page, { body: absentBody, filename: `stox-tax-dividends-${FINANCIAL_YEAR}-20261019-100000.csv` });
             expect(fixture.exports.at(-1).rows).toEqual([{
                 id: 640, stock_id: null, received_on: '2026-09-15T00:00:00.000000Z', amount: '25.0000', currency: 'INR',
                 source: 'manual', source_reference: 'unrelated-existing-evidence',
             }]);
-            expect(absentBody).toContain('640,,2026-09-15T00:00:00.000000Z,25.0000,INR,manual,unrelated-existing-evidence');
-            expect(absentBody).not.toContain(REFERENCE);
+            expect(absentExport).toContain('640,,2026-09-15T00:00:00.000000Z,25.0000,INR,manual,unrelated-existing-evidence');
+            expect(absentExport).not.toContain(REFERENCE);
 
             const savedPhase = fixture.startPhase();
             const refreshedReportPromise = page.waitForResponse(response => response.request().method() === 'GET'
@@ -543,7 +544,9 @@ for (const viewport of VIEWPORTS) {
             const savedRow = { id: 701, stock_id: null, received_on: SERIALIZED_DATE, amount: '125.0000', currency: 'INR', source: 'manual', source_reference: REFERENCE };
             const savedBody = dividendExport([...fixture.dividends]);
             expect(savedBody).toContain(`701,,${SERIALIZED_DATE},125.0000,INR,manual,synthetic-bank-dividend-2026-10`);
-            await readDividendExport(page, { body: savedBody, filename: `stox-tax-dividends-${FINANCIAL_YEAR}-20261019-100000.csv` });
+            const savedExport = await readDividendExport(page, { body: savedBody, filename: `stox-tax-dividends-${FINANCIAL_YEAR}-20261019-100000.csv` });
+            const savedRowLine = `701,,${SERIALIZED_DATE},125.0000,INR,manual,${REFERENCE}`;
+            expect(savedExport.split(savedRowLine)).toHaveLength(2);
             expect(fixture.exports.at(-1).rows).toEqual([fixture.dividends[0], savedRow]);
             expect(fixture.dividends.filter(row => row.source_reference === REFERENCE)).toHaveLength(1);
             expect(fixture.attempts).toHaveLength(2);
@@ -598,9 +601,9 @@ for (const viewport of VIEWPORTS) {
                 source: 'broker_statement', source_reference: IMPORT_REFERENCE,
             };
             const expected = dividendExport([fixture.dividends[0], importedRow]);
-            await readDividendExport(page, { body: expected, filename: `stox-tax-dividends-${FINANCIAL_YEAR}-20261019-100000.csv` });
+            const importedExport = await readDividendExport(page, { body: expected, filename: `stox-tax-dividends-${FINANCIAL_YEAR}-20261019-100000.csv` });
             expect(fixture.exports.at(-1).rows).toEqual([fixture.dividends[0], importedRow]);
-            expect(fixture.exports.at(-1).body).toContain('701,42,2026-10-02T00:00:00.000000Z,37.5000,INR,broker_statement,broker-statement-import-771');
+            expect(importedExport.split('701,42,2026-10-02T00:00:00.000000Z,37.5000,INR,broker_statement,broker-statement-import-771')).toHaveLength(2);
             expect(fixture.imports.map(item => item.dryRun)).toEqual([true, false]);
             expect(fixture.dividends.filter(row => row.source_reference === IMPORT_REFERENCE)).toHaveLength(1);
             await fixture.finish();
