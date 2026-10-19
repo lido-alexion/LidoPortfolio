@@ -1,6 +1,7 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
+import { getActivePortfolioId } from '../portfolio/activePortfolioStorage';
 import { DataTableCard } from '../components/DataTable';
 import NumberInput from '../components/NumberInput';
 import AIStrategyPromptBuilder from '../components/strategy/AIStrategyPromptBuilder';
@@ -213,8 +214,10 @@ export default function StrategyPage() {
     const strategyId = searchParams.get('strategy_id') || '';
     const screenerCreatedId = searchParams.get(STRATEGY_SCREENER_CREATED_PARAM) || '';
     const screenerReturn = searchParams.get(STRATEGY_SCREENER_RETURN_PARAM) || '';
+    const strategyReadSequence = useRef(0);
     const [section, setSection] = useState('general');
     const [saving, setSaving] = useState(false);
+    const [strategyLoadPending, setStrategyLoadPending] = useState(true);
     const [availableScreeners, setAvailableScreeners] = useState([]);
     const [strategyOptions, setStrategyOptions] = useState([]);
     const [meta, setMeta] = useState({
@@ -227,53 +230,81 @@ export default function StrategyPage() {
     const [lifecycleBusy, setLifecycleBusy] = useState(false);
 
     const { loading, reload: load } = useApiGet({
-        deps: [strategyId, screenerCreatedId, screenerReturn],
+        // Return parameters are consumed by the current load. Removing them from
+        // the URL must not start a second server hydration over the restored draft.
+        deps: [strategyId],
         errorFallback: 'Failed to load strategy',
         request: async () => {
-            const [{ data }, screenersRes, indexesRes, registryRes] = await Promise.all([
-                api.get('/v1/strategy', {
-                    params: strategyId ? { strategy_id: strategyId } : {},
-                    skipErrorToast: true,
-                }),
-                api.get('/screeners', { skipErrorToast: true }).catch(() => ({ data: [] })),
-                api.get('/indexes', { skipErrorToast: true }).catch(() => ({ data: {} })),
-                api.get('/v1/strategy-registry', { skipErrorToast: true }).catch(() => ({ data: { data: [] } })),
-            ]);
-            applyPayload(data?.data || {}, setMeta, setConfig);
-            const rows = Array.isArray(registryRes.data?.data) ? registryRes.data.data : [];
-            setStrategyOptions(rows);
-            const list = Array.isArray(screenersRes?.data?.data)
-                ? screenersRes.data.data
-                : (Array.isArray(screenersRes?.data) ? screenersRes.data : []);
-            setAvailableScreeners(list.filter((screener) => screener.artifact_status !== 'archived'));
-            setBenchmarkIndexes(indexesRes?.data?.data?.indexes || []);
+            const requestSequence = ++strategyReadSequence.current;
+            setStrategyLoadPending(true);
+            try {
+                const [{ data }, screenersRes, indexesRes, registryRes] = await Promise.all([
+                    api.get('/v1/strategy', {
+                        params: strategyId ? { strategy_id: strategyId } : {},
+                        skipErrorToast: true,
+                    }),
+                    api.get('/screeners', { skipErrorToast: true }).catch(() => ({ data: [] })),
+                    api.get('/indexes', { skipErrorToast: true }).catch(() => ({ data: {} })),
+                    api.get('/v1/strategy-registry', { skipErrorToast: true }).catch(() => ({ data: { data: [] } })),
+                ]);
+                if (requestSequence !== strategyReadSequence.current) return data?.data;
 
-            const effectiveStrategyId = strategyId || String(data?.data?.strategy_id ?? data?.data?.id ?? '');
-            const shouldRestoreDraft = Boolean(screenerCreatedId)
-                || screenerReturn === STRATEGY_SCREENER_RETURN_CANCEL;
-            const draft = shouldRestoreDraft ? readStrategyScreenerReturnDraft() : null;
-            if (draft && String(draft.strategyId) === String(effectiveStrategyId)) {
-                setMeta(draft.meta);
-                let nextConfig = draft.config;
-                if (screenerCreatedId) {
-                    const scr = list.find((s) => Number(s.id) === Number(screenerCreatedId));
-                    nextConfig = configWithEligibilityScreener(nextConfig, screenerCreatedId, {
-                        name: scr?.name,
-                        description: scr?.description,
-                    });
-                    showToast(`“${scr?.name || 'Screener'}” added to eligibility sources.`, 'success');
-                } else {
-                    showToast('Returned to Strategy editor with your unsaved changes.', 'info');
+                const payload = data?.data || {};
+                applyPayload(payload, setMeta, setConfig);
+                const rows = Array.isArray(registryRes.data?.data) ? registryRes.data.data : [];
+                setStrategyOptions(rows);
+                const list = Array.isArray(screenersRes?.data?.data)
+                    ? screenersRes.data.data
+                    : (Array.isArray(screenersRes?.data) ? screenersRes.data : []);
+                setAvailableScreeners(list.filter((screener) => screener.artifact_status !== 'archived'));
+                setBenchmarkIndexes(indexesRes?.data?.data?.indexes || []);
+
+                const effectiveStrategyId = strategyId || String(payload.strategy_id ?? payload.id ?? '');
+                const shouldRestoreDraft = Boolean(screenerCreatedId)
+                    || screenerReturn === STRATEGY_SCREENER_RETURN_CANCEL;
+                const draft = shouldRestoreDraft ? readStrategyScreenerReturnDraft() : null;
+                const activePortfolioId = getActivePortfolioId();
+                const draftMatchesCurrentContext = draft
+                    && String(draft.strategyId) === String(effectiveStrategyId)
+                    && draft.portfolioId != null
+                    && String(draft.portfolioId) === String(activePortfolioId);
+
+                if (shouldRestoreDraft && draft && !draftMatchesCurrentContext) {
+                    clearStrategyScreenerReturnDraft();
                 }
-                setConfig(nextConfig);
-                if (draft.section) setSection(draft.section);
-                clearStrategyScreenerReturnDraft();
-                if (effectiveStrategyId) {
+                if (draftMatchesCurrentContext) {
+                    setMeta({
+                        ...draft.meta,
+                        id: payload.id ?? payload.strategy_id ?? draft.meta.id,
+                        status: payload.status,
+                        setup_required: Boolean(payload.setup_required),
+                        readiness: payload.readiness || null,
+                        reusable_artifact_uuid: payload.reusable_artifact_uuid,
+                        compatibility_read_only: Boolean(payload.compatibility_read_only),
+                    });
+                    let nextConfig = draft.config;
+                    if (screenerCreatedId) {
+                        const scr = list.find((s) => Number(s.id) === Number(screenerCreatedId));
+                        nextConfig = configWithEligibilityScreener(nextConfig, screenerCreatedId, {
+                            name: scr?.name,
+                            description: scr?.description,
+                        });
+                        showToast(`“${scr?.name || 'Screener'}” added to eligibility sources.`, 'success');
+                    } else {
+                        showToast('Returned to Strategy editor with your unsaved changes.', 'info');
+                    }
+                    setConfig(nextConfig);
+                    if (draft.section) setSection(draft.section);
+                    clearStrategyScreenerReturnDraft();
+                }
+                if (shouldRestoreDraft && effectiveStrategyId) {
                     navigate(`/strategy?strategy_id=${encodeURIComponent(effectiveStrategyId)}`, { replace: true });
                 }
-            }
 
-            return data?.data;
+                return data?.data;
+            } finally {
+                if (requestSequence === strategyReadSequence.current) setStrategyLoadPending(false);
+            }
         },
     });
 
@@ -872,6 +903,7 @@ export default function StrategyPage() {
         }
         writeStrategyScreenerReturnDraft({
             strategyId: sid,
+            portfolioId: getActivePortfolioId(),
             meta,
             config,
             section: 'eligibility',
@@ -881,7 +913,7 @@ export default function StrategyPage() {
         );
     };
 
-    if (loading) {
+    if (loading || strategyLoadPending) {
         return <div className="container-fluid py-3 text-muted">Loading strategy…</div>;
     }
 
