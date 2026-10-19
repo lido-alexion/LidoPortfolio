@@ -315,6 +315,12 @@ test.describe('SCR-08 runtime screener archive conformance', () => {
         test(`SCR-08 archives an independent runtime screener and keeps its saved run inspectable (${viewport.name})`, async ({ page }, testInfo) => {
             journeyId(testInfo, 'SCR-08');
             const { evidence, record, savedRun, row, pathForRecord } = await prepareRuntimeArchive(page, viewport, 52, 'eligible');
+            await openSavedHistory(page, record, savedRun, evidence);
+            await page.getByRole('link', { name: '← Screeners', exact: true }).click();
+            await evidence.settleAllObserved();
+            await expect(row.getByRole('link', { name: 'Edit', exact: true })).toBeVisible();
+            await expect(row.getByRole('button', { name: 'Run', exact: true })).toBeEnabled();
+
             const deleteResponse = page.waitForResponse((response) => (
                 response.request().method() === 'DELETE'
                 && new URL(response.url()).pathname === pathForRecord
