@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
-import { handleApiFailureDiagnosticForPage, isApiFailureDiagnosticRequest, registerApiFailureDiagnosticFixtureHooks } from './apiFailureDiagnosticBoundary.js';
+import { installApiFailureDiagnosticBoundaryForPage, isApiFailureDiagnosticRequest, registerApiFailureDiagnosticFixtureHooks } from './apiFailureDiagnosticBoundary.js';
 
 registerApiFailureDiagnosticFixtureHooks(test);
 
@@ -73,7 +73,6 @@ for (const viewport of VIEWPORTS) {
         const overviewDocument = await readFile(new URL('../../public/docs/overview.html', import.meta.url));
 
         await page.route('**/*', async (route) => {
-            if (await handleApiFailureDiagnosticForPage(route, page, allowedOrigin)) return;
             const origin = new URL(route.request().url()).origin;
             if (origin !== allowedOrigin) {
                 blockedOrigins.push(origin);
@@ -140,6 +139,10 @@ for (const viewport of VIEWPORTS) {
                 body: overviewDocument,
             });
         });
+
+        // Register after the shared and fixture-specific mocks so diagnostic
+        // reports reach the strict terminal-receipt handler before mock fallbacks.
+        await installApiFailureDiagnosticBoundaryForPage(page);
 
         await page.goto('/');
         const trigger = page.getByRole('button', { name: 'Open StoX assistant' });

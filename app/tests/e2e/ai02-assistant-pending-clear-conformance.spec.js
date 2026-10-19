@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
-import { handleApiFailureDiagnosticForPage, isApiFailureDiagnosticRequest, registerApiFailureDiagnosticFixtureHooks } from './apiFailureDiagnosticBoundary.js';
+import { installApiFailureDiagnosticBoundaryForPage, isApiFailureDiagnosticRequest, registerApiFailureDiagnosticFixtureHooks } from './apiFailureDiagnosticBoundary.js';
 
 registerApiFailureDiagnosticFixtureHooks(test);
 
@@ -50,7 +50,6 @@ for (const viewport of VIEWPORTS) {
         let streamHandlerCount = 0;
 
         await page.route('**/*', async (route) => {
-            if (await handleApiFailureDiagnosticForPage(route, page, allowedOrigin)) return;
             const url = new URL(route.request().url());
             if (url.origin !== allowedOrigin) {
                 blockedOrigins.push(url.origin);
@@ -96,6 +95,10 @@ for (const viewport of VIEWPORTS) {
                 body: completedStream('Current answer remains authoritative', 'current-request', 'current'),
             });
         });
+
+        // Register after the shared API mocks so the strict diagnostic handler
+        // is the first matching route for reports from this fixture.
+        await installApiFailureDiagnosticBoundaryForPage(page);
 
         await page.goto('/');
         await page.getByRole('button', { name: 'Open StoX assistant' }).click();
