@@ -75,7 +75,7 @@ class MinimumActionableOpportunityTest extends TestCase
             TradingRecommendation::ACTION_OPEN_POSITION,
             TradingRecommendation::ACTION_INCREASE_POSITION,
         ])->count());
-        $this->assertDatabaseMissing('holdings', [
+        $this->assertDatabaseMissing('portfolio_holdings', [
             'profile_id' => $profile->id,
             'stock_id' => $stock->id,
             'target_amount' => 10000,
