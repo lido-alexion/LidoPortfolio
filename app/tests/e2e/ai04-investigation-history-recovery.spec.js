@@ -115,6 +115,7 @@ for (const viewport of VIEWPORTS) {
         expect(await firstHistoryResponse.finished()).toBeNull();
         expect(JSON.parse((await firstHistoryResponse.body()).toString())).toEqual({ success: false, error: { code: 'backend_unavailable' } });
         await expect(drawer.getByText('Run history is temporarily unavailable.', { exact: true })).toBeVisible();
+        await expect(drawer.getByText('The investigation could not finish. Check run history for its current state.', { exact: true })).toHaveCount(0);
         await expect(drawer.getByRole('article', { name: 'Assistant run' })).toHaveCount(0);
 
         const recoveredHistoryResponsePromise = page.waitForResponse((response) => isRunRequest(response, 'GET', allowedOrigin));

@@ -1,11 +1,14 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import AssistantDrawer from '../../../resources/js/src/components/AssistantDrawer';
 import api from '../../../resources/js/src/api';
 
 vi.mock('../../../resources/js/src/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }));
+
+const showModalDescriptor = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal');
+const closeDescriptor = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close');
 
 const objective = 'How concentrated are my holdings, and which prices are unavailable?';
 const savedRun = {
@@ -43,6 +46,20 @@ beforeEach(() => {
     HTMLDialogElement.prototype.close = function close() { this.open = false; };
 });
 
+afterEach(() => {
+    if (showModalDescriptor) {
+        Object.defineProperty(HTMLDialogElement.prototype, 'showModal', showModalDescriptor);
+    } else {
+        delete HTMLDialogElement.prototype.showModal;
+    }
+    if (closeDescriptor) {
+        Object.defineProperty(HTMLDialogElement.prototype, 'close', closeDescriptor);
+    } else {
+        delete HTMLDialogElement.prototype.close;
+    }
+    vi.restoreAllMocks();
+});
+
 it('recovers an uncertain account investigation from saved read-only run history without resubmitting', async () => {
     const investigation = deferred();
     const firstHistoryRead = deferred();
@@ -64,6 +81,7 @@ it('recovers an uncertain account investigation from saved read-only run history
     await waitFor(() => expect(api.get).toHaveBeenCalledTimes(1));
     firstHistoryRead.reject(requestFailure(503));
     expect(await screen.findByText('Run history is temporarily unavailable.')).toBeInTheDocument();
+    expect(screen.queryByText('The investigation could not finish. Check run history for its current state.')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Run history' }));
     const runArticle = await screen.findByRole('article', { name: 'Assistant run' });
@@ -71,7 +89,6 @@ it('recovers an uncertain account investigation from saved read-only run history
     expect(runArticle).toHaveTextContent('Completed');
     expect(runArticle).toHaveTextContent('The largest holding is 18% of the portfolio.');
     expect(runArticle).toHaveTextContent('Prices for two holdings are unavailable');
-    expect(screen.getByText('The investigation could not finish. Check run history for its current state.')).toBeInTheDocument();
     expect(screen.getByText('Run history is temporarily unavailable.')).toBeInTheDocument();
 
     fireEvent.click(within(runArticle).getByText('Investigation trace'));
