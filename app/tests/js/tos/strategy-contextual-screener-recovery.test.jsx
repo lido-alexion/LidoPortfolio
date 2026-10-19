@@ -280,10 +280,11 @@ describe('STR-02 contextual Strategy recovery concurrency', () => {
 
         await resolveRead(staleReadAfterCurrent, 7, 'Late post-restoration duplicate');
         expect(screen.getByTestId('router-location')).toHaveTextContent('/strategy?strategy_id=7');
-        expect(screen.getByRole('button', { name: 'Eligibility Sources' })).toHaveClass('btn-primary');
-        expect(screen.getByRole('row', { name: /Contextual screen/ })).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'General' }));
         expect(screen.getByLabelText('Name')).toHaveValue('Unsaved contextual strategy');
+        fireEvent.click(screen.getByRole('button', { name: 'Eligibility Sources' }));
+        expect(screen.getByRole('button', { name: 'Eligibility Sources' })).toHaveClass('btn-primary');
+        expect(screen.getByRole('row', { name: /Contextual screen/ })).toBeInTheDocument();
 
         const readsAfterReturnCleanup = reads.length;
         expect(readsAfterReturnCleanup).toBe(overlappingStrategyReads.length);
