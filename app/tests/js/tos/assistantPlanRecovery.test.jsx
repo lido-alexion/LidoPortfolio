@@ -112,7 +112,7 @@ it('rebuilds expired and stale history as distinct fresh previews before explici
         const freshRunCard = runCardContaining(phase.fresh.preview[0].consequence);
         expect(freshRunCard.getByText('Approval required', { exact: true })).toBeInTheDocument();
         fireEvent.click(freshRunCard.getByText(/Review field changes/));
-        expect(freshRunCard.getByText(phase.fresh.preview[0].changes[0].after, { exact: true })).toBeInTheDocument();
+        expect(freshRunCard.getByText(`${phase.fresh.preview[0].changes[0].before ?? 'Unset'} → ${phase.fresh.preview[0].changes[0].after}`, { exact: true })).toBeInTheDocument();
         expect(oldCard.getByText(phase.old.preview[0].consequence, { exact: true })).toBeInTheDocument();
         expect(oldCard.queryByRole('button', { name: 'Approve changes' })).not.toBeInTheDocument();
 
