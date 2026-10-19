@@ -2,15 +2,20 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { handleApiFailureDiagnosticForPage, registerApiFailureDiagnosticFixtureHooks } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticFixtureHooks(test);
 
 const VIEWPORTS = [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }];
 async function prepare(page, viewport, allowedWrites = []) {
     await seedDeterministicJourney(page, `investor-overview-${viewport.name}`);
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const rejected = [];
-    const seal = () => page.route('**/*', route => {
+    const allowedOrigin = new URL(process.env.STOX_E2E_BASE_URL || 'http://127.0.0.1:4177').origin;
+    const seal = () => page.route('**/*', async route => {
         const request = route.request();
         const url = new URL(request.url());
+        if (await handleApiFailureDiagnosticForPage(route, page, allowedOrigin)) return;
         const read = ['GET', 'HEAD'].includes(request.method());
         const allowed = [['POST', '/api/logs/frontend'], ...allowedWrites].some(([method, path]) => request.method() === method && url.pathname === path);
         if (url.origin !== 'http://127.0.0.1:4177' || (!read && !allowed)) {

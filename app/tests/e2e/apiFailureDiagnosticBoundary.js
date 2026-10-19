@@ -111,6 +111,18 @@ export async function installApiFailureDiagnosticBoundary(page, options) {
     });
 }
 
+export async function installApiFailureDiagnosticBoundaryForPage(page) {
+    const collector = collectors.get(page);
+    assert.ok(collector, 'The diagnostic collector must be initialized before installing its route.');
+    return installApiFailureDiagnosticBoundary(page, { origin: collector.origin, collector });
+}
+
+export async function handleApiFailureDiagnosticForPage(route, page, origin) {
+    const collector = collectors.get(page);
+    assert.ok(collector, 'The diagnostic collector must be initialized before handling its route.');
+    return handleApiFailureDiagnostic(route, { origin, collector });
+}
+
 export async function verifyApiFailureDiagnostics(page) {
     const collector = collectors.get(page);
     if (!collector) return;
@@ -134,4 +146,22 @@ export async function verifyApiFailureDiagnostics(page) {
 
 export function registerApiFailureDiagnosticAfterEach(test) {
     test.afterEach(async ({ page }) => verifyApiFailureDiagnostics(page));
+}
+
+export function registerApiFailureDiagnosticFixtureHooks(test) {
+    test.beforeEach(async ({ page }) => {
+        const origin = new URL(process.env.STOX_E2E_BASE_URL || 'http://127.0.0.1:4177').origin;
+        createApiFailureDiagnosticCollector(page, origin);
+    });
+    registerApiFailureDiagnosticAfterEach(test);
+}
+
+export function isApiFailureDiagnosticRequest(request, origin) {
+    try {
+        const url = new URL(request.url());
+        return url.origin === origin && url.pathname === REPORT_PATH && !url.username && !url.password
+            && !url.search && request.method() === 'POST' && isApiFailureDiagnosticPayload(request.postDataJSON());
+    } catch {
+        return false;
+    }
 }

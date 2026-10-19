@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createApiFailureDiagnosticCollector, installApiFailureDiagnosticBoundary, isApiFailureDiagnosticPayload, verifyApiFailureDiagnostics } from '../../e2e/apiFailureDiagnosticBoundary.js';
+import { createApiFailureDiagnosticCollector, handleApiFailureDiagnosticForPage, installApiFailureDiagnosticBoundary, isApiFailureDiagnosticPayload, verifyApiFailureDiagnostics } from '../../e2e/apiFailureDiagnosticBoundary.js';
 
 function makeBoundary() {
     let handler;
@@ -74,7 +74,7 @@ describe('E2E API failure diagnostic boundary', () => {
         await expect(verifyApiFailureDiagnostics(boundary.page)).rejects.toThrow('Malformed API failure diagnostics were observed.');
     });
 
-    it('matches the server payload bounds for status, endpoint, message, and request ID', () => {
+    it('matches the bounded client payload subset for status, endpoint, message, and request ID', () => {
         const valid = { ...report, endpoint: '/api/transactions' };
         expect(isApiFailureDiagnosticPayload({ ...valid, status: 400 })).toBe(true);
         expect(isApiFailureDiagnosticPayload({ ...valid, status: 599 })).toBe(true);
@@ -82,8 +82,36 @@ describe('E2E API failure diagnostic boundary', () => {
         expect(isApiFailureDiagnosticPayload({ ...valid, status: 399 })).toBe(false);
         expect(isApiFailureDiagnosticPayload({ ...valid, status: 600 })).toBe(false);
         expect(isApiFailureDiagnosticPayload({ ...valid, endpoint: '/api/transactions?scope=private' })).toBe(false);
+        expect(isApiFailureDiagnosticPayload({ ...valid, message: 'x'.repeat(500) })).toBe(true);
         expect(isApiFailureDiagnosticPayload({ ...valid, message: 'x'.repeat(501) })).toBe(false);
         expect(isApiFailureDiagnosticPayload({ ...valid, request_id: 'x'.repeat(129) })).toBe(false);
+    });
+
+    it('handles a diagnostic directly inside a fixture guard and verifies its terminal receipt', async () => {
+        const listeners = new Map();
+        const page = {
+            on: (event, callback) => { const set = listeners.get(event) || new Set(); set.add(callback); listeners.set(event, set); },
+            emit: (event, request) => (listeners.get(event) || []).forEach(callback => callback(request)),
+        };
+        createApiFailureDiagnosticCollector(page);
+        const valid = { ...report, endpoint: '/api/transactions' };
+        const response = { finished: async () => null, status: () => 202, json: async () => ({ data: { accepted: true } }) };
+        let action = null;
+        const request = {
+            url: () => 'http://127.0.0.1:4177/api/ops/api-failures',
+            method: () => 'POST',
+            postDataJSON: () => valid,
+            response: async () => action === 'fulfilled' ? response : null,
+        };
+        const route = {
+            request: () => request,
+            fulfill: async options => { action = 'fulfilled'; expect(options.status).toBe(202); page.emit('requestfinished', request); },
+            abort: async () => { action = 'aborted'; },
+        };
+        page.emit('request', request);
+        expect(await handleApiFailureDiagnosticForPage(route, page, 'http://127.0.0.1:4177')).toBe(true);
+        expect(action).toBe('fulfilled');
+        await verifyApiFailureDiagnostics(page);
     });
 
     it('leaves unexpected business POSTs and foreign diagnostics to the existing guard', async () => {
