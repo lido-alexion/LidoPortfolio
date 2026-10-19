@@ -9,6 +9,16 @@ const VIEWPORTS = [
 const STOCK = { id: 42, symbol: 'TCS', name: 'Tata Consultancy Services', exchange: 'NSE' };
 const INSIGHT_PATH = '/api/ai/insights/stocks/42';
 const EXPLORER_ANALYSIS_PATH = '/api/analytics/explore';
+const EXPLORER_ANALYSIS_PAYLOAD = {
+    symbol: 'TCS',
+    exchange: 'NSE',
+    benchmark_symbol: 'NIFTY50',
+    periods: [1, 3, 6, 12],
+};
+const EXPLORER_MANUAL_FALLBACK_ERROR = {
+    message: 'Symbol TCS (NSE) was not found. Choose a symbol from search or check the ticker spelling. You can still enter prices manually for RS.',
+    errors: ['NSE returned no company name.'],
+};
 const INSIGHT = {
     status: 'ready',
     fingerprint: 'a'.repeat(64),
@@ -49,47 +59,61 @@ function insightResponse(response) {
     return url.pathname === INSIGHT_PATH && response.request().method() === 'POST';
 }
 
-async function settleInsightPhase(requests) {
-    expect(requests.length).toBeGreaterThan(0);
-    const outcomes = await Promise.all(requests.map(async (request) => {
-        expect(request.method()).toBe('POST');
-        expect(new URL(request.url()).pathname).toBe(INSIGHT_PATH);
-        expect(request.postDataJSON()).toEqual({ refresh: false });
-        const response = await request.response();
-        if (!response) {
-            expect(request.failure()?.errorText).toBe('net::ERR_ABORTED');
-            return { kind: 'aborted' };
+async function settleInsightPhase(requests, startIndex = 0) {
+    expect(requests.length - startIndex).toBeGreaterThan(0);
+    const settled = new Set();
+    const outcomes = [];
+    while (settled.size < requests.length - startIndex) {
+        const pending = requests.slice(startIndex).filter((request) => !settled.has(request));
+        const batch = await Promise.all(pending.map(async (request) => {
+            expect(request.method()).toBe('POST');
+            expect(new URL(request.url()).pathname).toBe(INSIGHT_PATH);
+            expect(request.postDataJSON()).toEqual({ refresh: false });
+            const response = await request.response();
+            if (!response) {
+                expect(request.failure()?.errorText).toBe('net::ERR_ABORTED');
+                return { request, kind: 'aborted' };
+            }
+            expect(response.status()).toBe(200);
+            expect(await response.finished()).toBeNull();
+            const body = await response.json();
+            expect(body).toEqual({ data: INSIGHT });
+            return { request, kind: 'completed', body };
+        }));
+        for (const outcome of batch) {
+            settled.add(outcome.request);
+            outcomes.push(outcome);
         }
-        expect(response.status()).toBe(200);
-        expect(await response.finished()).toBeNull();
-        const body = await response.json();
-        expect(body).toEqual({ data: INSIGHT });
-        return { kind: 'completed', body };
-    }));
+    }
     expect(outcomes.some((outcome) => outcome.kind === 'completed')).toBe(true);
     return outcomes;
 }
 
 async function settleAnalysisPhase(requests, status, expectedBody) {
     expect(requests.length).toBeGreaterThan(0);
-    const outcomes = await Promise.all(requests.map(async (request) => {
-        expect(request.method()).toBe('POST');
-        expect(new URL(request.url()).pathname).toBe(EXPLORER_ANALYSIS_PATH);
-        const payload = request.postDataJSON();
-        expect(payload.symbol).toBe(STOCK.symbol);
-        expect(payload.exchange).toBe(STOCK.exchange);
-        expect(payload.benchmark_symbol).toBe('NIFTY50');
-        expect(payload.periods).toEqual([1, 3, 6, 12]);
-        const response = await request.response();
-        if (!response) {
-            expect(request.failure()?.errorText).toBe('net::ERR_ABORTED');
-            return { kind: 'aborted' };
+    const settled = new Set();
+    const outcomes = [];
+    while (settled.size < requests.length) {
+        const pending = requests.filter((request) => !settled.has(request));
+        const batch = await Promise.all(pending.map(async (request) => {
+            expect(request.method()).toBe('POST');
+            expect(new URL(request.url()).pathname).toBe(EXPLORER_ANALYSIS_PATH);
+            expect(request.postDataJSON()).toEqual(EXPLORER_ANALYSIS_PAYLOAD);
+            const response = await request.response();
+            if (!response) {
+                expect(request.failure()?.errorText).toBe('net::ERR_ABORTED');
+                return { request, kind: 'aborted' };
+            }
+            expect(response.status()).toBe(status);
+            expect(await response.finished()).toBeNull();
+            expect(await response.json()).toEqual(expectedBody);
+            return { request, kind: 'completed' };
+        }));
+        for (const outcome of batch) {
+            settled.add(outcome.request);
+            outcomes.push(outcome);
         }
-        expect(response.status()).toBe(status);
-        expect(await response.finished()).toBeNull();
-        expect(await response.json()).toEqual(expectedBody);
-        return { kind: 'completed' };
-    }));
+    }
     expect(outcomes.some((outcome) => outcome.kind === 'completed')).toBe(true);
     return outcomes;
 }
@@ -103,6 +127,10 @@ async function assertRenderedInsight(surface) {
     const provenance = surface.getByLabel('Based on / Data used');
     await expect(provenance.getByText('OHLCV through 2026-09-30', { exact: true })).toBeVisible();
     await expect(provenance.getByText('Fundamentals through 2026-06-30', { exact: true })).toBeVisible();
+    await expect(surface.getByRole('button', { name: 'Copy insight', exact: true })).toBeVisible();
+    await expect(surface.getByRole('button', { name: 'Refresh insight', exact: true })).toBeEnabled();
+    await expect(surface.getByRole('link', { name: 'Open stock details', exact: true })).toBeVisible();
+    await expect(surface.getByRole('button', { name: 'Copy AI Prompt', exact: true })).toHaveCount(0);
 }
 
 async function prepare(page, viewport, dashboardKind = null, setupPageRoutes = async () => {}, allowExplorerAnalysis = false) {
@@ -190,15 +218,14 @@ async function prepare(page, viewport, dashboardKind = null, setupPageRoutes = a
             const insightPosts = writes.filter(({ pathname }) => pathname === INSIGHT_PATH);
             const explorerAnalysisPosts = writes.filter(({ pathname }) => pathname === EXPLORER_ANALYSIS_PATH);
             expect(insightPosts.length).toBeGreaterThan(0);
-            expect(insightPosts.every(({ request }) => request.method() === 'POST' && request.postDataJSON().refresh === false)).toBe(true);
-            // Stock Explorer uses this POST endpoint as an on-demand analysis query; it is
-            // separate from the insight POST and performs no placement-side business action.
+            expect(insightPosts.map(({ request }) => request.postDataJSON()))
+                .toEqual(insightPosts.map(() => ({ refresh: false })));
+            // The browser fixture permits the user's explicit Stock Explorer calculation
+            // separately from insight generation. Interception proves request shape only;
+            // it does not establish whether the server-side analysis has effects.
             expect(explorerAnalysisPosts.length > 0).toBe(expectExplorerAnalysis);
-            expect(explorerAnalysisPosts.every(({ request }) => request.method() === 'POST'
-                && request.postDataJSON().symbol === STOCK.symbol
-                && request.postDataJSON().exchange === STOCK.exchange
-                && request.postDataJSON().benchmark_symbol === 'NIFTY50'
-                && request.postDataJSON().periods.join(',') === '1,3,6,12')).toBe(true);
+            expect(explorerAnalysisPosts.map(({ request }) => request.postDataJSON()))
+                .toEqual(explorerAnalysisPosts.map(() => EXPLORER_ANALYSIS_PAYLOAD));
             expect(writes.every(({ request, pathname }) => request.method() === 'POST'
                 && (pathname === INSIGHT_PATH || pathname === EXPLORER_ANALYSIS_PATH))).toBe(true);
         },
@@ -210,16 +237,19 @@ async function openInsight(page, button, requests) {
     const responsePromise = page.waitForResponse(insightResponse);
     await button.click();
     await responsePromise;
-    await settleInsightPhase(requests.slice(start));
+    await settleInsightPhase(requests, start);
 }
 
-async function assertSurfacePlacement(page, presentation) {
+async function assertSurfacePlacement(page, presentation, sourceButton) {
     const surface = presentation === 'inline'
         ? page.getByRole('region', { name: 'AI Insights — TCS', exact: true })
         : page.getByRole('dialog', { name: 'AI Insights — TCS', exact: true });
     await assertRenderedInsight(surface);
     await surface.getByRole('button', { name: 'Close AI Insights', exact: true }).click();
     await expect(surface).toHaveCount(0);
+    if (presentation === 'modal') {
+        await expect(sourceButton).toBeFocused();
+    }
     return surface;
 }
 
@@ -238,7 +268,7 @@ for (const viewport of VIEWPORTS) {
                 await expect(button).toBeVisible();
                 expect(harness.insightRequests).toHaveLength(0);
                 await openInsight(page, button, harness.insightRequests);
-                await assertSurfacePlacement(page, 'modal');
+                await assertSurfacePlacement(page, 'modal', button);
                 await expect(row).toBeVisible();
                 harness.assertRequestBoundary();
             });
@@ -253,7 +283,7 @@ for (const viewport of VIEWPORTS) {
             const rowAction = row.getByRole('button', { name: 'Open AI Insights', exact: true });
             expect(harness.insightRequests).toHaveLength(0);
             await openInsight(page, rowAction, harness.insightRequests);
-            await assertSurfacePlacement(page, 'modal');
+            await assertSurfacePlacement(page, 'modal', rowAction);
             await expect(row).toBeVisible();
 
             const requestsBeforeSelection = harness.insightRequests.length;
@@ -270,23 +300,43 @@ for (const viewport of VIEWPORTS) {
 
         test('opens the normal Stock Explorer result inline for the selected stock', async ({ page }, testInfo) => {
             journeyId(testInfo, 'AI-07');
-            const analysisPayloads = [];
+            const noHistoryStatus = {
+                success: false,
+                cache_hit: false,
+                stored_rows: 0,
+                fetched_rows: 0,
+                ranges_fetched: [],
+                errors: ['Insufficient cached price history. Universe price sync may not have covered this symbol yet.'],
+            };
             const expectedResult = { data: {
+                valid: true,
                 stock: STOCK,
-                benchmark: { symbol: 'NIFTY50', latest_close: 24000 },
-                latest_close: 3500,
-                period_closes: {},
-                relative_strength: {},
-                growth_percent: {},
-                benchmark_growth_percent: {},
-                chart: [],
+                benchmark: { symbol: 'NIFTY50', name: 'Nifty 50', latest_close: null },
+                tracking: { is_portfolio_tracked: false, is_exploratory: true },
+                latest_close: null,
+                as_of: '2026-10-19',
+                growth_percent: { '1m': null, '3m': null, '6m': null, '12m': null },
+                benchmark_growth_percent: { '1m': null, '3m': null, '6m': null, '12m': null },
+                relative_strength: { '1m': null, '3m': null, '6m': null, '12m': null },
+                period_closes: {
+                    '1m': { stock_start_close: null, stock_end_close: null, benchmark_start_close: null, benchmark_end_close: null, start_date: '2026-09-19', end_date: '2026-10-19' },
+                    '3m': { stock_start_close: null, stock_end_close: null, benchmark_start_close: null, benchmark_end_close: null, start_date: '2026-07-19', end_date: '2026-10-19' },
+                    '6m': { stock_start_close: null, stock_end_close: null, benchmark_start_close: null, benchmark_end_close: null, start_date: '2026-04-19', end_date: '2026-10-19' },
+                    '12m': { stock_start_close: null, stock_end_close: null, benchmark_start_close: null, benchmark_end_close: null, start_date: '2025-10-19', end_date: '2026-10-19' },
+                },
+                history: { available: null, benchmark_available: null, stock_fetch: noHistoryStatus, benchmark_fetch: noHistoryStatus },
+                chart: [
+                    { period: '1M', growth_percent: 0, benchmark_growth_percent: 0, relative_strength: 0 },
+                    { period: '3M', growth_percent: 0, benchmark_growth_percent: 0, relative_strength: 0 },
+                    { period: '6M', growth_percent: 0, benchmark_growth_percent: 0, relative_strength: 0 },
+                    { period: '1Y', growth_percent: 0, benchmark_growth_percent: 0, relative_strength: 0 },
+                ],
                 normalized_gain_chart: [],
-                history: {},
             } };
             const harness = await prepare(page, viewport, null, async () => {
                 await page.route(`**${EXPLORER_ANALYSIS_PATH}`, async (route) => {
                     expect(route.request().method()).toBe('POST');
-                    analysisPayloads.push(route.request().postDataJSON());
+                    expect(route.request().postDataJSON()).toEqual(EXPLORER_ANALYSIS_PAYLOAD);
                     await route.fulfill({ json: expectedResult });
                 });
             }, true);
@@ -307,24 +357,21 @@ for (const viewport of VIEWPORTS) {
             await expect(context.getByText('Latest close', { exact: true })).toBeVisible();
             const button = context.getByRole('button', { name: 'Open AI Insights', exact: true });
             await expect(button).toBeVisible();
-            expect(analysisPayloads.length).toBeGreaterThan(0);
-            expect(analysisPayloads.every((payload) => payload.symbol === 'TCS' && payload.exchange === 'NSE'
-                && payload.benchmark_symbol === 'NIFTY50' && payload.periods.join(',') === '1,3,6,12')).toBe(true);
+            expect(harness.analysisRequests.length).toBeGreaterThan(0);
             expect(harness.insightRequests).toHaveLength(0);
             await openInsight(page, button, harness.insightRequests);
-            await assertSurfacePlacement(page, 'inline');
+            await assertSurfacePlacement(page, 'inline', button);
             await expect(context.getByText('Latest close', { exact: true })).toBeVisible();
             harness.assertRequestBoundary({ expectExplorerAnalysis: true });
         });
 
         test('opens the manual-fallback Stock Explorer result inline for the selected stock', async ({ page }, testInfo) => {
             journeyId(testInfo, 'AI-07');
-            const analysisPayloads = [];
             const harness = await prepare(page, viewport, null, async () => {
                 await page.route(`**${EXPLORER_ANALYSIS_PATH}`, async (route) => {
                     expect(route.request().method()).toBe('POST');
-                    analysisPayloads.push(route.request().postDataJSON());
-                    await route.fulfill({ status: 422, json: { message: 'Synthetic cached analysis unavailable.', errors: {} } });
+                    expect(route.request().postDataJSON()).toEqual(EXPLORER_ANALYSIS_PAYLOAD);
+                    await route.fulfill({ status: 422, json: EXPLORER_MANUAL_FALLBACK_ERROR });
                 });
             }, true);
             await page.goto('/explorer');
@@ -337,11 +384,9 @@ for (const viewport of VIEWPORTS) {
             });
             await page.getByRole('button', { name: 'Calculate relative strength', exact: true }).click();
             await analysisResponsePromise;
-            await settleAnalysisPhase(harness.analysisRequests, 422, { message: 'Synthetic cached analysis unavailable.', errors: {} });
+            await settleAnalysisPhase(harness.analysisRequests, 422, EXPLORER_MANUAL_FALLBACK_ERROR);
             await expect(page.getByText('Analysis data is unavailable for this symbol.', { exact: false })).toBeVisible();
-            expect(analysisPayloads.length).toBeGreaterThan(0);
-            expect(analysisPayloads.every((payload) => payload.symbol === 'TCS' && payload.exchange === 'NSE'
-                && payload.benchmark_symbol === 'NIFTY50' && payload.periods.join(',') === '1,3,6,12')).toBe(true);
+            expect(harness.analysisRequests.length).toBeGreaterThan(0);
             await page.getByLabel(/TCS latest close/).fill('3500');
             await page.getByLabel(/NIFTY50 latest close/).fill('24000');
             await page.getByLabel(/TCS close 6 months ago/).fill('3400');
@@ -353,7 +398,7 @@ for (const viewport of VIEWPORTS) {
             await expect(button).toBeVisible();
             expect(harness.insightRequests).toHaveLength(0);
             await openInsight(page, button, harness.insightRequests);
-            await assertSurfacePlacement(page, 'inline');
+            await assertSurfacePlacement(page, 'inline', button);
             await expect(context.getByText('Latest close', { exact: true })).toBeVisible();
             harness.assertRequestBoundary({ expectExplorerAnalysis: true });
         });
