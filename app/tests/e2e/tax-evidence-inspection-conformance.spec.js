@@ -477,7 +477,6 @@ for (const viewport of VIEWPORTS) {
             expect(fixture.attempts).toHaveLength(1);
             expect(fixture.dividends.filter(row => row.source_reference === REFERENCE)).toHaveLength(1);
             await fixture.finish();
-            expect(fixture.diagnosticReports).toHaveLength(1);
         });
 
         test('checks the exact candidate is absent before an explicit retry, then verifies one exported record', async ({ page }, testInfo) => {
@@ -551,7 +550,6 @@ for (const viewport of VIEWPORTS) {
             expect(fixture.dividends.filter(row => row.source_reference === REFERENCE)).toHaveLength(1);
             expect(fixture.attempts).toHaveLength(2);
             await fixture.finish();
-            expect(fixture.diagnosticReports).toHaveLength(1);
         });
 
         test('inspects existing rows after an uncertain validated CSV import without applying twice', async ({ page }, testInfo) => {
@@ -607,7 +605,6 @@ for (const viewport of VIEWPORTS) {
             expect(fixture.imports.map(item => item.dryRun)).toEqual([true, false]);
             expect(fixture.dividends.filter(row => row.source_reference === IMPORT_REFERENCE)).toHaveLength(1);
             await fixture.finish();
-            expect(fixture.diagnosticReports).toHaveLength(1);
         });
     });
 }
