@@ -72,6 +72,34 @@ for (const viewport of [
         const freshByOldId = new Map([[expired.id, clone(freshExpired)], [stale.id, clone(freshStale)]]);
         const currentByFreshId = new Map([[freshExpired.id, clone(freshExpired)], [freshStale.id, clone(freshStale)]]);
         const routePhases = [];
+        const notificationReceipts = new Map();
+        const notificationBody = {
+            data: [],
+            meta: {
+                current_page: 1,
+                last_page: 1,
+                per_page: 5,
+                total: 0,
+                unread_count: 0,
+                active_critical_count: 0,
+            },
+        };
+
+        await page.route('**/api/notification-center*', async route => {
+            const request = route.request();
+            const url = new URL(request.url());
+            const allowedOrigin = new URL(process.env.STOX_E2E_BASE_URL || 'http://127.0.0.1:4177').origin;
+            expect(url.origin).toBe(allowedOrigin);
+            expect(url.username).toBe('');
+            expect(url.password).toBe('');
+            expect(url.pathname).toBe('/api/notification-center');
+            expect(url.search).toBe('?per_page=5');
+            expect(request.method()).toBe('GET');
+            const profile = request.headers()['x-profile-id'] ?? null;
+            expect([null, '1']).toContain(profile);
+            notificationReceipts.set(request, { profile, body: clone(notificationBody) });
+            await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(notificationBody) });
+        });
 
         await page.route('**/api/ai/assistant/runs**', async route => {
             const request = route.request();
@@ -219,6 +247,28 @@ for (const viewport of [
             expect(finishedRequests.has(phase.request)).toBe(true);
             expect(response.status()).toBe(phase.status);
             expect(await response.json()).toEqual(phase.body);
+        }
+        const observedNotificationRequests = allRequests.filter(request =>
+            /^https?:$/.test(new URL(request.url()).protocol)
+            && new URL(request.url()).pathname === '/api/notification-center',
+        );
+        expect(observedNotificationRequests.length).toBeGreaterThan(0);
+        expect(notificationReceipts.size).toBe(observedNotificationRequests.length);
+        for (const request of observedNotificationRequests) {
+            const url = new URL(request.url());
+            const receipt = notificationReceipts.get(request);
+            expect(receipt).toBeTruthy();
+            expect(request.method()).toBe('GET');
+            expect(url.origin).toBe(appOrigin);
+            expect(url.username).toBe('');
+            expect(url.password).toBe('');
+            expect(url.search).toBe('?per_page=5');
+            expect(request.headers()['x-profile-id'] ?? null).toBe(receipt.profile);
+            const response = allResponses.get(request) ?? await request.response();
+            expect(response).toBeTruthy();
+            expect(response.status()).toBe(200);
+            expect(await response.finished()).toBeNull();
+            expect(await response.json()).toEqual(receipt.body);
         }
         expect(routePhases.filter(phase => phase.request.method() === 'POST').map(phase => phase.payload)).toEqual([
             { objective: expired.objective, retry_run_id: expired.id },
