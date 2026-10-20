@@ -221,10 +221,15 @@ async function assertTerminalReceipts(guard, appOrigin) {
         expect(response.headers()['content-type'] || '').toContain('application/json');
         const body = await response.json();
         expect(body).toBeTruthy();
+        const unmockedBody = body?.error?.code === 'UNMOCKED'
+            && typeof body.error.message === 'string'
+            ? body.error.message.slice(0, 240)
+            : null;
         if (!(request.method() === 'POST' && url.pathname === '/api/screeners')
             && !(request.method() === 'POST' && url.pathname === '/api/logs/frontend')) {
-            expect(response.status()).toBeGreaterThanOrEqual(200);
-            expect(response.status()).toBeLessThan(300);
+            const receiptLabel = `${request.method()} ${url.pathname} status=${response.status()}${unmockedBody ? ` unmocked=${JSON.stringify(unmockedBody)}` : ''}`;
+            expect(response.status(), receiptLabel).toBeGreaterThanOrEqual(200);
+            expect(response.status(), receiptLabel).toBeLessThan(300);
         }
         if (request.method() === 'POST' && url.pathname === '/api/logs/frontend') {
             expect(response.status()).toBe(200);
