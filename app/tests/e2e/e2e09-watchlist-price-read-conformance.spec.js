@@ -1,6 +1,11 @@
+import { createApiFailureDiagnosticCollector, installApiFailureDiagnosticBoundary, handleApiFailureDiagnostic, registerApiFailureDiagnosticAfterEach } from './apiFailureDiagnosticBoundary.js';
+
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+
+registerApiFailureDiagnosticAfterEach(test);
+
 
 const VIEWPORTS = [
     { name: 'mobile', width: 390, height: 844 },
@@ -32,9 +37,11 @@ async function prepare(page, viewport, seed) {
     const allowedOrigin = new URL(process.env.STOX_E2E_BASE_URL || 'http://127.0.0.1:4177').origin;
     const blocked = [];
     const requests = [];
+    const diagnosticReports = createApiFailureDiagnosticCollector(page, allowedOrigin);
     const priceRequests = [];
     const priceRequestsByStock = new Map();
-    await page.route('**/*', (route) => {
+    await page.route('**/*', async (route) => {
+        if (await handleApiFailureDiagnostic(route, { origin: allowedOrigin, collector: diagnosticReports })) return;
         const url = new URL(route.request().url());
         if (url.origin !== allowedOrigin) {
             blocked.push(url.origin);
@@ -43,9 +50,10 @@ async function prepare(page, viewport, seed) {
         return route.fallback();
     });
     await installInvestorWorkflowApiMocks(page);
+    await installApiFailureDiagnosticBoundary(page, { origin: allowedOrigin, collector: diagnosticReports });
     page.on('request', (request) => {
         const url = new URL(request.url());
-        requests.push({ method: request.method(), path: url.pathname, origin: url.origin });
+        requests.push({ method: request.method(), path: url.pathname, origin: url.origin, diagnostic: request.method() === 'POST' && url.origin === allowedOrigin && !url.username && !url.password && url.pathname === '/api/ops/api-failures' && !url.search });
         const priceMatch = url.pathname.match(/^\/api\/stocks\/(\d+)\/market-prices$/);
         if (priceMatch) {
             priceRequests.push(request);
@@ -100,7 +108,7 @@ async function selectStock(page, symbol) {
 function expectReadOnly(evidence) {
     expect(evidence.blocked).toEqual([]);
     expect(evidence.requests.filter((request) => request.origin !== evidence.allowedOrigin)).toEqual([]);
-    expect(evidence.requests.filter((request) => /^(POST|PUT|PATCH|DELETE)$/.test(request.method))).toEqual([]);
+    expect(evidence.requests.filter((request) => /^(POST|PUT|PATCH|DELETE)$/.test(request.method) && !request.diagnostic)).toEqual([]);
 }
 
 for (const viewport of VIEWPORTS) {

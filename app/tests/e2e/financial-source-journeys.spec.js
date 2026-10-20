@@ -1,13 +1,20 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { createApiFailureDiagnosticCollector, installApiFailureDiagnosticBoundary, handleApiFailureDiagnostic, registerApiFailureDiagnosticAfterEach } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticAfterEach(test);
+
+
 
 const VIEWPORTS = [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }];
 async function prepare(page, viewport, name, allowed) {
     await seedDeterministicJourney(page, `financial-source-${name}-${viewport.name}`); await page.setViewportSize({ width: viewport.width, height: viewport.height }); await installInvestorWorkflowApiMocks(page);
-    await page.route('**/api/settings', route => route.fulfill({ json: { data: { fee_components: [{ id: 'synthetic-zero', label: 'Synthetic zero fee', value: '0', mode: 'fixed', applies_buy: true, applies_sell: true, exchange: 'both', gst_percent: '0' }] } } })); const blocked = []; const writes = [];
-    return { blocked, writes, seal: () => page.route('**/*', route => {
+    await page.route('**/api/settings', route => route.fulfill({ json: { data: { fee_components: [{ id: 'synthetic-zero', label: 'Synthetic zero fee', value: '0', mode: 'fixed', applies_buy: true, applies_sell: true, exchange: 'both', gst_percent: '0' }] } } })); const blocked = []; const writes = []; const diagnosticReports = createApiFailureDiagnosticCollector(page);
+    await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
+    return { blocked, writes, seal: () => page.route('**/*', async route => {
         const request = route.request(); const url = new URL(request.url()); const write = /^(POST|PUT|PATCH|DELETE)$/.test(request.method());
+        if (await handleApiFailureDiagnostic(route, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports })) return;
         if (url.origin !== 'http://127.0.0.1:4177' || (write && url.pathname !== '/api/logs/frontend' && !allowed(request.method(), url.pathname))) { blocked.push(`${request.method()} ${url.pathname}`); return route.abort(); }
         if (write && url.pathname !== '/api/logs/frontend') writes.push({ method: request.method(), path: url.pathname, body: request.postDataJSON() }); return route.fallback();
     }) };
