@@ -2,20 +2,27 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { createApiFailureDiagnosticCollector, installApiFailureDiagnosticBoundary, handleApiFailureDiagnostic, registerApiFailureDiagnosticAfterEach } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticAfterEach(test);
+
+
 
 const VIEWPORTS = [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }];
 const failure = (route, message = 'Synthetic account operation unavailable.') => route.fulfill({ status: 503, json: { message } });
 async function prepare(page, viewport, suffix, allowed = () => false) {
     await seedDeterministicJourney(page, 'account-channels-' + suffix + '-' + viewport.name); await page.setViewportSize({ width: viewport.width, height: viewport.height }); await installInvestorWorkflowApiMocks(page);
-    const blocked = []; const writes = [];
+    const blocked = []; const writes = []; const diagnosticReports = createApiFailureDiagnosticCollector(page);
+    await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
     await page.route('**/api/settings', route => route.fulfill({ json: { data: { default_stoploss_percent: '8', portfolio_trailing_percent: '10', notification_schedules: [] } } }));
     await page.route('**/api/auth/sessions', route => route.fulfill({ json: { data: [] } }));
     await page.route('**/api/v1/totp', route => route.fulfill({ json: { data: { enabled: false } } }));
     await page.route('**/api/personal-api-tokens', route => route.fulfill({ json: { data: [] } }));
     await page.route('**/api/v1/broker/status', route => route.fulfill({ json: { data: { connected: false } } }));
     await page.route('**/api/v1/execution/mode', route => route.fulfill({ json: { data: { execution_mode: 'manual', entitled: false, blockers: ['broker', 'totp', 'entitlement'] } } }));
-    return { blocked, writes, seal: () => page.route('**/*', route => {
+    return { blocked, writes, seal: () => page.route('**/*', async route => {
         const request = route.request(); const url = new URL(request.url()); const write = /^(POST|PUT|PATCH|DELETE)$/.test(request.method());
+        if (await handleApiFailureDiagnostic(route, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports })) return;
         if (url.origin !== 'http://127.0.0.1:4177' || (write && url.pathname !== '/api/logs/frontend' && !allowed(request.method(), url.pathname))) { blocked.push(request.method() + ' ' + url.pathname); return route.abort(); }
         if (write && url.pathname !== '/api/logs/frontend') writes.push({ method: request.method(), path: url.pathname }); return route.fallback();
     }) };

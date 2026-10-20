@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { handleApiFailureDiagnosticForPage, isApiFailureDiagnosticRequest, registerApiFailureDiagnosticFixtureHooks } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticFixtureHooks(test);
 
 const VIEWPORTS = [
     { name: 'mobile', width: 390, height: 844 },
@@ -199,6 +202,7 @@ async function prepare(page, viewport, dashboardKind = null, setupPageRoutes = a
     await page.route('**/*', async (route) => {
         const request = route.request();
         const url = new URL(request.url());
+        if (await handleApiFailureDiagnosticForPage(route, page, allowedOrigin)) return;
         if (url.protocol !== 'http:' && url.protocol !== 'https:') return route.fallback();
         if (url.origin !== allowedOrigin) return route.abort();
         if (/^(POST|PUT|PATCH|DELETE)$/.test(request.method())
@@ -214,7 +218,8 @@ async function prepare(page, viewport, dashboardKind = null, setupPageRoutes = a
         assertRequestBoundary({ expectExplorerAnalysis = false } = {}) {
             expect(observedRequests.length).toBeGreaterThan(0);
             expect(observedRequests.every(({ origin }) => origin === allowedOrigin)).toBe(true);
-            const writes = observedRequests.filter(({ request }) => /^(POST|PUT|PATCH|DELETE)$/.test(request.method()));
+            const writes = observedRequests.filter(({ request }) => /^(POST|PUT|PATCH|DELETE)$/.test(request.method())
+                && !isApiFailureDiagnosticRequest(request, allowedOrigin));
             const insightPosts = writes.filter(({ pathname }) => pathname === INSIGHT_PATH);
             const explorerAnalysisPosts = writes.filter(({ pathname }) => pathname === EXPLORER_ANALYSIS_PATH);
             expect(insightPosts.length).toBeGreaterThan(0);
