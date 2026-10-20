@@ -224,6 +224,16 @@ async function fillDepositForm(page) {
     return form;
 }
 
+async function cashHeaderRefresh(page) {
+    const heading = page.getByRole('heading', { name: 'Cash management', exact: true });
+    await expect(heading).toHaveCount(1);
+    const header = heading.locator('..').locator('..');
+    const refresh = header.getByRole('button', { name: 'Refresh', exact: true });
+    await expect(refresh).toHaveCount(1);
+    await expect(refresh).toBeVisible();
+    return refresh;
+}
+
 async function expectDepositRow(page, expectedBalance) {
     const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: DEPOSIT.remarks, exact: true }) });
     await expect(row).toHaveCount(1);
@@ -285,7 +295,7 @@ for (const viewport of VIEWPORTS) {
             await expect(baseline).toHaveCount(1);
             await expect(baseline.getByRole('cell').nth(5)).toContainText('12,500');
             const statementCard = page.locator('.card').filter({ hasText: 'Cash account statement' });
-            await expect(page.getByRole('button', { name: 'Refresh', exact: true })).toBeVisible();
+            await cashHeaderRefresh(page);
 
             const form = await fillDepositForm(page);
             const uncertainResponsePromise = page.waitForResponse(response => new URL(response.url()).pathname === '/api/cash/deposit' && response.status() === 503);
@@ -305,7 +315,8 @@ for (const viewport of VIEWPORTS) {
             expect(evidence.entries).toHaveLength(2);
 
             const refreshResponsePromise = page.waitForResponse(response => new URL(response.url()).pathname === '/api/cash/statement' && response.status() === 200);
-            await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+            const refresh = await cashHeaderRefresh(page);
+            await refresh.click();
             const refreshResponse = await refreshResponsePromise;
             const refreshed = await refreshResponse.json();
             expect(refreshed.data.entries.map(entry => ({ id: entry.id, date: entry.entry_date, type: entry.entry_type, amount: entry.amount, balance: entry.running_balance, remarks: entry.reason }))).toEqual([
@@ -351,7 +362,8 @@ for (const viewport of VIEWPORTS) {
             expect(evidence.entries.filter(entry => entry.reason === DEPOSIT.remarks)).toHaveLength(0);
 
             const refreshResponsePromise = page.waitForResponse(response => new URL(response.url()).pathname === '/api/cash/statement' && response.status() === 200);
-            await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+            const refresh = await cashHeaderRefresh(page);
+            await refresh.click();
             const refreshResponse = await refreshResponsePromise;
             const refreshed = await refreshResponse.json();
             expect(refreshed.data.entries).toEqual([BASELINE_ENTRY]);
