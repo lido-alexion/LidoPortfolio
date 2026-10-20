@@ -15,6 +15,17 @@ const VIEWPORTS = [
     { name: 'mobile', width: 390, height: 844 },
     { name: 'desktop', width: 1440, height: 900 },
 ];
+const EMPTY_NOTIFICATION_CENTER_RESPONSE = {
+    data: [],
+    meta: {
+        current_page: 1,
+        last_page: 1,
+        per_page: 5,
+        total: 0,
+        unread_count: 0,
+        active_critical_count: 0,
+    },
+};
 
 const preferences = {
     primary_benchmark_id: 1,
@@ -33,6 +44,8 @@ function receiptKey(request) {
             ? `?financial_year=${url.searchParams.get('financial_year')}`
             : url.pathname === '/api/stocks'
                 ? `?limit=${url.searchParams.get('limit')}`
+                : url.pathname === '/api/notification-center'
+                    ? `?per_page=${url.searchParams.get('per_page')}`
                 : '';
     return `${request.method()} ${url.pathname}${query}`;
 }
@@ -58,6 +71,7 @@ function isReceiptRelevant(request) {
         || path === '/api/tax/dividends'
         || path === '/api/tax/dividends/import'
         || path === '/api/tax/exports/dividends'
+        || path === '/api/notification-center'
         || path === '/api/ops/api-failures';
 }
 
@@ -127,6 +141,7 @@ async function prepareTaxEvidenceJourney(page, viewport, mode) {
     const requests = new Map();
     const responses = [];
     const diagnosticReports = [];
+    const notificationReads = [];
     const analysisReads = [];
     let commitOnNextAttempt = mode === 'commit-uncertain';
     let nextId = 701;
@@ -295,14 +310,40 @@ async function prepareTaxEvidenceJourney(page, viewport, mode) {
         });
     });
 
+    await page.route('**/api/notification-center*', route => {
+        const request = route.request();
+        const url = new URL(request.url());
+        const profileId = request.headers()['x-profile-id'] || null;
+        expect(url.origin).toBe(ORIGIN);
+        expect(url.username).toBe('');
+        expect(url.password).toBe('');
+        expect(request.method()).toBe('GET');
+        expect(url.pathname).toBe('/api/notification-center');
+        expect(url.search).toBe('?per_page=5');
+        expect([null, '1']).toContain(profileId);
+        notificationReads.push({ request, profileId });
+        return fulfillJson(route, EMPTY_NOTIFICATION_CENTER_RESPONSE);
+    });
+
     await page.route('**/api/ops/api-failures', route => {
-        const body = route.request().postDataJSON();
-        expect(route.request().method()).toBe('POST');
-        expect(route.request().headers()['x-profile-id']).toBe('1');
-        expect(body).toMatchObject({ method: 'post', status: 503 });
+        const request = route.request();
+        const url = new URL(request.url());
+        const body = request.postDataJSON();
+        expect(url.origin).toBe(ORIGIN);
+        expect(url.username).toBe('');
+        expect(url.password).toBe('');
+        expect(url.pathname).toBe('/api/ops/api-failures');
+        expect(url.search).toBe('');
+        expect(request.method()).toBe('POST');
+        expect(request.headers()['x-profile-id']).toBe('1');
+        expect(Object.keys(body).sort()).toEqual(['endpoint', 'message', 'method', 'request_id', 'status']);
+        expect(body.method).toBe('post');
+        expect(body.status).toBe(503);
         expect(['/api/tax/dividends', '/api/tax/dividends/import']).toContain(body.endpoint);
+        expect(body.message === null || (typeof body.message === 'string' && body.message.length <= 500)).toBe(true);
+        expect(body.request_id === null || (typeof body.request_id === 'string' && body.request_id.length <= 128)).toBe(true);
         diagnosticReports.push(body);
-        return fulfillText(route, '', 204);
+        return fulfillJson(route, { data: { accepted: true } }, 202);
     });
 
     await page.route('**/*', route => {
@@ -385,6 +426,15 @@ async function prepareTaxEvidenceJourney(page, viewport, mode) {
         finish: async () => {
             await expect.poll(() => [...requests.values()].every(record => record.terminal)).toBe(true);
             await settlePhase(0);
+            expect(notificationReads.length).toBeGreaterThan(0);
+            for (const { request, profileId } of notificationReads) {
+                const url = new URL(request.url());
+                expect(request.method()).toBe('GET');
+                expect(url.origin).toBe(ORIGIN);
+                expect(url.pathname).toBe('/api/notification-center');
+                expect(url.search).toBe('?per_page=5');
+                expect([null, '1']).toContain(profileId);
+            }
             for (const response of responses) expect(await response.finished()).toBeNull();
             for (const record of requests.values()) expect(record.failure).toBeNull();
             for (const { request, url } of requests.values()) {
