@@ -1,6 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { createApiFailureDiagnosticCollector, installApiFailureDiagnosticBoundary, handleApiFailureDiagnostic, registerApiFailureDiagnosticAfterEach } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticAfterEach(test);
+
+
 const VIEWPORTS = [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }];
 const UUID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'; const SHARED_UUID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'; const BUNDLE_UUID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 // Same supported envelope shape as the frozen guide and ArtifactLibraryApiTest;
@@ -9,9 +14,11 @@ const envelope = { schema_version: '1.0', artifact_type: 'screener', slug: 'revi
 const version = (id, semver, status = 'published') => ({ id, semver, status, definition_hash: 'synthetic-route-fixture-not-qualified-hash', content: { ...envelope, definition: { root: { ...envelope.definition.root, right: { type: 'constant', value: semver === '1.0.0' ? 50 : 60 } } } }, documentation: {}, change_summary: 'Synthetic reviewed change', lock_version: 4, dependencies: [] });
 const artifact = (versions, extra = {}) => ({ artifact_uuid: UUID, name: 'Reviewed screen', slug: 'reviewed-screen', type: 'screener', origin: 'user', permission: 'owner', archived_at: null, draft_version: versions.find(v => v.status === 'draft')?.semver || null, portfolio_binding: null, versions, ...extra });
 async function prepare(page, viewport, name, allowed) {
-    await seedDeterministicJourney(page, `artifact-library-${name}-${viewport.name}`); await page.setViewportSize({ width: viewport.width, height: viewport.height }); await installInvestorWorkflowApiMocks(page); const blocked = []; const writes = [];
-    return { blocked, writes, seal: () => page.route('**/*', route => {
+    await seedDeterministicJourney(page, `artifact-library-${name}-${viewport.name}`); await page.setViewportSize({ width: viewport.width, height: viewport.height }); await installInvestorWorkflowApiMocks(page); const blocked = []; const writes = []; const diagnosticReports = createApiFailureDiagnosticCollector(page);
+    await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
+    return { blocked, writes, seal: () => page.route('**/*', async route => {
         const request = route.request(); const url = new URL(request.url()); const write = /^(POST|PUT|PATCH|DELETE)$/.test(request.method());
+        if (await handleApiFailureDiagnostic(route, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports })) return;
         if (url.origin !== 'http://127.0.0.1:4177' || (write && url.pathname !== '/api/logs/frontend' && !allowed(request.method(), url.pathname))) { blocked.push(`${request.method()} ${url.pathname}`); return route.abort(); }
         if (write && url.pathname !== '/api/logs/frontend') writes.push({ method: request.method(), path: url.pathname, body: request.postDataJSON() }); return route.fallback();
     }) };

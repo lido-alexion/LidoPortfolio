@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { installApiFailureDiagnosticBoundaryForPage, isApiFailureDiagnosticRequest, registerApiFailureDiagnosticFixtureHooks } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticFixtureHooks(test);
 
 const VIEWPORTS = [
     { name: 'mobile', width: 390, height: 844 },
@@ -46,7 +49,7 @@ for (const viewport of VIEWPORTS) {
         let firstRequest = null;
         let streamHandlerCount = 0;
 
-        await page.route('**/*', (route) => {
+        await page.route('**/*', async (route) => {
             const url = new URL(route.request().url());
             if (url.origin !== allowedOrigin) {
                 blockedOrigins.push(url.origin);
@@ -92,6 +95,10 @@ for (const viewport of VIEWPORTS) {
                 body: completedStream('Current answer remains authoritative', 'current-request', 'current'),
             });
         });
+
+        // Register after the shared API mocks so the strict diagnostic handler
+        // is the first matching route for reports from this fixture.
+        await installApiFailureDiagnosticBoundaryForPage(page);
 
         await page.goto('/');
         await page.getByRole('button', { name: 'Open StoX assistant' }).click();
@@ -168,7 +175,8 @@ for (const viewport of VIEWPORTS) {
         await expect(refreshedDrawer.getByText('Current question after clear', { exact: true })).toHaveCount(0);
         await expect(refreshedDrawer.getByText('Current answer remains authoritative', { exact: true })).toHaveCount(0);
 
-        const mutatingRequests = requests.filter((entry) => /^(POST|PUT|PATCH|DELETE)$/.test(entry.method));
+        const mutatingRequests = requests.filter((entry) => /^(POST|PUT|PATCH|DELETE)$/.test(entry.method)
+            && !isApiFailureDiagnosticRequest(entry.request, allowedOrigin));
         expect(mutatingRequests.filter((entry) => entry.path !== STREAM_PATH)).toEqual([]);
         expect(streamHandlerCount).toBe(2);
     });
