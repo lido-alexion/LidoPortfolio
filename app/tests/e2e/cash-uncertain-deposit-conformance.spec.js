@@ -4,6 +4,21 @@ import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 import { TEST_PORTFOLIO } from '../js/tos/fixtures/tosApi.js';
 
 const ORIGIN = 'http://127.0.0.1:4177';
+const failureEvidenceByPage = new WeakMap();
+const FAILURE_EVIDENCE_REASONS = new Set([
+    'transport-failure',
+    'url-credentials',
+    'off-origin',
+    'malformed-diagnostic',
+    'unlisted-write',
+    'fixture-unmocked-501',
+    'status-outside-fixture-allowance',
+    'response-received',
+    'finished-without-response',
+    'request-pending',
+    'unexpected-notification-read',
+    'other',
+]);
 const VIEWPORTS = [
     { name: 'mobile', width: 390, height: 844 },
     { name: 'desktop', width: 1440, height: 900 },
@@ -23,6 +38,17 @@ const DEPOSIT = {
     transaction_date: '2026-10-10',
 };
 const FAILURE_MESSAGE = 'Synthetic deposit response unavailable.';
+const NOTIFICATION_EMPTY_RESPONSE = {
+    data: [],
+    meta: {
+        current_page: 1,
+        last_page: 1,
+        per_page: 5,
+        total: 0,
+        unread_count: 0,
+        active_critical_count: 0,
+    },
+};
 
 function statement(entries, closingBalance) {
     return {
@@ -48,6 +74,19 @@ function cashReceipt(request, path, status, body) {
         profileId: request.headers()['x-profile-id'] ?? null,
         status,
         body,
+    };
+}
+
+function safeRequestEvidence(request, reason, status = null) {
+    const url = new URL(request.url());
+    const method = request.method();
+    const path = url.pathname;
+    return {
+        method: method.slice(0, 12),
+        path: path.slice(0, 240),
+        status,
+        reason: FAILURE_EVIDENCE_REASONS.has(reason) ? reason : 'other',
+        truncated: method.length > 12 || path.length > 240,
     };
 }
 
@@ -83,21 +122,49 @@ async function prepare(page, viewport, mode) {
     const malformedDiagnostics = [];
     const diagnostics = [];
     const cashReceipts = [];
+    const notificationRequests = [];
+    const notificationReceipts = [];
+    const invalidNotificationRequests = [];
     const apiRequests = new Set();
     const finishedRequests = new Set();
+    const apiResponseStatuses = new Map();
     const failedRequests = [];
     let committed = false;
 
     page.on('request', request => {
         const url = new URL(request.url());
-        if (url.origin === ORIGIN && url.pathname.startsWith('/api/')) apiRequests.add(request);
+        if (url.origin === ORIGIN && url.pathname.startsWith('/api/')) {
+            apiRequests.add(request);
+            if (url.pathname === '/api/notification-center') notificationRequests.push(request);
+        }
+    });
+    page.on('response', response => {
+        const request = response.request();
+        if (apiRequests.has(request)) apiResponseStatuses.set(request, response.status());
     });
     page.on('requestfinished', request => finishedRequests.add(request));
     page.on('requestfailed', request => {
         if (apiRequests.has(request)) {
-            failedRequests.push(request.url().split('?')[0]);
+            failedRequests.push(safeRequestEvidence(request, 'transport-failure'));
             finishedRequests.add(request);
         }
+    });
+
+    // The shell's NotificationProvider requests this exact read during bootstrap.
+    // Install after shared mocks and before the final guard so fallback reaches here.
+    await page.route('**/api/notification-center*', async route => {
+        const request = route.request();
+        const url = new URL(request.url());
+        const profileId = request.headers()['x-profile-id'] ?? null;
+        if (request.method() !== 'GET' || url.origin !== ORIGIN || url.username !== '' || url.password !== ''
+            || url.pathname !== '/api/notification-center' || url.search !== '?per_page=5'
+            || (profileId !== null && profileId !== '1')) {
+            invalidNotificationRequests.push(safeRequestEvidence(request, 'unexpected-notification-read'));
+            return route.abort();
+        }
+        const body = JSON.parse(JSON.stringify(NOTIFICATION_EMPTY_RESPONSE));
+        notificationReceipts.push(cashReceipt(request, url.pathname, 200, body));
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
     });
 
     await page.route(/\/api\/cash(?:\?.*)?$/, route => {
@@ -181,11 +248,11 @@ async function prepare(page, viewport, mode) {
         const url = new URL(request.url());
         const mutation = /^(POST|PUT|PATCH|DELETE)$/.test(request.method());
         if (url.username !== '' || url.password !== '') {
-            rejectedWrites.push(`${request.method()} ${url.origin}${url.pathname}`);
+            rejectedWrites.push(safeRequestEvidence(request, 'url-credentials'));
             return route.abort();
         }
         if (url.origin !== ORIGIN) {
-            rejectedWrites.push(`${request.method()} ${url.origin}${url.pathname}`);
+            rejectedWrites.push(safeRequestEvidence(request, 'off-origin'));
             return route.abort();
         }
         if (url.pathname === '/api/ops/api-failures') {
@@ -194,8 +261,8 @@ async function prepare(page, viewport, mode) {
                 diagnostics.push({ request, path: url.pathname, status: 202, body: JSON.parse(JSON.stringify(body)) });
                 return route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify(body) });
             }
-            malformedDiagnostics.push(`${request.method()} ${url.pathname}`);
-            rejectedWrites.push(`${request.method()} ${url.origin}${url.pathname}`);
+            malformedDiagnostics.push(safeRequestEvidence(request, 'malformed-diagnostic'));
+            rejectedWrites.push(safeRequestEvidence(request, 'malformed-diagnostic'));
             return route.abort();
         }
         if (!mutation) return route.fallback();
@@ -203,11 +270,13 @@ async function prepare(page, viewport, mode) {
         if (request.method() === 'POST' && url.pathname === '/api/cash/deposit' && url.search === '') {
             return route.fallback();
         }
-        rejectedWrites.push(`${request.method()} ${url.origin}${url.pathname}`);
+        rejectedWrites.push(safeRequestEvidence(request, 'unlisted-write'));
         return route.abort();
     });
 
-    return { entries, attempts, rejectedWrites, malformedDiagnostics, diagnostics, cashReceipts, apiRequests, finishedRequests, failedRequests };
+    const evidence = { entries, attempts, rejectedWrites, malformedDiagnostics, diagnostics, cashReceipts, notificationRequests, notificationReceipts, invalidNotificationRequests, apiRequests, finishedRequests, apiResponseStatuses, failedRequests };
+    failureEvidenceByPage.set(page, evidence);
+    return evidence;
 }
 
 async function fillDepositForm(page) {
@@ -254,13 +323,25 @@ async function expectCapturedApiReceiptsSettled(evidence) {
     expect(evidence.failedRequests).toEqual([]);
     expect(evidence.malformedDiagnostics).toEqual([]);
     expect(evidence.rejectedWrites).toEqual([]);
+    expect(evidence.invalidNotificationRequests).toEqual([]);
+    expect(evidence.notificationRequests.length).toBeGreaterThan(0);
+    const notificationReceiptRequests = evidence.notificationReceipts.map(receipt => receipt.request);
+    expect(new Set(notificationReceiptRequests).size).toBe(notificationReceiptRequests.length);
+    for (const request of evidence.notificationRequests) {
+        expect(notificationReceiptRequests).toContain(request);
+    }
+    expect(notificationReceiptRequests).toHaveLength(evidence.notificationRequests.length);
     for (const request of evidence.apiRequests) {
         const response = await request.response();
         expect(response).not.toBeNull();
-        expect(response.status() < 400 || response.status() === 503).toBe(true);
+        const status = response.status();
+        const reason = status === 501 ? 'fixture-unmocked-501' : 'status-outside-fixture-allowance';
+        const label = safeRequestEvidence(request, reason, status);
+        expect(status < 400 || status === 503,
+            `${label.method} ${label.path} returned HTTP ${label.status}; reason=${label.reason}; truncated=${label.truncated}`).toBe(true);
         expect(await response.finished()).toBeNull();
     }
-    for (const receipt of [...evidence.cashReceipts, ...evidence.diagnostics]) {
+    for (const receipt of [...evidence.cashReceipts, ...evidence.notificationReceipts, ...evidence.diagnostics]) {
         const response = await receipt.request.response();
         expect(response).not.toBeNull();
         expect(response.status()).toBe(receipt.status);
@@ -268,6 +349,17 @@ async function expectCapturedApiReceiptsSettled(evidence) {
         expect(await response.json()).toEqual(receipt.body);
         if (evidence.diagnostics.includes(receipt)) {
             expect(receipt.request.postDataJSON()).toMatchObject({ method: 'post', endpoint: '/api/cash/deposit', status: 503 });
+        } else if (evidence.notificationReceipts.includes(receipt)) {
+            const url = new URL(receipt.request.url());
+            expect(receipt.origin).toBe(ORIGIN);
+            expect(receipt.method).toBe('GET');
+            expect(receipt.path).toBe('/api/notification-center');
+            expect(receipt.query).toBe('?per_page=5');
+            expect(receipt.profileId === null || receipt.profileId === '1').toBe(true);
+            expect(url.username).toBe('');
+            expect(url.password).toBe('');
+            expect(receipt.status).toBe(200);
+            expect(receipt.body).toEqual(NOTIFICATION_EMPTY_RESPONSE);
         } else {
             expect(receipt.origin).toBe(ORIGIN);
             expect(receipt.profileId).toBe(String(TEST_PORTFOLIO.id));
@@ -286,6 +378,33 @@ async function expectCapturedApiReceiptsSettled(evidence) {
         }
     }
 }
+
+test.afterEach(({ page }, testInfo) => {
+    if (testInfo.status === testInfo.expectedStatus) return;
+    const evidence = failureEvidenceByPage.get(page);
+    if (!evidence) return;
+
+    const bounded = values => ({ items: values.slice(0, 40), truncated: values.length > 40 });
+    const apiRequests = [...evidence.apiRequests].map(request => {
+        const status = evidence.apiResponseStatuses.get(request) ?? null;
+        const reason = status === 501
+            ? 'fixture-unmocked-501'
+            : status !== null ? 'response-received'
+            : evidence.finishedRequests.has(request) ? 'finished-without-response' : 'request-pending';
+        return safeRequestEvidence(request, reason, status);
+    });
+    // Failure-only output is limited to fixed test title and method/path/status/reason metadata.
+    // It deliberately excludes request URLs with queries, headers, bodies, and response bodies.
+    console.error(`[cash-uncertain-deposit] ${JSON.stringify({
+        test: testInfo.title.slice(0, 200),
+        testTitleTruncated: testInfo.title.length > 200,
+        assertionFailed: true,
+        apiRequests: bounded(apiRequests),
+        failedRequests: bounded(evidence.failedRequests),
+        rejectedWrites: bounded(evidence.rejectedWrites),
+        malformedDiagnostics: bounded(evidence.malformedDiagnostics),
+    })}`);
+});
 
 for (const viewport of VIEWPORTS) {
     test.describe(`Cash uncertain deposit recovery ${viewport.name}`, () => {
