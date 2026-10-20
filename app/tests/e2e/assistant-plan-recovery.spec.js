@@ -65,6 +65,17 @@ function ownFailureSite(testError) {
     return match ? `${match[1]}:${match[2]}` : null;
 }
 
+function diagnosticPath(pathname) {
+    const segments = pathname.split('/');
+    return segments.map((segment, index) => {
+        const resourceId = segments[index - 1] === 'runs'
+            || /^\d+$/.test(segment)
+            || /^[a-f\d]{8}-[a-f\d-]{27,}$/i.test(segment)
+            || /^[a-f\d]{32,}$/i.test(segment);
+        return resourceId ? '{id}' : segment;
+    }).join('/');
+}
+
 test.afterEach(({}, testInfo) => {
     if (!testInfo.errors?.length) return;
     const diagnostic = failureDiagnosticsByTest.get(testInfo);
@@ -188,7 +199,7 @@ for (const viewport of [
             allRequests.push(request);
             const url = new URL(request.url());
             if (!/^https?:$/.test(url.protocol)) return;
-            const rawPath = url.pathname;
+            const rawPath = diagnosticPath(url.pathname);
             const observation = {
                 method: request.method().slice(0, 12),
                 path: rawPath.slice(0, 240),
