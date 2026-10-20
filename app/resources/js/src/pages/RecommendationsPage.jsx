@@ -453,11 +453,11 @@ export default function RecommendationsPage() {
             )}
 
             {selected && (
-                <div className="modal show d-block lido-tos-review-modal" style={{ background: 'rgba(0,0,0,.45)' }} role="dialog" aria-modal="true">
+                <div className="modal show d-block lido-tos-review-modal" style={{ background: 'rgba(0,0,0,.45)' }} role="dialog" aria-modal="true" aria-labelledby="recommendation-review-dialog-title">
                     <div className="modal-dialog modal-lg modal-dialog-scrollable">
                         <div className="modal-content">
                             <div className="modal-header">
-                                <h5 className="modal-title">
+                                <h5 id="recommendation-review-dialog-title" className="modal-title">
                                     {displayLabel(selected)}
                                     {' '}
                                     {selected.symbol}
