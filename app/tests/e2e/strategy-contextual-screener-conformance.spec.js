@@ -1,6 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import {
+    createApiFailureDiagnosticCollector,
+    handleApiFailureDiagnostic,
+    registerApiFailureDiagnosticAfterEach,
+    verifyApiFailureDiagnostics,
+} from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticAfterEach(test);
 
 const VIEWPORTS = [
     { name: 'mobile', width: 390, height: 844 },
@@ -96,6 +104,7 @@ function installContextRequestGuard(page, appOrigin, mode) {
     const requests = [];
     const screenerWrites = [];
     const diagnostics = [];
+    const diagnosticReports = createApiFailureDiagnosticCollector(page, appOrigin);
     const blockedRequests = [];
     const notificationReads = [];
     let createAttempts = 0;
@@ -111,6 +120,8 @@ function installContextRequestGuard(page, appOrigin, mode) {
         const url = new URL(request.url());
         const method = request.method().toUpperCase();
         const write = !['GET', 'HEAD', 'OPTIONS'].includes(method);
+
+        if (await handleApiFailureDiagnostic(route, { origin: appOrigin, collector: diagnosticReports })) return;
 
         if (url.origin !== appOrigin) {
             blockedRequests.push(`${method} ${url.origin}${url.pathname}`);
@@ -199,7 +210,7 @@ function installContextRequestGuard(page, appOrigin, mode) {
         return route.fallback();
     });
 
-    return { requests, screenerWrites, diagnostics, notificationReads, blockedRequests };
+    return { requests, screenerWrites, diagnostics, diagnosticReports, notificationReads, blockedRequests };
 }
 
 async function startJourney(page, testInfo, viewport, mode) {
@@ -234,7 +245,8 @@ async function startJourney(page, testInfo, viewport, mode) {
     return { appOrigin, guard, openThreshold };
 }
 
-async function assertTerminalReceipts(guard, appOrigin) {
+async function assertTerminalReceipts(page, guard, appOrigin) {
+    await verifyApiFailureDiagnostics(page);
     expect(guard.blockedRequests).toEqual([]);
     expect(guard.requests.every((request) => new URL(request.url()).origin === appOrigin)).toBe(true);
 
@@ -242,6 +254,7 @@ async function assertTerminalReceipts(guard, appOrigin) {
     const recordedWrites = [
         ...guard.screenerWrites.map(({ method, path }) => `${method} ${path}`),
         ...guard.diagnostics.map(({ method, path }) => `${method} ${path}`),
+        ...[...guard.diagnosticReports.observed.keys()].map((request) => `${request.method()} ${new URL(request.url()).pathname}`),
     ].sort();
     expect(writeRequests.map((request) => `${request.method()} ${new URL(request.url()).pathname}`).sort()).toEqual(recordedWrites);
 
@@ -268,6 +281,13 @@ async function assertTerminalReceipts(guard, appOrigin) {
         if (request.method() === 'POST' && url.pathname === '/api/logs/frontend') {
             expect(response.status()).toBe(200);
             expect(body).toEqual({ ok: true });
+        }
+        if (request.method() === 'POST' && url.pathname === '/api/ops/api-failures') {
+            expect(url.search).toBe('');
+            expect(url.username).toBe('');
+            expect(url.password).toBe('');
+            expect(response.status()).toBe(202);
+            expect(body).toEqual({ data: { accepted: true } });
         }
         if (['/api/v1/strategy', '/api/screeners'].includes(url.pathname)) {
             expect(request.headers()['x-profile-id']).toBe('1');
@@ -299,6 +319,12 @@ async function assertTerminalReceipts(guard, appOrigin) {
     ));
     expect(notificationReceipts.length).toBeGreaterThan(0);
     expect(notificationReceipts).toEqual(guard.notificationReads);
+    expect(guard.diagnosticReports.violations).toEqual([]);
+    expect(guard.diagnosticReports.failures).toEqual([]);
+    expect(guard.diagnosticReports.pending.size).toBe(0);
+    for (const receipt of guard.diagnosticReports.receipts) {
+        expect(receipt).toMatchObject({ method: 'post', responseStatus: 202, finished: true, accepted: true });
+    }
     expect(apiReceipts.filter(({ method, path }) => method === 'POST' && path === '/api/screeners').map(({ status }) => status))
         .toEqual(guard.screenerWrites.map(({ status }) => status));
     return apiReceipts;
@@ -381,7 +407,8 @@ for (const viewport of VIEWPORTS) {
         });
         await returnNavigation;
         await expect(page).toHaveURL('/strategy?strategy_id=7');
-        const receipts = await assertTerminalReceipts(guard, appOrigin);
+        await assertRestoredDraft(page, openThreshold, 1);
+        const receipts = await assertTerminalReceipts(page, guard, appOrigin);
         assertReturnReads(guard, returnReadStart);
         expect(receipts.filter(({ method, path }) => method === 'POST' && path === '/api/screeners').map(({ status }) => status)).toEqual([201]);
         expect(guard.screenerWrites).toHaveLength(1);
@@ -413,7 +440,6 @@ for (const viewport of VIEWPORTS) {
             max_lookback: null,
         });
         assertNoStrategySave(guard);
-        await assertRestoredDraft(page, openThreshold, 1);
     });
 
     test(`STR-02 failed contextual save retains the Screener draft for explicit retry (${viewport.name})`, async ({ page }, testInfo) => {
@@ -439,7 +465,8 @@ for (const viewport of VIEWPORTS) {
         expect((await retrySave).status()).toBe(201);
         await returnNavigation;
         await expect(page).toHaveURL('/strategy?strategy_id=7');
-        const receipts = await assertTerminalReceipts(guard, appOrigin);
+        await assertRestoredDraft(page, openThreshold, 1);
+        const receipts = await assertTerminalReceipts(page, guard, appOrigin);
         assertReturnReads(guard, returnReadStart);
         expect(receipts.filter(({ method, path }) => method === 'POST' && path === '/api/screeners').map(({ status }) => status)).toEqual([503, 201]);
         expect(guard.screenerWrites).toHaveLength(2);
@@ -453,7 +480,6 @@ for (const viewport of VIEWPORTS) {
             });
         }
         assertNoStrategySave(guard);
-        await assertRestoredDraft(page, openThreshold, 1);
     });
 
     test(`STR-02 contextual cancel restores the Strategy without creating a Screener (${viewport.name})`, async ({ page }, testInfo) => {
@@ -463,11 +489,11 @@ for (const viewport of VIEWPORTS) {
         await page.getByRole('button', { name: 'Cancel — return to Strategy', exact: true }).click();
         await returnNavigation;
         await expect(page).toHaveURL('/strategy?strategy_id=7');
-        const receipts = await assertTerminalReceipts(guard, appOrigin);
+        await assertRestoredDraft(page, openThreshold, 0);
+        const receipts = await assertTerminalReceipts(page, guard, appOrigin);
         assertReturnReads(guard, returnReadStart);
         expect(receipts.filter(({ method, path }) => method === 'POST' && path === '/api/screeners')).toEqual([]);
         expect(guard.screenerWrites).toEqual([]);
         assertNoStrategySave(guard);
-        await assertRestoredDraft(page, openThreshold, 0);
     });
 }
