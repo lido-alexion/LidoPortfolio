@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { handleApiFailureDiagnosticForPage, registerApiFailureDiagnosticFixtureHooks } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticFixtureHooks(test);
 
 const TOKEN = '11111111-1111-4111-8111-111111111111';
 const DOWNLOAD = `/api/exports/${TOKEN}/download`;
@@ -9,8 +12,10 @@ async function prepare(page, name, writes) {
     await seedDeterministicJourney(page, `export-${name}`);
     await installInvestorWorkflowApiMocks(page);
     const rejected = [];
-    return { rejected, seal: () => page.route('**/*', route => {
+    const allowedOrigin = new URL(process.env.STOX_E2E_BASE_URL || 'http://127.0.0.1:4177').origin;
+    return { rejected, seal: () => page.route('**/*', async route => {
         const request = route.request(); const url = new URL(request.url());
+        if (await handleApiFailureDiagnosticForPage(route, page, allowedOrigin)) return;
         const allowed = ['GET', 'HEAD'].includes(request.method()) || [['POST', '/api/logs/frontend'], ...writes].some(([method, path]) => request.method() === method && url.pathname === path);
         if (url.origin !== 'http://127.0.0.1:4177' || !allowed) { rejected.push(`${request.method()} ${url.pathname}`); return route.abort(); }
         return route.fallback();

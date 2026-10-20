@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { installApiFailureDiagnosticBoundaryForPage, isApiFailureDiagnosticRequest, registerApiFailureDiagnosticFixtureHooks } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticFixtureHooks(test);
 
 const VIEWPORTS = [
     { name: 'mobile', width: 390, height: 844 },
@@ -120,6 +123,7 @@ async function installHoldingsRoutes(page) {
         expect(route.request().method()).toBe('GET');
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ stock: STOCK, data: [], price_count: 0, has_price_history: false }) });
     });
+    await installApiFailureDiagnosticBoundaryForPage(page);
 }
 
 async function installInsightRoute(page, mode, observedPayloads) {
@@ -150,7 +154,8 @@ async function assertOnlyAllowedHttpAndMutations(observedRequests, allowedOrigin
     const http = observedRequests.filter(({ protocol }) => protocol === 'http:' || protocol === 'https:');
     expect(http.length).toBeGreaterThan(0);
     expect(http.every(({ origin }) => origin === allowedOrigin)).toBe(true);
-    const mutations = http.filter(({ request }) => /^(POST|PUT|PATCH|DELETE)$/.test(request.method()));
+    const mutations = http.filter(({ request }) => /^(POST|PUT|PATCH|DELETE)$/.test(request.method())
+        && !isApiFailureDiagnosticRequest(request, allowedOrigin));
     expect(mutations.length).toBeGreaterThan(0);
     expect(mutations.every(({ request, pathname }) => request.method() === 'POST' && pathname === INSIGHT_PATH)).toBe(true);
     const payloads = mutations.map(({ request }) => request.postDataJSON());

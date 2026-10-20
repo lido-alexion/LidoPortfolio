@@ -166,8 +166,13 @@ api.interceptors.response.use(
         const url = error?.config?.url || '';
         let stoxApiPath = null;
         try {
-            const apiBase = new URL(error?.config?.baseURL || appUrl('/api'), window.location.origin);
-            const requestUrl = new URL(url, apiBase);
+            const requestConfig = error?.config;
+            const baseURL = requestConfig?.baseURL || appUrl('/api');
+            const apiBase = new URL(baseURL, window.location.origin);
+            // Axios joins leading-slash request paths to baseURL. Use the instance's
+            // resolver here too; native URL resolution would discard the /api prefix.
+            const resolvedRequestUrl = api.getUri({ ...requestConfig, baseURL });
+            const requestUrl = new URL(resolvedRequestUrl, window.location.origin);
             const apiBasePath = apiBase.pathname.replace(/\/$/, '');
             if (requestUrl.origin === apiBase.origin
                 && (requestUrl.pathname === apiBasePath || requestUrl.pathname.startsWith(`${apiBasePath}/`))) {
