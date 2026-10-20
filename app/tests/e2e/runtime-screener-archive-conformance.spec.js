@@ -1,6 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import {
+    createApiFailureDiagnosticCollector,
+    handleApiFailureDiagnostic,
+    registerApiFailureDiagnosticAfterEach,
+    verifyApiFailureDiagnostics,
+} from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticAfterEach(test);
 
 const VIEWPORTS = [
     { name: 'mobile', width: 390, height: 844 },
@@ -8,6 +16,17 @@ const VIEWPORTS = [
 ];
 
 const DEPENDENCY_MESSAGE = 'An active Strategy still uses this screener. Update or archive that Strategy before archiving the screener.';
+const EMPTY_NOTIFICATION_CENTER_RESPONSE = {
+    data: [],
+    meta: {
+        current_page: 1,
+        last_page: 1,
+        per_page: 5,
+        total: 0,
+        unread_count: 0,
+        active_critical_count: 0,
+    },
+};
 const DEFINITION = {
     root: {
         type: 'group', op: 'AND', children: [{
@@ -105,7 +124,7 @@ function screenerFixture(id, artifactStatus = 'active') {
     };
 }
 
-function createNetworkEvidence(page, allowedOrigin) {
+function createNetworkEvidence(page, allowedOrigin, diagnosticReports) {
     const requests = [];
     const byRequest = new Map();
 
@@ -136,22 +155,50 @@ function createNetworkEvidence(page, allowedOrigin) {
         }
     }
 
+    async function assertNotificationReceipts() {
+        const notifications = requests.filter(({ method, url }) => method === 'GET' && url.pathname === '/api/notification-center');
+        expect(notifications.length).toBeGreaterThan(0);
+        for (const { request, url } of notifications) {
+            expect(url.search).toBe('?per_page=5');
+            expect(['1', null]).toContain(request.headers()['x-profile-id'] || null);
+            const response = await request.response();
+            expect(response).not.toBeNull();
+            expect(response.status()).toBe(200);
+            expect(await response.finished()).toBeNull();
+            expect(await response.json()).toEqual(EMPTY_NOTIFICATION_CENTER_RESPONSE);
+        }
+    }
+
+    async function assertDiagnosticReceipts(dependencyRejected) {
+        await verifyApiFailureDiagnostics(page);
+        expect(diagnosticReports.receipts).toEqual(dependencyRejected ? [{
+            method: 'delete',
+            endpoint: '/api/screeners/41',
+            status: 422,
+            responseStatus: 202,
+            finished: true,
+            accepted: true,
+        }] : []);
+    }
+
     function assertBoundary(allowedDeletePath) {
         expect(requests.map(({ url }) => url.origin).filter((origin) => origin !== allowedOrigin)).toEqual([]);
+        const diagnosticRequests = diagnosticReports.observed;
         const mutations = requests
-            .filter(({ method }) => /^(POST|PUT|PATCH|DELETE)$/.test(method))
+            .filter(({ request, method }) => /^(POST|PUT|PATCH|DELETE)$/.test(method) && !diagnosticRequests.has(request))
             .map(({ method, url, request }) => ({ method, path: url.pathname, body: request.postData() }));
         expect(mutations).toEqual(allowedDeletePath ? [{ method: 'DELETE', path: allowedDeletePath, body: null }] : []);
     }
 
-    return { requests, settleAllObserved, assertBoundary };
+    return { requests, settleAllObserved, assertNotificationReceipts, assertDiagnosticReceipts, assertBoundary };
 }
 
 async function prepareRuntimeArchive(page, viewport, screenerId, archiveOutcome) {
     await seedDeterministicJourney(page, `scr08-runtime-${viewport.name}-${screenerId}`);
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const allowedOrigin = new URL(process.env.STOX_E2E_BASE_URL || 'http://127.0.0.1:4177').origin;
-    const evidence = createNetworkEvidence(page, allowedOrigin);
+    const diagnosticReports = createApiFailureDiagnosticCollector(page, allowedOrigin);
+    const evidence = createNetworkEvidence(page, allowedOrigin, diagnosticReports);
     await page.route('**/*', async (route) => {
         const url = new URL(route.request().url());
         if (['http:', 'https:'].includes(url.protocol) && url.origin !== allowedOrigin) {
@@ -173,6 +220,15 @@ async function prepareRuntimeArchive(page, viewport, screenerId, archiveOutcome)
         const url = new URL(request.url());
         const method = request.method();
         const path = url.pathname;
+
+        if (await handleApiFailureDiagnostic(route, { origin: allowedOrigin, collector: diagnosticReports })) return;
+
+        if (path === '/api/notification-center' && method === 'GET') {
+            if (url.search !== '?per_page=5' || ![null, '1'].includes(request.headers()['x-profile-id'] || null)) {
+                return route.abort();
+            }
+            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(EMPTY_NOTIFICATION_CENTER_RESPONSE) });
+        }
 
         if (path === '/api/screeners' && method === 'GET') {
             return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [record], count: 1 }) });
@@ -309,6 +365,8 @@ test.describe('SCR-08 runtime screener archive conformance', () => {
             await expect(page.getByText('Screener archived. Run history was preserved.', { exact: true })).toHaveCount(0);
             evidence.assertBoundary(pathForRecord);
             await openSavedHistory(page, record, savedRun, evidence);
+            await evidence.assertNotificationReceipts();
+            await evidence.assertDiagnosticReceipts(true);
             evidence.assertBoundary(pathForRecord);
         });
 
@@ -341,6 +399,8 @@ test.describe('SCR-08 runtime screener archive conformance', () => {
             await expect(page.getByText('This screener is archived and cannot be run or edited. Its run history remains available below.', { exact: true })).toBeVisible();
             await expect(page.getByRole('button', { name: 'Run now', exact: true })).toBeDisabled();
             await expect(history).toContainText('TCS');
+            await evidence.assertNotificationReceipts();
+            await evidence.assertDiagnosticReceipts(false);
             evidence.assertBoundary(pathForRecord);
         });
     }
