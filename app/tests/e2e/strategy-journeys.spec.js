@@ -1,8 +1,16 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
-import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { installInvestorWorkflowApiMocks as installInvestorWorkflowApiMocksBase } from './investorWorkflowApiMocks.js';
 import { installTosApiMocks } from './tosApiMocks.js';
 import { HOLD_INSIGHT, OPEN_BUY_RECOMMENDATION } from '../js/tos/fixtures/tosApi.js';
+import { handleApiFailureDiagnosticForPage, installApiFailureDiagnosticBoundaryForPage, registerApiFailureDiagnosticFixtureHooks } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticFixtureHooks(test);
+
+async function installInvestorWorkflowApiMocks(page, options) {
+    await installInvestorWorkflowApiMocksBase(page, options);
+    await installApiFailureDiagnosticBoundaryForPage(page);
+}
 
 const VIEWPORTS = [
     { name: 'mobile', width: 390, height: 844 },
@@ -425,9 +433,10 @@ test.describe('V9-UX-001 strategy journeys', () => {
                 return route.fallback();
             });
             const rejected = [];
-            await page.route('**/*', route => {
+            await page.route('**/*', async route => {
                 const request = route.request();
                 const url = new URL(request.url());
+                if (await handleApiFailureDiagnosticForPage(route, page, 'http://127.0.0.1:4177')) return;
                 const read = ['GET', 'HEAD'].includes(request.method());
                 const allowed = request.method() === 'POST' && ['/api/v1/pipeline/run', '/api/v1/recommendations/2151/review', '/api/v1/recommendations/2152/review', '/api/logs/frontend'].includes(url.pathname);
                 if (url.origin !== 'http://127.0.0.1:4177' || (!read && !allowed)) {
@@ -474,6 +483,7 @@ test.describe('V9-UX-001 strategy journeys', () => {
                     { ...HOLD_INSIGHT, id: 202, symbol: 'INFY', name: 'Infosys Limited', strategy_name: 'Quality Core', current_allocation_pct: 7, target_allocation_pct: 7, suggested_allocation_pct: 7 },
                 ],
             });
+            await installApiFailureDiagnosticBoundaryForPage(page);
             await page.goto('/recommendations');
             await page.getByLabel('Show HOLD insights').check();
             const sameStockRows = page.getByRole('row').filter({ hasText: 'INFY' });

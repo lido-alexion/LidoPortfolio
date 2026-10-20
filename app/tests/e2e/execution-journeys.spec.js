@@ -1,7 +1,12 @@
+import { createApiFailureDiagnosticCollector, handleApiFailureDiagnostic, installApiFailureDiagnosticBoundary, registerApiFailureDiagnosticAfterEach } from './apiFailureDiagnosticBoundary.js';
+
 import { test, expect } from '@playwright/test';
 import { OPEN_BUY_RECOMMENDATION } from '../js/tos/fixtures/tosApi.js';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installTosApiMocks } from './tosApiMocks.js';
+
+registerApiFailureDiagnosticAfterEach(test);
+
 
 const VIEWPORTS = [
     { name: 'mobile', width: 390, height: 844 },
@@ -27,6 +32,8 @@ test.describe('V9-UX-001 execution journeys', () => {
                 strategy_name: 'Momentum Core',
             };
             await installTosApiMocks(page, { recommendations: [recommendation] });
+            const diagnosticReports = createApiFailureDiagnosticCollector(page);
+            await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
 
             // React.StrictMode can repeat development mount effects. Keep every
             // pre-action read in the unavailable phase; advance only when the
@@ -57,7 +64,8 @@ test.describe('V9-UX-001 execution journeys', () => {
                     reads.push(url.pathname);
                     trackedReadRequests.add(request);
                 }
-                if (/^(POST|PUT|PATCH|DELETE)$/.test(request.method()) && url.pathname !== '/api/logs/frontend') {
+                const isLocalDiagnostic = request.method() === 'POST' && url.origin === appOrigin && !url.username && !url.password && url.pathname === '/api/ops/api-failures' && !url.search;
+                if (/^(POST|PUT|PATCH|DELETE)$/.test(request.method()) && url.pathname !== '/api/logs/frontend' && !isLocalDiagnostic) {
                     writes.push({ method: request.method(), path: url.pathname });
                 }
             });
@@ -76,6 +84,7 @@ test.describe('V9-UX-001 execution journeys', () => {
             await page.route('**/*', async route => {
                 const request = route.request();
                 const url = new URL(request.url());
+                if (await handleApiFailureDiagnostic(route, { origin: appOrigin, collector: diagnosticReports })) return;
                 if (url.origin !== appOrigin) {
                     blockedOrigins.push(url.origin);
                     return route.abort();
@@ -154,6 +163,8 @@ test.describe('V9-UX-001 execution journeys', () => {
                 strategy_name: 'Momentum Core',
             };
             await installTosApiMocks(page, { recommendations: [recommendation] });
+            const diagnosticReports = createApiFailureDiagnosticCollector(page);
+            await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
             const observedOrderRequests = [];
             page.on('request', (request) => {
                 if (/\/api\/v1\/execution\/(submit-selected|orders?)(\/|$)/.test(new URL(request.url()).pathname)) {
@@ -197,6 +208,8 @@ test.describe('V9-UX-001 manual execution journeys', () => {
                 reference_price: 3500,
             };
             await installTosApiMocks(page, { recommendations: [recommendation] });
+            const diagnosticReports = createApiFailureDiagnosticCollector(page);
+            await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
             await page.route('**/api/transactions*', (route) => route.fulfill({ json: { data: [] } }));
             await page.route('**/api/settings', (route) => route.fulfill({ json: { data: { fee_components: [] } } }));
             let ledgerWrites = 0;
@@ -240,6 +253,8 @@ test.describe('V9-UX-001 cancellation before broker submission', () => {
             let cancelPayload = null;
             const brokerSubmissionRequests = [];
             await installTosApiMocks(page, { recommendations: [recommendation] });
+            const diagnosticReports = createApiFailureDiagnosticCollector(page);
+            await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
             await page.route('**/api/v1/recommendations/pending-execution', (route) => route.fulfill({
                 json: {
                     success: true,
@@ -280,6 +295,8 @@ test.describe('V9-UX-001 broker reconciliation', () => {
             await seedDeterministicJourney(page, `execution-exe13-${viewport.name}`);
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
             await installTosApiMocks(page);
+            const diagnosticReports = createApiFailureDiagnosticCollector(page);
+            await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
             let reconcileCalls = 0;
             const order = {
                 id: 813,
@@ -329,6 +346,8 @@ test.describe('V9-UX-001 broker cancellation lifecycle', () => {
             await seedDeterministicJourney(page, `execution-exe09-${viewport.name}`);
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
             await installTosApiMocks(page);
+            const diagnosticReports = createApiFailureDiagnosticCollector(page);
+            await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
             let cancellationCalls = 0;
             const submittedOrder = {
                 id: 909,
@@ -367,6 +386,8 @@ test.describe('V9-UX-001 actual transaction recording', () => {
             await seedDeterministicJourney(page, `execution-exe02-${viewport.name}`);
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
             await installTosApiMocks(page);
+            const diagnosticReports = createApiFailureDiagnosticCollector(page);
+            await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
             let savedTransaction = null;
             await page.route('**/api/stocks/search**', (route) => route.fulfill({ json: { data: [] } }));
             await page.route('**/api/stocks/validate', (route) => route.fulfill({
@@ -404,6 +425,8 @@ test.describe('V9-UX-001 actual transaction recording', () => {
 
 async function installSemiAutomaticMocks(page, recommendation) {
     await installTosApiMocks(page, { recommendations: [] });
+    const diagnosticReports = createApiFailureDiagnosticCollector(page);
+    await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
     await page.route('**/api/v1/execution/mode', (route) => route.fulfill({
         json: { success: true, data: {
             execution_mode: 'semi_automatic',
@@ -528,6 +551,8 @@ test.describe('V9-UX-001 broker final and partial outcomes', () => {
             await seedDeterministicJourney(page, `execution-exe10-${viewport.name}`);
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
             await installTosApiMocks(page);
+            const diagnosticReports = createApiFailureDiagnosticCollector(page);
+            await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
             const order = { id: 910, symbol: 'INFY', side: 'buy', quantity: 5, status: 'pending', broker_status: 'cancelled', filled_quantity: 0 };
             await page.route('**/api/v1/review/dashboard', (route) => route.fulfill({ json: { success: true, data: { portfolio: {}, actionable_counts: {}, informational_counts: {}, outcomes: [], informational_outcomes: [], recent_reviews: [] } } }));
             await page.route('**/api/v1/orders', (route) => route.fulfill({ json: { success: true, data: [order] } }));
@@ -544,6 +569,8 @@ test.describe('V9-UX-001 broker final and partial outcomes', () => {
             await seedDeterministicJourney(page, `execution-exe11-${viewport.name}`);
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
             await installTosApiMocks(page);
+            const diagnosticReports = createApiFailureDiagnosticCollector(page);
+            await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
             const order = { id: 911, symbol: 'INFY', side: 'buy', quantity: 5, status: 'pending', broker_status: 'partial', filled_quantity: 2, average_fill_price: 3499 };
             await page.route('**/api/v1/review/dashboard', (route) => route.fulfill({ json: { success: true, data: { portfolio: {}, actionable_counts: {}, informational_counts: {}, outcomes: [], informational_outcomes: [], recent_reviews: [] } } }));
             await page.route('**/api/v1/orders', (route) => route.fulfill({ json: { success: true, data: [order] } }));
@@ -561,6 +588,8 @@ test.describe('V9-UX-001 broker final and partial outcomes', () => {
             await seedDeterministicJourney(page, `execution-exe12-${viewport.name}`);
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
             await installTosApiMocks(page);
+            const diagnosticReports = createApiFailureDiagnosticCollector(page);
+            await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
             const order = { id: 912, symbol: 'INFY', side: 'buy', quantity: 5, status: 'pending', broker_status: 'rejected', broker_error_message: 'Insufficient funds', filled_quantity: 0 };
             await page.route('**/api/v1/review/dashboard', (route) => route.fulfill({ json: { success: true, data: { portfolio: {}, actionable_counts: {}, informational_counts: {}, outcomes: [], informational_outcomes: [], recent_reviews: [] } } }));
             await page.route('**/api/v1/orders', (route) => route.fulfill({ json: { success: true, data: [order] } }));
@@ -664,6 +693,8 @@ test.describe('V9-UX-001 post-execution reconciliation', () => {
             await seedDeterministicJourney(page, `execution-exe15-${viewport.name}`);
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
             await installTosApiMocks(page);
+            const diagnosticReports = createApiFailureDiagnosticCollector(page);
+            await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
             let ledger = [];
             const holding = {
                 id: 1501,
