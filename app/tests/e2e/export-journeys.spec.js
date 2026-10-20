@@ -133,18 +133,35 @@ for (const viewport of VIEWPORTS) {
                 { phase: 'stale-export-rejection', items: [evidenceSnapshot, growthItem], status: 422, body: { message: 'Synthetic stale basket; review and retry.' } },
                 { phase: 'corrected-export-retry', items: [correctedSnapshot, growthItem], status: 202, body: { data: { token: TOKEN, status: 'queued', download_url: DOWNLOAD, expires_at: null } } },
             ];
-            const mutationReceipts = []; const mutationOrder = [];
-            const assertTerminalMutation = async (request, { phase, method, path, status, body }) => {
+            const mutationReceipts = []; const pendingMutationReceipts = []; const mutationOrder = [];
+            const immutableJson = value => {
+                const copy = cloneJson(value);
+                const freeze = current => {
+                    if (current && typeof current === 'object') { Object.values(current).forEach(freeze); Object.freeze(current); }
+                    return current;
+                };
+                return freeze(copy);
+            };
+            const beginTerminalMutationReceipt = (request, { phase, method, path, status, requestBody, responseBody }) => {
                 expect(request.method()).toBe(method);
                 const url = new URL(request.url());
                 expect(url.origin).toBe(new URL(process.env.STOX_E2E_BASE_URL || 'http://127.0.0.1:4177').origin);
                 expect(url.username).toBe(''); expect(url.password).toBe('');
                 expect(url.pathname).toBe(path); expect(url.search).toBe(''); expect(url.hash).toBe('');
-                const response = await request.response();
-                expect(response).not.toBeNull(); expect(response.status()).toBe(status);
-                expect(await response.json()).toEqual(body);
-                expect(await response.finished()).toBeNull();
-                mutationReceipts.push({ phase, method, path, status, requestBody: request.postData() === null ? null : cloneJson(request.postDataJSON()), responseBody: cloneJson(body) });
+                const expectedRequestBody = immutableJson(requestBody);
+                const capturedRequestBody = immutableJson(request.postData() === null ? null : request.postDataJSON());
+                const capturedResponseBody = immutableJson(responseBody);
+                expect(capturedRequestBody).toEqual(expectedRequestBody);
+                const receipt = Object.freeze({ phase, method, path, status, requestBody: capturedRequestBody, responseBody: capturedResponseBody });
+                mutationReceipts.push(receipt);
+                const assertion = (async () => {
+                    const response = await request.response();
+                    expect(response).not.toBeNull(); expect(response.status()).toBe(receipt.status);
+                    expect(immutableJson(await response.json())).toEqual(receipt.responseBody);
+                    expect(await response.finished()).toBeNull();
+                })();
+                pendingMutationReceipts.push(assertion);
+                return assertion;
             };
             await page.route('**/api/exports/catalog', route => route.fulfill({ json: { data: catalog } }));
             await page.route('**/api/exports/basket', async route => {
@@ -157,8 +174,9 @@ for (const viewport of VIEWPORTS) {
                 if (failSave) { failSave = false; status = 503; body = { message: 'Synthetic basket save unavailable.' }; }
                 else { items = cloneJson(plan.items); body = { data: { items: cloneJson(items) } }; }
                 expect(status).toBe(plan.status);
+                const receipt = beginTerminalMutationReceipt(request, { phase: plan.phase, method: 'PUT', path: '/api/exports/basket', status, requestBody: { items: plan.items }, responseBody: body });
                 await route.fulfill({ status, json: body });
-                await assertTerminalMutation(request, { phase: plan.phase, method: 'PUT', path: '/api/exports/basket', status, body });
+                await receipt;
             });
             await page.route('**/api/exports/basket/export', async route => {
                 const request = route.request(); const plan = exportWritePlan[exports++];
@@ -167,8 +185,9 @@ for (const viewport of VIEWPORTS) {
                 expect(request.postData()).toBeNull(); mutationOrder.push(`basket-export:${plan.phase}`);
                 expect(failExport).toBe(plan.status === 422);
                 if (failExport) failExport = false;
+                const receipt = beginTerminalMutationReceipt(request, { phase: plan.phase, method: 'POST', path: '/api/exports/basket/export', status: plan.status, requestBody: null, responseBody: plan.body });
                 await route.fulfill({ status: plan.status, json: plan.body });
-                await assertTerminalMutation(request, { phase: plan.phase, method: 'POST', path: '/api/exports/basket/export', status: plan.status, body: plan.body });
+                await receipt;
             });
             await page.route(`**/api/exports/${TOKEN}`, route => route.fulfill({ json: { data: { token: TOKEN, status: 'ready', download_url: DOWNLOAD, expires_at: '2099-01-01T00:00:00Z' } } }));
             let downloads = 0;
@@ -201,6 +220,7 @@ for (const viewport of VIEWPORTS) {
             await page.getByRole('button', { name: 'Export XLSX', exact: true }).click(); const job = page.getByRole('region', { name: 'Latest export' });
             await expect(job.getByRole('status')).toContainText('Export is queued.'); await expect(job.getByRole('link', { name: 'Download export' })).toHaveCount(0);
             await job.getByRole('button', { name: 'Refresh export status' }).click(); const downloadEvent = page.waitForEvent('download'); await job.getByRole('link', { name: 'Download export' }).click();
+            await Promise.all(pendingMutationReceipts);
             expect((await downloadEvent).suggestedFilename()).toBe('synthetic-basket.xlsx'); expect(downloads).toBe(1); expect(exports).toBe(2); expect(saves).toBe(8);
             expect(mutationReceipts).toHaveLength(10);
             expect(mutationReceipts.find(receipt => receipt.phase === 'rejected-export-preflight-save').requestBody.items[0].selected).toEqual(['101']);
