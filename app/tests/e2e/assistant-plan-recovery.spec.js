@@ -49,6 +49,42 @@ const freshStale = {
 const envelope = data => ({ success: true, data });
 const clone = value => structuredClone(value);
 const runPath = '/api/ai/assistant/runs';
+const failureDiagnosticsByTest = new WeakMap();
+const diagnosticStatusCodes = new Set([200, 201, 202, 204, 400, 401, 403, 404, 409, 422, 429, 500, 501, 502, 503, 504]);
+
+function ownFailureSite(testError) {
+    const location = testError?.location ?? testError?.error?.location;
+    if (location?.file?.split(/[\\/]/).at(-1) === 'assistant-plan-recovery.spec.js'
+        && Number.isInteger(location.line) && Number.isInteger(location.column)) {
+        return `${location.line}:${location.column}`;
+    }
+    const stack = typeof testError?.stack === 'string'
+        ? testError.stack
+        : typeof testError?.error?.stack === 'string' ? testError.error.stack : '';
+    const match = stack.match(/assistant-plan-recovery\.spec\.js:(\d+):(\d+)/);
+    return match ? `${match[1]}:${match[2]}` : null;
+}
+
+test.afterEach(({}, testInfo) => {
+    if (!testInfo.errors?.length) return;
+    const diagnostic = failureDiagnosticsByTest.get(testInfo);
+    if (!diagnostic) return;
+    const allSites = [...new Set(testInfo.errors.map(ownFailureSite).filter(Boolean))];
+    const sites = allSites.slice(0, 5);
+    const evidence = {
+        viewport: diagnostic.viewport,
+        phase: diagnostic.phase,
+        ownFailureSites: sites,
+        ownFailureSitesTruncated: allSites.length > sites.length,
+        requests: diagnostic.requests,
+        requestsTruncated: diagnostic.requestsTruncated,
+    };
+    try {
+        console.log(`[PR227 bounded browser failure evidence] ${JSON.stringify(evidence)}`);
+    } catch {
+        // Diagnostics must never change the test outcome or delay teardown.
+    }
+});
 
 async function expectSettledJson(response, expected) {
     expect(response).toBeTruthy();
@@ -145,17 +181,57 @@ for (const viewport of [
         const allResponses = new Map();
         const finishedRequests = new Set();
         const failedRequests = new Map();
-        page.on('request', request => allRequests.push(request));
-        page.on('response', response => allResponses.set(response.request(), response));
+        const diagnostic = { viewport: viewport.name, phase: 'application_navigation', requests: [], requestsTruncated: false, requestByObject: new Map() };
+        const setPhase = phase => { diagnostic.phase = phase; };
+        failureDiagnosticsByTest.set(testInfo, diagnostic);
+        page.on('request', request => {
+            allRequests.push(request);
+            const url = new URL(request.url());
+            if (!/^https?:$/.test(url.protocol)) return;
+            const rawPath = url.pathname;
+            const observation = {
+                method: request.method().slice(0, 12),
+                path: rawPath.slice(0, 240),
+                pathTruncated: rawPath.length > 240,
+                status: 'pending',
+            };
+            if (diagnostic.requests.length === 40) {
+                const oldest = diagnostic.requests.shift();
+                for (const [observedRequest, observedDiagnostic] of diagnostic.requestByObject) {
+                    if (observedDiagnostic === oldest) {
+                        diagnostic.requestByObject.delete(observedRequest);
+                        break;
+                    }
+                }
+                diagnostic.requestsTruncated = true;
+            }
+            diagnostic.requests.push(observation);
+            diagnostic.requestByObject.set(request, observation);
+        });
+        page.on('response', response => {
+            allResponses.set(response.request(), response);
+            const observation = diagnostic.requestByObject.get(response.request());
+            if (observation) {
+                const status = response.status();
+                observation.status = diagnosticStatusCodes.has(status) ? status : 'other';
+            }
+        });
         page.on('requestfinished', request => finishedRequests.add(request));
-        page.on('requestfailed', request => failedRequests.set(request, request.failure()?.errorText || 'unknown failure'));
+        page.on('requestfailed', request => {
+            failedRequests.set(request, request.failure()?.errorText || 'unknown failure');
+            const observation = diagnostic.requestByObject.get(request);
+            if (observation) observation.status = 'request_failed';
+        });
 
+        setPhase('application_navigation');
         await page.goto('/');
         const appOrigin = new URL(page.url()).origin;
+        setPhase('open_assistant_drawer');
         await page.getByRole('button', { name: 'Open StoX assistant' }).click();
         const drawer = page.getByRole('dialog', { name: 'StoX assistant' });
         await drawer.getByLabel('Assistant mode').selectOption('account');
 
+        setPhase('read_initial_history');
         const historyResponse = page.waitForResponse(response =>
             response.request().method() === 'GET' && new URL(response.url()).pathname.replace(/\/$/, '') === runPath,
         );
@@ -164,7 +240,8 @@ for (const viewport of [
         await expect(drawer.getByText('Approval expired', { exact: true })).toBeVisible();
         await expect(drawer.getByText('State changed — a fresh plan is required', { exact: true })).toBeVisible();
 
-        const recover = async (oldRun, freshRun) => {
+        const recover = async (oldRun, freshRun, recoveryKind) => {
+            setPhase(`${recoveryKind}_inspect_old_run`);
             const oldCard = drawer.locator('article[aria-label="Assistant run"]').filter({ hasText: oldRun.preview[0].consequence });
             await expect(oldCard).toHaveCount(1);
             await oldCard.getByText(/Review field changes/).click();
@@ -178,6 +255,7 @@ for (const viewport of [
                 return request.method() === 'POST'
                     && new URL(response.url()).pathname.replace(/\/$/, '') === runPath;
             });
+            setPhase(`${recoveryKind}_build_fresh_plan`);
             await oldCard.getByRole('button', { name: 'Build a fresh plan' }).click();
             const retryBody = envelope(freshRun);
             await expectSettledJson(await retryResponse, retryBody);
@@ -199,6 +277,7 @@ for (const viewport of [
                 return request.method() === 'POST'
                     && new URL(response.url()).pathname === `${runPath}/${freshRun.id}/approve`;
             });
+            setPhase(`${recoveryKind}_approve_fresh_plan`);
             await freshCard.getByRole('button', { name: 'Approve changes' }).click();
             const completed = {
                 ...clone(freshRun),
@@ -207,6 +286,7 @@ for (const viewport of [
                 steps: [{ index: 0, tool: freshRun.plan[0].tool, status: 'verified', affected_object_id: freshRun.preview[0].affected_object_id ?? 77 }],
             };
             await expectSettledJson(await approveResponse, envelope(completed));
+            setPhase(`${recoveryKind}_verify_action_results`);
             await expect(freshCard.getByText(completed.answer, { exact: true })).toBeVisible();
             const expectedActionResult = freshRun.preview[0].affected_object_id
                 ? `watchlist rename — verified (object ${freshRun.preview[0].affected_object_id})`
@@ -215,9 +295,10 @@ for (const viewport of [
             await expect(oldCard.getByRole('button', { name: 'Approve changes' })).toHaveCount(0);
         };
 
-        await recover(expired, freshExpired);
-        await recover(stale, freshStale);
+        await recover(expired, freshExpired, 'expired');
+        await recover(stale, freshStale, 'stale');
 
+        setPhase('verify_same_origin_and_mutation_allowlist');
         const httpRequests = allRequests.filter(request => /^https?:$/.test(new URL(request.url()).protocol));
         expect(httpRequests.every(request => new URL(request.url()).origin === appOrigin)).toBe(true);
 
@@ -233,9 +314,11 @@ for (const viewport of [
             { method: 'POST', path: `${runPath}/${freshStale.id}/approve`, body: { plan_hash: freshStale.plan_hash } },
         ]);
 
+        setPhase('verify_assistant_terminal_receipts');
         const explicitHistoryReads = routePhases.filter(phase => phase.request.method() === 'GET' && new URL(phase.request.url()).pathname.replace(/\/$/, '') === runPath);
         expect(explicitHistoryReads.length).toBeGreaterThan(0);
         expect(routePhases.filter(phase => phase.status !== 200)).toEqual([]);
+        setPhase('verify_all_response_bodies_and_completion');
         for (const phase of routePhases) {
             expect(failedRequests.has(phase.request), failedRequests.get(phase.request)).toBe(false);
             const response = allResponses.get(phase.request);
@@ -270,6 +353,7 @@ for (const viewport of [
             expect(await response.finished()).toBeNull();
             expect(await response.json()).toEqual(receipt.body);
         }
+        setPhase('verify_four_exact_business_payloads');
         expect(routePhases.filter(phase => phase.request.method() === 'POST').map(phase => phase.payload)).toEqual([
             { objective: expired.objective, retry_run_id: expired.id },
             { plan_hash: freshExpired.plan_hash },
