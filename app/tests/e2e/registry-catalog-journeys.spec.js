@@ -1,9 +1,14 @@
+import { createApiFailureDiagnosticCollector, installApiFailureDiagnosticBoundary, handleApiFailureDiagnostic, registerApiFailureDiagnosticAfterEach } from './apiFailureDiagnosticBoundary.js';
+
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { readFile } from 'node:fs/promises';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { TEST_PORTFOLIO } from '../js/tos/fixtures/tosApi.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+
+registerApiFailureDiagnosticAfterEach(test);
+
 
 const VIEWPORTS = [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }];
 const error = page => page.locator('.lido-main .contentPane.d-grid .alert[role="alert"]');
@@ -16,10 +21,12 @@ async function prepare(page, viewport, name, allowed = () => false) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await installInvestorWorkflowApiMocks(page);
     await page.route('**/api/portfolios', route => route.fulfill({ json: { data: [TEST_PORTFOLIO, { ...TEST_PORTFOLIO, id: 2, name: 'Long Term', is_default: false }] } }));
-    const blocked = [], writes = [];
-    return { blocked, writes, seal: () => page.route('**/*', route => {
+    const blocked = [], writes = [], diagnosticReports = createApiFailureDiagnosticCollector(page);
+    await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
+    return { blocked, writes, seal: () => page.route('**/*', async route => {
         const request = route.request(), url = new URL(request.url());
         const write = /^(POST|PUT|PATCH|DELETE)$/.test(request.method());
+        if (await handleApiFailureDiagnostic(route, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports })) return;
         if (url.origin !== 'http://127.0.0.1:4177' || (write && url.pathname !== '/api/logs/frontend' && !allowed(request.method(), url.pathname))) { blocked.push(`${request.method()} ${url.pathname}`); return route.abort(); }
         if (write && url.pathname !== '/api/logs/frontend') writes.push({ method: request.method(), path: url.pathname, body: request.postDataJSON() });
         return route.fallback();

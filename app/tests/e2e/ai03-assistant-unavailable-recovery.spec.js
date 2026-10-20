@@ -2,6 +2,9 @@ import { readFile } from 'node:fs/promises';
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { installApiFailureDiagnosticBoundaryForPage, isApiFailureDiagnosticRequest, registerApiFailureDiagnosticFixtureHooks } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticFixtureHooks(test);
 
 const VIEWPORTS = [
     { name: 'mobile', width: 390, height: 844 },
@@ -69,7 +72,7 @@ for (const viewport of VIEWPORTS) {
         const settledResponses = [];
         const overviewDocument = await readFile(new URL('../../public/docs/overview.html', import.meta.url));
 
-        await page.route('**/*', (route) => {
+        await page.route('**/*', async (route) => {
             const origin = new URL(route.request().url()).origin;
             if (origin !== allowedOrigin) {
                 blockedOrigins.push(origin);
@@ -136,6 +139,10 @@ for (const viewport of VIEWPORTS) {
                 body: overviewDocument,
             });
         });
+
+        // Register after the shared and fixture-specific mocks so diagnostic
+        // reports reach the strict terminal-receipt handler before mock fallbacks.
+        await installApiFailureDiagnosticBoundaryForPage(page);
 
         await page.goto('/');
         const trigger = page.getByRole('button', { name: 'Open StoX assistant' });
@@ -225,7 +232,8 @@ for (const viewport of VIEWPORTS) {
         const httpRequests = observedRequests.filter(({ request }) => /^https?:/i.test(request.url()));
         expect(httpRequests.length).toBeGreaterThan(0);
         expect(httpRequests.every(({ origin }) => origin === allowedOrigin)).toBe(true);
-        const mutations = observedRequests.filter(({ method }) => /^(POST|PUT|PATCH|DELETE)$/.test(method));
+        const mutations = observedRequests.filter(({ method, request }) => /^(POST|PUT|PATCH|DELETE)$/.test(method)
+            && !isApiFailureDiagnosticRequest(request, allowedOrigin));
         expect(mutations.map(({ method, origin, path }) => ({ method, origin, path }))).toEqual([
             { method: 'POST', origin: allowedOrigin, path: STREAM_PATH },
             { method: 'POST', origin: allowedOrigin, path: STREAM_PATH },

@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { installApiFailureDiagnosticBoundaryForPage, isApiFailureDiagnosticRequest, registerApiFailureDiagnosticFixtureHooks } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticFixtureHooks(test);
 
 const VIEWPORTS = [
     { name: 'mobile', width: 390, height: 844 },
@@ -14,13 +17,15 @@ test.describe('V9-UX-001 strategy configuration visual regression', () => {
             await seedDeterministicJourney(page, `strategy-str06-threshold-panel-${viewport.name}`);
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
             await installInvestorWorkflowApiMocks(page);
+            await installApiFailureDiagnosticBoundaryForPage(page);
 
             const externalRequests = [];
             const mutationRequests = [];
             page.on('request', (request) => {
                 const url = new URL(request.url());
                 if (url.origin !== 'http://127.0.0.1:4177') externalRequests.push(`${request.method()} ${url.origin}`);
-                if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method())) {
+                if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method())
+                    && !isApiFailureDiagnosticRequest(request, 'http://127.0.0.1:4177')) {
                     mutationRequests.push(`${request.method()} ${url.pathname}`);
                 }
             });

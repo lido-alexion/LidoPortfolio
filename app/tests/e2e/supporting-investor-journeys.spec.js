@@ -1,7 +1,12 @@
+import { createApiFailureDiagnosticCollector, installApiFailureDiagnosticBoundary, handleApiFailureDiagnostic, registerApiFailureDiagnosticAfterEach } from './apiFailureDiagnosticBoundary.js';
+
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { TEST_PORTFOLIO, TEST_USER } from '../js/tos/fixtures/tosApi.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+
+registerApiFailureDiagnosticAfterEach(test);
+
 
 const VIEWPORTS = [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }];
 const STOCK = { id: 42, symbol: 'TCS', exchange: 'NSE', name: 'Tata Consultancy Services' };
@@ -9,8 +14,9 @@ const STOCK = { id: 42, symbol: 'TCS', exchange: 'NSE', name: 'Tata Consultancy 
 async function prepare(page, viewport) {
     await seedDeterministicJourney(page, `supporting-${viewport.name}`);
     await page.setViewportSize(viewport);
-    const blocked = [];
+    const blocked = []; const diagnosticReports = createApiFailureDiagnosticCollector(page);
     await page.route('**/*', async route => {
+        if (await handleApiFailureDiagnostic(route, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports })) return;
         const url = new URL(route.request().url());
         if (url.origin !== 'http://127.0.0.1:4177') {
             blocked.push(url.origin);
@@ -19,6 +25,7 @@ async function prepare(page, viewport) {
         return route.fallback();
     });
     await installInvestorWorkflowApiMocks(page);
+    await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
     const requests = [];
     page.on('request', request => requests.push({ method: request.method(), path: new URL(request.url()).pathname }));
     return { blocked, requests };
