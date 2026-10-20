@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { handleApiFailureDiagnosticForPage, isApiFailureDiagnosticRequest, registerApiFailureDiagnosticFixtureHooks } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticFixtureHooks(test);
 
 const VIEWPORTS = [
     { name: 'mobile', width: 390, height: 844 },
@@ -169,6 +172,7 @@ async function installBoundaries(page, mode) {
     await page.route('**/*', async (route) => {
         const request = route.request();
         const url = new URL(request.url());
+        if (await handleApiFailureDiagnosticForPage(route, page, allowedOrigin)) return;
         if ((url.protocol === 'http:' || url.protocol === 'https:') && url.origin !== allowedOrigin) {
             denied.push({ method: request.method(), origin: url.origin, pathname: url.pathname });
             return route.abort();
@@ -224,7 +228,8 @@ async function assertOnlyStrategyMutations(boundaries) {
     const httpRequests = boundaries.observedRequests.filter(({ protocol }) => protocol === 'http:' || protocol === 'https:');
     expect(httpRequests.length).toBeGreaterThan(0);
     expect(httpRequests.every(({ origin }) => origin === boundaries.allowedOrigin)).toBe(true);
-    const mutations = httpRequests.filter(({ request }) => /^(POST|PUT|PATCH|DELETE)$/.test(request.method()));
+    const mutations = httpRequests.filter(({ request }) => /^(POST|PUT|PATCH|DELETE)$/.test(request.method())
+        && !isApiFailureDiagnosticRequest(request, boundaries.allowedOrigin));
     expect(mutations.length).toBeGreaterThan(0);
     expect(mutations.every(({ request, pathname }) => request.method() === 'POST' && pathname === STRATEGY_PATH)).toBe(true);
     expect(boundaries.denied).toEqual([]);

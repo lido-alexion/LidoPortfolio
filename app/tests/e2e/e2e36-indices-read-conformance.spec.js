@@ -1,6 +1,11 @@
+import { createApiFailureDiagnosticCollector, installApiFailureDiagnosticBoundary, handleApiFailureDiagnostic, registerApiFailureDiagnosticAfterEach } from './apiFailureDiagnosticBoundary.js';
+
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+
+registerApiFailureDiagnosticAfterEach(test);
+
 
 const VIEWPORTS = [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }];
 const INDEXES = [
@@ -24,10 +29,13 @@ async function prepare(page, viewport, seed) {
     await installInvestorWorkflowApiMocks(page);
     const blocked = [];
     const writes = [];
-    const seal = () => page.route('**/*', (route) => {
+    const diagnosticReports = createApiFailureDiagnosticCollector(page);
+    await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
+    const seal = () => page.route('**/*', async (route) => {
         const request = route.request();
         const url = new URL(request.url());
         const write = /^(POST|PUT|PATCH|DELETE)$/.test(request.method());
+        if (await handleApiFailureDiagnostic(route, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports })) return;
         if (url.origin !== 'http://127.0.0.1:4177' || (write && url.pathname !== '/api/logs/frontend')) {
             blocked.push(`${request.method()} ${url.pathname}`);
             return route.abort();

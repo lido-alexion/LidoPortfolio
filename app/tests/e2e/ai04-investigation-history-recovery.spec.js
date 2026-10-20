@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { installApiFailureDiagnosticBoundaryForPage, isApiFailureDiagnosticRequest, registerApiFailureDiagnosticFixtureHooks } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticFixtureHooks(test);
 
 const VIEWPORTS = [
     { name: 'mobile', width: 390, height: 844 },
@@ -55,6 +58,7 @@ for (const viewport of VIEWPORTS) {
             observedRequests.push({ method: request.method(), origin: url.origin, path: url.pathname, request });
         });
         await installInvestorWorkflowApiMocks(page);
+        await installApiFailureDiagnosticBoundaryForPage(page);
         await page.route('**/api/ai/assistant/runs**', async (route) => {
             const request = route.request();
             const url = new URL(request.url());
@@ -145,7 +149,8 @@ for (const viewport of VIEWPORTS) {
         const httpRequests = observedRequests.filter(({ request }) => /^https?:/i.test(request.url()));
         expect(httpRequests.length).toBeGreaterThan(0);
         expect(httpRequests.every(({ origin }) => origin === allowedOrigin)).toBe(true);
-        const mutations = observedRequests.filter(({ method }) => /^(POST|PUT|PATCH|DELETE)$/.test(method));
+        const mutations = observedRequests.filter(({ method, request }) => /^(POST|PUT|PATCH|DELETE)$/.test(method)
+            && !isApiFailureDiagnosticRequest(request, allowedOrigin));
         expect(mutations.map(({ method, origin, path }) => ({ method, origin, path }))).toEqual([
             { method: 'POST', origin: allowedOrigin, path: RUNS_PATH },
         ]);
