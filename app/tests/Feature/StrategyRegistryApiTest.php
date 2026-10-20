@@ -140,15 +140,15 @@ class StrategyRegistryApiTest extends TestCase
         $this->actingAs($user)
             ->getJson('/api/v1/strategy-registry/selection')
             ->assertOk()
-            ->assertJsonPath('data.rule', 'multiple_enabled_per_portfolio')
+            ->assertJsonPath('data.rule', 'zero_or_more_enabled_per_portfolio')
             ->assertJsonPath('data.enabled_count', 1)
             ->assertJsonPath('data.selected.slug', 'momentum_strategy');
 
         $this->actingAs($user)
             ->getJson('/api/v1/strategy-registry/meta')
             ->assertOk()
-            ->assertJsonPath('data.selection_rule', 'multiple_enabled_per_portfolio')
-            ->assertJsonPath('data.enablement_rule', 'multiple_enabled_per_portfolio');
+            ->assertJsonPath('data.selection_rule', 'zero_or_more_enabled_per_portfolio')
+            ->assertJsonPath('data.enablement_rule', 'zero_or_more_enabled_per_portfolio');
     }
 
     public function test_rejects_embedded_screener_tree(): void
@@ -306,7 +306,7 @@ class StrategyRegistryApiTest extends TestCase
             ->firstOrFail();
 
         $this->actingAs($user)
-            ->postJson('/api/v1/strategy-registry/'.$factory->id.'/archive')
+            ->postJson('/api/v1/strategy-registry/'.$factory->id.'/archive', ['reason' => 'Retiring this strategy'])
             ->assertOk()
             ->assertJsonPath('data.metadata.status', TradingStrategy::STATUS_ARCHIVED);
 

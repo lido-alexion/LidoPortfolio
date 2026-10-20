@@ -55,7 +55,7 @@ test('Registry and editor expose Enable and Archive without exclusive-activation
     assert.match(registry, /Enable “/);
     assert.match(registry, /Archive this strategy\?/);
     assert.match(registry, /\/archive/);
-    assert.match(registry, /last enabled/);
+    assert.match(registry, /Disable/);
     assert.match(page, /id="strategy-editor-enable"/);
     assert.match(page, /id="strategy-editor-archive"/);
     assert.match(page, /id="strategy-editor-select"/);
@@ -77,5 +77,5 @@ test('Help documents Create Strategy and Discovery not in sidebar', () => {
     assert.match(docs, /name: 'Create Strategy'/);
     assert.match(docs, /POST `\/v1\/strategies`/);
     assert.match(docs, /not listed in the left Market navigation/i);
-    assert.match(docs, /last remaining enabled strategy cannot be archived/i);
+    assert.match(docs, /Zero enabled strategies is allowed/i);
 });

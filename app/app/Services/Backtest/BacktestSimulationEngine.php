@@ -14,6 +14,7 @@ use App\Models\Screener;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\TradingStrategyVersion;
+use App\Models\TradingStrategy;
 use App\Models\User;
 use App\Services\Artifacts\ArtifactEnvelope;
 use App\Services\Artifacts\ArtifactRuntimeBindingResolver;
@@ -634,7 +635,11 @@ class BacktestSimulationEngine
             }
         }
 
-        return $this->strategies->ensureActive($profile)->load('strategy');
+        $existing = TradingStrategyVersion::query()->whereHas('strategy', fn ($query) => $query
+            ->where('profile_id', $profile->id)->where('status', '!=', TradingStrategy::STATUS_ARCHIVED))
+            ->orderByDesc('id')->first();
+
+        return ($existing ?? $this->strategies->ensureActive($profile))->load('strategy');
     }
 
     /**

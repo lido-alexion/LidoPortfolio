@@ -37,7 +37,7 @@ const otherScope = route => route.request().headers()['x-profile-id'] === '2';
 const scopeFailure = route => route.fulfill({ status: 403, json: { message: 'Artifact belongs to a different Portfolio.' } });
 async function nativeAction(page, action, answer) {
     let done; const answered = new Promise(resolve => { done = resolve; });
-    page.once('dialog', async dialog => { await dialog[answer](); done(); });
+    page.once('dialog', async dialog => { await dialog[answer](dialog.type === 'prompt' ? 'No longer used by this portfolio' : undefined); done(); });
     await action(); await answered;
 }
 async function accessibleRegistry(page) { const result = await new AxeBuilder({ page }).include('.contentPane').withTags(['wcag2a', 'wcag2aa']).analyze(); expect(result.violations).toEqual([]); }
@@ -121,8 +121,8 @@ for (const viewport of VIEWPORTS) test.describe(`Runtime registry compatibility 
         const exported = await downloadJson(page, () => page.getByRole('button', { name: 'Export JSON', exact: true }).click()); expect(exported.value).toEqual(current); expect(exported.value.definition.eligibility_sources[0]).not.toHaveProperty('screener_id');
         const enable = () => page.getByRole('button', { name: 'Enable', exact: true }).click(); await nativeAction(page, enable, 'dismiss'); expect(safety.writes.filter(w => w.path.endsWith('/activate'))).toHaveLength(0);
         await nativeAction(page, enable, 'accept'); await expect(error(page).filter({ hasText: 'Synthetic registry unavailable' })).toBeVisible(); expect(current.metadata.is_enabled).toBe(false);
-        await nativeAction(page, enable, 'accept'); await expect(page.getByRole('button', { name: 'Archive', exact: true })).toBeVisible();
-        const archive = () => page.getByRole('button', { name: 'Archive', exact: true }).click(); await nativeAction(page, archive, 'dismiss'); expect(safety.writes.filter(w => w.path.endsWith('/archive'))).toHaveLength(0);
+        await nativeAction(page, enable, 'accept'); await expect(page.getByRole('button', { name: 'Retire', exact: true })).toBeVisible();
+        const archive = () => page.getByRole('button', { name: 'Retire', exact: true }).click(); await nativeAction(page, archive, 'dismiss'); expect(safety.writes.filter(w => w.path.endsWith('/archive'))).toHaveLength(0);
         await nativeAction(page, archive, 'accept'); await expect(error(page).filter({ hasText: 'Synthetic registry unavailable' })).toBeVisible(); expect(current.metadata.is_enabled).toBe(true);
         await nativeAction(page, archive, 'accept'); await expect(page.getByText('archived · imported · not enabled', { exact: true })).toBeVisible();
         await page.getByRole('link', { name: 'Back to registry', exact: true }).click(); await expect(page.getByRole('row').filter({ has: page.getByRole('link', { name: sibling.slug, exact: true }) })).toContainText('active');

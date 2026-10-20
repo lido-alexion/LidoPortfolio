@@ -122,7 +122,8 @@ test('Strategy Registry exposes Create Strategy and Archive for sibling strategi
     assert.match(registry, /Create Strategy/);
     assert.match(registry, /CreateStrategyPanel/);
     assert.match(registry, /Archive this strategy\?/);
-    assert.match(registry, /last enabled/);
+    assert.match(registry, /Disable/);
+    assert.match(docs, /Zero enabled strategies is allowed/);
     assert.match(registry, /to=\{`\/strategy\?strategy_id=/);
 });
 

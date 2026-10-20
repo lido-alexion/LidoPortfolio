@@ -496,7 +496,7 @@ test.describe('V9-UX-001 strategy journeys', () => {
             await expect(qualityHold).toContainText('Hold');
             await expect(qualityHold.getByRole('button', { name: 'Review' })).toHaveCount(0);
         });
-        test('STR-14 archives one strategy and retains its active sibling (' + viewport.name + ')', async ({ page }, testInfo) => {
+        test('STR-14 retires one resolved strategy with a reason and retains its active sibling (' + viewport.name + ')', async ({ page }, testInfo) => {
             journeyId(testInfo, 'STR-14');
             await seedDeterministicJourney(page, 'strategy-str14-' + viewport.name);
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -507,12 +507,13 @@ test.describe('V9-UX-001 strategy journeys', () => {
                 ],
             });
             let confirmationAccepted = false;
-            page.on('dialog', async (dialog) => { confirmationAccepted = true; await dialog.accept(); });
+            page.on('dialog', async (dialog) => { confirmationAccepted = true; await dialog.accept(dialog.type === 'prompt' ? 'Portfolio no longer uses this strategy' : undefined); });
             await page.goto('/strategy/registry');
             const row = page.getByRole('row', { name: /momentum-core.*Momentum Core/ });
             const archiveRequest = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/momentum-core/archive'));
-            await row.getByRole('button', { name: 'Archive' }).click();
-            await archiveRequest;
+            await row.getByRole('button', { name: 'Retire' }).click();
+            const request = await archiveRequest;
+            expect(request.postDataJSON()).toEqual({ reason: 'Portfolio no longer uses this strategy' });
             expect(confirmationAccepted).toBe(true);
             await expect(page.getByRole('row', { name: /momentum-core.*Momentum Core/ })).toContainText('archived');
             await expect(page.getByRole('row', { name: /quality-core.*Quality Core/ })).toContainText('active');

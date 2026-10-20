@@ -939,8 +939,6 @@ class LiveBrokerExecutionService
             $strategy = $strategyId === null ? null : TradingStrategy::query()->find($strategyId);
             if (! $strategy || (int) $strategy->profile_id !== (int) $profile->id) {
                 $reason = 'strategy_ownership_changed';
-            } elseif (! $strategy->isEnabled()) {
-                $reason = 'strategy_inactive';
             }
         }
 

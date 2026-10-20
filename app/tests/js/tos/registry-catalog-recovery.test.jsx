@@ -1,5 +1,5 @@
 import React from 'react';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import api from '../../../resources/js/src/api';
@@ -12,6 +12,7 @@ vi.mock('../../../resources/js/src/toast', () => ({ showToast: vi.fn() }));
 const fail = () => Promise.reject({ response: { status: 503, data: { message: 'Synthetic registry unavailable.' } } });
 const envelope = type => ({ schema_version: '1.0', artifact_type: type, artifact_id: 69, artifact_version: 2, name: `Reviewed ${type}`, slug: `reviewed-${type}`, definition_hash: 'synthetic-reviewed-hash', metadata: { ownership: 'own', status: 'draft', origin: 'user' }, definition: {} });
 beforeEach(() => vi.resetAllMocks());
+afterEach(() => vi.restoreAllMocks());
 it('does not report an unavailable screener catalogue as no matching screeners and retries', async () => {
  let unavailable = true; api.get.mockImplementation(path => path.endsWith('/meta') ? Promise.resolve({ data: { data: {} } }) : unavailable ? fail() : Promise.resolve({ data: { data: [envelope('screener')] } })); render(<MemoryRouter><ScreenerRegistryPage /></MemoryRouter>);
  await screen.findByText('Screener Registry could not be loaded.'); expect(screen.queryByText('No screeners match the filters.')).toBeNull(); unavailable = false; fireEvent.click(screen.getByRole('button', { name: 'Retry Screener Registry' })); await screen.findByText('Reviewed screener'); expect(api.post).not.toHaveBeenCalled();
@@ -19,6 +20,41 @@ it('does not report an unavailable screener catalogue as no matching screeners a
 it('retains known strategies and does not report an unavailable catalogue as empty', async () => {
  let unavailable = false; api.get.mockImplementation(path => path.endsWith('/meta') ? Promise.resolve({ data: { data: {} } }) : unavailable ? fail() : Promise.resolve({ data: { data: [envelope('strategy')] } })); render(<MemoryRouter><StrategyRegistryPage /></MemoryRouter>);
  await screen.findByText('Reviewed strategy'); unavailable = true; fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'reviewed' } }); await screen.findByText('Strategy Registry could not be loaded.'); expect(screen.getByText('Reviewed strategy')).toBeInTheDocument(); expect(screen.queryByText('No strategies match the filters.')).toBeNull(); unavailable = false; fireEvent.click(screen.getByRole('button', { name: 'Retry Strategy Registry' })); await screen.findByText('Reviewed strategy'); expect(api.post).not.toHaveBeenCalled();
+});
+
+it('allows pausing the last enabled strategy and shows exact archive blockers with existing resolution links', async () => {
+ let lifecycle = 'active';
+ const row = () => ({ ...envelope('strategy'), metadata: { status: lifecycle === 'active' ? 'active' : 'draft', lifecycle_status: lifecycle, is_enabled: lifecycle === 'active' } });
+ api.get.mockImplementation(path => path.endsWith('/meta')
+  ? Promise.resolve({ data: { data: { counts: { total: 1, active: lifecycle === 'active' ? 1 : 0, disabled: lifecycle === 'disabled' ? 1 : 0, draft: 0, archived: 0 }, statuses: [], origins: [] } } })
+  : Promise.resolve({ data: { data: [row()] } }));
+ api.post.mockImplementation(path => {
+  if (path.endsWith('/disable')) { lifecycle = 'disabled'; return Promise.resolve({ data: { data: row() } }); }
+  return Promise.reject({ response: { status: 409, data: { error: { message: 'This strategy still has outstanding records to resolve.' }, meta: { blockers: [{ code: 'owned_holdings', label: 'Open holdings owned by this strategy', count: 2, href: '/holdings' }] } } });
+ });
+ vi.spyOn(window, 'confirm').mockReturnValue(true);
+ vi.spyOn(window, 'prompt').mockReturnValue('No longer needed');
+ render(<MemoryRouter><StrategyRegistryPage /></MemoryRouter>);
+ await screen.findByText('Reviewed strategy');
+ fireEvent.click(screen.getByRole('button', { name: 'Disable' }));
+ await screen.findByText('disabled');
+ expect(api.post).toHaveBeenCalledWith('/v1/strategy-registry/69/disable');
+ fireEvent.click(screen.getByRole('button', { name: 'Retire' }));
+ await screen.findByText('Open holdings owned by this strategy (2)');
+ expect(screen.getByRole('link', { name: 'Open resolution view' })).toHaveAttribute('href', '/holdings');
+});
+
+it('restores an archived strategy as disabled and offers a separate explicit Enable action', async () => {
+ let lifecycle = 'archived';
+ const archived = () => ({ ...envelope('strategy'), metadata: { status: 'archived', lifecycle_status: lifecycle, archive_reason: 'Retired by user' } });
+ api.get.mockImplementation(path => Promise.resolve({ data: { data: path.endsWith('/versions') ? [] : archived() } }));
+ api.post.mockImplementation(async path => { if (path.endsWith('/restore')) lifecycle = 'disabled'; return { data: { data: archived() } }; });
+ render(<MemoryRouter initialEntries={['/strategy/registry/69']}><Routes><Route path="/strategy/registry/:id" element={<StrategyRegistryDetailPage />} /></Routes></MemoryRouter>);
+ await screen.findByRole('heading', { name: 'Reviewed strategy' });
+ fireEvent.click(screen.getByRole('button', { name: 'Restore as disabled' }));
+ await screen.findByRole('button', { name: 'Enable' });
+ expect(api.post).toHaveBeenCalledWith('/v1/strategy-registry/69/restore');
+ expect(api.post).not.toHaveBeenCalledWith('/v1/strategy-registry/69/activate');
 });
 for (const [type, Component, route] of [['screener', ScreenerRegistryDetailPage, '/screeners/registry/:id'], ['strategy', StrategyRegistryDetailPage, '/strategy/registry/:id']]) {
  it(`retries an unavailable ${type} envelope without losing its intended identity`, async () => {

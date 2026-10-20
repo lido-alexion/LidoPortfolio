@@ -42,7 +42,7 @@ class StrategyConfigurationService
     }
 
     /**
-     * Seed or return the active strategy version for a profile.
+     * Return the enabled strategy version, or seed only an uninitialized profile.
      */
     public function ensureActive(PortfolioProfile $profile): TradingStrategyVersion
     {
@@ -70,6 +70,19 @@ class StrategyConfigurationService
                 if ($ver) {
                     return $ver;
                 }
+            }
+
+            $anyStrategy = TradingStrategy::query()->where('profile_id', $profile->id)->orderBy('id')->first();
+            if ($anyStrategy) {
+                $version = $anyStrategy->activeVersion
+                    ?? TradingStrategyVersion::query()->where('strategy_id', $anyStrategy->id)->orderByDesc('id')->first();
+                if ($version) {
+                    return $version;
+                }
+
+                throw ValidationException::withMessages([
+                    'strategy_id' => ['No enabled strategy is available. Select and enable a strategy before running the decision pipeline.'],
+                ]);
             }
 
             return $this->seedFactoryStrategy($profile)->activeVersion;
@@ -194,8 +207,6 @@ class StrategyConfigurationService
             ]);
         }
 
-        $this->ensureActive($profile);
-
         $description = trim((string) ($description ?? ''));
         $slug = $this->strategySupport->uniqueSlug($profile, $this->strategySupport->slugify($name, null));
         $config = $this->normalizeConfig($this->defaultConfig());
@@ -247,7 +258,6 @@ class StrategyConfigurationService
             ]);
         }
 
-        $this->ensureActive($profile);
         $this->validateConfig($config);
 
         $slugRaw = trim((string) ($envelope['slug'] ?? ''));
@@ -318,6 +328,17 @@ class StrategyConfigurationService
             return $strategy->activeVersion;
         }
 
+        $enabled = TradingStrategy::query()->where('profile_id', $profile->id)
+            ->where('status', TradingStrategy::STATUS_ACTIVE)->with('activeVersion')->orderBy('id')->first();
+        if ($enabled?->activeVersion) {
+            return $enabled->activeVersion;
+        }
+        $available = TradingStrategy::query()->where('profile_id', $profile->id)
+            ->where('status', '!=', TradingStrategy::STATUS_ARCHIVED)->with('activeVersion')->orderBy('id')->first();
+        if ($available?->activeVersion) {
+            return $available->activeVersion;
+        }
+
         return $this->ensureActive($profile);
     }
 
@@ -347,6 +368,12 @@ class StrategyConfigurationService
         return DB::transaction(function () use ($strategy, $version, $normalized, $name, $description, $changeNotes) {
             $lockedStrategy = TradingStrategy::query()->whereKey($strategy->id)->lockForUpdate()->firstOrFail();
             $lockedVersion = TradingStrategyVersion::query()->whereKey($version->id)->lockForUpdate()->firstOrFail();
+
+            if ($lockedStrategy->isReadOnly()) {
+                throw ValidationException::withMessages([
+                    'strategy_id' => ['Archived strategies are read-only. Restore this strategy before editing it.'],
+                ]);
+            }
 
             $configChanged = $this->configHash($lockedVersion->config_json ?? []) !== $this->configHash($normalized);
             // A legacy lineage-only dependency must be adopted through a new
@@ -885,6 +912,8 @@ class StrategyConfigurationService
             'summary' => $strategy->summary,
             'tags' => is_array($strategy->tags_json) ? $strategy->tags_json : [],
             'status' => $strategy->status,
+            'archive_reason' => $strategy->archive_reason,
+            'archived_at' => $strategy->archived_at?->toIso8601String(),
             'readiness' => $readiness,
             'setup_required' => ! $readiness['ready'],
             'allocation_pct' => $strategy->allocation_pct !== null ? (float) $strategy->allocation_pct : 100.0,
