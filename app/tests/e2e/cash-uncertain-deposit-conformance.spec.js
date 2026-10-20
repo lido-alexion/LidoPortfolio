@@ -52,7 +52,7 @@ function cashReceipt(request, path, status, body) {
 }
 
 function diagnosticPayloadIsValid(request, url) {
-    if (request.method() !== 'POST' || url.origin !== ORIGIN
+    if (request.method() !== 'POST' || url.origin !== ORIGIN || url.username !== '' || url.password !== ''
         || url.pathname !== '/api/ops/api-failures' || url.search !== '') return false;
 
     let payload;
@@ -180,6 +180,10 @@ async function prepare(page, viewport, mode) {
         const request = route.request();
         const url = new URL(request.url());
         const mutation = /^(POST|PUT|PATCH|DELETE)$/.test(request.method());
+        if (url.username !== '' || url.password !== '') {
+            rejectedWrites.push(`${request.method()} ${url.origin}${url.pathname}`);
+            return route.abort();
+        }
         if (url.origin !== ORIGIN) {
             rejectedWrites.push(`${request.method()} ${url.origin}${url.pathname}`);
             return route.abort();
