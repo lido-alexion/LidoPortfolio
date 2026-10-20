@@ -119,6 +119,8 @@ for (const viewport of [
         const freshByOldId = new Map([[expired.id, clone(freshExpired)], [stale.id, clone(freshStale)]]);
         const currentByFreshId = new Map([[freshExpired.id, clone(freshExpired)], [freshStale.id, clone(freshStale)]]);
         const routePhases = [];
+        const dashboardReceipts = new Map();
+        const dashboardBody = { data: [] };
         const notificationReceipts = new Map();
         const notificationBody = {
             data: [],
@@ -131,6 +133,23 @@ for (const viewport of [
                 active_critical_count: 0,
             },
         };
+
+        await page.route('**/api/dashboard-layouts**', async route => {
+            const request = route.request();
+            const url = new URL(request.url());
+            const allowedOrigin = new URL(process.env.STOX_E2E_BASE_URL || 'http://127.0.0.1:4177').origin;
+            expect(url.origin).toBe(allowedOrigin);
+            expect(url.username).toBe('');
+            expect(url.password).toBe('');
+            expect(url.pathname).toBe('/api/dashboard-layouts');
+            expect(url.search).toBe('');
+            expect(request.method()).toBe('GET');
+            const profile = request.headers()['x-profile-id'] ?? null;
+            expect([null, '1']).toContain(profile);
+            const body = clone(dashboardBody);
+            dashboardReceipts.set(request, { profile, body: clone(body) });
+            await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+        });
 
         await page.route('**/api/notification-center*', async route => {
             const request = route.request();
@@ -362,6 +381,32 @@ for (const viewport of [
             expect(response).toBeTruthy();
             expect(response.status()).toBe(200);
             expect(await response.finished()).toBeNull();
+            expect(await response.json()).toEqual(receipt.body);
+        }
+        const observedDashboardRequests = allRequests.filter(request =>
+            /^https?:$/.test(new URL(request.url()).protocol)
+            && new URL(request.url()).pathname === '/api/dashboard-layouts',
+        );
+        expect(observedDashboardRequests.length).toBeGreaterThan(0);
+        expect(dashboardReceipts.size).toBe(observedDashboardRequests.length);
+        for (const request of observedDashboardRequests) {
+            const url = new URL(request.url());
+            const receipt = dashboardReceipts.get(request);
+            expect(receipt).toBeTruthy();
+            expect(request.method()).toBe('GET');
+            expect(url.origin).toBe(appOrigin);
+            expect(url.username).toBe('');
+            expect(url.password).toBe('');
+            expect(url.search).toBe('');
+            expect(request.headers()['x-profile-id'] ?? null).toBe(receipt.profile);
+            const response = allResponses.get(request);
+            expect(response).toBeTruthy();
+            expect(await response.finished()).toBeNull();
+            if (!finishedRequests.has(request)) {
+                await page.waitForEvent('requestfinished', { predicate: finished => finished === request });
+            }
+            expect(finishedRequests.has(request)).toBe(true);
+            expect(response.status()).toBe(200);
             expect(await response.json()).toEqual(receipt.body);
         }
         setPhase('verify_four_exact_business_payloads');
