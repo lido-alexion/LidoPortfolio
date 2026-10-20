@@ -45,6 +45,18 @@ const INITIAL_STRATEGY_ELIGIBILITY = [{
     screener_version_id: 301,
 }];
 
+const EMPTY_NOTIFICATION_CENTER_RESPONSE = {
+    data: [],
+    meta: {
+        current_page: 1,
+        last_page: 1,
+        per_page: 5,
+        total: 0,
+        unread_count: 0,
+        active_critical_count: 0,
+    },
+};
+
 const EXPECTED_STRATEGY_RESPONSE = {
     data: {
         strategy_id: 7,
@@ -85,6 +97,7 @@ function installContextRequestGuard(page, appOrigin, mode) {
     const screenerWrites = [];
     const diagnostics = [];
     const blockedRequests = [];
+    const notificationReads = [];
     let createAttempts = 0;
     let createdScreener = null;
 
@@ -102,6 +115,27 @@ function installContextRequestGuard(page, appOrigin, mode) {
         if (url.origin !== appOrigin) {
             blockedRequests.push(`${method} ${url.origin}${url.pathname}`);
             return route.abort();
+        }
+
+        if (method === 'GET' && url.pathname === '/api/notification-center') {
+            const profileId = request.headers()['x-profile-id'] || null;
+            if (url.search !== '?per_page=5' || (profileId !== null && profileId !== '1')) {
+                blockedRequests.push(`${method} ${url.pathname} (unexpected notification query/profile)`);
+                return route.abort();
+            }
+            notificationReads.push({
+                method,
+                path: url.pathname,
+                query: url.search,
+                profileId,
+                status: 200,
+                body: EMPTY_NOTIFICATION_CENTER_RESPONSE,
+            });
+            return route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify(EMPTY_NOTIFICATION_CENTER_RESPONSE),
+            });
         }
 
         if (write && method === 'POST' && url.pathname === '/api/screeners') {
@@ -165,7 +199,7 @@ function installContextRequestGuard(page, appOrigin, mode) {
         return route.fallback();
     });
 
-    return { requests, screenerWrites, diagnostics, blockedRequests };
+    return { requests, screenerWrites, diagnostics, notificationReads, blockedRequests };
 }
 
 async function startJourney(page, testInfo, viewport, mode) {
@@ -245,8 +279,26 @@ async function assertTerminalReceipts(guard, appOrigin) {
         if (request.method() === 'GET' && url.pathname === '/api/screeners') {
             expect(url.search).toBe('');
         }
-        apiReceipts.push({ method: request.method(), path: url.pathname, status: response.status(), body });
+        if (request.method() === 'GET' && url.pathname === '/api/notification-center') {
+            expect(url.search).toBe('?per_page=5');
+            expect([null, '1']).toContain(request.headers()['x-profile-id'] || null);
+            expect(response.status()).toBe(200);
+            expect(body).toEqual(EMPTY_NOTIFICATION_CENTER_RESPONSE);
+        }
+        apiReceipts.push({
+            method: request.method(),
+            path: url.pathname,
+            query: url.search,
+            profileId: request.headers()['x-profile-id'] || null,
+            status: response.status(),
+            body,
+        });
     }
+    const notificationReceipts = apiReceipts.filter(({ method, path }) => (
+        method === 'GET' && path === '/api/notification-center'
+    ));
+    expect(notificationReceipts.length).toBeGreaterThan(0);
+    expect(notificationReceipts).toEqual(guard.notificationReads);
     expect(apiReceipts.filter(({ method, path }) => method === 'POST' && path === '/api/screeners').map(({ status }) => status))
         .toEqual(guard.screenerWrites.map(({ status }) => status));
     return apiReceipts;
