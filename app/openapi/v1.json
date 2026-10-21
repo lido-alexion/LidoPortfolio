@@ -3474,6 +3474,57 @@
                 }
             }
         },
+        "/api/v1/artifact-library/bundle-deployments/{uuid}": {
+            "get": {
+                "tags": [
+                    "artifact-library"
+                ],
+                "summary": "Read Bundle deployment evidence",
+                "description": "Reads the exact Bundle deployment for the authenticated requester and active Portfolio. Returns allowlisted status and member revision evidence; performs no mutation.",
+                "operationId": "get_artifact-library_bundle-deployments_uuid",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "404": {
+                        "description": "Deployment UUID is not available to this requester in the active Portfolio."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/artifact-library/bundle-deployments/{uuid}/deploy": {
             "post": {
                 "tags": [
