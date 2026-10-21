@@ -905,8 +905,8 @@
         <dt>Allocation editor</dt>
         <dd>Edit enabled-strategy allocation % with a live sum; Save calls PUT /v1/capital/allocations (same as Cash). Client requires sum ≈ 100 before save; server errors are shown.</dd>
 
-        <dt>Archive</dt>
-        <dd>Sets the strategy to archived without changing other enabled strategies. The last remaining enabled strategy cannot be archived until another is enabled. Past holdings/recommendations keep attribution.</dd>
+        <dt>Disable / Archive / Restore</dt>
+        <dd>Disable pauses future strategy recommendations and runs without changing existing financial work. Archive requires no owned holdings, actionable recommendations, pending executions/orders, reserved funds, or unsettled obligations; exact blockers link to their resolution pages. Archived configuration is read-only. Restore returns the strategy to Disabled, then explicit Enable applies readiness checks. Zero enabled strategies is allowed; history keeps attribution.</dd>
 
         <dt>Export JSON</dt>
         <dd>Download the portable Trading Artifact envelope (schema_version, slug, name, metadata, definition with eligibility_sources + scoring_model, dependencies). Best template for a new import — includes thresholds/exits/gates when present.</dd>

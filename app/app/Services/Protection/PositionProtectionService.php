@@ -16,6 +16,7 @@ use App\Services\Broker\BrokerAmbiguousException;
 use App\Services\Broker\BrokerGateway;
 use App\Services\Broker\BrokerGttRequest;
 use App\Services\PortfolioLoggerService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
 use Throwable;
 
@@ -549,7 +550,18 @@ class PositionProtectionService
             ? null
             : TradingRecommendation::query()->find($recommendationId);
 
-        return TradingOrder::query()->create([
+        return DB::transaction(function () use ($profile, $protection, $recommendationId, $recommendation, $filled) {
+            $holding = Holding::query()->whereKey($protection->holding_id)->first(['strategy_id', 'owner_key']);
+            $strategyId = $recommendation?->owningStrategyId() ?? $holding?->strategy_id;
+            if ($strategyId === null && preg_match('/^strategy:(\\d+)$/', (string) $holding?->owner_key, $ownerMatch) === 1) {
+                $strategyId = (int) $ownerMatch[1];
+            }
+            if ($strategyId !== null) {
+                app(\App\Services\Strategy\StrategyLifecycleAdmission::class)
+                    ->lockForNewObligation((int) $profile->id, [(int) $strategyId]);
+            }
+
+            return TradingOrder::query()->create([
             'profile_id' => $profile->id,
             'recommendation_id' => $recommendationId,
             'reusable_artifact_version_id' => $recommendation?->reusable_artifact_version_id,
@@ -563,7 +575,8 @@ class PositionProtectionService
             'broker_status' => TradingOrder::BROKER_PARTIAL,
             'filled_quantity' => 0,
             'notes' => 'GTT protection fill for holding #'.$protection->holding_id,
-        ]);
+            ]);
+        });
     }
 
     protected function cancelAtBroker(
