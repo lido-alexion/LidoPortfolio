@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import SegmentToggle from '../SegmentToggle';
 import KnowledgeEditor from './KnowledgeEditor';
@@ -28,6 +28,8 @@ const EMPTY_DOC = { type: 'doc', content: [{ type: 'paragraph' }] };
 export default function KnowledgeNoteEditorModal({
     open,
     sessionKey,
+    sessionId,
+    portfolioId,
     note,
     allTags,
     saving = false,
@@ -46,6 +48,31 @@ export default function KnowledgeNoteEditorModal({
     const [dirty, setDirty] = useState(false);
     const autosaveTimer = useRef(null);
     const lastSavedSnapshot = useRef('');
+    const portfolioDraftsRef = useRef(new Map());
+    const previousPortfolioRef = useRef(portfolioId == null ? null : String(portfolioId));
+    const initializedSessionRef = useRef(null);
+
+    useLayoutEffect(() => {
+        const nextPortfolioId = portfolioId == null ? null : String(portfolioId);
+        const previousPortfolioId = previousPortfolioRef.current;
+        if (previousPortfolioId === nextPortfolioId) return;
+        if (previousPortfolioId != null) {
+            portfolioDraftsRef.current.set(previousPortfolioId, {
+                tags, contentJson, contentHtml, plainText, markdownText, editorMode, colorPalette, dirty,
+                lastSavedSnapshot: lastSavedSnapshot.current, sessionId,
+            });
+        }
+        previousPortfolioRef.current = nextPortfolioId;
+        const recovered = nextPortfolioId == null ? null : portfolioDraftsRef.current.get(nextPortfolioId);
+        if (!recovered) return;
+        setTags(recovered.tags); setContentJson(recovered.contentJson); setContentHtml(recovered.contentHtml);
+        setPlainText(recovered.plainText); setMarkdownText(recovered.markdownText); setEditorMode(recovered.editorMode);
+        setColorPalette(recovered.colorPalette); setDirty(recovered.dirty);
+        lastSavedSnapshot.current = recovered.lastSavedSnapshot;
+        initializedSessionRef.current = recovered.sessionId;
+        // Capture outgoing editor state only when the committed Portfolio identity changes.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [portfolioId]);
 
     const snapshot = useCallback(() => JSON.stringify({
         tags: tags.map((tag) => tag.id).sort(),
@@ -57,9 +84,9 @@ export default function KnowledgeNoteEditorModal({
     }), [tags, contentJson, plainText, markdownText, editorMode, colorPalette]);
 
     useEffect(() => {
-        if (!open) {
-            return;
-        }
+        if (!open) return;
+        if (initializedSessionRef.current === sessionId) return;
+        initializedSessionRef.current = sessionId;
         const initialTags = note?.tags || [];
         const initialJson = note?.content_json || EMPTY_DOC;
         const initialHtml = note?.content_html || '';
@@ -82,7 +109,9 @@ export default function KnowledgeNoteEditorModal({
             editorMode: 'simple',
             colorPalette: initialPalette,
         });
-    }, [open, sessionKey]);
+        // A changed editor session initializes on activation; resume restores its private draft first.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sessionId]);
 
     const buildPayload = useCallback(() => {
         let html;
