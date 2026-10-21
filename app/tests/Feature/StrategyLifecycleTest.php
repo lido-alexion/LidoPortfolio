@@ -24,6 +24,7 @@ use App\Services\StrategyConfigurationService;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class StrategyLifecycleTest extends TestCase
@@ -308,7 +309,12 @@ class StrategyLifecycleTest extends TestCase
         $data = $this->getJson('/api/v1/strategy')->assertOk()->json('data');
         $strategy = TradingStrategy::query()->findOrFail($data['id']);
         $version = TradingStrategyVersion::query()->findOrFail($data['version_id']);
-        $stock = Stock::query()->create(['symbol' => 'STR14', 'exchange' => 'NSE', 'name' => 'Lifecycle Test', 'is_active' => true]);
+        $stock = Stock::query()->create([
+            'symbol' => 'STR14'.strtoupper(Str::random(12)),
+            'exchange' => 'NSE',
+            'name' => 'Lifecycle Test',
+            'is_active' => true,
+        ]);
 
         return [$user, $profile, $strategy, $version, $stock];
     }
