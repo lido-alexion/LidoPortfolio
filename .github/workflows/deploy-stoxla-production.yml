@@ -56,7 +56,10 @@ jobs:
           STOXLA_HOST: ${{ secrets.STOXLA_HOST }}
           STOXLA_SSH_USER: ${{ secrets.STOXLA_SSH_USER }}
           RELEASE_SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
+          set -euo pipefail
           test -n "$STOXLA_HOST"
           test -n "$STOXLA_SSH_USER"
           RELEASE_ID="$(date -u +%Y%m%d%H%M%S)-${RELEASE_SHA::12}"
@@ -66,7 +69,30 @@ jobs:
           ssh $SSH_OPTS "${STOXLA_SSH_USER}@${STOXLA_HOST}" "mkdir -p '${REMOTE_DIR}'"
           scp $SSH_OPTS stoxla-release.tgz deploy/scripts/stoxla-deploy-release.sh deploy/scripts/stoxla-rollback-release.sh deploy/scripts/stoxla-runtime-health-check.sh "${STOXLA_SSH_USER}@${STOXLA_HOST}:${REMOTE_DIR}/"
           ssh $SSH_OPTS "${STOXLA_SSH_USER}@${STOXLA_HOST}" \
-            "chmod 700 '${REMOTE_DIR}/stoxla-deploy-release.sh' '${REMOTE_DIR}/stoxla-rollback-release.sh' '${REMOTE_DIR}/stoxla-runtime-health-check.sh' && cp '${REMOTE_DIR}/stoxla-rollback-release.sh' '/home/${STOXLA_SSH_USER}/.stoxla-deploy/stoxla-rollback-release.sh' && cp '${REMOTE_DIR}/stoxla-runtime-health-check.sh' '/home/${STOXLA_SSH_USER}/.stoxla-deploy/stoxla-runtime-health-check.sh' && STOXLA_RELEASE_ID='${RELEASE_ID}' STOXLA_EXPECTED_COMMIT='${RELEASE_SHA}' '${REMOTE_DIR}/stoxla-deploy-release.sh' '${REMOTE_DIR}/stoxla-release.tgz'"
+            "chmod 700 '${REMOTE_DIR}/stoxla-deploy-release.sh' '${REMOTE_DIR}/stoxla-rollback-release.sh' '${REMOTE_DIR}/stoxla-runtime-health-check.sh' && cp '${REMOTE_DIR}/stoxla-rollback-release.sh' '/home/${STOXLA_SSH_USER}/.stoxla-deploy/stoxla-rollback-release.sh' && cp '${REMOTE_DIR}/stoxla-runtime-health-check.sh' '/home/${STOXLA_SSH_USER}/.stoxla-deploy/stoxla-runtime-health-check.sh'"
+          master_response="$(curl --fail --silent --show-error --location \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/branches/master")"
+          printf '%s' "$master_response" | python3 -c '
+          import json
+          import os
+          import sys
+
+          try:
+              payload = json.load(sys.stdin)
+              master_sha = payload["commit"]["sha"]
+          except (json.JSONDecodeError, KeyError, TypeError) as error:
+              raise SystemExit(f"Could not read authoritative master SHA: {error}")
+
+          candidate_sha = os.environ["RELEASE_SHA"]
+          if master_sha != candidate_sha:
+              raise SystemExit(f"Production activation blocked: candidate {candidate_sha} is not current master {master_sha}")
+          print(f"Current master matches candidate {candidate_sha}")
+          '
+          ssh $SSH_OPTS "${STOXLA_SSH_USER}@${STOXLA_HOST}" \
+            "STOXLA_RELEASE_ID='${RELEASE_ID}' STOXLA_EXPECTED_COMMIT='${RELEASE_SHA}' '${REMOTE_DIR}/stoxla-deploy-release.sh' '${REMOTE_DIR}/stoxla-release.tgz'"
 
       - name: Post-deploy health check
         env:

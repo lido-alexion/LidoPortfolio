@@ -37,7 +37,7 @@ const otherScope = route => route.request().headers()['x-profile-id'] === '2';
 const scopeFailure = route => route.fulfill({ status: 403, json: { message: 'Artifact belongs to a different Portfolio.' } });
 async function nativeAction(page, action, answer) {
     let done; const answered = new Promise(resolve => { done = resolve; });
-    page.once('dialog', async dialog => { await dialog[answer](); done(); });
+    page.once('dialog', async dialog => { await dialog[answer](dialog.type() === 'prompt' ? 'No longer used by this portfolio' : undefined); done(); });
     await action(); await answered;
 }
 async function accessibleRegistry(page) { const result = await new AxeBuilder({ page }).include('.contentPane').withTags(['wcag2a', 'wcag2aa']).analyze(); expect(result.violations).toEqual([]); }
@@ -110,7 +110,7 @@ for (const viewport of VIEWPORTS) test.describe(`Runtime registry compatibility 
         await page.route('**/api/v1/strategy-registry/69/versions', route => versionsFail ? failure(route) : route.fulfill({ json: { data: [{ version: 3, status: 'draft', definition_hash: current.definition_hash, change_notes: 'Reviewed pinned sources', created_at: '2026-10-01' }] } }));
         await page.route('**/api/v1/strategy-registry/69/export', route => { if (exportFails) { exportFails = false; return failure(route); } return route.fulfill({ json: { data: current } }); });
         await page.route('**/api/v1/strategy-registry/69/activate', route => { if (activateFails) { activateFails = false; return failure(route); } current = { ...current, metadata: { ...current.metadata, status: 'active', is_enabled: true } }; return route.fulfill({ json: { data: current } }); });
-        await page.route('**/api/v1/strategy-registry/69/archive', route => { if (archiveFails) { archiveFails = false; return failure(route); } current = { ...current, metadata: { ...current.metadata, status: 'archived', is_enabled: false } }; return route.fulfill({ json: { data: current } }); });
+        await page.route('**/api/v1/strategy-registry/69/archive', route => { expect(route.request().postDataJSON()).toEqual({ reason: 'No longer used by this portfolio' }); if (archiveFails) { archiveFails = false; return failure(route); } current = { ...current, metadata: { ...current.metadata, status: 'archived', is_enabled: false } }; return route.fulfill({ json: { data: current } }); });
         await safety.seal(); await page.goto('/strategy/registry'); await expect(error(page).filter({ hasText: 'Strategy Registry could not be loaded' })).toBeVisible(); await expect(page.getByText('No strategies match the filters.', { exact: true })).toHaveCount(0);
         listFails = false; await page.getByRole('button', { name: 'Retry Strategy Registry' }).click(); await expect(page.getByRole('row').filter({ has: page.getByRole('link', { name: sibling.slug, exact: true }) })).toBeVisible();
         await page.goto('/strategy/registry/69'); await expect(error(page).filter({ hasText: 'Synthetic registry unavailable' })).toBeVisible(); await expect(page.getByRole('button', { name: 'Enable', exact: true })).toBeDisabled();
@@ -121,10 +121,14 @@ for (const viewport of VIEWPORTS) test.describe(`Runtime registry compatibility 
         const exported = await downloadJson(page, () => page.getByRole('button', { name: 'Export JSON', exact: true }).click()); expect(exported.value).toEqual(current); expect(exported.value.definition.eligibility_sources[0]).not.toHaveProperty('screener_id');
         const enable = () => page.getByRole('button', { name: 'Enable', exact: true }).click(); await nativeAction(page, enable, 'dismiss'); expect(safety.writes.filter(w => w.path.endsWith('/activate'))).toHaveLength(0);
         await nativeAction(page, enable, 'accept'); await expect(error(page).filter({ hasText: 'Synthetic registry unavailable' })).toBeVisible(); expect(current.metadata.is_enabled).toBe(false);
-        await nativeAction(page, enable, 'accept'); await expect(page.getByRole('button', { name: 'Archive', exact: true })).toBeVisible();
-        const archive = () => page.getByRole('button', { name: 'Archive', exact: true }).click(); await nativeAction(page, archive, 'dismiss'); expect(safety.writes.filter(w => w.path.endsWith('/archive'))).toHaveLength(0);
+        await nativeAction(page, enable, 'accept'); await expect(page.getByRole('button', { name: 'Retire', exact: true })).toBeVisible();
+        const archive = () => page.getByRole('button', { name: 'Retire', exact: true }).click(); await nativeAction(page, archive, 'dismiss'); expect(safety.writes.filter(w => w.path.endsWith('/archive'))).toHaveLength(0);
         await nativeAction(page, archive, 'accept'); await expect(error(page).filter({ hasText: 'Synthetic registry unavailable' })).toBeVisible(); expect(current.metadata.is_enabled).toBe(true);
         await nativeAction(page, archive, 'accept'); await expect(page.getByText('archived · imported · not enabled', { exact: true })).toBeVisible();
+        expect(safety.writes.filter(w => w.path.endsWith('/archive'))).toEqual([
+            { method: 'POST', path: '/api/v1/strategy-registry/69/archive', body: { reason: 'No longer used by this portfolio' } },
+            { method: 'POST', path: '/api/v1/strategy-registry/69/archive', body: { reason: 'No longer used by this portfolio' } },
+        ]);
         await page.getByRole('link', { name: 'Back to registry', exact: true }).click(); await expect(page.getByRole('row').filter({ has: page.getByRole('link', { name: sibling.slug, exact: true }) })).toContainText('active');
         expect(JSON.stringify(current.definition)).toBe(definition); expect(JSON.stringify(sibling)).toBe(originalSibling); expect(safety.writes).toHaveLength(6); expect(safety.blocked).toEqual([]);
     });

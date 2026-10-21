@@ -459,7 +459,12 @@ class LiveBrokerExecutionService
         // Serialize the final claim per recommendation. The unique submission-key index remains
         // the last line of defense, while this lock makes racing retry requests return cleanly.
         $claim = DB::transaction(function () use ($profile, $recommendation, $user, $trigger, $stock, $side, $qty, $sizing): array {
+            app(\App\Services\Strategy\StrategyLifecycleAdmission::class)
+                ->lockForNewObligation((int) $profile->id, [$recommendation->owningStrategyId()]);
             $lockedRecommendation = TradingRecommendation::query()->whereKey($recommendation->id)->lockForUpdate()->firstOrFail();
+            if (! $lockedRecommendation->canExecuteManually()) {
+                return ['blocked' => true];
+            }
             $activeOrder = TradingOrder::query()
                 ->where('profile_id', $profile->id)
                 ->where('recommendation_id', $lockedRecommendation->id)
@@ -509,6 +514,13 @@ class LiveBrokerExecutionService
 
             return compact('decision', 'order', 'submissionKey');
         });
+        if ($claim['blocked'] ?? false) {
+            return [
+                'recommendation_id' => $recommendation->id,
+                'outcome' => ExecutionDecision::OUTCOME_BLOCKED,
+                'reason' => 'recommendation_no_longer_pending',
+            ];
+        }
         if (isset($claim['duplicate_order'])) {
             return [
                 'recommendation_id' => $recommendation->id,
@@ -939,8 +951,6 @@ class LiveBrokerExecutionService
             $strategy = $strategyId === null ? null : TradingStrategy::query()->find($strategyId);
             if (! $strategy || (int) $strategy->profile_id !== (int) $profile->id) {
                 $reason = 'strategy_ownership_changed';
-            } elseif (! $strategy->isEnabled()) {
-                $reason = 'strategy_inactive';
             }
         }
 

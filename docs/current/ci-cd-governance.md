@@ -14,6 +14,8 @@ It has backend, frontend and journey-only modes. Backend mode uses MySQL and val
 
 The production workflow packages, deploys, and post-deploy validates the exact GitHub Actions commit SHA. Build metadata and `/api/build-info` must equal that SHA before a release is accepted. Deployment must not be performed as a workaround for a failed verification run.
 
+Before production activation, while holding the production deploy concurrency lock, the workflow reads the authoritative current `master` SHA through the authenticated read-only GitHub API and requires exact equality with the candidate SHA. Lookup errors and mismatches block activation.
+
 ## GitHub repository policy
 
 Configure `master` with required pull requests, current required CI checks, and no force pushes. Require code-owner review for `.github/workflows/**`, `deploy/**`, `app/database/migrations/**`, `composer.lock`, and `package-lock.json`. Configure the `production` environment with required reviewers and restrict deployment secrets to the deployment job.

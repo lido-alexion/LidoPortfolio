@@ -235,6 +235,7 @@ export default function StrategyPage() {
     const [benchmarkIndexes, setBenchmarkIndexes] = useState([]);
     const [showCreate, setShowCreate] = useState(false);
     const [lifecycleBusy, setLifecycleBusy] = useState(false);
+    const [archiveBlockers, setArchiveBlockers] = useState([]);
 
     const { loading, reload: load } = useApiGet({
         // Return parameters are consumed by the current load. Removing them from
@@ -941,14 +942,10 @@ export default function StrategyPage() {
     }
 
     const selectedStrategyId = strategyId || (meta.id != null ? String(meta.id) : '');
-    const enabledCount = strategyOptions.filter((row) => {
-        const status = row?.metadata?.status || row?.status || '';
-        return Boolean(row?.metadata?.is_enabled || row?.metadata?.is_selected || status === 'active');
-    }).length;
     const currentStatus = meta.status || '';
     const currentEnabled = currentStatus === 'active';
     const compatibilityReadOnly = Boolean(meta.compatibility_read_only);
-    const canArchive = currentEnabled && enabledCount > 1;
+    const isArchived = currentStatus === 'archived';
     const onSelectStrategy = (nextId) => {
         if (!nextId || nextId === selectedStrategyId) return;
         navigate(`/strategy?strategy_id=${encodeURIComponent(nextId)}`);
@@ -970,15 +967,45 @@ export default function StrategyPage() {
         }
     };
 
-    const onArchiveCurrent = async () => {
+    const onDisableCurrent = async () => {
         const id = selectedStrategyId;
-        if (!id || !canArchive) return;
-        if (!window.confirm(
-            'Archive this strategy? It will stop generating recommendations. Other enabled strategies stay enabled. Past holdings/recommendations keep their attribution.',
-        )) return;
+        if (!id || !window.confirm('Pause this strategy? New recommendations and future strategy runs stop. Existing holdings, orders, executions and settlement remain available. No automatic sell, cancellation or fund release occurs.')) return;
         setLifecycleBusy(true);
         try {
-            await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/archive`);
+            await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/disable`);
+            showToast('Strategy paused. Existing work remains available.');
+            await load();
+        } catch (err) {
+            showToast(err?.response?.data?.error?.message || err.message || 'Disable failed', 'danger');
+        } finally {
+            setLifecycleBusy(false);
+        }
+    };
+
+    const onRestoreCurrent = async () => {
+        const id = selectedStrategyId;
+        if (!id) return;
+        setLifecycleBusy(true);
+        try {
+            await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/restore`);
+            showToast('Strategy restored as disabled. Enable it explicitly after reviewing readiness.');
+            await load();
+        } catch (err) {
+            showToast(err?.response?.data?.error?.message || err.message || 'Restore failed', 'danger');
+        } finally {
+            setLifecycleBusy(false);
+        }
+    };
+
+    const onArchiveCurrent = async () => {
+        const id = selectedStrategyId;
+        if (!id || isArchived) return;
+        const reason = window.prompt(`Why are you retiring “${meta.name || 'this strategy'}”? The reason remains with the read-only history.`)?.trim();
+        if (!reason || reason.length < 3) return;
+        setLifecycleBusy(true);
+        setArchiveBlockers([]);
+        try {
+            await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/archive`, { reason });
             showToast(`“${meta.name}” archived.`);
             const remaining = strategyOptions.find((row) => {
                 const rid = strategyListId(row);
@@ -994,6 +1021,7 @@ export default function StrategyPage() {
             }
         } catch (err) {
             showToast(err?.response?.data?.error?.message || err.message || 'Archive failed', 'danger');
+            setArchiveBlockers(err?.response?.data?.meta?.blockers || []);
         } finally {
             setLifecycleBusy(false);
         }
@@ -1028,7 +1056,7 @@ export default function StrategyPage() {
                     <Link className="btn btn-outline-secondary btn-sm" to="/screeners">Screeners</Link>
                     <Link className="btn btn-outline-secondary btn-sm" to="/recommendations">Recommendations</Link>
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load}>Refresh</button>
-                    <button type="button" className="btn btn-primary btn-sm" onClick={save} disabled={saving || compatibilityReadOnly}>
+                    <button type="button" className="btn btn-primary btn-sm" onClick={save} disabled={saving || compatibilityReadOnly || isArchived}>
                         {saving ? 'Saving…' : 'Save'}
                     </button>
                 </div>
@@ -1107,7 +1135,7 @@ export default function StrategyPage() {
                             </div>
                         </div>
                         <div className="col-md-6 col-lg-7 d-flex flex-wrap gap-2 align-items-end">
-                            {!currentEnabled && selectedStrategyId ? (
+                            {!currentEnabled && !isArchived && selectedStrategyId ? (
                                 <button
                                     type="button"
                                     id="strategy-editor-enable"
@@ -1119,20 +1147,20 @@ export default function StrategyPage() {
                                     Enable
                                 </button>
                             ) : null}
-                            {currentEnabled ? (
+                            {currentEnabled ? <button type="button" className="btn btn-outline-warning btn-sm" disabled={lifecycleBusy || compatibilityReadOnly} onClick={onDisableCurrent}>Disable</button> : null}
+                            {!isArchived && selectedStrategyId ? (
                                 <button
                                     type="button"
                                     id="strategy-editor-archive"
                                     className="btn btn-outline-secondary btn-sm"
-                                    disabled={lifecycleBusy || compatibilityReadOnly || !canArchive}
-                                    title={!canArchive
-                                        ? 'Enable another strategy before archiving the last enabled one'
-                                        : 'Archive this strategy'}
+                                    disabled={lifecycleBusy || compatibilityReadOnly}
+                                    title="Archive after all strategy-owned work is resolved"
                                     onClick={onArchiveCurrent}
                                 >
-                                    Archive
+                                    Retire
                                 </button>
                             ) : null}
+                            {isArchived ? <button type="button" className="btn btn-outline-primary btn-sm" disabled={lifecycleBusy} onClick={onRestoreCurrent}>Restore as disabled</button> : null}
                         </div>
                     </div>
                     <div className="row g-2 align-items-start">
@@ -1175,7 +1203,14 @@ export default function StrategyPage() {
                     </div>
                 </div>
             </div>
+            {archiveBlockers.length > 0 && (
+                <div className="alert alert-warning" role="alert">
+                    <strong>Resolve these records before retiring:</strong>
+                    <ul className="mb-0 mt-2">{archiveBlockers.map((blocker) => <li key={blocker.code}>{blocker.label} ({blocker.count}) — <Link to={blocker.href}>Open resolution view</Link></li>)}</ul>
+                </div>
+            )}
 
+            <fieldset disabled={isArchived} className="border-0 p-0 m-0">
             <AIStrategyPromptBuilder />
 
             <div className="btn-group flex-wrap mb-3" role="group">
@@ -1310,8 +1345,9 @@ export default function StrategyPage() {
                             ['watch', 'Watch'],
                         ].map(([key, label]) => (
                             <div className="col-md-4" key={key}>
-                                <label className="form-label">{label}</label>
+                                <label className="form-label" htmlFor={`strategy-threshold-${key}`}>{label}</label>
                                 <NumberInput
+                                    id={`strategy-threshold-${key}`}
                                     step="1"
                                     allowDecimals={false}
                                     buttonVariant="secondary"
@@ -1660,6 +1696,7 @@ export default function StrategyPage() {
                     })()}
                 </div>
             )}
+            </fieldset>
         </div>
     );
 }

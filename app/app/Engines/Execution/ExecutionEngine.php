@@ -185,6 +185,15 @@ class ExecutionEngine
         }
 
         $transaction = DB::transaction(function () use ($profile, $stock, $order, $delta, $price, $recommendation, $shouldComplete, $target, $ownerKey) {
+            $strategyId = $recommendation?->owningStrategyId();
+            if ($strategyId === null && is_string($ownerKey)
+                && preg_match('/^strategy:(\\d+)$/', $ownerKey, $ownerMatch) === 1) {
+                $strategyId = (int) $ownerMatch[1];
+            }
+            if ($strategyId !== null) {
+                app(\App\Services\Strategy\StrategyLifecycleAdmission::class)
+                    ->lockForNewObligation((int) $profile->id, [$strategyId]);
+            }
             $transaction = $this->writes->createFinancialUnit($profile, $stock, [
                 'type' => $order->side,
                 'quantity' => $delta,
@@ -313,6 +322,18 @@ class ExecutionEngine
             : false;
 
         $order = DB::transaction(function () use ($profile, $stock, $side, $quantity, $input, $recommendation) {
+            if ($recommendation !== null) {
+                app(\App\Services\Strategy\StrategyLifecycleAdmission::class)
+                    ->lockForNewObligation((int) $profile->id, [$recommendation->owningStrategyId()]);
+                $lockedRecommendation = TradingRecommendation::query()->whereKey($recommendation->id)
+                    ->where('profile_id', $profile->id)->lockForUpdate()->firstOrFail();
+                if (! $lockedRecommendation->canExecuteManually()) {
+                    throw ValidationException::withMessages([
+                        'recommendation_id' => ['Recommendation is no longer pending execution.'],
+                    ]);
+                }
+                $recommendation = $lockedRecommendation;
+            }
             return TradingOrder::query()->create([
                 'profile_id' => $profile->id,
                 'recommendation_id' => $recommendation?->id,
@@ -405,6 +426,10 @@ class ExecutionEngine
             ?? ($recommendation ? 'TOS recommendation #'.$recommendation->id : 'TOS order #'.$order->id);
 
         $transaction = DB::transaction(function () use ($profile, $stock, $side, $quantity, $price, $fees, $date, $notes, $order, $recommendation) {
+            if ($recommendation !== null) {
+                app(\App\Services\Strategy\StrategyLifecycleAdmission::class)
+                    ->lockForNewObligation((int) $profile->id, [$recommendation->owningStrategyId()]);
+            }
             $transaction = $this->writes->createFinancialUnit($profile, $stock, [
                 'type' => $side,
                 'quantity' => $quantity,

@@ -5,6 +5,7 @@ namespace App\Services\Lending;
 use App\Models\CapitalLoan;
 use App\Models\CapitalRecall;
 use App\Models\PortfolioProfile;
+use App\Services\Strategy\StrategyLifecycleAdmission;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -91,6 +92,17 @@ final class RecallService
         }
 
         return tap(DB::transaction(function () use ($profile, $loan, $kind, $amount, $asOf) {
+            app(StrategyLifecycleAdmission::class)->lockForNewObligation(
+                (int) $profile->id,
+                [(int) $loan->borrower_strategy_id, (int) $loan->lender_strategy_id],
+            );
+            $loan = CapitalLoan::query()->whereKey($loan->id)->where('profile_id', $profile->id)
+                ->lockForUpdate()->firstOrFail();
+            if (! $this->eligibility->canInitiateRecall($profile, $loan, $asOf)) {
+                throw ValidationException::withMessages([
+                    'recall' => ['Recall cannot be initiated (eligibility, active recall, or follow-up cooldown).'],
+                ]);
+            }
             if ($this->eligibility->hasActiveRecall($profile->fresh())) {
                 throw ValidationException::withMessages([
                     'recall' => ['Only one active recall is allowed at a time.'],

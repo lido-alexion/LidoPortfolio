@@ -13,6 +13,8 @@ A local reusable workflow keeps the existing deployment runtime contract in one 
 
 The production package still installs production Composer/npm dependencies and runs the production Vite build with `VITE_APP_BASE=/build/` and production telemetry settings. This is retained because production runtime settings differ from the CI frontend build. Existing release archive checks, production environment approval/secrets, serialized deployment concurrency, worker interlock, rollback scripts, runtime commit-SHA health check, public asset checks, authenticated read-only smoke, and evidence upload remain in place.
 
+While the `stoxla-production-deploy` concurrency lock is held, the deploy step makes an authenticated read-only GitHub API request for the current `master` branch SHA immediately before invoking the remote activation script. It fails closed on API/response errors or any exact-SHA mismatch with `github.sha`; queued or rerun historical candidates therefore cannot activate. The existing same-run artifact and post-deploy exact-SHA health/smoke checks remain required. The frontend canonical job retains the current-master 45-minute outer timeout without changing its verifier or test policy.
+
 ## Trigger and scope behavior
 
 - Pull requests retain the existing canonical CI jobs and stable job display names. They never run package or deploy.
@@ -36,6 +38,6 @@ The new graph introduces no new mandatory PR check name, so existing canonical r
 
 ## Verification and limitations
 
-`scripts/test_ci_release_contract.py` covers documentation, backend, frontend, journey-doc, and VPS scope plus successful, failed, cancelled, missing, skipped-applicable, wrong-SHA, PR, non-master, and docs-only gate outcomes. `scripts/test_ci_workflow_graph.py` parses the workflow and checks dependency wiring, stable canonical job names, same-run artifact naming, and absence of duplicate verification calls. The existing `app/tests/js/deployment-runtime-contract.test.mjs` also passes unchanged. These checks are offline contract evidence; hosted GitHub Actions remains authoritative for workflow execution and the first post-merge activation.
+`scripts/test_ci_release_contract.py` covers documentation, backend, frontend, journey-doc, and VPS scope plus successful, failed, cancelled, missing, skipped-applicable, wrong-SHA, PR, non-master, and docs-only gate outcomes. `scripts/test_ci_workflow_graph.py` parses the workflow and checks dependency wiring, stable canonical job names, the 45-minute frontend timeout, same-run artifact naming, current-master equality-check placement and failure behavior, exact-SHA post-deploy checks, and absence of duplicate verification calls. The existing `app/tests/js/deployment-runtime-contract.test.mjs` remains unchanged. These checks are offline contract evidence; hosted GitHub Actions remains authoritative for workflow execution and the first post-merge activation.
 
 No application/test inventory, assertions, skip policy, CI platform, secrets, environments, workflow settings, production host, or deployment scripts are changed. No hosted run is claimed until a draft PR is published and GitHub reports its results.

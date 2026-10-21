@@ -102,6 +102,8 @@ final class RecallLiquidationService
             &$pendingRows,
             &$expectedTotal,
         ) {
+            app(\App\Services\Strategy\StrategyLifecycleAdmission::class)
+                ->lockForNewObligation((int) $profile->id, [(int) $borrower->id]);
             if ($recall !== null && $recall->state === CapitalRecall::STATE_PENDING_HELD) {
                 $this->recalls->markLiquidation($recall);
             } elseif ($recall !== null && in_array($recall->state, [

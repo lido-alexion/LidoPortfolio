@@ -6,7 +6,9 @@ use App\Models\CapitalRequest;
 use App\Models\PortfolioProfile;
 use App\Models\TradingRecommendation;
 use App\Models\TradingStrategy;
+use App\Services\Strategy\StrategyLifecycleAdmission;
 use App\Support\CommittedLoanAmount;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -50,23 +52,30 @@ final class CapitalRequestService
             ]);
         }
 
-        $existing = CapitalRequest::query()
-            ->where('recommendation_id', $recommendation->id)
-            ->whereIn('status', CapitalRequest::ACTIVE_FUNDING_STATUSES)
-            ->orderBy('id')
-            ->first();
-        if ($existing !== null) {
-            return $existing;
-        }
+        return DB::transaction(function () use ($profile, $recommendation, $borrower, $amount) {
+            app(StrategyLifecycleAdmission::class)->lockForNewObligation((int) $profile->id, [(int) $borrower->id]);
+            $lockedRecommendation = TradingRecommendation::query()->whereKey($recommendation->id)
+                ->where('profile_id', $profile->id)->lockForUpdate()->firstOrFail();
+            if ($lockedRecommendation->owningStrategyId() !== (int) $borrower->id) {
+                throw ValidationException::withMessages([
+                    'borrower_strategy_id' => ['Borrower strategy no longer owns the recommendation.'],
+                ]);
+            }
+            $existing = CapitalRequest::query()->where('recommendation_id', $lockedRecommendation->id)
+                ->whereIn('status', CapitalRequest::ACTIVE_FUNDING_STATUSES)->orderBy('id')->first();
+            if ($existing !== null) {
+                return $existing;
+            }
 
-        return CapitalRequest::query()->create([
-            'profile_id' => $profile->id,
-            'borrower_strategy_id' => $borrower->id,
-            'lender_strategy_id' => null,
-            'recommendation_id' => $recommendation->id,
-            'amount' => round($amount, 4),
-            'status' => CapitalRequest::STATUS_DISPLAYED,
-        ]);
+            return CapitalRequest::query()->create([
+                'profile_id' => $profile->id,
+                'borrower_strategy_id' => $borrower->id,
+                'lender_strategy_id' => null,
+                'recommendation_id' => $lockedRecommendation->id,
+                'amount' => round($amount, 4),
+                'status' => CapitalRequest::STATUS_DISPLAYED,
+            ]);
+        });
     }
 
     /**
