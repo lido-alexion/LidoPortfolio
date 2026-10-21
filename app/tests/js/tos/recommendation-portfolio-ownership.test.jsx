@@ -66,16 +66,15 @@ it('replaces confirmed A recommendations with B on a real provider switch', asyn
 
 it('ignores a deferred A list completion after B becomes active', async () => {
     const oldA = deferred();
-    let aStarted;
-    const started = new Promise((resolve) => { aStarted = resolve; });
     api.get.mockImplementation((path) => {
         if (path === '/portfolios') return Promise.resolve({ data: { data: portfolios } });
-        if (path === '/v1/recommendations' && sessionStorage.getItem('portfolio_active_id') === '1') { aStarted(); return oldA.promise; }
+        if (path === '/v1/recommendations' && sessionStorage.getItem('portfolio_active_id') === '1') return oldA.promise;
         if (path === '/v1/recommendations') return Promise.resolve(list('BETA'));
         throw new Error(`Unexpected GET ${path}`);
     });
     renderPage();
-    await act(async () => started);
+    await waitFor(() => expect(api.get.mock.calls.some(([path, options]) =>
+        path === '/v1/recommendations' && options?.params?.open === 1)).toBe(true));
     fireEvent.click(screen.getByTitle('Switch portfolio (per tab)'));
     fireEvent.click(await screen.findByRole('button', { name: 'Research', exact: true }));
     expect(await screen.findByText('BETA')).toBeInTheDocument();
@@ -119,18 +118,17 @@ it('lets the latest same-portfolio detail request own the review panel', async (
 
 it('uses the portfolio event epoch to reject an A request across a batched A to B to A switch', async () => {
     const oldA = deferred();
-    let initialAStarted;
-    const initialStarted = new Promise((resolve) => { initialAStarted = resolve; });
     let aReads = 0;
     api.get.mockImplementation((path) => {
         if (path === '/portfolios') return Promise.resolve({ data: { data: portfolios } });
         if (path !== '/v1/recommendations') throw new Error(`Unexpected GET ${path}`);
         const active = sessionStorage.getItem('portfolio_active_id');
-        if (active === '1' && ++aReads === 1) { initialAStarted(); return oldA.promise; }
+        if (active === '1' && ++aReads === 1) return oldA.promise;
         return Promise.resolve(list(active === '2' ? 'BETA' : 'ALPHA FRESH'));
     });
     renderPage(<BatchSwitch />);
-    await act(async () => initialStarted);
+    await waitFor(() => expect(api.get.mock.calls.some(([path, options]) =>
+        path === '/v1/recommendations' && options?.params?.open === 1)).toBe(true));
     fireEvent.click(screen.getByRole('button', { name: 'Batch A-B-A' }));
     expect(await screen.findByText('ALPHA FRESH')).toBeInTheDocument();
     await act(async () => oldA.resolve(list('ALPHA OLD')));
@@ -274,15 +272,14 @@ it('does not treat a null provider bootstrap as a confirmed empty recommendation
 
 it('ignores a deferred list failure after unmount', async () => {
     const pending = deferred();
-    let started;
-    const requestStarted = new Promise((resolve) => { started = resolve; });
     api.get.mockImplementation((path) => {
         if (path === '/portfolios') return Promise.resolve({ data: { data: portfolios } });
-        if (path === '/v1/recommendations') { started(); return pending.promise; }
+        if (path === '/v1/recommendations') return pending.promise;
         throw new Error(`Unexpected GET ${path}`);
     });
     const view = renderPage();
-    await act(async () => requestStarted);
+    await waitFor(() => expect(api.get.mock.calls.some(([path, options]) =>
+        path === '/v1/recommendations' && options?.params?.open === 1)).toBe(true));
     view.unmount();
     await act(async () => pending.reject(new Error('late unmounted failure')));
     expect(showToast).not.toHaveBeenCalled();
@@ -347,19 +344,17 @@ it('keeps an in-flight pipeline owned and busy while opening and closing details
 
 it('lets a changed history filter supersede an initial pending list read', async () => {
     const openList = deferred();
-    let started;
-    const requestStarted = new Promise((resolve) => { started = resolve; });
     api.get.mockImplementation((path, options) => {
         if (path === '/portfolios') return Promise.resolve({ data: { data: portfolios } });
         if (path === '/v1/recommendations' && options.params.open === 1) {
-            started();
             return openList.promise;
         }
         if (path === '/v1/recommendations' && options.params.all === 1) return Promise.resolve(list('CLOSED HISTORY'));
         throw new Error(`Unexpected GET ${path}`);
     });
     renderPage();
-    await act(async () => requestStarted);
+    await waitFor(() => expect(api.get.mock.calls.some(([path, options]) =>
+        path === '/v1/recommendations' && options?.params?.open === 1)).toBe(true));
     fireEvent.click(screen.getByLabelText('Include closed history'));
     expect(await screen.findByText('CLOSED HISTORY')).toBeInTheDocument();
     await act(async () => openList.resolve(list('OLD OPEN')));
