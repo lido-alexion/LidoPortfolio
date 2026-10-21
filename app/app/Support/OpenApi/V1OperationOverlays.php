@@ -54,6 +54,7 @@ final class V1OperationOverlays
             'GET /api/v1/artifact-library/bundle-deployments/{uuid}' => [
                 'summary' => 'Read Bundle deployment evidence',
                 'description' => 'Reads the exact Bundle deployment for the authenticated requester and active Portfolio. Returns allowlisted status and member revision evidence; performs no mutation.',
+                'pathParameterSchemas' => ['uuid' => ['type' => 'string']],
                 'responses' => [
                     '404' => ['description' => 'Deployment UUID is not available to this requester in the active Portfolio.'],
                 ],
