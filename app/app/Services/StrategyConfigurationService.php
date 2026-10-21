@@ -415,7 +415,7 @@ class StrategyConfigurationService
             $lockedStrategy->forceFill([
                 'name' => $nameChanged ? $trimmedName : $lockedStrategy->name,
                 'description' => $descriptionChanged ? $description : $lockedStrategy->description,
-                'status' => TradingStrategy::STATUS_ACTIVE,
+                'status' => $lockedStrategy->status,
                 'active_version_id' => $newVersion->id,
                 'definition_hash' => $newVersion->definition_hash,
                 'is_factory' => false,

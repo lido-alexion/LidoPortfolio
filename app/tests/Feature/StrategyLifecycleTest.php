@@ -17,6 +17,10 @@ use App\Models\TradingStrategyVersion;
 use App\Models\User;
 use App\Engines\Recommendation\RecommendationGenerationPipeline;
 use App\Services\Strategy\StrategyArchiveEligibility;
+use App\Services\Lending\SaleProceedsAvailabilityService;
+use App\Services\Lending\CapitalRequestService;
+use App\Services\Strategy\StrategyLifecycleAdmission;
+use App\Services\StrategyConfigurationService;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -63,6 +67,28 @@ class StrategyLifecycleTest extends TestCase
         $this->actingAs($user)->postJson('/api/v1/evaluation/runs')
             ->assertUnprocessable()->assertJsonPath('error.code', 'NO_ENABLED_STRATEGY');
         $this->assertSame(0, EvaluationRun::query()->where('profile_id', $profile->id)->count());
+    }
+
+    public function test_editing_disabled_strategy_creates_version_without_implicitly_enabling_it(): void
+    {
+        [$user, $profile, $strategy, $version] = $this->strategyContext();
+        $this->actingAs($user)->postJson("/api/v1/strategy-registry/{$strategy->id}/disable")->assertOk();
+        $config = $version->config_json;
+        $config['risk']['high_atr_pct'] = 4.25;
+
+        $updated = app(StrategyConfigurationService::class)->updateActiveConfig(
+            $profile, $config, strategyId: (int) $strategy->id,
+        );
+
+        $strategy->refresh();
+        $this->assertSame(TradingStrategy::STATUS_DISABLED, $strategy->status);
+        $this->assertNotSame((int) $version->id, (int) $strategy->active_version_id);
+        $this->assertSame((int) $strategy->active_version_id, (int) $updated['version_id']);
+        $this->assertSame(0, TradingStrategy::query()->where('profile_id', $profile->id)
+            ->where('status', TradingStrategy::STATUS_ACTIVE)->count());
+
+        $this->actingAs($user)->postJson("/api/v1/strategy-registry/{$strategy->id}/activate")->assertOk();
+        $this->assertSame(TradingStrategy::STATUS_ACTIVE, $strategy->fresh()->status);
     }
 
     public function test_archive_blockers_follow_exact_profile_and_strategy_ownership_and_positive_balances(): void
@@ -181,6 +207,75 @@ class StrategyLifecycleTest extends TestCase
         $this->actingAs($user)->getJson('/api/v1/strategy-registry/'.$strategy->id)
             ->assertOk()->assertJsonPath('data.metadata.lifecycle_status', TradingStrategy::STATUS_DISABLED);
         $this->assertSame(0, TradingStrategy::query()->where('profile_id', $profile->id)->where('status', TradingStrategy::STATUS_ACTIVE)->count());
+    }
+
+    public function test_settlement_writer_and_archive_serialize_in_both_orders_without_financial_side_effects(): void
+    {
+        [$user, $profile, $strategy, $version] = $this->strategyContext();
+        $proceeds = app(SaleProceedsAvailabilityService::class)->scheduleForObligation(
+            $profile, $strategy, 125.0, 125.0, PendingSaleProceeds::OBLIGATION_RECALL,
+        );
+        $this->assertSame(PendingSaleProceeds::STATUS_PENDING, $proceeds->status);
+        $this->assertSame(125.0, (float) $proceeds->amount);
+        $this->assertSame(409, $this->actingAs($user)
+            ->postJson("/api/v1/strategy-registry/{$strategy->id}/archive", ['reason' => 'Retirement requested'])
+            ->status());
+        $this->assertSame(TradingStrategy::STATUS_ACTIVE, $strategy->fresh()->status);
+        $this->assertSame(0, TradingOrder::query()->where('profile_id', $profile->id)->count());
+
+        [$archivedUser, $archivedProfile, $archivedStrategy, $archivedVersion, $stock] = $this->strategyContext();
+        $recommendation = $this->recommendation(
+            $archivedProfile, $archivedVersion, $stock, TradingRecommendation::STATUS_REJECTED,
+        );
+        $this->actingAs($archivedUser)->postJson("/api/v1/strategy-registry/{$archivedStrategy->id}/archive", [
+            'reason' => 'Retirement requested',
+        ])->assertOk();
+
+        try {
+            app(SaleProceedsAvailabilityService::class)->scheduleForObligation(
+                $archivedProfile, $archivedStrategy, 125.0, 125.0, PendingSaleProceeds::OBLIGATION_RECALL,
+            );
+            $this->fail('A settlement writer must re-read the strategy after acquiring its admission lock.');
+        } catch (\Illuminate\Validation\ValidationException) {
+            $this->assertSame(0, PendingSaleProceeds::query()->where('profile_id', $archivedProfile->id)->count());
+        }
+        $this->assertSame(TradingRecommendation::STATUS_REJECTED, $recommendation->fresh()->status);
+        $this->assertSame(TradingStrategy::STATUS_ARCHIVED, $archivedStrategy->fresh()->status);
+    }
+
+    public function test_order_and_capital_admission_share_the_archive_strategy_barrier(): void
+    {
+        [$user, $profile, $strategy, $version, $stock] = $this->strategyContext();
+        $recommendation = $this->recommendation($profile, $version, $stock, TradingRecommendation::STATUS_REJECTED);
+        DB::transaction(function () use ($profile, $strategy, $recommendation, $stock): void {
+            app(StrategyLifecycleAdmission::class)->lockForNewObligation((int) $profile->id, [(int) $strategy->id]);
+            TradingOrder::query()->create([
+                'profile_id' => $profile->id, 'recommendation_id' => $recommendation->id,
+                'security_id' => $stock->id, 'side' => 'sell', 'quantity' => 1,
+                'status' => TradingOrder::STATUS_PENDING,
+            ]);
+        });
+        $this->actingAs($user)->postJson("/api/v1/strategy-registry/{$strategy->id}/archive", [
+            'reason' => 'Retirement requested',
+        ])->assertStatus(409)->assertJsonPath('meta.blockers.0.code', 'orders');
+
+        [$archivedUser, $archivedProfile, $archivedStrategy, $archivedVersion, $archivedStock] = $this->strategyContext();
+        $historical = $this->recommendation(
+            $archivedProfile, $archivedVersion, $archivedStock, TradingRecommendation::STATUS_REJECTED,
+        );
+        $this->actingAs($archivedUser)->postJson("/api/v1/strategy-registry/{$archivedStrategy->id}/archive", [
+            'reason' => 'Retirement requested',
+        ])->assertOk();
+
+        try {
+            app(CapitalRequestService::class)->createRequest($archivedProfile, $historical, $archivedStrategy, 5000.0);
+            $this->fail('A capital request must not be admitted after the strategy has been archived.');
+        } catch (\Illuminate\Validation\ValidationException) {
+            $this->assertSame(0, CapitalRequest::query()->where('profile_id', $archivedProfile->id)->count());
+        }
+        $this->assertSame(TradingRecommendation::STATUS_REJECTED, $historical->fresh()->status);
+        $this->assertSame(TradingStrategy::STATUS_ARCHIVED, $archivedStrategy->fresh()->status);
+        $this->assertSame(0, TradingOrder::query()->where('profile_id', $archivedProfile->id)->count());
     }
 
     public function test_generation_skips_a_strategy_paused_after_enabled_selection_was_read(): void

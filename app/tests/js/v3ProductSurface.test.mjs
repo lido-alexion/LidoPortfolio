@@ -53,7 +53,7 @@ test('Create Strategy action exists on Registry, editor, and create panel', () =
 
 test('Registry and editor expose Enable and Archive without exclusive-activation copy', () => {
     assert.match(registry, /Enable “/);
-    assert.match(registry, /Archive this strategy\?/);
+    assert.match(registry, /Why are you retiring/);
     assert.match(registry, /\/archive/);
     assert.match(registry, /Disable/);
     assert.match(page, /id="strategy-editor-enable"/);

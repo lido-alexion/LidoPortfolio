@@ -635,11 +635,29 @@ class BacktestSimulationEngine
             }
         }
 
-        $existing = TradingStrategyVersion::query()->whereHas('strategy', fn ($query) => $query
+        $enabled = TradingStrategy::query()->where('profile_id', $profile->id)
+            ->where('status', TradingStrategy::STATUS_ACTIVE)->with('activeVersion')->orderBy('id')->get();
+        foreach ($enabled as $strategy) {
+            if ($strategy->activeVersion) {
+                return $strategy->activeVersion->load('strategy');
+            }
+        }
+
+        $available = TradingStrategy::query()->where('profile_id', $profile->id)
+            ->where('status', TradingStrategy::STATUS_DISABLED)->with('activeVersion')->orderBy('id')->get();
+        foreach ($available as $strategy) {
+            if ($strategy->activeVersion) {
+                return $strategy->activeVersion->load('strategy');
+            }
+        }
+
+        // Legacy rows may not yet have a persisted active pointer. Preserve the
+        // established current-version fallback only for that incomplete lineage.
+        $legacy = TradingStrategyVersion::query()->whereHas('strategy', fn ($query) => $query
             ->where('profile_id', $profile->id)->where('status', '!=', TradingStrategy::STATUS_ARCHIVED))
             ->orderByDesc('id')->first();
 
-        return ($existing ?? $this->strategies->ensureActive($profile))->load('strategy');
+        return ($legacy ?? $this->strategies->ensureActive($profile))->load('strategy');
     }
 
     /**

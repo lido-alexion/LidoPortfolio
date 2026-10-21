@@ -45,6 +45,8 @@ STR-14 authority and implementation owner mapping: [frozen PO decision](./str14-
 
 Generation continues to select enabled strategies only. The normal execution, broker order reconciliation, transaction and settlement paths continue to process already persisted work for disabled strategies. In particular, current-state broker revalidation does not cancel a pending execution or release its reservation solely because its strategy was disabled.
 
+Archive and every writer that can create or reopen a strategy-owned blocker serialize on that exact strategy row before locking dependent records. Bilateral capital operations acquire borrower and lender strategy rows in ascending ID order. The writer rechecks current ownership after the barrier and refuses only a new obligation against Archived; Disabled strategies continue through existing execution and settlement workflows.
+
 **Current implementation anchors:** `app/app/Models/TradingStrategy.php`, `app/app/Services/Artifacts/StrategyArtifactRegistry.php`, `app/app/Http/Controllers/Api/V1/StrategyRegistryController.php`, and `app/resources/js/src/pages/StrategyRegistryPage.jsx`.
 
 ## 4. Strategy Configuration Model
