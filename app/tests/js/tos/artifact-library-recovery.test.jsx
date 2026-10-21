@@ -261,6 +261,51 @@ it('reads the exact Bundle plan after an uncertain deploy response and exposes c
     confirm.mockRestore();
 });
 
+it('keeps completed Bundle feedback after the follow-up detail refresh clears transient errors', async () => {
+    const bundle = { ...detail('Recovery Bundle'), type: 'bundle', versions: [{ id: 88, semver: '1.0.0', status: 'published', content: {}, documentation: {}, dependencies: [], definition_hash: 'fixture-only', lock_version: 1 }] };
+    const planUuid = '00000000-0000-4000-8000-000000000034';
+    const refreshedDetail = deferred();
+    let detailReads = 0;
+    apiMock.get.mockImplementation((path) => {
+        if (String(path).includes('/bundle-deployments/')) {
+            return Promise.resolve({ data: { data: { deployment_uuid: planUuid, status: 'completed', error_code: null, items: [{ artifact_uuid: UUID_A, version: '1.0.0', action: 'bind', resulting_revision_id: 42 }] } } });
+        }
+        detailReads++;
+        return detailReads === 1 ? Promise.resolve({ data: { data: bundle } }) : refreshedDetail.promise;
+    });
+    apiMock.post.mockImplementation((path) => String(path).endsWith('/bundle-plan')
+        ? Promise.resolve({ data: { data: { deployment_uuid: planUuid, status: 'planned', items: [{ artifact_uuid: UUID_A }] } } })
+        : Promise.reject(new Error('response lost after server commit')));
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<MemoryRouter initialEntries={[`/artifact-library/${UUID_A}`]}><Routes><Route path="/artifact-library/:uuid" element={<ArtifactLibraryDetailPage />} /></Routes></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Deploy Bundle', exact: true }));
+    const feedback = 'Bundle deployment completed; persisted member results confirm the application.';
+    await waitFor(() => expect(detailReads).toBe(2));
+    expect(await screen.findByText('Loading artifact…')).toBeVisible();
+    expect(apiMock.get).toHaveBeenCalledTimes(4);
+    expect(apiMock.post).toHaveBeenCalledTimes(2);
+
+    await act(async () => refreshedDetail.resolve({ data: { data: bundle } }));
+    expect(await screen.findByRole('heading', { name: 'Recovery Bundle' })).toBeVisible();
+    const recovery = await screen.findByRole('region', { name: 'Bundle deployment recovery' });
+    const planIdentity = within(recovery).getByText(planUuid, { selector: 'code', exact: true });
+    expect(planIdentity.parentElement).toHaveTextContent(new RegExp(`^Plan ${planUuid} · completed$`));
+    expect(within(recovery).getByText(feedback, { exact: true })).toBeVisible();
+    expect(screen.getAllByText(feedback, { exact: true })).toHaveLength(1);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(within(recovery).getByRole('listitem')).toHaveTextContent(/^synthetic-artifact-a 1\.0\.0 · bind · revision 42$/);
+    expect(screen.getByRole('button', { name: 'Existing Bundle plan needs review' })).toBeDisabled();
+    expect(apiMock.get.mock.calls.map(([path]) => path)).toEqual([
+        `/v1/artifact-library/${UUID_A}`,
+        `/v1/artifact-library/bundle-deployments/${planUuid}`,
+        `/v1/artifact-library/bundle-deployments/${planUuid}`,
+        `/v1/artifact-library/${UUID_A}`,
+    ]);
+    expect(apiMock.post).toHaveBeenCalledTimes(2);
+    expect(apiMock.post).toHaveBeenLastCalledWith(`/v1/artifact-library/bundle-deployments/${planUuid}/deploy`);
+    confirm.mockRestore();
+});
+
 const bundleDetail = (name) => ({ ...detail(name), type: 'bundle', versions: [{ id: `${name}-v1`, semver: '1.0.0', status: 'published', content: {}, documentation: {}, dependencies: [], definition_hash: 'fixture-only', lock_version: 1 }] });
 
 it('does not confirm or deploy a plan response after its artifact route changes', async () => {
