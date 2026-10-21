@@ -64,6 +64,8 @@ export default function ArtifactLibraryDetailPage() {
     const activeComparisonRef = useRef(null);
     const comparisonBusyRef = useRef(false);
     const mountedRef = useRef(false);
+    const bundleOperationGenerationRef = useRef(0);
+    const activeBundleOperationRef = useRef(null);
 
     const invalidateComparison = useCallback(() => {
         const comparisonOwnedBusy = comparisonBusyRef.current && activeComparisonRef.current !== null;
@@ -79,6 +81,10 @@ export default function ArtifactLibraryDetailPage() {
         committedRouteRef.current = routeIdentity;
         routeEpochRef.current++;
         loadGenerationRef.current++;
+        const bundleOperation = activeBundleOperationRef.current;
+        bundleOperationGenerationRef.current++;
+        activeBundleOperationRef.current = null;
+        if (bundleOperation) setBusy(false);
         invalidateComparison();
         setLoadedArtifact(null);
         setArtifactUuid(uuid);
@@ -103,6 +109,8 @@ export default function ArtifactLibraryDetailPage() {
             loadGenerationRef.current++;
             comparisonGenerationRef.current++;
             activeComparisonRef.current = null;
+            bundleOperationGenerationRef.current++;
+            activeBundleOperationRef.current = null;
         };
     }, []);
 
@@ -232,37 +240,60 @@ export default function ArtifactLibraryDetailPage() {
         }), binding.status === 'enabled' ? 'Binding disabled.' : 'Binding enabled.');
     };
 
-    const readBundleDeployment = async (deploymentUuid) => {
+    const readBundleDeployment = async (deploymentUuid, isCurrent) => {
         const response = await api.get(`/v1/artifact-library/bundle-deployments/${deploymentUuid}`);
         const evidence = response.data?.data;
-        setBundleRecovery((current) => current?.deployment_uuid === deploymentUuid
-            ? { ...current, evidence, readError: '' }
-            : current);
+        if (isCurrent()) {
+            setBundleRecovery((current) => current?.deployment_uuid === deploymentUuid
+                ? { ...current, evidence, readError: '' }
+                : current);
+        }
         return evidence;
     };
 
     const deployBundle = async (version) => {
+        const requestedRoute = routeIdentity;
+        if (!mountedRef.current || committedRouteRef.current !== requestedRoute) return;
+        const epoch = routeEpochRef.current;
+        const generation = ++bundleOperationGenerationRef.current;
+        const operation = { route: requestedRoute, epoch, generation };
+        activeBundleOperationRef.current = operation;
+        const isCurrent = () => mountedRef.current
+            && committedRouteRef.current === requestedRoute
+            && routeEpochRef.current === epoch
+            && bundleOperationGenerationRef.current === generation
+            && activeBundleOperationRef.current === operation;
         setBusy(true); setError('');
         let deploymentUuid = bundleRecovery?.deployment_uuid;
         try {
             let evidence;
             if (deploymentUuid) {
-                evidence = await readBundleDeployment(deploymentUuid);
+                evidence = await readBundleDeployment(deploymentUuid, isCurrent);
+                if (!isCurrent()) return;
                 if (evidence.status !== 'planned') return;
             } else {
                 const planned = await api.post(`/v1/artifact-library/versions/${version.id}/bundle-plan`);
+                if (!isCurrent()) return;
                 evidence = planned.data?.data;
                 deploymentUuid = evidence?.deployment_uuid;
                 if (!deploymentUuid) throw new Error('Bundle plan response did not include its deployment UUID.');
                 setBundleRecovery({ deployment_uuid: deploymentUuid, evidence, readError: '' });
             }
+            if (!isCurrent()) return;
             if (!window.confirm(`Deploy ${evidence?.items?.length || 0} Bundle members atomically to this Portfolio?`)) return;
+            if (!isCurrent()) return;
             try {
                 await api.post(`/v1/artifact-library/bundle-deployments/${deploymentUuid}/deploy`);
+                if (!isCurrent()) return;
             } catch (requestError) {
+                if (!isCurrent()) return;
                 setError('Bundle apply response was uncertain. Inspecting the same deployment plan.');
-                try { evidence = await readBundleDeployment(deploymentUuid); }
+                try {
+                    evidence = await readBundleDeployment(deploymentUuid, isCurrent);
+                    if (!isCurrent()) return;
+                }
                 catch (readError) {
+                    if (!isCurrent()) return;
                     setBundleRecovery((current) => current?.deployment_uuid === deploymentUuid
                         ? { ...current, readError: getApiErrorMessage(readError) }
                         : current);
@@ -278,21 +309,47 @@ export default function ArtifactLibraryDetailPage() {
                     return;
                 }
             }
-            evidence = await readBundleDeployment(deploymentUuid);
+            if (!isCurrent()) return;
+            evidence = await readBundleDeployment(deploymentUuid, isCurrent);
+            if (!isCurrent()) return;
             if (evidence.status === 'completed') {
                 showToast('Bundle deployed atomically.');
                 await load();
             }
-        } catch (requestError) { setError(getApiErrorMessage(requestError)); }
-        finally { setBusy(false); }
+        } catch (requestError) { if (isCurrent()) setError(getApiErrorMessage(requestError)); }
+        finally {
+            if (activeBundleOperationRef.current === operation) {
+                activeBundleOperationRef.current = null;
+                setBusy(false);
+            }
+        }
     };
 
     const inspectBundleDeployment = async () => {
         if (!bundleRecovery?.deployment_uuid) return;
+        const requestedRoute = routeIdentity;
+        if (!mountedRef.current || committedRouteRef.current !== requestedRoute) return;
+        const epoch = routeEpochRef.current;
+        const generation = ++bundleOperationGenerationRef.current;
+        const operation = { route: requestedRoute, epoch, generation };
+        activeBundleOperationRef.current = operation;
+        const isCurrent = () => mountedRef.current
+            && committedRouteRef.current === requestedRoute
+            && routeEpochRef.current === epoch
+            && bundleOperationGenerationRef.current === generation
+            && activeBundleOperationRef.current === operation;
         setBusy(true);
-        try { await readBundleDeployment(bundleRecovery.deployment_uuid); setError(''); }
-        catch (requestError) { setBundleRecovery((current) => current ? { ...current, readError: getApiErrorMessage(requestError) } : current); }
-        finally { setBusy(false); }
+        try {
+            await readBundleDeployment(bundleRecovery.deployment_uuid, isCurrent);
+            if (isCurrent()) setError('');
+        } catch (requestError) {
+            if (isCurrent()) setBundleRecovery((current) => current ? { ...current, readError: getApiErrorMessage(requestError) } : current);
+        } finally {
+            if (activeBundleOperationRef.current === operation) {
+                activeBundleOperationRef.current = null;
+                setBusy(false);
+            }
+        }
     };
 
     return (

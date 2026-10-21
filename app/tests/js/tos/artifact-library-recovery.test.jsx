@@ -232,3 +232,81 @@ it('reads the exact Bundle plan after an uncertain deploy response and exposes c
     expect(screen.getByRole('button', { name: 'Existing Bundle plan needs review' })).toBeDisabled();
     confirm.mockRestore();
 });
+
+const bundleDetail = (name) => ({ ...detail(name), type: 'bundle', versions: [{ id: `${name}-v1`, semver: '1.0.0', status: 'published', content: {}, documentation: {}, dependencies: [], definition_hash: 'fixture-only', lock_version: 1 }] });
+
+it('does not confirm or deploy a plan response after its artifact route changes', async () => {
+    const oldPlan = deferred();
+    apiMock.get.mockImplementation((path) => Promise.resolve({ data: { data: bundleDetail(String(path).endsWith(UUID_A) ? 'Bundle A' : 'Bundle B') } }));
+    apiMock.post.mockReturnValue(oldPlan.promise);
+    const confirm = vi.spyOn(window, 'confirm');
+    render(<MemoryRouter initialEntries={[`/artifact-library/${UUID_A}`]}><RouteHarness /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Deploy Bundle', exact: true }));
+    await waitFor(() => expect(apiMock.post).toHaveBeenCalledWith('/v1/artifact-library/versions/Bundle A-v1/bundle-plan'));
+    fireEvent.click(screen.getByRole('button', { name: 'Route B' }));
+    expect(await screen.findByRole('heading', { name: 'Bundle B' })).toBeVisible();
+    await act(async () => oldPlan.resolve({ data: { data: { deployment_uuid: 'obsolete-plan-a', status: 'planned', items: [{}] } } }));
+    expect(confirm).not.toHaveBeenCalled();
+    expect(apiMock.post).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('region', { name: 'Bundle deployment recovery' })).not.toBeInTheDocument();
+    confirm.mockRestore();
+});
+
+it('rejects an obsolete same-UUID plan after an A to B to A route sequence', async () => {
+    const oldPlan = deferred();
+    apiMock.get.mockImplementation((path) => Promise.resolve({ data: { data: bundleDetail(String(path).endsWith(UUID_A) ? 'Bundle A' : 'Bundle B') } }));
+    apiMock.post.mockReturnValue(oldPlan.promise);
+    const confirm = vi.spyOn(window, 'confirm');
+    render(<MemoryRouter initialEntries={[`/artifact-library/${UUID_A}`]}><RouteHarness /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Deploy Bundle', exact: true }));
+    await waitFor(() => expect(apiMock.post).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Route B' }));
+    expect(await screen.findByRole('heading', { name: 'Bundle B' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Route A' }));
+    expect(await screen.findByRole('heading', { name: 'Bundle A' })).toBeVisible();
+    await act(async () => oldPlan.resolve({ data: { data: { deployment_uuid: 'obsolete-same-uuid', status: 'planned', items: [{}] } } }));
+    expect(confirm).not.toHaveBeenCalled();
+    expect(apiMock.post).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('region', { name: 'Bundle deployment recovery' })).not.toBeInTheDocument();
+    confirm.mockRestore();
+});
+
+it('ignores an obsolete Bundle inspection rejection after the route changes', async () => {
+    const inspection = deferred();
+    apiMock.get.mockImplementation((path) => String(path).includes('/bundle-deployments/')
+        ? inspection.promise
+        : Promise.resolve({ data: { data: bundleDetail(String(path).endsWith(UUID_A) ? 'Bundle A' : 'Bundle B') } }));
+    apiMock.post.mockResolvedValue({ data: { data: { deployment_uuid: 'inspect-plan-a', status: 'planned', items: [] } } });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<MemoryRouter initialEntries={[`/artifact-library/${UUID_A}`]}><RouteHarness /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Deploy Bundle', exact: true }));
+    expect(await screen.findByRole('region', { name: 'Bundle deployment recovery' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect this plan' }));
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledWith('/v1/artifact-library/bundle-deployments/inspect-plan-a'));
+    fireEvent.click(screen.getByRole('button', { name: 'Route B' }));
+    expect(await screen.findByRole('heading', { name: 'Bundle B' })).toBeVisible();
+    await act(async () => inspection.reject(new Error('obsolete inspection failure')));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Bundle deployment recovery' })).not.toBeInTheDocument();
+    confirm.mockRestore();
+});
+
+it('does not let an obsolete plan completion release a newer route operation busy state', async () => {
+    const oldPlan = deferred();
+    const currentPlan = deferred();
+    apiMock.get.mockImplementation((path) => Promise.resolve({ data: { data: bundleDetail(String(path).endsWith(UUID_A) ? 'Bundle A' : 'Bundle B') } }));
+    apiMock.post.mockImplementation((path) => String(path).includes('Bundle A-v1') ? oldPlan.promise : currentPlan.promise);
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<MemoryRouter initialEntries={[`/artifact-library/${UUID_A}`]}><RouteHarness /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Deploy Bundle', exact: true }));
+    await waitFor(() => expect(apiMock.post).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Route B' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Deploy Bundle', exact: true }));
+    await waitFor(() => expect(apiMock.post).toHaveBeenCalledTimes(2));
+    await act(async () => oldPlan.resolve({ data: { data: { deployment_uuid: 'old-plan', status: 'planned', items: [] } } }));
+    expect(screen.getByRole('button', { name: 'Deploy Bundle', exact: true })).toBeDisabled();
+    await act(async () => currentPlan.resolve({ data: { data: { deployment_uuid: 'current-plan', status: 'planned', items: [] } } }));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(apiMock.post).toHaveBeenCalledTimes(2);
+    confirm.mockRestore();
+});
