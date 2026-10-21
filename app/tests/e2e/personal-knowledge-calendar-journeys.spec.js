@@ -52,6 +52,50 @@ for (const viewport of VIEWPORTS) {
             await page.getByRole('group', { name: 'Note viewing mode' }).getByRole('button', { name: 'Manage', exact: true }).click(); let original = page.locator('.lido-knowledge-card').filter({ hasText: 'Reviewed note' }); await noteAction(page, original, 'Pin', viewport); await expect(page.getByText('Could not update note.', { exact: true })).toBeVisible(); expect(rows[0].is_pinned).toBe(false); await noteAction(page, original, 'Pin', viewport); await expect.poll(() => rows[0].is_pinned).toBe(true); await noteAction(page, original, 'Duplicate', viewport); await expect(page.getByText('Could not duplicate note.', { exact: true })).toBeVisible(); expect(rows).toHaveLength(1); await noteAction(page, original, 'Duplicate', viewport); await expect(page.locator('.lido-knowledge-card')).toHaveCount(2); original = page.locator('.lido-knowledge-card').filter({ hasText: 'Reviewed note' }).filter({ hasNotText: 'copy' }); await noteAction(page, original, 'Archive', viewport); await expect(page.getByText('Could not update note.', { exact: true }).last()).toBeVisible(); await expect(original).toBeVisible(); expect(rows[0].is_archived).toBe(false); await noteAction(page, original, 'Archive', viewport); await expect(original).toHaveCount(0); expect(rows[0].is_archived).toBe(true);
             await page.getByRole('button', { name: 'Expand Knowledge Board filters' }).click(); await page.getByLabel('Show archived').check(); await expect(page.locator('.lido-knowledge-card')).toHaveCount(1); await page.getByLabel('Show archived').uncheck(); const copy = page.locator('.lido-knowledge-card').filter({ hasText: 'Reviewed note copy' }); await expect(copy).toBeVisible(); await page.getByRole('searchbox', { name: 'Search text and tags' }).fill('Reviewed note copy'); await expect(copy).toBeVisible(); if (viewport.name === 'desktop') await copy.hover(); await copy.getByRole('checkbox', { name: 'Select note', exact: true }).check(); await page.getByRole('button', { name: 'Export', exact: true }).click(); const exportDialog = page.getByRole('dialog', { name: 'Export 1 note', exact: true }); await exportDialog.getByRole('group', { name: 'Export format' }).getByRole('button', { name: 'Markdown', exact: true }).click(); await expect(exportDialog.getByLabel('Preview', { exact: true })).toHaveValue(/Reviewed note copy/); await page.evaluate(() => { window.__syntheticClipboardFailure = true; }); await exportDialog.getByRole('button', { name: 'Copy to Clipboard' }).click(); await expect(page.getByText('Could not copy to clipboard.', { exact: true })).toBeVisible(); await exportDialog.getByRole('button', { name: 'Copy to Clipboard' }).click(); await expect.poll(() => page.evaluate(() => window.__syntheticCopiedText || '')).toContain('Reviewed note copy'); await exportDialog.getByLabel('Close', { exact: true }).click(); await expect(exportDialog).toHaveCount(0); await nativeAction(page, () => page.locator('#kb-toolbar-panel').getByRole('button', { name: 'Delete', exact: true }).click(), 'dismiss'); expect(safety.writes.filter(w => w.path.endsWith('/bulk'))).toHaveLength(0); await nativeAction(page, () => page.locator('#kb-toolbar-panel').getByRole('button', { name: 'Delete', exact: true }).click(), 'accept'); await expect(page.getByText('Bulk action failed.', { exact: true })).toBeVisible(); await expect(copy).toBeVisible(); await nativeAction(page, () => page.locator('#kb-toolbar-panel').getByRole('button', { name: 'Delete', exact: true }).click(), 'accept'); await expect(copy).toHaveCount(0); expect(rows.map(row => row.id)).toEqual([901]); expect(safety.writes).toHaveLength(10); expect(safety.blocked).toEqual([]);
         });
+        test(`E2E-40 keeps delayed note actions inside their Portfolio (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'E2E-40');
+            const safety = await prepare(page, viewport, `board-scope-${viewport.name}`, (method, path) => method === 'POST' && path === '/api/knowledge-board/notes/901/duplicate');
+            let releaseDuplicate; let markDuplicateStarted; let duplicateRequest;
+            const duplicateGate = new Promise(resolve => { releaseDuplicate = resolve; });
+            const duplicateStarted = new Promise(resolve => { markDuplicateStarted = request => { duplicateRequest = request; resolve(); }; });
+            const rows = { 1: [note(901, 'A private note')], 2: [note(902, 'B private note')] };
+            await page.route('**/api/portfolios', route => route.fulfill({ json: { data: [{ ...TEST_PORTFOLIO, is_default: true }, { ...TEST_PORTFOLIO, id: 2, name: 'Long Term', is_default: false }] } }));
+            await page.route('**/api/knowledge-board/tags', route => route.fulfill({ json: { data: [] } }));
+            await page.route('**/api/knowledge-board/notes?*', route => {
+                const scope = route.request().headers()['x-profile-id'];
+                expect(['1', '2']).toContain(scope);
+                return route.fulfill({ json: { data: rows[scope] } });
+            });
+            await page.route('**/api/knowledge-board/notes/901/duplicate', async route => {
+                markDuplicateStarted(route.request()); await duplicateGate;
+                return route.fulfill({ status: 201, json: { data: note(903, 'A late duplicate') } });
+            });
+            await safety.seal();
+            await page.goto('/knowledge-board');
+            const aCard = page.locator('.lido-knowledge-card').filter({ hasText: 'A private note' });
+            await expect(aCard).toBeVisible();
+            await noteAction(page, aCard, 'Duplicate', viewport);
+            await duplicateStarted;
+            expect(duplicateRequest.method()).toBe('POST');
+            expect(duplicateRequest.headers()['x-profile-id']).toBe('1');
+            expect(duplicateRequest.postData()).toBeNull();
+            await page.getByTitle('Switch portfolio (per tab)').click();
+            await page.getByRole('button', { name: 'Long Term', exact: true }).click();
+            await expect(page.locator('.lido-knowledge-card').filter({ hasText: 'B private note' })).toBeVisible();
+            await expect(page.locator('.lido-knowledge-card').filter({ hasText: 'A private note' })).toHaveCount(0);
+            const duplicateResponsePromise = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/knowledge-board/notes/901/duplicate');
+            releaseDuplicate();
+            const duplicateResponse = await duplicateResponsePromise;
+            expect(duplicateResponse.status()).toBe(201);
+            expect((await duplicateResponse.json()).data).toEqual(note(903, 'A late duplicate'));
+            await duplicateResponse.finished();
+            await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+            await expect(page.getByText('A late duplicate')).toHaveCount(0);
+            await expect(page.getByText('Note duplicated.', { exact: true })).toHaveCount(0);
+            await expect(page.locator('.lido-knowledge-card').filter({ hasText: 'B private note' })).toBeVisible();
+            expect(safety.writes).toEqual([{ method: 'POST', path: '/api/knowledge-board/notes/901/duplicate' }]);
+            expect(safety.blocked).toEqual([]);
+        });
         test(`E2E-41 recovers profile tags and retains rejected rename/merge/delete drafts (${viewport.name})`, async ({ page }, testInfo) => {
             journeyId(testInfo, 'E2E-41'); const safety = await prepare(page, viewport, 'tags', (method, path) => method === 'POST' && ['/api/knowledge-board/tags', '/api/knowledge-board/tags/merge'].includes(path) || ['PUT', 'DELETE'].includes(method) && /^\/api\/knowledge-board\/tags\/[12]$/.test(path)); let tags = [{ id: 1, name: 'Dividend', color: '#198754' }, { id: 2, name: 'Research', color: '#0d6efd' }]; let readFails = true; let createFails = true; let renameFails = true; let mergeFails = true; let deleteFails = true;
             let releaseBootstrap; let markBootstrapStarted;
