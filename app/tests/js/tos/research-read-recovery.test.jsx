@@ -179,8 +179,8 @@ it('ignores pending report failures after StrictMode cleanup and page unmount', 
     expect(api.post).not.toHaveBeenCalled();
 });
 it('stops loading after a failed observational review and recovers through Refresh', async () => {
-    let failed = true; api.get.mockImplementation(async path => { if (failed) throw unavailable(); return { data: { data: path.endsWith('/orders') ? [] : {} } }; });
-    render(<MemoryRouter><ReviewDashboardPage /></MemoryRouter>);
+    let failed = true; api.get.mockImplementation(async path => { if (path === '/portfolios') return { data: { data: [{ id: 1, name: 'Main', is_default: true }] } }; if (failed) throw unavailable(); return { data: { data: path.endsWith('/orders') ? [] : {} } }; });
+    render(<MemoryRouter><AuthContext.Provider value={{ loading: false, isAuthenticated: true, user: { id: 1, default_portfolio_id: 1, is_admin: false } }}><PortfolioProvider><ReviewDashboardPage /></PortfolioProvider></AuthContext.Provider></MemoryRouter>);
     expect(await screen.findByRole('alert')).toHaveTextContent('Review dashboard could not be loaded');
     expect(screen.queryByText('Loading…')).toBeNull(); failed = false; fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     expect(await screen.findByText('Trade recommendations (actionable)')).toBeVisible(); expect(api.post).not.toHaveBeenCalled();
