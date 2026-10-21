@@ -203,7 +203,7 @@ it('accepts only the current StrictMode detail effect and ignores its replayed p
     const committedEffect = deferred();
     const queue = [obsoleteEffect, committedEffect];
     apiMock.get.mockImplementation(() => queue.shift().promise);
-    render(<React.StrictMode><MemoryRouter initialEntries={[`/artifact-library/${UUID_A}`]}><Routes><Route path="/artifact-library/:uuid" element={<ArtifactLibraryDetailPage />} /></Routes></MemoryRouter></React.StrictMode>);
+    renderTestingLibrary(<React.StrictMode><PortfolioScope><MemoryRouter initialEntries={[`/artifact-library/${UUID_A}`]}><Routes><Route path="/artifact-library/:uuid" element={<ArtifactLibraryDetailPage />} /></Routes></MemoryRouter></PortfolioScope></React.StrictMode>);
     await waitFor(() => expect(apiMock.get).toHaveBeenCalledTimes(2));
     await act(async () => committedEffect.resolve({ data: { data: detail('Strict current') } }));
     expect(await screen.findByRole('heading', { name: 'Strict current' })).toBeVisible();
