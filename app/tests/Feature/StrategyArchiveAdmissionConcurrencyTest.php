@@ -29,6 +29,10 @@ class StrategyArchiveAdmissionConcurrencyTest extends TestCase
 
     protected function tearDown(): void
     {
+        $primary = config('database.default');
+        DB::setDefaultConnection($primary);
+        DB::purge($primary);
+
         $this->truncateTablesForAllConnections();
         parent::tearDown();
     }

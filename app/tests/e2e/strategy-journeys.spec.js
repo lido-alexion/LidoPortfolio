@@ -507,13 +507,14 @@ test.describe('V9-UX-001 strategy journeys', () => {
                 ],
             });
             let confirmationAccepted = false;
-            page.on('dialog', async (dialog) => { confirmationAccepted = true; await dialog.accept(dialog.type === 'prompt' ? 'Portfolio no longer uses this strategy' : undefined); });
+            const archiveReason = 'Portfolio no longer uses this strategy';
+            page.on('dialog', async (dialog) => { confirmationAccepted = true; await dialog.accept(dialog.type() === 'prompt' ? archiveReason : undefined); });
             await page.goto('/strategy/registry');
             const row = page.getByRole('row', { name: /momentum-core.*Momentum Core/ });
             const archiveRequest = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/momentum-core/archive'));
             await row.getByRole('button', { name: 'Retire' }).click();
             const request = await archiveRequest;
-            expect(request.postDataJSON()).toEqual({ reason: 'Portfolio no longer uses this strategy' });
+            expect(request.postDataJSON()).toEqual({ reason: archiveReason });
             expect(confirmationAccepted).toBe(true);
             await expect(page.getByRole('row', { name: /momentum-core.*Momentum Core/ })).toContainText('archived');
             await expect(page.getByRole('row', { name: /quality-core.*Quality Core/ })).toContainText('active');
