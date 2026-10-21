@@ -237,7 +237,7 @@ it('keeps a resumed A create in flight once, then saves its receipt as the same 
     await waitFor(() => expect(api.put).toHaveBeenCalledWith('/knowledge-board/notes/991', expect.any(Object)));
     expect(api.post).toHaveBeenCalledTimes(1);
     await switchTo('Research');
-    expect(screen.getByText('B confirmed')).toBeVisible();
+    expect(await screen.findByText('B confirmed')).toBeVisible();
     expect(screen.queryByText('A pending create')).toBeNull();
 });
 
@@ -261,8 +261,9 @@ it('keeps a pending create session open through its receipt when the user closes
     expect(api.post).toHaveBeenCalledTimes(1);
 
     await act(async () => create.resolve({ data: { data: note(992, 'Receipt retained') } }));
-    expect(await screen.findByText('Receipt retained')).toBeVisible();
+    expect(await screen.findByRole('button', { name: 'Edit Receipt retained', exact: true })).toBeVisible();
     expect(screen.getByRole('dialog', { name: 'Edit note' })).toBeVisible();
+    expect(within(screen.getByRole('dialog', { name: 'Edit note' })).getByLabelText('Note content')).toHaveValue('Receipt retained');
     expect(api.post).toHaveBeenCalledTimes(1);
 
     editor = screen.getByRole('dialog', { name: 'Edit note' });
