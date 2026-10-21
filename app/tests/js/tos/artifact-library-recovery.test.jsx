@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
 import ArtifactLibraryPage from '../../../resources/js/src/pages/ArtifactLibraryPage.jsx';
@@ -221,8 +221,11 @@ it('reads the exact Bundle plan after an uncertain deploy response and exposes c
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<MemoryRouter initialEntries={[`/artifact-library/${UUID_A}`]}><Routes><Route path="/artifact-library/:uuid" element={<ArtifactLibraryDetailPage />} /></Routes></MemoryRouter>);
     fireEvent.click(await screen.findByRole('button', { name: 'Deploy Bundle', exact: true }));
-    expect(await screen.findByText(new RegExp(`${planUuid} · completed`))).toBeVisible();
-    expect(screen.getByText(new RegExp(`${UUID_A} 1\\.0\\.0 · bind · revision 17`))).toBeVisible();
+    const recovery = await screen.findByRole('region', { name: 'Bundle deployment recovery' });
+    const planIdentity = await within(recovery).findByText(planUuid, { selector: 'code', exact: true });
+    expect(planIdentity).toBeVisible();
+    await waitFor(() => expect(planIdentity.parentElement).toHaveTextContent(new RegExp(`^Plan ${planUuid} · completed$`)));
+    expect(within(recovery).getByRole('listitem')).toHaveTextContent(/^synthetic-artifact-a 1\.0\.0 · bind · revision 17$/);
     expect(apiMock.get).toHaveBeenCalledWith(`/v1/artifact-library/bundle-deployments/${planUuid}`);
     expect(apiMock.post).toHaveBeenCalledTimes(2);
     expect(apiMock.post).toHaveBeenLastCalledWith(`/v1/artifact-library/bundle-deployments/${planUuid}/deploy`);
