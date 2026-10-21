@@ -192,6 +192,7 @@ class ArtifactActionController extends Controller
             $deployment = ArtifactBundleDeployment::query()
                 ->where('deployment_uuid', $uuid)
                 ->where('requested_by_user_id', $request->user()->id)
+                ->where('profile_id', activePortfolio()->id)
                 ->firstOrFail();
 
             return ApiEnvelope::success($this->deploymentData($this->bundles->deploy($deployment, $request->user())));

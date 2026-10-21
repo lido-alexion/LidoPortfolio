@@ -1,10 +1,13 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render as renderTestingLibrary, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
 import ArtifactLibraryPage from '../../../resources/js/src/pages/ArtifactLibraryPage.jsx';
 import ArtifactLibraryDetailPage from '../../../resources/js/src/pages/ArtifactLibraryDetailPage.jsx';
 import { apiMock } from './helpers/mockApi.js';
+import PortfolioContext from '../../../resources/js/src/context/PortfolioContext.jsx';
+import { getActivePortfolioId, setActivePortfolioId } from '../../../resources/js/src/portfolio/activePortfolioStorage.js';
+import { notifyPortfolioChanged } from '../../../resources/js/src/utils/portfolioEvents.js';
 
 const UUID_A = 'synthetic-artifact-a';
 const UUID_B = 'synthetic-artifact-b';
@@ -38,7 +41,32 @@ function RouteHarness() {
     </>;
 }
 
+function PortfolioScope({ children, controls = false, initialPortfolioId = '1' }) {
+    const [activePortfolioId, setPortfolioId] = React.useState(initialPortfolioId);
+    const select = (id, notify = true) => {
+        setActivePortfolioId(id);
+        setPortfolioId(id);
+        if (notify) notifyPortfolioChanged(id);
+    };
+    return <PortfolioContext.Provider value={{ activePortfolioId: activePortfolioId == null ? null : Number(activePortfolioId) }}>
+        {controls && <>
+            <button type="button" onClick={() => select('1')}>Portfolio A</button>
+            <button type="button" onClick={() => select('2')}>Portfolio B</button>
+            <button type="button" onClick={() => { select('2'); select('1'); }}>Portfolio B then A</button>
+            <button type="button" onClick={() => select('1', false)}>Resolve Portfolio A</button>
+        </>}
+        {children}
+    </PortfolioContext.Provider>;
+}
+
+// Existing focused route tests run under the same confirmed Portfolio contract
+// supplied by the application, without bootstrapping unrelated provider APIs.
+function render(ui, options) {
+    return renderTestingLibrary(<PortfolioScope>{ui}</PortfolioScope>, options);
+}
+
 beforeEach(() => {
+    setActivePortfolioId('1');
     apiMock.get.mockReset();
     apiMock.post.mockReset();
     apiMock.put.mockReset();
@@ -309,4 +337,115 @@ it('does not let an obsolete plan completion release a newer route operation bus
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(apiMock.post).toHaveBeenCalledTimes(2);
     confirm.mockRestore();
+});
+
+function renderPortfolioBundle(initialPortfolioId = '1') {
+    return renderTestingLibrary(<PortfolioScope controls initialPortfolioId={initialPortfolioId}><MemoryRouter initialEntries={[`/artifact-library/${UUID_A}`]}><Routes><Route path="/artifact-library/:uuid" element={<ArtifactLibraryDetailPage />} /></Routes></MemoryRouter></PortfolioScope>);
+}
+
+it('discards a delayed Bundle plan after a Portfolio switch on the same artifact route', async () => {
+    const oldPlan = deferred();
+    apiMock.get.mockImplementation(() => Promise.resolve({ data: { data: bundleDetail(`Portfolio ${getActivePortfolioId()}`) } }));
+    apiMock.post.mockReturnValue(oldPlan.promise);
+    const confirm = vi.spyOn(window, 'confirm');
+    renderPortfolioBundle();
+    fireEvent.click(await screen.findByRole('button', { name: 'Deploy Bundle', exact: true }));
+    await waitFor(() => expect(apiMock.post).toHaveBeenCalledWith('/v1/artifact-library/versions/Portfolio 1-v1/bundle-plan'));
+    fireEvent.click(screen.getByRole('button', { name: 'Portfolio B', exact: true }));
+    expect(await screen.findByRole('heading', { name: 'Portfolio 2' })).toBeVisible();
+    await act(async () => oldPlan.resolve({ data: { data: { deployment_uuid: 'portfolio-a-plan', status: 'planned', items: [{}] } } }));
+    expect(confirm).not.toHaveBeenCalled();
+    expect(apiMock.post).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('region', { name: 'Bundle deployment recovery' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Portfolio 2' })).toBeVisible();
+    confirm.mockRestore();
+});
+
+it('invalidates a Bundle plan across a batched Portfolio A to B to A selection', async () => {
+    const oldPlan = deferred();
+    apiMock.get.mockImplementation(() => Promise.resolve({ data: { data: bundleDetail(`Portfolio ${getActivePortfolioId()}`) } }));
+    apiMock.post.mockReturnValue(oldPlan.promise);
+    const confirm = vi.spyOn(window, 'confirm');
+    renderPortfolioBundle();
+    fireEvent.click(await screen.findByRole('button', { name: 'Deploy Bundle', exact: true }));
+    await waitFor(() => expect(apiMock.post).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Portfolio B then A', exact: true }));
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole('heading', { name: 'Portfolio 1' })).toBeVisible();
+    await act(async () => oldPlan.resolve({ data: { data: { deployment_uuid: 'obsolete-portfolio-a-plan', status: 'planned', items: [{}] } } }));
+    expect(confirm).not.toHaveBeenCalled();
+    expect(apiMock.post).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('region', { name: 'Bundle deployment recovery' })).not.toBeInTheDocument();
+    confirm.mockRestore();
+});
+
+it('does not let an old Portfolio inspection error alter recovery or busy ownership in the new Portfolio', async () => {
+    const inspection = deferred();
+    const newPlan = deferred();
+    apiMock.get.mockImplementation((path) => String(path).includes('/bundle-deployments/')
+        ? inspection.promise
+        : Promise.resolve({ data: { data: bundleDetail(`Portfolio ${getActivePortfolioId()}`) } }));
+    apiMock.post.mockImplementation(() => getActivePortfolioId() === '1'
+        ? Promise.resolve({ data: { data: { deployment_uuid: 'portfolio-a-inspection', status: 'planned', items: [] } } })
+        : newPlan.promise);
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderPortfolioBundle();
+    fireEvent.click(await screen.findByRole('button', { name: 'Deploy Bundle', exact: true }));
+    expect(await screen.findByRole('region', { name: 'Bundle deployment recovery' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect this plan' }));
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledWith('/v1/artifact-library/bundle-deployments/portfolio-a-inspection'));
+    fireEvent.click(screen.getByRole('button', { name: 'Portfolio B', exact: true }));
+    expect(await screen.findByRole('heading', { name: 'Portfolio 2' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Deploy Bundle', exact: true }));
+    await waitFor(() => expect(apiMock.post).toHaveBeenCalledTimes(2));
+    await act(async () => inspection.reject(new Error('obsolete Portfolio A inspection')));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Bundle deployment recovery' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Deploy Bundle', exact: true })).toBeDisabled();
+    await act(async () => newPlan.resolve({ data: { data: { deployment_uuid: 'portfolio-b-plan', status: 'planned', items: [] } } }));
+    expect(await screen.findByRole('region', { name: 'Bundle deployment recovery' })).toHaveTextContent('portfolio-b-plan');
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(apiMock.post).toHaveBeenCalledTimes(2);
+    confirm.mockRestore();
+});
+
+it('discards completed Bundle evidence after switching Portfolio during uncertain-response recovery', async () => {
+    const evidence = deferred();
+    apiMock.get.mockImplementation((path) => String(path).includes('/bundle-deployments/')
+        ? evidence.promise
+        : Promise.resolve({ data: { data: bundleDetail(`Portfolio ${getActivePortfolioId()}`) } }));
+    apiMock.post.mockImplementation((path) => String(path).endsWith('/bundle-plan')
+        ? Promise.resolve({ data: { data: { deployment_uuid: 'portfolio-a-committed', status: 'planned', items: [{}] } } })
+        : Promise.reject(new Error('uncertain apply response')));
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const toast = vi.fn();
+    window.addEventListener('portfolio-toast', toast);
+    try {
+        renderPortfolioBundle();
+        fireEvent.click(await screen.findByRole('button', { name: 'Deploy Bundle', exact: true }));
+        await waitFor(() => expect(apiMock.get).toHaveBeenCalledWith('/v1/artifact-library/bundle-deployments/portfolio-a-committed'));
+        fireEvent.click(screen.getByRole('button', { name: 'Portfolio B', exact: true }));
+        expect(await screen.findByRole('heading', { name: 'Portfolio 2' })).toBeVisible();
+        await act(async () => evidence.resolve({ data: { data: { deployment_uuid: 'portfolio-a-committed', status: 'completed', items: [{ artifact_uuid: UUID_A, version: '1.0.0', action: 'bind', resulting_revision_id: 17 }] } } }));
+        expect(screen.queryByRole('region', { name: 'Bundle deployment recovery' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+        expect(toast).not.toHaveBeenCalled();
+        expect(confirm).toHaveBeenCalledTimes(1);
+        expect(apiMock.post).toHaveBeenCalledTimes(2);
+    } finally {
+        window.removeEventListener('portfolio-toast', toast);
+        confirm.mockRestore();
+    }
+});
+
+it('waits for a confirmed Portfolio and reloads detail when bootstrap resolves it without a change event', async () => {
+    setActivePortfolioId(null);
+    apiMock.get.mockResolvedValue({ data: { data: bundleDetail('Resolved Portfolio A') } });
+    renderPortfolioBundle(null);
+    expect(apiMock.get).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Deploy Bundle', exact: true })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Resolve Portfolio A', exact: true }));
+    expect(await screen.findByRole('heading', { name: 'Resolved Portfolio A' })).toBeVisible();
+    expect(apiMock.get).toHaveBeenCalledTimes(1);
+    expect(apiMock.post).not.toHaveBeenCalled();
 });

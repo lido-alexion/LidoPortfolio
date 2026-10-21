@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { Link, useParams } from 'react-router-dom';
 import api, { getApiErrorMessage } from '../api';
 import { showToast } from '../toast';
+import { usePortfolio } from '../context/PortfolioContext';
+import usePortfolioChanged from '../hooks/usePortfolioChanged';
+import { getActivePortfolioId } from '../portfolio/activePortfolioStorage';
 
 const stateBadge = (state) => ({ usable: 'text-bg-success', warning: 'text-bg-warning', blocked: 'text-bg-danger' }[state] || 'text-bg-light');
 
@@ -45,6 +48,9 @@ function DraftEditor({ artifact, version, busy, onSaved }) {
 
 export default function ArtifactLibraryDetailPage() {
     const { uuid } = useParams();
+    const { activePortfolioId } = usePortfolio();
+    const portfolioId = activePortfolioId == null ? null : String(activePortfolioId);
+    const [portfolioEpoch, setPortfolioEpoch] = useState(0);
     const [loadedArtifact, setLoadedArtifact] = useState(null);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
@@ -54,7 +60,7 @@ export default function ArtifactLibraryDetailPage() {
     const [changes, setChanges] = useState(null);
     const [bundleRecovery, setBundleRecovery] = useState(null);
     const [artifactUuid, setArtifactUuid] = useState(uuid);
-    const routeIdentity = useMemo(() => ({ uuid }), [uuid]);
+    const routeIdentity = useMemo(() => ({ uuid, portfolioId, portfolioEpoch }), [uuid, portfolioId, portfolioEpoch]);
     const comparisonSelection = useMemo(() => ({ routeIdentity, from, to }), [routeIdentity, from, to]);
     const committedRouteRef = useRef(null);
     const committedComparisonRef = useRef(null);
@@ -66,6 +72,7 @@ export default function ArtifactLibraryDetailPage() {
     const mountedRef = useRef(false);
     const bundleOperationGenerationRef = useRef(0);
     const activeBundleOperationRef = useRef(null);
+    const observedPortfolioIdRef = useRef(getActivePortfolioId());
 
     const invalidateComparison = useCallback(() => {
         const comparisonOwnedBusy = comparisonBusyRef.current && activeComparisonRef.current !== null;
@@ -76,9 +83,31 @@ export default function ArtifactLibraryDetailPage() {
         if (comparisonOwnedBusy) setBusy(false);
     }, []);
 
+    const portfolioChanged = useCallback(() => {
+        const nextId = getActivePortfolioId();
+        if (observedPortfolioIdRef.current === nextId) return;
+        observedPortfolioIdRef.current = nextId;
+        // Invalidate synchronously with the selection event, including A→B→A
+        // selections batched before React commits the next context value.
+        routeEpochRef.current++;
+        loadGenerationRef.current++;
+        bundleOperationGenerationRef.current++;
+        const bundleOperation = activeBundleOperationRef.current;
+        activeBundleOperationRef.current = null;
+        if (bundleOperation) setBusy(false);
+        invalidateComparison();
+        setLoadedArtifact(null);
+        setBundleRecovery(null);
+        setError('');
+        setLoading(true);
+        setPortfolioEpoch((epoch) => epoch + 1);
+    }, [invalidateComparison]);
+    usePortfolioChanged(portfolioChanged);
+
     useLayoutEffect(() => {
         if (committedRouteRef.current === routeIdentity) return;
         committedRouteRef.current = routeIdentity;
+        observedPortfolioIdRef.current = getActivePortfolioId();
         routeEpochRef.current++;
         loadGenerationRef.current++;
         const bundleOperation = activeBundleOperationRef.current;
@@ -117,10 +146,12 @@ export default function ArtifactLibraryDetailPage() {
     const load = useCallback(async () => {
         const requestedUuid = uuid;
         const requestedRoute = routeIdentity;
-        if (!mountedRef.current || committedRouteRef.current !== requestedRoute) return;
+        if (!portfolioId || getActivePortfolioId() !== portfolioId
+            || !mountedRef.current || committedRouteRef.current !== requestedRoute) return;
         const epoch = routeEpochRef.current;
         const generation = ++loadGenerationRef.current;
         const isCurrent = () => mountedRef.current
+            && getActivePortfolioId() === requestedRoute.portfolioId
             && committedRouteRef.current === requestedRoute
             && routeEpochRef.current === epoch
             && loadGenerationRef.current === generation;
@@ -142,7 +173,7 @@ export default function ArtifactLibraryDetailPage() {
         } finally {
             if (isCurrent()) setLoading(false);
         }
-    }, [uuid, routeIdentity]);
+    }, [uuid, routeIdentity, portfolioId]);
 
     useEffect(() => {
         load();
@@ -166,12 +197,15 @@ export default function ArtifactLibraryDetailPage() {
         const requestedTo = to;
         const requestedRoute = routeIdentity;
         const requestedSelection = comparisonSelection;
+        if (!portfolioId || getActivePortfolioId() !== portfolioId
+            || !mountedRef.current || committedRouteRef.current !== requestedRoute) return;
         const epoch = routeEpochRef.current;
         const generation = ++comparisonGenerationRef.current;
         const comparison = { uuid: requestedUuid, from: requestedFrom, to: requestedTo, epoch, generation };
         activeComparisonRef.current = comparison;
         comparisonBusyRef.current = true;
         const isCurrent = () => mountedRef.current
+            && getActivePortfolioId() === requestedRoute.portfolioId
             && committedRouteRef.current === requestedRoute
             && committedComparisonRef.current === requestedSelection
             && routeEpochRef.current === epoch
@@ -253,12 +287,14 @@ export default function ArtifactLibraryDetailPage() {
 
     const deployBundle = async (version) => {
         const requestedRoute = routeIdentity;
-        if (!mountedRef.current || committedRouteRef.current !== requestedRoute) return;
+        if (!portfolioId || getActivePortfolioId() !== portfolioId
+            || !mountedRef.current || committedRouteRef.current !== requestedRoute) return;
         const epoch = routeEpochRef.current;
         const generation = ++bundleOperationGenerationRef.current;
         const operation = { route: requestedRoute, epoch, generation };
         activeBundleOperationRef.current = operation;
         const isCurrent = () => mountedRef.current
+            && getActivePortfolioId() === requestedRoute.portfolioId
             && committedRouteRef.current === requestedRoute
             && routeEpochRef.current === epoch
             && bundleOperationGenerationRef.current === generation
@@ -328,12 +364,14 @@ export default function ArtifactLibraryDetailPage() {
     const inspectBundleDeployment = async () => {
         if (!bundleRecovery?.deployment_uuid) return;
         const requestedRoute = routeIdentity;
-        if (!mountedRef.current || committedRouteRef.current !== requestedRoute) return;
+        if (!portfolioId || getActivePortfolioId() !== portfolioId
+            || !mountedRef.current || committedRouteRef.current !== requestedRoute) return;
         const epoch = routeEpochRef.current;
         const generation = ++bundleOperationGenerationRef.current;
         const operation = { route: requestedRoute, epoch, generation };
         activeBundleOperationRef.current = operation;
         const isCurrent = () => mountedRef.current
+            && getActivePortfolioId() === requestedRoute.portfolioId
             && committedRouteRef.current === requestedRoute
             && routeEpochRef.current === epoch
             && bundleOperationGenerationRef.current === generation
@@ -390,3 +428,4 @@ export default function ArtifactLibraryDetailPage() {
         </div>
     );
 }
+

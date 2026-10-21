@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\ArtifactBinding;
+use App\Models\ArtifactBundleDeployment;
 use App\Models\ArtifactLibraryAdoption;
 use App\Models\ReusableArtifactVersion;
 use App\Models\User;
@@ -108,6 +109,23 @@ class ArtifactActionApiTest extends TestCase
         ])->assertCreated()
             ->assertJsonPath('data.status', 'planned');
 
+        $uuid = $planned->json('data.deployment_uuid');
+        $pending = ArtifactBundleDeployment::query()->where('deployment_uuid', $uuid)->firstOrFail();
+        $before = $pending->getAttributes();
+        $beforeItems = $pending->items()->orderBy('id')->get()
+            ->map(fn ($item) => $item->getAttributes())->all();
+        $sibling = $this->createPortfolioProfile($owner, 'Sibling', false);
+        $this->actingAs($owner)->withProfileHeader($owner, $sibling)
+            ->getJson('/api/v1/artifact-library/bundle-deployments/'.$uuid)->assertNotFound();
+        $this->actingAs($owner)->withProfileHeader($owner, $sibling)
+            ->postJson('/api/v1/artifact-library/bundle-deployments/'.$uuid.'/deploy')
+            ->assertNotFound();
+        $this->assertSame($before, $pending->fresh()->getAttributes());
+        $this->assertSame($beforeItems, $pending->items()->orderBy('id')->get()
+            ->map(fn ($item) => $item->getAttributes())->all());
+        $this->assertSame(0, ArtifactBinding::query()->whereIn('profile_id', [$profile->id, $sibling->id])->count());
+
+        $this->withProfileHeader($owner, $profile);
         $this->actingAs($owner)->postJson('/api/v1/artifact-library/bundle-deployments/'.$planned->json('data.deployment_uuid').'/deploy')
             ->assertOk()
             ->assertJsonPath('data.status', 'completed');
@@ -125,7 +143,8 @@ class ArtifactActionApiTest extends TestCase
 
         $other = User::factory()->create();
         $this->defaultPortfolioFor($other);
-        $this->actingAs($other)->getJson('/api/v1/artifact-library/bundle-deployments/'.$uuid)->assertNotFound();
+        $this->actingAs($other)->withProfileHeader($other)
+            ->getJson('/api/v1/artifact-library/bundle-deployments/'.$uuid)->assertNotFound();
     }
 
     private function publishedScreener(User $owner, string $slug): ReusableArtifactVersion
