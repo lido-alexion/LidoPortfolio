@@ -35,7 +35,7 @@ it('allows pausing the last enabled strategy and shows exact archive blockers wi
  vi.spyOn(window, 'confirm').mockReturnValue(true);
  vi.spyOn(window, 'prompt').mockReturnValue('No longer needed');
  render(<MemoryRouter><StrategyRegistryPage /></MemoryRouter>);
- await screen.findByText('Reviewed strategy');
+ expect(await screen.findAllByText('Reviewed strategy')).not.toHaveLength(0);
  fireEvent.click(screen.getByRole('button', { name: 'Disable' }));
  await screen.findByText('disabled');
  expect(api.post).toHaveBeenCalledWith('/v1/strategy-registry/69/disable');

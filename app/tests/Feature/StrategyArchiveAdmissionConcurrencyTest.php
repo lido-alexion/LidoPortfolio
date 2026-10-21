@@ -16,7 +16,7 @@ use App\Services\Lending\CapitalRequestService;
 use App\Services\Lending\SaleProceedsAvailabilityService;
 use App\Services\Strategy\StrategyArchiveBlocked;
 use App\Services\Strategy\StrategyLifecycleAdmission;
-use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\Process\Process;
@@ -25,7 +25,7 @@ use Tests\TestCase;
 /** Separate PHP/MySQL sessions prove both sides contend on the strategy admission row. */
 class StrategyArchiveAdmissionConcurrencyTest extends TestCase
 {
-    use DatabaseMigrations;
+    use DatabaseTruncation;
 
     public function test_sequential_writer_then_archive_and_archive_then_writer_recheck_lifecycle(): void
     {
