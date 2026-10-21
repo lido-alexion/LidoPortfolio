@@ -55,7 +55,7 @@ These journeys preserve the frozen [Trading Artifact Framework](../archive/specs
 2. Inspect the new local Draft and unchanged immutable source. Modification occurs on the fork, not the shared published version.
 3. For a published Bundle, choose Deploy Bundle to obtain its server-validated transactional plan. Inspect failure instead of claiming deployment.
 4. Review the planned member-count confirmation for the active Portfolio. Dismiss to leave deployment unapplied.
-5. Confirm only the intended validated plan. If application is unconfirmed, inspect existing deployment evidence before retrying; do not assume a transport error proves rollback.
+5. Confirm only the intended validated plan. If its apply response is unconfirmed, retain that exact deployment UUID and inspect its read-only status/member results before any further mutation; do not assume a transport error proves rollback. A `planned` result remains pending and requires the existing explicit confirmation; `failed` and `completed` results are evidence and are not replayed.
 6. Inspect confirmed deployed member bindings/provenance independently; the Bundle does not become a trading controller.
 
 **Expected result:** Fork identity, plan generation, human confirmation and atomic deployment remain explicit and bounded to the intended account/Portfolio.

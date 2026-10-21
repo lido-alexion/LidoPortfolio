@@ -112,6 +112,20 @@ class ArtifactActionApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.status', 'completed');
         $this->assertSame(2, ArtifactBinding::query()->where('profile_id', $profile->id)->count());
+
+        $uuid = $planned->json('data.deployment_uuid');
+        $evidence = $this->actingAs($owner)->getJson('/api/v1/artifact-library/bundle-deployments/'.$uuid)
+            ->assertOk()
+            ->assertJsonPath('data.deployment_uuid', $uuid)
+            ->assertJsonPath('data.status', 'completed')
+            ->assertJsonMissingPath('data.plan')
+            ->assertJsonMissingPath('data.items.0.settings');
+        $this->assertIsInt($evidence->json('data.items.0.resulting_revision_id'));
+        $this->assertSame(['artifact_uuid', 'version', 'action', 'resulting_revision_id'], array_keys($evidence->json('data.items.0')));
+
+        $other = User::factory()->create();
+        $this->defaultPortfolioFor($other);
+        $this->actingAs($other)->getJson('/api/v1/artifact-library/bundle-deployments/'.$uuid)->assertNotFound();
     }
 
     private function publishedScreener(User $owner, string $slug): ReusableArtifactVersion

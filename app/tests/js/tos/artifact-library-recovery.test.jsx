@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
-import { beforeEach, expect, it } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import ArtifactLibraryPage from '../../../resources/js/src/pages/ArtifactLibraryPage.jsx';
 import ArtifactLibraryDetailPage from '../../../resources/js/src/pages/ArtifactLibraryDetailPage.jsx';
 import { apiMock } from './helpers/mockApi.js';
@@ -207,4 +207,25 @@ it('preserves same-UUID DraftEditor text across an unrelated parent rerender', a
     fireEvent.click(screen.getByRole('button', { name: 'Rerender parent' }));
     expect(screen.getByLabelText('Artifact envelope JSON')).toHaveValue('{"unsaved":"same uuid"}');
     expect(apiMock.get).toHaveBeenCalledTimes(1);
+});
+
+it('reads the exact Bundle plan after an uncertain deploy response and exposes committed member evidence', async () => {
+    const bundle = { ...detail('Recovery Bundle'), type: 'bundle', versions: [{ id: 88, semver: '1.0.0', status: 'published', content: {}, documentation: {}, dependencies: [], definition_hash: 'fixture-only', lock_version: 1 }] };
+    const planUuid = '00000000-0000-4000-8000-000000000034';
+    apiMock.get.mockImplementation((path) => String(path).includes('/bundle-deployments/')
+        ? Promise.resolve({ data: { data: { deployment_uuid: planUuid, status: 'completed', error_code: null, items: [{ artifact_uuid: UUID_A, version: '1.0.0', action: 'bind', resulting_revision_id: 17 }] } } })
+        : Promise.resolve({ data: { data: bundle } }));
+    apiMock.post.mockImplementation((path) => String(path).endsWith('/bundle-plan')
+        ? Promise.resolve({ data: { data: { deployment_uuid: planUuid, status: 'planned', items: [{ artifact_uuid: UUID_A }] } } })
+        : Promise.reject(new Error('response lost after server commit')));
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<MemoryRouter initialEntries={[`/artifact-library/${UUID_A}`]}><Routes><Route path="/artifact-library/:uuid" element={<ArtifactLibraryDetailPage />} /></Routes></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Deploy Bundle', exact: true }));
+    expect(await screen.findByText(new RegExp(`${planUuid} · completed`))).toBeVisible();
+    expect(screen.getByText(new RegExp(`${UUID_A} 1\\.0\\.0 · bind · revision 17`))).toBeVisible();
+    expect(apiMock.get).toHaveBeenCalledWith(`/v1/artifact-library/bundle-deployments/${planUuid}`);
+    expect(apiMock.post).toHaveBeenCalledTimes(2);
+    expect(apiMock.post).toHaveBeenLastCalledWith(`/v1/artifact-library/bundle-deployments/${planUuid}/deploy`);
+    expect(screen.getByRole('button', { name: 'Existing Bundle plan needs review' })).toBeDisabled();
+    confirm.mockRestore();
 });

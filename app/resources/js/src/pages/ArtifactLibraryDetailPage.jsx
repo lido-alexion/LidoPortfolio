@@ -52,6 +52,7 @@ export default function ArtifactLibraryDetailPage() {
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
     const [changes, setChanges] = useState(null);
+    const [bundleRecovery, setBundleRecovery] = useState(null);
     const [artifactUuid, setArtifactUuid] = useState(uuid);
     const routeIdentity = useMemo(() => ({ uuid }), [uuid]);
     const comparisonSelection = useMemo(() => ({ routeIdentity, from, to }), [routeIdentity, from, to]);
@@ -81,6 +82,7 @@ export default function ArtifactLibraryDetailPage() {
         invalidateComparison();
         setLoadedArtifact(null);
         setArtifactUuid(uuid);
+        setBundleRecovery(null);
         setError('');
         setLoading(true);
         setFrom('');
@@ -230,16 +232,67 @@ export default function ArtifactLibraryDetailPage() {
         }), binding.status === 'enabled' ? 'Binding disabled.' : 'Binding enabled.');
     };
 
+    const readBundleDeployment = async (deploymentUuid) => {
+        const response = await api.get(`/v1/artifact-library/bundle-deployments/${deploymentUuid}`);
+        const evidence = response.data?.data;
+        setBundleRecovery((current) => current?.deployment_uuid === deploymentUuid
+            ? { ...current, evidence, readError: '' }
+            : current);
+        return evidence;
+    };
+
     const deployBundle = async (version) => {
         setBusy(true); setError('');
+        let deploymentUuid = bundleRecovery?.deployment_uuid;
         try {
-            const planned = await api.post(`/v1/artifact-library/versions/${version.id}/bundle-plan`);
-            const plan = planned.data?.data;
-            if (!window.confirm(`Deploy ${plan?.items?.length || 0} Bundle members atomically to this Portfolio?`)) return;
-            await api.post(`/v1/artifact-library/bundle-deployments/${plan.deployment_uuid}/deploy`);
-            showToast('Bundle deployed atomically.');
-            await load();
-        } catch (requestError) { setError(getApiErrorMessage(requestError)); } finally { setBusy(false); }
+            let evidence;
+            if (deploymentUuid) {
+                evidence = await readBundleDeployment(deploymentUuid);
+                if (evidence.status !== 'planned') return;
+            } else {
+                const planned = await api.post(`/v1/artifact-library/versions/${version.id}/bundle-plan`);
+                evidence = planned.data?.data;
+                deploymentUuid = evidence?.deployment_uuid;
+                if (!deploymentUuid) throw new Error('Bundle plan response did not include its deployment UUID.');
+                setBundleRecovery({ deployment_uuid: deploymentUuid, evidence, readError: '' });
+            }
+            if (!window.confirm(`Deploy ${evidence?.items?.length || 0} Bundle members atomically to this Portfolio?`)) return;
+            try {
+                await api.post(`/v1/artifact-library/bundle-deployments/${deploymentUuid}/deploy`);
+            } catch (requestError) {
+                setError('Bundle apply response was uncertain. Inspecting the same deployment plan.');
+                try { evidence = await readBundleDeployment(deploymentUuid); }
+                catch (readError) {
+                    setBundleRecovery((current) => current?.deployment_uuid === deploymentUuid
+                        ? { ...current, readError: getApiErrorMessage(readError) }
+                        : current);
+                    return;
+                }
+                if (evidence.status === 'completed') {
+                    setError('Bundle deployment completed; persisted member results confirm the application.');
+                } else if (evidence.status === 'failed') {
+                    setError('Bundle deployment failed; the atomic failure is recorded in this plan.');
+                    return;
+                } else {
+                    setError('The same Bundle plan remains planned; review it before confirming any application.');
+                    return;
+                }
+            }
+            evidence = await readBundleDeployment(deploymentUuid);
+            if (evidence.status === 'completed') {
+                showToast('Bundle deployed atomically.');
+                await load();
+            }
+        } catch (requestError) { setError(getApiErrorMessage(requestError)); }
+        finally { setBusy(false); }
+    };
+
+    const inspectBundleDeployment = async () => {
+        if (!bundleRecovery?.deployment_uuid) return;
+        setBusy(true);
+        try { await readBundleDeployment(bundleRecovery.deployment_uuid); setError(''); }
+        catch (requestError) { setBundleRecovery((current) => current ? { ...current, readError: getApiErrorMessage(requestError) } : current); }
+        finally { setBusy(false); }
     };
 
     return (
@@ -268,12 +321,13 @@ export default function ArtifactLibraryDetailPage() {
                 </div></div>}
 
                 <div className="d-grid gap-3">{artifact.versions.map((version) => <div className="card" key={version.id}><div className="card-body">
-                    <div className="d-flex flex-wrap justify-content-between gap-2"><div><h3 className="h6 mb-1">{version.semver} <span className={`badge ${version.status === 'published' ? 'text-bg-success' : 'text-bg-warning'}`}>{version.status}</span></h3><p className="small text-muted mb-2">{version.change_summary || 'No change summary'} · <code>{version.definition_hash}</code></p></div><div className="d-flex flex-wrap gap-2">{version.status === 'published' && <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={() => exportVersion(version)}>Export</button>}{version.status === 'published' && artifact.permission === 'owner' && !artifact.draft_version && <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy} onClick={() => nextDraft(version)}>New version Draft</button>}{version.status === 'published' && artifact.permission === 'owner' && <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy} onClick={() => share(version)}>Share</button>}{version.status === 'published' && artifact.permission !== 'owner' && <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy} onClick={() => fork(version)}>Fork</button>}{version.status === 'published' && artifact.type !== 'bundle' && <button type="button" className="btn btn-sm btn-primary" disabled={busy || artifact.portfolio_binding?.active_version === version.semver} onClick={() => bindOrUpgrade(version)}>{artifact.portfolio_binding ? 'Upgrade binding' : 'Bind to Portfolio'}</button>}{version.status === 'published' && artifact.type === 'bundle' && <button type="button" className="btn btn-sm btn-primary" disabled={busy} onClick={() => deployBundle(version)}>Deploy Bundle</button>}</div></div>
+                    <div className="d-flex flex-wrap justify-content-between gap-2"><div><h3 className="h6 mb-1">{version.semver} <span className={`badge ${version.status === 'published' ? 'text-bg-success' : 'text-bg-warning'}`}>{version.status}</span></h3><p className="small text-muted mb-2">{version.change_summary || 'No change summary'} · <code>{version.definition_hash}</code></p></div><div className="d-flex flex-wrap gap-2">{version.status === 'published' && <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={() => exportVersion(version)}>Export</button>}{version.status === 'published' && artifact.permission === 'owner' && !artifact.draft_version && <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy} onClick={() => nextDraft(version)}>New version Draft</button>}{version.status === 'published' && artifact.permission === 'owner' && <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy} onClick={() => share(version)}>Share</button>}{version.status === 'published' && artifact.permission !== 'owner' && <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy} onClick={() => fork(version)}>Fork</button>}{version.status === 'published' && artifact.type !== 'bundle' && <button type="button" className="btn btn-sm btn-primary" disabled={busy || artifact.portfolio_binding?.active_version === version.semver} onClick={() => bindOrUpgrade(version)}>{artifact.portfolio_binding ? 'Upgrade binding' : 'Bind to Portfolio'}</button>}{version.status === 'published' && artifact.type === 'bundle' && <button type="button" className="btn btn-sm btn-primary" disabled={busy || (bundleRecovery && bundleRecovery.evidence?.status !== 'planned')} onClick={() => deployBundle(version)}>{bundleRecovery ? 'Existing Bundle plan needs review' : 'Deploy Bundle'}</button>}</div></div>
                     {version.status === 'draft' && artifact.permission === 'owner' ? <DraftEditor artifact={artifact} version={version} busy={busy} onSaved={act} /> : <>
                     <h4 className="small fw-semibold mt-2">Exact dependencies</h4>{version.dependencies.length ? <ul className="small">{version.dependencies.map((dependency, index) => <li key={index}>{dependency.kind}: <code>{dependency.artifact_uuid ? `${dependency.artifact_uuid}@${dependency.artifact_version}` : `${dependency.indicator_id}@${dependency.indicator_version}`}</code></li>)}</ul> : <p className="small text-muted">None</p>}
                     <details><summary className="small">Definition and documentation</summary><pre className="bg-light border rounded p-2 small mt-2 overflow-auto">{JSON.stringify({ content: version.content, documentation: version.documentation }, null, 2)}</pre></details>
                     </>}
                 </div></div>)}</div>
+                {bundleRecovery && <section className="alert alert-warning mb-0" aria-label="Bundle deployment recovery"><div className="fw-semibold">Existing Bundle deployment</div><div>Plan <code>{bundleRecovery.deployment_uuid}</code> · {bundleRecovery.evidence?.status || 'status not confirmed'}</div><button type="button" className="btn btn-sm btn-outline-secondary mt-2" disabled={busy} onClick={inspectBundleDeployment}>Inspect this plan</button>{bundleRecovery.readError && <div role="alert" className="small mt-2">{bundleRecovery.readError}</div>}{bundleRecovery.evidence?.status === 'completed' && <ul className="small mt-2 mb-0">{bundleRecovery.evidence.items.map((item) => <li key={item.artifact_uuid}>{item.artifact_uuid} {item.version} · {item.action} · revision {item.resulting_revision_id ?? 'not recorded'}</li>)}</ul>}{bundleRecovery.evidence?.status === 'failed' && <div className="small mt-2">Failure evidence: {bundleRecovery.evidence.error_code || 'no error code recorded'}. No further action is available for this plan.</div>}{bundleRecovery.evidence?.status === 'planned' && <div className="small mt-2">This plan remains unapplied. Choose Deploy Bundle to inspect and confirm this same plan before applying it.</div>}</section>}
                 {artifact.permission === 'owner' && !artifact.archived_at && <div><button type="button" className="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => window.confirm('Archive this artifact? Published history and active bindings remain intact.') && act(() => api.post(`/v1/artifact-library/${uuid}/archive`), 'Artifact archived; immutable history was preserved.')}>Archive artifact</button></div>}
             </>}
         </div>

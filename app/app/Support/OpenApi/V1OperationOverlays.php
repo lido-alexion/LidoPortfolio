@@ -51,6 +51,14 @@ final class V1OperationOverlays
         ];
 
         return V1AcceptanceOverlays::all() + [
+            'GET /api/v1/artifact-library/bundle-deployments/{uuid}' => [
+                'summary' => 'Read Bundle deployment evidence',
+                'description' => 'Reads the exact Bundle deployment for the authenticated requester and active Portfolio. Returns allowlisted status and member revision evidence; performs no mutation.',
+                'responses' => [
+                    '404' => ['description' => 'Deployment UUID is not available to this requester in the active Portfolio.'],
+                ],
+                'noBody' => true,
+            ],
             'GET /api/v1/admin/vps-health' => [
                 'summary' => 'Read aggregate VPS health samples',
                 'description' => 'Returns recent aggregate VPS health samples. Requires admin access.',

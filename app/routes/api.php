@@ -744,6 +744,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::post('/artifact-library/versions/{version}/export', [ArtifactActionController::class, 'export'])->whereNumber('version');
     Route::post('/artifact-library/import', [ArtifactActionController::class, 'import']);
     Route::post('/artifact-library/versions/{version}/bundle-plan', [ArtifactActionController::class, 'planBundle'])->whereNumber('version');
+    Route::get('/artifact-library/bundle-deployments/{uuid}', [ArtifactActionController::class, 'bundleDeployment'])->whereUuid('uuid');
     Route::post('/artifact-library/bundle-deployments/{uuid}/deploy', [ArtifactActionController::class, 'deployBundle'])->whereUuid('uuid');
     Route::put('/artifact-bindings/{uuid}/upgrade', [ArtifactActionController::class, 'upgrade'])->whereUuid('uuid');
     Route::put('/artifact-bindings/{uuid}/settings', [ArtifactActionController::class, 'settings'])->whereUuid('uuid');

@@ -198,6 +198,32 @@ class ArtifactActionController extends Controller
         }, 'ARTIFACT_BUNDLE_DEPLOY_FAILED');
     }
 
+    public function bundleDeployment(Request $request, string $uuid)
+    {
+        return $this->run(function () use ($request, $uuid) {
+            $deployment = ArtifactBundleDeployment::query()
+                ->where('deployment_uuid', $uuid)
+                ->where('requested_by_user_id', $request->user()->id)
+                ->where('profile_id', activePortfolio()->id)
+                ->with('items.memberVersion.artifact')
+                ->firstOrFail();
+
+            return ApiEnvelope::success([
+                'deployment_uuid' => $deployment->deployment_uuid,
+                'status' => $deployment->status,
+                'error_code' => $deployment->status === ArtifactBundleDeployment::STATUS_FAILED
+                    ? 'bundle_deployment_failed'
+                    : null,
+                'items' => $deployment->items->map(fn ($item) => [
+                    'artifact_uuid' => $item->memberVersion->artifact->artifact_uuid,
+                    'version' => $item->memberVersion->semver,
+                    'action' => $item->action,
+                    'resulting_revision_id' => $item->resulting_revision_id,
+                ])->values()->all(),
+            ]);
+        }, 'ARTIFACT_BUNDLE_DEPLOYMENT_READ_FAILED');
+    }
+
     private function ownedBinding(string $uuid): ArtifactBinding
     {
         return ArtifactBinding::query()
