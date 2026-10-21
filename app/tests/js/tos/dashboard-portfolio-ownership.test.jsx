@@ -94,7 +94,7 @@ it('waits for confirmed default Portfolio when storage is empty at bootstrap', a
 it('checks storage again after synchronous rebuild confirmation before posting', async () => {
     api.get.mockImplementation((path) => path === '/portfolios' ? Promise.resolve(portfolios) : Promise.resolve(path === '/dashboard' ? dashboard(100) : { data: { data: [] } }));
     vi.spyOn(window, 'confirm').mockImplementation(() => { sessionStorage.setItem('portfolio_active_id', '2'); return true; });
-    mount(); await screen.findByText(/100/); fireEvent.click(screen.getByRole('button', { name: 'Rebuild history' }));
+    mount(); await screen.findByText(/^₹\s*100$/); fireEvent.click(screen.getByRole('button', { name: 'Rebuild history' }));
     expect(api.post).not.toHaveBeenCalled();
 });
 
@@ -178,7 +178,7 @@ it('preserves same-scope rebuild POST payload and success copy', async () => {
     api.post.mockResolvedValue({ data: { rebuild: { snapshots_written: 4 } } });
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     const { showToast } = await import('../../../resources/js/src/toast');
-    mount(); await screen.findByText(/100/); fireEvent.click(screen.getByRole('button', { name: 'Rebuild history' }));
+    mount(); await screen.findByText(/^₹\s*100$/); fireEvent.click(screen.getByRole('button', { name: 'Rebuild history' }));
     await waitFor(() => expect(api.post).toHaveBeenCalledWith('/portfolio/rebuild-history'));
     await waitFor(() => expect(showToast).toHaveBeenCalledWith('Portfolio history rebuilt (4 snapshots).'));
     expect(api.post).toHaveBeenCalledTimes(1);
@@ -198,10 +198,10 @@ it('preserves same-scope alert clear POST, response copy, and reload', async () 
 
  it('keeps same-scope reads functional with StrictMode at the fixture root', async () => {
     render(<React.StrictMode><MemoryRouter><AuthContext.Provider value={{ loading: false, isAuthenticated: true, user: { id: 1, default_portfolio_id: 1, is_admin: false } }}><PortfolioProvider><PortfolioSwitcher /><DashboardPage /></PortfolioProvider></AuthContext.Provider></MemoryRouter></React.StrictMode>);
-    expect(await screen.findByText(/100/)).toBeVisible();
+    expect(await screen.findByText(/^₹\s*100$/)).toBeVisible();
     expect(screen.getByText('AAA')).toBeVisible();
     expect(api.post).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Refresh dashboard' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh dashboard' })).toBeEnabled());
-    expect(screen.getByText(/100/)).toBeVisible();
+    expect(screen.getByText(/^₹\s*100$/)).toBeVisible();
 });
