@@ -227,17 +227,17 @@
 
 <p>---</p>
 
-<h2 id="str-14-archive-or-disable-a-strategy">STR-14 — Archive or disable a strategy</h2>
+<h2 id="str-14-pause-retire-or-restore-a-strategy">STR-14 — Pause, retire, or restore a strategy</h2>
 
-<p>**Goal:** Stop future runtime use without erasing historical evidence.</p>
+<p>**Goal:** Pause new strategy work without changing existing financial work, or retire a fully resolved strategy while retaining its history.</p>
 
 <p>1. Open `/strategy/registry`.</p>
-<p>2. Select the strategy to retire.</p>
-<p>3. Check for live recommendations, pending execution and owned holdings that need deliberate handling.</p>
-<p>4. Use the supported disable/archive lifecycle action.</p>
-<p>5. Confirm the strategy is no longer enabled for future runs.</p>
+<p>2. Select the strategy. **Disable** is available at any time and pauses new recommendations and future strategy runs. It does not sell, cancel orders, release reservations, or change holdings, orders, execution, or settlement. Configuration stays editable; Enable resumes only after normal readiness checks.</p>
+<p>3. To **Retire**, enter a reason. If the server reports blockers, follow each existing resolution link and finish the owned work through its normal workflow. Archive is allowed only after the strategy has no open owned holdings, actionable recommendations, pending executions/orders, reserved funds, or unsettled obligations.</p>
+<p>4. Retired configuration is read-only. Its reason, versions, recommendations, transactions and ownership attribution remain available as history.</p>
+<p>5. **Restore** changes a retired strategy to Disabled. Select **Enable** separately to run existing readiness checks.</p>
 
-<p>**Expected result:** Disable pauses future recommendations and runs while existing financial work remains manageable. Archive requires all strategy-owned holdings, actionable recommendations, pending executions/orders, reserved funds, and unsettled obligations to be resolved. Restore returns the strategy to Disabled; explicit Enable applies readiness checks. Historical recommendations and transactions remain attributable.</p>
+<p>**Expected result:** Zero enabled strategies is valid. Disabling and retiring do not create financial writes, forced liquidation, cancellation, reassignment or automatic fund release. Existing obligations remain manageable for disabled strategies; sibling strategy history does not block this strategy's retirement.</p>
 
 <p>---</p>
 

@@ -15,12 +15,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
-/** MySQL serial interleavings for the shared archive admission row lock. */
+/** Separate-connection rechecks; this does not exercise overlapping transactions. */
 class StrategyArchiveAdmissionConcurrencyTest extends TestCase
 {
     use DatabaseMigrations;
 
-    public function test_writer_then_archive_and_archive_then_writer_use_separate_mysql_transactions(): void
+    public function test_sequential_writer_then_archive_and_archive_then_writer_recheck_lifecycle(): void
     {
         $primary = DB::getDefaultConnection();
         $this->assertSame('mysql', DB::connection($primary)->getDriverName());
@@ -33,7 +33,7 @@ class StrategyArchiveAdmissionConcurrencyTest extends TestCase
             $this->useConnection($primary);
             app(SaleProceedsAvailabilityService::class)->scheduleForObligation(
                 $writerProfile, $writerStrategy, 125.0, 125.0, PendingSaleProceeds::OBLIGATION_RECALL,
-            ); // Writer transaction commits before the archive transaction starts.
+            ); // The writer commits before archive starts; this verifies the blocker recheck only.
 
             $this->useConnection($alternate);
             $writerProfile = PortfolioProfile::query()->findOrFail($writerProfile->id);

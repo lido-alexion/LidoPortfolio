@@ -3228,7 +3228,7 @@
     "title": "Strategy",
     "path": "app/resources/js/src/data/appDocumentation.js",
     "section": "Enable / Archive (editor)",
-    "snippet": "Enable turns the selected draft/archived strategy on without disabling others. Archive sets STATUS_ARCHIVED for the selected enabled strategy; siblings stay enabled. The last remaining enabled strategy cannot be archived until another is enabled. Past holdings/recommendations keep attribution.",
+    "snippet": "Enable turns a ready strategy on without disabling others. Disable pauses future strategy recommendations and runs while existing holdings and financial work remain manageable. Archive retires only a strategy with no owned holdings, actionable recommendations, pending executions/orders, reserved funds, or unsettled obligations; blockers link to their existing resolution pages. Archived configuration is read-only. Restore returns it to Disabled; enable it explicitly after readiness checks. Past history keeps attribution.",
     "url": "/docs/strategy.html"
   },
   {
@@ -3664,11 +3664,11 @@
     "url": "/docs/strategy-registry.html"
   },
   {
-    "source_id": "product:strategy-registry:control:archive",
+    "source_id": "product:strategy-registry:control:disable-archive-restore",
     "title": "Strategy Registry",
     "path": "app/resources/js/src/data/appDocumentation.js",
-    "section": "Archive",
-    "snippet": "Sets the strategy to archived without changing other enabled strategies. The last remaining enabled strategy cannot be archived until another is enabled. Past holdings/recommendations keep attribution.",
+    "section": "Disable / Archive / Restore",
+    "snippet": "Disable pauses future strategy recommendations and runs without changing existing financial work. Archive requires no owned holdings, actionable recommendations, pending executions/orders, reserved funds, or unsettled obligations; exact blockers link to their resolution pages. Archived configuration is read-only. Restore returns the strategy to Disabled, then explicit Enable applies readiness checks. Zero enabled strategies is allowed; history keeps attribution.",
     "url": "/docs/strategy-registry.html"
   },
   {

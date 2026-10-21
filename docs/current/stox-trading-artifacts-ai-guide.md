@@ -4,7 +4,7 @@
 
 > **Audience:** AI agents and developers authoring portable Indicator / Screener / Strategy JSON **without** reading application source code.
 >
-> **Generated:** 2026-10-02T14:14:33.075Z
+> **Generated:** 2026-10-21T01:29:28.703Z
 > **Deploy download:** `/docs/stox-trading-artifacts-ai-guide.md` (also linked from Screener Registry and Strategy Registry).
 > **Repo copy:** `docs/current/stox-trading-artifacts-ai-guide.md`
 
@@ -1729,9 +1729,7 @@ Practical tip: treat this page as one step in a larger workflow, not an isolated
 - **Enable** — Turn this strategy on for the portfolio when readiness is satisfied (`setup_required` is false). Incomplete strategies show a Setup required list (missing eligibility, indicator weights, etc.). Other enabled strategies stay enabled.
 - **Allocation % (list)** — Enabled rows show the stored strategy allocation_pct (read-only in the table).
 - **Allocation editor** — Edit enabled-strategy allocation % with a live sum; Save calls PUT /v1/capital/allocations (same as Cash). Client requires sum ≈ 100 before save; server errors are shown.
-- **Disable** — Pauses future strategy recommendations and runs. Existing holdings, orders, executions, and settlements remain manageable; no automatic sell, cancellation, or fund release occurs.
-- **Archive** — Retires a strategy only when it has no owned holdings, actionable recommendations, pending executions/orders, reserved funds, or unsettled obligations. The response names each blocker and links to its existing resolution view. Archived configuration is read-only and history remains attributable.
-- **Restore** — Returns an archived strategy to Disabled. Enable it explicitly after the existing readiness checks. Zero enabled strategies is allowed.
+- **Disable / Archive / Restore** — Disable pauses future strategy recommendations and runs without changing existing financial work. Archive requires no owned holdings, actionable recommendations, pending executions/orders, reserved funds, or unsettled obligations; exact blockers link to their resolution pages. Archived configuration is read-only. Restore returns the strategy to Disabled, then explicit Enable applies readiness checks. Zero enabled strategies is allowed; history keeps attribution.
 - **Export JSON** — Download the portable Trading Artifact envelope (schema_version, slug, name, metadata, definition with eligibility_sources + scoring_model, dependencies). Best template for a new import — includes thresholds/exits/gates when present.
 - **Validate** — Check pasted JSON against Trading Artifact Strategy rules. On success, a green “Validated successfully” cue appears above Validate/Import and the JSON result panel still shows details. Import stays disabled until this reports ok. Editing the JSON clears validation.
 - **Import** — Enabled only after successful Validate. Creates a draft strategy in this portfolio and shows a success toast (not an inline alert). Does not change Recommendations until Enable. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.scoring_model with enabled weights = 100.
