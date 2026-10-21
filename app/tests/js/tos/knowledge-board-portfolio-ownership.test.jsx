@@ -29,21 +29,20 @@ const switchTo = async (name) => {
     fireEvent.click(await screen.findByRole('button', { name, exact: true }));
 };
 
-beforeEach(() => { cleanup(); vi.resetAllMocks(); localStorage.clear(); sessionStorage.clear(); sessionStorage.setItem('portfolio_active_id', '1'); });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+beforeEach(() => { vi.useRealTimers(); cleanup(); vi.resetAllMocks(); localStorage.clear(); sessionStorage.clear(); sessionStorage.setItem('portfolio_active_id', '1'); });
+afterEach(() => { vi.useRealTimers(); cleanup(); vi.restoreAllMocks(); });
 
 it('ignores a deferred A duplicate result and keeps the returned A read current after A→B→A', async () => {
     const bRead = deferred(); const currentA = deferred(); const obsoleteDuplicate = deferred();
-    const aCalls = { notes: 0 };
+    let visitedB = false;
     api.get.mockImplementation((path) => {
         if (path.endsWith('/tags')) return Promise.resolve({ data: { data: [] } });
         if (path.endsWith('/notes')) {
             const id = sessionStorage.getItem('portfolio_active_id');
-            if (id === '2') return bRead.promise;
-            aCalls.notes += 1;
-            return aCalls.notes <= 1
-                ? Promise.resolve({ data: { data: [note(11, 'A source')] } })
-                : currentA.promise;
+            if (id === '2') { visitedB = true; return bRead.promise; }
+            return visitedB
+                ? currentA.promise
+                : Promise.resolve({ data: { data: [note(11, 'A source')] } });
         }
         return Promise.resolve({ data: { data: [] } });
     });
@@ -134,7 +133,7 @@ it('invalidates an obsolete duplicate completion after the Board unmounts', asyn
 it('retains a failed new-note draft and retries it as a new A create after switching away and back', async () => {
     const write = deferred();
     api.get.mockImplementation(path => Promise.resolve({ data: { data: path.endsWith('/notes') ? [] : [] } }));
-    api.post.mockReturnValueOnce(Promise.reject(unavailable()))
+    api.post.mockRejectedValueOnce(unavailable())
         .mockReturnValueOnce(write.promise)
         .mockResolvedValueOnce({ data: { data: note(26, 'Private A draft') } });
     mount();
@@ -230,17 +229,16 @@ it('keeps a resumed A create in flight once, then saves its receipt as the same 
         editor = screen.getByRole('dialog', { name: 'New note' });
         await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
         expect(api.post).toHaveBeenCalledTimes(1);
-        await act(async () => create.resolve({ data: { data: note(991, 'A pending create') } }));
-        fireEvent.click(within(screen.getByRole('dialog', { name: 'Edit note' })).getByRole('button', { name: 'Save (Ctrl/Cmd + S)' }));
-        await waitFor(() => expect(api.put).toHaveBeenCalledWith('/knowledge-board/notes/991', expect.any(Object)));
-        expect(api.post).toHaveBeenCalledTimes(1);
-        vi.useRealTimers();
-        await switchTo('Research');
-        expect(screen.getByText('B confirmed')).toBeVisible();
-        expect(screen.queryByText('A pending create')).toBeNull();
     } finally {
         vi.useRealTimers();
     }
+    await act(async () => create.resolve({ data: { data: note(991, 'A pending create') } }));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Edit note' })).getByRole('button', { name: 'Save (Ctrl/Cmd + S)' }));
+    await waitFor(() => expect(api.put).toHaveBeenCalledWith('/knowledge-board/notes/991', expect.any(Object)));
+    expect(api.post).toHaveBeenCalledTimes(1);
+    await switchTo('Research');
+    expect(screen.getByText('B confirmed')).toBeVisible();
+    expect(screen.queryByText('A pending create')).toBeNull();
 });
 
 it('keeps a pending create session open through its receipt when the user closes', async () => {
