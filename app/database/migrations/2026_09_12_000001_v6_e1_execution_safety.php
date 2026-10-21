@@ -64,6 +64,9 @@ return new class extends Migration
                     Schema::hasColumn('portfolio_users', 'live_quote_policy') ? 'live_quote_policy' : null,
                 ]));
                 if ($columns !== []) {
+                    if (Schema::hasColumn('portfolio_users', 'execution_halted_by')) {
+                        $table->dropForeign('portfolio_users_execution_halted_by_foreign');
+                    }
                     $table->dropColumn($columns);
                 }
             });

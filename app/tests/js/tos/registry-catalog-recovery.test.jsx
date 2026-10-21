@@ -30,7 +30,7 @@ it('allows pausing the last enabled strategy and shows exact archive blockers wi
   : Promise.resolve({ data: { data: [row()] } }));
  api.post.mockImplementation(path => {
   if (path.endsWith('/disable')) { lifecycle = 'disabled'; return Promise.resolve({ data: { data: row() } }); }
-  return Promise.reject({ response: { status: 409, data: { error: { message: 'This strategy still has outstanding records to resolve.' }, meta: { blockers: [{ code: 'owned_holdings', label: 'Open holdings owned by this strategy', count: 2, href: '/holdings' }] } } });
+  return Promise.reject({ response: { status: 409, data: { error: { message: 'This strategy still has outstanding records to resolve.' }, meta: { blockers: [{ code: 'owned_holdings', label: 'Open holdings owned by this strategy', count: 2, href: '/holdings' }] } } } });
  });
  vi.spyOn(window, 'confirm').mockReturnValue(true);
  vi.spyOn(window, 'prompt').mockReturnValue('No longer needed');
