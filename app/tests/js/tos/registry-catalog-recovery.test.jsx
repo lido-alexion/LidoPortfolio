@@ -40,8 +40,9 @@ it('allows pausing the last enabled strategy and shows exact archive blockers wi
  await screen.findByText('disabled');
  expect(api.post).toHaveBeenCalledWith('/v1/strategy-registry/69/disable');
  fireEvent.click(screen.getByRole('button', { name: 'Retire' }));
- await screen.findByText('Open holdings owned by this strategy (2)');
- expect(screen.getByRole('link', { name: 'Open resolution view' })).toHaveAttribute('href', '/holdings');
+ const resolutionLink = await screen.findByRole('link', { name: 'Open resolution view' });
+ expect(resolutionLink.closest('li')).toHaveTextContent('Open holdings owned by this strategy (2)');
+ expect(resolutionLink).toHaveAttribute('href', '/holdings');
 });
 
 it('restores an archived strategy as disabled and offers a separate explicit Enable action', async () => {

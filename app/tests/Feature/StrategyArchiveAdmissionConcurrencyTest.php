@@ -27,6 +27,12 @@ class StrategyArchiveAdmissionConcurrencyTest extends TestCase
 {
     use DatabaseTruncation;
 
+    protected function tearDown(): void
+    {
+        $this->truncateTablesForAllConnections();
+        parent::tearDown();
+    }
+
     public function test_sequential_writer_then_archive_and_archive_then_writer_recheck_lifecycle(): void
     {
         $primary = DB::getDefaultConnection();
