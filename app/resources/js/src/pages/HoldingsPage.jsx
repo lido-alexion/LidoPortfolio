@@ -1,7 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import usePortfolioChanged from '../hooks/usePortfolioChanged';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api';
+import { usePortfolio } from '../context/PortfolioContext';
+import { useAuth } from '../context/AuthContext';
+import { getActivePortfolioId } from '../portfolio/activePortfolioStorage';
+import { PORTFOLIO_CHANGED } from '../utils/portfolioEvents';
 import ComboButton from '../components/ComboButton';
 import AnalyseStockButton from '../components/AnalyseStockButton';
 import { DataTableColumnMenu, DataTableView, useDataTableController } from '../components/DataTable';
@@ -480,10 +483,21 @@ function buildHoldingsColumns(complex, handleSell, handleCorporateAction, handle
 
 export default function HoldingsPage() {
     const navigate = useNavigate();
+    const { activePortfolio, activePortfolioId } = usePortfolio();
+    const { user } = useAuth();
+    const committedScope = useRef(null);
+    const [eventRevision, setEventRevision] = useState(0);
+    const loadSequence = useRef(0);
+    const adoptOperation = useRef(0);
+    const protectionOperation = useRef(0);
+    const adoptSession = useRef(null);
+    const protectionSession = useRef(null);
+    const mounted = useRef(false);
     const [holdings, setHoldings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState(loadHoldingsViewMode);
     const [adoptHolding, setAdoptHolding] = useState(null);
+    const [adoptDialogSession, setAdoptDialogSession] = useState(null);
     const [adoptStrategies, setAdoptStrategies] = useState([]);
     const [adoptStrategyId, setAdoptStrategyId] = useState('');
     const [adoptBusy, setAdoptBusy] = useState(false);
@@ -496,7 +510,15 @@ export default function HoldingsPage() {
     const [protectionBusy, setProtectionBusy] = useState(false);
     const [protectionError, setProtectionError] = useState('');
 
+    const scopeKey = activePortfolio && user?.id != null
+        ? `${user.id}:${activePortfolioId}:${eventRevision}` : null;
+    const currentScope = useCallback(() => mounted.current
+        && activePortfolioId != null
+        && activePortfolio != null
+        && String(getActivePortfolioId()) === String(activePortfolioId)
+        && committedScope.current === scopeKey, [activePortfolio, activePortfolioId, scopeKey]);
     const handleCorporateAction = useCallback((holding) => {
+        if (!currentScope()) return;
         const stockRow = holding.stock || {};
         navigate('/corporate-action', {
             state: {
@@ -508,14 +530,22 @@ export default function HoldingsPage() {
                 },
             },
         });
-    }, [navigate]);
+    }, [currentScope, navigate]);
 
     const handleAdopt = useCallback(async (holding) => {
+        if (!currentScope()) return;
+        const scope = scopeKey;
+        const session = { scope, operation: ++adoptOperation.current };
+        adoptSession.current = session;
         setAdoptHolding(holding);
+        setAdoptDialogSession(session);
+        setAdoptStrategies([]);
+        setAdoptBusy(false);
         setAdoptError('');
         setAdoptStrategyId('');
         try {
             const res = await api.get('/v1/strategy-registry');
+            if (!currentScope() || committedScope.current !== scope || adoptSession.current !== session) return;
             const rows = res.data?.data || [];
             const enabled = rows.filter((row) => {
                 const meta = row.metadata || {};
@@ -527,18 +557,25 @@ export default function HoldingsPage() {
                 setAdoptStrategyId(String(firstId));
             }
         } catch {
+            if (!currentScope() || committedScope.current !== scope || adoptSession.current !== session) return;
             setAdoptStrategies([]);
             setAdoptError('Could not load strategies.');
         }
+    }, [currentScope, scopeKey]);
+
+    const closeAdoption = useCallback(() => {
+        adoptOperation.current += 1; adoptSession.current = null;
+        setAdoptHolding(null); setAdoptDialogSession(null); setAdoptStrategies([]); setAdoptStrategyId(''); setAdoptBusy(false); setAdoptError('');
     }, []);
 
     const handleSell = useCallback((holding) => {
+        if (!currentScope()) return;
         const prefill = buildSellPrefillFromHolding(holding);
         if (!prefill) {
             return;
         }
         navigate('/transactions', { state: { sellPrefill: prefill } });
-    }, [navigate]);
+    }, [currentScope, navigate]);
 
     const handleViewModeChange = useCallback((mode) => {
         setViewMode(mode);
@@ -546,50 +583,61 @@ export default function HoldingsPage() {
     }, []);
 
     const load = useCallback(async () => {
+        if (!currentScope()) return;
+        const scope = scopeKey;
+        const request = ++loadSequence.current;
+        const isLatest = () => mounted.current && currentScope() && committedScope.current === scope && loadSequence.current === request;
         setLoading(true);
         try {
             const holdingsRes = await api.get('/holdings');
+            if (!isLatest()) return;
             setHoldings(holdingsRes.data.data || []);
-            try {
-                const [modeRes, protRes] = await Promise.all([
-                    api.get('/v1/execution/mode'),
-                    api.get('/v1/protections'),
-                ]);
-                setExecutionMode(modeRes.data?.data?.execution_mode || 'manual');
-                setExecutionCodeLabel(modeRes.data?.data?.execution_code_label || 'StoX execution code — Authenticator app');
-                setProtections(protRes.data?.data || []);
-            } catch {
-                setExecutionMode('manual');
-                setExecutionCodeLabel('StoX execution code — Authenticator app');
-                setProtections([]);
+            const [modeResult, protectionsResult] = await Promise.allSettled([
+                api.get('/v1/execution/mode'), api.get('/v1/protections'),
+            ]);
+            if (!isLatest()) return;
+            if (modeResult.status === 'fulfilled' && protectionsResult.status === 'fulfilled') {
+                setExecutionMode(modeResult.value.data?.data?.execution_mode || 'manual');
+                setExecutionCodeLabel(modeResult.value.data?.data?.execution_code_label || 'StoX execution code — Authenticator app');
+                setProtections(protectionsResult.value.data?.data || []);
+            } else {
+                setExecutionMode('manual'); setExecutionCodeLabel('StoX execution code — Authenticator app'); setProtections([]);
             }
+        } catch {
+            // Keep the existing presentation on a failed holdings read.
         } finally {
-            setLoading(false);
+            if (isLatest()) setLoading(false);
         }
-    }, []);
+    }, [currentScope, scopeKey]);
 
     const handleAdoptConfirm = useCallback(async () => {
-        if (!adoptHolding || !adoptStrategyId) {
+        if (!adoptHolding || !adoptStrategyId || !currentScope()) {
             return;
         }
+        const scope = scopeKey; const session = adoptDialogSession;
+        if (!session || session !== adoptSession.current || session.scope !== scope) return;
+        const operation = ++adoptOperation.current; session.operation = operation;
         setAdoptBusy(true);
         setAdoptError('');
         try {
+            if (!currentScope() || committedScope.current !== scope || adoptSession.current !== session || session.operation !== operation) return;
             await api.post(`/holdings/${adoptHolding.id}/adopt`, {
                 strategy_id: Number(adoptStrategyId),
             });
-            setAdoptHolding(null);
+            if (!currentScope() || committedScope.current !== scope || adoptSession.current !== session || session.operation !== operation) return;
+            closeAdoption();
             await load();
         } catch (e) {
+            if (!currentScope() || committedScope.current !== scope || adoptSession.current !== session || session.operation !== operation) return;
             const msg = e?.response?.data?.errors?.strategy_id?.[0]
                 || e?.response?.data?.errors?.holding_id?.[0]
                 || e?.response?.data?.message
                 || 'Adoption failed.';
             setAdoptError(msg);
         } finally {
-            setAdoptBusy(false);
+            if (mounted.current && currentScope() && committedScope.current === scope && adoptSession.current === session && session.operation === operation) setAdoptBusy(false);
         }
-    }, [adoptHolding, adoptStrategyId, load]);
+    }, [adoptDialogSession, adoptHolding, adoptStrategyId, closeAdoption, currentScope, load, scopeKey]);
 
     const protectionByHoldingId = useMemo(() => {
         const map = {};
@@ -602,18 +650,31 @@ export default function HoldingsPage() {
     }, [protections]);
 
     const openProtectionPrompt = useCallback((action, holding, protection) => {
+        if (!currentScope()) return;
+        const session = { scope: scopeKey, operation: ++protectionOperation.current };
+        protectionSession.current = session;
         setProtectionError('');
         setProtectionTotp('');
-        setProtectionPrompt({ action, holding, protection });
+        setProtectionBusy(false);
+        setProtectionPrompt({ action, holding, protection, session });
+    }, [currentScope, scopeKey]);
+
+    const closeProtection = useCallback(() => {
+        protectionOperation.current += 1; protectionSession.current = null;
+        setProtectionPrompt(null); setProtectionTotp(''); setProtectionBusy(false); setProtectionError('');
     }, []);
 
     const handleProtectionConfirm = useCallback(async () => {
-        if (!protectionPrompt) {
+        if (!protectionPrompt || !currentScope()) {
             return;
         }
+        const scope = scopeKey; const session = protectionPrompt.session;
+        if (!session || session !== protectionSession.current || session.scope !== scope) return;
+        const operation = ++protectionOperation.current; session.operation = operation;
         setProtectionBusy(true);
         setProtectionError('');
         try {
+            if (!currentScope() || committedScope.current !== scope || protectionSession.current !== session || session.operation !== operation) return;
             const body = { totp: protectionTotp || undefined };
             if (protectionPrompt.action === 'cancel') {
                 await api.post(`/v1/protections/${protectionPrompt.protection.id}/cancel`, body);
@@ -624,22 +685,49 @@ export default function HoldingsPage() {
                     totp: protectionTotp || undefined,
                 });
             }
-            setProtectionPrompt(null);
-            setProtectionTotp('');
+            if (!currentScope() || committedScope.current !== scope || protectionSession.current !== session || session.operation !== operation) return;
+            closeProtection();
             await load();
         } catch (e) {
+            if (!currentScope() || committedScope.current !== scope || protectionSession.current !== session || session.operation !== operation) return;
             setProtectionError(
                 e?.response?.data?.error?.message
                 || e?.response?.data?.message
                 || 'Could not update broker protection.',
             );
         } finally {
-            setProtectionBusy(false);
+            if (mounted.current && currentScope() && committedScope.current === scope && protectionSession.current === session && session.operation === operation) setProtectionBusy(false);
         }
-    }, [protectionPrompt, protectionTotp, load]);
+    }, [protectionPrompt, protectionTotp, closeProtection, currentScope, load, scopeKey]);
 
-    useEffect(() => { load(); }, [load]);
-    usePortfolioChanged(load);
+    useLayoutEffect(() => {
+        mounted.current = true;
+        return () => { mounted.current = false; loadSequence.current += 1; adoptOperation.current += 1; protectionOperation.current += 1; adoptSession.current = null; protectionSession.current = null; };
+    }, []);
+    useLayoutEffect(() => {
+        const next = activePortfolioId == null || !activePortfolio || user?.id == null ? null : scopeKey;
+        if (committedScope.current === next) return;
+        committedScope.current = next; loadSequence.current += 1; adoptOperation.current += 1; protectionOperation.current += 1; adoptSession.current = null; protectionSession.current = null;
+        setHoldings([]); setExecutionMode('manual'); setExecutionCodeLabel('StoX execution code — Authenticator app'); setProtections([]);
+        setAdoptHolding(null); setAdoptStrategies([]); setAdoptStrategyId(''); setAdoptBusy(false); setAdoptError('');
+        setAdoptDialogSession(null);
+        setProtectionPrompt(null); setProtectionTotp(''); setProtectionBusy(false); setProtectionError(''); setLoading(next !== null);
+    }, [activePortfolio, activePortfolioId, scopeKey, user?.id]);
+    useEffect(() => {
+        const onChanged = (event) => {
+            const requested = event.detail?.portfolioId == null ? null : String(event.detail.portfolioId);
+            if (requested !== String(getActivePortfolioId())) return;
+            committedScope.current = null;
+            loadSequence.current += 1; adoptOperation.current += 1; protectionOperation.current += 1; adoptSession.current = null; protectionSession.current = null;
+            setHoldings([]); setProtections([]); setExecutionMode('manual'); setAdoptHolding(null); setAdoptStrategies([]); setAdoptStrategyId(''); setAdoptBusy(false); setAdoptError('');
+            setAdoptDialogSession(null);
+            setProtectionPrompt(null); setProtectionTotp(''); setProtectionBusy(false); setProtectionError(''); setLoading(true);
+            setEventRevision((revision) => revision + 1);
+        };
+        window.addEventListener(PORTFOLIO_CHANGED, onChanged);
+        return () => window.removeEventListener(PORTFOLIO_CHANGED, onChanged);
+    }, [user?.id]);
+    useEffect(() => { if (currentScope()) load(); }, [currentScope, load]);
 
     const tableData = useMemo(() => holdings.map((h) => ({
         ...h,
@@ -776,7 +864,7 @@ export default function HoldingsPage() {
                                     type="button"
                                     className="btn-close"
                                     aria-label="Close"
-                                    onClick={() => setAdoptHolding(null)}
+                                    onClick={closeAdoption}
                                     disabled={adoptBusy}
                                 />
                             </div>
@@ -829,7 +917,7 @@ export default function HoldingsPage() {
                                 <button
                                     type="button"
                                     className="btn btn-outline-secondary"
-                                    onClick={() => setAdoptHolding(null)}
+                                    onClick={closeAdoption}
                                     disabled={adoptBusy}
                                 >
                                     Cancel
@@ -863,7 +951,7 @@ export default function HoldingsPage() {
                                     type="button"
                                     className="btn-close"
                                     aria-label="Close"
-                                    onClick={() => setProtectionPrompt(null)}
+                                    onClick={closeProtection}
                                     disabled={protectionBusy}
                                 />
                             </div>
@@ -891,7 +979,7 @@ export default function HoldingsPage() {
                                 <button
                                     type="button"
                                     className="btn btn-outline-secondary"
-                                    onClick={() => setProtectionPrompt(null)}
+                                    onClick={closeProtection}
                                     disabled={protectionBusy}
                                 >
                                     Back
