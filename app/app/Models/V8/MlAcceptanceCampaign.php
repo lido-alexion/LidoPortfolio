@@ -7,5 +7,5 @@ class MlAcceptanceCampaign extends Model
     public $incrementing = false;
     protected $keyType = 'string';
     protected $guarded = [];
-    protected function casts(): array { return ['cutoff_date' => 'date', 'identity' => 'array', 'active_models' => 'array', 'horizons' => 'array', 'history' => 'array', 'qualified_at' => 'datetime']; }
+    protected function casts(): array { return ['cutoff_date' => 'date', 'identity' => 'array', 'active_models' => 'array', 'horizons' => 'array', 'history' => 'array', 'qualified_at' => 'datetime', 'wizard_sequence' => 'integer']; }
 }

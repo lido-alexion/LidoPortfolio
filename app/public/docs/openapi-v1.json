@@ -810,6 +810,12 @@
                                             "type": "string",
                                             "format": "uuid"
                                         }
+                                    },
+                                    "campaign_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true,
+                                        "description": "Source-remediation campaign whose exact missing dates this preview addresses."
                                     }
                                 }
                             }
@@ -1149,6 +1155,15 @@
                                         "type": "string",
                                         "format": "date",
                                         "description": "Not later than today."
+                                    },
+                                    "final_preflight": {
+                                        "type": "boolean",
+                                        "description": "Records an explicit final-preflight intent."
+                                    },
+                                    "remediation_backfill_id": {
+                                        "type": "integer",
+                                        "nullable": true,
+                                        "description": "Completed applied source remediation linked to the prior campaign."
                                     }
                                 }
                             }
@@ -1949,6 +1964,90 @@
                                 }
                             }
                         }
+                    },
+                    "413": {
+                        "description": "Content-Length exceeds the 1,500,000-byte acceptance request limit.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Laravel validation `{message, errors}`: invalid input, source quotas/state, queue prerequisites or campaign/backfill preconditions. Invalid base64 returns `{message, request_id}`."
+                    },
+                    "429": {
+                        "description": "Acceptance rate limit exceeded (60 requests per minute).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/acceptance/wizard": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Reconstruct production acceptance wizard state",
+                "description": "Read-only aggregate of the current persisted acceptance campaign, its campaign-linked source/backfill remediation state, horizon evidence and authoritative evidence_current result. This endpoint does not dispatch work, probe Python, or mutate settings.",
+                "operationId": "get_admin_ml_acceptance_wizard",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Safe acceptance payload wrapped in `data`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
                     },
                     "413": {
                         "description": "Content-Length exceeds the 1,500,000-byte acceptance request limit.",

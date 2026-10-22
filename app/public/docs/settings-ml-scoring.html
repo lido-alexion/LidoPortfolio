@@ -122,17 +122,20 @@
       <section class="panel">
         <h2>Controls</h2>
         <dl class="doc-list">
-        <dt>Production acceptance report</dt>
-        <dd>Refresh reads recorded evidence only. Unknown worker, Python, source, or feature evidence remains blocking. Expand evidence for per-horizon reference dates, coverage, exclusions and reasons.</dd>
+        <dt>Seven-step production acceptance wizard</dt>
+        <dd>The wizard reloads readiness, discovery, source, backfill, final preflight, candidate training and completion state from the server. Refresh is read-only; closing the page does not change background work.</dd>
 
         <dt>Private NSE upload</dt>
-        <dd>Choose the official dated CSV or single-CSV ZIP (up to 16 MiB), source family and date. Upload queues validation. To resume, choose the incomplete upload and reselect the identical file. Files are stored privately; sealed files cannot be replaced.</dd>
+        <dd>Choose an official source family and exact date reported by preflight, then select a local CSV or single-CSV ZIP up to 16 MiB. Upload queues validation. Resume an incomplete upload with the identical file; StoX never downloads an archive URL.</dd>
 
-        <dt>Backfill dry-run and apply</dt>
-        <dd>Select sealed sources and queue a dry-run. Review mapping/provenance evidence before Apply reviewed backfill. Save the backfill ID to reopen status. Resume preserves completed dates; cancel stops between work units.</dd>
+        <dt>Backfill preview and apply</dt>
+        <dd>Select one sealed source for every missing date and run a safe preview. Review per-date mapping and provenance before confirming Apply. The wizard recovers the campaign-linked backfill ID from server state; conflicting or unproven history is not overwritten.</dd>
 
-        <dt>Acceptance campaign</dt>
-        <dd>Choose a cutoff and queue preflight. All 1m/3m/6m gates must pass before Start training becomes available. Campaigns retain linked runs and evidence; local runs never qualify as production acceptance. Cancel requests training cancellation.</dd>
+        <dt>Discovery and final preflight</dt>
+        <dd>Discovery preflight identifies dates and blockers but does not train. After resolving missing historical data, a fresh final preflight must pass all 1m/3m/6m horizons before training.</dd>
+
+        <dt>Candidate training and review</dt>
+        <dd>Starting training requires confirmation and queues all three canonical horizon runs. Results remain candidates. Promotion, active models, schedules, lifecycle and drift stay separate explicit decisions.</dd>
 
         <dt>Queue retrain</dt>
         <dd>POST <code>/api/v1/admin/ml/retrain-queue</code> and stream SSE progress for the horizon.</dd>

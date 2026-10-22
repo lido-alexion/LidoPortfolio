@@ -617,6 +617,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
         Route::prefix('/admin/ml/acceptance')->middleware(['throttle:60,1', \App\Http\Middleware\MlAcceptanceRequestLimit::class])->group(function () {
             $controller = \App\Http\Controllers\Api\V1\MlAcceptanceController::class;
             Route::get('/', [$controller, 'report']);
+            Route::get('/wizard', [$controller, 'wizard']);
             Route::get('/sources', [$controller, 'sources']);
             Route::post('/sources', [$controller, 'createSource']);
             Route::get('/sources/{source}', [$controller, 'source'])->whereUuid('source');

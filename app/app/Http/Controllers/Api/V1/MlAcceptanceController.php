@@ -16,6 +16,7 @@ class MlAcceptanceController extends Controller
 {
     private function response(array $data, int $status = 200) { return response()->json(['data' => app(MlAcceptanceReportService::class)->safe($data)], $status); }
     public function report() { return $this->response(app(MlAcceptanceReportService::class)->report()); }
+    public function wizard() { return $this->response(app(MlAcceptanceReportService::class)->wizard()); }
     public function sources() { return $this->response(MlAcceptanceSource::query()->latest()->paginate(25)->toArray()); }
     public function source(MlAcceptanceSource $source) { return $this->response($source->toArray()); }
     public function createSource(Request $request, MlAcceptanceSourceService $service) { return $this->response($service->create($request->all(), $request->user()->id)->toArray(), 201); }
@@ -32,15 +33,17 @@ class MlAcceptanceController extends Controller
     }
     public function preview(Request $request, MlAcceptanceBackfillService $service)
     {
-        $data = $request->validate(['sources' => 'required|array|min:1|max:5000', 'sources.*' => 'required|uuid|distinct']);
-        return $this->response($service->preview($data['sources'], $request->user()->id)->toArray(), 202);
+        $data = $request->validate(['sources' => 'required|array|min:1|max:5000', 'sources.*' => 'required|uuid|distinct', 'campaign_id' => 'nullable|uuid']);
+        return $this->response($service->preview($data['sources'], $request->user()->id, $data['campaign_id'] ?? null)->toArray(), 202);
     }
     public function backfill(MlUniverseSnapshotBackfillRun $backfill) { abort_unless(is_array($backfill->acceptance), 404); return $this->response($backfill->toArray()); }
     public function backfillAction(Request $request, MlUniverseSnapshotBackfillRun $backfill, string $action, MlAcceptanceBackfillService $service) { return $this->response($service->action($backfill, $action, $request->user()->id)->toArray()); }
     public function createCampaign(Request $request, MlAcceptanceCampaignService $service)
     {
-        $data = $request->validate(['cutoff_date' => 'required|date_format:Y-m-d|before_or_equal:today']);
-        return $this->response($service->create($data['cutoff_date'], $request->user()->id)->toArray(), 202);
+        $data = $request->validate(['cutoff_date' => 'required|date_format:Y-m-d|before_or_equal:today', 'final_preflight' => 'sometimes|boolean',
+            'remediation_backfill_id' => 'nullable|integer']);
+        return $this->response($service->create($data['cutoff_date'], $request->user()->id, (bool) ($data['final_preflight'] ?? false),
+            $data['remediation_backfill_id'] ?? null)->toArray(), 202);
     }
     public function campaign(MlAcceptanceCampaign $campaign) { return $this->response($campaign->toArray()); }
     public function campaignAction(Request $request, MlAcceptanceCampaign $campaign, string $action, MlAcceptanceCampaignService $service)

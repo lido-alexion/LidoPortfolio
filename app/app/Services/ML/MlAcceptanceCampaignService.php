@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\V7\MlModelVersion;
 use App\Models\V7\MlTrainingRun;
 use App\Models\V8\MlAcceptanceCampaign;
+use App\Models\V8\MlUniverseSnapshotBackfillRun;
 use App\Models\V8\MlUniverseSnapshotBoundary;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -17,12 +18,14 @@ use Illuminate\Validation\ValidationException;
 
 class MlAcceptanceCampaignService
 {
-    public function create(string $cutoff, int $actor): MlAcceptanceCampaign
+    public function create(string $cutoff, int $actor, bool $finalPreflight = false, ?int $remediationBackfillId = null): MlAcceptanceCampaign
     {
         app(MlAcceptanceRuntime::class)->assertQueue();
-        validator(['cutoff' => $cutoff], ['cutoff' => 'required|date_format:Y-m-d|before_or_equal:today'])->validate();
+        validator(['cutoff' => $cutoff, 'final_preflight' => $finalPreflight, 'remediation_backfill_id' => $remediationBackfillId], [
+            'cutoff' => 'required|date_format:Y-m-d|before_or_equal:today', 'final_preflight' => 'boolean', 'remediation_backfill_id' => 'nullable|integer',
+        ])->validate();
 
-        return Cache::lock('ml-acceptance-campaign-create', 30)->block(5, function () use ($cutoff, $actor) {
+        return Cache::lock('ml-acceptance-campaign-create', 30)->block(5, function () use ($cutoff, $actor, $finalPreflight, $remediationBackfillId) {
             if (MlAcceptanceCampaign::query()->whereIn('status', ['preflight', 'ready', 'training'])->exists()) {
                 $this->fail('An acceptance campaign is already active.');
             }
@@ -30,16 +33,49 @@ class MlAcceptanceCampaignService
             if (MlAcceptanceCampaign::query()->count() >= 100) {
                 $this->fail('Acceptance evidence retention quota reached.');
             }
+            $linkedBackfill = $remediationBackfillId === null ? null : $this->validatedAppliedRemediation($remediationBackfillId, $cutoff);
             $runtime = app(MlAcceptanceRuntime::class);
+            $action = $linkedBackfill ? 'final_preflight_requested_after_backfill:'.$linkedBackfill->id
+                : ($finalPreflight ? 'final_preflight_requested' : 'preflight_requested');
             $campaign = MlAcceptanceCampaign::query()->create([
                 'id' => (string) Str::uuid(), 'actor_id' => $actor, 'cutoff_date' => $cutoff, 'status' => 'preflight',
                 'identity' => $runtime->identity(), 'active_models' => $runtime->activeModels(), 'horizons' => [],
-                'history' => $runtime->history([], 'preflight_requested', $actor),
+                'wizard_sequence' => ((int) MlAcceptanceCampaign::query()->max('wizard_sequence')) + 1,
+                'history' => $runtime->history([], $action, $actor),
             ]);
             MlAcceptanceJob::dispatch('campaign', $campaign->id);
 
             return $campaign;
         });
+    }
+
+    /** Validate and retain the exact, completed remediation chain on the new final campaign. */
+    private function validatedAppliedRemediation(int $backfillId, string $cutoff): MlUniverseSnapshotBackfillRun
+    {
+        $backfill = MlUniverseSnapshotBackfillRun::query()->find($backfillId);
+        $state = $backfill?->acceptance ?? [];
+        $priorCampaign = isset($state['campaign_id']) ? MlAcceptanceCampaign::query()->find($state['campaign_id']) : null;
+        $reasons = collect($priorCampaign?->horizons ?? [])->flatMap(fn ($horizon) => $horizon['blocking_reasons'] ?? []);
+        $expectedDates = [];
+        foreach ($priorCampaign?->horizons ?? [] as $horizon) {
+            foreach ($horizon['snapshots'] ?? [] as $date => $snapshot) {
+                if (($snapshot['status'] ?? null) !== 'covered') { $expectedDates[$date] = true; }
+            }
+        }
+        $expectedDates = array_keys($expectedDates);
+        $requestedDates = $backfill?->requested_dates ?? [];
+        if (! is_array($requestedDates)) { $requestedDates = []; }
+        sort($expectedDates);
+        sort($requestedDates);
+        $hasSourceBlocker = $reasons->contains(fn ($reason) => str_starts_with((string) $reason, 'snapshot_unproven:') || $reason === 'membership_coverage_incomplete');
+        if (! $backfill || ($state['mode'] ?? null) !== 'apply' || ! app(MlAcceptanceBackfillService::class)->isComplete($backfill)
+            || ! $priorCampaign || ! in_array($priorCampaign->status, ['blocked', 'failed', 'cancelled'], true)
+            || $priorCampaign->cutoff_date?->toDateString() !== $cutoff || ! $hasSourceBlocker
+            || $expectedDates === [] || $expectedDates !== $requestedDates) {
+            $this->fail('A completed applied backfill for this campaign and cutoff is required for final-preflight lineage.');
+        }
+
+        return $backfill;
     }
 
     public function action(MlAcceptanceCampaign $campaign, string $action, int $actor): MlAcceptanceCampaign
