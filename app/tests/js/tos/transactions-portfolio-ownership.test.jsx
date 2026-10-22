@@ -69,8 +69,11 @@ function CurrentPortfolioPrefill({ sell = false }) {
     return <button type="button" onClick={() => navigate('/transactions', { state })}>Prefill current Portfolio</button>;
 }
 
+const originalScrollIntoView = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView');
+
 beforeEach(() => {
     cleanup();
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, writable: true, value: vi.fn() });
     api.get.mockReset(); api.post.mockReset(); api.put.mockReset(); api.delete.mockReset();
     showToast.mockClear();
     sessionStorage.clear();
@@ -83,7 +86,11 @@ beforeEach(() => {
         throw new Error(`Unexpected GET ${path}`);
     });
 });
-afterEach(() => cleanup());
+afterEach(() => {
+    cleanup();
+    if (originalScrollIntoView) Object.defineProperty(Element.prototype, 'scrollIntoView', originalScrollIntoView);
+    else delete Element.prototype.scrollIntoView;
+});
 
 it('keeps B rows after an ordinary confirmed A to B switch resolves the held A request last', async () => {
     const oldA = deferred(); let firstTransactionRead = true;
@@ -175,7 +182,7 @@ it('preserves the confirmed form and avoids duplicate reads on benign catalogue 
         if (path === '/settings') return Promise.resolve({ data: { data: { fee_components: [] } } });
         throw new Error(`Unexpected GET ${path}`);
     });
-    mount({ extra: <RefreshPortfolioList /> });
+    mount({ extra: <><RefreshPortfolioList /><CurrentPortfolioPrefill /></> });
     await screen.findByText('ALPHA');
     fireEvent.click(screen.getByRole('button', { name: 'Prefill current Portfolio' }));
     await screen.findByRole('button', { name: 'Save Transaction' });
