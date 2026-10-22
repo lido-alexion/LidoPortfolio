@@ -388,9 +388,12 @@ for (const viewport of VIEWPORTS) {
         await expect(configuredScheduleRow).toContainText('Enabled');
         await expect(configuredScheduleRow).toContainText(nextBefore);
         await configuredScheduleRow.getByRole('button', { name: 'History' }).click();
-        await panel.getByRole('button', { name: 'Next' }).last().click();
-        await expect.poll(() => fixture.rows.some(r => r.method === 'GET' && r.path === `${ROOT}/schedules/6/occurrences` && r.query.includes('page=2'))).toBe(true);
-        await expect(panel.getByRole('row').filter({ hasText: '#73' })).toBeVisible();
+        const occurrenceHistory = panel.locator('.bo-card').filter({ has: page.getByRole('heading', { name: 'Quarterly operations schedule history', exact: true }) });
+        await expect(occurrenceHistory).toBeVisible();
+        await expect(occurrenceHistory.getByRole('row').filter({ hasText: '#72' })).toBeVisible();
+        await occurrenceHistory.getByRole('button', { name: 'Next', exact: true }).click();
+        await expect.poll(() => fixture.rows.some(r => r.method === 'GET' && r.path === `${ROOT}/schedules/6/occurrences` && new URLSearchParams(r.query).get('page') === '2' && r.responseFinished && r.responseBody?.data?.current_page === 2 && r.responseBody?.data?.data?.some(o => o.id === 82 && o.run_id === 73))).toBe(true);
+        await expect(occurrenceHistory.getByRole('row').filter({ hasText: '#73' })).toBeVisible();
         await panel.getByRole('tab', { name: 'Backfills and history' }).click();
         await panel.getByLabel('CSV item status').selectOption('failed');
         const exportLink = panel.getByRole('link', { name: 'Export CSV' }).first();
