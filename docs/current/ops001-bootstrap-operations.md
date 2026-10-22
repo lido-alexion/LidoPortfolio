@@ -38,7 +38,7 @@ The existing Admin notification center reports meaningful outcomes such as failu
 
 ## E2E acceptance annotations
 
-The accompanying browser acceptance file uses epic-scoped annotations rather than adding entries to the existing user-journey catalog:
+The accompanying browser acceptance file uses Playwright annotations of type `ops001`, with the following epic acceptance IDs. The existing `journeyId` helper is reserved for IDs in the canonical investor-journey catalog; this operations suite does not extend or claim coverage of that catalog:
 
 - `OPS001-01`: full and targeted run controls, explicit forced rerun, uncertain-write recovery, failed-item retry, and cancellation conflict followed by terminal cancellation.
 - `OPS001-02`: compatible gap acknowledgement with note/audit history and a targeted run from an unresolved gap.

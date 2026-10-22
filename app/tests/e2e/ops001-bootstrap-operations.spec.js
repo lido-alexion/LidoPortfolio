@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { TEST_USER } from '../js/tos/fixtures/tosApi.js';
-import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
+import { seedDeterministicJourney } from './journeyTestUtils.js';
 import { createApiFailureDiagnosticCollector, installApiFailureDiagnosticBoundary, handleApiFailureDiagnostic, registerApiFailureDiagnosticAfterEach } from './apiFailureDiagnosticBoundary.js';
 
 registerApiFailureDiagnosticAfterEach(test);
@@ -205,7 +205,7 @@ async function assertReceipts(rows) {
 
 for (const viewport of VIEWPORTS) {
     test(`OPS001-01 run lifecycle, force guard, uncertain launch recovery and cancellation (${viewport.name})`, async ({ page }, testInfo) => {
-        journeyId(testInfo, 'OPS001-01');
+        testInfo.annotations.push({ type: 'ops001', description: 'OPS001-01' });
         const { fixture, panel } = await open(page, viewport, '01', { uncertainLaunch: true });
         await expect(panel).toBeVisible();
         await expect(page.getByRole('heading', { name: 'Fundamental Data' })).toBeVisible();
@@ -291,7 +291,7 @@ for (const viewport of VIEWPORTS) {
     });
 
     test(`OPS001-02 compatible gap review and targeted stock launch (${viewport.name})`, async ({ page }, testInfo) => {
-        journeyId(testInfo, 'OPS001-02');
+        testInfo.annotations.push({ type: 'ops001', description: 'OPS001-02' });
         const { fixture, panel } = await open(page, viewport, '02');
         await panel.getByRole('tab', { name: 'Coverage and review' }).click();
         await expect(panel.getByText(/unknown/i).first()).toBeVisible();
@@ -333,7 +333,7 @@ for (const viewport of VIEWPORTS) {
     });
 
     test(`OPS001-03 schedule recurrence, history pagination and run CSV scope (${viewport.name})`, async ({ page }, testInfo) => {
-        journeyId(testInfo, 'OPS001-03');
+        testInfo.annotations.push({ type: 'ops001', description: 'OPS001-03' });
         const { fixture, panel } = await open(page, viewport, '03');
         await panel.getByRole('tab', { name: 'Presets and schedules' }).click();
         await panel.getByLabel('Preset name').fill('Eligible universe');
