@@ -380,8 +380,13 @@ for (const viewport of VIEWPORTS) {
         expect(mutationRows(fixture.rows)[5].responseBody).toEqual({ data: { run_id: 90, created: false } });
         expect(mutationRows(fixture.rows)[4].request.headers()['idempotency-key']).toBeTruthy();
         expect(mutationRows(fixture.rows)[4].request.headers()['idempotency-key']).toBe(mutationRows(fixture.rows)[5].request.headers()['idempotency-key']);
-        await panel.getByRole('button', { name: 'Refresh' }).first().click();
-        await expect.poll(() => fixture.rows.some(r => r.method === 'GET' && r.path === `${ROOT}/schedules` && r.responseBody?.data?.data?.some(s => s.id === 6 && s.version === 2 && s.next_occurrence_at === nextBefore))).toBe(true);
+        // A successful retry clears the error-only Refresh control; reload the saved state.
+        const beforeReload = fixture.rows.length;
+        await page.reload();
+        await panel.getByRole('tab', { name: 'Presets and schedules' }).click();
+        await expect.poll(() => fixture.rows.slice(beforeReload).some(r => r.method === 'GET' && r.path === `${ROOT}/schedules` && r.responseBody?.data?.data?.some(s => s.id === 6 && s.version === 2 && s.enabled && s.next_occurrence_at === nextBefore))).toBe(true);
+        await expect(configuredScheduleRow).toContainText('Enabled');
+        await expect(configuredScheduleRow).toContainText(nextBefore);
         await configuredScheduleRow.getByRole('button', { name: 'History' }).click();
         await panel.getByRole('button', { name: 'Next' }).last().click();
         await expect.poll(() => fixture.rows.some(r => r.method === 'GET' && r.path === `${ROOT}/schedules/6/occurrences` && r.query.includes('page=2'))).toBe(true);
