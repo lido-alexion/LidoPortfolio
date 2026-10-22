@@ -208,7 +208,7 @@ for (const viewport of VIEWPORTS) {
         testInfo.annotations.push({ type: 'ops001', description: 'OPS001-01' });
         const { fixture, panel } = await open(page, viewport, '01', { uncertainLaunch: true });
         await expect(panel).toBeVisible();
-        await expect(page.getByRole('heading', { name: 'Fundamental Data' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Fundamental Data', level: 1 })).toBeVisible();
         await panel.getByRole('button', { name: 'Start backfill' }).click();
         await expect(panel.getByRole('status').filter({ hasText: /action result is uncertain/i })).toBeVisible();
         expect(mutationRows(fixture.rows)).toHaveLength(1);
@@ -306,7 +306,9 @@ for (const viewport of VIEWPORTS) {
         const acknowledgedGap = acceptedGapReceipt.responseBody.data.data[0];
         expect(acknowledgedGap).toMatchObject({ id: 21, state: 'accepted', acknowledgement: { note: 'Expected source gap; reviewed by Admin', actor_id: 1, at: '2026-10-22T10:00:00Z' }, acknowledgement_history: [{ note: 'Expected source gap; reviewed by Admin', actor_id: 1, at: '2026-10-22T10:00:00Z' }] });
         const acknowledgedRow = panel.getByRole('row').filter({ hasText: 'AAA' });
-        await expect(acknowledgedRow.getByText('Expected source gap; reviewed by Admin', { exact: true })).toBeVisible();
+        const reviewCell = acknowledgedRow.getByRole('cell').filter({ hasText: 'Expected source gap; reviewed by Admin' });
+        await expect(reviewCell).toBeVisible();
+        expect(await reviewCell.evaluate(cell => [...cell.childNodes].filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent).join(''))).toBe('Expected source gap; reviewed by Admin');
         await expect(acknowledgedRow.getByText('accepted', { exact: true })).toBeVisible();
         await expect.poll(() => mutationRows(fixture.rows).length).toBe(1);
         expect(mutationRows(fixture.rows)[0]).toMatchObject({ method: 'POST', path: `${ROOT}/gaps/acknowledge`, status: 200, requestBody: { ids: [21, 22], note: 'Expected source gap; reviewed by Admin' }, responseBody: { success: true, data: { acknowledged: 2 }, meta: {} } });
@@ -338,7 +340,7 @@ for (const viewport of VIEWPORTS) {
         await panel.getByRole('tab', { name: 'Presets and schedules' }).click();
         await panel.getByLabel('Preset name').fill('Eligible universe');
         await panel.getByRole('button', { name: 'Save preset' }).click();
-        await expect(panel.getByRole('row').filter({ has: page.getByText('Eligible universe', { exact: true }) })).toBeVisible();
+        await expect(panel.getByRole('listitem').filter({ has: page.getByText('Eligible universe', { exact: true }) })).toBeVisible();
         await expect.poll(() => mutationRows(fixture.rows).length).toBe(1);
         expect(mutationRows(fixture.rows)[0]).toMatchObject({ method: 'POST', path: `${ROOT}/presets`, status: 201, requestBody: { name: 'Eligible universe', configuration: { scope: 'all' } }, responseBody: { data: { id: 3, name: 'Eligible universe', configuration: { scope: 'all' }, revision: 1, schedules_count: 0 } } });
         await panel.getByLabel('Schedule name').fill('Quarterly operations');

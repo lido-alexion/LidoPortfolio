@@ -24,7 +24,7 @@ class BootstrapCoverageOperationsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        Route::middleware(['auth:sanctum', 'admin'])->prefix('package-b-test')->group(function (): void {
+        Route::middleware(['api', 'auth:sanctum', 'admin'])->prefix('api/package-b-test')->group(function (): void {
             Route::get('/summary', [BootstrapCoverageOperationsController::class, 'summary']);
             Route::get('/gaps', [BootstrapCoverageOperationsController::class, 'gaps']);
             Route::get('/warnings', [BootstrapCoverageOperationsController::class, 'warnings']);
@@ -37,14 +37,14 @@ class BootstrapCoverageOperationsTest extends TestCase
     public function test_admin_authorization_and_get_endpoints_do_not_reconcile_or_mutate(): void
     {
         $run = $this->runWithJob(['facts_rejected' => 1]);
-        $this->getJson('/package-b-test/summary')->assertUnauthorized();
+        $this->getJson('/api/package-b-test/summary')->assertUnauthorized();
         $member = User::factory()->create(['is_admin' => false]);
-        $this->actingAs($member)->getJson('/package-b-test/summary')->assertForbidden();
+        $this->actingAs($member)->getJson('/api/package-b-test/summary')->assertForbidden();
         $admin = User::factory()->admin()->create();
         $before = [$run->jobs()->count(), BootstrapCoverageGap::count(), BootstrapQualityWarning::count()];
-        $this->actingAs($admin)->getJson('/package-b-test/summary')->assertOk()->assertJsonPath('data.eligible_equity_population', 1);
-        $this->getJson('/package-b-test/gaps?per_page=2&state=actionable&metric=revenue')->assertOk()->assertJsonPath('data.per_page', 2);
-        $this->getJson('/package-b-test/warnings?per_page=3&category=anomaly_guard_review')->assertOk()->assertJsonPath('data.per_page', 3);
+        $this->actingAs($admin)->getJson('/api/package-b-test/summary')->assertOk()->assertJsonPath('data.eligible_equity_population', 1);
+        $this->getJson('/api/package-b-test/gaps?per_page=2&state=actionable&metric=revenue')->assertOk()->assertJsonPath('data.per_page', 2);
+        $this->getJson('/api/package-b-test/warnings?per_page=3&category=anomaly_guard_review')->assertOk()->assertJsonPath('data.per_page', 3);
         $this->assertSame($before, [$run->jobs()->count(), BootstrapCoverageGap::count(), BootstrapQualityWarning::count()]);
     }
 
@@ -132,7 +132,7 @@ class BootstrapCoverageOperationsTest extends TestCase
         $this->assertSame('ingestion_not_yet_attempted', $gap->reason);
         $failedRun = $this->runWithJob(['stock_id' => $stock->id, 'status' => FundamentalBootstrapJob::STATUS_FAILED, 'last_error' => 'Provider unavailable']);
         $service->reconcile($failedRun);
-        $this->assertSame('source_unavailable', $gap->reason);
+        $this->assertSame('source_unavailable', $gap->fresh()->reason);
         $this->assertSame('source_unavailable', \DB::table('stox_fund_bootstrap_gap_observations')->where('gap_id', $gap->id)->where('run_id', $failedRun->id)->value('observed_reason'));
         $admin = User::factory()->admin()->create();
         $service->acknowledgeGaps([$gap->id], $admin->id, null);

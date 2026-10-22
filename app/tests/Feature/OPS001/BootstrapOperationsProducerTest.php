@@ -187,6 +187,7 @@ class BootstrapOperationsProducerTest extends TestCase
 
     public function test_invalid_older_occurrences_do_not_starve_a_later_outcome_and_accepted_rows_leave_the_scan(): void
     {
+        CarbonImmutable::setTestNow('2026-10-22 08:00:00 UTC');
         $operator = User::factory()->create(['is_admin' => true]);
         $actor = User::factory()->create(['is_admin' => true]);
         $schedules = app(BootstrapScheduleOperationsService::class);

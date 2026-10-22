@@ -136,7 +136,7 @@ class BootstrapScheduleOperationsTest extends TestCase
 
     public function test_admin_read_endpoint_is_protected_and_does_not_mutate(): void
     {
-        Route::middleware(['api', 'auth:sanctum', 'admin'])->get('/_ops001_package_c/presets', [\App\Http\Controllers\Api\V1\BootstrapScheduleOperationsController::class, 'presets']);
+        Route::middleware(['api', 'auth:sanctum', 'admin'])->get('/api/_ops001_package_c/presets', [\App\Http\Controllers\Api\V1\BootstrapScheduleOperationsController::class, 'presets']);
         $admin = User::factory()->create(['is_admin' => true]);
         $investor = User::factory()->create(['is_admin' => false]);
         $before = [
@@ -144,8 +144,8 @@ class BootstrapScheduleOperationsTest extends TestCase
             'schedules' => \Illuminate\Support\Facades\DB::table('stox_bootstrap_schedules')->count(),
             'occurrences' => \Illuminate\Support\Facades\DB::table('stox_bootstrap_schedule_occurrences')->count(),
         ];
-        $this->actingAs($investor)->getJson('/_ops001_package_c/presets')->assertForbidden();
-        $this->actingAs($admin)->getJson('/_ops001_package_c/presets')->assertOk();
+        $this->actingAs($investor)->getJson('/api/_ops001_package_c/presets')->assertForbidden();
+        $this->actingAs($admin)->getJson('/api/_ops001_package_c/presets')->assertOk();
         $this->assertSame($before, [
             'presets' => \Illuminate\Support\Facades\DB::table('stox_bootstrap_presets')->count(),
             'schedules' => \Illuminate\Support\Facades\DB::table('stox_bootstrap_schedules')->count(),
@@ -228,7 +228,7 @@ class BootstrapScheduleOperationsTest extends TestCase
         $this->assertSame($admin->id, $runNowReceipt['actor_admin_id']);
         $this->assertSame($schedule->id, $runNowReceipt['schedule_id']);
         $this->assertSame($schedule->generation, $runNowReceipt['schedule_generation']);
-        $this->assertSame($schedule->version, $runNowReceipt['schedule_version']);
+        $this->assertSame($schedule->fresh()->version, $runNowReceipt['schedule_version']);
         $this->assertSame($schedule->configuration_snapshot, $runNowReceipt['configuration_snapshot']);
         $this->assertNull($runNowReceipt['preset_id']);
         $this->assertNull($runNowReceipt['preset_revision']);

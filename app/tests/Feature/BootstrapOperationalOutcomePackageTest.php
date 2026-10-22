@@ -133,7 +133,8 @@ class BootstrapOperationalOutcomePackageTest extends TestCase
         $due = now('UTC')->subHour()->startOfMinute();
         $configuration = ['scope' => 'all', 'stock_ids' => [], 'force' => false, 'reason' => null];
         $this->schedule(7101, (int) $actor->id, $configuration);
-        $actor->update(['is_admin' => false]);
+        $actor->forceFill(['is_admin' => false])->save();
+        $this->assertFalse($actor->fresh()->is_admin, 'The persisted actor must actually be revoked before testing cannot-start.');
         $definitiveId = $this->occurrence(7101, null, $due, 'cannot_start', (int) $actor->id, $configuration, 1, 1, 'actor_not_admin');
         $service = app(BootstrapOperationalOutcomeService::class);
         $this->assertTrue($service->notifyScheduledOccurrence($definitiveId, 'cannot_start'));
@@ -194,7 +195,7 @@ class BootstrapOperationalOutcomePackageTest extends TestCase
         ]);
         $priorRun = $this->outcomeRun();
         DB::table('stox_fund_bootstrap_quality_warnings')->insert([
-            'run_id' => $run->id, 'stock_id' => $stock->id, 'category' => '=HYPERLINK("evil")|facts_rejected_by_quality_gate',
+            'run_id' => $run->id, 'stock_id' => $stock->id, 'category' => '=HYPERLINK(1)|facts_rejected_by_quality_gate',
             'identity_hash' => hash('sha256', 'malicious-warning-'.$run->id), 'summary' => 'safe fixture', 'state' => 'unresolved',
             'created_at' => now(), 'updated_at' => now(),
         ]);
