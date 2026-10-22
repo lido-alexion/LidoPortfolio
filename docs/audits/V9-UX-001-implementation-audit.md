@@ -1,5 +1,50 @@
 # V9-UX-001 Implementation Audit
 
+**Status:** IMPLEMENTED / VERIFIED. **Acceptance date:** 2026-10-22.
+**Canonical scope:** [frozen UX001 §§1–20](../archive/specs/V9-User-Journey-Automation-E2E-Specification.md).
+**Detailed decision:** [finite 16-criterion / 22-guide ledger](V9-UX-001-finite-acceptance-ledger.md).
+
+## Final root acceptance — 2026-10-22
+
+Root closes the parent epic after adjudicating every agreed in-scope major Investor journey against the frozen specification, golden/user journeys, retained dated source reviews, corrections and named automation assertions. All 16 §19 completion criteria are accepted within the original scope. The 129-ID contract provides traceability; it is not used alone as semantic or behavioral proof.
+
+The two previously named outcomes are now satisfied: PR220's AI-02 copy/feedback automation was normally qualified and integrated after explicit PO hold release, and the separately authorized exactly-once real-Kite boundary check passed. No product-policy amendment, blanket all-V9 closure or successful ML/PIT training was required or inferred.
+
+### AI-02 exact-head and integration evidence
+
+[PR220](https://github.com/lido-alexion/LidoPortfolio/pull/220), exact `25b4ec9049ef2317384f291a7b149516df42be2a`, base `dbe0c12ae497b16dd39040067148ea91d386bd7e`, tree `3a6c1edc40e8b732cfcb8738e314336cc8db388b`, contains exactly two new test files / 250 additions. The PO lifted only PR220's hold. Existing local histories were preserved; the published two-parent normal reconciliation is a fast-forward with no force or history rewrite. Root independently reviewed the full current diff, product copy/feedback path and guide06 AI02 contract.
+
+[Canonical CI1520](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39747435956), attempt1, passed: 247 Node contracts, 585 component tests across 91 files, typecheck, 129 documentation topics, build, 472 Chromium passes and 57 governed skips in 28.9 minutes; 56 Python contracts passed. Full terminal job/log/retry/flaky/artifact review found no failed-test retry, flaky result or unhandled error; PHP/VPS/package/deploy were scope-skipped and the artifact collection was empty. Protected expected-head merge produced `349c3276e7b315ff3aa7a420e7ecfac6c02fc434` at 2026-10-22T08:59:34Z.
+
+The two component cases and desktop/mobile browser cases exercise actual visible copy/source, Helpful and Not helpful/comment controls, exact answer request-ID payloads, visible 503 failure and explicit retry. They assert one stream and three feedback requests, all business-response terminal bodies/statuses, same origin, blocked external traffic and no other business mutations. Generated diagnostic POSTs retain the shared strict schema and verified terminal202 cleanup. Clipboard interception proves the UI call and content contract, not the native operating-system clipboard. Product, economic, financial, provider and background-work policies are unchanged.
+
+### Normal release and production health
+
+Normal [master CI1521](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39751948159) qualifies `349c3276e7b315ff3aa7a420e7ecfac6c02fc434`: 247 Node contracts, 585 components across 91 files, typecheck, 129 documentation topics, build, 472 Chromium passes and 57 governed skips in 30.6 minutes, and 56 Python contracts; no failed-test retries or flaky results. Frontend job119734494335 took 33m41s, package job119749201608 took 40s and deploy job119749510964 took 2m05s. Release artifact12416580365 is 11,470,779 bytes, SHA-256 `be9293f6cee1886008f807b581673fc26707cbe48be09619258171bfad9e30df`; archive paths, hashes and modes passed. Authenticated authoritative master equality was confirmed at 09:34:40Z through the existing deployment-lock contract; runtime exact-SHA health passed at 09:34:54Z and 09:35:04Z. Mandatory public and authenticated smoke passed 2/2 on the first attempt in 31.6s. Smoke artifact12415548552 is 194,724 bytes, SHA-256 `b7ab7660e8b5e8ac612af8dd546831c92a506d02348cac89e8a1f5404706b444`. Run1521 completed at 09:36:21Z; independent public build-info and /up returned 200 at 09:36:49Z for exact349/build1521.
+
+Root accepted the full current frontend/Python/classifier/package/deploy logs, applicable outcomes, retry/flaky evidence and artifacts. Trusted exact-SHA packaging, authenticated authoritative current-master equality under the existing deployment lock, runtime exact SHA and mandatory public/authenticated non-destructive smoke passed. Scope-skipped jobs remain labelled as skips, not represented as executions. No manual rerun, dispatch, deployment, dummy change or gate waiver was used.
+
+### Separate real-Kite boundary and ordinary scheduled regression
+
+The explicit PO grant authorized exactly one existing read-only smoke. Its exclusive started marker was reserved before execution. The result at `2026-10-22T08:16:41.074217Z` records `passed=true`, `stage=complete`, `evidence_kind=real_kite_read_only`, `read_requests=3`, `commit_sha=acba369fd4458bf2f55d02fa896800d8115d652e` on accepted build1513. Root reviewed the small receipt; tokens, provider payloads, account identity and financial data were not exposed. No order, alteration, cancellation, cash action or reconciliation occurred. The existing connection was usable; no reconnect or credential request is needed.
+
+The grant is consumed. The later delta consists only of the two AI-02 tests and documentation; actual product, deployment and Kite-protocol sources remain equivalent. This is the explicit source-equivalence acceptance for the already completed real-boundary check, not permission to make another provider call after a test-only SHA.
+
+[Ordinary scheduled nightly24](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39732013335), event schedule, attempt1, exact `198a343fd8eacf5320d3f8d920f18dbc717b5d6d`, passed 470 Chromium cases and 57 governed skips in 29.6 minutes, with no failed-test retry/flaky result and artifacts empty. The full terminal log/jobs were reviewed. Maintained nightly workflow/verifier/configuration source remains unchanged; current normal CI qualifies the additional AI-02 cases. No claim is made that nightly24 executed tests added afterward. The frozen operational/relevant-source nightly requirement is accepted without inventing a rerun after every test/documentation SHA.
+
+### Final scope, boundaries and disposition
+
+The linked finite ledger consolidates 22 guide groups and 129 stable IDs, all major discovered Investor workflows, resolved documented deviations and required PO decisions. Existing happy/key recovery/error/cancel/auth assertions, representative Chromium desktop/mobile, bounded targeted visual baselines, key-page Axe/keyboard checks, deterministic known-state fixtures, safe setup/terminal teardown, synthetic broker lifecycle and retained failure evidence satisfy the frozen scope. Representative visual/a11y acceptance remains bounded; this is not full WCAG, every-page screenshot coverage or live financial persistence/delivery proof.
+
+All finite acceptance outcomes are complete. The V9 register records **IMPLEMENTED / VERIFIED**. Historical failed runs, timing incidents, old holds and dated campaign/Kite observations remain preserved below; this final decision supersedes their obsolete current-state gates without rewriting those receipts.
+
+FEAT056/057 historical acquisition/training acceptance, unrelated parallel V9 work and [OPS004/#251](https://github.com/lido-alexion/LidoPortfolio/issues/251) administration remain separate. No new provider/account/order/cash, infrastructure, ML/source-model-feed, service or permission authority is granted. PR210 and foreign176/186/187 are preserved. The old input-waiting reviewer and watcher effective-configuration work are operational followups, not unfinished UX001 product acceptance.
+
+## Retained historical evidence — superseded current-state summaries
+
+The following prior text is retained byte-for-byte after the original title. Its dated “in progress”, hold and missing-receipt statements describe the observations at those dates and are superseded by the final acceptance above.
+
+
 **Status:** IMPLEMENTATION IN PROGRESS. Build1513 and ordinary nightly24 are accepted. The [finite acceptance ledger](V9-UX-001-finite-acceptance-ledger.md) identifies two remaining authorization-dependent evidence steps: held AI-02 automation and controlled safe Kite. Final IMPLEMENTED status depends on those outcomes.
 **Audit date:** 2026-10-22
 **Canonical scope:** [frozen specification](../archive/specs/V9-User-Journey-Automation-E2E-Specification.md)
