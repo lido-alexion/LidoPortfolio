@@ -196,7 +196,7 @@ async function runToTraining(panel, active, fixture) {
     await expect(applyDialog.locator('[data-confirmation-title]')).toBeFocused();
     await applyDialog.getByRole('button', { name: 'Confirm apply' }).click();
     await expect(active.getByRole('heading', { name: 'Step 5: Run final preflight' })).toBeVisible();
-    await panel.getByRole('button', { name: 'Run final preflight' }).click();
+    await active.getByRole('button', { name: 'Run final preflight', exact: true }).click();
     await expect(active.getByRole('heading', { name: 'Step 6: Train candidates' })).toBeVisible();
     await panel.getByRole('button', { name: 'Start 1m/3m/6m candidate training' }).click();
     const trainingConfirmation = panel.getByRole('alertdialog');
