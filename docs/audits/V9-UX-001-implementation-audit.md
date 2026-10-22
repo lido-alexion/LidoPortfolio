@@ -1,6 +1,6 @@
 # V9-UX-001 Implementation Audit
 
-**Status:** IMPLEMENTATION IN PROGRESS. Build1513 is accepted. The [finite acceptance ledger](V9-UX-001-finite-acceptance-ledger.md) identifies the remaining AI-02 automation hold, relevant ordinary nightly, controlled safe Kite receipt and final adjudication.
+**Status:** IMPLEMENTATION IN PROGRESS. Build1513 and ordinary nightly24 are accepted. The [finite acceptance ledger](V9-UX-001-finite-acceptance-ledger.md) identifies two remaining authorization-dependent evidence steps: held AI-02 automation and controlled safe Kite. Final IMPLEMENTED status depends on those outcomes.
 **Audit date:** 2026-10-22
 **Canonical scope:** [frozen specification](../archive/specs/V9-User-Journey-Automation-E2E-Specification.md)
 **Journey sources:** [golden journeys](../user-journeys/)
@@ -19,6 +19,14 @@ The trusted exact-SHA release gate and archive path/hash/mode verification passe
 
 Earlier master 1510 failed at SSH host-key discovery before authentication, upload or activation. Normal release 1513 passed that path without a workflow, credential, firewall, service or permission change. This proves the recovered release outcome; it does not diagnose the earlier cause. Residual diagnosis and watcher/reviewer operational work remain [V9-OPS-004/#251](https://github.com/lido-alexion/LidoPortfolio/issues/251). Its spec/register documentation merged normally through [PR252](https://github.com/lido-alexion/LidoPortfolio/pull/252); implementation remains FROZEN / NOT STARTED.
 
+### Ordinary scheduled nightly qualified — 2026-10-22
+
+Root accepted [nightly24 /39732013335](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39732013335), event `schedule`, attempt1, exact source `198a343fd8eacf5320d3f8d920f18dbc717b5d6d`. Job119668964134 ran06:07:34–06:37:58 UTC; the run completed06:37:59. Full161,028-character terminal log, job outcomes and empty artifact collection were reviewed. All470 applicable Chromium cases passed, with57 governed skips,29.6minutes of browser execution and no failed-test retries or flaky results. The canonical setup verified Chromium and ran the maintained journey command; no manual dispatch was used.
+
+Nightly source198 differs from the accepted deployed acba application only by four documentation files. The complete app, scripts, deployment and workflow trees are byte-identical. This supplies relevant current application-source nightly evidence without claiming that198 is the deployed runtime SHA. Later documentation-only evidence updates do not require another application deployment or nightly rerun.
+
+Root reconciled the finite guide/criterion review record against the retained scoped reviews. The known AI-02 copy/feedback automation omission still prevents100% acceptance; it is not hidden by the passing suite. There is no new generic conformance, full-WCAG, all-page screenshot, PIT-training or parallel-epic closure task.
+
 ### Bounded acceptance and exact remaining work
 
 Root accepts the representative visual and lightweight accessibility requirement from existing source assertions, reviewed baselines and exact 1511 execution: account login/error, screener results, Strategy threshold configuration, recommendation review, pending execution, actual-fill entry and critical mobile Dashboard controls. Key-page Axe and keyboard checks, including opened STR-06 and REC-02 dialogs, pass on desktop/mobile. This is bounded regression acceptance, not all-page visual coverage or full WCAG certification.
@@ -28,9 +36,8 @@ Deterministic route fixtures use per-test contexts/state and guarded terminal cl
 Remaining actions:
 
 1. **AI-02 copy/feedback automation:** current `assistant.spec.js` checks Copy response visibility, not the actual copy/feedback actions. Existing [PR220](https://github.com/lido-alexion/LidoPortfolio/pull/220) contains the two targeted fixtures. Its explicit all-mutation/indirect scope hold remains binding. The established scope authorizer must resolve that hold before fresh-base/current-head qualification. Root does not copy, restore or merge held work.
-2. **Ordinary nightly:** qualify scheduled regression with relevant-source freshness/equivalence. Latest separately recorded ordinary run [39552983555](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39552983555) passed 21 October on old 5bc2159 and predates recent UI/browser corrections. No manual dispatch or universal nightly rerun after every documentation SHA is introduced.
-3. **Controlled safe Kite:** record an authorized integration-boundary receipt through the existing [three-GET protocol](V9-UX-001-real-kite-smoke-protocol.md). The 12 October/build 523 receipt remains historical. No current session status, expiry, provider request or new authority is inferred.
-4. **Final adjudication/register:** close the finite guide/criterion ledger only after the actual remaining outcomes pass. The V9 register remains IMPLEMENTATION IN PROGRESS.
+2. **Controlled safe Kite:** record an authorized integration-boundary receipt through the existing [three-GET protocol](V9-UX-001-real-kite-smoke-protocol.md). The 12 October/build 523 receipt remains historical. No current session status, expiry, provider request or new authority is inferred.
+3. **Final adjudication/register:** close the finite guide/criterion ledger after the two authorization-dependent outcomes pass. Existing scoped reviews have been consolidated; do not create an additional generic review programme. The V9 register remains IMPLEMENTATION IN PROGRESS.
 
 Successful PIT 1m/3m/6m training and missing fundamentals belong to FEAT-056/057 acceptance. They are not a UX001 blanket gate. Relevant readiness/blocked-state UI remains in scope; all parallel V9 epics need not close. No performance, full WCAG, all-page screenshot, generic test matrix or speculative bug hunt is added. Preserve held 210/220 and foreign 176/186/187.
 

@@ -19,6 +19,12 @@ Nightly must be operational and qualified with relevant-source freshness. Frozen
 
 Normal master release [CI39728312989 /1513](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39728312989) qualifies application source `acba369fd4458bf2f55d02fa896800d8115d652e`. Its final release receipt is recorded in the current implementation-audit section; PR qualification alone is not deployment proof.
 
+## Accepted ordinary nightly and current blocker disposition
+
+[Scheduled nightly24](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39732013335) passed on exact source `198a343fd8eacf5320d3f8d920f18dbc717b5d6d`:470 Chromium passes,57 governed skips,29.6minutes, no failed-test retries/flaky results and no failure artifacts. Root reviewed the full terminal log and job outcomes. The app, scripts, deploy and workflow trees equal accepted live acba/build1513; intervening changes are documentation only. The ordinary scheduled-regression requirement is qualified for the relevant application source. No new final-SHA rerun rule applies to this documentation receipt.
+
+Root's finite adjudication retains exactly two missing acceptance outcomes: AI-02's held automation package and the authorized real-Kite boundary receipt. These require the established scope authorizer and authorized operator respectively. Current instructions preserve PR220's all-mutation/indirect hold and prohibit automatic real provider/account actions. No executable producer exists for either outcome within current authority. The epic remains incomplete; it is not waiting on an external code reviewer, another ML campaign or all parallel epics.
+
 ## Frozen §19 evidence ledger
 
 | Criterion | Evidence and accepted boundary | Remaining action |
@@ -34,8 +40,8 @@ Normal master release [CI39728312989 /1513](https://github.com/lido-alexion/Lido
 |Lightweight accessibility|Axe assertions and keyboard checks on auth, results, strategy, review, pending and configured STR-06/REC-02 dialogs pass mobile/desktop in 1511.|Bounded requirement accepted; no full WCAG certification.|
 |Deterministic setup/teardown|Per-test browser contexts and per-invocation fixture state, exact origin/method guards, and diagnostic terminal-receipt afterEach checks. Backend isolated MySQL checks are separate.|Seed label alone is not database-seed proof; one worker is not order-independence proof. Frozen known-state requirements do not prescribe one database architecture.|
 |Deterministic brokerCI +real Kite|Mock lifecycle/partial/reject/cancel/uncertain/idempotent-retry scenarios remain separate from live boundary evidence.|Historical12 October/build 523 three-GET receipt retained; current accepted-source safe protocol receipt remains open. No current session expiry is inferred.|
-|BlockingCI/one retry/nightly|Canonical verification blocks E2E failures, retries1, and retains repeated flakiness as blocking. Ordinary scheduled runs are recorded separately.|Qualify ordinary regression against relevant current journey source; old 5bc alone predates recent UI/browser changes. Do not manually dispatch or invent a per-SHA blanket gate.|
-|Non-destructive production smoke|Normal release requires artifact verification, current-master equality under deployment lock, exact runtime SHA, public health and mandatory authenticated smoke.|Use the latest qualified release receipt; public-only health and green PR CI do not replace AUTH.|
+|BlockingCI/one retry/nightly|Canonical verification blocks E2E failures, retries1, and retains repeated flakiness as blocking. Ordinary scheduled runs are recorded separately.|Qualified by ordinary scheduled24 on relevant current source198; retain the receipt. No manual dispatch or per-documentation-SHA repeat.|
+|Non-destructive production smoke|Normal release requires artifact verification, current-master equality under deployment lock, exact runtime SHA, public health and mandatory authenticated smoke.|Qualified for live application acba/build1513; current documentation-only source has identical application/deployment trees. Public-only health does not replace the retained AUTH receipt.|
 |Failed-run diagnostics|Existing failure traces/screenshots/network/error contexts and full logs are retained;1505 artifact12392383191 SHA25651bcf1893edcd72ba79fb923d35f70c876ea10e856c32d5c43a2bcba88e463fb was independently reviewed.|Preserve useful evidence; no test analytics product.|
 |No real money-moving automation|Synthetic request guards and deterministic broker lifecycle; production read-only allowlist and separate guarded three-GET protocol.|Preserve; no real orders, cancellations, cash, provider or account action is authorized by this ledger.|
 |Documentation-to-test traceability|129-ID AST-backed contract, route map, guides and named source suites;current Node contract passes.|Publish truthful final audit/register status only after actual remaining outcomes pass; static traceability is not behavior proof.|
@@ -79,10 +85,10 @@ This table reuses the dated semantic inventories and accepted scoped reviews in 
 
 ## Finite closure actions and owners
 
-1. **Root:** accept the normal latest application-source release, exact SHA/public+mandatory AUTH; preserve failed attempts separately.
+1. **Root — complete:** build1513/acba release, exact SHA/public+mandatory AUTH accepted; failed1510 remains historical.
 2. **Existing hold scope authorizer, then root:** resolve AI-02's explicit PR220 hold before any mutation; obtain normal fresh-base/current-head qualification only if permitted. No duplicate worker or indirect restoration.
-3. **Root:** finish the above finite guide/evidence adjudication, naming actual remaining omissions rather than reopening a generic matrix.
-4. **Root:** qualify ordinary scheduled regression with relevant-source freshness/equivalence. It supplements normal CI and does not replace it.
+3. **Root — reconciled:** existing22-guide review record and criteria consolidated; AI-02 is the named remaining automation omission. No generic matrix or bug hunt is opened.
+4. **Root — complete:** ordinary nightly24 on source198 accepted with application-source equivalence to live acba; it supplements normal CI.
 5. **Authorized operator under existing protocol:** supply safe real-Kite boundary receipt; root records it. No new credentials/session status or provider-action authority is inferred.
 6. **Root:** update the audit and V9 register to IMPLEMENTED only when these actual UX criteria are proven.
 
