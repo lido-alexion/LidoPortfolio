@@ -164,13 +164,14 @@ Simple read-only navigation and ordinary settings belong in a later secondary/tr
 
 **Goal:** Record deployed 1m/3m/6m training evidence before lifecycle scheduling is allowed.
 
-1. As StoX Admin, open Settings → ML Scoring (`/settings/ml-scoring`) and refresh Production ML acceptance. Unknown evidence remains blocking.
-2. Queue campaign preflight for the desired cutoff; inspect each horizon's exact required source dates and blocking reasons.
-3. Upload official dated NSE CSV/ZIP sources in the private upload panel. Reselect the identical file to resume an incomplete upload. Refresh to see queued validation results; resume queued validation after interrupted dispatch if needed.
-4. Select sealed sources, queue a backfill dry-run, and review each date's mapping and provenance. Apply only after preview succeeds. Save the backfill ID to reopen status, resume completed progress, or cancel between dates.
-5. Create a fresh campaign preflight after resolving blockers. When all three horizons pass, explicitly choose Start 1m/3m/6m training.
-6. Refresh progress and inspect linked run, feature coverage/exclusion, calibration, fold, baseline and candidate evidence. Cancel requests cancellation through the existing training controls.
+1. As StoX Admin, open Settings → ML Scoring (`/settings/ml-scoring`). The seven-step wizard reloads saved server state; refresh is read-only and unknown evidence stays blocking.
+2. Check the build, registry, configuration, migrations and dedicated queue readiness. Run discovery preflight for the desired cutoff; inspect the three horizon cards and the exact missing dates. Preflight prepares/checks datasets but does not train.
+3. For each required date, select the official NSE source family and local CSV or single-CSV ZIP. Upload and validation remain explicit; reselect the identical file to resume an incomplete upload. StoX does not fetch an archive URL.
+4. Select one sealed, matching source for every required date and run the safe preview. Review per-date mapping and provenance evidence. Confirm Apply only after the preview completes successfully; conflicting or unproven history remains blocked and is not overwritten.
+5. After an apply, run a fresh final preflight. Continue only when all 1m/3m/6m horizons are ready. Changed inputs require fresh server evidence.
+6. Confirm the cutoff, build and configuration before explicitly starting the three candidate runs. Progress is durable; refresh or reopen the page to recover. Cancel uses the existing campaign/training cancellation controls and retains completed evidence.
+7. Review production qualification separately from candidate quality. Promotion, active models, lifecycle, schedules and drift remain separate explicit decisions; finishing the wizard only collapses the review.
 
 **Success condition:** The deployed campaign records production-qualified evidence for the current build/registry/configuration. Active models remain unchanged. Local fixture campaigns cannot qualify. Lifecycle/schedules/drift and model activation remain separate explicit controls.
 
-**Failure path:** Source conflicts or insufficient mapping never overwrite existing snapshots; missing fundamentals or runtime evidence remain blocking. Failed training requires a fresh campaign.
+**Failure path:** Source conflicts or insufficient mapping never overwrite existing snapshots; missing fundamentals or runtime evidence remain blocking. Failed training requires a fresh campaign. A browser disconnect or refresh does not start, resume or cancel work.

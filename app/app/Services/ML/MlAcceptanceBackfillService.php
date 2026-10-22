@@ -5,6 +5,7 @@ namespace App\Services\ML;
 use App\Exceptions\MlHistoricalUniverseProviderException;
 use App\Jobs\MlAcceptanceJob;
 use App\Models\V8\MlAcceptanceSource;
+use App\Models\V8\MlAcceptanceCampaign;
 use App\Models\V8\MlUniverseSnapshotBackfillRun;
 use App\Models\V8\MlUniverseSnapshotBoundary;
 use Illuminate\Support\Facades\Cache;
@@ -13,23 +14,47 @@ use Illuminate\Validation\ValidationException;
 
 class MlAcceptanceBackfillService
 {
-    public function preview(array $ids, int $actor): MlUniverseSnapshotBackfillRun
+    public function preview(array $ids, int $actor, ?string $campaignId = null): MlUniverseSnapshotBackfillRun
     {
         app(MlAcceptanceRuntime::class)->assertQueue();
         validator(['sources' => $ids], ['sources' => 'required|array|min:1|max:5000', 'sources.*' => 'required|uuid|distinct'])->validate();
         $sources = MlAcceptanceSource::query()->whereIn('id', $ids)->get()->sortBy(fn ($s) => $s->manifest['date']);
-        if ($sources->count() !== count($ids) || $sources->contains(fn ($s) => $s->status !== 'sealed')) {
-            $this->fail('Every source must be sealed.');
+        if ($sources->count() !== count($ids) || $sources->contains(fn ($s) => $s->status !== 'sealed'
+            || ! in_array($s->manifest['source'] ?? null, ['nse_mii_security_file', 'nse_cash_bhavcopy'], true))) {
+            $this->fail('Every source must be sealed and from a supported NSE source family.');
         }
         $dates = $sources->map(fn ($s) => $s->manifest['date'])->values()->all();
         if (count($dates) !== count(array_unique($dates))) {
             $this->fail('Select one source for each date.');
         }
+        if ($campaignId !== null) {
+            $campaign = MlAcceptanceCampaign::query()->findOrFail($campaignId);
+            if (! in_array($campaign->status, ['blocked', 'failed', 'cancelled'], true)) {
+                $this->fail('A source-remediation campaign is required to link this backfill.');
+            }
+            $reasons = collect($campaign->horizons ?? [])->flatMap(fn ($horizon) => $horizon['blocking_reasons'] ?? []);
+            if (! $reasons->contains(fn ($reason) => str_starts_with((string) $reason, 'snapshot_unproven:') || $reason === 'membership_coverage_incomplete')) {
+                $this->fail('This campaign has no historical source blocker to remediate.');
+            }
+            $expectedDates = [];
+            foreach ($campaign->horizons ?? [] as $horizon) {
+                foreach ($horizon['snapshots'] ?? [] as $date => $snapshot) {
+                    if (($snapshot['status'] ?? null) !== 'covered') { $expectedDates[$date] = true; }
+                }
+            }
+            $expectedDates = array_keys($expectedDates);
+            sort($expectedDates);
+            $selectedDates = $dates;
+            sort($selectedDates);
+            if ($expectedDates === [] || $selectedDates !== $expectedDates) {
+                $this->fail('Select exactly one sealed source for each date reported as missing by this campaign.');
+            }
+        }
         $run = MlUniverseSnapshotBackfillRun::query()->create([
             'universe_key' => MlHistoricalUniverseMembershipService::ACTIVE_ELIGIBLE_NSE,
             'source' => 'admin_sealed_nse', 'requested_dates' => $dates, 'processed_dates' => [], 'failed_dates' => [],
             'retry_counts' => [], 'status' => 'queued',
-            'acceptance' => ['mode' => 'preview', 'sources' => $sources->pluck('id')->values()->all(), 'cursor' => 0, 'results' => [], 'actor_id' => $actor,
+            'acceptance' => ['mode' => 'preview', 'campaign_id' => $campaignId, 'sources' => $sources->pluck('id')->values()->all(), 'cursor' => 0, 'results' => [], 'actor_id' => $actor,
                 'history' => app(MlAcceptanceRuntime::class)->history([], 'preview', $actor)],
         ]);
         MlAcceptanceJob::dispatch('backfill', (string) $run->id);

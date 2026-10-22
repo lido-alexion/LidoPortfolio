@@ -62,17 +62,60 @@ class MlProductionAcceptanceTest extends TestCase
         return $admin;
     }
 
-    private function source(string $contents = "SYMBOL,SERIES,ISIN,TIMESTAMP\nTEST,EQ,INE123,30-SEP-2026\n"): MlAcceptanceSource
+    private function source(string $contents = "SYMBOL,SERIES,ISIN,TIMESTAMP\nTEST,EQ,INE123,30-SEP-2026\n", string $date = '2026-09-30'): MlAcceptanceSource
     {
         $service = app(MlAcceptanceSourceService::class);
-        $source = $service->create(['version' => 1, 'source' => 'nse_cash_bhavcopy', 'date' => '2026-09-30',
-            'filename' => 'cm30SEP2026bhav.csv', 'bytes' => strlen($contents), 'sha256' => hash('sha256', $contents)], 1);
+        $filename = 'cm'.strtoupper(Carbon::parse($date)->format('dMY')).'bhav.csv';
+        $source = $service->create(['version' => 1, 'source' => 'nse_cash_bhavcopy', 'date' => $date,
+            'filename' => $filename, 'bytes' => strlen($contents), 'sha256' => hash('sha256', $contents)], 1);
         $this->sourceIds[] = $source->id;
         $service->chunk($source, 0, $contents, 1);
         $service->finalize($source, 1);
         $service->validateQueued($source->id);
 
         return $source->refresh();
+    }
+
+    public function test_linked_backfill_preview_requires_a_real_source_blocker_and_exact_campaign_dates(): void
+    {
+        $admin = $this->admin();
+        $campaign = MlAcceptanceCampaign::query()->create(['id' => (string) Str::uuid(), 'actor_id' => $admin->id,
+            'cutoff_date' => '2026-09-30', 'status' => 'blocked', 'identity' => [], 'active_models' => [],
+            'horizons' => ['1m' => ['snapshots' => ['2026-09-01' => ['status' => 'missing_or_unproven']], 'blocking_reasons' => ['snapshot_unproven:2026-09-01']]], 'history' => []]);
+        $source = $this->source("SYMBOL,SERIES,ISIN,TIMESTAMP\nTEST,EQ,INE123,01-SEP-2026\n", '2026-09-01');
+        $service = app(MlAcceptanceBackfillService::class);
+        $run = $service->preview([$source->id], $admin->id, $campaign->id);
+        $this->assertSame($campaign->id, $run->acceptance['campaign_id']);
+
+        $wrongDate = MlAcceptanceCampaign::query()->create(['id' => (string) Str::uuid(), 'actor_id' => $admin->id,
+            'cutoff_date' => '2026-09-30', 'status' => 'blocked', 'identity' => [], 'active_models' => [],
+            'horizons' => ['1m' => ['snapshots' => ['2026-09-02' => ['status' => 'missing_or_unproven']], 'blocking_reasons' => ['snapshot_unproven:2026-09-02']]], 'history' => []]);
+        try {
+            $service->preview([$source->id], $admin->id, $wrongDate->id);
+            $this->fail('A source for another campaign date was accepted.');
+        } catch (ValidationException) {
+            $this->assertDatabaseCount('stox_ml_universe_snapshot_backfill_runs', 1);
+        }
+
+        $unrelated = MlAcceptanceCampaign::query()->create(['id' => (string) Str::uuid(), 'actor_id' => $admin->id,
+            'cutoff_date' => '2026-09-30', 'status' => 'blocked', 'identity' => [], 'active_models' => [],
+            'horizons' => ['1m' => ['snapshots' => [], 'blocking_reasons' => ['historical_breadth_unavailable']]], 'history' => []]);
+        try {
+            $service->preview([$source->id], $admin->id, $unrelated->id);
+            $this->fail('A non-source blocker was accepted as a source-remediation campaign.');
+        } catch (ValidationException) {
+            $this->assertDatabaseCount('stox_ml_universe_snapshot_backfill_runs', 1);
+        }
+
+        $unsupported = MlAcceptanceSource::query()->create(['id' => (string) Str::uuid(), 'actor_id' => $admin->id, 'status' => 'sealed',
+            'manifest' => ['source' => 'unsupported_source_family', 'date' => '2026-09-01', 'filename' => 'unsupported.csv', 'bytes' => 10, 'sha256' => str_repeat('c', 64)],
+            'received' => 10, 'evidence' => [], 'history' => []]);
+        try {
+            $service->preview([$unsupported->id], $admin->id, $campaign->id);
+            $this->fail('An unsupported source family reached backfill preview.');
+        } catch (ValidationException) {
+            $this->assertDatabaseCount('stox_ml_universe_snapshot_backfill_runs', 1);
+        }
     }
 
     public function test_report_is_admin_only_read_only_and_explicit_about_unknown_evidence(): void
@@ -89,6 +132,257 @@ class MlProductionAcceptanceTest extends TestCase
         $this->assertDatabaseCount('stox_ml_acceptance_campaigns', 0);
         $this->assertDatabaseCount('stox_ml_lifecycle_schedules', 0);
         Bus::assertNothingDispatched();
+    }
+
+    public function test_wizard_read_model_is_admin_only_read_only_and_recovers_server_owned_step_state(): void
+    {
+        $this->getJson('/api/v1/admin/ml/acceptance/wizard')->assertUnauthorized();
+        $user = User::factory()->create();
+        $this->defaultPortfolioFor($user);
+        $this->actingAs($user)->getJson('/api/v1/admin/ml/acceptance/wizard')->assertForbidden();
+
+        $admin = $this->admin();
+        $this->actingAs($admin)->getJson('/api/v1/admin/ml/acceptance/wizard')->assertOk()
+            ->assertJsonPath('data.current_step', 2)
+            ->assertJsonCount(7, 'data.steps')
+            ->assertJsonPath('data.steps.1.status', 'action_required')
+            ->assertJsonPath('data.steps.1.reason_codes.0', 'preflight_not_recorded');
+        $this->assertDatabaseCount('stox_ml_acceptance_campaigns', 0);
+        $this->assertDatabaseCount('stox_ml_universe_snapshot_backfill_runs', 0);
+        Bus::assertNothingDispatched();
+
+        $campaign = MlAcceptanceCampaign::query()->create(['id' => (string) \Illuminate\Support\Str::uuid(), 'actor_id' => $admin->id,
+            'cutoff_date' => '2026-09-30', 'status' => 'blocked', 'identity' => [], 'active_models' => [],
+            'horizons' => ['1m' => ['reference_dates' => ['2026-09-01'], 'snapshots' => ['2026-09-01' => ['status' => 'missing_or_unproven']], 'blocking_reasons' => ['snapshot_unproven:2026-09-01']]], 'history' => []]);
+        $backfill = \App\Models\V8\MlUniverseSnapshotBackfillRun::query()->create(['universe_key' => 'active_eligible_nse', 'source' => 'admin_sealed_nse',
+            'requested_dates' => ['2026-09-01'], 'processed_dates' => [], 'failed_dates' => [], 'retry_counts' => [], 'status' => 'running',
+            'acceptance' => ['mode' => 'preview', 'campaign_id' => $campaign->id, 'cursor' => 0, 'results' => [], 'history' => []]]);
+        $payload = $this->actingAs($admin)->getJson('/api/v1/admin/ml/acceptance/wizard')->assertOk()
+            ->assertJsonPath('data.campaign.id', $campaign->id)
+            ->assertJsonPath('data.backfill.id', $backfill->id)
+            ->assertJsonPath('data.backfill.mode', 'preview')
+            ->assertJsonPath('data.steps.3.status', 'in_progress')
+            ->assertJsonMissingPath('data.backfill.last_error');
+        $this->assertStringNotContainsString(storage_path(), $payload->getContent());
+        Bus::assertNothingDispatched();
+    }
+
+    public function test_wizard_blocks_discovery_when_required_queue_configuration_is_not_ready(): void
+    {
+        config(['queue.connections.ml-acceptance.driver' => 'sync']);
+        $admin = $this->admin();
+
+        $this->actingAs($admin)->getJson('/api/v1/admin/ml/acceptance/wizard')->assertOk()
+            ->assertJsonPath('data.current_step', 1)
+            ->assertJsonPath('data.steps.0.status', 'blocked')
+            ->assertJsonPath('data.steps.0.reason_codes.0', 'queue_configuration_not_ready')
+            ->assertJsonPath('data.steps.1.status', 'action_required');
+        $this->assertDatabaseCount('stox_ml_acceptance_campaigns', 0);
+        Bus::assertNothingDispatched();
+    }
+
+    public function test_wizard_step_mapping_covers_ready_running_local_complete_and_non_source_blocked_campaigns(): void
+    {
+        $admin = $this->admin();
+        $id = (string) Str::uuid();
+        $horizons = array_fill_keys(['1m', '3m', '6m'], ['snapshots' => [], 'blocking_reasons' => []]);
+        $campaign = MlAcceptanceCampaign::query()->create(['id' => $id, 'actor_id' => $admin->id, 'cutoff_date' => '2026-09-30',
+            'status' => 'ready', 'identity' => app(MlAcceptanceRuntime::class)->identity(), 'active_models' => [], 'horizons' => $horizons, 'history' => []]);
+        $url = '/api/v1/admin/ml/acceptance/wizard';
+
+        $this->actingAs($admin)->getJson($url)->assertOk()
+            ->assertJsonPath('data.steps.2.status', 'not_required')
+            ->assertJsonPath('data.steps.3.status', 'not_required')
+            ->assertJsonPath('data.steps.4.status', 'complete')
+            ->assertJsonPath('data.steps.5.status', 'action_required')
+            ->assertJsonPath('data.current_step', 6);
+
+        $campaign->forceFill(['status' => 'preflight'])->save();
+        $this->getJson($url)->assertOk()->assertJsonPath('data.steps.1.status', 'in_progress')->assertJsonPath('data.current_step', 2);
+
+        $campaign->forceFill(['status' => 'training'])->save();
+        $this->getJson($url)->assertOk()->assertJsonPath('data.steps.5.status', 'in_progress')->assertJsonPath('data.current_step', 6);
+
+        $campaign->forceFill(['status' => 'local_complete'])->save();
+        $this->getJson($url)->assertOk()->assertJsonPath('data.steps.4.status', 'complete')
+            ->assertJsonPath('data.steps.5.status', 'complete')->assertJsonPath('data.steps.6.status', 'action_required')->assertJsonPath('data.current_step', 7);
+
+        $blockedHorizons = array_fill_keys(['1m', '3m', '6m'], ['snapshots' => [], 'blocking_reasons' => ['membership_coverage_incomplete']]);
+        $campaign->forceFill(['status' => 'blocked', 'horizons' => $blockedHorizons])->save();
+        $this->getJson($url)->assertOk()->assertJsonPath('data.steps.1.status', 'blocked')
+            ->assertJsonPath('data.steps.1.reason_codes.0', 'membership_coverage_incomplete')
+            ->assertJsonPath('data.steps.4.status', 'blocked')->assertJsonPath('data.current_step', 2);
+    }
+
+    public function test_wizard_binds_backfill_and_sources_to_the_current_campaign_and_reports_family_options(): void
+    {
+        $admin = $this->admin();
+        $oldId = (string) \Illuminate\Support\Str::uuid();
+        $oldCampaign = MlAcceptanceCampaign::query()->create(['id' => $oldId, 'actor_id' => $admin->id, 'cutoff_date' => '2026-09-20',
+            'status' => 'blocked', 'identity' => [], 'active_models' => [], 'horizons' => ['1m' => ['snapshots' => ['2026-09-01' => ['status' => 'missing_or_unproven']], 'blocking_reasons' => ['snapshot_unproven:2026-09-01']]], 'history' => [],
+            'created_at' => now()->subMinute(), 'updated_at' => now()->subMinute()]);
+        $oldBackfill = \App\Models\V8\MlUniverseSnapshotBackfillRun::query()->create(['universe_key' => 'active_eligible_nse', 'source' => 'admin_sealed_nse',
+            'requested_dates' => ['2026-09-01'], 'processed_dates' => [], 'failed_dates' => [], 'retry_counts' => [], 'status' => 'running',
+            'acceptance' => ['mode' => 'apply', 'campaign_id' => $oldId, 'cursor' => 0, 'results' => [], 'history' => []]]);
+
+        $currentId = (string) \Illuminate\Support\Str::uuid();
+        $currentCampaign = MlAcceptanceCampaign::query()->create(['id' => $currentId, 'actor_id' => $admin->id, 'cutoff_date' => '2026-09-25',
+            'status' => 'blocked', 'identity' => [], 'active_models' => [], 'horizons' => ['1m' => ['snapshots' => ['2026-09-02' => ['status' => 'missing_or_unproven']], 'blocking_reasons' => ['snapshot_unproven:2026-09-02']]], 'history' => []]);
+        $currentBackfill = \App\Models\V8\MlUniverseSnapshotBackfillRun::query()->create(['universe_key' => 'active_eligible_nse', 'source' => 'admin_sealed_nse',
+            'requested_dates' => ['2026-09-02'], 'processed_dates' => ['2026-09-02'], 'failed_dates' => [], 'retry_counts' => [], 'status' => 'completed',
+            'acceptance' => ['mode' => 'apply', 'campaign_id' => $currentId, 'cursor' => 1, 'results' => [], 'history' => []]]);
+        \App\Models\V8\MlAcceptanceSource::query()->create(['id' => (string) \Illuminate\Support\Str::uuid(), 'actor_id' => $admin->id, 'status' => 'sealed',
+            'manifest' => ['source' => 'nse_mii_security_file', 'date' => '2026-09-02', 'filename' => 'MII02092026.csv', 'bytes' => 10, 'sha256' => str_repeat('a', 64)], 'received' => 10, 'evidence' => [], 'history' => []]);
+        \App\Models\V8\MlAcceptanceSource::query()->create(['id' => (string) \Illuminate\Support\Str::uuid(), 'actor_id' => $admin->id, 'status' => 'sealed',
+            'manifest' => ['source' => 'unsupported_source_family', 'date' => '2026-09-02', 'filename' => 'other.csv', 'bytes' => 10, 'sha256' => str_repeat('b', 64)], 'received' => 10, 'evidence' => [], 'history' => []]);
+
+        $response = $this->actingAs($admin)->getJson('/api/v1/admin/ml/acceptance/wizard')->assertOk()
+            ->assertJsonPath('data.campaign.id', $currentCampaign->id)
+            ->assertJsonPath('data.backfill.id', $currentBackfill->id)
+            ->assertJsonPath('data.required_sources.0.date', '2026-09-02')
+            ->assertJsonPath('data.required_sources.0.accepted_families.0', 'nse_mii_security_file')
+            ->assertJsonPath('data.required_sources.0.accepted_families.1', 'nse_cash_bhavcopy')
+            ->assertJsonCount(1, 'data.required_sources.0.sources');
+        $this->assertSame('completed', $response->json('data.backfill.status'));
+        $this->assertNotSame($oldCampaign->id, $response->json('data.campaign.id'));
+        $this->assertNotSame($oldBackfill->id, $response->json('data.backfill.id'));
+        Bus::assertNothingDispatched();
+    }
+
+    public function test_wizard_endpoint_tracks_sealed_source_preview_apply_and_fresh_preflight_lineage(): void
+    {
+        $admin = $this->admin();
+        $campaign = MlAcceptanceCampaign::query()->create(['id' => (string) Str::uuid(), 'wizard_sequence' => 1, 'actor_id' => $admin->id,
+            'cutoff_date' => '2026-09-30', 'status' => 'blocked', 'identity' => [], 'active_models' => [],
+            'horizons' => ['1m' => ['snapshots' => ['2026-09-01' => ['status' => 'missing_or_unproven']],
+                'blocking_reasons' => ['snapshot_unproven:2026-09-01']]], 'history' => []]);
+        Stock::query()->create(['symbol' => 'TEST', 'name' => 'Test', 'exchange' => 'NSE', 'isin' => 'INE123']);
+        $source = $this->source("SYMBOL,SERIES,ISIN,TIMESTAMP\nTEST,EQ,INE123,01-SEP-2026\n", '2026-09-01');
+        $url = '/api/v1/admin/ml/acceptance/wizard';
+
+        $this->actingAs($admin)->getJson($url)->assertOk()
+            ->assertJsonPath('data.current_step', 3)
+            ->assertJsonPath('data.steps.2.status', 'action_required')
+            ->assertJsonPath('data.required_sources.0.sources.0.id', $source->id);
+
+        $preview = $this->postJson('/api/v1/admin/ml/acceptance/backfills/preview', ['sources' => [$source->id], 'campaign_id' => $campaign->id])
+            ->assertAccepted()->json('data');
+        $this->assertSame(4, $this->getJson($url)->assertOk()->json('data.current_step'));
+        $backfills = app(MlAcceptanceBackfillService::class);
+        $backfills->step($preview['id']);
+        $previewState = $this->getJson($url)->assertOk();
+        $previewState->assertJsonPath('data.backfill.can_apply', true);
+        $this->postJson('/api/v1/admin/ml/acceptance/backfills/'.$preview['id'].'/apply')->assertOk();
+        $backfills->step($preview['id']);
+        $backfills->step($preview['id']);
+        $applied = $this->getJson($url)->assertOk()->assertJsonPath('data.steps.3.status', 'complete')->json('data');
+
+        $this->postJson('/api/v1/admin/ml/acceptance/campaigns', [
+            'cutoff_date' => '2026-09-30', 'final_preflight' => true, 'remediation_backfill_id' => $preview['id'],
+        ])->assertAccepted();
+        $fresh = $this->getJson($url)->assertOk()
+            ->assertJsonPath('data.campaign.final_preflight', true)
+            ->assertJsonPath('data.backfill.id', $preview['id'])
+            ->assertJsonPath('data.steps.3.status', 'complete');
+        $fresh->assertJsonPath('data.steps.4.status', 'in_progress');
+        $this->assertNotSame($campaign->id, $fresh->json('data.campaign.id'));
+        $this->assertGreaterThan($campaign->wizard_sequence, MlAcceptanceCampaign::query()->findOrFail($fresh->json('data.campaign.id'))->wizard_sequence);
+        $this->assertSame($preview['id'], $applied['backfill']['id']);
+        $finalCampaignId = $fresh->json('data.campaign.id');
+        $this->mock(MlAcceptanceEvidenceService::class)->shouldReceive('preflight')->times(3)
+            ->andReturn(['blocking_reasons' => [], 'dataset_sha256' => str_repeat('c', 64)]);
+        $campaigns = app(MlAcceptanceCampaignService::class);
+        for ($i = 0; $i < 3; $i++) { $campaigns->step($finalCampaignId); }
+        $ready = $this->getJson($url)->assertOk()
+            ->assertJsonPath('data.campaign.status', 'ready')
+            ->assertJsonPath('data.steps.4.status', 'complete')
+            ->assertJsonPath('data.steps.5.status', 'action_required');
+        $this->postJson('/api/v1/admin/ml/acceptance/campaigns/'.$finalCampaignId.'/start')->assertOk();
+        $this->getJson($url)->assertOk()
+            ->assertJsonPath('data.campaign.status', 'training')
+            ->assertJsonPath('data.current_step', 6)
+            ->assertJsonPath('data.steps.5.status', 'in_progress')
+            ->assertJsonPath('data.steps.6.status', 'action_required');
+        $this->assertSame($finalCampaignId, $ready->json('data.campaign.id'));
+        $campaignModel = MlAcceptanceCampaign::query()->findOrFail($finalCampaignId);
+        foreach ($campaignModel->horizons as $evidence) {
+            MlTrainingRun::query()->findOrFail($evidence['run_id'])->forceFill(['status' => 'completed_rejected'])->save();
+        }
+        $campaigns->step($finalCampaignId);
+        $this->getJson($url)->assertOk()
+            ->assertJsonPath('data.campaign.status', 'failed')
+            ->assertJsonPath('data.steps.4.status', 'complete')
+            ->assertJsonPath('data.steps.5.status', 'failed')
+            ->assertJsonPath('data.steps.6.status', 'failed')
+            ->assertJsonPath('data.current_step', 6);
+        $campaignModel->forceFill(['status' => 'blocked', 'horizons' => [
+            '1m' => ['blocking_reasons' => ['canonical_dataset_or_coverage_unavailable']],
+            '3m' => ['blocking_reasons' => []], '6m' => ['blocking_reasons' => []],
+        ]])->save();
+        $this->getJson($url)->assertOk()
+            ->assertJsonPath('data.steps.1.status', 'complete')
+            ->assertJsonPath('data.steps.4.status', 'blocked')
+            ->assertJsonPath('data.steps.4.reason_codes.0', 'canonical_dataset_or_coverage_unavailable')
+            ->assertJsonPath('data.current_step', 5);
+
+        $cancelledId = $this->postJson('/api/v1/admin/ml/acceptance/campaigns', ['cutoff_date' => '2026-09-30'])
+            ->assertAccepted()->json('data.id');
+        $this->postJson('/api/v1/admin/ml/acceptance/campaigns/'.$cancelledId.'/cancel')->assertOk();
+        $this->getJson($url)->assertOk()
+            ->assertJsonPath('data.campaign.id', $cancelledId)
+            ->assertJsonPath('data.campaign.status', 'cancelled')
+            ->assertJsonPath('data.steps.1.status', 'cancelled')
+            ->assertJsonPath('data.current_step', 2);
+        Bus::assertDispatched(\App\Jobs\MlAcceptanceJob::class);
+        Bus::assertDispatchedTimes(MlRetrainJob::class, 3);
+    }
+
+    public function test_wizard_exposes_server_evidence_freshness_without_reconstructing_it(): void
+    {
+        $admin = $this->admin();
+        MlAcceptanceCampaign::query()->create(['id' => (string) \Illuminate\Support\Str::uuid(), 'actor_id' => $admin->id, 'cutoff_date' => '2026-09-30',
+            'status' => 'qualified', 'identity' => ['build_id' => 'old-build'], 'active_models' => [], 'horizons' => [], 'history' => [], 'qualified_at' => now()]);
+
+        $this->actingAs($admin)->getJson('/api/v1/admin/ml/acceptance/wizard')->assertOk()
+            ->assertJsonPath('data.campaign.status', 'qualified')
+            ->assertJsonPath('data.evidence_current', false)
+            ->assertJsonPath('data.steps.6.status', 'action_required');
+    }
+
+    public function test_failed_and_cancelled_campaigns_can_start_a_fresh_review_without_deleting_evidence(): void
+    {
+        $admin = $this->admin();
+        $previous = [];
+        foreach (['failed', 'cancelled'] as $index => $status) {
+            $previous[] = MlAcceptanceCampaign::query()->create([
+                'id' => (string) Str::uuid(), 'wizard_sequence' => $index + 1, 'actor_id' => $admin->id,
+                'cutoff_date' => '2026-09-30', 'status' => $status,
+                'identity' => ['build_id' => 'preserved-'.$status], 'active_models' => [],
+                'horizons' => ['1m' => ['run_id' => 100 + $index, 'status' => $status]],
+                'history' => [['action' => 'terminal_'.$status]],
+            ]);
+        }
+
+        $new = $this->actingAs($admin)->postJson('/api/v1/admin/ml/acceptance/campaigns', ['cutoff_date' => '2026-09-30'])
+            ->assertAccepted()
+            ->assertJsonPath('data.status', 'preflight')
+            ->json('data');
+
+        $this->assertNotSame($previous[1]->id, $new['id']);
+        $this->getJson('/api/v1/admin/ml/acceptance/wizard')->assertOk()
+            ->assertJsonPath('data.campaign.id', $new['id'])
+            ->assertJsonPath('data.campaign.status', 'preflight')
+            ->assertJsonPath('data.current_step', 2)
+            ->assertJsonPath('data.steps.1.status', 'in_progress');
+        foreach ($previous as $campaign) {
+            $this->assertDatabaseHas('stox_ml_acceptance_campaigns', [
+                'id' => $campaign->id,
+                'status' => $campaign->status,
+                'identity->build_id' => 'preserved-'.$campaign->status,
+            ]);
+        }
+        Bus::assertDispatched(\App\Jobs\MlAcceptanceJob::class);
+        Bus::assertNotDispatched(MlRetrainJob::class);
     }
 
     public function test_source_create_response_starts_at_zero_and_api_upload_can_finalize(): void
