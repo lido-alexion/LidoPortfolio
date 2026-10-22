@@ -1,13 +1,20 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { createApiFailureDiagnosticCollector, installApiFailureDiagnosticBoundary, handleApiFailureDiagnostic, registerApiFailureDiagnosticAfterEach } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticAfterEach(test);
+
+
 
 const VIEWPORTS = [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }];
 async function prepare(page, viewport, name, allowed) {
     await seedDeterministicJourney(page, `financial-source-${name}-${viewport.name}`); await page.setViewportSize({ width: viewport.width, height: viewport.height }); await installInvestorWorkflowApiMocks(page);
-    await page.route('**/api/settings', route => route.fulfill({ json: { data: { fee_components: [{ id: 'synthetic-zero', label: 'Synthetic zero fee', value: '0', mode: 'fixed', applies_buy: true, applies_sell: true, exchange: 'both', gst_percent: '0' }] } } })); const blocked = []; const writes = [];
-    return { blocked, writes, seal: () => page.route('**/*', route => {
+    await page.route('**/api/settings', route => route.fulfill({ json: { data: { fee_components: [{ id: 'synthetic-zero', label: 'Synthetic zero fee', value: '0', mode: 'fixed', applies_buy: true, applies_sell: true, exchange: 'both', gst_percent: '0' }] } } })); const blocked = []; const writes = []; const diagnosticReports = createApiFailureDiagnosticCollector(page);
+    await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
+    return { blocked, writes, seal: () => page.route('**/*', async route => {
         const request = route.request(); const url = new URL(request.url()); const write = /^(POST|PUT|PATCH|DELETE)$/.test(request.method());
+        if (await handleApiFailureDiagnostic(route, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports })) return;
         if (url.origin !== 'http://127.0.0.1:4177' || (write && url.pathname !== '/api/logs/frontend' && !allowed(request.method(), url.pathname))) { blocked.push(`${request.method()} ${url.pathname}`); return route.abort(); }
         if (write && url.pathname !== '/api/logs/frontend') writes.push({ method: request.method(), path: url.pathname, body: request.postDataJSON() }); return route.fallback();
     }) };
@@ -44,6 +51,76 @@ for (const viewport of VIEWPORTS) {
             await page.route('**/api/transactions?*', route => route.fulfill({ json: { data: [] } })); await page.route('**/api/corporate-actions/preview', route => { previews++; const body = route.request().postDataJSON(); expect(body).toMatchObject({ stock_id: 42, symbol: 'TCS', action_type: 'split', ratio_from: 1, ratio_to: 2, ex_date: '2026-10-01', split_scope: 'before_ex_date' }); if (previews === 1) return route.fulfill({ status: 503, json: { message: 'Synthetic preview unavailable.' } }); return route.fulfill({ json: { data: { action_type: 'split', blocking_errors: previews === 2 ? ['Synthetic blocking source inconsistency.'] : [], warnings: [], adjustments: [], post_state: { quantity: 4, avg_buy_price: 50, invested_amount: 200 } } } }); }); await page.route('**/api/corporate-actions', route => { expect(route.request().postDataJSON()).toMatchObject({ notes: 'Reviewed synthetic official-action placeholder', ratio_from: 1, ratio_to: 2 }); if (applyFails) { applyFails = false; return route.fulfill({ status: 503, json: { message: 'Synthetic application unavailable.' } }); } applied++; return route.fulfill({ status: 201, json: { data: { id: 31 } } }); });
             await safety.seal(); await page.goto('/holdings'); await menu(page, page.getByRole('row').filter({ hasText: 'TCS' }), 'Split/Bonus', viewport); await expect(page).toHaveURL('/corporate-action'); await page.getByLabel('Ex-date / record date', { exact: true }).fill('01-Oct-2026'); await page.getByLabel('Ex-date / record date', { exact: true }).press('Tab'); await page.getByRole('group', { name: 'Split transaction scope' }).getByRole('button', { name: 'On/before ex-date only', exact: true }).click(); await page.getByLabel('Notes (optional)', { exact: true }).fill('Synthetic action evidence'); await page.getByRole('button', { name: 'Apply', exact: true }).click(); await expect(page.getByText('Synthetic preview unavailable.', { exact: true })).toBeVisible(); expect(applied).toBe(0); await page.getByRole('button', { name: 'Preview', exact: true }).click(); await expect(page.getByRole('region', { name: 'Corporate action preview' }).getByRole('alert')).toContainText('Synthetic blocking source inconsistency.'); await page.getByRole('button', { name: 'Apply', exact: true }).click(); expect(safety.writes.filter(w => w.path === '/api/corporate-actions')).toHaveLength(0); await page.getByLabel('Notes (optional)', { exact: true }).fill('Reviewed synthetic official-action placeholder'); await expect(page.getByText('Run preview to see affected transactions and warnings.', { exact: true })).toBeVisible(); await page.getByRole('button', { name: 'Preview', exact: true }).click(); await expect(page.getByRole('region', { name: 'Corporate action preview' })).toContainText('Quantity: 4');
             page.once('dialog', async dialog => { expect(dialog.message()).toContain('updates your transaction ledger'); await dialog.dismiss(); }); await page.getByRole('button', { name: 'Apply', exact: true }).click(); expect(applied).toBe(0); expect(safety.writes.filter(w => w.path === '/api/corporate-actions')).toHaveLength(0); page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Apply', exact: true }).click(); await expect(page.getByText('Synthetic application unavailable.', { exact: true })).toBeVisible(); await expect(page.getByLabel('Notes (optional)', { exact: true })).toHaveValue('Reviewed synthetic official-action placeholder'); page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Apply', exact: true }).click(); await expect(page).toHaveURL('/transactions'); await expect(page.getByText('Corporate action applied.', { exact: true })).toBeVisible(); expect(applied).toBe(1); expect(previews).toBe(3); expect(safety.writes).toHaveLength(5); expect(safety.blocked).toEqual([]);
+        });
+        test(`E2E-30 keeps Apply preview-only until a current preview matches the edited inputs (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'E2E-30');
+            const safety = await prepare(page, viewport, 'corporate-preview-race', (method, path) => method === 'POST' && ['/api/corporate-actions/preview', '/api/corporate-actions'].includes(path));
+            await holdingReads(page, () => [unmanaged()]);
+            await page.route('**/api/transactions?*', route => route.fulfill({ json: { data: [] } }));
+            const previewBodies = [];
+            let startFirst; let finishFirst; let startSecond; let finishSecond;
+            const firstStarted = new Promise(resolve => { startFirst = resolve; });
+            const firstGate = new Promise(resolve => { finishFirst = resolve; });
+            const secondStarted = new Promise(resolve => { startSecond = resolve; });
+            const secondGate = new Promise(resolve => { finishSecond = resolve; });
+            let applyRequests = 0;
+            await page.route('**/api/corporate-actions/preview', async route => {
+                const body = route.request().postDataJSON(); previewBodies.push(body);
+                if (previewBodies.length === 1) {
+                    expect(body).toMatchObject({ stock_id: 42, symbol: 'TCS', ratio_from: 1, ratio_to: 2 });
+                    startFirst(); await firstGate;
+                    return route.fulfill({ json: { data: { action_type: 'split', blocking_errors: [], warnings: [], adjustments: [], post_state: { quantity: 202, avg_buy_price: 50 } } } });
+                }
+                if (previewBodies.length === 2) {
+                    expect(body).toMatchObject({ stock_id: 42, symbol: 'TCS', ratio_from: 1, ratio_to: 3 });
+                    startSecond(); await secondGate;
+                }
+                return route.fulfill({ json: { data: { action_type: 'split', blocking_errors: [], warnings: [], adjustments: [], post_state: { quantity: previewBodies.length === 2 ? 303 : 404, avg_buy_price: 50 } } } });
+            });
+            await page.route('**/api/corporate-actions', route => { applyRequests++; return route.fulfill({ status: 201, json: { data: { id: 31 } } }); });
+            await safety.seal(); await page.goto('/holdings');
+            await menu(page, page.getByRole('row').filter({ hasText: 'TCS' }), 'Split/Bonus', viewport);
+            await expect(page).toHaveURL('/corporate-action');
+            const panel = page.getByRole('region', { name: 'Corporate action preview' });
+            const firstResponse = page.waitForResponse(response => {
+                const url = new URL(response.url());
+                return url.origin === 'http://127.0.0.1:4177'
+                    && url.pathname === '/api/corporate-actions/preview'
+                    && response.request().method() === 'POST'
+                    && response.request().postDataJSON().ratio_to === 2;
+            });
+            await page.getByRole('button', { name: 'Preview', exact: true }).click(); await firstStarted;
+            await page.getByLabel('Ratio to').fill('3');
+            finishFirst();
+            const settledFirst = await firstResponse; await settledFirst.finished();
+
+            const secondResponse = page.waitForResponse(response => {
+                const url = new URL(response.url());
+                return url.origin === 'http://127.0.0.1:4177'
+                    && url.pathname === '/api/corporate-actions/preview'
+                    && response.request().method() === 'POST'
+                    && response.request().postDataJSON().ratio_to === 3;
+            });
+            await page.getByRole('button', { name: 'Preview', exact: true }).click(); await secondStarted;
+            await expect(panel).toContainText('Run preview to see affected transactions and warnings.');
+            await expect(panel).not.toContainText('Quantity: 202');
+            finishSecond();
+            const settledSecond = await secondResponse; await settledSecond.finished();
+            await expect(panel).toContainText('Quantity: 303');
+            expect(previewBodies).toHaveLength(2);
+
+            await page.getByLabel('Notes (optional)', { exact: true }).fill('Reviewed synthetic evidence');
+            await expect(panel).toContainText('Run preview to see affected transactions and warnings.');
+            await page.getByRole('button', { name: 'Apply', exact: true }).click();
+            await expect(panel).toContainText('Quantity: 404');
+            await expect(page.getByLabel('Ratio to')).toHaveValue('3');
+            await expect(page.getByLabel('Notes (optional)')).toHaveValue('Reviewed synthetic evidence');
+            expect(previewBodies).toHaveLength(3);
+            expect(previewBodies[2]).toMatchObject({ stock_id: 42, symbol: 'TCS', ratio_from: 1, ratio_to: 3, notes: 'Reviewed synthetic evidence' });
+            expect(applyRequests).toBe(0);
+            expect(safety.writes).toHaveLength(3);
+            expect(safety.writes.every(write => write.path === '/api/corporate-actions/preview')).toBe(true);
+            expect(safety.blocked).toEqual([]);
         });
     });
 }

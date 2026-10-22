@@ -8,6 +8,7 @@ use App\Models\PortfolioProfile;
 use App\Models\TradingStrategy;
 use App\Models\User;
 use App\Support\CommittedLoanAmount;
+use App\Services\Strategy\StrategyLifecycleAdmission;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -26,11 +27,27 @@ final class CapitalRequestApprovalService
     public function approve(CapitalRequest $request, TradingStrategy $lender, User $approver): CapitalLoan
     {
         $result = DB::transaction(function () use ($request, $lender, $approver) {
+            $lockedStrategies = app(StrategyLifecycleAdmission::class)->lockForNewObligation(
+                (int) $request->profile_id,
+                [(int) $request->borrower_strategy_id, (int) $lender->id],
+            )->keyBy('id');
             /** @var CapitalRequest $locked */
             $locked = CapitalRequest::query()
                 ->whereKey($request->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            if ((int) $locked->borrower_strategy_id !== (int) $request->borrower_strategy_id) {
+                throw ValidationException::withMessages([
+                    'capital_request' => ['The borrower strategy changed while the request was being approved.'],
+                ]);
+            }
+            $lender = $lockedStrategies->get((int) $lender->id);
+            if (! $lender) {
+                throw ValidationException::withMessages([
+                    'lender_strategy_id' => ['Lender strategy no longer belongs to this portfolio.'],
+                ]);
+            }
 
             if ($locked->loan()->exists()) {
                 throw ValidationException::withMessages([

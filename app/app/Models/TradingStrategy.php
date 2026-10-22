@@ -14,6 +14,8 @@ class TradingStrategy extends Model
 
     public const STATUS_ACTIVE = 'active';
 
+    public const STATUS_DISABLED = 'disabled';
+
     public const STATUS_ARCHIVED = 'archived';
 
     protected $fillable = [
@@ -44,6 +46,7 @@ class TradingStrategy extends Model
             'allocation_pct' => 'decimal:4',
             'is_factory' => 'boolean',
             'tags_json' => 'array',
+            'archived_at' => 'datetime',
         ];
     }
 
@@ -100,5 +103,10 @@ class TradingStrategy extends Model
     public function isEnabled(): bool
     {
         return $this->status === self::STATUS_ACTIVE;
+    }
+
+    public function isReadOnly(): bool
+    {
+        return $this->status === self::STATUS_ARCHIVED;
     }
 }

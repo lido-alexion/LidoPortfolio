@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import api, { getApiErrorMessage } from '../api';
 import FundamentalInsightsSignals from '../components/FundamentalInsightsSignals';
@@ -17,63 +17,128 @@ function resolveStockFromSearchRows(rows, symbol) {
 export default function FundamentalInsightsPage() {
     const { symbol: routeSymbol } = useParams();
     const navigate = useNavigate();
-    const [stock, setStock] = useState(null);
-    const [loading, setLoading] = useState(false);
+    const [resolvedStock, setResolvedStock] = useState(null);
+    const [read, setRead] = useState(null);
     const [refreshingAi, setRefreshingAi] = useState(false);
-    const [error, setError] = useState(null);
-    const [snapshot, setSnapshot] = useState(null);
     const [retryKey, setRetryKey] = useState(0);
+    const routeIdentityRef = useRef(routeSymbol || '');
+    const routeEpochRef = useRef(0);
+    const readGenerationRef = useRef(0);
+    const mountedRef = useRef(false);
 
-    const loadInsights = useCallback(async (stockId) => {
-        setLoading(true);
-        setError(null);
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+            readGenerationRef.current += 1;
+        };
+    }, []);
+
+    useLayoutEffect(() => {
+        routeIdentityRef.current = routeSymbol || '';
+        routeEpochRef.current += 1;
+        readGenerationRef.current += 1;
+    }, [routeSymbol]);
+
+    const loadInsights = useCallback(async (stockId, symbol, routeEpoch, generation) => {
+        const isCurrent = () => routeEpochRef.current === routeEpoch
+            && routeIdentityRef.current === symbol
+            && mountedRef.current
+            && readGenerationRef.current === generation;
+        if (!isCurrent()) return;
+        setRead(previous => ({
+            symbol,
+            stockId,
+            state: 'loading',
+            snapshot: previous?.symbol === symbol && previous?.stockId === stockId ? previous.snapshot : null,
+            error: null,
+        }));
         try {
             const params = { include_insights: 1, include_ai_insights: 1 };
             const res = await api.get(`/v1/stocks/${stockId}/fundamentals`, {
                 params,
                 skipErrorToast: true,
             });
-            setSnapshot(res?.data?.data ?? res?.data ?? null);
+            if (!isCurrent()) return;
+            const snapshot = res?.data?.data ?? res?.data ?? null;
+            if (snapshot == null) {
+                setRead(previous => ({
+                    symbol,
+                    stockId,
+                    state: 'unavailable',
+                    snapshot: previous?.symbol === symbol && previous?.stockId === stockId ? previous.snapshot : null,
+                    error: 'Fundamental snapshot is unavailable. Please retry.',
+                }));
+            } else {
+                setRead({ symbol, stockId, state: 'confirmed', snapshot, error: null });
+            }
         } catch (e) {
-            setSnapshot(null);
-            setError(getApiErrorMessage(e, 'Failed to load fundamental insights'));
+            if (!isCurrent()) return;
+            setRead(previous => ({
+                symbol,
+                stockId,
+                state: 'unavailable',
+                snapshot: previous?.symbol === symbol && previous?.stockId === stockId ? previous.snapshot : null,
+                error: getApiErrorMessage(e, 'Failed to load fundamental insights'),
+            }));
         } finally {
-            setLoading(false);
-            setRefreshingAi(false);
+            if (isCurrent()) setRefreshingAi(false);
         }
     }, []);
 
     useEffect(() => {
+        setRefreshingAi(false);
         if (!routeSymbol) {
-            setStock(null);
-            setSnapshot(null);
+            setResolvedStock(null);
+            setRead(null);
             return undefined;
         }
-        setError(null);
         let cancelled = false;
+        const symbol = routeSymbol;
+        const routeEpoch = routeEpochRef.current;
+        const generation = ++readGenerationRef.current;
+        const isCurrent = () => !cancelled
+            && routeEpochRef.current === routeEpoch
+            && routeIdentityRef.current === symbol
+            && mountedRef.current
+            && readGenerationRef.current === generation;
+        setRead(previous => ({
+            symbol,
+            stockId: previous?.symbol === symbol ? previous.stockId : null,
+            state: 'resolving',
+            snapshot: previous?.symbol === symbol ? previous.snapshot : null,
+            error: null,
+        }));
         (async () => {
             try {
-                const res = await api.get('/stocks/search', {
-                    params: { q: routeSymbol, limit: 8 },
+                const response = await api.get('/stocks/search', {
+                    params: { q: symbol, limit: 8 },
                     skipErrorToast: true,
                 });
-                const rows = res?.data?.data ?? res?.data ?? [];
-                const match = resolveStockFromSearchRows(rows, routeSymbol);
-                if (cancelled) return;
+                if (!isCurrent()) return;
+                const rows = response?.data?.data ?? response?.data ?? [];
+                const match = resolveStockFromSearchRows(rows, symbol);
                 if (!match?.id) {
-                    setStock(null);
-                    setError(`No stock found for symbol ${routeSymbol}`);
+                    setResolvedStock(previous => previous?.symbol === symbol ? null : previous);
+                    setRead({ symbol, stockId: null, state: 'unavailable', snapshot: null, error: `No stock found for symbol ${symbol}` });
                     return;
                 }
-                setStock(match);
-                await loadInsights(match.id);
+                setResolvedStock({ symbol, stock: match });
+                await loadInsights(match.id, symbol, routeEpoch, generation);
             } catch (e) {
-                if (!cancelled) {
-                    setError(getApiErrorMessage(e, 'Failed to resolve symbol'));
-                }
+                if (isCurrent()) setRead(previous => ({
+                    symbol,
+                    stockId: previous?.symbol === symbol ? previous.stockId : null,
+                    state: 'unavailable',
+                    snapshot: previous?.symbol === symbol ? previous.snapshot : null,
+                    error: getApiErrorMessage(e, 'Failed to resolve symbol'),
+                }));
             }
         })();
-        return () => { cancelled = true; };
+        return () => {
+            cancelled = true;
+            if (readGenerationRef.current === generation) readGenerationRef.current += 1;
+        };
     }, [routeSymbol, loadInsights, retryKey]);
 
     const onStockPick = (picked) => {
@@ -81,10 +146,23 @@ export default function FundamentalInsightsPage() {
         navigate(`${ROUTES.FUNDAMENTAL_INSIGHTS}/${picked.symbol}`);
     };
 
+    const currentStock = resolvedStock?.symbol === routeSymbol ? resolvedStock.stock : null;
+    const routeRead = read?.symbol === routeSymbol ? read : null;
+    const currentRead = routeRead && (
+        !currentStock || routeRead.stockId == null || routeRead.stockId === currentStock.id
+    ) ? routeRead : null;
+    const stock = currentStock;
+    const snapshot = currentRead?.snapshot ?? null;
+    const loading = Boolean(routeSymbol) && (!currentRead || ['resolving', 'loading'].includes(currentRead.state));
+    const error = currentRead?.state === 'unavailable' ? currentRead.error : null;
+    const stale = Boolean(snapshot && (loading || error));
+
     const onRefreshAi = async () => {
-        if (!stock?.id) return;
+        if (!stock?.id || !routeSymbol) return;
+        const generation = ++readGenerationRef.current;
+        const routeEpoch = routeEpochRef.current;
         setRefreshingAi(true);
-        await loadInsights(stock.id);
+        await loadInsights(stock.id, routeSymbol, routeEpoch, generation);
     };
 
     const insights = snapshot?.insights ?? null;
@@ -125,12 +203,13 @@ export default function FundamentalInsightsPage() {
             ) : null}
 
             {loading && !snapshot ? (
-                <div className="text-muted small mt-3">Loading insights…</div>
+                <div className="text-muted small mt-3" role="status">Loading insights…</div>
             ) : null}
 
             {stock && snapshot ? (
                 <div className="card mt-3">
                     <div className="card-body">
+                        {stale ? <p className="alert alert-warning small" role="status">Showing last confirmed fundamentals for {stock.symbol}; they may be out of date.</p> : null}
                         <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
                             <div>
                                 <h2 className="h5 mb-0">

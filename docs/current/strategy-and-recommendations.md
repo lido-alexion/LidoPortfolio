@@ -35,9 +35,17 @@ The product journey is **Create -> Draft/Edit -> Enable -> Run concurrently -> A
 | Draft/Edit | Editing produces versioned policy evidence. Saving configuration changes policy only; it does not generate recommendations. |
 | Enable | `active` means enabled for eligible pipeline runs. Enablement is non-exclusive. |
 | Run | The pipeline evaluates each enabled strategy independently, preserving strategy-scoped stale cancellation and output provenance. |
-| Archive | Archive removes a strategy from enabled runtime without silently deleting its historical evidence. The last enabled strategy is protected from archive. |
+| Disable | Pauses a strategy at any time. It stops future strategy recommendation generation, while existing recommendations, holdings, orders, reservations and settlement stay available for their established workflows. It does not sell, cancel, release funds, or alter financial records. Disabled configuration remains editable. |
+| Archive | Retires a strategy only after its strategy-owned open holdings, actionable recommendations, pending execution/orders, positive reserved funds, and unsettled capital/settlement obligations are resolved. The API returns exact blockers and existing resolution routes. It retains attributable history and the required retirement reason; archived configuration is read-only. |
+| Restore | Changes Archived to Disabled. It never enables directly; explicit Enable applies the existing readiness rules. |
 
-The strategy registry is the management surface; the editor selection is a UI selection, not a global exclusive-active switch. Current stored statuses are `draft`, `active`, and `archived`.
+The strategy registry is the management surface; the editor selection is a UI selection, not a global exclusive-active switch. Stored statuses are `draft`, `active` (enabled), `disabled` (paused), and `archived` (retired). Zero enabled strategies is valid. Reads and pipeline runs must not silently re-enable a disabled strategy.
+
+STR-14 authority and implementation owner mapping: [frozen PO decision](./str14-po-frozen-decision-20261021.md). Archive eligibility uses positive `portfolio_holdings.quantity` rows with the strategy ID/owner key; actionable recommendations through `portfolio_tos_recommendations.strategy_version_id` → `portfolio_tos_strategy_versions.strategy_id`; pending execution recommendation states, `portfolio_tos_orders` pending/in-flight records, and positive `reserved_amount` rows; active strategy-named `portfolio_tos_capital_requests`, outstanding normal/bridge loan balances, active nonzero recalls, and pending/available positive `portfolio_tos_pending_sale_proceeds`. All queries are restricted to the active profile and exact strategy owner. Completed history and zero settlement/loan balances are not blockers.
+
+Generation continues to select enabled strategies only. The normal execution, broker order reconciliation, transaction and settlement paths continue to process already persisted work for disabled strategies. In particular, current-state broker revalidation does not cancel a pending execution or release its reservation solely because its strategy was disabled.
+
+Archive and every writer that can create or reopen a strategy-owned blocker serialize on that exact strategy row before locking dependent records. Bilateral capital operations acquire borrower and lender strategy rows in ascending ID order. The writer rechecks current ownership after the barrier and refuses only a new obligation against Archived; Disabled strategies continue through existing execution and settlement workflows.
 
 **Current implementation anchors:** `app/app/Models/TradingStrategy.php`, `app/app/Services/Artifacts/StrategyArtifactRegistry.php`, `app/app/Http/Controllers/Api/V1/StrategyRegistryController.php`, and `app/resources/js/src/pages/StrategyRegistryPage.jsx`.
 
@@ -256,7 +264,7 @@ Portfolio/profile ownership scopes all strategy and recommendation reads/mutatio
 The API is active-portfolio scoped and must enforce the current user's ownership boundary.
 
 - **Strategy configuration:** `/api/v1/strategy`, `/summary`, `/catalogue`, `/screeners`, `/eligibility`, `/scoring`, `/exit`, `/factors`, `/thresholds`, `/portfolio-rules`, `/capital-allocation`, `/recommendation-rules`.
-- **Registry/lifecycle:** `/api/v1/strategy-registry/*` for list/detail/version/create/import/export/validate/activate/archive/selection operations.
+- **Registry/lifecycle:** `/api/v1/strategy-registry/*` for list/detail/version/create/import/export/validate/activate/disable/archive-blockers/archive/restore/selection operations. Archive requires a reason and returns ownership-scoped blockers with resolution routes.
 - **Recommendations:** `/api/v1/recommendations/generate`, `/api/v1/recommendations`, `/pending-execution`, `/{id}`, `/{id}/review`, `/{id}/reopen`, `/{id}/cancel-execution`, `/{id}/expire`, and `/{id}/reviews`.
 - **Preview/pipeline:** `/api/v1/analytics/stocks/{stock}/recommendation-preview` and `/api/v1/pipeline/run`.
 - **Capital-resolution handoff:** `/api/v1/capital/*` and `/api/v1/recommendations/{recommendation}/capital-resolution`.
@@ -271,7 +279,7 @@ Route names and detailed payload validation are implementation-owned; callers mu
 
 ## 27. Scheduling And Pipeline
 
-The decision pipeline may run explicitly or on its scheduled path. It requires a usable dataset/evaluation context, iterates enabled strategies, persists scoped recommendation output, hands notifications to the notification layer, and coordinates with recommendation execution lifetime.
+The decision pipeline may run explicitly or on its scheduled path. It requires a usable dataset/evaluation context, iterates enabled strategies, persists scoped recommendation output, hands notifications to the notification layer, and coordinates with recommendation execution lifetime. With zero enabled strategies it generates no new recommendation intent; existing pending execution, broker reconciliation, transaction, and settlement workflows still process their persisted records regardless of the owning strategy's enabled state.
 
 Scheduled runs require idempotency and lock/once-per-day safeguards. A partial profile failure must be observable and retryable without duplicating successful profile work or notifications. Scheduling does not authorize broker execution by itself.
 
@@ -313,7 +321,7 @@ The following automated tests provide meaningful evidence for the named behavior
 | Area | Test anchor | What it proves |
 | --- | --- | --- |
 | Multi-strategy | `app/tests/Feature/V3RecommendationGenerationTest.php` | Independently generates enabled strategies, preserves strategy-scoped stale work and holding isolation. |
-| Registry lifecycle | `app/tests/Feature/StrategyRegistryApiTest.php` | Default drafts, independent created strategies, validation/import/activation, and last-enabled archive protection. |
+| Registry lifecycle | `app/tests/Feature/StrategyRegistryApiTest.php`; `app/tests/Feature/StrategyLifecycleTest.php` | Zero-enabled/last-disable behavior, ownership-scoped archive blockers, reason/history, read-only archive, restore-to-disabled and sibling isolation. |
 | Configuration/scoring | `app/tests/Unit/StrategyConfigurationServiceTest.php` | Weight normalization, supported configuration handling, and score/gate behavior. |
 | Eligibility/data gates | `app/tests/Feature/DataQualityPipelineGatingTest.php` and `MarketGateRecommendationTest.php` | Data-quality gate and entry-block/exit-allow semantics. |
 | Evaluation/market mapping | `app/tests/Unit/Evaluation/MarketRegimeScoreMapperTest.php` and `EvaluationParameterOverrideTest.php` | Categorical regime mapping and parameter behavior. |
@@ -340,7 +348,7 @@ The following automated tests provide meaningful evidence for the named behavior
 | Capital state is wrong | Capital snapshot, target/remaining amount, lending coordinator, reservation, and accounting docs/services. |
 | Exit reason is wrong | `ExitPrecedenceEvaluator`, `ExitAttribution`, recommendation evidence, and transaction realization. |
 | Preview disagrees with list | Persisted-current versus newly derived preview state, selected strategy ID, evaluation-cycle availability, and `F137RecommendationPreviewTest`. |
-| Strategy cannot enable/archive | Registry validation, active profile ownership, enabled-count rule, and `StrategyRegistryApiTest`. |
+| Strategy cannot enable/archive | Enable readiness and active profile ownership; archive is blocked only by exact strategy-owned unresolved records. Zero enabled is allowed. |
 
 ## 32. Implementation Alignment Notes
 

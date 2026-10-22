@@ -1,8 +1,16 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
-import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { installInvestorWorkflowApiMocks as installInvestorWorkflowApiMocksBase } from './investorWorkflowApiMocks.js';
 import { installTosApiMocks } from './tosApiMocks.js';
 import { HOLD_INSIGHT, OPEN_BUY_RECOMMENDATION } from '../js/tos/fixtures/tosApi.js';
+import { handleApiFailureDiagnosticForPage, installApiFailureDiagnosticBoundaryForPage, registerApiFailureDiagnosticFixtureHooks } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticFixtureHooks(test);
+
+async function installInvestorWorkflowApiMocks(page, options) {
+    await installInvestorWorkflowApiMocksBase(page, options);
+    await installApiFailureDiagnosticBoundaryForPage(page);
+}
 
 const VIEWPORTS = [
     { name: 'mobile', width: 390, height: 844 },
@@ -425,9 +433,10 @@ test.describe('V9-UX-001 strategy journeys', () => {
                 return route.fallback();
             });
             const rejected = [];
-            await page.route('**/*', route => {
+            await page.route('**/*', async route => {
                 const request = route.request();
                 const url = new URL(request.url());
+                if (await handleApiFailureDiagnosticForPage(route, page, 'http://127.0.0.1:4177')) return;
                 const read = ['GET', 'HEAD'].includes(request.method());
                 const allowed = request.method() === 'POST' && ['/api/v1/pipeline/run', '/api/v1/recommendations/2151/review', '/api/v1/recommendations/2152/review', '/api/logs/frontend'].includes(url.pathname);
                 if (url.origin !== 'http://127.0.0.1:4177' || (!read && !allowed)) {
@@ -474,6 +483,7 @@ test.describe('V9-UX-001 strategy journeys', () => {
                     { ...HOLD_INSIGHT, id: 202, symbol: 'INFY', name: 'Infosys Limited', strategy_name: 'Quality Core', current_allocation_pct: 7, target_allocation_pct: 7, suggested_allocation_pct: 7 },
                 ],
             });
+            await installApiFailureDiagnosticBoundaryForPage(page);
             await page.goto('/recommendations');
             await page.getByLabel('Show HOLD insights').check();
             const sameStockRows = page.getByRole('row').filter({ hasText: 'INFY' });
@@ -486,7 +496,7 @@ test.describe('V9-UX-001 strategy journeys', () => {
             await expect(qualityHold).toContainText('Hold');
             await expect(qualityHold.getByRole('button', { name: 'Review' })).toHaveCount(0);
         });
-        test('STR-14 archives one strategy and retains its active sibling (' + viewport.name + ')', async ({ page }, testInfo) => {
+        test('STR-14 retires one resolved strategy with a reason and retains its active sibling (' + viewport.name + ')', async ({ page }, testInfo) => {
             journeyId(testInfo, 'STR-14');
             await seedDeterministicJourney(page, 'strategy-str14-' + viewport.name);
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -497,12 +507,14 @@ test.describe('V9-UX-001 strategy journeys', () => {
                 ],
             });
             let confirmationAccepted = false;
-            page.on('dialog', async (dialog) => { confirmationAccepted = true; await dialog.accept(); });
+            const archiveReason = 'Portfolio no longer uses this strategy';
+            page.on('dialog', async (dialog) => { confirmationAccepted = true; await dialog.accept(dialog.type() === 'prompt' ? archiveReason : undefined); });
             await page.goto('/strategy/registry');
             const row = page.getByRole('row', { name: /momentum-core.*Momentum Core/ });
             const archiveRequest = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/momentum-core/archive'));
-            await row.getByRole('button', { name: 'Archive' }).click();
-            await archiveRequest;
+            await row.getByRole('button', { name: 'Retire' }).click();
+            const request = await archiveRequest;
+            expect(request.postDataJSON()).toEqual({ reason: archiveReason });
             expect(confirmationAccepted).toBe(true);
             await expect(page.getByRole('row', { name: /momentum-core.*Momentum Core/ })).toContainText('archived');
             await expect(page.getByRole('row', { name: /quality-core.*Quality Core/ })).toContainText('active');

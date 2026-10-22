@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import { usePortfolio } from '../context/PortfolioContext';
 import usePortfolioChanged from '../hooks/usePortfolioChanged';
+import { getActivePortfolioId } from '../portfolio/activePortfolioStorage';
 import KnowledgeNoteGrid from '../components/knowledgeBoard/KnowledgeNoteGrid';
 import KnowledgeNoteEditorModal from '../components/knowledgeBoard/KnowledgeNoteEditorModal';
 import KnowledgeExportDialog from '../components/knowledgeBoard/KnowledgeExportDialog';
@@ -47,6 +48,13 @@ function useDebouncedValue(value, delayMs = 300) {
 export default function KnowledgeBoardPage() {
     const { activePortfolio } = usePortfolio();
     const profileId = activePortfolio?.id;
+    const ownershipRef = useRef({ profileId: profileId == null ? null : String(profileId), generation: 0, mounted: false, editorGeneration: 0 });
+    const pendingPortfolioRef = useRef({ active: false, profileId: null });
+    const ownership = () => ({ ...ownershipRef.current });
+    const owns = (owner) => ownershipRef.current.mounted
+        && ownershipRef.current.profileId === owner.profileId
+        && ownershipRef.current.generation === owner.generation;
+    const ownsEditor = (owner) => owns(owner) && owner.editorGeneration === ownershipRef.current.editorGeneration;
 
     const [notes, setNotes] = useState([]);
     const [tags, setTags] = useState([]);
@@ -54,6 +62,7 @@ export default function KnowledgeBoardPage() {
     const [loadError, setLoadError] = useState('');
     const [tagsError, setTagsError] = useState('');
     const notesRequestRef = useRef(0);
+    const searchRequestRef = useRef(0);
     const [search, setSearch] = useState('');
     const [wikiSearchResults, setWikiSearchResults] = useState([]);
     const [sort, setSort] = useState(() => loadSortPreference());
@@ -65,7 +74,11 @@ export default function KnowledgeBoardPage() {
     const [selectedIds, setSelectedIds] = useState(() => new Set());
     const [manualOrder, setManualOrder] = useState([]);
     const [editorOpen, setEditorOpen] = useState(false);
+    const [draftPortfolioIds, setDraftPortfolioIds] = useState([]);
     const [editorSessionKey, setEditorSessionKey] = useState(0);
+    const editorOwnerRef = useRef(null);
+    const editorSessionsRef = useRef(new Map());
+    const editorSessionIdRef = useRef(0);
     const [editingNote, setEditingNote] = useState(null);
     const [saving, setSaving] = useState(false);
     const [exportOpen, setExportOpen] = useState(false);
@@ -73,17 +86,56 @@ export default function KnowledgeBoardPage() {
 
     const debouncedSearch = useDebouncedValue(search, 300);
 
+    const resetForPortfolio = useCallback((nextProfileId) => {
+        const next = nextProfileId == null ? null : String(nextProfileId);
+        if (ownershipRef.current.profileId === next) return false;
+        if (editorOpen && ownershipRef.current.profileId != null) {
+            const session = editorOwnerRef.current?.session;
+            if (session && session.profileId === ownershipRef.current.profileId) {
+                session.note = editingNote ?? session.note;
+                editorSessionsRef.current.set(session.profileId, session);
+                setDraftPortfolioIds(current => current.includes(session.profileId) ? current : [...current, session.profileId]);
+            }
+        }
+        ownershipRef.current = { profileId: next, generation: ownershipRef.current.generation + 1, mounted: ownershipRef.current.mounted, editorGeneration: ownershipRef.current.editorGeneration + 1 };
+        setNotes([]); setTags([]); setLoadError(''); setTagsError(''); setWikiSearchResults([]);
+        setLoading(Boolean(next)); setSaving(false); setSelectedIds(new Set());
+        setFilterTagIds([]); setExportOpen(false);
+        setEditorOpen(false);
+        return true;
+    }, [editorOpen, editingNote]);
+
+    useLayoutEffect(() => {
+        const committed = profileId == null ? null : String(profileId);
+        if (pendingPortfolioRef.current.active) {
+            if (pendingPortfolioRef.current.profileId !== committed) return;
+            pendingPortfolioRef.current = { active: false, profileId: null };
+        }
+        resetForPortfolio(profileId);
+    }, [profileId, resetForPortfolio]);
+
     const loadTags = useCallback(async () => {
+        if (profileId == null) return;
+        const owner = ownership();
+        if (owner.profileId !== String(profileId)) return;
         setTagsError('');
         try {
             const res = await api.get('/knowledge-board/tags');
+            if (!owns(owner)) return;
             setTags(res.data.data || []);
         } catch {
+            if (!owns(owner)) return;
             setTagsError('Knowledge tags could not be loaded.');
         }
-    }, []);
+    }, [profileId]);
 
     const loadNotes = useCallback(async () => {
+        if (profileId == null) {
+            setLoading(false);
+            return;
+        }
+        const owner = ownership();
+        if (owner.profileId !== String(profileId)) return;
         const requestId = ++notesRequestRef.current;
         setLoading(true);
         setLoadError('');
@@ -97,14 +149,14 @@ export default function KnowledgeBoardPage() {
                     sort: sort === 'manual' ? 'updated_at' : sort,
                 },
             });
-            if (requestId === notesRequestRef.current) setNotes(res.data.data || []);
+            if (owns(owner) && requestId === notesRequestRef.current) setNotes(res.data.data || []);
         } catch {
-            if (requestId === notesRequestRef.current) {
+            if (owns(owner) && requestId === notesRequestRef.current) {
                 setLoadError('Knowledge notes could not be loaded.');
                 showToast('Failed to load knowledge notes.', 'danger');
             }
         } finally {
-            if (requestId === notesRequestRef.current) setLoading(false);
+            if (owns(owner) && requestId === notesRequestRef.current) setLoading(false);
         }
     }, [debouncedSearch, showArchived, tagMatch, filterTagIds, sort, profileId]);
 
@@ -117,11 +169,14 @@ export default function KnowledgeBoardPage() {
     }, [loadNotes]);
 
     useEffect(() => {
+        const owner = ownership();
+        if (owner.profileId !== (profileId == null ? null : String(profileId))) return;
+        const requestId = ++searchRequestRef.current;
         if (!debouncedSearch.trim()) { setWikiSearchResults([]); return; }
         api.get('/knowledge-board/search', { params: { q: debouncedSearch } })
-            .then((response) => setWikiSearchResults((response.data?.data || []).filter((item) => item.type === 'wiki_page')))
-            .catch(() => setWikiSearchResults([]));
-    }, [debouncedSearch]);
+            .then((response) => { if (owns(owner) && requestId === searchRequestRef.current) setWikiSearchResults((response.data?.data || []).filter((item) => item.type === 'wiki_page')); })
+            .catch(() => { if (owns(owner) && requestId === searchRequestRef.current) setWikiSearchResults([]); });
+    }, [debouncedSearch, profileId]);
 
     useEffect(() => {
         if (profileId) {
@@ -130,10 +185,15 @@ export default function KnowledgeBoardPage() {
     }, [profileId]);
 
     usePortfolioChanged(() => {
-        setSelectedIds(new Set());
-        loadTags();
-        loadNotes();
+        const selectedProfileId = getActivePortfolioId();
+        pendingPortfolioRef.current = { active: true, profileId: selectedProfileId == null ? null : String(selectedProfileId) };
+        resetForPortfolio(selectedProfileId);
     });
+
+    useEffect(() => {
+        ownershipRef.current.mounted = true;
+        return () => { ownershipRef.current.mounted = false; ownershipRef.current.generation += 1; ownershipRef.current.editorGeneration += 1; };
+    }, []);
 
     const displayNotes = useMemo(() => {
         if (sort !== 'manual') {
@@ -167,38 +227,69 @@ export default function KnowledgeBoardPage() {
     const clearSelection = () => setSelectedIds(new Set());
 
     const openNewNote = () => {
+        if (profileId == null) return;
+        const owner = ownership();
+        const nextSessionKey = editorSessionKey + 1;
+        const session = { id: ++editorSessionIdRef.current, profileId: owner.profileId, sessionKey: nextSessionKey, note: null };
+        editorSessionsRef.current.set(owner.profileId, session);
+        setDraftPortfolioIds(current => current.filter(id => id !== owner.profileId));
         setEditingNote(null);
-        setEditorSessionKey((key) => key + 1);
+        setEditorSessionKey(nextSessionKey);
+        editorOwnerRef.current = { ...owner, editorGeneration: ownershipRef.current.editorGeneration + 1, session };
+        ownershipRef.current.editorGeneration += 1;
         setEditorOpen(true);
     };
 
     const openEditNote = (note) => {
+        const owner = ownership();
+        const nextSessionKey = editorSessionKey + 1;
+        const session = { id: ++editorSessionIdRef.current, profileId: owner.profileId, sessionKey: nextSessionKey, note };
+        editorSessionsRef.current.set(owner.profileId, session);
+        setDraftPortfolioIds(current => current.filter(id => id !== owner.profileId));
         setEditingNote(note);
-        setEditorSessionKey((key) => key + 1);
+        setEditorSessionKey(nextSessionKey);
+        editorOwnerRef.current = { ...owner, editorGeneration: ownershipRef.current.editorGeneration + 1, session };
+        ownershipRef.current.editorGeneration += 1;
         setEditorOpen(true);
     };
 
-    const createTag = async (name) => {
+    const createTag = async (name, owner = ownership()) => {
         try {
             const res = await api.post('/knowledge-board/tags', { name });
+            if (!owns(owner)) return null;
             const created = res.data.data;
             setTags((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
             return created;
         } catch (err) {
+            if (!owns(owner)) return null;
             const message = err?.response?.data?.errors?.name?.[0] || 'Could not create tag.';
             showToast(message, 'danger');
             return null;
         }
     };
 
-    const saveNote = async (payload, { isAutosave = false } = {}) => {
+    const saveNote = async (payload, { isAutosave = false } = {}, owner = editorOwnerRef.current) => {
+        const session = owner?.session;
+        const editorKey = session?.sessionKey;
+        if (!session || !editorOpen || !ownsEditor(owner)) return false;
+        const isSessionCurrent = () => ownershipRef.current.mounted && editorSessionsRef.current.get(session.profileId) === session;
+        const isCurrentEditor = () => editorOpen && ownsEditor(owner) && editorSessionKey === editorKey && isSessionCurrent() && editorOwnerRef.current?.session === session;
+        const isVisibleSession = () => ownershipRef.current.mounted && editorOpen && ownershipRef.current.profileId === session.profileId && editorOwnerRef.current?.session === session;
+        // A suspended session can be resumed before its request settles. Keep the
+        // operation on the session itself so the resumed editor cannot duplicate it.
+        if (session.pendingWrite) return false;
+        const operation = {};
+        session.pendingWrite = operation;
         if (!isAutosave) {
             setSaving(true);
         }
         try {
-            if (editingNote?.id) {
-                const res = await api.put(`/knowledge-board/notes/${editingNote.id}`, payload);
+            if (session.note?.id) {
+                const res = await api.put(`/knowledge-board/notes/${session.note.id}`, payload);
                 const updated = res.data.data;
+                if (isSessionCurrent()) session.note = updated;
+                if (isVisibleSession() && isSessionCurrent()) setEditingNote(updated);
+                if (!isCurrentEditor()) return false;
                 setNotes((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
                 if (!isAutosave) {
                     setEditingNote(updated);
@@ -206,6 +297,9 @@ export default function KnowledgeBoardPage() {
             } else {
                 const res = await api.post('/knowledge-board/notes', payload);
                 const created = res.data.data;
+                if (isSessionCurrent()) session.note = created;
+                if (isVisibleSession()) setEditingNote(created);
+                if (!isCurrentEditor()) return false;
                 setNotes((prev) => [created, ...prev]);
                 setEditingNote(created);
                 if (profileId) {
@@ -219,6 +313,7 @@ export default function KnowledgeBoardPage() {
             }
             return true;
         } catch (err) {
+            if (!isCurrentEditor()) return false;
             const message = err?.response?.data?.errors?.content_html?.[0]
                 || err?.response?.data?.errors?.title?.[0]
                 || err?.response?.data?.message
@@ -228,66 +323,119 @@ export default function KnowledgeBoardPage() {
             }
             return false;
         } finally {
+            if (session.pendingWrite === operation) session.pendingWrite = null;
             if (!isAutosave) {
-                setSaving(false);
+                if (isCurrentEditor()) setSaving(false);
             }
         }
     };
 
-    const patchNote = async (note, changes) => {
+    const boundEditorOwner = editorOwnerRef.current;
+    const saveEditorNote = (payload, options) => saveNote(payload, options, boundEditorOwner);
+    const createEditorTag = (name) => (boundEditorOwner && ownsEditor(boundEditorOwner)
+        ? createTag(name, boundEditorOwner)
+        : Promise.resolve(null));
+    const deleteEditorNote = (note) => (boundEditorOwner && ownsEditor(boundEditorOwner)
+        ? deleteNote(note, { closeEditor: true }, boundEditorOwner)
+        : Promise.resolve());
+    const closeEditorSession = () => {
+        if (!boundEditorOwner || !ownsEditor(boundEditorOwner)) return;
+        if (boundEditorOwner.session.pendingWrite) {
+            showToast('A note save is still pending. Keep the editor open until it finishes.');
+            return;
+        }
+        if (editorSessionsRef.current.get(boundEditorOwner.profileId) === boundEditorOwner.session) {
+            editorSessionsRef.current.delete(boundEditorOwner.profileId);
+        }
+        ownershipRef.current.editorGeneration += 1;
+        setEditorOpen(false);
+        setEditingNote(null);
+    };
+
+    const resumeNoteDraft = () => {
+        const profileKey = ownershipRef.current.profileId;
+        const session = editorSessionsRef.current.get(profileKey);
+        if (!session) return;
+        ownershipRef.current.editorGeneration += 1;
+        editorOwnerRef.current = { ...ownership(), editorGeneration: ownershipRef.current.editorGeneration, session };
+        setEditingNote(session.note);
+        setEditorSessionKey(session.sessionKey);
+        setDraftPortfolioIds(current => current.filter(id => id !== profileKey));
+        setEditorOpen(true);
+    };
+
+    const patchNote = async (note, changes, owner = ownership()) => {
         try {
             const res = await api.put(`/knowledge-board/notes/${note.id}`, changes);
+            if (!owns(owner)) return false;
             const updated = res.data.data;
             setNotes((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
             return true;
         } catch {
+            if (!owns(owner)) return false;
             showToast('Could not update note.', 'danger');
             return false;
         }
     };
 
     const duplicateNote = async (note) => {
+        const owner = ownership();
         try {
             const res = await api.post(`/knowledge-board/notes/${note.id}/duplicate`);
+            if (!owns(owner)) return;
             const copy = res.data.data;
             setNotes((prev) => [copy, ...prev]);
             showToast('Note duplicated.');
         } catch {
+            if (!owns(owner)) return;
             showToast('Could not duplicate note.', 'danger');
         }
     };
 
     const archiveNote = async (note) => {
-        if (await patchNote(note, { is_archived: true })) {
+        const owner = ownership();
+        if (await patchNote(note, { is_archived: true }, owner) && owns(owner)) {
             setNotes((prev) => prev.filter((row) => row.id !== note.id));
             showToast('Note archived.');
         }
     };
 
-    const deleteNote = async (note, { closeEditor = false } = {}) => {
+    const deleteNote = async (note, { closeEditor = false } = {}, owner = ownership()) => {
         const label = notePreviewText(note.content_html, 60) || 'this note';
         if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) {
             return;
         }
         try {
             await api.delete(`/knowledge-board/notes/${note.id}`);
+            if (!owns(owner)) return;
+            const ownsEditorSession = () => closeEditor
+                && ownsEditor(owner)
+                && editorOwnerRef.current?.session === owner.session
+                && editorSessionsRef.current.get(owner.profileId) === owner.session;
+            const closeOriginatingEditor = ownsEditorSession();
             setNotes((prev) => prev.filter((row) => row.id !== note.id));
             setSelectedIds((prev) => {
                 const next = new Set(prev);
                 next.delete(String(note.id));
                 return next;
             });
-            if (closeEditor) {
+            if (closeOriginatingEditor) {
+                if (owner.session && editorSessionsRef.current.get(owner.profileId) === owner.session) {
+                    editorSessionsRef.current.delete(owner.profileId);
+                }
+                ownershipRef.current.editorGeneration += 1;
                 setEditorOpen(false);
                 setEditingNote(null);
             }
-            showToast('Note deleted.');
+            if (!closeEditor || closeOriginatingEditor) showToast('Note deleted.');
         } catch {
+            if (!owns(owner) || (closeEditor && (!ownsEditor(owner) || editorOwnerRef.current?.session !== owner.session))) return;
             showToast('Could not delete note.', 'danger');
         }
     };
 
     const bulkAction = async (action) => {
+        const owner = ownership();
         const ids = [...selectedIds];
         if (!ids.length) {
             return;
@@ -297,10 +445,13 @@ export default function KnowledgeBoardPage() {
         }
         try {
             await api.post('/knowledge-board/notes/bulk', { action, note_ids: ids.map(Number) });
+            if (!owns(owner)) return;
             await loadNotes();
+            if (!owns(owner)) return;
             clearSelection();
             showToast(action === 'delete' ? 'Notes deleted.' : 'Notes archived.');
         } catch {
+            if (!owns(owner)) return;
             showToast('Bulk action failed.', 'danger');
         }
     };
@@ -499,10 +650,14 @@ export default function KnowledgeBoardPage() {
             </div>
             )}
 
+            {draftPortfolioIds.includes(String(profileId)) && !editorOpen ? (
+                <button type="button" className="btn btn-sm btn-outline-primary justify-self-start" onClick={resumeNoteDraft}>Resume note draft</button>
+            ) : null}
+
             {wikiSearchResults.length ? <div className="card"><div className="card-header">Wiki Page results</div><div className="list-group list-group-flush">{wikiSearchResults.map((result) => <Link key={result.id} to={`/knowledge-board/wiki/${result.id}`} className="list-group-item list-group-item-action"><strong>{result.title}</strong><div className="small text-muted">Wiki Page · {result.context}</div><div className="small">{result.excerpt}</div></Link>)}</div></div> : null}
 
-            {tagsError && <div className="alert alert-danger" role="alert"><p>{tagsError}</p><button type="button" className="btn btn-sm btn-outline-primary" onClick={loadTags}>Retry knowledge tags</button></div>}
-            {loadError ? <div className="alert alert-danger" role="alert"><p>{loadError}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={loadNotes}>Retry knowledge notes</button></div> : loading ? (
+            {profileId == null ? <div className="text-muted small px-1" role="status">Waiting for a selected portfolio</div> : tagsError && <div className="alert alert-danger" role="alert"><p>{tagsError}</p><button type="button" className="btn btn-sm btn-outline-primary" onClick={loadTags}>Retry knowledge tags</button></div>}
+            {profileId != null && (loadError ? <div className="alert alert-danger" role="alert"><p>{loadError}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={loadNotes}>Retry knowledge notes</button></div> : loading ? (
                 <div className="text-muted small px-1">Loading notes…</div>
             ) : displayNotes.length === 0 ? (
                 <div className="card">
@@ -525,18 +680,20 @@ export default function KnowledgeBoardPage() {
                     onDelete={deleteNote}
                     onChangePalette={(note, paletteId) => patchNote(note, { color_palette: paletteId })}
                 />
-            )}
+            ))}
 
             <KnowledgeNoteEditorModal
                 open={editorOpen}
                 sessionKey={editorSessionKey}
+                sessionId={editorOwnerRef.current?.session?.id ?? null}
+                portfolioId={profileId}
                 note={editingNote}
                 allTags={tags}
                 saving={saving}
-                onClose={() => setEditorOpen(false)}
-                onSave={saveNote}
-                onDelete={(note) => deleteNote(note, { closeEditor: true })}
-                onCreateTag={createTag}
+                onClose={closeEditorSession}
+                onSave={saveEditorNote}
+                onDelete={deleteEditorNote}
+                onCreateTag={createEditorTag}
             />
 
             {exportOpen ? (

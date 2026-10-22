@@ -1,7 +1,12 @@
+import { createApiFailureDiagnosticCollector, installApiFailureDiagnosticBoundary, handleApiFailureDiagnostic, registerApiFailureDiagnosticAfterEach } from './apiFailureDiagnosticBoundary.js';
+
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { TEST_PORTFOLIO, TEST_USER } from '../js/tos/fixtures/tosApi.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+
+registerApiFailureDiagnosticAfterEach(test);
+
 
 const VIEWPORTS = [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }];
 const STOCK = { id: 42, symbol: 'TCS', exchange: 'NSE', name: 'Tata Consultancy Services' };
@@ -9,8 +14,9 @@ const STOCK = { id: 42, symbol: 'TCS', exchange: 'NSE', name: 'Tata Consultancy 
 async function prepare(page, viewport) {
     await seedDeterministicJourney(page, `supporting-${viewport.name}`);
     await page.setViewportSize(viewport);
-    const blocked = [];
+    const blocked = []; const diagnosticReports = createApiFailureDiagnosticCollector(page);
     await page.route('**/*', async route => {
+        if (await handleApiFailureDiagnostic(route, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports })) return;
         const url = new URL(route.request().url());
         if (url.origin !== 'http://127.0.0.1:4177') {
             blocked.push(url.origin);
@@ -19,6 +25,7 @@ async function prepare(page, viewport) {
         return route.fallback();
     });
     await installInvestorWorkflowApiMocks(page);
+    await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
     const requests = [];
     page.on('request', request => requests.push({ method: request.method(), path: new URL(request.url()).pathname }));
     return { blocked, requests };
@@ -82,31 +89,76 @@ for (const viewport of VIEWPORTS) {
         expectNoTrading(evidence);
     });
 
-    test(`E2E-10 retries a failed Kite handoff and disconnects a mocked connection (${viewport.name})`, async ({ page }, testInfo) => {
+    test(`E2E-10 retries unknown Kite status and disconnect read failure (${viewport.name})`, async ({ page }, testInfo) => {
         journeyId(testInfo, 'E2E-10');
         const evidence = await prepare(page, viewport);
         await settingsMocks(page);
         let connected = true;
         let usable = false;
         let failLogin = true;
-        await page.route('**/api/v1/broker/status', route => route.fulfill({ json: { data: { configured: true, connected, usable } } }));
+        let statusReads = 0;
+        let allowInitialStatus = false;
+        let failStatusAfterDisconnect = true;
+        let disconnectPosts = 0;
+        let loginUrlReads = 0;
+        await page.route('**/api/v1/broker/status', route => {
+            statusReads += 1;
+            if (!allowInitialStatus || (!connected && failStatusAfterDisconnect)) {
+                if (!connected) failStatusAfterDisconnect = false;
+                return route.fulfill({ status: 503, json: { message: 'Synthetic private broker status failure.' } });
+            }
+            return route.fulfill({ json: { data: { configured: true, connected, usable } } });
+        });
         await page.route('**/api/v1/broker/kite/login-url', route => {
+            loginUrlReads += 1;
             if (failLogin) { failLogin = false; return route.fulfill({ status: 503, json: { message: 'Kite temporarily unavailable.' } }); }
             usable = true;
             return route.fulfill({ json: { data: { url: 'http://127.0.0.1:4177/settings/account?mock-kite-return=1' } } });
         });
-        await page.route('**/api/v1/broker/kite/disconnect', route => { connected = false; usable = false; return route.fulfill({ json: { data: { disconnected: true } } }); });
+        await page.route('**/api/v1/broker/kite/disconnect', route => {
+            disconnectPosts += 1;
+            connected = false;
+            usable = false;
+            return route.fulfill({ json: { data: { disconnected: true } } });
+        });
         await page.goto('/settings/account');
         const panel = page.locator('.card').filter({ has: page.locator('.card-header').getByText('Zerodha / Kite', { exact: true }) });
+
+        const initialStatusAlert = panel.getByRole('alert');
+        await expect(initialStatusAlert).toContainText('Kite connection status is unavailable. Retry to check the current connection.');
+        await expect(initialStatusAlert).not.toContainText('Synthetic private broker status failure.');
+        await expect(panel.getByText('Not connected', { exact: true })).toHaveCount(0);
+        await expect(panel.getByText('Kite API keys are not configured on this server.', { exact: true })).toHaveCount(0);
+        await expect(panel.getByRole('button', { name: 'Connect Kite' })).toBeDisabled();
+        await expect(panel.getByRole('button', { name: 'Disconnect' })).toBeDisabled();
+        expect(statusReads).toBeGreaterThan(0);
+        const readsBeforeInitialRetry = statusReads;
+        allowInitialStatus = true;
+        await panel.getByRole('button', { name: 'Retry status', exact: true }).click();
         await expect(panel.getByText('Session expired', { exact: true })).toBeVisible();
+        expect(statusReads).toBe(readsBeforeInitialRetry + 1);
         await panel.getByRole('button', { name: 'Connect Kite' }).click();
         await expect(page.getByText('Kite temporarily unavailable.', { exact: true })).toBeVisible();
         await panel.getByRole('button', { name: 'Connect Kite' }).click();
         await expect(page).toHaveURL(/mock-kite-return=1/);
         await expect(panel.getByText('Connected', { exact: true })).toBeVisible();
         await panel.getByRole('button', { name: 'Disconnect', exact: true }).click();
+
+        const disconnectStatusAlert = panel.getByRole('alert');
+        await expect(disconnectStatusAlert).toContainText('Kite connection status is unavailable. Retry to check the current connection.');
+        await expect(disconnectStatusAlert).not.toContainText('Synthetic private broker status failure.');
+        await expect(panel.getByText('Connected', { exact: true })).toHaveCount(0);
+        await expect(panel.getByRole('button', { name: 'Connect Kite' })).toBeDisabled();
+        await expect(panel.getByRole('button', { name: 'Disconnect', exact: true })).toBeDisabled();
+        await expect.poll(() => disconnectPosts).toBe(1);
+        const readsBeforeDisconnectRetry = statusReads;
+
+        await panel.getByRole('button', { name: 'Retry status', exact: true }).click();
         await expect(panel.getByText('Not connected', { exact: true })).toBeVisible();
         await expect(panel.getByRole('button', { name: 'Disconnect', exact: true })).toBeDisabled();
+        expect(disconnectPosts).toBe(1);
+        expect(statusReads).toBe(readsBeforeDisconnectRetry + 1);
+        expect(loginUrlReads).toBe(2);
         expectNoTrading(evidence);
     });
 
@@ -140,15 +192,32 @@ for (const viewport of VIEWPORTS) {
         journeyId(testInfo, 'AUTH-03');
         const evidence = await prepare(page, viewport);
         let signedIn = true;
+        let logoutAttempts = 0;
         await page.route('**/api/auth/me', route => route.fulfill({ status: signedIn ? 200 : 401, json: signedIn ? { user: TEST_USER } : { message: 'Unauthenticated.' } }));
-        await page.route('**/api/auth/logout', route => { signedIn = false; return route.fulfill({ status: 204, body: '' }); });
+        await page.route('**/api/auth/logout', route => {
+            logoutAttempts++;
+            if (logoutAttempts === 1) return route.fulfill({ status: 503, json: { message: 'Synthetic private server detail.' } });
+            signedIn = false;
+            return route.fulfill({ status: 204, body: '' });
+        });
         await page.route('**/api/auth/login', route => { signedIn = true; return route.fulfill({ json: { user: TEST_USER } }); });
         await page.goto('/screeners');
         await expect(page.getByRole('heading', { name: 'Screener', exact: true })).toBeVisible();
+        const meRequestsBeforeLogout = evidence.requests.filter(request => request.path === '/api/auth/me').length;
         await page.getByRole('button', { name: /Profile menu for/ }).click();
-        await Promise.all([page.waitForURL('**/', { waitUntil: 'load' }), page.getByRole('button', { name: /Logout$/ }).click()]);
+        await page.getByRole('button', { name: /Logout$/ }).click();
+        await expect(page.getByRole('alert')).toHaveText('Logout could not be confirmed. Your session may still be active. Please retry.');
+        await expect(page.getByRole('heading', { name: 'Screener', exact: true })).toBeVisible();
+        await expect(page).toHaveURL(/\/screeners$/);
+        expect(logoutAttempts).toBe(1);
+        expect(evidence.requests.filter(request => request.path === '/api/auth/me')).toHaveLength(meRequestsBeforeLogout);
+        await Promise.all([page.waitForURL('**/', { waitUntil: 'load' }), page.getByRole('button', { name: /Retry logout$/ }).click()]);
         await expect(page.getByRole('heading', { name: 'Login', exact: true })).toBeVisible();
+        expect(logoutAttempts).toBe(2);
         await page.goto('/screeners?source=ended-session');
+        await expect(page.getByRole('heading', { name: 'Login', exact: true })).toBeVisible();
+        await page.reload();
+        await expect(page.getByRole('heading', { name: 'Login', exact: true })).toBeVisible();
         await expect(page.getByRole('heading', { name: 'Screener', exact: true })).toHaveCount(0);
         await page.getByLabel('Email').fill('investor@example.test');
         await page.getByLabel('Password').fill('deterministic-test-password');

@@ -254,7 +254,13 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
             return json(route, { data: { label: 'P/B (TTM)', points: [{ period: '2026-06-30', value: 5.1 }] } });
         }
         if (path.endsWith('/api/stocks/42/market-prices') && method === 'GET') {
-            return json(route, { data: [], meta: { has_price_history: false } });
+            return json(route, {
+                stock: { id: 42, symbol: 'TCS', name: 'Tata Consultancy Services', exchange: 'NSE' },
+                data: [],
+                price_count: 0,
+                has_price_history: false,
+                meta: { has_price_history: false },
+            });
         }
         if (path.endsWith('/api/guided-tour') && (method === 'GET' || method === 'PUT')) {
             if (method === 'PUT') {
@@ -376,12 +382,13 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
             const statuses = strategyRegistryRows.map((row) => row.metadata?.status);
             return json(route, { data: { counts: { total: statuses.length, active: statuses.filter((value) => value === 'active').length, draft: statuses.filter((value) => value === 'draft').length, archived: statuses.filter((value) => value === 'archived').length } } });
         }
-        const strategyLifecycleMatch = path.match(/\/api\/v1\/strategy-registry\/([^/]+)\/(activate|archive)$/);
+        const strategyLifecycleMatch = path.match(/\/api\/v1\/strategy-registry\/([^/]+)\/(activate|disable|archive|restore)$/);
         if (strategyLifecycleMatch && method === 'POST') {
             const [, encodedId, action] = strategyLifecycleMatch;
             const row = strategyRegistryRows.find((item) => String(item.artifact_id || item.slug) === decodeURIComponent(encodedId));
             if (!row) return json(route, { message: 'Strategy not found.' }, 404);
-            row.metadata = { ...row.metadata, status: action === 'activate' ? 'active' : 'archived', is_enabled: action === 'activate' };
+            const lifecycleStatus = action === 'activate' ? 'active' : action === 'archive' ? 'archived' : 'disabled';
+            row.metadata = { ...row.metadata, status: lifecycleStatus, lifecycle_status: lifecycleStatus, is_enabled: action === 'activate' };
             return json(route, { data: row });
         }
         if (path.endsWith('/api/v1/strategy-registry') && method === 'GET') {

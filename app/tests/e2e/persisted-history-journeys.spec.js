@@ -1,12 +1,18 @@
+import { createApiFailureDiagnosticCollector, installApiFailureDiagnosticBoundary, handleApiFailureDiagnostic, registerApiFailureDiagnosticAfterEach } from './apiFailureDiagnosticBoundary.js';
+
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 import { TEST_PORTFOLIO } from '../js/tos/fixtures/tosApi.js';
+
+registerApiFailureDiagnosticAfterEach(test);
+
 const VIEWPORTS = [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }];
 const fail = route => route.fulfill({ status: 503, json: { message: 'Synthetic stored history unavailable.' } });
 async function prepare(page, viewport, allowed = () => false) {
- await seedDeterministicJourney(page, `stored-history-${viewport.name}`); await page.setViewportSize({ width: viewport.width, height: viewport.height }); await installInvestorWorkflowApiMocks(page); const blocked = []; const writes = [];
- return { blocked, writes, seal: () => page.route('**/*', route => { const r = route.request(), url = new URL(r.url()); const write = /^(POST|PUT|PATCH|DELETE)$/.test(r.method()); if (url.origin !== 'http://127.0.0.1:4177' || write && url.pathname !== '/api/logs/frontend' && !allowed(r.method(), url.pathname)) { blocked.push(`${r.method()} ${url.pathname}`); return route.abort(); } if (write && url.pathname !== '/api/logs/frontend') writes.push({ method: r.method(), path: url.pathname }); return route.fallback(); }) };
+ await seedDeterministicJourney(page, `stored-history-${viewport.name}`); await page.setViewportSize({ width: viewport.width, height: viewport.height }); await installInvestorWorkflowApiMocks(page); const blocked = []; const writes = []; const diagnosticReports = createApiFailureDiagnosticCollector(page);
+ await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
+ return { blocked, writes, seal: () => page.route('**/*', async route => { if (await handleApiFailureDiagnostic(route, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports })) return; const r = route.request(), url = new URL(r.url()); const write = /^(POST|PUT|PATCH|DELETE)$/.test(r.method()); if (url.origin !== 'http://127.0.0.1:4177' || write && url.pathname !== '/api/logs/frontend' && !allowed(r.method(), url.pathname)) { blocked.push(`${r.method()} ${url.pathname}`); return route.abort(); } if (write && url.pathname !== '/api/logs/frontend') writes.push({ method: r.method(), path: url.pathname }); return route.fallback(); }) };
 }
 async function confirmClick(page, target, yes) { const done = new Promise(resolve => page.once('dialog', async dialog => { if (yes) await dialog.accept(); else await dialog.dismiss(); resolve(); })); await target.click(); await done; }
 for (const viewport of VIEWPORTS) test.describe(`Stored history ${viewport.name}`, () => {
@@ -27,6 +33,36 @@ for (const viewport of VIEWPORTS) test.describe(`Stored history ${viewport.name}
   unavailable = false; await page.getByRole('button', { name: 'Retry squared-off transactions' }).click(); await expect(page.getByRole('row').filter({ hasText: 'INFY' })).toBeVisible(); await expect(page.getByRole('row').filter({ hasText: 'TCS' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Close notification', exact: true }).click();
   await switchTo('Long Term', 'Main'); await expect(page.getByRole('row').filter({ hasText: 'TCS' })).toBeVisible(); await expect(page.getByRole('row').filter({ hasText: 'INFY' })).toHaveCount(0); expect(JSON.stringify([main, other])).toBe(originals); expect(safety.writes).toEqual([]); expect(safety.blocked).toEqual([]);
+ });
+ test(`E2E-52 refreshes the latest same-Portfolio filter after a delayed confirmed delete (${viewport.name})`, async ({ page }, testInfo) => {
+  journeyId(testInfo, 'E2E-52'); const safety = await prepare(page, viewport, (method, path) => method === 'DELETE' && path === '/api/transactions/501');
+  const base = { type: 'sell', quantity: 10, price: 3500, transaction_date: '2026-10-01', realized_pl: 5000, squared_off_fees: 50, exit_reason: 'Reviewed manual close' };
+  let rows = [{ ...base, id: 501, stock_id: 42, stock: { id: 42, symbol: 'TCS', name: 'Synthetic TCS' } }, { ...base, id: 502, stock_id: 43, stock: { id: 43, symbol: 'INFY', name: 'Synthetic INFY' } }]; const sibling = JSON.stringify(rows[1]);
+  const reads = []; let deleteCount = 0; let releaseDelete; const deleteGate = new Promise(resolve => { releaseDelete = resolve; });
+  await page.route('**/api/transactions?*', route => {
+   const params = new URL(route.request().url()).searchParams; expect(params.get('scope')).toBe('closed'); expect(params.get('per_page')).toBe('25'); const search = params.get('search') || ''; reads.push({ page: params.get('page'), search });
+   const matched = rows.filter(row => !search || row.stock.symbol.includes(search));
+   return route.fulfill({ json: { data: matched, current_page: Number(params.get('page') || 1), last_page: 1, from: matched.length ? 1 : null, to: matched.length || null, total: matched.length } });
+  });
+  await page.route('**/api/transactions/501', async route => { deleteCount++; await deleteGate; rows = rows.filter(row => row.id !== 501); return route.fulfill({ status: 204, body: '' }); });
+  await safety.seal(); await page.goto('/transactions/closed');
+  const tcs = page.getByRole('row').filter({ hasText: 'TCS' }); const infy = page.getByRole('row').filter({ hasText: 'INFY' });
+  await expect(tcs).toBeVisible(); await expect(infy).toBeVisible();
+  const search = page.getByRole('searchbox', { name: 'Search squared-off transactions by stock symbol or name' });
+  await search.fill('TCS'); await expect.poll(() => reads.some(read => read.search === 'TCS')).toBe(true);
+  await expect(tcs).toBeVisible(); await expect(infy).toHaveCount(0);
+  const deleteRequest = page.waitForRequest(request => request.method() === 'DELETE' && new URL(request.url()).pathname === '/api/transactions/501');
+  await confirmClick(page, tcs.getByRole('button', { name: 'Delete', exact: true }), true); await deleteRequest;
+  await expect.poll(() => deleteCount).toBe(1);
+  await search.fill('INFY'); await expect.poll(() => reads.some(read => read.search === 'INFY')).toBe(true);
+  await expect(infy).toBeVisible(); await expect(tcs).toHaveCount(0);
+  const readsBeforeDeleteAck = reads.length;
+  releaseDelete();
+  await expect(page.getByText('Transaction deleted', { exact: true })).toBeVisible();
+  await expect.poll(() => reads.length).toBe(readsBeforeDeleteAck + 1);
+  expect(deleteCount).toBe(1); expect(reads.at(-1)).toEqual({ page: '1', search: 'INFY' });
+  await expect(infy).toBeVisible(); await expect(tcs).toHaveCount(0);
+  expect(rows.map(row => row.id)).toEqual([502]); expect(JSON.stringify(rows[0])).toBe(sibling); expect(safety.writes).toEqual([{ method: 'DELETE', path: '/api/transactions/501' }]); expect(safety.blocked).toEqual([]);
  });
  test(`E2E-53 distinguishes unavailable evaluation history from zero observations and retries the selected run (${viewport.name})`, async ({ page }, testInfo) => {
   journeyId(testInfo, 'E2E-53'); const safety = await prepare(page, viewport); let runFails = true; let resultFails = true; const selectedReads = []; const observations = [{ id: 601, rank: 1, symbol: 'TCS', score: 88.5, confidence: 0.8, explanation: 'Synthetic stored evaluation; no trade authority.' }]; const original = JSON.stringify(observations); await page.route('**/api/v1/candidates*', route => route.fulfill({ json: { data: [] } })); await page.route('**/api/v1/evaluation/runs?*', route => runFails ? fail(route) : route.fulfill({ json: { data: [{ id: 73, status: 'completed', result_count: 1 }, { id: 74, status: 'completed', result_count: 0 }] } })); await page.route('**/api/v1/evaluations?*', route => { const id = new URL(route.request().url()).searchParams.get('evaluation_run_id'); selectedReads.push(id); if (resultFails) return fail(route); return route.fulfill({ json: { data: id === '73' ? observations : [] } }); }); await safety.seal(); await page.goto('/candidates'); const history = page.getByRole('region', { name: 'Evaluation history', exact: true }); await expect(history.getByRole('alert').filter({ hasText: 'Evaluation history could not be loaded' })).toBeVisible(); await expect(history.getByText('No evaluation runs have been recorded yet.', { exact: true })).toHaveCount(0); runFails = false; await history.getByRole('button', { name: 'Retry evaluation history' }).click(); await history.getByLabel('Evaluation run').selectOption('73'); await expect(history.getByRole('alert').filter({ hasText: 'Selected evaluation run could not be loaded' })).toBeVisible(); await expect(history.getByText('This run has no results.', { exact: true })).toHaveCount(0); await expect(history.getByLabel('Evaluation run')).toHaveValue('73'); resultFails = false; await history.getByRole('button', { name: 'Retry selected evaluation run' }).click(); await expect(history.getByRole('gridcell', { name: 'TCS', exact: true })).toBeVisible(); await expect(history.getByRole('gridcell', { name: '88.5', exact: true })).toBeVisible(); await expect(history.getByRole('gridcell', { name: '80%', exact: true })).toBeVisible(); await history.getByLabel('Evaluation run').selectOption('74'); await expect(history.getByText('This run has no results.', { exact: true })).toBeVisible(); expect(selectedReads.filter(x => x === '73').length).toBeGreaterThanOrEqual(2); expect(selectedReads.at(-1)).toBe('74'); expect(JSON.stringify(observations)).toBe(original); expect(safety.writes).toHaveLength(0); expect(safety.blocked).toEqual([]);

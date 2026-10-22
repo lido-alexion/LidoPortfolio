@@ -3,6 +3,11 @@ import AxeBuilder from '@axe-core/playwright';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 import { TEST_USER } from '../js/tos/fixtures/tosApi.js';
+import { createApiFailureDiagnosticCollector, installApiFailureDiagnosticBoundary, handleApiFailureDiagnostic, registerApiFailureDiagnosticAfterEach } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticAfterEach(test);
+
+
 
 const VIEWPORTS = [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }];
 const request = id => ({ id, full_name: `Synthetic applicant ${id}`, email: `applicant-${id}@example.test`, status: 'pending', verification_status: 'unverified', verification_email_delivery_status: 'failed' });
@@ -14,10 +19,12 @@ async function prepare(page, viewport, allowed = [], admin = true) {
     await seedDeterministicJourney(page, `admission-${viewport.name}`);
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await installInvestorWorkflowApiMocks(page, { user: { ...TEST_USER, is_admin: admin } });
-    const writes = [], blocked = [];
+    const writes = [], blocked = [], diagnosticReports = createApiFailureDiagnosticCollector(page);
+    await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
     for (const path of ['users', 'invites', 'password-reset-links', 'access-request-bans']) await page.route(`**/api/${path}`, route => route.fulfill({ json: { data: [] } }));
-    return { writes, blocked, seal: () => page.route('**/*', route => {
+    return { writes, blocked, diagnosticReports, seal: () => page.route('**/*', async route => {
         const req = route.request(), url = new URL(req.url());
+        if (await handleApiFailureDiagnostic(route, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports })) return;
         const write = !['GET', 'HEAD'].includes(req.method());
         if (url.origin !== 'http://127.0.0.1:4177' || write && url.pathname !== '/api/logs/frontend' && !allowed.some(([method, path]) => method === req.method() && path === url.pathname)) { blocked.push(`${req.method()} ${url.pathname}`); return route.abort(); }
         if (write && url.pathname !== '/api/logs/frontend') writes.push({ path: url.pathname, body: req.postData() ? req.postDataJSON() : null });
@@ -55,7 +62,7 @@ for (const viewport of VIEWPORTS) test.describe(`Admission prerequisite ${viewpo
         await expect(region(page).getByRole('alert')).toContainText('Request details could not be loaded'); await expect(region(page).getByRole('heading', { name: 'Audit trail' })).toHaveCount(0);
         detailFailed = false; await region(page).getByRole('button', { name: 'Retry request details' }).click(); await expect(region(page).getByText(/request_received/)).toBeVisible();
         const a11y = await new AxeBuilder({ page }).include('.lido-access-requests-admin').withTags(['wcag2a', 'wcag2aa']).analyze(); expect(a11y.violations).toEqual([]);
-        await region(page).getByRole('button', { name: 'Close', exact: true }).click(); await expect(region(page).getByRole('heading', { name: /Review —/ })).toHaveCount(0); expect(safety.writes).toEqual([]); expect(safety.blocked).toEqual([]);
+        await region(page).getByRole('button', { name: 'Close', exact: true }).click(); await expect(region(page).getByRole('heading', { name: /Review —/ })).toHaveCount(0); expect(safety.writes).toEqual([]); expect(safety.blocked).toEqual([]); await expect.poll(() => safety.diagnosticReports.receipts.some(report => report.endpoint === '/api/access-requests' && report.status === 503)).toBe(true);
     });
     for (const action of ['ignore', 'reject']) test(`AUTH-08 retries verification and explicit ${action} without another invitation (${viewport.name})`, async ({ page }, testInfo) => {
         journeyId(testInfo, 'AUTH-08'); const allowed = [['POST', '/api/access-requests/51/resend-verification'], ['POST', `/api/access-requests/51/${action}`], ['POST', '/api/access-request-bans/8/clear']]; const safety = await prepare(page, viewport, allowed);

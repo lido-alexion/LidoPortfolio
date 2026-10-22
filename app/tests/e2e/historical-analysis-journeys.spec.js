@@ -2,14 +2,21 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { createApiFailureDiagnosticCollector, installApiFailureDiagnosticBoundary, handleApiFailureDiagnostic, registerApiFailureDiagnosticAfterEach } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticAfterEach(test);
+
+
 
 const VIEWPORTS = [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }];
 const original = { id: 11, name: 'Historical original', status: 'completed', strategy_name: 'Historical strategy', strategy_version: '1.0.0', strategy_version_id: 71, from_date: '2026-09-01', to_date: '2026-10-01', range_key: '1y', initial_capital: 250000, tags: ['research'], notes: 'Original research', execution_assumptions: { price_method: 'next_close', adverse_slippage_percent: 0.25 }, statistics: { return_pct: null }, snapshots: [], trades: [], transactions: [], timeline: [] };
 async function prepare(page, viewport, name, allowed) {
     await seedDeterministicJourney(page, `historical-${name}-${viewport.name}`); await page.setViewportSize({ width: viewport.width, height: viewport.height }); await installInvestorWorkflowApiMocks(page);
-    const blocked = []; const writes = [];
-    return { blocked, writes, seal: () => page.route('**/*', route => {
+    const blocked = []; const writes = []; const diagnosticReports = createApiFailureDiagnosticCollector(page);
+    await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
+    return { blocked, writes, seal: () => page.route('**/*', async route => {
         const request = route.request(); const url = new URL(request.url()); const write = /^(POST|PUT|PATCH|DELETE)$/.test(request.method());
+        if (await handleApiFailureDiagnostic(route, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports })) return;
         if (url.origin !== 'http://127.0.0.1:4177' || (write && url.pathname !== '/api/logs/frontend' && !allowed(request.method(), url.pathname))) { blocked.push(`${request.method()} ${url.pathname}`); return route.abort(); }
         if (write && url.pathname !== '/api/logs/frontend') writes.push({ method: request.method(), path: url.pathname, body: request.postDataJSON() }); return route.fallback();
     }) };
@@ -70,6 +77,45 @@ for (const viewport of VIEWPORTS) {
             page.once('dialog', async dialog => { expect(dialog.message()).toContain('cannot be undone'); await dialog.dismiss(); }); await row.getByRole('button', { name: 'Delete', exact: true }).click(); expect(safety.writes.filter(w => w.method === 'DELETE')).toHaveLength(0);
             page.once('dialog', dialog => dialog.accept()); await row.getByRole('button', { name: 'Delete', exact: true }).click(); await expect(page.getByText('Synthetic delete unavailable.', { exact: true })).toBeVisible(); await expect(row).toBeVisible();
             page.once('dialog', dialog => dialog.accept()); await row.getByRole('button', { name: 'Delete', exact: true }).click(); await expect(row).toHaveCount(0); expect(runs.map(r => r.id)).toEqual([12]); expect(safety.blocked).toEqual([]); expect(safety.writes).toHaveLength(5);
+        });
+
+        test(`E2E-24 recovers unavailable replay history through an explicit GET retry (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'E2E-24');
+            const safety = await prepare(page, viewport, 'replay-list-read', () => false);
+            const replay = { id: 41, created_at: '2026-10-10T10:00:00Z', period_start: '2026-09-01', period_end: '2026-10-01', starting_mode: 'new_simulated', price_method: 'next_close', adverse_slippage_percent: 0.25, status: 'completed' };
+            let phase = 'unavailable'; let initialReads = 0;
+            const trackedReads = { started: 0, completed: 0, inFlight: new Set() };
+            const isReplayListRead = request => request.method() === 'GET' && new URL(request.url()).pathname === '/api/replays';
+            page.on('request', request => {
+                if (isReplayListRead(request)) { trackedReads.started += 1; trackedReads.inFlight.add(request); }
+            });
+            const finishTrackedRead = request => {
+                if (isReplayListRead(request)) { trackedReads.completed += 1; trackedReads.inFlight.delete(request); }
+            };
+            page.on('requestfinished', finishTrackedRead);
+            page.on('requestfailed', finishTrackedRead);
+            await page.route('**/api/replays', route => {
+                if (route.request().method() !== 'GET') return route.fallback();
+                if (phase === 'unavailable') { initialReads += 1; return route.fulfill({ status: 503, json: { message: 'Synthetic replay history unavailable.' } }); }
+                return route.fulfill({ json: { data: phase === 'rows' ? [replay] : [] } });
+            });
+            await safety.seal(); await page.goto('/portfolios');
+            const panel = page.getByRole('region', { name: 'Portfolio Replay' });
+            await expect(panel.getByRole('alert')).toContainText('Replay history could not be loaded. Retry to check saved runs.');
+            await expect(panel.getByText('No Portfolio Replay runs.', { exact: true })).toHaveCount(0);
+            await expect.poll(() => trackedReads.inFlight.size).toBe(0);
+            expect(initialReads).toBeGreaterThan(0);
+            expect(trackedReads.started).toBe(trackedReads.completed);
+            const initialBaseline = trackedReads.started;
+
+            phase = 'rows';
+            await panel.getByRole('button', { name: 'Retry replay history', exact: true }).click();
+            await expect(panel.getByLabel('Compare Replay 41')).toBeVisible();
+            await expect.poll(() => trackedReads.inFlight.size).toBe(0);
+            expect(trackedReads.started).toBe(initialBaseline + 1);
+            expect(trackedReads.completed).toBe(trackedReads.started);
+            expect(safety.blocked).toEqual([]);
+            expect(safety.writes).toEqual([]);
         });
 
         test(`E2E-24 checks readiness blockers and retains isolated replay evidence through read/cancel/delete recovery (${viewport.name})`, async ({ page }, testInfo) => {

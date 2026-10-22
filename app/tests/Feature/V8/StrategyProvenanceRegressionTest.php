@@ -217,7 +217,8 @@ class StrategyProvenanceRegressionTest extends TestCase
         $beforeHash = $version->definition_hash;
         $beforeLinks = StrategyScreener::query()->where('strategy_version_id', $version->id)->get()->toArray();
 
-        app(StrategyRegistrySupport::class)->archive($profile, $version->strategy);
+        app(StrategyRegistrySupport::class)->archive($profile, $version->strategy, 'Retiring for provenance test');
+        app(StrategyRegistrySupport::class)->restore($profile, $version->strategy->fresh());
         app(StrategyRegistrySupport::class)->activate($profile, $version->strategy->fresh());
 
         $version->refresh();
@@ -234,7 +235,7 @@ class StrategyProvenanceRegressionTest extends TestCase
         $active = $this->getJson('/api/v1/strategy')->json('data');
         $strategy = TradingStrategy::query()->findOrFail($active['id']);
 
-        $archived = app(StrategyRegistrySupport::class)->archive($profile, $strategy);
+        $archived = app(StrategyRegistrySupport::class)->archive($profile, $strategy, 'Retiring for lifecycle test');
 
         $this->assertSame(TradingStrategy::STATUS_ARCHIVED, $archived->status);
     }

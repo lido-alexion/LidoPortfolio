@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ROUTES } from '../navigation/routes';
 import api from '../api';
@@ -37,6 +37,8 @@ import { normalizeDashboardChartNumber } from '../utils/dashboardState';
 import { formatInrCompactWhole, formatInrWhole, formatTablePercent0 } from '../utils/tableFormat';
 import { formatChartAxisDate, formatTransactionDateDisplay } from '../utils/transactionDate';
 import { migrateDashboardLayout } from '../utils/dashboardLayouts';
+import { PORTFOLIO_CHANGED } from '../utils/portfolioEvents';
+import { getActivePortfolioId } from '../portfolio/activePortfolioStorage';
 import {
     CartesianGrid,
     Line,
@@ -282,7 +284,7 @@ function averageRelativeStrength(metrics) {
 export default function DashboardPage() {
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { activePortfolio } = usePortfolio();
+    const { activePortfolio, portfolios, loading: portfoliosLoading } = usePortfolio();
     const userId = user?.id;
     const profileId = activePortfolio?.id;
     const isAdmin = Boolean(user?.is_admin);
@@ -305,6 +307,49 @@ export default function DashboardPage() {
     const [marketDiagnosticsExpanded, setMarketDiagnosticsExpanded] = useState(loadMarketDiagnosticsExpanded);
     const [dashboardLayout, setDashboardLayout] = useState(() => migrateDashboardLayout(null));
     const [dashboardVariant, setDashboardVariant] = useState(() => (typeof window !== 'undefined' && window.innerWidth < 768 ? 'mobile' : 'desktop'));
+    const [portfolioEventRevision, setPortfolioEventRevision] = useState(0);
+    const ownerRef = useRef({ key: null, mounted: false, read: 0, calendar: 0, ops: {} });
+    const owner = ownerRef.current;
+    const confirmed = Boolean(profileId) && portfolios.some((item) => String(item.id) === String(profileId));
+    const scopeKey = userId && confirmed ? `${userId}:${profileId}:${portfolioEventRevision}` : null;
+    const owns = useCallback((snapshot) => owner.mounted && snapshot.key != null
+        && owner.key === snapshot.key && String(getActivePortfolioId()) === String(snapshot.profileId), [owner]);
+    const captureOwner = useCallback(() => ({ key: scopeKey, userId, profileId }), [scopeKey, userId, profileId]);
+
+    useLayoutEffect(() => {
+        owner.mounted = true;
+        owner.key = scopeKey;
+        owner.read += 1;
+        owner.calendar += 1;
+        for (const key of Object.keys(owner.ops)) owner.ops[key] += 1;
+        setData(null);
+        setPatternRows([]);
+        setPatternLoading(true);
+        setPatternError('');
+        setCalendarEvents([]);
+        setCalendarLoading(true);
+        setCalendarError('');
+        setServedFromCache(false);
+        setCachedAt(null);
+        setLoadError('');
+        setRefreshing(false);
+        setSyncingPrices(false);
+        setRebuildingHistory(false);
+        setClearingAlerts(false);
+        setAcknowledgingId(null);
+        const changed = () => {
+            owner.key = null;
+            setPortfolioEventRevision((revision) => revision + 1);
+        };
+        window.addEventListener(PORTFOLIO_CHANGED, changed);
+        return () => {
+            window.removeEventListener(PORTFOLIO_CHANGED, changed);
+            owner.mounted = false;
+            owner.key = null;
+            owner.read += 1;
+            owner.calendar += 1;
+        };
+    }, [scopeKey, owner]);
 
     useEffect(() => {
         if (typeof window === 'undefined' || !window.matchMedia) return undefined;
@@ -331,24 +376,29 @@ export default function DashboardPage() {
     }, []);
 
     const fetchCalendarUpcoming = useCallback(() => {
-        if (!profileId) {
+        if (!userId || !profileId || !confirmed || !owns(captureOwner())) {
             return Promise.resolve();
         }
+        const snapshot = captureOwner();
+        const request = ++owner.calendar;
         setCalendarLoading(true);
         setCalendarError('');
         return api.get('/calendar/upcoming')
-            .then((res) => setCalendarEvents(res.data?.data ?? []))
+            .then((res) => { if (owns(snapshot) && owner.calendar === request) setCalendarEvents(res.data?.data ?? []); })
             .catch(() => {
+                if (!owns(snapshot) || owner.calendar !== request) return;
                 setCalendarEvents([]);
                 setCalendarError('Upcoming events are temporarily unavailable.');
-            })
-            .finally(() => setCalendarLoading(false));
-    }, [profileId]);
+            }).finally(() => { if (owns(snapshot) && owner.calendar === request) setCalendarLoading(false); });
+    }, [userId, profileId, confirmed, captureOwner, owns, owner]);
 
     const fetchDashboard = useCallback(({ force = false } = {}) => {
-        if (!userId || !profileId) {
+        if (!userId || !profileId || !confirmed || !owns(captureOwner())) {
             return Promise.resolve();
         }
+        const snapshot = captureOwner();
+        const request = ++owner.read;
+        owner.calendar += 1;
 
         if (!force) {
             const cached = readDashboardCache(userId, profileId);
@@ -377,6 +427,7 @@ export default function DashboardPage() {
             api.get('/patterns/scan', { params: { scope: 'holdings', actionable_only: true } }),
         ])
             .then(([dashboardResult, patternResult]) => {
+                if (!owns(snapshot) || owner.read !== request) return;
                 if (dashboardResult.status === 'rejected') {
                     setLoadError('Failed to load dashboard');
                     setPatternRows([]);
@@ -402,22 +453,27 @@ export default function DashboardPage() {
                     showAdminOperationalAlertsToastIfAny();
                 }
             })
-            .finally(() => setPatternLoading(false));
-    }, [userId, profileId, isAdmin, fetchCalendarUpcoming]);
+            .finally(() => { if (owns(snapshot) && owner.read === request) setPatternLoading(false); });
+    }, [userId, profileId, isAdmin, confirmed, fetchCalendarUpcoming, captureOwner, owns, owner]);
 
     const handleRefreshDashboard = useCallback(() => {
-        if (!userId || !profileId) {
+        if (!userId || !profileId || !confirmed || !owns(captureOwner())) {
             return;
         }
+        const snapshot = captureOwner();
+        const operation = (owner.ops.refresh || 0) + 1; owner.ops.refresh = operation;
         setRefreshing(true);
         clearDashboardCache(userId, profileId);
-        fetchDashboard({ force: true }).finally(() => setRefreshing(false));
-    }, [userId, profileId, fetchDashboard]);
+        fetchDashboard({ force: true }).finally(() => { if (owns(snapshot) && owner.ops.refresh === operation) setRefreshing(false); });
+    }, [userId, profileId, confirmed, fetchDashboard, captureOwner, owns, owner]);
 
     const runDailyPriceSync = useCallback((force = false) => {
+        if (!userId || !profileId || !confirmed || !owns(captureOwner())) return;
+        const snapshot = captureOwner(); const operation = (owner.ops.sync || 0) + 1; owner.ops.sync = operation;
         setSyncingPrices(true);
         api.post('/sync/daily', { force })
             .then((res) => {
+                if (!owns(snapshot) || owner.ops.sync !== operation) return;
                 const body = res.data || {};
                 showToast(body.message || 'Daily price sync finished.');
                 if (!body.skipped) {
@@ -427,25 +483,28 @@ export default function DashboardPage() {
             })
             .catch((err) => {
                 const msg = err?.response?.data?.message || 'Failed to run daily price sync.';
-                showToast(msg, 'danger');
+                if (owns(snapshot) && owner.ops.sync === operation) showToast(msg, 'danger');
             })
-            .finally(() => setSyncingPrices(false));
-    }, [userId, profileId, fetchDashboard]);
+            .finally(() => { if (owns(snapshot) && owner.ops.sync === operation) setSyncingPrices(false); });
+    }, [userId, profileId, confirmed, fetchDashboard, captureOwner, owns, owner]);
 
     const requestRebuildPortfolioHistory = useCallback(() => {
-        const confirmed = window.confirm(
+        if (!userId || !profileId || !confirmed || !owns(captureOwner())) return;
+        const snapshot = captureOwner();
+        const accepted = window.confirm(
             'Rebuild portfolio history from your first transaction through today?\n\n'
             + 'This refetches missing stock prices and recalculates every trading day. '
             + 'It can take a minute or longer for large portfolios.',
         );
-        if (!confirmed) {
+        if (!owns(snapshot) || !accepted) {
             return;
         }
-
+        const operation = (owner.ops.rebuild || 0) + 1; owner.ops.rebuild = operation;
         setRebuildingHistory(true);
         setLoadError('');
         api.post('/portfolio/rebuild-history')
             .then((res) => {
+                if (!owns(snapshot) || owner.ops.rebuild !== operation) return;
                 const written = res.data?.rebuild?.snapshots_written;
                 const msg = written != null
                     ? `Portfolio history rebuilt (${written} snapshots).`
@@ -454,35 +513,42 @@ export default function DashboardPage() {
                 clearDashboardCache(userId, profileId);
                 return fetchDashboard({ force: true });
             })
-            .catch(() => setLoadError('Failed to rebuild portfolio history'))
-            .finally(() => setRebuildingHistory(false));
-    }, [userId, profileId, fetchDashboard]);
+            .catch(() => { if (owns(snapshot) && owner.ops.rebuild === operation) setLoadError('Failed to rebuild portfolio history'); })
+            .finally(() => { if (owns(snapshot) && owner.ops.rebuild === operation) setRebuildingHistory(false); });
+    }, [userId, profileId, confirmed, fetchDashboard, captureOwner, owns, owner]);
 
     const clearAllAlerts = useCallback(() => {
+        if (!userId || !profileId || !confirmed || !owns(captureOwner())) return;
+        const snapshot = captureOwner(); const operation = (owner.ops.clear || 0) + 1; owner.ops.clear = operation;
         setClearingAlerts(true);
         api.post('/alerts/expire-all')
             .then((res) => {
+                if (!owns(snapshot) || owner.ops.clear !== operation) return;
                 showToast(res.data?.message || 'Alerts cleared.');
                 clearDashboardCache(userId, profileId);
                 return fetchDashboard({ force: true });
             })
-            .catch(() => showToast('Failed to clear alerts.', 'danger'))
-            .finally(() => setClearingAlerts(false));
-    }, [userId, profileId, fetchDashboard]);
+            .catch(() => { if (owns(snapshot) && owner.ops.clear === operation) showToast('Failed to clear alerts.', 'danger'); })
+            .finally(() => { if (owns(snapshot) && owner.ops.clear === operation) setClearingAlerts(false); });
+    }, [userId, profileId, confirmed, fetchDashboard, captureOwner, owns, owner]);
 
     const acknowledgeAlert = useCallback((alertId) => {
+        if (!userId || !profileId || !confirmed || !owns(captureOwner())) return;
+        const snapshot = captureOwner(); const operation = (owner.ops.ack || 0) + 1; owner.ops.ack = operation;
         setAcknowledgingId(alertId);
         api.post(`/alerts/${alertId}/acknowledge`)
             .then(() => {
+                if (!owns(snapshot) || owner.ops.ack !== operation) return;
                 clearDashboardCache(userId, profileId);
                 return fetchDashboard({ force: true });
             })
-            .catch(() => showToast('Failed to acknowledge alert.', 'danger'))
-            .finally(() => setAcknowledgingId(null));
-    }, [userId, profileId, fetchDashboard]);
+            .catch(() => { if (owns(snapshot) && owner.ops.ack === operation) showToast('Failed to acknowledge alert.', 'danger'); })
+            .finally(() => { if (owns(snapshot) && owner.ops.ack === operation) setAcknowledgingId(null); });
+    }, [userId, profileId, confirmed, fetchDashboard, captureOwner, owns, owner]);
 
     useEffect(() => {
-        if (!userId || !profileId) {
+        if (portfoliosLoading) return;
+        if (!userId || !profileId || !confirmed || !owns(captureOwner())) {
             setData(null);
             setPatternRows([]);
             setPatternLoading(true);
@@ -494,7 +560,7 @@ export default function DashboardPage() {
         setPatternRows([]);
         setLoadError('');
         fetchDashboard({ force: false });
-    }, [userId, profileId, fetchDashboard]);
+    }, [userId, profileId, confirmed, fetchDashboard, portfoliosLoading, portfolioEventRevision]);
 
     const allocationColumns = useMemo(() => [
         { accessorKey: 'symbol', header: 'Symbol' },

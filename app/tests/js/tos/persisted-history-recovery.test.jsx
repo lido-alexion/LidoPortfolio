@@ -1,19 +1,33 @@
 import React from 'react';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import api from '../../../resources/js/src/api';
 import { showToast } from '../../../resources/js/src/toast';
+import { PORTFOLIO_DASHBOARD_REFRESH } from '../../../resources/js/src/utils/portfolioEvents';
 import ClosedTransactionsPage from '../../../resources/js/src/pages/ClosedTransactionsPage.jsx';
 import { EvaluationHistory } from '../../../resources/js/src/pages/CandidatesPage.jsx';
 vi.mock('../../../resources/js/src/api', async original => ({ ...(await original()), default: { get: vi.fn(), delete: vi.fn() } }));
 vi.mock('../../../resources/js/src/toast', () => ({ showToast: vi.fn() }));
 vi.mock('../../../resources/js/src/utils/transactionTableColumns', () => ({ buildTransactionTableColumns: options => [options] }));
 vi.mock('../../../resources/js/src/components/DataTable', () => ({ DataTableCard: ({ data, columns, emptyMessage, headerExtra }) => <section aria-label="Stored transaction rows">{headerExtra}{data.length ? data.map(row => <div key={row.id}>{row.stock.symbol}<button onClick={() => columns[0].onDelete(row.id)}>Delete recorded transaction</button></div>) : <span>{emptyMessage}</span>}</section> }));
-vi.mock('../../../resources/js/src/components/TablePagination', () => ({ default: () => null }));
+vi.mock('../../../resources/js/src/components/TablePagination', () => ({ default: ({ meta, onPageChange }) => meta?.last_page > 1 ? <nav><button onClick={() => onPageChange(meta.current_page + 1)}>Next page</button></nav> : null }));
 const rejection = () => Promise.reject({ response: { status: 503, data: { message: 'Synthetic history unavailable.' } } });
 const payload = { data: { data: [{ id: 91, stock: { symbol: 'TCS' } }], current_page: 1, last_page: 1, total: 1, from: 1, to: 1 } };
-beforeEach(() => { vi.clearAllMocks(); vi.spyOn(window, 'confirm').mockReturnValue(true); });
+const rows = [
+ { id: 91, stock: { symbol: 'TCS' } },
+ { id: 92, stock: { symbol: 'INFY' } },
+];
+function pagePayload(data, currentPage = 1, lastPage = 2) { return { data: { data, current_page: currentPage, last_page: lastPage, total: 30, from: 1, to: data.length } }; }
+function deferred() { let resolve; let reject; const promise = new Promise((done, fail) => { resolve = done; reject = fail; }); return { promise, resolve, reject }; }
+const listeners = [];
+function listen(type, listener) { window.addEventListener(type, listener); listeners.push([type, listener]); }
+async function applySearch(value) {
+ fireEvent.change(screen.getByRole('searchbox', { name: 'Search squared-off transactions by stock symbol or name' }), { target: { value } });
+ await act(async () => { await vi.advanceTimersByTimeAsync(301); });
+}
+beforeEach(() => { vi.resetAllMocks(); vi.spyOn(window, 'confirm').mockReturnValue(true); });
+afterEach(() => { listeners.splice(0).forEach(([type, listener]) => window.removeEventListener(type, listener)); vi.useRealTimers(); vi.restoreAllMocks(); });
 it('catches a failed initial closed-history read without reporting no transactions and permits retry', async () => {
  api.get.mockImplementationOnce(rejection).mockResolvedValue(payload); render(<MemoryRouter><ClosedTransactionsPage /></MemoryRouter>);
  await screen.findByText(/Squared-off transactions could not be loaded/); expect(screen.queryByText('No squared-off transactions yet.')).toBeNull(); fireEvent.click(screen.getByRole('button', { name: 'Retry squared-off transactions' })); await screen.findByText('TCS'); expect(api.delete).not.toHaveBeenCalled();
@@ -50,4 +64,59 @@ it('does not publish or refresh a prior Portfolio delete response into the curre
  await act(async () => finishDelete({ data: {} }));
  expect(screen.getByText('INFY')).toBeVisible(); expect(screen.queryByText('TCS')).not.toBeInTheDocument();
  expect(showToast).not.toHaveBeenCalledWith('Transaction deleted'); expect(api.get).toHaveBeenCalledTimes(2); expect(api.delete).toHaveBeenCalledTimes(1);
+});
+
+it('refreshes the latest same-Portfolio search after a confirmed delete without suppressing its acknowledgement', async () => {
+ vi.useFakeTimers();
+ const deletion = deferred(); const dashboardRefresh = vi.fn(); listen(PORTFOLIO_DASHBOARD_REFRESH, dashboardRefresh);
+ api.get.mockImplementation((_url, { params }) => {
+  const filtered = rows.filter(row => !params.search || row.stock.symbol.includes(params.search));
+  return Promise.resolve(pagePayload(filtered, params.page));
+ });
+ api.delete.mockReturnValue(deletion.promise);
+ render(<MemoryRouter><ClosedTransactionsPage /></MemoryRouter>);
+ await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+ expect(screen.getByText('TCS')).toBeInTheDocument(); expect(screen.getByText('INFY')).toBeInTheDocument();
+ await applySearch('TCS');
+ expect(screen.getByText('TCS')).toBeInTheDocument(); expect(screen.queryByText('INFY')).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button', { name: 'Delete recorded transaction' }));
+ expect(api.delete).toHaveBeenCalledTimes(1); expect(api.delete).toHaveBeenCalledWith('/transactions/91');
+ await applySearch('INFY');
+ expect(screen.getByText('INFY')).toBeInTheDocument(); expect(screen.queryByText('TCS')).not.toBeInTheDocument();
+ await act(async () => { deletion.resolve({ data: {} }); });
+ expect(api.delete).toHaveBeenCalledTimes(1);
+ expect(api.get.mock.calls.map(([, options]) => [options.params.page, options.params.search || ''])).toEqual([[1, ''], [1, 'TCS'], [1, 'INFY'], [1, 'INFY']]);
+ expect(screen.getByText('INFY')).toBeInTheDocument(); expect(screen.queryByText('TCS')).not.toBeInTheDocument();
+ expect(showToast).toHaveBeenCalledTimes(1); expect(showToast).toHaveBeenCalledWith('Transaction deleted');
+ expect(dashboardRefresh).toHaveBeenCalledTimes(1);
+});
+
+it('uses the latest page after a confirmed delete completes', async () => {
+ const deletion = deferred();
+ api.get.mockImplementation((_url, { params }) => Promise.resolve(pagePayload(params.page === 1 ? [rows[0]] : [rows[1]], params.page)));
+ api.delete.mockReturnValue(deletion.promise);
+ render(<MemoryRouter><ClosedTransactionsPage /></MemoryRouter>); await screen.findByText('TCS');
+ fireEvent.click(screen.getByRole('button', { name: 'Delete recorded transaction' }));
+ expect(api.delete).toHaveBeenCalledWith('/transactions/91');
+ fireEvent.click(screen.getByRole('button', { name: 'Next page' })); await screen.findByText('INFY');
+ await act(async () => { deletion.resolve({ data: {} }); });
+ expect(api.delete).toHaveBeenCalledTimes(1);
+ expect(api.get.mock.calls.map(([, options]) => options.params.page)).toEqual([1, 2, 2]);
+ expect(screen.getByText('INFY')).toBeInTheDocument();
+});
+
+it('keeps current filtered evidence when delete is rejected and does not retry the mutation', async () => {
+ vi.useFakeTimers();
+ const dashboardRefresh = vi.fn(); listen(PORTFOLIO_DASHBOARD_REFRESH, dashboardRefresh);
+ api.get.mockImplementation((_url, { params }) => Promise.resolve(pagePayload(rows.filter(row => !params.search || row.stock.symbol.includes(params.search)))));
+ const deletion = deferred(); api.delete.mockReturnValue(deletion.promise);
+ render(<MemoryRouter><ClosedTransactionsPage /></MemoryRouter>);
+ await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+ await applySearch('TCS');
+ fireEvent.click(screen.getByRole('button', { name: 'Delete recorded transaction' }));
+ await act(async () => { deletion.reject({ response: { status: 503, data: { message: 'Synthetic delete unavailable.' } } }); await deletion.promise.catch(() => {}); });
+ expect(screen.getByText(/Transaction deletion could not be confirmed/)).toBeInTheDocument();
+ expect(screen.getByText('TCS')).toBeInTheDocument(); expect(screen.queryByText('INFY')).not.toBeInTheDocument();
+ expect(api.get).toHaveBeenCalledTimes(2); expect(api.delete).toHaveBeenCalledTimes(1);
+ expect(showToast).not.toHaveBeenCalledWith('Transaction deleted'); expect(dashboardRefresh).not.toHaveBeenCalled();
 });

@@ -1,8 +1,13 @@
+import { createApiFailureDiagnosticCollector, installApiFailureDiagnosticBoundary, handleApiFailureDiagnostic, registerApiFailureDiagnosticAfterEach } from './apiFailureDiagnosticBoundary.js';
+
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 import { hasPresetChartGeometry, waitForPresetChartGeometry } from './productionSmokeDiagnostics.js';
+
+registerApiFailureDiagnosticAfterEach(test);
+
 
 const dates = ['2025-10-01', '2026-01-01', '2026-04-01', '2026-07-01'];
 const prices = dates.map((price_date, index) => ({
@@ -71,7 +76,7 @@ async function progressiveDenseLegendScenario(page, viewport) {
     // The long synthetic history stresses actual Recharts geometry while six
     // independent metric histories resolve one at a time. No production data
     // or preference writes are involved.
-    await page.route('**/api/stocks/42/market-prices', route => route.fulfill({ json: { data: longPriceHistory, has_price_history: true, price_count: longPriceHistory.length } }));
+    await page.route('**/api/stocks/42/market-prices', route => route.fulfill({ json: { stock: { id: 42, symbol: 'TCS', name: 'Tata Consultancy Services', exchange: 'NSE' }, data: longPriceHistory, has_price_history: true, price_count: longPriceHistory.length } }));
     await page.route('**/api/v1/stocks/42/fundamentals/metrics/*/history?*', async route => {
         const routeMetric = new URL(route.request().url()).pathname.split('/').at(-2);
         const metric = routeMetric === 'net_income' ? 'net_profit' : routeMetric;
@@ -138,7 +143,7 @@ async function prepare(page, viewport, { showWelcomePrompt = false, allowMockedT
     await page.route('**/api/watchlists', route => route.fulfill({ json: { data: [{ id: 5, name: 'Synthetic research', item_count: 0 }] } }));
     await page.route('**/api/watchlists/5/items*', route => route.fulfill({ json: { data: [] } }));
     await page.route('**/api/watchlist/membership*', route => route.fulfill({ json: { watchlist_ids: [] } }));
-    await page.route('**/api/stocks/42/market-prices', route => route.fulfill({ json: { data: prices, has_price_history: true, price_count: prices.length, from_date: dates[0], to_date: dates.at(-1), latest_close: 104, latest_price_date: dates.at(-1) } }));
+    await page.route('**/api/stocks/42/market-prices', route => route.fulfill({ json: { stock: { id: 42, symbol: 'TCS', name: 'Tata Consultancy Services', exchange: 'NSE' }, data: prices, has_price_history: true, price_count: prices.length, from_date: dates[0], to_date: dates.at(-1), latest_close: 104, latest_price_date: dates.at(-1) } }));
     await page.route('**/api/stocks/42/pattern-scan*', route => route.fulfill({ json: { data: { matches: [] } } }));
     await page.route('**/api/v1/stocks/42/fundamentals/metrics/*/history?*', route => route.fulfill({ json: { data: { points } } }));
     await page.route('**/api/v1/stock-details/combo-chart-preference', route => {
@@ -147,10 +152,13 @@ async function prepare(page, viewport, { showWelcomePrompt = false, allowMockedT
     });
     const writes = [];
     const blocked = [];
+    const diagnosticReports = createApiFailureDiagnosticCollector(page);
+    await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
     let welcomeSkipUiActionInProgress = false;
-    await page.route('**/*', route => {
+    await page.route('**/*', async route => {
         const request = route.request();
         const url = new URL(request.url());
+        if (await handleApiFailureDiagnostic(route, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports })) return;
         const write = /^(POST|PUT|PATCH|DELETE)$/.test(request.method());
         let tourAction = null;
         try {
@@ -302,7 +310,10 @@ test('symbol deep links prefer the data-bearing NSE listing over a BSE-first wat
     await page.route('**/api/stocks/*/market-prices', route => {
         const stockId = Number(new URL(route.request().url()).pathname.match(/\/stocks\/(\d+)\/market-prices$/)?.[1]);
         requestedPriceStockIds.push(stockId);
-        return route.fulfill({ json: { data: stockId === 1886 ? prices : [], has_price_history: stockId === 1886, price_count: stockId === 1886 ? prices.length : 0 } });
+        const stock = stockId === 1886
+            ? { id: 1886, symbol: 'TCS', name: 'Tata Consultancy Services', exchange: 'NSE' }
+            : { id: 4573, symbol: 'TCS', name: 'Tata Consultancy Services', exchange: 'BSE' };
+        return route.fulfill({ json: { stock, data: stockId === 1886 ? prices : [], has_price_history: stockId === 1886, price_count: stockId === 1886 ? prices.length : 0 } });
     });
     await page.route('**/api/v1/stocks/*/fundamentals/metrics/*/history*', route => route.fulfill({ json: { data: { points } } }));
 
@@ -338,7 +349,10 @@ test('a deliberate BSE selection survives late watchlist rows for the same symbo
     await page.route('**/api/stocks/*/market-prices', route => {
         const stockId = Number(new URL(route.request().url()).pathname.match(/\/stocks\/(\d+)\/market-prices$/)?.[1]);
         requestedPriceStockIds.push(stockId);
-        return route.fulfill({ json: { data: stockId === 1886 ? prices : [], has_price_history: stockId === 1886, price_count: stockId === 1886 ? prices.length : 0 } });
+        const stock = stockId === 1886
+            ? { id: 1886, symbol: 'TCS', name: 'Tata Consultancy Services', exchange: 'NSE' }
+            : { id: 4573, symbol: 'TCS', name: 'Tata Consultancy Services', exchange: 'BSE' };
+        return route.fulfill({ json: { stock, data: stockId === 1886 ? prices : [], has_price_history: stockId === 1886, price_count: stockId === 1886 ? prices.length : 0 } });
     });
     await page.route('**/api/v1/stocks/*/fundamentals/metrics/*/history*', route => route.fulfill({ json: { data: { points } } }));
 
@@ -411,7 +425,7 @@ test('renders real combo series with 5,458 price rows while every unrelated hist
     const longPriceHistory = createDensePriceHistory();
     const historiesReady = new Promise(() => {});
     let pendingHistoryRequests = 0;
-    await page.route('**/api/stocks/42/market-prices', route => route.fulfill({ json: { data: longPriceHistory, has_price_history: true, price_count: longPriceHistory.length } }));
+    await page.route('**/api/stocks/42/market-prices', route => route.fulfill({ json: { stock: { id: 42, symbol: 'TCS', name: 'Tata Consultancy Services', exchange: 'NSE' }, data: longPriceHistory, has_price_history: true, price_count: longPriceHistory.length } }));
     await page.route('**/api/v1/stocks/42/fundamentals/metrics/*/history?*', async route => {
         pendingHistoryRequests += 1;
         await historiesReady;
@@ -451,7 +465,7 @@ test('an open welcome prompt blocks the production pointer legend action until s
     const safety = await prepare(page, 'desktop', { showWelcomePrompt: true, allowMockedTourActions: true });
     await page.setViewportSize({ width: 1280, height: 720 });
     const longPriceHistory = createDensePriceHistory();
-    await page.route('**/api/stocks/42/market-prices', route => route.fulfill({ json: { data: longPriceHistory, has_price_history: true, price_count: longPriceHistory.length } }));
+    await page.route('**/api/stocks/42/market-prices', route => route.fulfill({ json: { stock: { id: 42, symbol: 'TCS', name: 'Tata Consultancy Services', exchange: 'NSE' }, data: longPriceHistory, has_price_history: true, price_count: longPriceHistory.length } }));
 
     await page.goto('/watchlist/TCS');
     const chart = page.getByRole('region', { name: 'Stock Details combo chart', exact: true });
