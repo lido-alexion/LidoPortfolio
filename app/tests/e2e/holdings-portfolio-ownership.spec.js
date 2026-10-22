@@ -25,6 +25,15 @@ for (const viewport of VIEWPORTS) {
             page.on('response', response => responses.push(response));
             await installInvestorWorkflowApiMocks(page);
             await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnostics });
+            // The shell performs its ordinary account-local notification read on mount.
+            // Supply the real empty-list envelope rather than letting the generic fixture
+            // return UNMOCKED/501 and produce an unrelated diagnostic POST.
+            const notificationEnvelope = { data: [], meta: { current_page: 1, last_page: 1, per_page: 5, total: 0, unread_count: 0, active_critical_count: 0 } };
+            await page.route('**/api/notification-center?*', route => {
+                const request = route.request(); const url = new URL(request.url());
+                if (request.method() !== 'GET' || url.origin !== 'http://127.0.0.1:4177' || url.search !== '?per_page=5') return route.fallback();
+                return route.fulfill({ json: notificationEnvelope });
+            });
             const second = { id: 2, name: 'Long Term', is_default: false };
             await page.route('**/api/portfolios', route => route.fulfill({ json: { data: [TEST_PORTFOLIO, second] } }));
             let releaseA;
@@ -84,6 +93,18 @@ for (const viewport of VIEWPORTS) {
             await expect(page.getByText('LATE_A', { exact: true })).toHaveCount(0);
             await expect(page.getByRole('button', { name: 'Sell' }).first()).toBeVisible();
             await expect(page.getByRole('menuitem', { name: 'Cancel protection', exact: true })).toBeVisible();
+            const notificationRequests = requests.filter(request => request.path === '/api/notification-center');
+            expect(notificationRequests.length).toBeGreaterThan(0);
+            await expect.poll(() => responses.filter(response => new URL(response.url()).pathname === '/api/notification-center').length).toBe(notificationRequests.length);
+            const notificationResponses = responses.filter(response => new URL(response.url()).pathname === '/api/notification-center');
+            await Promise.all(notificationResponses.map(async response => {
+                expect(response.request().method()).toBe('GET');
+                expect(new URL(response.url()).search).toBe('?per_page=5');
+                expect(response.status()).toBe(200);
+                expect(await response.json()).toEqual(notificationEnvelope);
+                expect(await response.finished()).toBeNull();
+            }));
+            expect(diagnostics.receipts).toEqual([]);
             expect(blocked).toEqual([]);
             expect(requests.filter(request => request.origin !== 'http://127.0.0.1:4177')).toEqual([]);
             expect(writes).toEqual([]);
