@@ -208,7 +208,7 @@ for (const viewport of VIEWPORTS) {
         testInfo.annotations.push({ type: 'ops001', description: 'OPS001-01' });
         const { fixture, panel } = await open(page, viewport, '01', { uncertainLaunch: true });
         await expect(panel).toBeVisible();
-        await expect(page.getByRole('heading', { name: 'Fundamental Data', level: 1 })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Fundamental Data', level: 1, exact: true }).and(page.locator('h1.h3'))).toBeVisible();
         await panel.getByRole('button', { name: 'Start backfill' }).click();
         await expect(panel.getByRole('status').filter({ hasText: /action result is uncertain/i })).toBeVisible();
         expect(mutationRows(fixture.rows)).toHaveLength(1);
@@ -345,7 +345,7 @@ for (const viewport of VIEWPORTS) {
         expect(mutationRows(fixture.rows)[0]).toMatchObject({ method: 'POST', path: `${ROOT}/presets`, status: 201, requestBody: { name: 'Eligible universe', configuration: { scope: 'all' } }, responseBody: { data: { id: 3, name: 'Eligible universe', configuration: { scope: 'all' }, revision: 1, schedules_count: 0 } } });
         await panel.getByLabel('Schedule name').fill('Quarterly operations');
         await panel.getByLabel('Configuration').selectOption('3');
-        await panel.getByLabel('Repeat').selectOption('monthly');
+        await panel.getByRole('combobox', { name: 'Repeat', exact: true }).selectOption('monthly');
         await panel.getByLabel('Local time').fill('09:15');
         await panel.getByLabel('Timezone').fill('Asia/Kolkata');
         await panel.getByLabel('Starts (local date and time)').fill('2026-11-01T09:15');
@@ -356,7 +356,7 @@ for (const viewport of VIEWPORTS) {
         expect(mutationRows(fixture.rows)[1].requestBody).not.toHaveProperty('configuration');
         expect(mutationRows(fixture.rows)[1].responseBody.data.enabled).toBe(false);
         const nextBefore = fixture.schedule.next_occurrence_at;
-        const configuredScheduleRow = panel.getByRole('row').filter({ has: page.getByText('Quarterly operations', { exact: true }) });
+        const configuredScheduleRow = panel.getByRole('row').filter({ has: page.getByRole('cell').filter({ hasText: /^Quarterly operations\s*all · version \d+$/ }) });
         await configuredScheduleRow.getByRole('button', { name: 'Clone', exact: true }).click();
         await expect(panel.getByRole('row').filter({ hasText: 'Quarterly operations copy' })).toContainText('Disabled');
         await expect.poll(() => mutationRows(fixture.rows).length).toBe(3);

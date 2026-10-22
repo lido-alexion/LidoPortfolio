@@ -229,7 +229,10 @@ class BootstrapScheduleOperationsTest extends TestCase
         $this->assertSame($schedule->id, $runNowReceipt['schedule_id']);
         $this->assertSame($schedule->generation, $runNowReceipt['schedule_generation']);
         $this->assertSame($schedule->fresh()->version, $runNowReceipt['schedule_version']);
-        $this->assertSame($schedule->configuration_snapshot, $runNowReceipt['configuration_snapshot']);
+        $this->assertSame(
+            \App\Services\Fundamentals\BootstrapRequestContext::canonical($schedule->configuration_snapshot),
+            \App\Services\Fundamentals\BootstrapRequestContext::canonical($runNowReceipt['configuration_snapshot']),
+        );
         $this->assertNull($runNowReceipt['preset_id']);
         $this->assertNull($runNowReceipt['preset_revision']);
         $this->assertNull($runNowReceipt['scheduled_at']);

@@ -213,7 +213,7 @@ class BootstrapOperationalOutcomePackageTest extends TestCase
 
         $response = $this->actingAs($admin)->get('/api/v1/admin/fundamentals/bootstrap-operations/runs/'.$run->id.'/export.csv?failed_only=1');
         $response->assertOk();
-        $response->assertHeader('cache-control', 'private, no-store, max-age=0');
+        $response->assertHeader('cache-control', 'max-age=0, no-store, private');
         $csv = $response->streamedContent();
         $this->assertStringContainsString('run_summary', $csv);
         $rows = $this->parseCsvRows($csv);
