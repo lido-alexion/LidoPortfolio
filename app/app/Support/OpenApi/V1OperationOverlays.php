@@ -50,7 +50,7 @@ final class V1OperationOverlays
             ],
         ];
 
-        return V1AcceptanceOverlays::all() + [
+        return V1AcceptanceOverlays::all() + V1BootstrapOperationsOverlays::all() + V1BootstrapCoverageOverlays::all() + V1BootstrapScheduleOverlays::all() + V1BootstrapOperationalOutcomeOverlays::all() + V1BootstrapIntegrationOverlays::all() + [
             'GET /api/v1/artifact-library/bundle-deployments/{uuid}' => [
                 'summary' => 'Read Bundle deployment evidence',
                 'description' => 'Reads the exact Bundle deployment for the authenticated requester and active Portfolio. Returns allowlisted status and member revision evidence; performs no mutation.',

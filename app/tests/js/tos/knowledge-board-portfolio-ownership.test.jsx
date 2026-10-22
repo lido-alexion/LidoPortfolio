@@ -25,7 +25,7 @@ function mount(controls = null) {
     return render(<MemoryRouter><AuthContext.Provider value={{ loading: false, isAuthenticated: true, user: { id: 1, default_portfolio_id: 1, is_admin: false } }}><PortfolioProvider><PortfolioSwitcher />{controls}<KnowledgeBoardPage /></PortfolioProvider></AuthContext.Provider></MemoryRouter>);
 }
 const switchTo = async (name) => {
-    fireEvent.click(screen.getByTitle('Switch portfolio (per tab)'));
+    fireEvent.click(await screen.findByTitle('Switch portfolio (per tab)'));
     fireEvent.click(await screen.findByRole('button', { name, exact: true }));
 };
 

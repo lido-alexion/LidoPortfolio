@@ -172,6 +172,68 @@ class FundamentalBootstrapWorkflowTest extends TestCase
         $this->assertSame(1, $job->fresh()->attempts);
     }
 
+    public function test_due_retry_is_claimed_and_finishes_without_replacing_its_run_history(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'DUE-RETRY', 'exchange' => 'NSE', 'name' => 'Due retry', 'is_active' => true, 'is_benchmark' => true]);
+        $run = FundamentalBootstrapRun::query()->create(['trigger' => 'manual', 'scope' => 'stocks', 'status' => 'running', 'requested' => 1]);
+        $job = FundamentalBootstrapJob::query()->create([
+            'run_id' => $run->id, 'stock_id' => $stock->id, 'status' => FundamentalBootstrapJob::STATUS_RETRY,
+            'attempts' => 1, 'next_attempt_at' => now()->subSecond(),
+        ]);
+
+        app(FundamentalBootstrapService::class)->process($run, 1);
+
+        $this->assertSame(FundamentalBootstrapJob::STATUS_COMPLETE_NO_DATA, $job->fresh()->status);
+        $this->assertSame(2, $job->fresh()->attempts);
+        $this->assertSame('completed', $run->fresh()->status);
+        $this->assertSame(1, FundamentalBootstrapRun::query()->count());
+    }
+
+    public function test_automatic_queue_worker_never_adopts_legacy_queued_or_running_runs(): void
+    {
+        $queuedStock = Stock::query()->create(['symbol' => 'LEGACY-Q', 'exchange' => 'NSE', 'name' => 'Legacy queued']);
+        $runningStock = Stock::query()->create(['symbol' => 'LEGACY-R', 'exchange' => 'NSE', 'name' => 'Legacy running']);
+        $runs = collect([
+            FundamentalBootstrapRun::query()->create(['trigger' => 'manual', 'scope' => 'stocks', 'status' => 'queued', 'requested' => 1]),
+            FundamentalBootstrapRun::query()->create(['trigger' => 'manual', 'scope' => 'stocks', 'status' => 'running', 'requested' => 1]),
+            FundamentalBootstrapRun::query()->create(['trigger' => 'manual', 'scope' => 'stocks', 'status' => 'queued', 'request_snapshot' => ['managed_version' => 1]]),
+            FundamentalBootstrapRun::query()->create(['trigger' => 'manual', 'scope' => 'stocks', 'status' => 'running', 'request_snapshot' => ['managed_version' => 1]]),
+            FundamentalBootstrapRun::query()->create(['trigger' => 'manual', 'scope' => 'stocks', 'status' => 'queued', 'request_snapshot' => ['managed_version' => 1, 'origin' => 'untrusted_origin']]),
+            FundamentalBootstrapRun::query()->create(['trigger' => 'manual', 'scope' => 'stocks', 'status' => 'running', 'request_snapshot' => ['managed_version' => 1, 'origin' => 'untrusted_origin']]),
+        ]);
+        FundamentalBootstrapJob::query()->create(['run_id' => $runs[0]->id, 'stock_id' => $queuedStock->id, 'status' => FundamentalBootstrapJob::STATUS_QUEUED]);
+        FundamentalBootstrapJob::query()->create(['run_id' => $runs[1]->id, 'stock_id' => $runningStock->id, 'status' => FundamentalBootstrapJob::STATUS_RUNNING]);
+
+        $ingest = \Mockery::mock(\App\Services\Fundamentals\FundamentalHistoricalIngestService::class);
+        $ingest->shouldNotReceive('fetch');
+        $this->app->instance(\App\Services\Fundamentals\FundamentalHistoricalIngestService::class, $ingest);
+        Artisan::call('stox:fundamentals-bootstrap-work-once');
+
+        $this->assertSame(['queued', 'running', 'queued', 'running', 'queued', 'running'], $runs->map(fn ($run) => $run->fresh()->status)->all());
+        $this->assertSame(FundamentalBootstrapJob::STATUS_QUEUED, FundamentalBootstrapJob::query()->where('run_id', $runs[0]->id)->value('status'));
+        $this->assertSame(FundamentalBootstrapJob::STATUS_RUNNING, FundamentalBootstrapJob::query()->where('run_id', $runs[1]->id)->value('status'));
+    }
+
+    public function test_version_only_queued_slot_is_not_classified_as_an_ops_owner(): void
+    {
+        $admin = \App\Models\User::factory()->create(['is_admin' => true]);
+        $stock = Stock::query()->create(['symbol' => 'WRONG-ORIGIN', 'exchange' => 'NSE', 'name' => 'Wrong origin', 'is_active' => true, 'is_benchmark' => false]);
+        $managed = app(\App\Services\Fundamentals\BootstrapOperationsService::class)->launch(
+            ['scope' => 'stocks', 'stock_ids' => [$stock->id]], $admin->id, 'Admin', 'managed-right-origin-001',
+        )->run;
+        $untrusted = FundamentalBootstrapRun::query()->create([
+            'trigger' => 'manual', 'scope' => 'stocks', 'status' => 'queued',
+            'request_snapshot' => ['managed_version' => 1],
+        ]);
+        \Illuminate\Support\Facades\DB::table('stox_fund_bootstrap_control')->where('id', 1)->update(['active_run_id' => $untrusted->id]);
+        $stock->forceFill(['is_benchmark' => true])->save();
+
+        app(FundamentalBootstrapService::class)->process($managed, 1);
+
+        $this->assertSame('queued', $untrusted->fresh()->status);
+        $this->assertSame('completed', $managed->fresh()->status);
+    }
+
     public function test_cancellation_waits_for_processing_lock_preserves_terminal_jobs_and_fences_resume(): void
     {
         $processingStock = Stock::query()->create(['symbol' => 'PROCESSING', 'exchange' => 'NSE', 'name' => 'Processing']);

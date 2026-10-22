@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../api';
 import { showToast } from '../toast';
+import BootstrapOperationsPanel from './BootstrapOperationsPanel';
 
 export default function FundamentalDataAdminPage() {
     const [status, setStatus] = useState(null);
@@ -117,6 +118,8 @@ export default function FundamentalDataAdminPage() {
                 </div>
                 <button className="btn btn-primary" type="button" onClick={run} disabled={busy}>Run slice</button>
             </div>
+
+            <BootstrapOperationsPanel />
 
             <div className="row g-3">
                 <div className="col-lg-4">
