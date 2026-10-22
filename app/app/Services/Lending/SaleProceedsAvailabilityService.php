@@ -5,6 +5,7 @@ namespace App\Services\Lending;
 use App\Models\PendingSaleProceeds;
 use App\Models\PortfolioProfile;
 use App\Models\TradingStrategy;
+use App\Services\Strategy\StrategyLifecycleAdmission;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -56,7 +57,10 @@ final class SaleProceedsAvailabilityService
         $soldAt = $soldAt ? Carbon::parse($soldAt) : now();
         $availableAt = $soldAt->copy()->addDays(self::SETTLEMENT_DELAY_DAYS);
 
-        return PendingSaleProceeds::query()->create([
+        return DB::transaction(function () use ($profile, $strategy, $actualAmount, $expectedAmount, $obligationType, $soldAt, $availableAt, $capitalRecallId, $recallBridgeLoanId, $transactionId, $requiredSettlementAmount, $targetLiquidationValue, $saleBufferAmount) {
+            app(StrategyLifecycleAdmission::class)->lockForNewObligation((int) $profile->id, [(int) $strategy->id]);
+
+            return PendingSaleProceeds::query()->create([
             'profile_id' => $profile->id,
             'strategy_id' => $strategy->id,
             'capital_recall_id' => $capitalRecallId,
@@ -71,7 +75,8 @@ final class SaleProceedsAvailabilityService
             'sold_at' => $soldAt,
             'available_at' => $availableAt,
             'status' => PendingSaleProceeds::STATUS_PENDING,
-        ]);
+            ]);
+        });
     }
 
     public function isPhysicallyAvailable(PendingSaleProceeds $row, ?CarbonInterface $asOf = null): bool
@@ -141,13 +146,17 @@ final class SaleProceedsAvailabilityService
      */
     public function setActualProceeds(PendingSaleProceeds $row, float $actualAmount): PendingSaleProceeds
     {
-        if ($row->status === PendingSaleProceeds::STATUS_APPLIED) {
-            return $row;
-        }
         $actualAmount = round(max(0.0, $actualAmount), 4);
-        $row->forceFill(['amount' => $actualAmount])->save();
+        return DB::transaction(function () use ($row, $actualAmount) {
+            app(StrategyLifecycleAdmission::class)->lockForNewObligation((int) $row->profile_id, [(int) $row->strategy_id]);
+            $locked = PendingSaleProceeds::query()->whereKey($row->id)->lockForUpdate()->firstOrFail();
+            if ($locked->status === PendingSaleProceeds::STATUS_APPLIED) {
+                return $locked;
+            }
+            $locked->forceFill(['amount' => $actualAmount])->save();
 
-        return $row->fresh();
+            return $locked->fresh();
+        });
     }
 
     public function availableAmount(PortfolioProfile $profile, TradingStrategy $strategy, ?CarbonInterface $asOf = null): float

@@ -1,8 +1,13 @@
+import { createApiFailureDiagnosticCollector, installApiFailureDiagnosticBoundary, handleApiFailureDiagnostic, registerApiFailureDiagnosticAfterEach } from './apiFailureDiagnosticBoundary.js';
+
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 import { hasPresetChartGeometry, waitForPresetChartGeometry } from './productionSmokeDiagnostics.js';
+
+registerApiFailureDiagnosticAfterEach(test);
+
 
 const dates = ['2025-10-01', '2026-01-01', '2026-04-01', '2026-07-01'];
 const prices = dates.map((price_date, index) => ({
@@ -147,10 +152,13 @@ async function prepare(page, viewport, { showWelcomePrompt = false, allowMockedT
     });
     const writes = [];
     const blocked = [];
+    const diagnosticReports = createApiFailureDiagnosticCollector(page);
+    await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
     let welcomeSkipUiActionInProgress = false;
-    await page.route('**/*', route => {
+    await page.route('**/*', async route => {
         const request = route.request();
         const url = new URL(request.url());
+        if (await handleApiFailureDiagnostic(route, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports })) return;
         const write = /^(POST|PUT|PATCH|DELETE)$/.test(request.method());
         let tourAction = null;
         try {

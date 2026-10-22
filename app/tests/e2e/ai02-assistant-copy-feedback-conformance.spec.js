@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { installApiFailureDiagnosticBoundaryForPage, isApiFailureDiagnosticRequest, registerApiFailureDiagnosticFixtureHooks } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticFixtureHooks(test);
 
 const answer = 'A screener filters stocks using conditions you choose.';
 const source = {
@@ -28,13 +31,22 @@ for (const { width, height } of [{ width: 390, height: 844 }, { width: 1440, hei
                 value: { writeText: async text => { window.__ux001ClipboardCalls.push(text); } },
             });
         });
+        const allowedOrigin = new URL(process.env.STOX_E2E_BASE_URL || 'http://127.0.0.1:4177').origin;
+        const blockedOrigins = [];
+        await page.route('**/*', async route => {
+            const url = new URL(route.request().url());
+            if (url.origin !== allowedOrigin) { blockedOrigins.push(url.origin); return route.abort(); }
+            return route.fallback();
+        });
         const observed = [];
         const forbiddenAccountCalls = [];
         page.on('request', request => {
             const url = new URL(request.url());
-            if (url.pathname.startsWith('/api/ai/assistant/')) {
+            if (url.pathname.startsWith('/api/')) {
                 observed.push({ request, origin: url.origin, path: url.pathname, method: request.method() });
-                if (!['/api/ai/assistant/stream', feedbackPath].includes(url.pathname)) {
+                if (/^(POST|PUT|PATCH|DELETE)$/.test(request.method())
+                    && !isApiFailureDiagnosticRequest(request, allowedOrigin)
+                    && !['/api/ai/assistant/stream', feedbackPath].includes(url.pathname)) {
                     forbiddenAccountCalls.push(url.pathname);
                 }
             }
@@ -71,6 +83,9 @@ for (const { width, height } of [{ width: 390, height: 844 }, { width: 1440, hei
                 : { status: 200, contentType: 'application/json', body: JSON.stringify({ data: { saved: true } }) });
         });
 
+        // Keep generated 503 diagnostics within the fixture's strict boundary.
+        await installApiFailureDiagnosticBoundaryForPage(page);
+
         await page.goto('/');
         await page.getByRole('button', { name: 'Open StoX assistant' }).click();
         const drawer = page.getByRole('dialog', { name: 'StoX assistant' });
@@ -104,9 +119,13 @@ for (const { width, height } of [{ width: 390, height: 844 }, { width: 1440, hei
         ]);
         expect(observed.filter(item => item.path === streamPath)).toHaveLength(1);
         expect(observed.filter(item => item.path === feedbackPath)).toHaveLength(3);
-        expect(observed.every(item => item.method === 'POST')).toBe(true);
         expect(observed.every(item => item.origin === new URL(page.url()).origin)).toBe(true);
         expect(forbiddenAccountCalls).toEqual([]);
+        expect(blockedOrigins).toEqual([]);
+        const mutatingRequests = observed.filter(item => /^(POST|PUT|PATCH|DELETE)$/.test(item.method)
+            && !isApiFailureDiagnosticRequest(item.request, allowedOrigin));
+        expect(mutatingRequests.every(item => item.method === 'POST')).toBe(true);
+        expect(mutatingRequests.map(item => item.path).sort()).toEqual([feedbackPath, feedbackPath, feedbackPath, streamPath].sort());
         expect(responses).toHaveLength(4);
         for (const response of responses) {
             expect(await response.finished()).toBeNull();

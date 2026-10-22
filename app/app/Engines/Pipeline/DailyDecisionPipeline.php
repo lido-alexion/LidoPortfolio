@@ -84,7 +84,9 @@ class DailyDecisionPipeline
                 'candidates' => count($discovery['candidates']),
             ];
 
-            $this->strategies->ensureActive($profile);
+            if (! TradingStrategy::query()->where('profile_id', $profile->id)->exists()) {
+                $this->strategies->ensureActive($profile);
+            }
             $evalGroups = $this->evaluationGroupsForProfile($profile);
             $allRecs = [];
             $evalRunIds = [];
@@ -215,13 +217,6 @@ class DailyDecisionPipeline
                 ];
             }
             $groups[$fingerprint]['strategy_ids'][] = (int) $strategy->id;
-        }
-
-        if ($groups === []) {
-            return [[
-                'config' => $this->parameterResolver->globals(),
-                'strategy_ids' => null,
-            ]];
         }
 
         return array_values($groups);

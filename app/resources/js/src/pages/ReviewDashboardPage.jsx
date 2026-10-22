@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ROUTES } from '../navigation/routes';
-import api from '../api';
-import useApiGet from '../hooks/useApiGet';
-import { runApiMutation } from '../hooks/useApiMutation';
+import api, { getApiErrorMessage } from '../api';
 import { showToast } from '../toast';
 import { formatInrCompactWhole } from '../utils/tableFormat';
 import { tosData, tosList } from '../utils/tosEnvelope';
+import { usePortfolio } from '../context/PortfolioContext';
+import { getActivePortfolioId } from '../portfolio/activePortfolioStorage';
+import { PORTFOLIO_CHANGED } from '../utils/portfolioEvents';
 
 function fmtPct(v) {
     if (v == null || Number.isNaN(Number(v))) return '—';
@@ -26,52 +27,149 @@ function brokerStatusOf(order) {
 }
 
 export default function ReviewDashboardPage() {
-    const [reconcilingOrderId, setReconcilingOrderId] = useState(null);
-    const { data, loading, error, reload: load } = useApiGet({
-        errorFallback: 'Failed to load review dashboard',
-        request: async () => {
+    const { activePortfolio, activePortfolioId } = usePortfolio();
+    const [portfolioEpoch, setPortfolioEpoch] = useState(0);
+    const [ownedData, setOwnedData] = useState(null);
+    const [ownedLoading, setOwnedLoading] = useState(true);
+    const [ownedError, setOwnedError] = useState(null);
+    const [revision, setRevision] = useState(0);
+    const [reconciling, setReconciling] = useState(null);
+    const identity = useRef({ scope: null, epoch: 0, mounted: false });
+    const readSequence = useRef(0);
+    const reconcileSequence = useRef(0);
+    const committedScope = activePortfolio && String(activePortfolio.id) === String(activePortfolioId)
+        ? String(activePortfolioId) : null;
+    useLayoutEffect(() => {
+        identity.current.mounted = true;
+        return () => {
+            identity.current.mounted = false;
+            identity.current.epoch += 1;
+            readSequence.current += 1;
+            reconcileSequence.current += 1;
+        };
+    }, []);
+    useLayoutEffect(() => {
+        if (identity.current.scope === committedScope) return;
+        identity.current.scope = committedScope;
+        identity.current.epoch += 1;
+        readSequence.current += 1;
+        reconcileSequence.current += 1;
+        setOwnedData(null);
+        setOwnedError(null);
+        setOwnedLoading(true);
+        setReconciling(null);
+    }, [committedScope]);
+    useLayoutEffect(() => {
+        const onPortfolioChanged = () => {
+            identity.current.epoch += 1;
+            setPortfolioEpoch(identity.current.epoch);
+            readSequence.current += 1;
+            reconcileSequence.current += 1;
+            setOwnedData(null);
+            setOwnedError(null);
+            setOwnedLoading(true);
+            setReconciling(null);
+            setRevision((value) => value + 1);
+        };
+        window.addEventListener(PORTFOLIO_CHANGED, onPortfolioChanged);
+        return () => window.removeEventListener(PORTFOLIO_CHANGED, onPortfolioChanged);
+    }, []);
+    const isCurrent = useCallback((owner) => identity.current.mounted
+        && owner.scope != null
+        && owner.scope === identity.current.scope
+        && getActivePortfolioId() === owner.scope
+        && owner.epoch === identity.current.epoch
+        && (owner.reconcileOperation == null || owner.reconcileOperation === reconcileSequence.current), []);
+    const runOwnedMutation = async (request, owner, { successMessage, errorFallback }) => {
+        if (!isCurrent(owner)) return { ok: false };
+        try {
+            const response = await request();
+            if (successMessage && isCurrent(owner)) showToast(successMessage, 'success');
+            return { ok: true, data: response };
+        } catch (e) {
+            if (isCurrent(owner)) showToast(getApiErrorMessage(e, errorFallback), 'danger');
+            return { ok: false, error: e };
+        }
+    };
+    const load = useCallback(async () => {
+        const owner = { scope: committedScope, epoch: identity.current.epoch };
+        if (!isCurrent(owner)) return null;
+        const sequence = ++readSequence.current;
+        setOwnedLoading(true);
+        setOwnedError(null);
+        try {
             const [d, o] = await Promise.all([
                 api.get('/v1/review/dashboard', { skipErrorToast: true }),
                 api.get('/v1/orders', { skipErrorToast: true }),
             ]);
-            return {
+            const result = {
                 dash: tosData(d),
                 orders: tosList(o),
             };
-        },
-    });
+            if (isCurrent(owner) && sequence === readSequence.current) setOwnedData({ ...result, scope: owner.scope, epoch: owner.epoch, sequence });
+            return isCurrent(owner) && sequence === readSequence.current ? result : null;
+        } catch (e) {
+            if (isCurrent(owner) && sequence === readSequence.current) {
+                setOwnedError({ scope: owner.scope, epoch: owner.epoch, sequence, error: e });
+                showToast(getApiErrorMessage(e, 'Failed to load review dashboard'), 'danger');
+            }
+            return null;
+        } finally {
+            if (isCurrent(owner) && sequence === readSequence.current) setOwnedLoading(false);
+        }
+    }, [committedScope, isCurrent]);
+    useEffect(() => {
+        if (committedScope) load();
+    }, [committedScope, portfolioEpoch, revision, load]);
+    const visibleData = ownedData?.scope === committedScope
+        && ownedData?.epoch === identity.current.epoch
+        && getActivePortfolioId() === committedScope;
+    const data = visibleData ? ownedData : null;
+    const loading = !committedScope || ownedLoading;
+    const error = ownedError?.scope === committedScope
+        && ownedError?.epoch === identity.current.epoch
+        && getActivePortfolioId() === committedScope ? ownedError.error : null;
     const dash = data?.dash ?? null;
     const orders = data?.orders ?? [];
+    const renderedOwner = { scope: committedScope, epoch: identity.current.epoch };
 
-    const executePending = async (orderId) => {
+    const executePending = async (orderId, rowOwner) => {
+        const owner = { ...rowOwner };
+        if (!isCurrent(owner)) return;
         const price = window.prompt('Execution price');
-        if (!price) return;
-        const { ok } = await runApiMutation(async () => {
+        if (!price || !isCurrent(owner)) return;
+        const { ok } = await runOwnedMutation(async () => {
             await api.post(`/v1/orders/${orderId}/execute`, { price: Number(price) }, { skipErrorToast: true });
-        }, { successMessage: 'Transaction added', errorFallback: 'Execute failed' });
-        if (ok) {
+        }, owner, { successMessage: 'Transaction added', errorFallback: 'Execute failed' });
+        if (ok && isCurrent(owner)) {
             await load();
         }
     };
 
-    const cancelPending = async (orderId) => {
-        const { ok, data: response } = await runApiMutation(async () => (
+    const cancelPending = async (orderId, rowOwner) => {
+        const owner = { ...rowOwner };
+        if (!isCurrent(owner)) return;
+        const { ok, data: response } = await runOwnedMutation(async () => (
             await api.post(`/v1/orders/${orderId}/cancel`, null, { skipErrorToast: true })
-        ), { errorFallback: 'Cancel failed' });
-        if (ok) {
+        ), owner, { errorFallback: 'Cancel failed' });
+        if (ok && isCurrent(owner)) {
             const outcome = response?.data?.data?.cancellation_status;
             showToast(outcome === 'pending' ? 'Cancellation requested; waiting for Kite confirmation.' : 'Order cancellation confirmed.', 'success');
             await load();
         }
     };
 
-    const reconcileOrder = async (orderId) => {
-        setReconcilingOrderId(orderId);
+    const reconcileOrder = async (orderId, rowOwner) => {
+        const owner = { ...rowOwner };
+        if (!isCurrent(owner)) return;
+        const operation = ++reconcileSequence.current;
+        owner.reconcileOperation = operation;
+        setReconciling({ id: orderId, operation });
         try {
-            const { ok, data: response } = await runApiMutation(async () => (
+            const { ok, data: response } = await runOwnedMutation(async () => (
                 await api.post(`/v1/orders/${orderId}/reconcile`, null, { skipErrorToast: true })
-            ), { errorFallback: 'Order reconciliation failed' });
-            if (ok) {
+            ), owner, { errorFallback: 'Order reconciliation failed' });
+            if (ok && isCurrent(owner)) {
                 const status = response?.data?.data?.broker_status || 'unknown';
                 const inFlight = ['submitted', 'open', 'partial'].includes(status);
                 showToast(
@@ -85,7 +183,7 @@ export default function ReviewDashboardPage() {
                 await load();
             }
         } finally {
-            setReconcilingOrderId(null);
+            if (isCurrent(owner) && reconcileSequence.current === operation) setReconciling(null);
         }
     };
 
@@ -275,18 +373,18 @@ export default function ReviewDashboardPage() {
                                                 <button
                                                     type="button"
                                                     className="btn btn-link btn-sm px-0 me-2"
-                                                    disabled={reconcilingOrderId === o.id}
-                                                    onClick={() => reconcileOrder(o.id)}
+                                                    disabled={reconciling?.id === o.id}
+                                                    onClick={() => reconcileOrder(o.id, renderedOwner)}
                                                 >
-                                                    {reconcilingOrderId === o.id ? 'Reconciling…' : 'Reconcile'}
+                                                    {reconciling?.id === o.id ? 'Reconciling…' : 'Reconcile'}
                                                 </button>
                                             )}
                                             {o.status === 'pending' && (
                                                 <>
                                                     {!IN_FLIGHT_BROKER_STATUSES.has(brokerStatusOf(o)) && !FINAL_NO_FILL_BROKER_STATUSES.has(brokerStatusOf(o)) && (
-                                                        <button type="button" className="btn btn-link btn-sm px-0 me-2" onClick={() => executePending(o.id)}>Add transaction</button>
+                                                        <button type="button" className="btn btn-link btn-sm px-0 me-2" onClick={() => executePending(o.id, renderedOwner)}>Add transaction</button>
                                                     )}
-                                                    <button type="button" className="btn btn-link btn-sm px-0 text-danger" onClick={() => cancelPending(o.id)}>Cancel</button>
+                                                    <button type="button" className="btn btn-link btn-sm px-0 text-danger" onClick={() => cancelPending(o.id, renderedOwner)}>Cancel</button>
                                                 </>
                                             )}
                                         </td>

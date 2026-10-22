@@ -3474,6 +3474,57 @@
                 }
             }
         },
+        "/api/v1/artifact-library/bundle-deployments/{uuid}": {
+            "get": {
+                "tags": [
+                    "artifact-library"
+                ],
+                "summary": "Read Bundle deployment evidence",
+                "description": "Reads the exact Bundle deployment for the authenticated requester and active Portfolio. Returns allowlisted status and member revision evidence; performs no mutation.",
+                "operationId": "get_artifact-library_bundle-deployments_uuid",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "404": {
+                        "description": "Deployment UUID is not available to this requester in the active Portfolio."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/artifact-library/bundle-deployments/{uuid}/deploy": {
             "post": {
                 "tags": [
@@ -11713,9 +11764,146 @@
                 "tags": [
                     "strategy-registry"
                 ],
-                "summary": "POST archive",
-                "description": "Live route: `POST /api/v1/strategy-registry/{id}/archive`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyRegistryController@archive`.",
+                "summary": "Retire a fully resolved strategy",
+                "description": "Requires a user reason. Archives only when no strategy-owned holdings, actionable recommendations, pending executions/orders, reserved funds, or unsettled obligations remain. Returns HTTP 409 with exact blockers otherwise.",
                 "operationId": "post_strategy-registry_id_archive",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "409": {
+                        "description": "Strategy still has unresolved owned work; meta.blockers contains code, label, count, and an existing resolution href.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeError"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "reason"
+                                ],
+                                "properties": {
+                                    "reason": {
+                                        "type": "string",
+                                        "minLength": 3,
+                                        "maxLength": 1000
+                                    }
+                                },
+                                "additionalProperties": true
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/strategy-registry/{id}/archive-blockers": {
+            "get": {
+                "tags": [
+                    "strategy-registry"
+                ],
+                "summary": "Inspect strategy-owned archive blockers",
+                "description": "Returns exact unresolved strategy-owned records and their existing resolution routes. Other strategies and completed zero-balance history do not block retirement.",
+                "operationId": "get_strategy-registry_id_archive-blockers",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "404": {
+                        "description": "Strategy does not exist in the active portfolio.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeError"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/strategy-registry/{id}/disable": {
+            "post": {
+                "tags": [
+                    "strategy-registry"
+                ],
+                "summary": "Pause a strategy without changing existing obligations",
+                "description": "Stops future strategy recommendation runs. Existing holdings, recommendations, orders, reservations, execution and settlement remain under their existing workflows; no financial side effect is performed.",
+                "operationId": "post_strategy-registry_id_disable",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/XProfileId"
@@ -11750,18 +11938,6 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ErrorOrValidation"
                                 }
-                            }
-                        }
-                    }
-                },
-                "requestBody": {
-                    "required": false,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "additionalProperties": true,
-                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
                             }
                         }
                     }
@@ -11822,6 +11998,54 @@
                                 "type": "object",
                                 "additionalProperties": true,
                                 "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/strategy-registry/{id}/restore": {
+            "post": {
+                "tags": [
+                    "strategy-registry"
+                ],
+                "summary": "Restore a retired strategy as disabled",
+                "description": "Restoration never enables the strategy. A separate Enable action applies normal readiness checks.",
+                "operationId": "post_strategy-registry_id_restore",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
                             }
                         }
                     }

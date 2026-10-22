@@ -6,6 +6,7 @@ use App\Engines\Support\ApiEnvelope;
 use App\Http\Controllers\Controller;
 use App\Services\Artifacts\ArtifactType;
 use App\Services\Artifacts\StrategyArtifactRegistry;
+use App\Services\Strategy\StrategyArchiveBlocked;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
 
@@ -185,18 +186,60 @@ class StrategyRegistryController extends Controller
         }
     }
 
-    public function archive(string $id)
+    public function archive(string $id, Request $request)
     {
         $profile = \activePortfolio();
         if ($profile === null) {
             return ApiEnvelope::error('NO_PORTFOLIO', 'Active portfolio required.', 422);
         }
         try {
-            $archived = $this->registry->archive($id, $profile);
+            $validated = $request->validate(['reason' => 'required|string|min:3|max:1000']);
+            $archived = $this->registry->archive($id, $profile, $validated['reason']);
 
             return ApiEnvelope::success($archived);
+        } catch (StrategyArchiveBlocked $e) {
+            return ApiEnvelope::error('STRATEGY_ARCHIVE_BLOCKED', $e->getMessage(), 409, ['blockers' => $e->blockers]);
         } catch (InvalidArgumentException $e) {
             return ApiEnvelope::error('STRATEGY_ARCHIVE_FAILED', $e->getMessage(), 422);
+        }
+    }
+
+    public function archiveBlockers(string $id)
+    {
+        $profile = \activePortfolio();
+        if ($profile === null) {
+            return ApiEnvelope::error('NO_PORTFOLIO', 'Active portfolio required.', 422);
+        }
+        try {
+            return ApiEnvelope::success($this->registry->archiveBlockers($id, $profile));
+        } catch (InvalidArgumentException $e) {
+            return ApiEnvelope::error('STRATEGY_NOT_FOUND', $e->getMessage(), 404);
+        }
+    }
+
+    public function disable(string $id)
+    {
+        $profile = \activePortfolio();
+        if ($profile === null) {
+            return ApiEnvelope::error('NO_PORTFOLIO', 'Active portfolio required.', 422);
+        }
+        try {
+            return ApiEnvelope::success($this->registry->disable($id, $profile));
+        } catch (InvalidArgumentException $e) {
+            return ApiEnvelope::error('STRATEGY_DISABLE_FAILED', $e->getMessage(), 422);
+        }
+    }
+
+    public function restore(string $id)
+    {
+        $profile = \activePortfolio();
+        if ($profile === null) {
+            return ApiEnvelope::error('NO_PORTFOLIO', 'Active portfolio required.', 422);
+        }
+        try {
+            return ApiEnvelope::success($this->registry->restore($id, $profile));
+        } catch (InvalidArgumentException $e) {
+            return ApiEnvelope::error('STRATEGY_RESTORE_FAILED', $e->getMessage(), 422);
         }
     }
 

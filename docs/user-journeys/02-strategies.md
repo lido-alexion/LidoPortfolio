@@ -227,17 +227,17 @@ A strategy is a named investment policy. It consumes discovery/screener evidence
 
 ---
 
-## STR-14 — Archive or disable a strategy
+## STR-14 — Pause, retire, or restore a strategy
 
-**Goal:** Stop future runtime use without erasing historical evidence.
+**Goal:** Pause new strategy work without changing existing financial work, or retire a fully resolved strategy while retaining its history.
 
 1. Open `/strategy/registry`.
-2. Select the strategy to retire.
-3. Check for live recommendations, pending execution and owned holdings that need deliberate handling.
-4. Use the supported disable/archive lifecycle action.
-5. Confirm the strategy is no longer enabled for future runs.
+2. Select the strategy. **Disable** is available at any time and pauses new recommendations and future strategy runs. It does not sell, cancel orders, release reservations, or change holdings, orders, execution, or settlement. Configuration stays editable; Enable resumes only after normal readiness checks.
+3. To **Retire**, enter a reason. If the server reports blockers, follow each existing resolution link and finish the owned work through its normal workflow. Archive is allowed only after the strategy has no open owned holdings, actionable recommendations, pending executions/orders, reserved funds, or unsettled obligations.
+4. Retired configuration is read-only. Its reason, versions, recommendations, transactions and ownership attribution remain available as history.
+5. **Restore** changes a retired strategy to Disabled. Select **Enable** separately to run existing readiness checks.
 
-**Expected result:** Historical recommendations/transactions remain attributable to the strategy. StoX protects lifecycle invariants such as the last-enabled-strategy rule where applicable.
+**Expected result:** Zero enabled strategies is valid. Disabling and retiring do not create financial writes, forced liquidation, cancellation, reassignment or automatic fund release. Existing obligations remain manageable for disabled strategies; sibling strategy history does not block this strategy's retirement.
 
 ---
 

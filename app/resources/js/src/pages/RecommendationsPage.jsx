@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../api';
-import useApiGet from '../hooks/useApiGet';
-import { runApiMutation } from '../hooks/useApiMutation';
+import api, { getApiErrorMessage } from '../api';
+import { usePortfolio } from '../context/PortfolioContext';
+import { getActivePortfolioId } from '../portfolio/activePortfolioStorage';
+import { PORTFOLIO_CHANGED } from '../utils/portfolioEvents';
 import { showToast } from '../toast';
 import RecommendationCapitalResolution from '../components/RecommendationCapitalResolution';
 import RecommendationLenderActions from '../components/RecommendationLenderActions';
@@ -108,7 +109,7 @@ function displayLabel(r) {
     return r.ui_label || r.recommendation_type || '—';
 }
 
-function CapitalStatusCell({ r, expandedId, onToggleLender, onLenderChanged }) {
+function CapitalStatusCell({ r, expandedId, onToggleLender, onLenderChanged, canInteract }) {
     if (!showsCapitalAllocationStatus(r)) {
         return <span className="text-muted">—</span>;
     }
@@ -128,17 +129,22 @@ function CapitalStatusCell({ r, expandedId, onToggleLender, onLenderChanged }) {
                 <button
                     type="button"
                     className="btn btn-link btn-sm px-0 py-0"
-                    onClick={() => onToggleLender(r.id)}
+                    onClick={() => { if (canInteract()) onToggleLender(r.id); }}
                 >
                     {expandedId === r.id ? 'Hide lenders' : 'Select lender'}
                 </button>
             ) : null}
             {expandedId === r.id && canLender ? (
-                <div className="w-100" style={{ minWidth: '16rem' }}>
+                <div
+                    className="w-100"
+                    style={{ minWidth: '16rem' }}
+                    onClickCapture={(event) => {
+                        if (!canInteract()) { event.preventDefault(); event.stopPropagation(); }
+                    }}
+                >
                     <RecommendationLenderActions
                         recommendation={r}
                         onChanged={async () => {
-                            onToggleLender(null);
                             if (typeof onLenderChanged === 'function') await onLenderChanged(r.id);
                         }}
                     />
@@ -148,7 +154,7 @@ function CapitalStatusCell({ r, expandedId, onToggleLender, onLenderChanged }) {
     );
 }
 
-function RecTable({ rows, actionLabel, onOpen, expandedLenderId, onToggleLender, onLenderChanged }) {
+function RecTable({ rows, actionLabel, onOpen, expandedLenderId, onToggleLender, onLenderChanged, canInteract }) {
     if (rows.length === 0) {
         return <p className="text-muted small mb-0">None.</p>;
     }
@@ -196,13 +202,14 @@ function RecTable({ rows, actionLabel, onOpen, expandedLenderId, onToggleLender,
                                     expandedId={expandedLenderId}
                                     onToggleLender={onToggleLender}
                                     onLenderChanged={onLenderChanged}
+                                    canInteract={canInteract}
                                 />
                             </td>
                             <td className="small">{allocationLabel(r)}</td>
                             <td>{formatPct(r.confidence)}</td>
                             <td className="small">{r.generated_at ? new Date(r.generated_at).toLocaleString() : '—'}</td>
                             <td>
-                                <button type="button" className="btn btn-link btn-sm px-0" onClick={() => onOpen(r.id)}>
+                                <button type="button" className="btn btn-link btn-sm px-0" onClick={() => { if (canInteract()) onOpen(r.id); }}>
                                     {actionLabel}
                                 </button>
                             </td>
@@ -215,8 +222,22 @@ function RecTable({ rows, actionLabel, onOpen, expandedLenderId, onToggleLender,
 }
 
 export default function RecommendationsPage() {
+    const { activePortfolio, activePortfolioId } = usePortfolio();
+    const portfolioId = activePortfolioId == null ? null : String(activePortfolioId);
+    const portfolioConfirmed = Boolean(activePortfolio && String(activePortfolio.id) === portfolioId);
+    const contextRef = useRef({ portfolioId: null, portfolioConfirmed: false });
+    const committedScope = useRef(null);
+    const ownershipEpoch = useRef(0);
+    const listSequence = useRef(0);
+    const detailSequence = useRef(0);
+    const mounted = useRef(false);
+    const operationSequence = useRef(0);
+    const operationOwner = useRef(null);
+    const pipelineOwner = useRef(null);
     const [recs, setRecs] = useState([]);
     const [running, setRunning] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const [pipelineMeta, setPipelineMeta] = useState(null);
     const [selected, setSelected] = useState(null);
     const [notes, setNotes] = useState('');
@@ -225,49 +246,192 @@ export default function RecommendationsPage() {
     const [showHold, setShowHold] = useState(false);
     const [resultMeta, setResultMeta] = useState(null);
     const [expandedLenderId, setExpandedLenderId] = useState(null);
-
-    const { loading, error, reload: load } = useApiGet({
-        deps: [showAll],
-        errorFallback: 'Failed to load recommendations',
-        request: async () => {
+    const [loadedPortfolioId, setLoadedPortfolioId] = useState(null);
+    const committedPortfolioId = contextRef.current.portfolioId;
+    const currentOwner = useCallback((id, epoch) => mounted.current
+        && epoch === ownershipEpoch.current
+        && id != null
+        && contextRef.current.portfolioConfirmed
+        && contextRef.current.portfolioId === id
+        && String(getActivePortfolioId() ?? '') === id, []);
+    const beginOperation = (id, epoch, busyKey = null, channel = 'detail') => {
+        const operation = { id: ++operationSequence.current, portfolioId: id, epoch, channel };
+        const owner = channel === 'pipeline' ? pipelineOwner : operationOwner;
+        owner.current = operation;
+        if (busyKey !== null) setBusyId(busyKey);
+        return operation;
+    };
+    const operationOwns = (operation) => currentOwner(operation?.portfolioId, operation?.epoch)
+        && (operation?.channel === 'pipeline' ? pipelineOwner : operationOwner).current?.id === operation?.id;
+    const finishOperation = (operation) => {
+        if (!operationOwns(operation)) return;
+        const owner = operation.channel === 'pipeline' ? pipelineOwner : operationOwner;
+        owner.current = null;
+        if (operation.channel === 'pipeline') setRunning(false);
+        else setBusyId(null);
+    };
+    const invalidateOperation = () => {
+        operationSequence.current += 1;
+        operationOwner.current = null;
+        setBusyId(null);
+    };
+    const runOwnedMutation = async (operation, fn, { successMessage, errorFallback = 'Request failed' } = {}) => {
+        try {
+            const data = await fn();
+            if (operationOwns(operation) && successMessage) showToast(successMessage, 'success');
+            return { ok: true, data };
+        } catch (e) {
+            if (operationOwns(operation) && !e?.stalePortfolio) showToast(getApiErrorMessage(e, errorFallback), 'danger');
+            return { ok: false, error: e };
+        }
+    };
+    const resetScope = useCallback(() => {
+        ownershipEpoch.current += 1;
+        operationSequence.current += 1;
+        operationOwner.current = null;
+        pipelineOwner.current = null;
+        listSequence.current += 1;
+        detailSequence.current += 1;
+        setRecs([]); setResultMeta(null); setPipelineMeta(null); setSelected(null);
+        setNotes(''); setExpandedLenderId(null); setBusyId(null); setRunning(false);
+        setError(null); setLoadedPortfolioId(null);
+        setLoading(Boolean(contextRef.current.portfolioId) && contextRef.current.portfolioConfirmed);
+    }, []);
+    const load = useCallback(async () => {
+        const id = contextRef.current.portfolioId;
+        if (!id || !contextRef.current.portfolioConfirmed || String(getActivePortfolioId() ?? '') !== id) {
+            return null;
+        }
+        const epoch = ownershipEpoch.current;
+        const sequence = ++listSequence.current;
+        setLoading(true); setError(null);
+        try {
             const { data } = await api.get('/v1/recommendations', {
-                params: showAll ? { all: 1 } : { open: 1 },
-                skipErrorToast: true,
+                params: showAll ? { all: 1 } : { open: 1 }, skipErrorToast: true,
             });
+            if (!currentOwner(id, epoch) || sequence !== listSequence.current) return null;
             const list = Array.isArray(data?.data) ? data.data : [];
-            setRecs(list);
-            setResultMeta(data?.meta || null);
+            setRecs(list); setResultMeta(data?.meta || null); setLoadedPortfolioId(id);
             return list;
-        },
-    });
+        } catch (e) {
+            if (currentOwner(id, epoch) && sequence === listSequence.current) {
+                setError(e);
+                showToast(getApiErrorMessage(e, 'Failed to load recommendations'), 'danger');
+            }
+            return null;
+        } finally {
+            if (currentOwner(id, epoch) && sequence === listSequence.current) setLoading(false);
+        }
+    }, [currentOwner, showAll]);
+    const loadRef = useRef(load);
+    useLayoutEffect(() => { loadRef.current = load; }, [load]);
+    useLayoutEffect(() => {
+        mounted.current = true;
+        return () => {
+            mounted.current = false;
+            ownershipEpoch.current += 1;
+            operationSequence.current += 1;
+            operationOwner.current = null;
+            pipelineOwner.current = null;
+            committedScope.current = null;
+            listSequence.current += 1;
+            detailSequence.current += 1;
+        };
+    }, []);
+    useLayoutEffect(() => {
+        contextRef.current = { portfolioId, portfolioConfirmed };
+        const scopeKey = portfolioConfirmed ? portfolioId : null;
+        if (committedScope.current !== scopeKey) {
+            committedScope.current = scopeKey;
+            resetScope();
+            if (scopeKey && String(getActivePortfolioId() ?? '') === scopeKey) loadRef.current();
+        }
+    }, [portfolioId, portfolioConfirmed, resetScope]);
+    useLayoutEffect(() => {
+        const onPortfolioChanged = () => {
+            resetScope();
+            const id = contextRef.current.portfolioId;
+            if (id && contextRef.current.portfolioConfirmed && String(getActivePortfolioId() ?? '') === id) loadRef.current();
+        };
+        window.addEventListener(PORTFOLIO_CHANGED, onPortfolioChanged);
+        return () => window.removeEventListener(PORTFOLIO_CHANGED, onPortfolioChanged);
+    }, [resetScope]);
+    const lastShowAll = useRef(showAll);
+    useEffect(() => {
+        if (lastShowAll.current === showAll) return;
+        lastShowAll.current = showAll;
+        if (portfolioConfirmed) loadRef.current();
+    }, [showAll, portfolioConfirmed]);
 
-    const tradeRecs = useMemo(() => recs.filter(isActionableRec), [recs]);
-    const allInsights = useMemo(() => recs.filter((r) => !isActionableRec(r)), [recs]);
+    const refreshAfterLenderChange = async (id, ownerId, epoch, detailToken, expectedOperationId) => {
+        if (!currentOwner(ownerId, epoch) || detailSequence.current !== detailToken
+            || (operationOwner.current?.id ?? null) !== expectedOperationId) return;
+        const operation = beginOperation(ownerId, epoch, `lender:${id}`);
+        try {
+            await loadRef.current();
+            if (!operationOwns(operation) || detailSequence.current !== detailToken) return;
+            const requestSequence = ++detailSequence.current;
+            const { data } = await api.get(`/v1/recommendations/${id}`, { skipErrorToast: true });
+            if (operationOwns(operation) && detailSequence.current === requestSequence) {
+                setSelected(data?.data || null);
+                setNotes('');
+                setExpandedLenderId(null);
+            }
+        } catch (e) {
+            if (operationOwns(operation)) showToast(getApiErrorMessage(e, 'Failed to load detail'), 'danger');
+        } finally {
+            finishOperation(operation);
+        }
+    };
+
+    const visibleOwner = portfolioConfirmed && portfolioId === committedPortfolioId
+        && currentOwner(committedPortfolioId, ownershipEpoch.current);
+    const scopedRecs = visibleOwner && loadedPortfolioId === committedPortfolioId ? recs : [];
+    const tradeRecs = useMemo(() => scopedRecs.filter(isActionableRec), [scopedRecs]);
+    const allInsights = useMemo(() => scopedRecs.filter((r) => !isActionableRec(r)), [scopedRecs]);
     const hiddenHoldCount = useMemo(() => allInsights.filter(isHoldRec).length, [allInsights]);
     const insights = useMemo(
         () => allInsights.filter((r) => showHold || !isHoldRec(r)),
         [allInsights, showHold],
     );
-    const generatedDates = useMemo(() => recs
+    const generatedDates = useMemo(() => scopedRecs
         .map((r) => r.generated_at && new Date(r.generated_at))
-        .filter((date) => date && !Number.isNaN(date.getTime())), [recs]);
+        .filter((date) => date && !Number.isNaN(date.getTime())), [scopedRecs]);
 
     const openDetail = async (id) => {
-        const { ok, data: detail } = await runApiMutation(async () => {
+        const ownerId = contextRef.current.portfolioId;
+        const epoch = ownershipEpoch.current;
+        if (!ownerId || !currentOwner(ownerId, epoch)) return;
+        invalidateOperation();
+        const sequence = ++detailSequence.current;
+        try {
             const { data } = await api.get(`/v1/recommendations/${id}`, { skipErrorToast: true });
-            return data?.data || null;
-        }, { errorFallback: 'Failed to load detail' });
-        if (ok) {
-            setSelected(detail);
-            setNotes('');
+            if (currentOwner(ownerId, epoch) && sequence === detailSequence.current) {
+                setSelected(data?.data || null); setNotes('');
+            }
+        } catch (e) {
+            if (currentOwner(ownerId, epoch) && sequence === detailSequence.current) showToast(getApiErrorMessage(e, 'Failed to load detail'), 'danger');
         }
     };
 
+    const closeDetail = () => {
+        detailSequence.current += 1;
+        invalidateOperation();
+        setSelected(null);
+        setNotes('');
+    };
+
     const runPipeline = async () => {
+        const ownerId = contextRef.current.portfolioId;
+        const epoch = ownershipEpoch.current;
+        if (!ownerId || !currentOwner(ownerId, epoch)) return;
+        if (pipelineOwner.current && operationOwns(pipelineOwner.current)) return;
+        const operation = beginOperation(ownerId, epoch, null, 'pipeline');
         setRunning(true);
         setPipelineMeta(null);
         try {
-            const { ok, data: stages } = await runApiMutation(async () => {
+            const { ok, data: stages } = await runOwnedMutation(operation, async () => {
+                if (!operationOwns(operation)) return null;
                 const { data } = await api.post('/v1/pipeline/run', null, {
                     params: { notify: 1, review: 1 },
                     skipErrorToast: true,
@@ -277,63 +441,82 @@ export default function RecommendationsPage() {
                 successMessage: 'Decision pipeline completed',
                 errorFallback: 'Pipeline failed',
             });
-            if (ok) {
+            if (ok && operationOwns(operation)) {
                 setPipelineMeta(stages);
                 await load();
             }
         } finally {
-            setRunning(false);
+            finishOperation(operation);
         }
     };
 
     const reopen = async () => {
         if (!selected) return;
-        setBusyId(selected.id);
+        const ownerId = contextRef.current.portfolioId;
+        const epoch = ownershipEpoch.current;
+        if (!ownerId || !currentOwner(ownerId, epoch)) return;
+        const detailToken = detailSequence.current;
+        const operation = beginOperation(ownerId, epoch, selected.id);
         const id = selected.id;
         try {
-            await runApiMutation(async () => {
+            await runOwnedMutation(operation, async () => {
+                if (!operationOwns(operation) || detailSequence.current !== detailToken) return;
                 await api.post(`/v1/recommendations/${id}/reopen`, {
                     notes: notes || null,
                 }, { skipErrorToast: true });
+                if (!operationOwns(operation) || detailSequence.current !== detailToken) return;
                 await load();
+                if (!operationOwns(operation) || detailSequence.current !== detailToken) return;
+                const requestSequence = ++detailSequence.current;
                 const { data } = await api.get(`/v1/recommendations/${id}`, { skipErrorToast: true });
-                setSelected(data?.data || null);
+                if (operationOwns(operation) && detailSequence.current === requestSequence) setSelected(data?.data || null);
             }, {
                 successMessage: 'Reopened for review',
                 errorFallback: 'Reopen failed',
             });
         } finally {
-            setBusyId(null);
+            finishOperation(operation);
         }
     };
 
     const decide = async (decision) => {
         if (!selected) return;
-        setBusyId(selected.id);
+        const ownerId = contextRef.current.portfolioId;
+        const epoch = ownershipEpoch.current;
+        if (!ownerId || !currentOwner(ownerId, epoch)) return;
+        const detailToken = detailSequence.current;
+        const operation = beginOperation(ownerId, epoch, selected.id);
         const recId = selected.id;
         try {
-            const { ok } = await runApiMutation(async () => {
+            const { ok } = await runOwnedMutation(operation, async () => {
+                if (!operationOwns(operation) || detailSequence.current !== detailToken) return;
                 await api.post(`/v1/recommendations/${recId}/review`, {
                     decision,
                     notes: notes || null,
                 }, { skipErrorToast: true });
+                if (!operationOwns(operation) || detailSequence.current !== detailToken) return;
                 await load();
-                setSelected(null);
+                if (operationOwns(operation) && detailSequence.current === detailToken) setSelected(null);
             }, {
                 successMessage: `Marked ${decision === 'approved' || decision === 'accepted' ? 'approved for execution' : decision}`,
                 errorFallback: 'Review failed',
             });
-            if (ok && (decision === 'approved' || decision === 'accepted')) {
+            if (ok && operationOwns(operation) && (decision === 'approved' || decision === 'accepted')) {
                 showToast('Open Transactions → Pending Execution to record the trade when ready', 'success');
             }
         } finally {
-            setBusyId(null);
+            finishOperation(operation);
         }
     };
 
     const selectedActionable = selected && isActionableRec(selected);
     const opinion = selected?.market_opinion;
     const plan = selected?.execution_plan;
+    const renderedPortfolioId = contextRef.current.portfolioId;
+    const renderedEpoch = ownershipEpoch.current;
+    const renderedDetailToken = detailSequence.current;
+    const renderedOperationId = operationOwner.current?.id ?? null;
+    const canInteractInRenderedScope = () => currentOwner(renderedPortfolioId, renderedEpoch);
 
     return (
         <div className="container-fluid py-3">
@@ -350,14 +533,14 @@ export default function RecommendationsPage() {
                         <label className="form-check-label small" htmlFor="showAllRecs">Include closed history</label>
                     </div>
                     <Link className="btn btn-outline-secondary btn-sm" to="/strategy">Strategy</Link>
-                    <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load} disabled={loading || running}>Refresh</button>
-                    <button type="button" className="btn btn-primary btn-sm" onClick={runPipeline} disabled={running}>
+                    <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load} disabled={!visibleOwner || loading || running}>Refresh</button>
+                    <button type="button" className="btn btn-primary btn-sm" onClick={runPipeline} disabled={!visibleOwner || running}>
                         {running ? 'Running pipeline…' : 'Run decision pipeline'}
                     </button>
                 </div>
             </div>
 
-            {pipelineMeta && (
+            {visibleOwner && pipelineMeta && (
                 <div className="alert alert-info small py-2">
                     Pipeline: discovery candidates {pipelineMeta.discovery?.candidates ?? '—'}
                     {' · '}
@@ -367,31 +550,31 @@ export default function RecommendationsPage() {
                 </div>
             )}
 
-            {error ? (
+            {visibleOwner && error ? (
                 <DataState
                     variant="unavailable"
                     title="Recommendations unavailable"
                     message="The recommendation list could not be loaded. Existing results remain unchanged."
-                    action={<button type="button" className="btn btn-outline-secondary btn-sm" onClick={load} disabled={loading || running}>Retry</button>}
+                    action={<button type="button" className="btn btn-outline-secondary btn-sm" onClick={load} disabled={!visibleOwner || loading || running}>Retry</button>}
                     className="mb-3"
                 />
             ) : null}
 
-            {!loading && (
+            {visibleOwner && !loading && (
                 <p className="small text-muted mb-3">
                     {showAll
                         ? 'All recommendation statuses, newest first.'
                         : 'Current/open statuses only; this view is status-based, not date-based.'}
                     {' Showing '}
-                    {recs.length}
-                    {resultMeta?.total != null ? ` of ${resultMeta.total}` : ''}
+                    {scopedRecs.length}
+                    {visibleOwner && resultMeta?.total != null ? ` of ${resultMeta.total}` : ''}
                     {generatedDates.length > 0 ? (
                         ` · Generated ${new Date(Math.min(...generatedDates)).toLocaleString()} to ${new Date(Math.max(...generatedDates)).toLocaleString()}`
                     ) : ''}
                 </p>
             )}
 
-            {loading ? (
+            {!visibleOwner || loading ? (
                 <p className="text-muted">Loading…</p>
             ) : (
                 <>
@@ -410,11 +593,11 @@ export default function RecommendationsPage() {
                                 actionLabel="Review"
                                 onOpen={openDetail}
                                 expandedLenderId={expandedLenderId}
+                                canInteract={canInteractInRenderedScope}
                                 onToggleLender={(id) => setExpandedLenderId((cur) => (id == null ? null : (cur === id ? null : id)))}
-                                onLenderChanged={async (id) => {
-                                    await load();
-                                    await openDetail(id);
-                                }}
+                                onLenderChanged={(id) => refreshAfterLenderChange(
+                                    id, renderedPortfolioId, renderedEpoch, renderedDetailToken, renderedOperationId,
+                                )}
                             />
                         )}
                     </section>
@@ -445,6 +628,7 @@ export default function RecommendationsPage() {
                                 actionLabel="View details"
                                 onOpen={openDetail}
                                 expandedLenderId={null}
+                                canInteract={canInteractInRenderedScope}
                                 onToggleLender={() => {}}
                             />
                         )}
@@ -452,12 +636,12 @@ export default function RecommendationsPage() {
                 </>
             )}
 
-            {selected && (
-                <div className="modal show d-block lido-tos-review-modal" style={{ background: 'rgba(0,0,0,.45)' }} role="dialog" aria-modal="true">
+            {visibleOwner && selected && (
+                <div className="modal show d-block lido-tos-review-modal" style={{ background: 'rgba(0,0,0,.45)' }} role="dialog" aria-modal="true" aria-labelledby="recommendation-review-dialog-title">
                     <div className="modal-dialog modal-lg modal-dialog-scrollable">
                         <div className="modal-content">
                             <div className="modal-header">
-                                <h5 className="modal-title">
+                                <h5 id="recommendation-review-dialog-title" className="modal-title">
                                     {displayLabel(selected)}
                                     {' '}
                                     {selected.symbol}
@@ -465,7 +649,7 @@ export default function RecommendationsPage() {
                                         <span className="badge text-bg-secondary ms-2">Insight</span>
                                     ) : null}
                                 </h5>
-                                <button type="button" className="btn-close" onClick={() => setSelected(null)} aria-label="Close" />
+                                <button type="button" className="btn-close" onClick={closeDetail} aria-label="Close" />
                             </div>
                             <div className="modal-body">
                                 <p className="small text-muted mb-2">
@@ -726,13 +910,16 @@ export default function RecommendationsPage() {
 
                                 {selectedActionable ? (
                                     <>
-                                        <RecommendationLenderActions
-                                            recommendation={selected}
-                                            onChanged={async () => {
-                                                await load();
-                                                await openDetail(selected.id);
-                                            }}
-                                        />
+                                        <div onClickCapture={(event) => {
+                                            if (!canInteractInRenderedScope()) { event.preventDefault(); event.stopPropagation(); }
+                                        }}>
+                                            <RecommendationLenderActions
+                                                recommendation={selected}
+                                                onChanged={() => refreshAfterLenderChange(
+                                                    selected.id, renderedPortfolioId, renderedEpoch, renderedDetailToken, renderedOperationId,
+                                                )}
+                                            />
+                                        </div>
                                         <RecommendationCapitalResolution recommendationId={selected.id} />
                                     </>
                                 ) : null}
@@ -825,7 +1012,7 @@ export default function RecommendationsPage() {
                             </div>
                             <div className="modal-footer">
                                 <Link className="btn btn-outline-secondary btn-sm" to="/review">Review dashboard</Link>
-                                <button type="button" className="btn btn-primary btn-sm" onClick={() => setSelected(null)}>Close</button>
+                                <button type="button" className="btn btn-primary btn-sm" onClick={closeDetail}>Close</button>
                             </div>
                         </div>
                     </div>

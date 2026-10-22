@@ -85,7 +85,7 @@ UI labels can evolve. The route and user intent are more important than minor wo
 | STR-11 | Change the screener without rebuilding the strategy | [Strategies](02-strategies.md#str-11--change-the-screener-without-rebuilding-the-strategy) |
 | STR-12 | Change exit policy without changing entry policy | [Strategies](02-strategies.md#str-12--change-exit-policy-without-changing-entry-policy) |
 | STR-13 | Enable a strategy | [Strategies](02-strategies.md#str-13--enable-a-strategy) |
-| STR-14 | Archive/disable a strategy | [Strategies](02-strategies.md#str-14--archive-or-disable-a-strategy) |
+| STR-14 | Pause, retire, or restore a strategy | [Strategies](02-strategies.md#str-14--pause-retire-or-restore-a-strategy) |
 | STR-15 | Operate multiple strategies concurrently | [Strategies](02-strategies.md#str-15--operate-multiple-strategies-concurrently) |
 | STR-16 | Same stock used by multiple strategies | [Strategies](02-strategies.md#str-16--same-stock-used-by-multiple-strategies) |
 

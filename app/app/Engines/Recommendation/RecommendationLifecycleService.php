@@ -410,6 +410,11 @@ class RecommendationLifecycleService
         $fromStatus = $recommendation->status;
 
         DB::transaction(function () use ($recommendation, $user, $notes, $fromStatus, $profile) {
+            $strategyId = $recommendation->owningStrategyId();
+            if ($strategyId !== null) {
+                app(\App\Services\Strategy\StrategyLifecycleAdmission::class)
+                    ->lockForNewObligation((int) $profile->id, [$strategyId]);
+            }
             TradingOrder::query()
                 ->where('profile_id', $profile->id)
                 ->where('recommendation_id', $recommendation->id)

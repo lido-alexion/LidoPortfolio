@@ -76,7 +76,7 @@ test('Portfolio Settings exposes OD-12 / opportunity-cost / max position / lendi
     assert.match(settings, /max_lending_pct_of_unused/);
     assert.match(settings, /max_lending_absolute/);
     assert.match(settings, /Atomic block ₹5,000 · Execution margin 1% \(OD-06\)/);
-    assert.match(registry, /Archive this strategy\?/);
+    assert.match(registry, /Why are you retiring/);
     assert.match(registry, /\/archive/);
 });
 
@@ -121,8 +121,9 @@ test('Strategy Registry exposes Create Strategy and Archive for sibling strategi
     assert.match(registry, /id="create-strategy-open"/);
     assert.match(registry, /Create Strategy/);
     assert.match(registry, /CreateStrategyPanel/);
-    assert.match(registry, /Archive this strategy\?/);
-    assert.match(registry, /last enabled/);
+    assert.match(registry, /Why are you retiring/);
+    assert.match(registry, /Disable/);
+    assert.match(docs, /Zero enabled strategies is allowed/);
     assert.match(registry, /to=\{`\/strategy\?strategy_id=/);
 });
 

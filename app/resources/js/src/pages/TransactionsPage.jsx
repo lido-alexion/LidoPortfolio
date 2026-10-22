@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import api from '../api';
@@ -14,7 +14,6 @@ import StockAutocomplete from '../components/StockAutocomplete';
 import { showToast } from '../toast';
 
 import { notifyPortfolioDashboardRefresh } from '../utils/portfolioEvents';
-import usePortfolioChanged from '../hooks/usePortfolioChanged';
 
 import {
 
@@ -45,6 +44,10 @@ import {
 } from '../utils/transactionDate';
 import { buildTransactionTableColumns } from '../utils/transactionTableColumns';
 import { ownerLabelFromKey } from '../utils/sellTransactionPrefill';
+import PortfolioContext from '../context/PortfolioContext';
+import AuthContext from '../context/AuthContext';
+import { getActivePortfolioId } from '../portfolio/activePortfolioStorage';
+import { PORTFOLIO_CHANGED } from '../utils/portfolioEvents';
 
 
 
@@ -148,37 +151,134 @@ function calculatedTotal(quantity, price) {
 export default function TransactionsPage() {
     const location = useLocation();
     const navigate = useNavigate();
+    const portfolioContext = useContext(PortfolioContext);
+    const authContext = useContext(AuthContext);
+    const userId = authContext?.user?.id == null ? null : String(authContext.user.id);
+    const portfolioId = portfolioContext?.activePortfolio?.id == null
+        ? null : String(portfolioContext.activePortfolio.id);
+    const scope = userId && portfolioId ? `${userId}:${portfolioId}` : null;
+    const [portfolioEventRevision, setPortfolioEventRevision] = useState(0);
+    const renderedOwnershipKey = scope ? `${scope}:${portfolioEventRevision}` : null;
+    const ownershipRef = useRef({ key: null, mounted: false });
+    const operationRef = useRef(0);
+    const transactionReadRef = useRef(0);
+    const settingsReadRef = useRef(0);
+    const lotsReadRef = useRef(0);
+    const ownershipIsCurrent = useCallback(() => (
+        Boolean(renderedOwnershipKey)
+        && ownershipRef.current.mounted
+        && ownershipRef.current.key === renderedOwnershipKey
+        && String(getActivePortfolioId()) === portfolioId
+        && String(authContext?.user?.id ?? '') === userId
+    ), [renderedOwnershipKey, portfolioId, userId, authContext?.user?.id]);
+    const [transactions, setTransactionsRaw] = useState([]);
+    const setTransactions = useCallback((value) => { if (ownershipIsCurrent()) setTransactionsRaw(value); }, [ownershipIsCurrent]);
 
-    const [transactions, setTransactions] = useState([]);
+    const [loading, setLoadingRaw] = useState(true);
+    const setLoading = useCallback((value) => { if (ownershipIsCurrent()) setLoadingRaw(value); }, [ownershipIsCurrent]);
 
-    const [loading, setLoading] = useState(true);
+    const [form, setFormState] = useState(emptyForm());
+    const setForm = useCallback((value) => { if (ownershipIsCurrent()) setFormState(value); }, [ownershipIsCurrent]);
 
-    const [form, setForm] = useState(emptyForm());
+    const [sellLots, setSellLotsRaw] = useState([]);
+    const setSellLots = useCallback((value) => { if (ownershipIsCurrent()) setSellLotsRaw(value); }, [ownershipIsCurrent]);
 
-    const [sellLots, setSellLots] = useState([]);
+    const [selectedStock, setSelectedStockRaw] = useState(null);
+    const setSelectedStock = useCallback((value) => { if (ownershipIsCurrent()) setSelectedStockRaw(value); }, [ownershipIsCurrent]);
 
-    const [selectedStock, setSelectedStock] = useState(null);
+    const [symbolValidation, setSymbolValidationRaw] = useState(null);
+    const setSymbolValidation = useCallback((value) => { if (ownershipIsCurrent()) setSymbolValidationRaw(value); }, [ownershipIsCurrent]);
 
-    const [symbolValidation, setSymbolValidation] = useState(null);
+    const [validatingSymbol, setValidatingSymbolRaw] = useState(false);
+    const setValidatingSymbol = useCallback((value) => { if (ownershipIsCurrent()) setValidatingSymbolRaw(value); }, [ownershipIsCurrent]);
 
-    const [validatingSymbol, setValidatingSymbol] = useState(false);
-
-    const [submitting, setSubmitting] = useState(false);
-    const [transactionSaveError, setTransactionSaveError] = useState('');
+    const [submitting, setSubmittingRaw] = useState(false);
+    const setSubmitting = useCallback((value) => { if (ownershipIsCurrent()) setSubmittingRaw(value); }, [ownershipIsCurrent]);
+    const [transactionSaveError, setTransactionSaveErrorRaw] = useState('');
+    const setTransactionSaveError = useCallback((value) => { if (ownershipIsCurrent()) setTransactionSaveErrorRaw(value); }, [ownershipIsCurrent]);
 
     const validationTokenRef = useRef(0);
 
     const dateInputFocusedRef = useRef(false);
 
-    const [transactionDateInput, setTransactionDateInput] = useState(() => (
+    const [transactionDateInput, setTransactionDateInputRaw] = useState(() => (
         formatTransactionDateDisplay(getLocalTodayDateString())
     ));
+    const setTransactionDateInput = useCallback((value) => { if (ownershipIsCurrent()) setTransactionDateInputRaw(value); }, [ownershipIsCurrent]);
 
-    const [feeComponents, setFeeComponents] = useState(DEFAULT_FEE_COMPONENTS);
+    const [feeComponents, setFeeComponentsRaw] = useState(DEFAULT_FEE_COMPONENTS);
+    const setFeeComponents = useCallback((value) => { if (ownershipIsCurrent()) setFeeComponentsRaw(value); }, [ownershipIsCurrent]);
 
-    const [stockSearch, setStockSearch] = useState('');
+    const [stockSearch, setStockSearchRaw] = useState('');
+    const setStockSearch = useCallback((value) => { if (ownershipIsCurrent()) setStockSearchRaw(value); }, [ownershipIsCurrent]);
 
-    const [entryMode, setEntryMode] = useState('single');
+    useLayoutEffect(() => {
+        ownershipRef.current.mounted = true;
+        return () => {
+            ownershipRef.current.mounted = false;
+            ownershipRef.current.key = null;
+            operationRef.current += 1;
+            validationTokenRef.current += 1;
+            transactionReadRef.current += 1;
+            settingsReadRef.current += 1;
+            lotsReadRef.current += 1;
+        };
+    }, []);
+
+    useLayoutEffect(() => {
+        const nextKey = scope
+            && getActivePortfolioId() === portfolioId
+            ? renderedOwnershipKey : null;
+        const previousKey = ownershipRef.current.key;
+        ownershipRef.current.key = nextKey;
+        if (previousKey !== nextKey) {
+            operationRef.current += 1;
+            validationTokenRef.current += 1;
+            transactionReadRef.current += 1;
+            settingsReadRef.current += 1;
+            lotsReadRef.current += 1;
+            setTransactionsRaw([]);
+            setLoadingRaw(Boolean(nextKey));
+            setSellLotsRaw([]);
+            setFormState(emptyForm());
+            setSelectedStockRaw(null);
+            setSymbolValidationRaw(null);
+            setValidatingSymbolRaw(false);
+            setSubmittingRaw(false);
+            setTransactionSaveErrorRaw('');
+            setStockSearchRaw('');
+            setFeeComponentsRaw(DEFAULT_FEE_COMPONENTS);
+            dateInputFocusedRef.current = false;
+        }
+    }, [scope, portfolioId, renderedOwnershipKey]);
+
+    useLayoutEffect(() => {
+        const onPortfolioChanged = () => {
+            ownershipRef.current.key = null;
+            operationRef.current += 1;
+            validationTokenRef.current += 1;
+            transactionReadRef.current += 1;
+            settingsReadRef.current += 1;
+            lotsReadRef.current += 1;
+            setPortfolioEventRevision((revision) => revision + 1);
+            setTransactionsRaw([]);
+            setLoadingRaw(true);
+            setSellLotsRaw([]);
+            setFormState(emptyForm());
+            setSelectedStockRaw(null);
+            setSymbolValidationRaw(null);
+            setValidatingSymbolRaw(false);
+            setSubmittingRaw(false);
+            setTransactionSaveErrorRaw('');
+            setStockSearchRaw('');
+            dateInputFocusedRef.current = false;
+        };
+        window.addEventListener(PORTFOLIO_CHANGED, onPortfolioChanged);
+        return () => window.removeEventListener(PORTFOLIO_CHANGED, onPortfolioChanged);
+    }, []);
+
+    const [entryMode, setEntryModeRaw] = useState('single');
+    const setEntryMode = useCallback((value) => { if (ownershipIsCurrent()) setEntryModeRaw(value); }, [ownershipIsCurrent]);
     const pageTab = location.pathname.startsWith('/transactions/pending') ? 'pending' : 'history';
 
     const setPageTab = useCallback((tab) => {
@@ -188,30 +288,42 @@ export default function TransactionsPage() {
 
 
     const load = useCallback(async () => {
+        if (!scope || !ownershipIsCurrent()) return;
+        const owns = ownershipIsCurrent;
+        const request = ++transactionReadRef.current;
         setLoading(true);
         try {
             const txRes = await api.get('/transactions', { params: { scope: 'open', per_page: 500 } });
-            setTransactions(txRes.data.data || []);
+            if (request === transactionReadRef.current && owns()) setTransactions(txRes.data.data || []);
+        } catch {
+            // Failed reads keep the existing rows; a later event or manual reload can recover.
         } finally {
-            setLoading(false);
+            if (request === transactionReadRef.current && owns()) setLoading(false);
         }
-    }, []);
+    }, [ownershipIsCurrent, scope]);
 
-    const loadFeeSettings = async () => {
-        const res = await api.get('/settings');
-        setFeeComponents(normalizeFeeComponents(res.data.data?.fee_components));
-    };
+    const loadFeeSettings = useCallback(async () => {
+        if (!scope) return;
+        const owns = ownershipIsCurrent;
+        const request = ++settingsReadRef.current;
+        try {
+            const res = await api.get('/settings');
+            if (request === settingsReadRef.current && owns()) setFeeComponents(normalizeFeeComponents(res.data.data?.fee_components));
+        } catch {
+            // Keep the last confirmed fee settings when this read fails.
+        }
+    }, [ownershipIsCurrent, scope]);
 
 
-
-    useEffect(() => { load(); loadFeeSettings(); }, [load]);
-
-    usePortfolioChanged(() => {
-        load();
-        loadFeeSettings();
-    });
 
     useEffect(() => {
+        if (!scope || !ownershipIsCurrent()) return;
+        load();
+        loadFeeSettings();
+    }, [load, loadFeeSettings, renderedOwnershipKey, scope]);
+
+    useEffect(() => {
+        if (!scope || !ownershipIsCurrent()) return;
         const prefill = location.state?.sellPrefill;
         if (!prefill?.stock) {
             return;
@@ -220,6 +332,10 @@ export default function TransactionsPage() {
         const stock = prefill.stock;
         const exchange = stock.exchange || 'NSE';
 
+        operationRef.current += 1;
+        validationTokenRef.current += 1;
+        setSubmitting(false);
+        setValidatingSymbol(false);
         setEntryMode('single');
         setCachedStockValidation(exchange, stock.symbol, {
             valid: true,
@@ -252,25 +368,30 @@ export default function TransactionsPage() {
 
         navigate('/transactions', { replace: true, state: {} });
 
+        const owns = ownershipIsCurrent;
         requestAnimationFrame(() => {
+            if (!owns()) return;
             document.getElementById('transaction-form-card')?.scrollIntoView({
                 behavior: 'smooth',
                 block: 'start',
             });
         });
-    }, [location.state, navigate]);
+    }, [location.state, navigate, scope, ownershipIsCurrent]);
 
     const sellStockId = Number(form.stock_id || selectedStock?.id || 0);
 
     useEffect(() => {
+        if (!ownershipIsCurrent()) return undefined;
         if (form.type !== 'sell' || !sellStockId) {
             setSellLots([]);
             return undefined;
         }
+        const owns = ownershipIsCurrent;
+        const request = ++lotsReadRef.current;
         let cancelled = false;
         api.get('/holdings')
             .then((res) => {
-                if (cancelled) {
+                if (cancelled || request !== lotsReadRef.current || !owns()) {
                     return;
                 }
                 const lots = (res.data?.data || []).filter(
@@ -279,14 +400,14 @@ export default function TransactionsPage() {
                 setSellLots(lots);
             })
             .catch(() => {
-                if (!cancelled) {
+                if (!cancelled && request === lotsReadRef.current && owns()) {
                     setSellLots([]);
                 }
             });
         return () => {
             cancelled = true;
         };
-    }, [form.type, sellStockId]);
+    }, [form.type, sellStockId, ownershipIsCurrent]);
 
     const ownerOptions = useMemo(() => {
         const map = new Map();
@@ -313,19 +434,22 @@ export default function TransactionsPage() {
     }, [form.type, form.recommendation_id, form.owner_key, ownerOptions]);
 
     useEffect(() => {
-        if (!location.state?.focusAddForm) {
+        if (!ownershipIsCurrent() || !location.state?.focusAddForm) {
             return;
         }
         setEntryMode('single');
         navigate('/transactions', { replace: true, state: {} });
+        const owns = ownershipIsCurrent;
         requestAnimationFrame(() => {
+            if (!owns()) return;
             const card = document.getElementById('transaction-form-card');
             card?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             card?.querySelector('input, select, textarea, button')?.focus?.();
         });
-    }, [location.state, navigate]);
+    }, [location.state, navigate, ownershipIsCurrent]);
 
     useEffect(() => {
+        if (!ownershipIsCurrent()) return;
         const search = location.state?.transactionSearch;
         if (typeof search !== 'string' || !search.trim()) {
             return;
@@ -334,13 +458,15 @@ export default function TransactionsPage() {
         setStockSearch(search.trim());
         navigate('/transactions', { replace: true, state: {} });
 
+        const owns = ownershipIsCurrent;
         requestAnimationFrame(() => {
+            if (!owns()) return;
             document.getElementById('active-transactions-table')?.scrollIntoView({
                 behavior: 'smooth',
                 block: 'start',
             });
         });
-    }, [location.state, navigate]);
+    }, [location.state, navigate, ownershipIsCurrent]);
 
     useEffect(() => {
 
@@ -349,14 +475,17 @@ export default function TransactionsPage() {
             return;
 
         }
+        if (!ownershipIsCurrent()) return;
 
         setTransactionDateInput(formatTransactionDateDisplay(form.transaction_date));
 
-    }, [form.transaction_date]);
+    }, [form.transaction_date, ownershipIsCurrent]);
 
 
 
     useEffect(() => {
+
+        if (!ownershipIsCurrent()) return;
 
         if (form.id || !symbolValidation?.valid) {
 
@@ -380,11 +509,12 @@ export default function TransactionsPage() {
 
         }
 
-    }, [form.symbol, form.id, symbolValidation]);
+    }, [form.symbol, form.id, symbolValidation, ownershipIsCurrent]);
 
 
 
     const applyValidatedStock = useCallback((stock, source, cached = false) => {
+        if (!ownershipIsCurrent()) return;
 
         setSelectedStock(stock);
 
@@ -420,13 +550,17 @@ export default function TransactionsPage() {
 
         });
 
-    }, []);
+    }, [ownershipIsCurrent, setForm]);
 
 
 
     const createTx = async (e) => {
 
         e.preventDefault();
+        const owns = ownershipIsCurrent;
+        if (!owns()) return;
+        const operation = ++operationRef.current;
+        const current = () => operationRef.current === operation && owns();
 
         const txDate = parseTransactionDateDisplay(transactionDateInput);
 
@@ -457,9 +591,13 @@ export default function TransactionsPage() {
 
         try {
 
+            if (!current()) return;
+
             if (form.id) {
 
                 await api.put(`/transactions/${form.id}`, payload);
+
+                if (!current()) return;
 
                 showToast('Transaction updated');
 
@@ -471,6 +609,7 @@ export default function TransactionsPage() {
 
             } else {
                 const { data } = await api.post('/transactions', payload);
+                if (!current()) return;
                 showToast(data?.message || 'Transaction saved', 'success');
                 setForm(emptyForm());
                 setSelectedStock(null);
@@ -478,15 +617,16 @@ export default function TransactionsPage() {
                 setTransactionDateInput(formatTransactionDateDisplay(getLocalTodayDateString()));
             }
 
+            if (!current()) return;
             await load();
 
-            notifyPortfolioDashboardRefresh();
+            if (current()) notifyPortfolioDashboardRefresh();
 
         } catch {
-            setTransactionSaveError('Transaction save could not be confirmed. Review existing evidence before retrying.');
+            if (current()) setTransactionSaveError('Transaction save could not be confirmed. Review existing evidence before retrying.');
         } finally {
 
-            setSubmitting(false);
+            if (current()) setSubmitting(false);
 
         }
 
@@ -551,6 +691,11 @@ export default function TransactionsPage() {
 
 
     const editTx = useCallback((tx) => {
+        if (!ownershipIsCurrent()) return;
+        operationRef.current += 1;
+        validationTokenRef.current += 1;
+        setSubmitting(false);
+        setValidatingSymbol(false);
         setTransactionSaveError('');
 
         setForm({
@@ -585,30 +730,39 @@ export default function TransactionsPage() {
 
         setTransactionDateInput(formatTransactionDateDisplay(tx.transaction_date));
 
-    }, []);
+    }, [ownershipIsCurrent]);
 
 
 
     useEffect(() => {
+        if (!scope) return;
         const tx = location.state?.editTransaction;
         if (!tx) {
             return;
         }
         setEntryMode('single');
+        if (!ownershipIsCurrent()) return;
         editTx(tx);
         navigate('/transactions', { replace: true, state: {} });
+        const owns = ownershipIsCurrent;
         requestAnimationFrame(() => {
+            if (!owns()) return;
             document.getElementById('transaction-form-card')?.scrollIntoView({
                 behavior: 'smooth',
                 block: 'start',
             });
         });
-    }, [location.state, editTx, navigate]);
+    }, [location.state, editTx, navigate, scope, ownershipIsCurrent]);
 
     const applyExecuteRecommendation = useCallback((prefill) => {
+        if (!ownershipIsCurrent()) return;
         if (!prefill?.stock_id && !prefill?.symbol) {
             return;
         }
+        operationRef.current += 1;
+        validationTokenRef.current += 1;
+        setSubmitting(false);
+        setValidatingSymbol(false);
         setEntryMode('single');
         const stock = {
             id: prefill.stock_id,
@@ -632,43 +786,51 @@ export default function TransactionsPage() {
             owner_key: '',
         });
         setSymbolValidation({ valid: true, stock, source: 'recommendation' });
+        const owns = ownershipIsCurrent;
         requestAnimationFrame(() => {
+            if (!owns()) return;
             document.getElementById('transaction-form-card')?.scrollIntoView({
                 behavior: 'smooth',
                 block: 'start',
             });
         });
-    }, []);
+    }, [ownershipIsCurrent, setForm]);
 
     useEffect(() => {
+        if (!scope || !ownershipIsCurrent()) return;
         const prefill = location.state?.executeRecommendation;
         if (!prefill) {
             return;
         }
         applyExecuteRecommendation(prefill);
         navigate('/transactions', { replace: true, state: {} });
-    }, [location.state, applyExecuteRecommendation, navigate]);
+    }, [location.state, applyExecuteRecommendation, navigate, scope, ownershipIsCurrent]);
 
 
 
     const deleteTx = useCallback(async (id) => {
+        const owns = ownershipIsCurrent;
+        if (!owns()) return;
         if (!window.confirm('Delete this transaction? If it came from a recommendation, that item returns to Pending Execution.')) {
             return;
         }
+        if (!owns()) return;
         try {
             const { data } = await api.delete(`/transactions/${id}`);
+            if (!owns()) return;
             const msg = data?.message || 'Transaction deleted';
             showToast(msg, data?.tos?.recommendation_reopened ? 'success' : undefined);
             await load();
-            notifyPortfolioDashboardRefresh();
+            if (owns()) notifyPortfolioDashboardRefresh();
         } catch (e) {
-            showToast(e?.response?.data?.message || e?.response?.data?.error?.message || e.message || 'Delete failed', 'danger');
+            if (owns()) showToast(e?.response?.data?.message || e?.response?.data?.error?.message || e.message || 'Delete failed', 'danger');
         }
-    }, [load]);
+    }, [load, ownershipIsCurrent]);
 
 
 
     const handleStockSelect = (stock) => {
+        if (!ownershipIsCurrent()) return;
         const listingExchange = stock.exchange || 'NSE';
 
         setCachedStockValidation(listingExchange, stock.symbol, {
@@ -690,6 +852,11 @@ export default function TransactionsPage() {
 
 
     const handleSymbolChange = (symbol) => {
+        if (!ownershipIsCurrent()) return;
+        if (symbol.trim().toUpperCase() !== form.symbol.trim().toUpperCase()) {
+            validationTokenRef.current += 1;
+            setValidatingSymbol(false);
+        }
 
         setForm((prev) => {
 
@@ -722,6 +889,7 @@ export default function TransactionsPage() {
 
 
     const handleExchangeChange = (exchange) => {
+        if (!ownershipIsCurrent()) return;
 
         setForm((prev) => ({
 
@@ -737,6 +905,9 @@ export default function TransactionsPage() {
 
     const validateSymbol = async () => {
 
+        const owns = ownershipIsCurrent;
+        if (!owns()) return;
+
         const symbol = form.symbol.trim().toUpperCase();
 
         if (symbol.length < 2) {
@@ -750,6 +921,7 @@ export default function TransactionsPage() {
 
 
         const token = ++validationTokenRef.current;
+        const currentValidation = () => token === validationTokenRef.current && owns();
 
         setValidatingSymbol(true);
 
@@ -767,7 +939,7 @@ export default function TransactionsPage() {
 
             });
 
-            if (token !== validationTokenRef.current) {
+            if (!currentValidation()) {
 
                 return;
 
@@ -811,9 +983,13 @@ export default function TransactionsPage() {
 
             for (const exchange of exchangesToTry) {
 
+                if (!currentValidation()) return;
+
                 const cached = getCachedStockValidation(exchange, symbol);
 
                 if (cached?.valid && cached.stock) {
+
+                    if (!currentValidation()) return;
 
                     applyValidatedStock(cached.stock, cached.source || 'local', true);
 
@@ -822,6 +998,8 @@ export default function TransactionsPage() {
                 }
 
                 try {
+
+                    if (!currentValidation()) return;
 
                     const res = await api.post('/stocks/validate', {
 
@@ -833,7 +1011,7 @@ export default function TransactionsPage() {
 
                     });
 
-                    if (token !== validationTokenRef.current) {
+                    if (!currentValidation()) {
 
                         return;
 
@@ -861,13 +1039,15 @@ export default function TransactionsPage() {
 
                 } catch (err) {
 
+                    if (!currentValidation()) return;
+
                     lastError = err;
 
                 }
 
             }
 
-            if (token !== validationTokenRef.current) {
+            if (!currentValidation()) {
 
                 return;
 
@@ -895,7 +1075,7 @@ export default function TransactionsPage() {
 
         } catch (err) {
 
-            if (token !== validationTokenRef.current) {
+            if (!currentValidation()) {
 
                 return;
 
@@ -921,7 +1101,7 @@ export default function TransactionsPage() {
 
         } finally {
 
-            if (token === validationTokenRef.current) {
+            if (currentValidation()) {
 
                 setValidatingSymbol(false);
 
@@ -1382,8 +1562,8 @@ export default function TransactionsPage() {
                                     required
                                     onDisplayChange={setTransactionDateInput}
                                     onIsoChange={(iso) => setForm((prev) => ({ ...prev, transaction_date: iso }))}
-                                    onFocus={() => { dateInputFocusedRef.current = true; }}
-                                    onBlur={() => { dateInputFocusedRef.current = false; }}
+                                    onFocus={() => { if (ownershipIsCurrent()) dateInputFocusedRef.current = true; }}
+                                    onBlur={() => { if (ownershipIsCurrent()) dateInputFocusedRef.current = false; }}
                                 />
 
                                 {transactionDateIsFuture && (
@@ -1440,6 +1620,11 @@ export default function TransactionsPage() {
                                     className="btn btn-outline-secondary"
 
                                     onClick={() => {
+                                        if (!ownershipIsCurrent()) return;
+                                        operationRef.current += 1;
+                                        validationTokenRef.current += 1;
+                                        setSubmitting(false);
+                                        setValidatingSymbol(false);
                                         setTransactionSaveError('');
                                         setForm(emptyForm());
 

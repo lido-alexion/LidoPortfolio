@@ -4032,26 +4032,27 @@ export const JOURNEY_TOPICS = Object.freeze([
   },
   {
     "id": "STR-14",
-    "title": "How do I archive or disable a strategy?",
+    "title": "How do I pause, retire, or restore a strategy?",
     "aliases": [
-      "Archive or disable a strategy",
+      "Pause, retire, or restore a strategy",
       "str-14"
     ],
     "keywords": [
-      "archive",
-      "disable",
+      "pause",
+      "retire",
+      "restore",
       "strategy"
     ],
     "synonyms": [],
     "category": "Strategies",
     "route": "/strategy/registry",
-    "guide": "/docs/journeys/02-strategies.html#str-14-archive-or-disable-a-strategy",
+    "guide": "/docs/journeys/02-strategies.html#str-14-pause-retire-or-restore-a-strategy",
     "steps": [
       "Open `/strategy/registry`.",
-      "Select the strategy to retire.",
-      "Check for live recommendations, pending execution and owned holdings that need deliberate handling.",
-      "Use the supported disable/archive lifecycle action.",
-      "Confirm the strategy is no longer enabled for future runs."
+      "Select the strategy. Disable is available at any time and pauses new recommendations and future strategy runs. It does not sell, cancel orders, release reservations, or change holdings, orders, execution, or settlement. Configuration stays editable; Enable resumes only after normal readiness checks.",
+      "To Retire, enter a reason. If the server reports blockers, follow each existing resolution link and finish the owned work through its normal workflow. Archive is allowed only after the strategy has no open owned holdings, actionable recommendations, pending executions/orders, reserved funds, or unsettled obligations.",
+      "Retired configuration is read-only. Its reason, versions, recommendations, transactions and ownership attribution remain available as history.",
+      "Restore changes a retired strategy to Disabled. Select Enable separately to run existing readiness checks."
     ],
     "prerequisites": [],
     "warnings": []

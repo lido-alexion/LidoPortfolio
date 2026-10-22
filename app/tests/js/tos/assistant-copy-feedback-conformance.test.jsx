@@ -6,10 +6,10 @@ import AssistantDrawer from '../../../resources/js/src/components/AssistantDrawe
 import api from '../../../resources/js/src/api';
 import { streamAssistant } from '../../../resources/js/src/utils/assistantStream';
 
-vi.mock('../../../resources/js/src/utils/assistantStream', () => ({
-    streamAssistant: vi.fn(),
-    safeSourceUrl: url => url?.startsWith('/docs/') ? url : null,
-}));
+vi.mock('../../../resources/js/src/utils/assistantStream', async () => {
+    const actual = await vi.importActual('../../../resources/js/src/utils/assistantStream');
+    return { ...actual, streamAssistant: vi.fn() };
+});
 vi.mock('../../../resources/js/src/api', () => ({ default: { post: vi.fn() } }));
 
 const answer = 'A screener filters stocks using conditions you choose.';

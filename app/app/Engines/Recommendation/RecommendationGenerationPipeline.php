@@ -124,7 +124,7 @@ class RecommendationGenerationPipeline
         ?array $onlyStrategyIds = null,
     ): array {
         $versions = $this->enabledStrategyVersions($profile);
-        if ($versions === []) {
+        if ($versions === [] && ! TradingStrategy::query()->where('profile_id', $profile->id)->exists()) {
             $this->strategies->ensureActive($profile);
             $versions = $this->enabledStrategyVersions($profile);
         }
@@ -145,6 +145,11 @@ class RecommendationGenerationPipeline
 
         DB::transaction(function () use ($profile, $evaluationRun, $versions, $snapshot, &$created, &$strategySummaries) {
             foreach ($versions as $strategyVersion) {
+                $currentStrategy = TradingStrategy::query()->whereKey($strategyVersion->strategy_id)
+                    ->where('profile_id', $profile->id)->lockForUpdate()->first();
+                if (! $currentStrategy || ! $currentStrategy->isEnabled()) {
+                    continue;
+                }
                 $config = is_array($strategyVersion->config_json) ? $strategyVersion->config_json : [];
                 $unresolved = $this->eligibility->unresolvedPinnedScreeners($config, $strategyVersion);
                 if ($unresolved !== []) {

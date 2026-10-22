@@ -4,13 +4,19 @@ import AxeBuilder from '@axe-core/playwright';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 import { factoryDashboardLayout } from '../../resources/js/src/utils/dashboardLayouts.js';
+import { createApiFailureDiagnosticCollector, installApiFailureDiagnosticBoundary, handleApiFailureDiagnostic, registerApiFailureDiagnosticAfterEach } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticAfterEach(test);
+
+
 const VIEWPORTS = [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }];
 const fail = route => route.fulfill({ status: 503, json: { message: 'Synthetic dashboard/chart unavailable.' } });
 const named = (id, name, definition = factoryDashboardLayout()) => ({ id, name, definition, is_default: false, revision: 1 });
 async function prepare(page, viewport, allowed = () => false) {
  await seedDeterministicJourney(page, `dashboard-combo-${viewport.name}`); await page.setViewportSize({ width: viewport.width, height: viewport.height }); await installInvestorWorkflowApiMocks(page);
- const writes = []; const blocked = [];
- return { writes, blocked, seal: () => page.route('**/*', route => { const request = route.request(); const url = new URL(request.url()); const write = /^(POST|PUT|PATCH|DELETE)$/.test(request.method()); if (url.origin !== 'http://127.0.0.1:4177' || write && url.pathname !== '/api/logs/frontend' && !allowed(request.method(), url.pathname)) { blocked.push(`${request.method()} ${url.pathname}`); return route.abort(); } if (write && url.pathname !== '/api/logs/frontend') writes.push({ method: request.method(), path: url.pathname, body: request.postDataJSON() }); return route.fallback(); }) };
+ const writes = []; const blocked = []; const diagnosticReports = createApiFailureDiagnosticCollector(page);
+ await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
+ return { writes, blocked, seal: () => page.route('**/*', async route => { if (await handleApiFailureDiagnostic(route, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports })) return; const request = route.request(); const url = new URL(request.url()); const write = /^(POST|PUT|PATCH|DELETE)$/.test(request.method()); if (url.origin !== 'http://127.0.0.1:4177' || write && url.pathname !== '/api/logs/frontend' && !allowed(request.method(), url.pathname)) { blocked.push(`${request.method()} ${url.pathname}`); return route.abort(); } if (write && url.pathname !== '/api/logs/frontend') writes.push({ method: request.method(), path: url.pathname, body: request.postDataJSON() }); return route.fallback(); }) };
 }
 async function dashboardReads(page, rows = () => []) {
  await page.route('**/api/dashboard', route => route.fulfill({ json: { portfolio_value: 100000, invested_value: 90000, total_gain_loss: 10000, portfolio_growth: [], alerts: [] } }));

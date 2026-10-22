@@ -1,12 +1,18 @@
+import { createApiFailureDiagnosticCollector, installApiFailureDiagnosticBoundary, handleApiFailureDiagnostic, registerApiFailureDiagnosticAfterEach } from './apiFailureDiagnosticBoundary.js';
+
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 import { TEST_PORTFOLIO } from '../js/tos/fixtures/tosApi.js';
+
+registerApiFailureDiagnosticAfterEach(test);
+
 const VIEWPORTS = [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }];
 const fail = route => route.fulfill({ status: 503, json: { message: 'Synthetic stored history unavailable.' } });
 async function prepare(page, viewport, allowed = () => false) {
- await seedDeterministicJourney(page, `stored-history-${viewport.name}`); await page.setViewportSize({ width: viewport.width, height: viewport.height }); await installInvestorWorkflowApiMocks(page); const blocked = []; const writes = [];
- return { blocked, writes, seal: () => page.route('**/*', route => { const r = route.request(), url = new URL(r.url()); const write = /^(POST|PUT|PATCH|DELETE)$/.test(r.method()); if (url.origin !== 'http://127.0.0.1:4177' || write && url.pathname !== '/api/logs/frontend' && !allowed(r.method(), url.pathname)) { blocked.push(`${r.method()} ${url.pathname}`); return route.abort(); } if (write && url.pathname !== '/api/logs/frontend') writes.push({ method: r.method(), path: url.pathname }); return route.fallback(); }) };
+ await seedDeterministicJourney(page, `stored-history-${viewport.name}`); await page.setViewportSize({ width: viewport.width, height: viewport.height }); await installInvestorWorkflowApiMocks(page); const blocked = []; const writes = []; const diagnosticReports = createApiFailureDiagnosticCollector(page);
+ await installApiFailureDiagnosticBoundary(page, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports });
+ return { blocked, writes, seal: () => page.route('**/*', async route => { if (await handleApiFailureDiagnostic(route, { origin: 'http://127.0.0.1:4177', collector: diagnosticReports })) return; const r = route.request(), url = new URL(r.url()); const write = /^(POST|PUT|PATCH|DELETE)$/.test(r.method()); if (url.origin !== 'http://127.0.0.1:4177' || write && url.pathname !== '/api/logs/frontend' && !allowed(r.method(), url.pathname)) { blocked.push(`${r.method()} ${url.pathname}`); return route.abort(); } if (write && url.pathname !== '/api/logs/frontend') writes.push({ method: r.method(), path: url.pathname }); return route.fallback(); }) };
 }
 async function confirmClick(page, target, yes) { const done = new Promise(resolve => page.once('dialog', async dialog => { if (yes) await dialog.accept(); else await dialog.dismiss(); resolve(); })); await target.click(); await done; }
 for (const viewport of VIEWPORTS) test.describe(`Stored history ${viewport.name}`, () => {
