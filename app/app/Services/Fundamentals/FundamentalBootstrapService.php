@@ -133,6 +133,10 @@ class FundamentalBootstrapService
             return $fresh?->toArray() ?? [];
         }
 
+        if ($this->fundamentals->settings()->paused) {
+            return array_merge($fresh->toArray(), ['skipped_reason' => 'fundamentals_globally_paused']);
+        }
+
         // Acquire the process fence before publishing the durable active slot. A
         // failed cache claim must never strand the control row on this run.
         $lock = Cache::lock(self::PROCESS_LOCK_KEY, 900);
@@ -335,6 +339,9 @@ class FundamentalBootstrapService
             ->get();
 
         foreach ($jobs as $job) {
+            // A global pause stops new claims; provider work already in flight
+            // remains protected by the existing cancellation/attempt fences.
+            if ($settings->fresh()->paused) break;
             $claimedJob = $this->claimJob($run->id, $job->id);
             if (! $claimedJob) {
                 if (! in_array($run->fresh()->status, ['queued', 'running'], true)) {

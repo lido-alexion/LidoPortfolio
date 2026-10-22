@@ -607,11 +607,35 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::middleware('admin')->group(function () {
         Route::prefix('/admin/fundamentals/bootstrap-operations')->group(function () {
             $controller = \App\Http\Controllers\Api\V1\BootstrapOperationsController::class;
+            $coverage = \App\Http\Controllers\Api\V1\BootstrapCoverageOperationsController::class;
+            Route::get('/coverage', [$coverage, 'summary']);
+            Route::get('/gaps', [$coverage, 'gaps']);
+            Route::get('/warnings', [$coverage, 'warnings']);
+            Route::post('/reconcile', [$coverage, 'reconcile']);
+            Route::post('/gaps/acknowledge', [$coverage, 'acknowledgeGaps']);
+            Route::post('/warnings/acknowledge', [$coverage, 'acknowledgeWarnings']);
+            Route::post('/runs/from-gaps', [$controller, 'fromGaps']);
+            Route::get('/health', [$controller, 'health']);
             Route::get('/runs', [$controller, 'index']);
             Route::post('/runs', [$controller, 'launch']);
             Route::get('/runs/{run}', [$controller, 'show'])->whereNumber('run');
             Route::post('/runs/{run}/retry-failed', [$controller, 'retry'])->whereNumber('run');
             Route::post('/runs/{run}/cancel', [$controller, 'cancel'])->whereNumber('run');
+            $schedules = \App\Http\Controllers\Api\V1\BootstrapScheduleOperationsController::class;
+            Route::get('/presets', [$schedules, 'presets']);
+            Route::post('/presets', [$schedules, 'createPreset']);
+            Route::put('/presets/{preset}', [$schedules, 'updatePreset'])->whereNumber('preset');
+            Route::post('/presets/{preset}/clone', [$schedules, 'clonePreset'])->whereNumber('preset');
+            Route::delete('/presets/{preset}', [$schedules, 'deletePreset'])->whereNumber('preset');
+            Route::get('/schedules', [$schedules, 'schedules']);
+            Route::post('/schedules', [$schedules, 'createSchedule']);
+            Route::put('/schedules/{schedule}', [$schedules, 'updateSchedule'])->whereNumber('schedule');
+            Route::put('/schedules/{schedule}/enabled', [$schedules, 'enable'])->whereNumber('schedule');
+            Route::post('/schedules/{schedule}/clone', [$schedules, 'cloneSchedule'])->whereNumber('schedule');
+            Route::get('/schedules/{schedule}/occurrences', [$schedules, 'occurrences'])->whereNumber('schedule');
+            Route::post('/schedules/{schedule}/run-now', [$schedules, 'runNow'])->whereNumber('schedule');
+            Route::get('/runs/{run}/export.csv', \App\Http\Controllers\Api\V1\BootstrapOperationsExportController::class)->whereNumber('run');
+
         });
         Route::put('/admin/users/{user}/automated-execution-entitlement', [TradingOsAdminEntitlementController::class, 'update']);
         Route::get('/admin/fundamentals', [FundamentalDataController::class, 'adminStatus']);

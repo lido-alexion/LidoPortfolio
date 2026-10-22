@@ -364,17 +364,19 @@ Artisan::command('stox:fundamentals-bootstrap
 })->purpose('Process, retry, or safely cancel V8 historical fundamentals bootstrap runs');
 
 Artisan::command('stox:fundamentals-bootstrap-work-once {--batch=10}', function () {
-    if (! Schema::hasTable('stox_fundamental_bootstrap_runs') || ! Schema::hasTable('stox_fund_bootstrap_control')) {
-        return 0;
+    foreach (['stox_fundamental_bootstrap_runs', 'stox_fund_bootstrap_control',
+        'stox_bootstrap_schedules', 'stox_bootstrap_schedule_occurrences',
+        'stox_fund_bootstrap_coverage_gaps', 'stox_fund_bootstrap_quality_warnings',
+        'stox_bootstrap_outcome_receipts', 'stox_bootstrap_projection_receipts',
+        'stox_bootstrap_occurrence_projection_checks'] as $table) {
+        if (! Schema::hasTable($table)) return 0;
     }
-    $run = \App\Models\V7\FundamentalBootstrapRun::query()
-        ->whereIn('status', ['queued', 'running'])
-        ->opsManaged()
-        ->orderBy('id')->first();
-    if (! $run) return 0;
-    app(FundamentalBootstrapService::class)->process($run, max(1, min((int) $this->option('batch'), 100)));
+    // Only explicit Admin-managed requests and enabled Admin schedules can create
+    // ingestion work. Legacy rows are never adopted by this minute producer.
+    app(\App\Services\Fundamentals\BootstrapOperationsProducer::class)
+        ->tick(max(1, min((int) $this->option('batch'), 100)));
     return 0;
-})->purpose('Advance the oldest queued fundamentals bootstrap run by one durable slice');
+})->purpose('Advance explicit Admin bootstrap requests, schedules and bounded outcome projections');
 
 $cronTime = env('PORTFOLIO_CRON_TIME', '18:30');
 $timezone = env('PORTFOLIO_CRON_TIMEZONE', 'Asia/Kolkata');

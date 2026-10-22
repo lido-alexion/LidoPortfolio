@@ -13,6 +13,11 @@ class BootstrapOperationsController extends Controller
 {
     public function __construct(private BootstrapOperationsService $operations) {}
 
+    public function health(\App\Services\Fundamentals\BootstrapOperationsHealthService $health): JsonResponse
+    {
+        return response()->json(['data' => $health->summary()]);
+    }
+
     public function index(Request $request): JsonResponse
     {
         return response()->json($this->operations->history($request->validate([
@@ -37,6 +42,15 @@ class BootstrapOperationsController extends Controller
         $key = $request->header('Idempotency-Key');
         abort_unless(is_string($key) && preg_match('/^[A-Za-z0-9._:-]{8,128}$/', $key), 422, 'A valid Idempotency-Key header is required.');
         $result = $this->operations->launch($data, (int) $request->user()->id, (string) ($request->user()->name ?? 'Admin'), $key);
+        return response()->json(['data' => $this->operations->presentRun($result->run)], $result->created ? 201 : 200);
+    }
+
+    public function fromGaps(Request $request): JsonResponse
+    {
+        $data = $request->validate(['gap_ids' => ['required', 'array', 'min:1', 'max:100'], 'gap_ids.*' => ['integer', 'distinct', 'min:1']]);
+        $key = $request->header('Idempotency-Key');
+        abort_unless(is_string($key), 422, 'A valid Idempotency-Key header is required.');
+        $result = $this->operations->launchFromGaps($data['gap_ids'], (int) $request->user()->id, (string) $request->user()->name, $key);
         return response()->json(['data' => $this->operations->presentRun($result->run)], $result->created ? 201 : 200);
     }
 
