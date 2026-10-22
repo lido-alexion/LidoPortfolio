@@ -36,13 +36,13 @@ class BootstrapOperationalOutcomePackageTest extends TestCase
         })->andReturn(new NotificationSource());
         $this->app->instance(NotificationPublisher::class, $publisher);
 
-        $managed = $this->run(['status' => 'completed', 'completed' => 2, 'failed' => 1]);
+        $managed = $this->outcomeRun(['status' => 'completed', 'completed' => 2, 'failed' => 1]);
         $service = app(BootstrapOperationalOutcomeService::class);
         $this->assertTrue($service->notifyRunOutcome($managed));
         $this->assertFalse($service->notifyRunOutcome($managed));
-        $legacy = $this->run(['request_snapshot' => ['origin' => 'legacy'], 'status' => 'failed']);
+        $legacy = $this->outcomeRun(['request_snapshot' => ['origin' => 'legacy'], 'status' => 'failed']);
         $this->assertFalse($service->notifyRunOutcome($legacy));
-        $cancelled = $this->run(['status' => 'cancelled', 'completed' => 2, 'failed' => 3]);
+        $cancelled = $this->outcomeRun(['status' => 'cancelled', 'completed' => 2, 'failed' => 3]);
         $this->assertFalse($service->notifyRunOutcome($cancelled));
         $this->assertDatabaseCount('stox_bootstrap_outcome_receipts', 1);
     }
@@ -57,7 +57,7 @@ class BootstrapOperationalOutcomePackageTest extends TestCase
             return new NotificationSource();
         });
         $this->app->instance(NotificationPublisher::class, $publisher);
-        $run = $this->run(['status' => 'failed', 'failed' => 1]);
+        $run = $this->outcomeRun(['status' => 'failed', 'failed' => 1]);
         $service = app(BootstrapOperationalOutcomeService::class);
 
         try { $service->notifyRunOutcome($run); $this->fail('Expected publisher rejection.'); }
@@ -82,7 +82,7 @@ class BootstrapOperationalOutcomePackageTest extends TestCase
         $this->schedule(7001, (int) $actor->id, $configuration, 3, 2);
         $occurrenceKey = $this->occurrenceKey(7001, 3, $due);
         $receipt = $this->scheduleReceipt(7001, 3, 2, (int) $actor->id, $due, $configuration);
-        $run = $this->run([
+        $run = $this->outcomeRun([
             'trigger' => 'scheduled', 'created_by_user_id' => $actor->id,
             'idempotency_key' => hash('sha256', $actor->id.':'.$occurrenceKey),
             'status' => 'running', 'started_at' => $due->copy()->addHour(),
@@ -103,16 +103,16 @@ class BootstrapOperationalOutcomePackageTest extends TestCase
         $pendingId = $this->occurrence(7002, null, $due, 'pending', (int) $actor->id, $configuration);
         $this->assertFalse($service->notifyScheduledOccurrence($pendingId, 'cannot_start'), 'Transient pending delivery is not a definitive cannot-start outcome.');
 
-        $qualityRun = $this->run();
+        $qualityRun = $this->outcomeRun();
         $this->addWarnings($qualityRun, 3, BootstrapWarningCategory::ANOMALY_REVIEW);
         $this->assertTrue($service->notifyRepeatedQualityWarningOccurrences($qualityRun, BootstrapWarningCategory::ANOMALY_REVIEW));
         $this->addWarnings($qualityRun, 2, BootstrapWarningCategory::ANOMALY_REVIEW);
         $this->assertFalse($service->notifyRepeatedQualityWarningOccurrences($qualityRun, BootstrapWarningCategory::ANOMALY_REVIEW));
 
-        $laterRun = $this->run();
+        $laterRun = $this->outcomeRun();
         $this->addWarnings($laterRun, 3, BootstrapWarningCategory::ANOMALY_REVIEW);
         $this->assertTrue($service->notifyRepeatedQualityWarningOccurrences($laterRun, BootstrapWarningCategory::ANOMALY_REVIEW));
-        $legacy = $this->run(['request_snapshot' => ['origin' => 'legacy']]);
+        $legacy = $this->outcomeRun(['request_snapshot' => ['origin' => 'legacy']]);
         $this->addWarnings($legacy, 3, BootstrapWarningCategory::ANOMALY_REVIEW);
         $this->assertFalse($service->notifyRepeatedQualityWarningOccurrences($legacy, BootstrapWarningCategory::ANOMALY_REVIEW));
         $this->assertDatabaseCount('stox_bootstrap_outcome_receipts', 3);
@@ -147,7 +147,7 @@ class BootstrapOperationalOutcomePackageTest extends TestCase
         $this->assertFalse($service->notifyScheduledOccurrence($wrongActorStateId, 'cannot_start'));
         $wrongIdentityId = $this->occurrence(7105, null, $due, 'cannot_start', (int) $operator->id, $configuration, 1, 1, 'configuration_invalid', false);
         $this->assertFalse($service->notifyScheduledOccurrence($wrongIdentityId, 'cannot_start'));
-        $linkedRun = $this->run();
+        $linkedRun = $this->outcomeRun();
         $linkedRunId = $this->occurrence(7106, (int) $linkedRun->id, $due, 'cannot_start', (int) $operator->id, $configuration, 1, 1, 'configuration_invalid');
         $this->assertFalse($service->notifyScheduledOccurrence($linkedRunId, 'cannot_start'), 'Definitive cannot-start state must have no linked run.');
         $this->assertFalse($service->notifyScheduledOccurrence(999999, 'cannot_start'));
@@ -164,7 +164,7 @@ class BootstrapOperationalOutcomePackageTest extends TestCase
             return new NotificationSource();
         });
         $this->app->instance(NotificationPublisher::class, $publisher);
-        $run = $this->run();
+        $run = $this->outcomeRun();
         $this->addWarnings($run, 3, BootstrapWarningCategory::MISSING_PROVENANCE);
         $service = app(BootstrapOperationalOutcomeService::class);
 
@@ -187,12 +187,12 @@ class BootstrapOperationalOutcomePackageTest extends TestCase
         $symbol = "\t=CMD()\nline,\"quoted\"";
         $this->assertLessThanOrEqual(255, strlen($symbol), 'The fixture must fit portfolio_stocks.symbol without truncation.');
         $stock = Stock::query()->create(['symbol' => $symbol, 'name' => 'Example']);
-        $run = $this->run(['status' => 'completed', 'completed' => 1]);
+        $run = $this->outcomeRun(['status' => 'completed', 'completed' => 1]);
         FundamentalBootstrapJob::query()->create([
             'run_id' => $run->id, 'stock_id' => $stock->id, 'status' => 'failed',
             'last_error' => 'Bearer secret and raw provider detail', 'quarterly_status' => 'failed',
         ]);
-        $priorRun = $this->run();
+        $priorRun = $this->outcomeRun();
         DB::table('stox_fund_bootstrap_quality_warnings')->insert([
             'run_id' => $run->id, 'stock_id' => $stock->id, 'category' => '=HYPERLINK("evil")|facts_rejected_by_quality_gate',
             'identity_hash' => hash('sha256', 'malicious-warning-'.$run->id), 'summary' => 'safe fixture', 'state' => 'unresolved',
@@ -233,11 +233,11 @@ class BootstrapOperationalOutcomePackageTest extends TestCase
 
     public function test_export_endpoint_is_admin_only_and_current_managed_scope_only(): void
     {
-        $run = $this->run(['status' => 'completed']);
+        $run = $this->outcomeRun(['status' => 'completed']);
         $path = '/api/v1/admin/fundamentals/bootstrap-operations/runs/'.$run->id.'/export.csv';
         $this->actingAs(User::factory()->create(['is_admin' => false]))->get($path)->assertForbidden();
 
-        $legacy = $this->run(['request_snapshot' => ['managed_version' => 0, 'origin' => 'legacy']]);
+        $legacy = $this->outcomeRun(['request_snapshot' => ['managed_version' => 0, 'origin' => 'legacy']]);
         $this->actingAs(User::factory()->create(['is_admin' => true]))
             ->get('/api/v1/admin/fundamentals/bootstrap-operations/runs/'.$legacy->id.'/export.csv')->assertNotFound();
     }
@@ -245,12 +245,12 @@ class BootstrapOperationalOutcomePackageTest extends TestCase
     public function test_export_stream_chunks_large_item_scope_without_cross_run_rows(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);
-        $run = $this->run(['requested' => 260, 'completed' => 260]);
+        $run = $this->outcomeRun(['requested' => 260, 'completed' => 260]);
         for ($index = 0; $index < 260; $index++) {
             $stock = Stock::query()->create(['symbol' => 'OPS'.str_pad((string) $index, 3, '0', STR_PAD_LEFT), 'name' => 'Stock '.$index]);
             FundamentalBootstrapJob::query()->create(['run_id' => $run->id, 'stock_id' => $stock->id, 'status' => 'complete_good']);
         }
-        $otherRun = $this->run();
+        $otherRun = $this->outcomeRun();
         $otherStock = Stock::query()->create(['symbol' => 'UNRELATED', 'name' => 'Unrelated']);
         FundamentalBootstrapJob::query()->create(['run_id' => $otherRun->id, 'stock_id' => $otherStock->id, 'status' => 'failed']);
 
@@ -260,7 +260,7 @@ class BootstrapOperationalOutcomePackageTest extends TestCase
         $this->assertStringNotContainsString('UNRELATED', $csv);
     }
 
-    private function run(array $overrides = []): FundamentalBootstrapRun
+    private function outcomeRun(array $overrides = []): FundamentalBootstrapRun
     {
         return FundamentalBootstrapRun::query()->create(array_merge([
             'trigger' => 'manual', 'scope' => 'stocks', 'status' => 'completed', 'requested' => 1,
