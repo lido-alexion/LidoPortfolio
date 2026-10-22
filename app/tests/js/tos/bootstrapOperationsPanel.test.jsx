@@ -272,7 +272,7 @@ describe('BootstrapOperationsPanel', () => {
         expect(within(scheduleCard).getByRole('checkbox',{name:'Force rerun successful selected stocks'}).checked).toBe(true);
         expect(within(scheduleCard).getByLabelText('Reason for forced rerun').value).toBe(config.reason);
         expect(within(scheduleCard).getByLabelText('Local time').value).toBe('09:00:30');
-        expect(within(scheduleCard).getByLabelText('Starts (local date and time)').value).toBe('2035-06-02T08:10:15');
+        expect(within(scheduleCard).getByLabelText('Starts (local date and time)').valueAsNumber).toBe(Date.UTC(2035, 5, 2, 8, 10, 15));
         expect(within(scheduleCard).getByLabelText('Repeat every').value).toBe('2');
         await userEvent.click(screen.getByRole('button',{name:'Save future changes'}));
         await waitFor(()=>expect(api.put).toHaveBeenCalledWith('/v1/admin/fundamentals/bootstrap-operations/schedules/5',{
