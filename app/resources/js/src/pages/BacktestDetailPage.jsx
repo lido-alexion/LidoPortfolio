@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '../api';
 import BacktestPortfolioChart from '../components/backtest/BacktestPortfolioChart';
@@ -191,6 +191,12 @@ function BacktestProgressBanner({ run, resuming }) {
 
 export default function BacktestDetailPage() {
     const { id } = useParams();
+    // A route change starts a new evidence/editor session, even when the same
+    // page component is retained by React Router (including an ABA navigation).
+    return <BacktestDetailSession key={id} id={id} />;
+}
+
+function BacktestDetailSession({ id }) {
     const [detail, setDetail] = useState(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
@@ -203,13 +209,30 @@ export default function BacktestDetailPage() {
     const [tradesOpen, setTradesOpen] = useState(false);
     const [transactionsOpen, setTransactionsOpen] = useState(false);
     const resumeAttemptedRef = useRef(false);
+    const sessionRef = useRef(null);
+    const loadGenerationRef = useRef(0);
+
+    useLayoutEffect(() => {
+        const session = { id, active: true };
+        sessionRef.current = session;
+        return () => {
+            session.active = false;
+        };
+    }, [id]);
 
     const load = useCallback(async () => {
+        const session = sessionRef.current;
+        if (!session || !session.active || session.id !== id) return null;
+        const generation = ++loadGenerationRef.current;
+        const isCurrent = () => sessionRef.current === session
+            && session.active
+            && loadGenerationRef.current === generation;
         setLoading(true);
         setLoadError('');
         try {
             const res = await api.get(`/v1/backtests/${id}`);
             const data = res.data?.data || null;
+            if (!isCurrent()) return null;
             setDetail(data);
             if (data) {
                 setEditName(data.name || '');
@@ -218,12 +241,13 @@ export default function BacktestDetailPage() {
             }
             return data;
         } catch (e) {
+            if (!isCurrent()) return null;
             setLoadError(e?.response?.status === 404 ? 'Backtest not found.' : 'Backtest could not be loaded. Please retry.');
             showToast(e?.response?.data?.error?.message || e.message || 'Failed to load backtest', 'danger');
             setDetail(null);
             return null;
         } finally {
-            setLoading(false);
+            if (isCurrent()) setLoading(false);
         }
     }, [id]);
 
@@ -236,29 +260,33 @@ export default function BacktestDetailPage() {
     }, [id]);
 
     useEffect(() => {
-        let cancelled = false;
+        const session = sessionRef.current;
+        const isCurrentSession = () => session
+            && session.active
+            && sessionRef.current === session
+            && session.id === id;
 
         async function resumeIfNeeded() {
-            if (!detail || !isBacktestInProgress(detail) || resumeAttemptedRef.current) {
+            if (!isCurrentSession() || !detail || String(detail.id) !== String(id) || !isBacktestInProgress(detail) || resumeAttemptedRef.current) {
                 return;
             }
             resumeAttemptedRef.current = true;
             setResuming(true);
             try {
                 await continueBacktestUntilDone(Number(id), (run) => {
-                    if (!cancelled) {
+                    if (isCurrentSession()) {
                         setDetail((prev) => ({ ...(prev || {}), ...run }));
                     }
                 });
-                if (!cancelled) {
+                if (isCurrentSession()) {
                     await load();
                 }
             } catch (e) {
-                if (!cancelled) {
+                if (isCurrentSession()) {
                     showToast(e?.response?.data?.error?.message || e.message || 'Resume failed', 'danger');
                 }
             } finally {
-                if (!cancelled) {
+                if (isCurrentSession()) {
                     setResuming(false);
                 }
             }
@@ -266,9 +294,8 @@ export default function BacktestDetailPage() {
 
         resumeIfNeeded();
 
-        return () => {
-            cancelled = true;
-        };
+        // Same-run status changes must not revoke the active continuation.
+        // Layout-session cleanup invalidates callbacks on route changes/unmount.
     }, [detail?.id, detail?.status, id, load]);
 
     const stats = detail?.statistics || {};
@@ -283,32 +310,45 @@ export default function BacktestDetailPage() {
     ]), [stats]);
 
     const onSaveMeta = async () => {
+        const session = sessionRef.current;
+        const isCurrentSession = () => session
+            && session.active
+            && sessionRef.current === session
+            && session.id === id;
+        if (!isCurrentSession()) return;
+        const draft = { name: editName.trim() || undefined, notes: editNotes, tags: parseTagsInput(editTags) };
         setSavingMeta(true);
         try {
-            const res = await api.put(`/v1/backtests/${id}`, {
-                name: editName.trim() || undefined,
-                notes: editNotes,
-                tags: parseTagsInput(editTags),
-            });
+            const res = await api.put(`/v1/backtests/${id}`, draft);
+            if (!isCurrentSession()) return;
             const updated = res.data?.data;
             setDetail((prev) => ({ ...(prev || {}), ...updated }));
             showToast('Backtest updated', 'success');
         } catch (e) {
+            if (!isCurrentSession()) return;
             showToast(e?.response?.data?.error?.message || e.message || 'Save failed', 'danger');
         } finally {
-            setSavingMeta(false);
+            if (isCurrentSession()) setSavingMeta(false);
         }
     };
 
     const onCreateDraft = async () => {
+        const session = sessionRef.current;
+        const isCurrentSession = () => session
+            && session.active
+            && sessionRef.current === session
+            && session.id === id;
+        if (!isCurrentSession()) return;
         setCreatingDraft(true);
         try {
             const response = await api.post(`/v1/backtests/${id}/strategy-draft`);
+            if (!isCurrentSession()) return;
             showToast(`Strategy Draft ${response.data?.data?.semver || ''} created in Artifact Library`, 'success');
         } catch (e) {
+            if (!isCurrentSession()) return;
             showToast(e?.response?.data?.error?.message || e.message || 'Draft creation failed', 'danger');
         } finally {
-            setCreatingDraft(false);
+            if (isCurrentSession()) setCreatingDraft(false);
         }
     };
 
