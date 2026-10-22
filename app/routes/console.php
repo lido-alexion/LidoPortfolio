@@ -363,6 +363,19 @@ Artisan::command('stox:fundamentals-bootstrap
     return 0;
 })->purpose('Process, retry, or safely cancel V8 historical fundamentals bootstrap runs');
 
+Artisan::command('stox:fundamentals-bootstrap-work-once {--batch=10}', function () {
+    if (! Schema::hasTable('stox_fundamental_bootstrap_runs') || ! Schema::hasTable('stox_fund_bootstrap_control')) {
+        return 0;
+    }
+    $run = \App\Models\V7\FundamentalBootstrapRun::query()
+        ->whereIn('status', ['queued', 'running'])
+        ->opsManaged()
+        ->orderBy('id')->first();
+    if (! $run) return 0;
+    app(FundamentalBootstrapService::class)->process($run, max(1, min((int) $this->option('batch'), 100)));
+    return 0;
+})->purpose('Advance the oldest queued fundamentals bootstrap run by one durable slice');
+
 $cronTime = env('PORTFOLIO_CRON_TIME', '18:30');
 $timezone = env('PORTFOLIO_CRON_TIMEZONE', 'Asia/Kolkata');
 
@@ -690,5 +703,8 @@ Artisan::command('ai:reconcile-reservations', function () {
     app(\App\Services\AI\AiBudgetReservationService::class)->reconcile();
 })->purpose('Conservatively settle expired AI provider reservations');
 Schedule::command('ai:reconcile-reservations')->everyMinute()->withoutOverlapping();
+
+Schedule::command('stox:fundamentals-bootstrap-work-once --batch=10')
+    ->everyMinute()->timezone($timezone)->withoutOverlapping(5)->name('fundamentals-bootstrap-queue');
 
 Schedule::command('ops:maintain-log-triages')->everyTenMinutes()->withoutOverlapping()->name('log-triage-maintenance');

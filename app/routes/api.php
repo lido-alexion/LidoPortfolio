@@ -605,6 +605,14 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::post('/broker/kite/emergency-cancel-open-orders-disconnect', [TradingOsExecutionSafetyController::class, 'cancelOpenOrdersAndDisconnect'])->middleware('token.scope:execution:submit');
 
     Route::middleware('admin')->group(function () {
+        Route::prefix('/admin/fundamentals/bootstrap-operations')->group(function () {
+            $controller = \App\Http\Controllers\Api\V1\BootstrapOperationsController::class;
+            Route::get('/runs', [$controller, 'index']);
+            Route::post('/runs', [$controller, 'launch']);
+            Route::get('/runs/{run}', [$controller, 'show'])->whereNumber('run');
+            Route::post('/runs/{run}/retry-failed', [$controller, 'retry'])->whereNumber('run');
+            Route::post('/runs/{run}/cancel', [$controller, 'cancel'])->whereNumber('run');
+        });
         Route::put('/admin/users/{user}/automated-execution-entitlement', [TradingOsAdminEntitlementController::class, 'update']);
         Route::get('/admin/fundamentals', [FundamentalDataController::class, 'adminStatus']);
         Route::put('/admin/fundamentals/settings', [FundamentalDataController::class, 'updateSettings']);
