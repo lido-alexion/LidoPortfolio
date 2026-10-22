@@ -1094,7 +1094,7 @@ const APP_DOCUMENTATION_BASE = [
             {
                 name: 'Enable / Archive (editor)',
                 description:
-                    'Enable turns the selected draft/archived strategy on without disabling others. Archive sets STATUS_ARCHIVED for the selected enabled strategy; siblings stay enabled. The last remaining enabled strategy cannot be archived until another is enabled. Past holdings/recommendations keep attribution.',
+                    'Enable turns a ready strategy on without disabling others. Disable pauses future strategy recommendations and runs while existing holdings and financial work remain manageable. Archive retires only a strategy with no owned holdings, actionable recommendations, pending executions/orders, reserved funds, or unsettled obligations; blockers link to their existing resolution pages. Archived configuration is read-only. Restore returns it to Disabled; enable it explicitly after readiness checks. Past history keeps attribution.',
             },
             {
                 name: 'Strategy Registry',
@@ -1587,7 +1587,7 @@ const APP_DOCUMENTATION_BASE = [
             { name: 'Enable', description: 'Turn this strategy on for the portfolio when readiness is satisfied (`setup_required` is false). Incomplete strategies show a Setup required list (missing eligibility, indicator weights, etc.). Other enabled strategies stay enabled.' },
             { name: 'Allocation % (list)', description: 'Enabled rows show the stored strategy allocation_pct (read-only in the table).' },
             { name: 'Allocation editor', description: 'Edit enabled-strategy allocation % with a live sum; Save calls PUT /v1/capital/allocations (same as Cash). Client requires sum ≈ 100 before save; server errors are shown.' },
-            { name: 'Archive', description: 'Sets the strategy to archived without changing other enabled strategies. The last remaining enabled strategy cannot be archived until another is enabled. Past holdings/recommendations keep attribution.' },
+            { name: 'Disable / Archive / Restore', description: 'Disable pauses future strategy recommendations and runs without changing existing financial work. Archive requires no owned holdings, actionable recommendations, pending executions/orders, reserved funds, or unsettled obligations; exact blockers link to their resolution pages. Archived configuration is read-only. Restore returns the strategy to Disabled, then explicit Enable applies readiness checks. Zero enabled strategies is allowed; history keeps attribution.' },
             { name: 'Export JSON', description: 'Download the portable Trading Artifact envelope (schema_version, slug, name, metadata, definition with eligibility_sources + scoring_model, dependencies). Best template for a new import — includes thresholds/exits/gates when present.' },
             { name: 'Validate', description: 'Check pasted JSON against Trading Artifact Strategy rules. On success, a green “Validated successfully” cue appears above Validate/Import and the JSON result panel still shows details. Import stays disabled until this reports ok. Editing the JSON clears validation.' },
             { name: 'Import', description: 'Enabled only after successful Validate. Creates a draft strategy in this portfolio and shows a success toast (not an inline alert). Does not change Recommendations until Enable. Mandatory: schema_version, artifact_type, slug, name, metadata, definition.scoring_model with enabled weights = 100.' },

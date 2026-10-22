@@ -100,6 +100,11 @@ class AuthSessionTest extends TestCase
         $this->postJson('/api/auth/logout')
             ->assertOk()
             ->assertJson(['message' => 'Logged out successfully']);
+
+        $this->assertGuest();
+        $this->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJson(['user' => null]);
     }
 
     public function test_sessions_list_and_logout_others(): void

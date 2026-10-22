@@ -156,7 +156,7 @@ flowchart TD
         <dd>On Strategy and Strategy Registry. Enter a name and optional description; the app creates a draft Strategy from the default template (<code>POST /v1/strategies</code> or <code>POST /v1/strategy-registry</code>) and opens the Strategy editor. Enable when readiness requirements pass.</dd>
 
         <dt>Enable / Archive (editor)</dt>
-        <dd>Enable turns the selected draft/archived strategy on without disabling others. Archive sets STATUS_ARCHIVED for the selected enabled strategy; siblings stay enabled. The last remaining enabled strategy cannot be archived until another is enabled. Past holdings/recommendations keep attribution.</dd>
+        <dd>Enable turns a ready strategy on without disabling others. Disable pauses future strategy recommendations and runs while existing holdings and financial work remain manageable. Archive retires only a strategy with no owned holdings, actionable recommendations, pending executions/orders, reserved funds, or unsettled obligations; blockers link to their existing resolution pages. Archived configuration is read-only. Restore returns it to Disabled; enable it explicitly after readiness checks. Past history keeps attribution.</dd>
 
         <dt>Strategy Registry</dt>
         <dd>Open /strategy/registry (also listed under Trading in the sidebar) to inspect/export runtime Strategies and validate/import new definitions as Artifact Library Drafts. Existing compatibility rows retain Enable/Archive controls until mapped.</dd>

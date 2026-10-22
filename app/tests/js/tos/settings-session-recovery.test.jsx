@@ -4,15 +4,16 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import api from '../../../resources/js/src/api';
 import SettingsPage from '../../../resources/js/src/pages/SettingsPage';
+const { logoutMock } = vi.hoisted(() => ({ logoutMock: vi.fn() }));
 vi.mock('../../../resources/js/src/api', () => ({ default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() } }));
 vi.mock('../../../resources/js/src/toast', () => ({ showToast: vi.fn() }));
-vi.mock('../../../resources/js/src/context/AuthContext', () => ({ useAuth: () => ({ user: { id: 2, is_admin: false }, logout: vi.fn() }) }));
+vi.mock('../../../resources/js/src/context/AuthContext', () => ({ useAuth: () => ({ user: { id: 2, is_admin: false }, logout: logoutMock }) }));
 vi.mock('../../../resources/js/src/context/PortfolioContext', () => ({ usePortfolio: () => ({ activePortfolio: { id: 1 } }) }));
 vi.mock('../../../resources/js/src/components/TotpSettingsPanel', () => ({ default: () => null }));
 vi.mock('../../../resources/js/src/components/PersonalApiTokensPanel', () => ({ default: () => null }));
 vi.mock('../../../resources/js/src/components/BrokerConnectionPanel', () => ({ default: () => null }));
 vi.mock('../../../resources/js/src/components/ExecutionModePanel', () => ({ default: () => null }));
-beforeEach(() => { cleanup(); vi.clearAllMocks(); });
+beforeEach(() => { cleanup(); vi.clearAllMocks(); logoutMock.mockReset(); });
 const unavailable = () => ({ response: { status: 503 }, message: 'Synthetic unavailable' });
 const at = path => render(<MemoryRouter initialEntries={[path]}><SettingsPage /></MemoryRouter>);
 it('recovers unavailable own-session reads without claiming no sessions', async () => {
@@ -26,6 +27,19 @@ it('catches uncertain non-current session revoke and retains the named session',
     at('/settings/account'); fireEvent.click(await screen.findByRole('button', { name: 'Revoke', exact: true }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Session revocation could not be confirmed'); expect(screen.getByText('Synthetic second device')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Revoke', exact: true })); expect(await screen.findByText('No active sessions found.')).toBeVisible(); expect(api.delete).toHaveBeenCalledTimes(2);
+});
+it('keeps the current session row when current-session logout is rejected', async () => {
+    const currentSession = { id: 902, device: 'Synthetic current device', is_current: true };
+    api.get.mockImplementation(async path => ({ data: { data: path === '/auth/sessions' ? [currentSession] : { default_stoploss_percent: '8', notification_schedules: [] } } }));
+    logoutMock.mockRejectedValueOnce(new Error('synthetic uncertain logout'));
+    at('/settings/account');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Log out', exact: true }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Session revocation could not be confirmed. Review the current sessions before retrying.');
+    expect(screen.getByText('Synthetic current device')).toBeVisible();
+    expect(screen.getByText('This device')).toBeVisible();
+    expect(logoutMock).toHaveBeenCalledTimes(1);
 });
 it('retains failed Portfolio settings drafts and succeeds only after confirmed retry', async () => {
     api.get.mockResolvedValue({ data: { data: { default_stoploss_percent: '8', notification_schedules: [] } } }); api.put.mockRejectedValueOnce(unavailable()).mockResolvedValueOnce({ data: {} });

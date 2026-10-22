@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import api from '../api';
 import PortfolioSnapshotGrowthChart from '../components/portfolio/PortfolioSnapshotGrowthChart';
 import ExportDataButton from '../components/ExportDataButton';
-import useApiGet from '../hooks/useApiGet';
 import usePortfolioChanged from '../hooks/usePortfolioChanged';
 import { ROUTES } from '../navigation/routes';
 import { showToast } from '../toast';
@@ -11,6 +10,7 @@ import { notifyPortfolioDashboardRefresh } from '../utils/portfolioEvents';
 import { usePortfolio } from '../context/PortfolioContext';
 import { formatInrWhole, formatTablePercent2 } from '../utils/tableFormat';
 import { formatTransactionDateDisplay, getLocalTodayDateString } from '../utils/transactionDate';
+import usePortfolioScopedRead from './usePortfolioScopedRead';
 
 const RANGE_OPTIONS = [
     { id: '90d', label: '90 days', days: 90, limit: 90 },
@@ -26,12 +26,26 @@ function subtractDays(dateString, days) {
 }
 
 function normalizeSnapshotRows(payload) {
-    return (payload?.snapshots || []).map((row) => ({
+    return payload.snapshots.map((row) => ({
         id: String(row.id),
         snapshot_date: String(row.snapshot_date).slice(0, 10),
         portfolio_value: Number(row.portfolio_value || 0),
         invested_value: Number(row.invested_value || 0),
     }));
+}
+
+function validateSnapshotResponse(payload) {
+    if (!payload || !Array.isArray(payload.snapshots)
+            || !Number.isInteger(payload.meta?.count)
+            || payload.meta.count !== payload.snapshots.length
+            || payload.snapshots.some((row) => (
+                !row || row.id == null || !row.snapshot_date
+            || row.portfolio_value == null || row.portfolio_value === '' || !Number.isFinite(Number(row.portfolio_value))
+            || row.invested_value == null || row.invested_value === '' || !Number.isFinite(Number(row.invested_value))
+        ))) {
+        throw new Error('Portfolio snapshot response could not be confirmed.');
+    }
+    return payload;
 }
 
 function signedClass(value) {
@@ -53,33 +67,40 @@ export default function PortfolioSnapshotsPage() {
     const chartExportFilters = { ...tableExportFilters, sort_direction: 'asc' };
     useEffect(() => setSelectedIds([]), [profileId, rangeId]);
 
+    const today = getLocalTodayDateString();
+    const fromDate = range.days != null ? subtractDays(today, range.days) : null;
     const loadSnapshots = useCallback(async () => {
         const params = { limit: range.limit };
         if (range.days != null) {
-            params.from_date = subtractDays(getLocalTodayDateString(), range.days);
+            params.from_date = fromDate;
         }
         const { data } = await api.get('/portfolio/snapshots', { params, skipErrorToast: true });
         return data;
-    }, [range.days, range.limit]);
+    }, [fromDate, range.days, range.limit]);
 
+    const identity = JSON.stringify([profileId == null ? null : String(profileId), rangeId, fromDate]);
     const {
         data,
+        confirmed,
         loading,
         error,
+        stale,
+        waiting,
         reload,
-    } = useApiGet({
+    } = usePortfolioScopedRead({
+        identity,
+        profileId,
         request: loadSnapshots,
-        deps: [profileId, rangeId],
+        validate: validateSnapshotResponse,
         enabled: Boolean(profileId),
         errorFallback: 'Failed to load portfolio snapshots',
-        initialData: { snapshots: [], meta: { count: 0 } },
     });
 
     usePortfolioChanged(useCallback(() => {
         reload();
     }, [reload]));
 
-    const snapshotsAsc = useMemo(() => normalizeSnapshotRows(data), [data]);
+    const snapshotsAsc = useMemo(() => (confirmed ? normalizeSnapshotRows(data) : []), [confirmed, data]);
     const snapshotsDesc = useMemo(
         () => [...snapshotsAsc].reverse(),
         [snapshotsAsc],
@@ -181,11 +202,15 @@ export default function PortfolioSnapshotsPage() {
                 ))}
             </div>
 
-            {error && !loading && (
+            {error && (
                 <div className="alert alert-danger py-2" role="alert">
-                    Could not load portfolio snapshots. Try Refresh or Rebuild history.
+                    {stale
+                        ? 'Could not load portfolio snapshots on refresh. Showing the last successfully loaded range; it may be out of date.'
+                        : 'Could not load portfolio snapshots for the current portfolio and range. Retry to check again.'}
                 </div>
             )}
+            {stale && !error && <div className="alert alert-secondary py-2" role="status">Showing the last successfully loaded snapshot range; it may be out of date.</div>}
+            {waiting && !error && <div className="alert alert-secondary py-2" role="status">Portfolio selection is not confirmed. Snapshot history has not been checked.</div>}
 
             <div className="row g-3 mb-3">
                 <div className="col-6 col-md-3">
@@ -195,7 +220,7 @@ export default function PortfolioSnapshotsPage() {
                             <div className="fw-semibold">
                                 {latest
                                     ? formatTransactionDateDisplay(latest.snapshot_date)
-                                    : '—'}
+                                    : confirmed ? '—' : 'Unavailable'}
                             </div>
                         </div>
                     </div>
@@ -205,7 +230,7 @@ export default function PortfolioSnapshotsPage() {
                         <div className="card-body py-3">
                             <div className="text-muted small">Portfolio value</div>
                             <div className="fw-semibold">
-                                {latest ? formatInrWhole(latest.portfolio_value) : '—'}
+                                {latest ? formatInrWhole(latest.portfolio_value) : confirmed ? '—' : 'Unavailable'}
                             </div>
                         </div>
                     </div>
@@ -215,7 +240,7 @@ export default function PortfolioSnapshotsPage() {
                         <div className="card-body py-3">
                             <div className="text-muted small">Invested value</div>
                             <div className="fw-semibold">
-                                {latest ? formatInrWhole(latest.invested_value) : '—'}
+                                {latest ? formatInrWhole(latest.invested_value) : confirmed ? '—' : 'Unavailable'}
                             </div>
                         </div>
                     </div>
@@ -225,7 +250,7 @@ export default function PortfolioSnapshotsPage() {
                         <div className="card-body py-3">
                             <div className="text-muted small">Unrealized P/L</div>
                             <div className={`fw-semibold ${signedClass(latestUnrealized)}`}>
-                                {latest ? formatInrWhole(latestUnrealized) : '—'}
+                                {latest ? formatInrWhole(latestUnrealized) : confirmed ? '—' : 'Unavailable'}
                             </div>
                         </div>
                     </div>
@@ -236,13 +261,15 @@ export default function PortfolioSnapshotsPage() {
                 <div className="card-header py-2 fw-semibold small d-flex justify-content-between align-items-center gap-2">
                     <span>Portfolio growth</span>
                     <div className="d-flex align-items-center gap-2">
-                        <span className="text-muted fw-normal">{loading ? 'Loading…' : `${data?.meta?.count ?? 0} snapshot(s)`}</span>
+                        <span className="text-muted fw-normal">{confirmed ? `${data.meta.count} snapshot(s)` : loading ? 'Loading…' : 'Unavailable'}</span>
                         <ExportDataButton dataset="portfolio-growth" label="Export chart data" fields={['snapshot_date', 'portfolio_value', 'invested_value']} scopes={['current', 'full']} filters={chartExportFilters} />
                     </div>
                 </div>
                 <div className="card-body">
-                    {loading ? (
-                        <div className="text-center py-5 text-muted">Loading snapshot history…</div>
+                    {!confirmed ? (
+                        waiting ? null : <div className="text-center py-5 text-muted" role="status">
+                            {loading ? 'Loading snapshot history…' : 'Snapshot history for this portfolio and range is unavailable.'}
+                        </div>
                     ) : (
                         <PortfolioSnapshotGrowthChart snapshots={snapshotsAsc} />
                     )}
@@ -268,10 +295,16 @@ export default function PortfolioSnapshotsPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {loading ? (
+                                {!confirmed && loading ? (
                                     <tr>
-                                        <td colSpan={6} className="text-muted small p-3">
+                                        <td colSpan={6} className="text-muted small p-3" role="status">
                                             Loading snapshots…
+                                        </td>
+                                    </tr>
+                                ) : !confirmed && waiting ? null : !confirmed ? (
+                                    <tr>
+                                        <td colSpan={6} className="text-muted small p-4 text-center" role="status">
+                                            Snapshot history for this portfolio and range is unavailable.
                                         </td>
                                     </tr>
                                 ) : tableRows.length === 0 ? (

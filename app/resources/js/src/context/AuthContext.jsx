@@ -101,14 +101,18 @@ export function AuthProvider({ children }) {
 
     const logout = useCallback(async () => {
         try {
-            await api.post('/auth/logout');
-        } catch {
-            // Session may already be invalid.
+            await api.post('/auth/logout', {}, { skipErrorToast: true });
+        } catch (error) {
+            // A 401 means there is no authenticated session left to end.
+            if (error?.response?.status !== 401) {
+                throw error;
+            }
         }
         resetCsrfCookie();
         clearAllDashboardCaches();
         setUser(null);
         setSessionExpired(false);
+        return true;
     }, []);
 
     const value = useMemo(() => ({

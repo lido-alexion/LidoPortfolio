@@ -3,6 +3,9 @@ import AxeBuilder from '@axe-core/playwright';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 import { TEST_USER } from '../js/tos/fixtures/tosApi.js';
+import { handleApiFailureDiagnosticForPage, registerApiFailureDiagnosticFixtureHooks } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticFixtureHooks(test);
 
 const VIEWPORTS = [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }];
 const TOKEN = 'synthetic-invite-token';
@@ -11,8 +14,10 @@ async function prepare(page, viewport, writes, user = null) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await installInvestorWorkflowApiMocks(page, user ? { user } : { initiallyUnauthenticated: true });
     const rejected = [];
-    const seal = () => page.route('**/*', route => {
+    const allowedOrigin = new URL(process.env.STOX_E2E_BASE_URL || 'http://127.0.0.1:4177').origin;
+    const seal = () => page.route('**/*', async route => {
         const req = route.request(); const url = new URL(req.url());
+        if (await handleApiFailureDiagnosticForPage(route, page, allowedOrigin)) return;
         const allowed = ['GET', 'HEAD'].includes(req.method()) || [['POST', '/api/logs/frontend'], ...writes].some(([method, path]) => req.method() === method && url.pathname === path);
         if (url.origin !== 'http://127.0.0.1:4177' || !allowed) { rejected.push(`${req.method()} ${url.pathname}`); return route.abort(); }
         return route.fallback();

@@ -17,6 +17,8 @@ function statusBadgeClass(status) {
             return 'text-bg-warning';
         case 'archived':
             return 'text-bg-secondary';
+        case 'disabled':
+            return 'text-bg-warning';
         default:
             return 'text-bg-light';
     }
@@ -24,7 +26,7 @@ function statusBadgeClass(status) {
 
 function isEnabledRow(row) {
     const m = row?.metadata || {};
-    return Boolean(m.is_enabled || m.is_selected || m.status === 'active');
+    return Boolean(m.is_enabled || m.is_selected || (m.lifecycle_status || m.status) === 'active');
 }
 
 function strategyIdOf(row) {
@@ -76,6 +78,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
     const [allocBusy, setAllocBusy] = useState(false);
     const [allocError, setAllocError] = useState('');
     const [provenanceGate, setProvenanceGate] = useState(null);
+    const [archiveBlockers, setArchiveBlockers] = useState([]);
     const importValidated = Boolean(validateResult?.ok);
     const renderScope = scopeRef.current;
 
@@ -145,12 +148,11 @@ export default function StrategyRegistryPage({ adminMode = false }) {
     const countsLabel = useMemo(() => {
         if (!meta?.counts) return '';
         const c = meta.counts;
-        return `${c.total} total · ${c.active} active · ${c.draft} draft · ${c.archived} archived`;
+        return `${c.total} total · ${c.active} enabled · ${c.disabled || 0} paused · ${c.draft} draft · ${c.archived} archived`;
     }, [meta]);
 
     const allocSum = allocDraft.reduce((sum, row) => sum + (Number(row.allocation_pct) || 0), 0);
     const allocSumIs100 = Math.abs(allocSum - 100) <= 0.01;
-    const enabledCount = rows.filter(isEnabledRow).length;
 
     const saveAllocations = async () => {
         setAllocError('');
@@ -286,22 +288,58 @@ export default function StrategyRegistryPage({ adminMode = false }) {
         }
     };
 
-    const onArchive = async (row) => {
+    const onDisable = async (row) => {
         const id = row.artifact_id || row.slug;
-        if (!window.confirm(
-            'Archive this strategy? It will stop generating recommendations. Other enabled strategies stay enabled. Past holdings/recommendations keep their attribution.',
-        )) return;
+        if (!window.confirm(`Pause “${row.name}”? New recommendations and future runs stop. Existing holdings, orders, executions, reservations and settlement remain available for normal handling. No sell, cancellation or fund release is automatic.`)) return;
         const scope = scopeRef.current;
         setBusy(true);
         setError('');
         try {
-            await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/archive`);
+            await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/disable`);
+            if (scope !== scopeRef.current) return;
+            showToast(`“${row.name}” paused. Existing work remains available.`);
+            await load();
+        } catch (err) {
+            if (scope === scopeRef.current) setError(getApiErrorMessage(err, 'Disable failed'));
+        } finally {
+            if (scope === scopeRef.current) setBusy(false);
+        }
+    };
+
+    const onRestore = async (row) => {
+        const id = row.artifact_id || row.slug;
+        const scope = scopeRef.current;
+        setBusy(true);
+        setError('');
+        try {
+            await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/restore`);
+            if (scope !== scopeRef.current) return;
+            showToast(`“${row.name}” restored as disabled. Enable it explicitly after reviewing readiness.`);
+            await load();
+        } catch (err) {
+            if (scope === scopeRef.current) setError(getApiErrorMessage(err, 'Restore failed'));
+        } finally {
+            if (scope === scopeRef.current) setBusy(false);
+        }
+    };
+
+    const onArchive = async (row) => {
+        const id = row.artifact_id || row.slug;
+        const reason = window.prompt(`Why are you retiring “${row.name}”? This reason is retained with its read-only history.`)?.trim();
+        if (!reason || reason.length < 3) return;
+        const scope = scopeRef.current;
+        setBusy(true);
+        setError('');
+        setArchiveBlockers([]);
+        try {
+            await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/archive`, { reason });
             if (scope !== scopeRef.current) return;
             showToast(`“${row.name}” archived.`);
             await load();
         } catch (err) {
             if (scope !== scopeRef.current) return;
             setError(getApiErrorMessage(err, 'Archive failed'));
+            setArchiveBlockers(err?.response?.data?.meta?.blockers || []);
         } finally {
             if (scope === scopeRef.current) setBusy(false);
         }
@@ -431,6 +469,14 @@ export default function StrategyRegistryPage({ adminMode = false }) {
 
             {loadError && <div className="alert alert-danger mb-0" role="alert">{loadError} <button type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={load}>Retry Strategy Registry</button></div>}
             {error && <div className="alert alert-danger mb-0" role="alert">{error}</div>}
+            {archiveBlockers.length > 0 && (
+                <div className="alert alert-warning mb-0" role="alert">
+                    <strong>Resolve these strategy-owned records before retiring:</strong>
+                    <ul className="mb-0 mt-2">
+                        {archiveBlockers.map((blocker) => <li key={blocker.code}>{blocker.label} ({blocker.count}) — <Link to={blocker.href}>Open resolution view</Link></li>)}
+                    </ul>
+                </div>
+            )}
 
             <div className="card">
                 <div className="table-responsive">
@@ -459,6 +505,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                             )}
                             {!loading && rows.map((row) => {
                                 const m = row.metadata || {};
+                                const lifecycleStatus = m.lifecycle_status || m.status;
                                 const id = row.artifact_id || row.slug;
                                 const selected = isEnabledRow(row);
                                 const alloc = allocationPctOf(row);
@@ -471,7 +518,7 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                                         </td>
                                         <td>{row.name}</td>
                                         <td>
-                                            <span className={`badge ${statusBadgeClass(m.status)}`}>{m.status || '—'}</span>
+                                            <span className={`badge ${statusBadgeClass(lifecycleStatus)}`}>{lifecycleStatus || '—'}</span>
                                         </td>
                                         <td>{row.artifact_version}</td>
                                         <td>{selected ? 'Yes' : '—'}</td>
@@ -491,7 +538,9 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                                                 <Link to={`/strategy?strategy_id=${encodeURIComponent(id)}`} className="btn btn-outline-primary btn-sm">
                                                     Edit
                                                 </Link>
-                                                {!selected && (
+                                                {lifecycleStatus === 'archived' ? (
+                                                    <button type="button" className="btn btn-outline-primary btn-sm" disabled={busy} onClick={() => onRestore(row)}>Restore as disabled</button>
+                                                ) : !selected && (
                                                     <button
                                                         type="button"
                                                         className="btn btn-primary btn-sm"
@@ -501,17 +550,18 @@ export default function StrategyRegistryPage({ adminMode = false }) {
                                                         Enable
                                                     </button>
                                                 )}
-                                                {m.status !== 'archived' && (
+                                                {selected && (
+                                                    <button type="button" className="btn btn-outline-warning btn-sm" disabled={busy} onClick={() => onDisable(row)}>Disable</button>
+                                                )}
+                                                {lifecycleStatus !== 'archived' && (
                                                     <button
                                                         type="button"
                                                         className="btn btn-outline-secondary btn-sm"
-                                                        disabled={busy || (selected && enabledCount <= 1)}
-                                                        title={selected && enabledCount <= 1
-                                                            ? 'Enable another strategy before archiving the last enabled one'
-                                                            : 'Archive this strategy'}
+                                                        disabled={busy}
+                                                        title="Archive after all strategy-owned work is resolved"
                                                         onClick={() => onArchive(row)}
                                                     >
-                                                        Archive
+                                                        Retire
                                                     </button>
                                                 )}
                                             </div>

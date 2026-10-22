@@ -204,6 +204,11 @@ final class StrategyRegistrySupport
         }
 
         return DB::transaction(function () use ($profile, $strategy) {
+            $locked = TradingStrategy::query()->whereKey($strategy->id)->lockForUpdate()->firstOrFail();
+            if ((int) $locked->profile_id !== (int) $profile->id || $locked->isReadOnly()) {
+                throw new InvalidArgumentException('Archived strategy is read-only and must be restored before enabling.');
+            }
+            $strategy = $locked;
             $version = $strategy->activeVersion
                 ?? TradingStrategyVersion::query()->where('strategy_id', $strategy->id)->orderByDesc('id')->first();
             if (! $version) {
@@ -234,24 +239,70 @@ final class StrategyRegistrySupport
         });
     }
 
-    /**
-     * Archive a strategy without changing siblings. Keeps active_version_id for historical attribution.
-     */
-    public function archive(PortfolioProfile $profile, TradingStrategy $strategy): TradingStrategy
+    public function disable(PortfolioProfile $profile, TradingStrategy $strategy): TradingStrategy
     {
         if ((int) $strategy->profile_id !== (int) $profile->id) {
             throw new InvalidArgumentException('Strategy does not belong to the active portfolio.');
         }
 
-        if ($strategy->status === TradingStrategy::STATUS_ARCHIVED) {
-            return $strategy->fresh(['activeVersion']);
+        return DB::transaction(function () use ($profile, $strategy) {
+            $locked = TradingStrategy::query()->whereKey($strategy->id)->lockForUpdate()->firstOrFail();
+            if ((int) $locked->profile_id !== (int) $profile->id || $locked->isReadOnly()) {
+                throw new InvalidArgumentException('Archived strategy is read-only. Restore it before changing its lifecycle.');
+            }
+            if ($locked->status !== TradingStrategy::STATUS_DISABLED) {
+                $locked->forceFill(['status' => TradingStrategy::STATUS_DISABLED])->save();
+            }
+
+            return $locked->fresh(['activeVersion']);
+        });
+    }
+
+    public function archive(PortfolioProfile $profile, TradingStrategy $strategy, string $reason): TradingStrategy
+    {
+        if ((int) $strategy->profile_id !== (int) $profile->id) {
+            throw new InvalidArgumentException('Strategy does not belong to the active portfolio.');
         }
 
-        $strategy->forceFill([
-            'status' => TradingStrategy::STATUS_ARCHIVED,
-        ])->save();
+        return DB::transaction(function () use ($profile, $strategy, $reason) {
+            $locked = TradingStrategy::query()->whereKey($strategy->id)->lockForUpdate()->firstOrFail();
+            if ((int) $locked->profile_id !== (int) $profile->id) {
+                throw new InvalidArgumentException('Strategy does not belong to the active portfolio.');
+            }
+            if ($locked->isReadOnly()) {
+                return $locked->fresh(['activeVersion']);
+            }
 
-        return $strategy->fresh(['activeVersion']);
+            $blockers = app(StrategyArchiveEligibility::class)->blockers($profile, $locked);
+            if ($blockers !== []) {
+                throw new StrategyArchiveBlocked($blockers);
+            }
+
+            $locked->forceFill([
+                'status' => TradingStrategy::STATUS_ARCHIVED,
+                'archived_at' => now(),
+                'archive_reason' => trim($reason),
+            ])->save();
+
+            return $locked->fresh(['activeVersion']);
+        });
+    }
+
+    public function restore(PortfolioProfile $profile, TradingStrategy $strategy): TradingStrategy
+    {
+        if ((int) $strategy->profile_id !== (int) $profile->id) {
+            throw new InvalidArgumentException('Strategy does not belong to the active portfolio.');
+        }
+
+        return DB::transaction(function () use ($profile, $strategy) {
+            $locked = TradingStrategy::query()->whereKey($strategy->id)->lockForUpdate()->firstOrFail();
+            if ((int) $locked->profile_id !== (int) $profile->id || ! $locked->isReadOnly()) {
+                throw new InvalidArgumentException('Only an archived strategy can be restored.');
+            }
+            $locked->forceFill(['status' => TradingStrategy::STATUS_DISABLED])->save();
+
+            return $locked->fresh(['activeVersion']);
+        });
     }
 
     public function ensureRegistryFields(TradingStrategy $strategy, TradingStrategyVersion $version): void

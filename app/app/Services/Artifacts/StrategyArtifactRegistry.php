@@ -9,6 +9,7 @@ use App\Models\TradingStrategyVersion;
 use App\Services\Artifacts\Contracts\ArtifactRegistryInterface;
 use App\Services\Indicators\IndicatorRegistry;
 use App\Services\Strategy\StrategyRegistrySupport;
+use App\Services\Strategy\StrategyArchiveEligibility;
 use App\Services\StrategyConfigurationService;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -20,7 +21,7 @@ use InvalidArgumentException;
  */
 final class StrategyArtifactRegistry implements ArtifactRegistryInterface
 {
-    public const ENABLEMENT_RULE = 'multiple_enabled_per_portfolio';
+    public const ENABLEMENT_RULE = 'zero_or_more_enabled_per_portfolio';
 
     public function __construct(
         private StrategyConfigurationService $strategies,
@@ -39,7 +40,9 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
         if ($profile === null) {
             return [];
         }
-        $this->strategies->ensureActive($profile);
+        if (! TradingStrategy::query()->where('profile_id', $profile->id)->exists()) {
+            $this->strategies->ensureActive($profile);
+        }
         $rows = TradingStrategy::query()
             ->where('profile_id', $profile->id)
             ->with('activeVersion')
@@ -85,7 +88,9 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
         if ($profile === null) {
             return null;
         }
-        $this->strategies->ensureActive($profile);
+        if (! TradingStrategy::query()->where('profile_id', $profile->id)->exists()) {
+            $this->strategies->ensureActive($profile);
+        }
         $strategy = $this->findStrategy($profile, $idOrSlug);
         if (! $strategy) {
             return null;
@@ -134,8 +139,6 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
         if ($name === '') {
             throw new InvalidArgumentException('Strategy name is required.');
         }
-
-        $this->strategies->ensureActive($profile);
 
         $created = $this->strategies->createInvestorStrategy($profile, $name, $description);
         $strategy = TradingStrategy::query()
@@ -336,18 +339,53 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
      *
      * @return array<string, mixed>
      */
-    public function archive(string $idOrSlug, PortfolioProfile $profile): array
+    public function archive(string $idOrSlug, PortfolioProfile $profile, string $reason): array
     {
         $strategy = $this->findStrategy($profile, $idOrSlug);
         if (! $strategy) {
             throw new InvalidArgumentException("Strategy not found: {$idOrSlug}");
         }
-        $this->assertLegacyMutable($strategy);
-        $archived = $this->support->archive($profile, $strategy);
+        $archived = $this->support->archive($profile, $strategy, $reason);
         $version = $archived->activeVersion
             ?? TradingStrategyVersion::query()->where('strategy_id', $archived->id)->orderByDesc('id')->firstOrFail();
 
         return $this->project($archived, $version);
+    }
+
+    public function archiveBlockers(string $idOrSlug, PortfolioProfile $profile): array
+    {
+        $strategy = $this->findStrategy($profile, $idOrSlug);
+        if (! $strategy) {
+            throw new InvalidArgumentException("Strategy not found: {$idOrSlug}");
+        }
+
+        return app(StrategyArchiveEligibility::class)->blockers($profile, $strategy);
+    }
+
+    public function disable(string $idOrSlug, PortfolioProfile $profile): array
+    {
+        $strategy = $this->findStrategy($profile, $idOrSlug);
+        if (! $strategy) {
+            throw new InvalidArgumentException("Strategy not found: {$idOrSlug}");
+        }
+        $disabled = $this->support->disable($profile, $strategy);
+        $version = $disabled->activeVersion
+            ?? TradingStrategyVersion::query()->where('strategy_id', $disabled->id)->orderByDesc('id')->firstOrFail();
+
+        return $this->project($disabled, $version);
+    }
+
+    public function restore(string $idOrSlug, PortfolioProfile $profile): array
+    {
+        $strategy = $this->findStrategy($profile, $idOrSlug);
+        if (! $strategy) {
+            throw new InvalidArgumentException("Strategy not found: {$idOrSlug}");
+        }
+        $restored = $this->support->restore($profile, $strategy);
+        $version = $restored->activeVersion
+            ?? TradingStrategyVersion::query()->where('strategy_id', $restored->id)->orderByDesc('id')->firstOrFail();
+
+        return $this->project($restored, $version);
     }
 
     /**
@@ -381,9 +419,12 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
      */
     public function meta(PortfolioProfile $profile): array
     {
-        $this->strategies->ensureActive($profile);
+        if (! TradingStrategy::query()->where('profile_id', $profile->id)->exists()) {
+            $this->strategies->ensureActive($profile);
+        }
         $rows = TradingStrategy::query()->where('profile_id', $profile->id)->get();
         $active = $rows->where('status', TradingStrategy::STATUS_ACTIVE)->count();
+        $disabled = $rows->where('status', TradingStrategy::STATUS_DISABLED)->count();
         $draft = $rows->where('status', TradingStrategy::STATUS_DRAFT)->count();
         $archived = $rows->where('status', TradingStrategy::STATUS_ARCHIVED)->count();
         $factory = $rows->where('is_factory', true)->count();
@@ -392,12 +433,14 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
             'counts' => [
                 'total' => $rows->count(),
                 'active' => $active,
+                'disabled' => $disabled,
                 'draft' => $draft,
                 'archived' => $archived,
                 'factory' => $factory,
             ],
             'statuses' => [
                 ['id' => 'active', 'label' => 'Active (enabled)'],
+                ['id' => 'disabled', 'label' => 'Disabled (paused)'],
                 ['id' => 'draft', 'label' => 'Draft'],
                 ['id' => 'archived', 'label' => 'Archived'],
             ],
@@ -510,6 +553,9 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
                 'legacy_version_id' => $version->id,
                 'is_enabled' => $strategy->status === TradingStrategy::STATUS_ACTIVE,
                 'is_selected' => $strategy->status === TradingStrategy::STATUS_ACTIVE,
+                'lifecycle_status' => $strategy->status,
+                'archived_at' => $strategy->archived_at?->toIso8601String(),
+                'archive_reason' => $strategy->archive_reason,
                 'allocation_pct' => $strategy->allocation_pct !== null ? (float) $strategy->allocation_pct : 100.0,
                 'reusable_artifact_id' => $strategy->reusable_artifact_id,
                 'reusable_artifact_uuid' => $strategy->reusableArtifact?->artifact_uuid,
@@ -533,6 +579,9 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
 
     private function assertLegacyMutable(TradingStrategy $strategy): void
     {
+        if ($strategy->isReadOnly()) {
+            throw new InvalidArgumentException('Archived strategies are read-only. Restore this strategy before editing it.');
+        }
         if ($strategy->reusable_artifact_id !== null) {
             throw new InvalidArgumentException(
                 'This Strategy is managed by the Artifact Library. Create or edit a Draft there, then publish and explicitly upgrade its Portfolio binding.'
@@ -606,7 +655,7 @@ final class StrategyArtifactRegistry implements ArtifactRegistryInterface
             }
         }
         if (isset($filters['status']) && trim((string) $filters['status']) !== '') {
-            if (($env['metadata']['status'] ?? '') !== (string) $filters['status']) {
+            if (($env['metadata']['lifecycle_status'] ?? $env['metadata']['status'] ?? '') !== (string) $filters['status']) {
                 return false;
             }
         }

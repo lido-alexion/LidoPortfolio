@@ -358,6 +358,9 @@ class MlTrainingDatasetBuilderTest extends TestCase
         $dataset = app(MlTrainingDatasetBuilder::class)->buildStreamed('3m', Carbon::parse('2026-09-30'), $directory);
         $repeat = app(MlTrainingDatasetBuilder::class)->buildStreamed('3m', Carbon::parse('2026-09-30'), $secondDirectory);
         $this->assertSame($dataset['partitions'], $repeat['partitions']);
+        foreach (['train', 'validation', 'test'] as $partition) {
+            $this->assertSame(hash_file('sha256', $dataset['paths'][$partition]), hash_file('sha256', $repeat['paths'][$partition]));
+        }
 
         foreach (['train', 'validation', 'test'] as $partition) {
             $this->assertGreaterThan(0, $dataset['partitions']['row_counts'][$partition]);
@@ -368,6 +371,232 @@ class MlTrainingDatasetBuilderTest extends TestCase
 
         File::deleteDirectory($directory);
         File::deleteDirectory($secondDirectory);
+    }
+
+    public function test_partition_metadata_matches_brute_force_reference_for_edge_cases_and_all_horizons(): void
+    {
+        $builder = app(MlTrainingDatasetBuilder::class);
+        $partitionMetadata = new \ReflectionMethod($builder, 'partitionMetadata');
+        $partitionMetadata->setAccessible(true);
+        $cutoff = Carbon::parse('2030-12-31');
+
+        $complexRows = $this->partitionRows([
+            '2020-01-01', '2020-02-01', '2020-04-01', '2020-05-01',
+            '2020-07-01', '2020-08-01', '2020-09-01', '2020-11-01',
+            '2021-01-01', '2021-02-01', '2021-04-01', '2021-05-01',
+        ], [1, 4, 2, 5, 1, 3, 5, 1, 3, 2, 6, 2], [7, 15, 2, 25, 3, 6, 1, 20, 4, 13, 2, 10]);
+        $complexRows = array_reverse($complexRows, true);
+
+        $tieRows = [];
+        foreach ([80, 63, 122, 103, 59, 147, 78, 115, 118, 91, 120, 8] as $index => $offset) {
+            $date = Carbon::parse('2020-01-01')->addMonthsNoOverflow($index)->toDateString();
+            $tieRows[$date] = Carbon::parse($date)->addDays($offset)->toDateString();
+        }
+
+        $cases = [
+            'varied bucket sizes, missing months, shuffled dates and nonmonotonic labels' => [
+                'rows' => $complexRows,
+                'tie_count' => null,
+            ],
+            'equal best-score candidates retain the earliest boundary pair' => [
+                'rows' => $tieRows,
+                'tie_count' => 2,
+                'expected_train_end' => '2020-06',
+                'expected_validation_end' => '2020-10',
+            ],
+            'label end equal to next partition start is not usable' => [
+                'rows' => [
+                    '2020-01-01' => '2020-02-01',
+                    '2020-02-01' => '2020-02-15',
+                    '2020-03-01' => '2020-03-15',
+                ],
+                'exception' => 'Insufficient horizon-aware chronological buckets for %d-observation labels: no train/validation/test allocation retains a usable row after label separation.',
+            ],
+            'no allocation can survive long overlapping labels' => [
+                'rows' => [
+                    '2020-01-01' => '2021-03-01',
+                    '2020-02-01' => '2021-03-01',
+                    '2020-03-01' => '2021-03-01',
+                    '2020-04-01' => '2021-03-01',
+                    '2020-05-01' => '2021-03-01',
+                    '2020-06-01' => '2021-03-01',
+                ],
+                'exception' => 'Insufficient horizon-aware chronological buckets for %d-observation labels: no train/validation/test allocation retains a usable row after label separation.',
+            ],
+        ];
+
+        foreach (['1m' => 21, '3m' => 63, '6m' => 126] as $horizon => $horizonDays) {
+            foreach ($cases as $caseName => $case) {
+                $reference = $this->bruteForcePartitionMetadata($case['rows'], $cutoff, $horizonDays);
+                if (isset($case['exception'])) {
+                    $expectedException = sprintf($case['exception'], $horizonDays);
+                    $this->assertSame($expectedException, $reference['exception_message'] ?? null);
+                    $actualException = null;
+                    try {
+                        $partitionMetadata->invoke($builder, $case['rows'], $cutoff, $horizonDays);
+                    } catch (\RuntimeException $exception) {
+                        $actualException = $exception;
+                    }
+                    $this->assertNotNull($actualException, "{$caseName} should have no valid partition allocation at {$horizon}.");
+                    $this->assertSame($expectedException, $actualException->getMessage());
+                    continue;
+                }
+
+                $actual = $partitionMetadata->invoke($builder, $case['rows'], $cutoff, $horizonDays);
+                $this->assertSame($reference['metadata'], $actual, "Metadata differed for {$caseName} at {$horizon}.");
+                if (isset($case['tie_count'])) {
+                    $this->assertSame($case['tie_count'], $reference['best_score_tie_count']);
+                    $this->assertSame($case['expected_train_end'], $actual['horizon_aware']['selected_train_end_bucket']);
+                    $this->assertSame($case['expected_validation_end'], $actual['horizon_aware']['selected_validation_end_bucket']);
+                }
+            }
+        }
+    }
+
+    /** @return array<string,string> */
+    private function partitionRows(array $months, array $bucketSizes, array $baseOffsets): array
+    {
+        $rows = [];
+        foreach ($months as $index => $month) {
+            for ($day = 0; $day < $bucketSizes[$index]; $day++) {
+                $date = Carbon::parse($month)->addDays($day)->toDateString();
+                $offset = $baseOffsets[$index] + (($day * 11 + $index * 7) % 9);
+                $rows[$date] = Carbon::parse($date)->addDays($offset)->toDateString();
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Independent oracle: enumerate row-level usable candidates and sort all
+     * candidates by score and boundary indices. It does not use prefix or
+     * rolling minima like the production implementation.
+     *
+     * @param array<string,string> $referenceDates
+     * @return array{metadata?:array<string,mixed>,best_score_tie_count:int,exception_message?:string}
+     */
+    private function bruteForcePartitionMetadata(array $referenceDates, Carbon $cutoff, int $horizonDays): array
+    {
+        $buckets = [];
+        foreach ($referenceDates as $date => $labelEnd) {
+            $month = substr($date, 0, 7);
+            $buckets[$month]['dates'][] = $date;
+            $buckets[$month]['rows'][] = ['reference_date' => $date, 'label_end' => $labelEnd];
+        }
+        ksort($buckets);
+        foreach ($buckets as &$bucket) {
+            sort($bucket['dates']);
+        }
+        unset($bucket);
+
+        $months = array_keys($buckets);
+        $count = count($months);
+        if ($count < 3) {
+            throw new \RuntimeException('Insufficient chronological sampling buckets.');
+        }
+
+        $nominalTrainEnd = max(0, min($count - 3, (int) floor($count * 0.70) - 1));
+        $nominalValidationEnd = min($count - 2, max($nominalTrainEnd + 1, (int) floor($count * 0.85) - 1));
+        $candidates = [];
+        for ($trainEnd = 0; $trainEnd < $count - 2; $trainEnd++) {
+            for ($validationEnd = $trainEnd + 1; $validationEnd < $count - 1; $validationEnd++) {
+                $validationStart = $buckets[$months[$trainEnd + 1]]['dates'][0];
+                $testStart = $buckets[$months[$validationEnd + 1]]['dates'][0];
+                $trainUsable = false;
+                for ($monthIndex = 0; $monthIndex <= $trainEnd && ! $trainUsable; $monthIndex++) {
+                    foreach ($buckets[$months[$monthIndex]]['rows'] as $row) {
+                        if ($row['label_end'] < $validationStart) {
+                            $trainUsable = true;
+                            break;
+                        }
+                    }
+                }
+                $validationUsable = false;
+                for ($monthIndex = $trainEnd + 1; $monthIndex <= $validationEnd && ! $validationUsable; $monthIndex++) {
+                    foreach ($buckets[$months[$monthIndex]]['rows'] as $row) {
+                        if ($row['label_end'] < $testStart) {
+                            $validationUsable = true;
+                            break;
+                        }
+                    }
+                }
+                if ($trainUsable && $validationUsable) {
+                    $candidates[] = [
+                        'score' => abs($trainEnd - $nominalTrainEnd) + abs($validationEnd - $nominalValidationEnd),
+                        'train_end_index' => $trainEnd,
+                        'validation_end_index' => $validationEnd,
+                    ];
+                }
+            }
+        }
+        usort($candidates, static function (array $left, array $right): int {
+            return ($left['score'] <=> $right['score'])
+                ?: ($left['train_end_index'] <=> $right['train_end_index'])
+                ?: ($left['validation_end_index'] <=> $right['validation_end_index']);
+        });
+        if ($candidates === []) {
+            return [
+                'best_score_tie_count' => 0,
+                'exception_message' => "Insufficient horizon-aware chronological buckets for {$horizonDays}-observation labels: no train/validation/test allocation retains a usable row after label separation.",
+            ];
+        }
+
+        $best = $candidates[0];
+        $tieCount = count(array_filter($candidates, static fn (array $candidate): bool => $candidate['score'] === $best['score']));
+        $trainEndIndex = $best['train_end_index'];
+        $validationEndIndex = $best['validation_end_index'];
+        $trainEndMonth = $months[$trainEndIndex];
+        $validationStartMonth = $months[$trainEndIndex + 1];
+        $validationEndMonth = $months[$validationEndIndex];
+        $testStartMonth = $months[$validationEndIndex + 1];
+        $bucketPartitions = [];
+        foreach ($months as $index => $month) {
+            $bucketPartitions[$month] = $index <= $trainEndIndex ? 'train' : ($index <= $validationEndIndex ? 'validation' : 'test');
+        }
+        $firstDate = static function (string $month) use ($buckets): string {
+            return $buckets[$month]['dates'][0];
+        };
+        $lastDate = static function (string $month) use ($buckets): string {
+            return $buckets[$month]['dates'][array_key_last($buckets[$month]['dates'])];
+        };
+
+        return [
+            'metadata' => [
+                'train_start' => $firstDate($months[0]),
+                'train_end' => $lastDate($trainEndMonth),
+                'validation_start' => $firstDate($validationStartMonth),
+                'validation_end' => $lastDate($validationEndMonth),
+                'test_start' => $firstDate($testStartMonth),
+                'test_end' => $lastDate($months[array_key_last($months)]),
+                'cutoff_date' => $cutoff->toDateString(),
+                'split_basis' => 'chronological_monthly_sampling_buckets',
+                'sampling_buckets' => $bucketPartitions,
+                'sampling' => [
+                    'version' => 'v8-horizon-reference-1',
+                    'cadence' => $horizonDays === 21 ? 'weekly' : 'monthly',
+                    'anchor' => 'last_available_trading_day',
+                    'horizon_days' => $horizonDays,
+                ],
+                'purge_embargo' => [
+                    'version' => 'v8-label-window-purge-1',
+                    'horizon_observations' => $horizonDays,
+                    'rule' => 'exclude_rows_whose_forward_label_window_reaches_or_crosses_next_partition_start',
+                    'train_boundary' => $validationStartMonth,
+                    'validation_boundary' => $testStartMonth,
+                    'embargo_observations' => $horizonDays,
+                ],
+                'horizon_aware' => [
+                    'label_observations' => $horizonDays,
+                    'nominal_train_end_bucket' => $months[$nominalTrainEnd],
+                    'nominal_validation_end_bucket' => $months[$nominalValidationEnd],
+                    'selected_train_end_bucket' => $trainEndMonth,
+                    'selected_validation_end_bucket' => $validationEndMonth,
+                    'boundary_adjustment_score' => $best['score'],
+                ],
+            ],
+            'best_score_tie_count' => $tieCount,
+        ];
     }
 
     public function test_horizon_aware_partitioning_reports_insufficient_history_precisely(): void

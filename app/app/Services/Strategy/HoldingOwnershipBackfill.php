@@ -4,6 +4,7 @@ namespace App\Services\Strategy;
 
 use App\Models\Holding;
 use App\Models\Transaction;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
 
 /**
@@ -41,7 +42,7 @@ class HoldingOwnershipBackfill
         foreach ($byStock as $stockId => $stockHoldings) {
             $inferredStrategyId = $this->inferredStrategyIdForOpenLots($profileId, (int) $stockId);
             foreach ($stockHoldings as $holding) {
-                if ($this->assignIfSafe($holding, $stockHoldings, $inferredStrategyId)) {
+                if ($this->assignIfSafe($holding, $inferredStrategyId)) {
                     $updated++;
                 }
             }
@@ -118,7 +119,6 @@ class HoldingOwnershipBackfill
      */
     protected function assignIfSafe(
         Holding $holding,
-        Collection $stockHoldings,
         ?int $inferredStrategyId,
     ): bool {
         if (! $holding->isUnmanaged()) {
@@ -128,21 +128,29 @@ class HoldingOwnershipBackfill
             return false;
         }
 
-        $targetKey = Holding::ownerKeyFor($inferredStrategyId);
-        $conflict = $stockHoldings->first(
-            fn (Holding $other) => $other->id !== $holding->id
-                && $other->owner_key === $targetKey
-        );
-        if ($conflict !== null) {
-            return false;
-        }
+        return DB::transaction(function () use ($holding, $inferredStrategyId): bool {
+            app(StrategyLifecycleAdmission::class)->lockForNewObligation(
+                (int) $holding->profile_id,
+                [$inferredStrategyId],
+            );
+            $lockedHolding = Holding::query()->whereKey($holding->id)->lockForUpdate()->first();
+            if (! $lockedHolding || ! $lockedHolding->isUnmanaged()) {
+                return false;
+            }
+            $targetKey = Holding::ownerKeyFor($inferredStrategyId);
+            if (Holding::query()->where('profile_id', $lockedHolding->profile_id)
+                ->where('stock_id', $lockedHolding->stock_id)->where('owner_key', $targetKey)
+                ->where('id', '!=', $lockedHolding->id)->where('quantity', '>', 0)->exists()) {
+                return false;
+            }
 
-        $holding->forceFill([
-            'strategy_id' => $inferredStrategyId,
-            'owner_key' => $targetKey,
-        ])->save();
+            $lockedHolding->forceFill([
+                'strategy_id' => $inferredStrategyId,
+                'owner_key' => $targetKey,
+            ])->save();
 
-        return true;
+            return true;
+        });
     }
 
     /**

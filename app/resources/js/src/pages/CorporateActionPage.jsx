@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import api from '../api';
 import SegmentToggle from '../components/SegmentToggle';
@@ -12,6 +12,8 @@ import {
     getLocalTodayDateString,
 } from '../utils/transactionDate';
 import { formatTableInteger, formatTableMoney2 } from '../utils/tableFormat';
+import { getActivePortfolioId } from '../portfolio/activePortfolioStorage';
+import { PORTFOLIO_CHANGED } from '../utils/portfolioEvents';
 
 const SPLIT_SCOPE_OPTIONS = [
     { value: 'all', label: 'All transactions' },
@@ -61,9 +63,14 @@ export default function CorporateActionPage() {
     const [exDateDisplay, setExDateDisplay] = useState(() => formatTransactionDateDisplay(getLocalTodayDateString()));
     const [splitScope, setSplitScope] = useState('all');
     const [notes, setNotes] = useState('');
-    const [preview, setPreview] = useState(null);
+    const [previewReceipt, setPreviewReceipt] = useState(null);
     const [previewLoading, setPreviewLoading] = useState(false);
     const [applyLoading, setApplyLoading] = useState(false);
+    const previewGenerationRef = useRef(0);
+    const inputRevisionRef = useRef(0);
+    const portfolioIdRef = useRef(getActivePortfolioId());
+    const portfolioEpochRef = useRef(0);
+    const mountedRef = useRef(false);
 
     const adjustmentColumns = useMemo(() => buildAdjustmentColumns(), []);
 
@@ -80,26 +87,94 @@ export default function CorporateActionPage() {
 
     const canSubmit = Boolean(stock.stock_id && stock.symbol && ratioFrom && ratioTo && exDate);
 
+    const invalidatePreview = useCallback(() => {
+        inputRevisionRef.current += 1;
+        previewGenerationRef.current += 1;
+        setPreviewReceipt(null);
+        setPreviewLoading(false);
+    }, []);
+
+    const syncPortfolioScope = useCallback(() => {
+        if (!mountedRef.current) return;
+        const activePortfolioId = getActivePortfolioId();
+        if (activePortfolioId === portfolioIdRef.current) return;
+        portfolioIdRef.current = activePortfolioId;
+        portfolioEpochRef.current += 1;
+        inputRevisionRef.current += 1;
+        previewGenerationRef.current += 1;
+        setPreviewReceipt(null);
+        setPreviewLoading(false);
+    }, []);
+
+    useEffect(() => {
+        mountedRef.current = true;
+        const handlePortfolioChange = () => syncPortfolioScope();
+        window.addEventListener(PORTFOLIO_CHANGED, handlePortfolioChange);
+        return () => {
+            window.removeEventListener(PORTFOLIO_CHANGED, handlePortfolioChange);
+            mountedRef.current = false;
+            portfolioEpochRef.current += 1;
+            previewGenerationRef.current += 1;
+        };
+    }, [syncPortfolioScope]);
+
+    const payloadKey = JSON.stringify(payload);
+    const preview = previewReceipt
+        && previewReceipt.payloadKey === payloadKey
+        && previewReceipt.inputRevision === inputRevisionRef.current
+        && previewReceipt.portfolioId === portfolioIdRef.current
+        && previewReceipt.portfolioEpoch === portfolioEpochRef.current
+        && previewReceipt.portfolioId === getActivePortfolioId()
+        ? previewReceipt.data
+        : null;
+
+    const changeInput = (currentValue, nextValue, setter) => {
+        if (currentValue === nextValue) return;
+        invalidatePreview();
+        setter(nextValue);
+    };
+
     const loadPreview = useCallback(async () => {
+        syncPortfolioScope();
         if (!canSubmit) {
             showToast('Select a stock and enter ratio details first.', 'warning');
             return;
         }
+        const requestGeneration = ++previewGenerationRef.current;
+        const requestInputRevision = inputRevisionRef.current;
+        const requestPortfolioId = portfolioIdRef.current;
+        const requestPortfolioEpoch = portfolioEpochRef.current;
+        const requestPayloadKey = JSON.stringify(payload);
+        const isCurrentRequest = () => {
+            syncPortfolioScope();
+            return mountedRef.current
+                && requestGeneration === previewGenerationRef.current
+                && requestInputRevision === inputRevisionRef.current
+                && requestPortfolioId === portfolioIdRef.current
+                && requestPortfolioEpoch === portfolioEpochRef.current
+                && requestPortfolioId === getActivePortfolioId();
+        };
         setPreviewLoading(true);
         try {
             const res = await api.post('/corporate-actions/preview', payload);
-            setPreview(res.data.data);
+            if (isCurrentRequest()) {
+                setPreviewReceipt({
+                    data: res.data.data,
+                    payloadKey: requestPayloadKey,
+                    inputRevision: requestInputRevision,
+                    portfolioId: requestPortfolioId,
+                    portfolioEpoch: requestPortfolioEpoch,
+                });
+            }
         } catch (err) {
-            setPreview(null);
-            showToast(err?.response?.data?.message || 'Could not preview corporate action.', 'danger');
+            if (isCurrentRequest()) {
+                setPreviewReceipt(null);
+                showToast(err?.response?.data?.message || 'Could not preview corporate action.', 'danger');
+            }
         } finally {
-            setPreviewLoading(false);
+            if (isCurrentRequest()) setPreviewLoading(false);
         }
-    }, [canSubmit, payload]);
-
-    useEffect(() => {
-        setPreview(null);
-    }, [actionType, ratioFrom, ratioTo, exDate, splitScope, stock.stock_id, notes]);
+    }, [canSubmit, payload, syncPortfolioScope]);
 
     const applyAction = async () => {
         if (!preview) {
@@ -155,13 +230,24 @@ export default function CorporateActionPage() {
                                 id="ca-stock"
                                 value={stock.symbol}
                                 exchange={stock.exchange}
-                                onChange={(symbol) => setStock((prev) => ({ ...prev, symbol, stock_id: '' }))}
-                                onSelect={(selected) => setStock({
-                                    stock_id: selected.id,
-                                    symbol: selected.symbol,
-                                    name: selected.name || '',
-                                    exchange: selected.exchange || stock.exchange || 'NSE',
-                                })}
+                                onChange={(symbol) => changeInput(
+                                    `${stock.stock_id || ''}|${stock.symbol}`,
+                                    `|${symbol}`,
+                                    () => setStock((prev) => ({ ...prev, symbol, stock_id: '' })),
+                                )}
+                                onSelect={(selected) => {
+                                    const nextStock = {
+                                        stock_id: selected.id,
+                                        symbol: selected.symbol,
+                                        name: selected.name || '',
+                                        exchange: selected.exchange || stock.exchange || 'NSE',
+                                    };
+                                    changeInput(
+                                        `${stock.stock_id || ''}|${stock.symbol}|${stock.name}|${stock.exchange}`,
+                                        `${nextStock.stock_id}|${nextStock.symbol}|${nextStock.name}|${nextStock.exchange}`,
+                                        () => setStock(nextStock),
+                                    );
+                                }}
                                 required
                             />
                         </div>
@@ -170,7 +256,7 @@ export default function CorporateActionPage() {
                             label="Action type"
                             ariaLabel="Corporate action type"
                             value={actionType}
-                            onChange={setActionType}
+                            onChange={(value) => changeInput(actionType, value, setActionType)}
                             options={[
                                 { value: 'split', label: 'Stock split' },
                                 { value: 'bonus', label: 'Bonus issue' },
@@ -187,7 +273,7 @@ export default function CorporateActionPage() {
                                     step="1"
                                     className="form-control"
                                     value={ratioFrom}
-                                    onChange={(e) => setRatioFrom(e.target.value)}
+                                    onChange={(e) => changeInput(ratioFrom, e.target.value, setRatioFrom)}
                                 />
                             </div>
                             <div className="col-auto pb-2 text-muted">:</div>
@@ -200,7 +286,7 @@ export default function CorporateActionPage() {
                                     step="1"
                                     className="form-control"
                                     value={ratioTo}
-                                    onChange={(e) => setRatioTo(e.target.value)}
+                                    onChange={(e) => changeInput(ratioTo, e.target.value, setRatioTo)}
                                 />
                             </div>
                             <div className="col-12">
@@ -218,8 +304,8 @@ export default function CorporateActionPage() {
                                 id="ca-ex-date"
                                 displayValue={exDateDisplay}
                                 isoValue={exDate}
-                                onDisplayChange={setExDateDisplay}
-                                onIsoChange={setExDate}
+                                onDisplayChange={(value) => changeInput(exDateDisplay, value, setExDateDisplay)}
+                                onIsoChange={(value) => changeInput(exDate, value, setExDate)}
                             />
                         </div>
 
@@ -228,7 +314,7 @@ export default function CorporateActionPage() {
                                 label="Split scope"
                                 ariaLabel="Split transaction scope"
                                 value={splitScope}
-                                onChange={setSplitScope}
+                                onChange={(value) => changeInput(splitScope, value, setSplitScope)}
                                 options={SPLIT_SCOPE_OPTIONS}
                             />
                         ) : null}
@@ -240,7 +326,7 @@ export default function CorporateActionPage() {
                                 className="form-control"
                                 rows={2}
                                 value={notes}
-                                onChange={(e) => setNotes(e.target.value)}
+                                onChange={(e) => changeInput(notes, e.target.value, setNotes)}
                             />
                         </div>
 

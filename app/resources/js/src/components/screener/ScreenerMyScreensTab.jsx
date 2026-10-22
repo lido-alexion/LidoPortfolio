@@ -7,6 +7,8 @@ import { showToast } from '../../toast';
 import {
     LastRunSummaryCell,
     ScreenerDescriptionCell,
+    hasScreenerRunId,
+    runCompletionNotice,
     runStatsWarning,
     scheduleDisplay,
     scopeDisplay,
@@ -81,21 +83,26 @@ export default function ScreenerMyScreensTab() {
         try {
             const res = await api.post(`/screeners/${id}/run`);
             let run = res.data?.data;
-            if (res.data?.continued && run?.id) {
+            if (res.data?.continued && hasScreenerRunId(run)) {
                 showToast('Scanning universe in chunks…');
                 run = await pollContinue(run.id);
             }
-            const matched = run?.stats?.matched ?? 0;
-            const scanned = run?.stats?.scanned ?? 0;
-            const warning = runStatsWarning(run?.stats, run?.error_message);
-            showToast(
-                warning
-                    ? `Run finished: ${matched} match(es) / ${scanned} scanned. Warning: ${warning}`
-                    : `Run finished: ${matched} match(es) / ${scanned} scanned`,
-                warning ? 'warning' : undefined,
-            );
+            const notice = runCompletionNotice(run);
+            if (notice) {
+                showToast(notice.message, notice.variant);
+            } else {
+                const matched = run.stats?.matched ?? 0;
+                const scanned = run.stats?.scanned ?? 0;
+                const warning = runStatsWarning(run.stats, run.error_message);
+                showToast(
+                    warning
+                        ? `Run finished: ${matched} match(es) / ${scanned} scanned. Warning: ${warning}`
+                        : `Run finished: ${matched} match(es) / ${scanned} scanned`,
+                    warning ? 'warning' : undefined,
+                );
+            }
             await load();
-            if (run?.id) {
+            if (hasScreenerRunId(run)) {
                 navigate(`/screeners/${id}?run=${run.id}`);
             }
         } catch (error) {

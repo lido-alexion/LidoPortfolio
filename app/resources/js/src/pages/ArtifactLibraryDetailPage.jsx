@@ -1,7 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api, { getApiErrorMessage } from '../api';
 import { showToast } from '../toast';
+import { usePortfolio } from '../context/PortfolioContext';
+import usePortfolioChanged from '../hooks/usePortfolioChanged';
+import { getActivePortfolioId } from '../portfolio/activePortfolioStorage';
 
 const stateBadge = (state) => ({ usable: 'text-bg-success', warning: 'text-bg-warning', blocked: 'text-bg-danger' }[state] || 'text-bg-light');
 
@@ -45,35 +48,142 @@ function DraftEditor({ artifact, version, busy, onSaved }) {
 
 export default function ArtifactLibraryDetailPage() {
     const { uuid } = useParams();
-    const [artifact, setArtifact] = useState(null);
+    const { activePortfolioId } = usePortfolio();
+    const portfolioId = activePortfolioId == null ? null : String(activePortfolioId);
+    const [portfolioEpoch, setPortfolioEpoch] = useState(0);
+    const [loadedArtifact, setLoadedArtifact] = useState(null);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
     const [changes, setChanges] = useState(null);
+    const [bundleRecovery, setBundleRecovery] = useState(null);
+    const [artifactUuid, setArtifactUuid] = useState(uuid);
+    const routeIdentity = useMemo(() => ({ uuid, portfolioId, portfolioEpoch }), [uuid, portfolioId, portfolioEpoch]);
+    const comparisonSelection = useMemo(() => ({ routeIdentity, from, to }), [routeIdentity, from, to]);
+    const committedRouteRef = useRef(null);
+    const committedComparisonRef = useRef(null);
+    const routeEpochRef = useRef(0);
+    const loadGenerationRef = useRef(0);
+    const comparisonGenerationRef = useRef(0);
+    const activeComparisonRef = useRef(null);
+    const comparisonBusyRef = useRef(false);
+    const mountedRef = useRef(false);
+    const bundleOperationGenerationRef = useRef(0);
+    const activeBundleOperationRef = useRef(null);
+    const observedPortfolioIdRef = useRef(getActivePortfolioId());
 
-    const load = async () => {
+    const invalidateComparison = useCallback(() => {
+        const comparisonOwnedBusy = comparisonBusyRef.current && activeComparisonRef.current !== null;
+        comparisonGenerationRef.current++;
+        activeComparisonRef.current = null;
+        comparisonBusyRef.current = false;
+        setChanges(null);
+        if (comparisonOwnedBusy) setBusy(false);
+    }, []);
+
+    const portfolioChanged = useCallback(() => {
+        const nextId = getActivePortfolioId();
+        if (observedPortfolioIdRef.current === nextId) return;
+        observedPortfolioIdRef.current = nextId;
+        // Invalidate synchronously with the selection event, including A→B→A
+        // selections batched before React commits the next context value.
+        routeEpochRef.current++;
+        loadGenerationRef.current++;
+        bundleOperationGenerationRef.current++;
+        const bundleOperation = activeBundleOperationRef.current;
+        activeBundleOperationRef.current = null;
+        if (bundleOperation) setBusy(false);
+        invalidateComparison();
+        setLoadedArtifact(null);
+        setBundleRecovery(null);
+        setError('');
+        setLoading(true);
+        setPortfolioEpoch((epoch) => epoch + 1);
+    }, [invalidateComparison]);
+    usePortfolioChanged(portfolioChanged);
+
+    useLayoutEffect(() => {
+        if (committedRouteRef.current === routeIdentity) return;
+        committedRouteRef.current = routeIdentity;
+        observedPortfolioIdRef.current = getActivePortfolioId();
+        routeEpochRef.current++;
+        loadGenerationRef.current++;
+        const bundleOperation = activeBundleOperationRef.current;
+        bundleOperationGenerationRef.current++;
+        activeBundleOperationRef.current = null;
+        if (bundleOperation) setBusy(false);
+        invalidateComparison();
+        setLoadedArtifact(null);
+        setArtifactUuid(uuid);
+        setBundleRecovery(null);
+        setError('');
+        setLoading(true);
+        setFrom('');
+        setTo('');
+    }, [routeIdentity, uuid, invalidateComparison]);
+
+    useLayoutEffect(() => {
+        if (committedComparisonRef.current === comparisonSelection) return;
+        committedComparisonRef.current = comparisonSelection;
+        invalidateComparison();
+    }, [comparisonSelection, invalidateComparison]);
+
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+            routeEpochRef.current++;
+            loadGenerationRef.current++;
+            comparisonGenerationRef.current++;
+            activeComparisonRef.current = null;
+            bundleOperationGenerationRef.current++;
+            activeBundleOperationRef.current = null;
+        };
+    }, []);
+
+    const load = useCallback(async () => {
+        const requestedUuid = uuid;
+        const requestedRoute = routeIdentity;
+        if (!portfolioId || getActivePortfolioId() !== portfolioId
+            || !mountedRef.current || committedRouteRef.current !== requestedRoute) return;
+        const epoch = routeEpochRef.current;
+        const generation = ++loadGenerationRef.current;
+        const isCurrent = () => mountedRef.current
+            && getActivePortfolioId() === requestedRoute.portfolioId
+            && committedRouteRef.current === requestedRoute
+            && routeEpochRef.current === epoch
+            && loadGenerationRef.current === generation;
         setLoading(true);
         setError('');
         try {
-            const response = await api.get(`/v1/artifact-library/${uuid}`);
+            const response = await api.get(`/v1/artifact-library/${requestedUuid}`);
             const data = response.data?.data || null;
-            setArtifact(data);
+            if (!isCurrent()) return;
+            setLoadedArtifact(data);
+            setArtifactUuid(requestedUuid);
             const published = (data?.versions || []).filter((version) => version.status === 'published');
             if (published.length >= 2) {
                 setTo((current) => current || published[0].semver);
                 setFrom((current) => current || published[1].semver);
             }
         } catch (requestError) {
-            setError(getApiErrorMessage(requestError, 'Failed to load artifact details.'));
+            if (isCurrent()) setError(getApiErrorMessage(requestError, 'Failed to load artifact details.'));
         } finally {
-            setLoading(false);
+            if (isCurrent()) setLoading(false);
         }
-    };
+    }, [uuid, routeIdentity, portfolioId]);
 
-    useEffect(() => { load(); }, [uuid]); // eslint-disable-line react-hooks/exhaustive-deps
-    const published = useMemo(() => (artifact?.versions || []).filter((version) => version.status === 'published'), [artifact]);
+    useEffect(() => {
+        load();
+        return () => { loadGenerationRef.current++; };
+    }, [load]);
+    const currentArtifact = artifactUuid === uuid ? loadedArtifact : null;
+    const artifact = currentArtifact;
+    const currentError = artifactUuid === uuid ? error : '';
+    const routeLoading = artifactUuid !== uuid || loading;
+    const published = useMemo(() => (currentArtifact?.versions || []).filter((version) => version.status === 'published'), [currentArtifact]);
 
     const act = async (operation, message) => {
         setBusy(true); setError('');
@@ -82,12 +192,39 @@ export default function ArtifactLibraryDetailPage() {
 
     const compare = async () => {
         if (!from || !to || from === to) return;
+        const requestedUuid = uuid;
+        const requestedFrom = from;
+        const requestedTo = to;
+        const requestedRoute = routeIdentity;
+        const requestedSelection = comparisonSelection;
+        if (!portfolioId || getActivePortfolioId() !== portfolioId
+            || !mountedRef.current || committedRouteRef.current !== requestedRoute) return;
+        const epoch = routeEpochRef.current;
+        const generation = ++comparisonGenerationRef.current;
+        const comparison = { uuid: requestedUuid, from: requestedFrom, to: requestedTo, epoch, generation };
+        activeComparisonRef.current = comparison;
+        comparisonBusyRef.current = true;
+        const isCurrent = () => mountedRef.current
+            && getActivePortfolioId() === requestedRoute.portfolioId
+            && committedRouteRef.current === requestedRoute
+            && committedComparisonRef.current === requestedSelection
+            && routeEpochRef.current === epoch
+            && comparisonGenerationRef.current === generation
+            && activeComparisonRef.current === comparison;
         setBusy(true); setError('');
         try {
-            const response = await api.get(`/v1/artifact-library/${uuid}/diff`, { params: { from, to } });
-            setChanges(response.data?.data?.changes || []);
-        } catch (requestError) { setError(getApiErrorMessage(requestError)); } finally { setBusy(false); }
+            const response = await api.get(`/v1/artifact-library/${requestedUuid}/diff`, { params: { from: requestedFrom, to: requestedTo } });
+            if (isCurrent()) setChanges({ uuid: requestedUuid, from: requestedFrom, to: requestedTo, rows: response.data?.data?.changes || [] });
+        } catch (requestError) { if (isCurrent()) setError(getApiErrorMessage(requestError)); } finally {
+            if (activeComparisonRef.current === comparison && comparisonBusyRef.current) {
+                activeComparisonRef.current = null;
+                comparisonBusyRef.current = false;
+                setBusy(false);
+            }
+        }
     };
+
+    const visibleChanges = changes?.uuid === uuid && changes?.from === from && changes?.to === to ? changes.rows : null;
 
     const exportVersion = async (version) => {
         setBusy(true); setError('');
@@ -137,16 +274,120 @@ export default function ArtifactLibraryDetailPage() {
         }), binding.status === 'enabled' ? 'Binding disabled.' : 'Binding enabled.');
     };
 
+    const readBundleDeployment = async (deploymentUuid, isCurrent) => {
+        const response = await api.get(`/v1/artifact-library/bundle-deployments/${deploymentUuid}`);
+        const evidence = response.data?.data;
+        if (isCurrent()) {
+            setBundleRecovery((current) => current?.deployment_uuid === deploymentUuid
+                ? { ...current, evidence, readError: '' }
+                : current);
+        }
+        return evidence;
+    };
+
     const deployBundle = async (version) => {
+        const requestedRoute = routeIdentity;
+        if (!portfolioId || getActivePortfolioId() !== portfolioId
+            || !mountedRef.current || committedRouteRef.current !== requestedRoute) return;
+        const epoch = routeEpochRef.current;
+        const generation = ++bundleOperationGenerationRef.current;
+        const operation = { route: requestedRoute, epoch, generation };
+        activeBundleOperationRef.current = operation;
+        const isCurrent = () => mountedRef.current
+            && getActivePortfolioId() === requestedRoute.portfolioId
+            && committedRouteRef.current === requestedRoute
+            && routeEpochRef.current === epoch
+            && bundleOperationGenerationRef.current === generation
+            && activeBundleOperationRef.current === operation;
         setBusy(true); setError('');
+        let deploymentUuid = bundleRecovery?.deployment_uuid;
         try {
-            const planned = await api.post(`/v1/artifact-library/versions/${version.id}/bundle-plan`);
-            const plan = planned.data?.data;
-            if (!window.confirm(`Deploy ${plan?.items?.length || 0} Bundle members atomically to this Portfolio?`)) return;
-            await api.post(`/v1/artifact-library/bundle-deployments/${plan.deployment_uuid}/deploy`);
-            showToast('Bundle deployed atomically.');
-            await load();
-        } catch (requestError) { setError(getApiErrorMessage(requestError)); } finally { setBusy(false); }
+            let evidence;
+            if (deploymentUuid) {
+                evidence = await readBundleDeployment(deploymentUuid, isCurrent);
+                if (!isCurrent()) return;
+                if (evidence.status !== 'planned') return;
+            } else {
+                const planned = await api.post(`/v1/artifact-library/versions/${version.id}/bundle-plan`);
+                if (!isCurrent()) return;
+                evidence = planned.data?.data;
+                deploymentUuid = evidence?.deployment_uuid;
+                if (!deploymentUuid) throw new Error('Bundle plan response did not include its deployment UUID.');
+                setBundleRecovery({ deployment_uuid: deploymentUuid, evidence, readError: '' });
+            }
+            if (!isCurrent()) return;
+            if (!window.confirm(`Deploy ${evidence?.items?.length || 0} Bundle members atomically to this Portfolio?`)) return;
+            if (!isCurrent()) return;
+            try {
+                await api.post(`/v1/artifact-library/bundle-deployments/${deploymentUuid}/deploy`);
+                if (!isCurrent()) return;
+            } catch (requestError) {
+                if (!isCurrent()) return;
+                setError('Bundle apply response was uncertain. Inspecting the same deployment plan.');
+                try {
+                    evidence = await readBundleDeployment(deploymentUuid, isCurrent);
+                    if (!isCurrent()) return;
+                }
+                catch (readError) {
+                    if (!isCurrent()) return;
+                    setBundleRecovery((current) => current?.deployment_uuid === deploymentUuid
+                        ? { ...current, readError: getApiErrorMessage(readError) }
+                        : current);
+                    return;
+                }
+                if (evidence.status === 'completed') {
+                    setError('');
+                } else if (evidence.status === 'failed') {
+                    setError('Bundle deployment failed; the atomic failure is recorded in this plan.');
+                    return;
+                } else {
+                    setError('The same Bundle plan remains planned; review it before confirming any application.');
+                    return;
+                }
+            }
+            if (!isCurrent()) return;
+            evidence = await readBundleDeployment(deploymentUuid, isCurrent);
+            if (!isCurrent()) return;
+            if (evidence.status === 'completed') {
+                showToast('Bundle deployed atomically.');
+                await load();
+            }
+        } catch (requestError) { if (isCurrent()) setError(getApiErrorMessage(requestError)); }
+        finally {
+            if (activeBundleOperationRef.current === operation) {
+                activeBundleOperationRef.current = null;
+                setBusy(false);
+            }
+        }
+    };
+
+    const inspectBundleDeployment = async () => {
+        if (!bundleRecovery?.deployment_uuid) return;
+        const requestedRoute = routeIdentity;
+        if (!portfolioId || getActivePortfolioId() !== portfolioId
+            || !mountedRef.current || committedRouteRef.current !== requestedRoute) return;
+        const epoch = routeEpochRef.current;
+        const generation = ++bundleOperationGenerationRef.current;
+        const operation = { route: requestedRoute, epoch, generation };
+        activeBundleOperationRef.current = operation;
+        const isCurrent = () => mountedRef.current
+            && getActivePortfolioId() === requestedRoute.portfolioId
+            && committedRouteRef.current === requestedRoute
+            && routeEpochRef.current === epoch
+            && bundleOperationGenerationRef.current === generation
+            && activeBundleOperationRef.current === operation;
+        setBusy(true);
+        try {
+            await readBundleDeployment(bundleRecovery.deployment_uuid, isCurrent);
+            if (isCurrent()) setError('');
+        } catch (requestError) {
+            if (isCurrent()) setBundleRecovery((current) => current ? { ...current, readError: getApiErrorMessage(requestError) } : current);
+        } finally {
+            if (activeBundleOperationRef.current === operation) {
+                activeBundleOperationRef.current = null;
+                setBusy(false);
+            }
+        }
     };
 
     return (
@@ -155,9 +396,9 @@ export default function ArtifactLibraryDetailPage() {
                 <div><h2 className="h4 mb-1">{artifact?.name || 'Artifact'}</h2><p className="small text-muted mb-0"><code>{artifact?.slug || uuid}</code>{artifact && ` · ${artifact.type} · ${artifact.permission} · ${artifact.origin}`}</p></div>
                 <Link className="btn btn-sm btn-outline-secondary align-self-start" to="/artifact-library">Back to Library</Link>
             </div>
-            {error && <div className="alert alert-danger mb-0" role="alert">{error}{!artifact && <button type="button" className="btn btn-sm btn-outline-secondary ms-2" disabled={loading || busy} onClick={load}>Retry artifact</button>}</div>}
-            {loading && <div className="text-muted">Loading artifact…</div>}
-            {!loading && artifact && <>
+            {currentError && <div className="alert alert-danger mb-0" role="alert">{currentError}{!artifact && <button type="button" className="btn btn-sm btn-outline-secondary ms-2" disabled={routeLoading || busy} onClick={load}>Retry artifact</button>}</div>}
+            {routeLoading && <div className="text-muted">Loading artifact…</div>}
+            {!routeLoading && artifact && <>
                 <div className="card"><div className="card-body">
                     <h3 className="h6">Portfolio deployment</h3>
                     {artifact.portfolio_binding ? <div className="d-flex flex-wrap gap-2 align-items-center"><span className={`badge ${stateBadge(artifact.portfolio_binding.usability_state)}`}>{artifact.portfolio_binding.usability_state}</span><span>{artifact.portfolio_binding.status} on {artifact.portfolio_binding.active_version}</span>{(artifact.portfolio_binding.usability_reasons || []).map((reason) => <code className="small" key={reason}>{reason}</code>)}<button type="button" className="btn btn-sm btn-outline-secondary" onClick={toggleBinding} disabled={busy || artifact.portfolio_binding.usability_state === 'blocked' && artifact.portfolio_binding.status !== 'enabled'}>{artifact.portfolio_binding.status === 'enabled' ? 'Disable' : 'Enable'}</button></div> : <span className="text-muted">This artifact is not bound to the active Portfolio.</span>}
@@ -171,18 +412,20 @@ export default function ArtifactLibraryDetailPage() {
                         <select className="form-select form-select-sm w-auto" aria-label="Compare to version" value={to} onChange={(event) => setTo(event.target.value)}>{published.map((version) => <option key={version.id}>{version.semver}</option>)}</select>
                         <button className="btn btn-sm btn-outline-primary" type="button" onClick={compare} disabled={busy || from === to}>Compare</button>
                     </div>
-                    {changes && <div className="table-responsive mt-3"><table className="table table-sm"><thead><tr><th>Path</th><th>Change</th><th>Before</th><th>After</th></tr></thead><tbody>{changes.map((change, index) => <tr key={`${change.path}-${index}`}><td><code>{change.path}</code></td><td>{change.change}</td><td><code>{JSON.stringify(change.before)}</code></td><td><code>{JSON.stringify(change.after)}</code></td></tr>)}</tbody></table>{changes.length === 0 && <p className="text-muted small mb-0">No structural changes.</p>}</div>}
+                    {visibleChanges && <div className="table-responsive mt-3"><table className="table table-sm"><thead><tr><th>Path</th><th>Change</th><th>Before</th><th>After</th></tr></thead><tbody>{visibleChanges.map((change, index) => <tr key={`${change.path}-${index}`}><td><code>{change.path}</code></td><td>{change.change}</td><td><code>{JSON.stringify(change.before)}</code></td><td><code>{JSON.stringify(change.after)}</code></td></tr>)}</tbody></table>{visibleChanges.length === 0 && <p className="text-muted small mb-0">No structural changes.</p>}</div>}
                 </div></div>}
 
                 <div className="d-grid gap-3">{artifact.versions.map((version) => <div className="card" key={version.id}><div className="card-body">
-                    <div className="d-flex flex-wrap justify-content-between gap-2"><div><h3 className="h6 mb-1">{version.semver} <span className={`badge ${version.status === 'published' ? 'text-bg-success' : 'text-bg-warning'}`}>{version.status}</span></h3><p className="small text-muted mb-2">{version.change_summary || 'No change summary'} · <code>{version.definition_hash}</code></p></div><div className="d-flex flex-wrap gap-2">{version.status === 'published' && <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={() => exportVersion(version)}>Export</button>}{version.status === 'published' && artifact.permission === 'owner' && !artifact.draft_version && <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy} onClick={() => nextDraft(version)}>New version Draft</button>}{version.status === 'published' && artifact.permission === 'owner' && <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy} onClick={() => share(version)}>Share</button>}{version.status === 'published' && artifact.permission !== 'owner' && <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy} onClick={() => fork(version)}>Fork</button>}{version.status === 'published' && artifact.type !== 'bundle' && <button type="button" className="btn btn-sm btn-primary" disabled={busy || artifact.portfolio_binding?.active_version === version.semver} onClick={() => bindOrUpgrade(version)}>{artifact.portfolio_binding ? 'Upgrade binding' : 'Bind to Portfolio'}</button>}{version.status === 'published' && artifact.type === 'bundle' && <button type="button" className="btn btn-sm btn-primary" disabled={busy} onClick={() => deployBundle(version)}>Deploy Bundle</button>}</div></div>
+                    <div className="d-flex flex-wrap justify-content-between gap-2"><div><h3 className="h6 mb-1">{version.semver} <span className={`badge ${version.status === 'published' ? 'text-bg-success' : 'text-bg-warning'}`}>{version.status}</span></h3><p className="small text-muted mb-2">{version.change_summary || 'No change summary'} · <code>{version.definition_hash}</code></p></div><div className="d-flex flex-wrap gap-2">{version.status === 'published' && <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={() => exportVersion(version)}>Export</button>}{version.status === 'published' && artifact.permission === 'owner' && !artifact.draft_version && <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy} onClick={() => nextDraft(version)}>New version Draft</button>}{version.status === 'published' && artifact.permission === 'owner' && <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy} onClick={() => share(version)}>Share</button>}{version.status === 'published' && artifact.permission !== 'owner' && <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy} onClick={() => fork(version)}>Fork</button>}{version.status === 'published' && artifact.type !== 'bundle' && <button type="button" className="btn btn-sm btn-primary" disabled={busy || artifact.portfolio_binding?.active_version === version.semver} onClick={() => bindOrUpgrade(version)}>{artifact.portfolio_binding ? 'Upgrade binding' : 'Bind to Portfolio'}</button>}{version.status === 'published' && artifact.type === 'bundle' && <button type="button" className="btn btn-sm btn-primary" disabled={busy || (bundleRecovery && bundleRecovery.evidence?.status !== 'planned')} onClick={() => deployBundle(version)}>{bundleRecovery ? 'Existing Bundle plan needs review' : 'Deploy Bundle'}</button>}</div></div>
                     {version.status === 'draft' && artifact.permission === 'owner' ? <DraftEditor artifact={artifact} version={version} busy={busy} onSaved={act} /> : <>
                     <h4 className="small fw-semibold mt-2">Exact dependencies</h4>{version.dependencies.length ? <ul className="small">{version.dependencies.map((dependency, index) => <li key={index}>{dependency.kind}: <code>{dependency.artifact_uuid ? `${dependency.artifact_uuid}@${dependency.artifact_version}` : `${dependency.indicator_id}@${dependency.indicator_version}`}</code></li>)}</ul> : <p className="small text-muted">None</p>}
                     <details><summary className="small">Definition and documentation</summary><pre className="bg-light border rounded p-2 small mt-2 overflow-auto">{JSON.stringify({ content: version.content, documentation: version.documentation }, null, 2)}</pre></details>
                     </>}
                 </div></div>)}</div>
+                {bundleRecovery && <section className="alert alert-warning mb-0" aria-label="Bundle deployment recovery"><div className="fw-semibold">Existing Bundle deployment</div><div>Plan <code>{bundleRecovery.deployment_uuid}</code> · {bundleRecovery.evidence?.status || 'status not confirmed'}</div><button type="button" className="btn btn-sm btn-outline-secondary mt-2" disabled={busy} onClick={inspectBundleDeployment}>Inspect this plan</button>{bundleRecovery.readError && <div role="alert" className="small mt-2">{bundleRecovery.readError}</div>}{bundleRecovery.evidence?.status === 'completed' && <div className="small mt-2">Bundle deployment completed; persisted member results confirm the application.</div>}{bundleRecovery.evidence?.status === 'completed' && <ul className="small mt-2 mb-0">{bundleRecovery.evidence.items.map((item) => <li key={item.artifact_uuid}>{item.artifact_uuid} {item.version} · {item.action} · revision {item.resulting_revision_id ?? 'not recorded'}</li>)}</ul>}{bundleRecovery.evidence?.status === 'failed' && <div className="small mt-2">Failure evidence: {bundleRecovery.evidence.error_code || 'no error code recorded'}. No further action is available for this plan.</div>}{bundleRecovery.evidence?.status === 'planned' && <div className="small mt-2">This plan remains unapplied. Choose Deploy Bundle to inspect and confirm this same plan before applying it.</div>}</section>}
                 {artifact.permission === 'owner' && !artifact.archived_at && <div><button type="button" className="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => window.confirm('Archive this artifact? Published history and active bindings remain intact.') && act(() => api.post(`/v1/artifact-library/${uuid}/archive`), 'Artifact archived; immutable history was preserved.')}>Archive artifact</button></div>}
             </>}
         </div>
     );
 }
+

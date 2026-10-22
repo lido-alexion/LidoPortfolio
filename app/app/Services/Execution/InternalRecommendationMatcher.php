@@ -63,6 +63,12 @@ final class InternalRecommendationMatcher
             if (InternalExecutionTransfer::query()->where('idempotency_key', $key)->exists()) {
                 return 0;
             }
+            $sellProfileId = (int) $sell->profile_id;
+            $buyProfileId = (int) $buy->profile_id;
+            app(\App\Services\Strategy\StrategyLifecycleAdmission::class)->lockOwners([
+                ['profile_id' => $sellProfileId, 'strategy_id' => (int) $sell->owningStrategyId()],
+                ['profile_id' => $buyProfileId, 'strategy_id' => (int) $buy->owningStrategyId()],
+            ]);
             $lockedSell = TradingRecommendation::query()->lockForUpdate()->findOrFail($sell->id);
             $lockedBuy = TradingRecommendation::query()->lockForUpdate()->findOrFail($buy->id);
             $stock = $lockedSell->security()->firstOrFail();
