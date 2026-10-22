@@ -1,5 +1,41 @@
 # V9-UX-001 Implementation Audit
 
+**Status:** IMPLEMENTATION IN PROGRESS. Build1513 is accepted. The [finite acceptance ledger](V9-UX-001-finite-acceptance-ledger.md) identifies the remaining AI-02 automation hold, relevant ordinary nightly, controlled safe Kite receipt and final adjudication.
+**Audit date:** 2026-10-22
+**Canonical scope:** [frozen specification](../archive/specs/V9-User-Journey-Automation-E2E-Specification.md)
+**Journey sources:** [golden journeys](../user-journeys/)
+
+## Current finite-scope acceptance update — 2026-10-22
+
+This update supersedes older current-state gate summaries. All dated failures, approval and scope holds, reviewed baselines, historical campaign observations and build 523 Kite evidence remain below. The ledger maps all 16 frozen completion criteria and 22 guide groups to existing source reviews, named assertions and exact remaining actions. A count of 129 annotations or passing tests alone does not establish semantic conformance.
+
+### Accepted source and release
+
+[PR250](https://github.com/lido-alexion/LidoPortfolio/pull/250), exact head `469aca9f465ae744e5f3c70957a15dd783e739ec`, merged normally to application source `acba369fd4458bf2f55d02fa896800d8115d652e`. Root accepted its full [CI1511](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39717113629): 247 Node contracts, 583 component tests across 90 files including 13 Backtest route cases, typecheck, 129 documentation topics, build and 470 Chromium passes with 57 governed skips. There were no failed-test retries or flaky results. Earlier Board, Bundle, Recommendations, Review, Dashboard, Holdings and Transactions corrections remain in ancestry with their scoped evidence.
+
+Normal [master CI1513](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39728312989) completed successfully on attempt 1 at 2026-10-22T05:55:32Z. Root reviewed full frontend, Python, package and deployment logs, current jobs, retry/flaky outcomes and artifacts. It passed 247 Node contracts, 583 components across 90 files, typecheck, 129 documentation topics, build, 470 Chromium cases with 57 governed skips in 21.2 minutes, and 56 Python contracts. There were no failed-test retries or flaky results. PHP/VPS tests were scope-skipped and are not represented as executed.
+
+The trusted exact-SHA release gate and archive path/hash/mode verification passed. Package 119664338082 took 34 seconds. Release artifact 12404234298 is 11,486,993 bytes with SHA-256 `08363f441777687e973bee99baf32fb196c84da25cd830b4ba68242c157acb4c`. Deploy 119664521851 took 2m04. Authoritative authenticated master equality was confirmed at 05:53:55Z through the existing deployment contract. Runtime exact-SHA health passed at 05:54:10Z and 05:54:21Z. Mandatory public and authenticated non-destructive smoke passed 2/2 on the first attempt in 32.0 seconds. Smoke artifact 12405455172 is 194,768 bytes with SHA-256 `b3e9aaa1c3adb2695872d9ea2e985718896387bbab3feebba227df9dd7d0eaeb`. Independent public health at 05:56:31Z returned 200 and exact build 1513/acba369.
+
+Earlier master 1510 failed at SSH host-key discovery before authentication, upload or activation. Normal release 1513 passed that path without a workflow, credential, firewall, service or permission change. This proves the recovered release outcome; it does not diagnose the earlier cause. Residual diagnosis and watcher/reviewer operational work remain [V9-OPS-004/#251](https://github.com/lido-alexion/LidoPortfolio/issues/251). Its spec/register documentation merged normally through [PR252](https://github.com/lido-alexion/LidoPortfolio/pull/252); implementation remains FROZEN / NOT STARTED.
+
+### Bounded acceptance and exact remaining work
+
+Root accepts the representative visual and lightweight accessibility requirement from existing source assertions, reviewed baselines and exact 1511 execution: account login/error, screener results, Strategy threshold configuration, recommendation review, pending execution, actual-fill entry and critical mobile Dashboard controls. Key-page Axe and keyboard checks, including opened STR-06 and REC-02 dialogs, pass on desktop/mobile. This is bounded regression acceptance, not all-page visual coverage or full WCAG certification.
+
+Deterministic route fixtures use per-test contexts/state and guarded terminal cleanup. A seed label alone is not a backend database-seed receipt; one worker alone is not order-independence proof. Frozen known-state requirements do not prescribe one database architecture.
+
+Remaining actions:
+
+1. **AI-02 copy/feedback automation:** current `assistant.spec.js` checks Copy response visibility, not the actual copy/feedback actions. Existing [PR220](https://github.com/lido-alexion/LidoPortfolio/pull/220) contains the two targeted fixtures. Its explicit all-mutation/indirect scope hold remains binding. The established scope authorizer must resolve that hold before fresh-base/current-head qualification. Root does not copy, restore or merge held work.
+2. **Ordinary nightly:** qualify scheduled regression with relevant-source freshness/equivalence. Latest separately recorded ordinary run [39552983555](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39552983555) passed 21 October on old 5bc2159 and predates recent UI/browser corrections. No manual dispatch or universal nightly rerun after every documentation SHA is introduced.
+3. **Controlled safe Kite:** record an authorized integration-boundary receipt through the existing [three-GET protocol](V9-UX-001-real-kite-smoke-protocol.md). The 12 October/build 523 receipt remains historical. No current session status, expiry, provider request or new authority is inferred.
+4. **Final adjudication/register:** close the finite guide/criterion ledger only after the actual remaining outcomes pass. The V9 register remains IMPLEMENTATION IN PROGRESS.
+
+Successful PIT 1m/3m/6m training and missing fundamentals belong to FEAT-056/057 acceptance. They are not a UX001 blanket gate. Relevant readiness/blocked-state UI remains in scope; all parallel V9 epics need not close. No performance, full WCAG, all-page screenshot, generic test matrix or speculative bug hunt is added. Preserve held 210/220 and foreign 176/186/187.
+
+## Historical current-state summary — 2026-10-19
+
 **Status:** IMPLEMENTATION IN PROGRESS — frozen §19/20 completion is not established. The latest dated evidence update is [the 2026-10-19 batch update](#current-release-and-acceptance-update--2026-10-19-batch). Root fully qualified build 589 on exact SHA `f401f4570df89ddbb633e83128a39a2f2a6e845d`; master CI39215479161 and normal deployment39215479126 passed, including exact-SHA health and authenticated smoke 2/2 first try. PRs #221–225 are merged and their exact-head hosted CI passed; these scoped synthetic fixtures add evidence, not blanket journey acceptance. PR #220 remains an existing AI-02 copy/feedback draft under an unresolved filesystem/scope hold; do not infer permission to change or restore it. PR #210 remains explicitly held. The pinned build-551 campaign remains historical **BLOCKED** on all three horizons for unavailable core fundamentals; no unchanged retry or training is implied. The 129-ID route/automation crosswalk is static traceability, not behavior proof. UX004 #186 and UX005 #187 remain parallel-owner work. The Oct 12 three-GET real-Kite receipt was on build 523 and does not waive the required fresh final-deployed-SHA receipt. The canonical wishlist row remains IMPLEMENTATION IN PROGRESS.
 **Audit date:** 2026-10-19
 **Canonical scope:** [V9-UX-001 specification](../archive/specs/V9-User-Journey-Automation-E2E-Specification.md)
