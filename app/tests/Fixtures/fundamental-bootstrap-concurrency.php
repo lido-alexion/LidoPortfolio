@@ -10,8 +10,38 @@ if (($cacheDirectory = getenv('BOOTSTRAP_CACHE_DIRECTORY')) !== false && $cacheD
         'cache.stores.file.path' => $cacheDirectory,
         'cache.stores.file.lock_path' => $cacheDirectory,
     ]);
+    // The application bootstrap may already have resolved the file store
+    // against its normal storage directory. Drop that repository only after
+    // overriding its configuration so both child and parent use this test's
+    // isolated lock directory.
+    app('cache')->purge('file');
     app('cache')->setDefaultDriver('file');
 }
+
+$cacheDiagnostics = static function (): array {
+    $manager = app('cache');
+    $defaultRepository = $manager->store();
+    $fileStore = $manager->store('file')->getStore();
+    $reflection = new ReflectionProperty($fileStore, 'lockDirectory');
+    $lockDirectory = $reflection->getValue($fileStore) ?: $fileStore->getDirectory();
+    $key = 'file-store-lock:'.\App\Services\Fundamentals\FundamentalBootstrapService::PROCESS_LOCK_KEY;
+    $hash = sha1($key);
+    $lockPath = rtrim($lockDirectory, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.substr($hash, 0, 2).DIRECTORY_SEPARATOR.substr($hash, 2, 2).DIRECTORY_SEPARATOR.$hash;
+    $contents = is_file($lockPath) ? file_get_contents($lockPath) : false;
+
+    return [
+        'default' => $manager->getDefaultDriver(),
+        'default_store_class' => get_class($defaultRepository->getStore()),
+        'file_store_class' => get_class($fileStore),
+        'file_directory' => $fileStore->getDirectory(),
+        'lock_directory' => $lockDirectory,
+        'lock_file_exists' => is_file($lockPath),
+        'lock_expires_at' => is_string($contents) && strlen($contents) >= 10 && ctype_digit(substr($contents, 0, 10))
+            ? (int) substr($contents, 0, 10)
+            : null,
+        'lock_path' => $lockPath,
+    ];
+};
 if (($argv[1] ?? '') === 'launch') {
     app(\App\Services\Fundamentals\BootstrapOperationsService::class)->launch(
         ['scope' => 'stocks', 'stock_ids' => [(int) $argv[3]]],
@@ -29,6 +59,7 @@ if (($argv[1] ?? '') === 'launch') {
     file_put_contents((string) getenv('BOOTSTRAP_RESULT_PATH'), json_encode([
         'status' => $result['status'] ?? null,
         'skipped_reason' => $result['skipped_reason'] ?? null,
+        'cache' => $cacheDiagnostics(),
     ], JSON_THROW_ON_ERROR), LOCK_EX);
     file_put_contents((string) getenv('BOOTSTRAP_READY_PATH'), (string) ($result['skipped_reason'] ?? 'processed'), LOCK_EX);
 } elseif (in_array(($argv[1] ?? ''), ['worker-old', 'worker-new'], true)) {
@@ -64,6 +95,7 @@ if (($argv[1] ?? '') === 'launch') {
     file_put_contents((string) getenv('BOOTSTRAP_RESULT_PATH'), json_encode([
         'status' => $result['status'] ?? null,
         'skipped_reason' => $result['skipped_reason'] ?? null,
+        'cache' => $cacheDiagnostics(),
     ], JSON_THROW_ON_ERROR), LOCK_EX);
 } else {
     app(\App\Services\Fundamentals\FundamentalBootstrapService::class)->process(

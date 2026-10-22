@@ -143,22 +143,37 @@ class FundamentalBootstrapQueueConcurrencyTest extends TestCase
             $oldProcess = $this->workerProcess('worker-old', $run->id, $oldReadyPath, $oldReleasePath);
             $oldProcess->start();
             $this->waitForBarrier($oldReadyPath, $oldProcess);
+            $parentCache = $this->sharedCacheDiagnostics();
+            self::assertSame('file', $parentCache['default']);
+            self::assertSame(\Illuminate\Cache\FileStore::class, $parentCache['default_store_class']);
+            self::assertSame($cacheDirectory, $parentCache['file_directory']);
+            self::assertSame($cacheDirectory, $parentCache['lock_directory']);
+            self::assertTrue($parentCache['lock_file_exists'], 'The blocked worker must hold the isolated shared process fence.');
+            self::assertGreaterThan(time(), $parentCache['lock_expires_at']);
 
             $probe = $this->workerProcess('competing-worker', $run->id, $probePath, $oldReleasePath);
             $probe->run();
             self::assertTrue($probe->isSuccessful(), $probe->getErrorOutput().$probe->getOutput());
             self::assertSame('another_bootstrap_slice_is_in_progress', trim((string) file_get_contents($probePath)), 'A competing execution process must observe the shared process fence before lease expiry.');
+            $probeResult = json_decode((string) file_get_contents($probePath.'.result'), true, 512, JSON_THROW_ON_ERROR);
+            self::assertSame($parentCache['lock_path'], $probeResult['cache']['lock_path']);
+            self::assertSame($parentCache['lock_expires_at'], $probeResult['cache']['lock_expires_at']);
+            self::assertSame($parentCache['default_store_class'], $probeResult['cache']['default_store_class']);
+            self::assertSame($parentCache['file_store_class'], $probeResult['cache']['file_store_class']);
+            self::assertSame($cacheDirectory, $probeResult['cache']['file_directory']);
+            self::assertSame($cacheDirectory, $probeResult['cache']['lock_directory']);
+            self::assertTrue($probeResult['cache']['lock_file_exists']);
             self::assertSame(1, (int) $run->jobs()->sole()->attempts, 'The fenced competitor must not claim the running job.');
 
             // Simulate process lease expiry while attempt 1 is blocked in provider
             // I/O. Attempt 2 claims the same job and also blocks outside a transaction.
-            Cache::lock(FundamentalBootstrapService::PROCESS_LOCK_KEY, 900)->forceRelease();
+            $this->expireSharedProcessFence();
             $newProcess = $this->workerProcess('worker-new', $run->id, $newReadyPath, $newReleasePath);
             $newProcess->start();
             $this->waitForBarrier($newReadyPath, $newProcess);
             self::assertSame(2, (int) $run->jobs()->sole()->attempts);
 
-            Cache::lock(FundamentalBootstrapService::PROCESS_LOCK_KEY, 900)->forceRelease();
+            $this->expireSharedProcessFence();
             $cancelProcess = $this->workerProcess('cancel', $run->id, $oldReadyPath, $oldReleasePath);
             $cancelProcess->run();
             self::assertTrue($cancelProcess->isSuccessful(), $cancelProcess->getErrorOutput().$cancelProcess->getOutput());
@@ -216,7 +231,7 @@ class FundamentalBootstrapQueueConcurrencyTest extends TestCase
             $oldProcess = $this->workerProcess('worker-old', $run->id, $oldReadyPath, $oldReleasePath);
             $oldProcess->start();
             $this->waitForBarrier($oldReadyPath, $oldProcess);
-            Cache::lock(FundamentalBootstrapService::PROCESS_LOCK_KEY, 900)->forceRelease();
+            $this->expireSharedProcessFence();
 
             $newProcess = $this->workerProcess('worker-new', $run->id, $newReadyPath, $newReleasePath);
             $newProcess->start();
@@ -242,7 +257,7 @@ class FundamentalBootstrapQueueConcurrencyTest extends TestCase
             @unlink($newReleasePath);
             @unlink($oldReadyPath.'.result');
             @unlink($newReadyPath.'.result');
-            Cache::lock(FundamentalBootstrapService::PROCESS_LOCK_KEY, 900)->forceRelease();
+            $this->expireSharedProcessFence();
             $this->removeOwnedCacheDirectory($cacheDirectory);
         }
     }
@@ -292,9 +307,40 @@ class FundamentalBootstrapQueueConcurrencyTest extends TestCase
         $this->sharedCacheDirectory = $directory;
         $this->sharedCachePrefix = 'stox-bootstrap-test-'.$key;
         config(['cache.default' => 'file', 'cache.prefix' => $this->sharedCachePrefix, 'cache.stores.file.path' => $directory, 'cache.stores.file.lock_path' => $directory]);
-        Cache::purge('file');
         Cache::setDefaultDriver('file');
+        Cache::purge('file');
         return $directory;
+    }
+
+    /** @return array<string, mixed> */
+    private function sharedCacheDiagnostics(): array
+    {
+        $repository = Cache::store('file');
+        $store = $repository->getStore();
+        $reflection = new \ReflectionProperty($store, 'lockDirectory');
+        $lockDirectory = $reflection->getValue($store) ?: $store->getDirectory();
+        $hash = sha1('file-store-lock:'.FundamentalBootstrapService::PROCESS_LOCK_KEY);
+        $lockPath = rtrim($lockDirectory, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.substr($hash, 0, 2).DIRECTORY_SEPARATOR.substr($hash, 2, 2).DIRECTORY_SEPARATOR.$hash;
+        $contents = is_file($lockPath) ? file_get_contents($lockPath) : false;
+
+        return [
+            'default' => app('cache')->getDefaultDriver(),
+            'default_store_class' => get_class(Cache::store()->getStore()),
+            'file_store_class' => get_class($store),
+            'file_directory' => $store->getDirectory(),
+            'lock_directory' => $lockDirectory,
+            'lock_file_exists' => is_file($lockPath),
+            'lock_expires_at' => is_string($contents) && strlen($contents) >= 10 && ctype_digit(substr($contents, 0, 10))
+                ? (int) substr($contents, 0, 10)
+                : null,
+            'lock_path' => $lockPath,
+        ];
+    }
+
+    private function expireSharedProcessFence(): void
+    {
+        Cache::store('file')->lock(FundamentalBootstrapService::PROCESS_LOCK_KEY, 900)->forceRelease();
+        self::assertFalse($this->sharedCacheDiagnostics()['lock_file_exists'], 'The shared isolated fence must be removed before the next process attempt.');
     }
 
     private function waitForBarrier(string $path, Process $process): void
