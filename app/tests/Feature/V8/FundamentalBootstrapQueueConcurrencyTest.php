@@ -26,15 +26,63 @@ class FundamentalBootstrapQueueConcurrencyTest extends TestCase
 
     private ?string $sharedCachePrefix = null;
 
+    /** @var list<int> */
+    private array $ownedStockIds = [];
+
+    /** @var list<int> */
+    private array $ownedUserIds = [];
+
+    /** @var list<int> */
+    private array $ownedRunIds = [];
+
+    private ?int $ownedSettingId = null;
+
     protected function setUp(): void
     {
         parent::setUp();
-        FundamentalSetting::query()->create([
+        $setting = FundamentalSetting::query()->create([
             'quarterly_freshness_months' => 5, 'annual_freshness_months' => 15,
             'request_delay_ms' => 0, 'max_attempts' => 3, 'provider' => 'yahoo', 'paused' => false,
         ]);
+        $this->ownedSettingId = (int) $setting->id;
         if (! DB::table('stox_fund_bootstrap_control')->where('id', 1)->exists()) {
             DB::table('stox_fund_bootstrap_control')->insert(['id' => 1, 'created_at' => now(), 'updated_at' => now()]);
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        try {
+            // Child PHP processes commit independently of the test connection;
+            // remove every fixture row they and this test created so later
+            // RefreshDatabase tests cannot inherit stocks or unfinished runs.
+            $connection = DB::connection();
+            if (in_array($connection->getDriverName(), ['mysql', 'sqlite'], true)) {
+                $stockIds = array_values(array_unique($this->ownedStockIds));
+                $runIds = array_values(array_unique(array_merge(
+                    $this->ownedRunIds,
+                    $this->ownedUserIds === [] ? [] : FundamentalBootstrapRun::query()
+                        ->whereIn('created_by_user_id', $this->ownedUserIds)->pluck('id')->map(fn ($id) => (int) $id)->all(),
+                    $stockIds === [] ? [] : FundamentalBootstrapJob::query()
+                        ->whereIn('stock_id', $stockIds)->pluck('run_id')->map(fn ($id) => (int) $id)->all(),
+                )));
+
+                if ($runIds !== []) {
+                    DB::table('stox_fund_bootstrap_control')->whereIn('active_run_id', $runIds)->update(['active_run_id' => null, 'updated_at' => now()]);
+                    FundamentalBootstrapJob::query()->whereIn('run_id', $runIds)->delete();
+                }
+                if ($stockIds !== []) {
+                    DB::table('stox_fundamental_provider_checks')->whereIn('stock_id', $stockIds)->delete();
+                    FundamentalFact::query()->whereIn('stock_id', $stockIds)->delete();
+                    FundamentalBootstrapJob::query()->whereIn('stock_id', $stockIds)->delete();
+                }
+                if ($runIds !== []) FundamentalBootstrapRun::query()->whereIn('id', $runIds)->delete();
+                if ($this->ownedSettingId !== null) FundamentalSetting::query()->whereKey($this->ownedSettingId)->delete();
+                if ($stockIds !== []) Stock::query()->whereIn('id', $stockIds)->delete();
+                if ($this->ownedUserIds !== []) User::query()->whereIn('id', $this->ownedUserIds)->delete();
+            }
+        } finally {
+            parent::tearDown();
         }
     }
 
@@ -45,9 +93,12 @@ class FundamentalBootstrapQueueConcurrencyTest extends TestCase
         }
 
         $stock = Stock::query()->create(['symbol' => 'BOOTSTRAPLOCK', 'exchange' => 'NSE', 'name' => 'Concurrency fixture', 'is_active' => true, 'is_benchmark' => false]);
+        $this->ownedStockIds[] = (int) $stock->id;
         $actor = User::factory()->create(['is_admin' => true]);
+        $this->ownedUserIds[] = (int) $actor->id;
         $this->processesConcurrently($actor->id, $stock->id);
         $runs = FundamentalBootstrapRun::query()->orderBy('id')->get();
+        $this->ownedRunIds = array_merge($this->ownedRunIds, $runs->modelKeys());
         $this->assertCount(2, $runs);
         $this->assertSame('queued', $runs[0]->status);
         $this->assertSame('queued', $runs[1]->status);
@@ -73,10 +124,13 @@ class FundamentalBootstrapQueueConcurrencyTest extends TestCase
         }
 
         $stock = Stock::query()->create(['symbol' => 'BOOTSTRAPFENCE', 'exchange' => 'NSE', 'name' => 'Fencing fixture', 'is_active' => true, 'is_benchmark' => false]);
+        $this->ownedStockIds[] = (int) $stock->id;
         $actor = User::factory()->create(['is_admin' => true]);
+        $this->ownedUserIds[] = (int) $actor->id;
         $run = app(\App\Services\Fundamentals\BootstrapOperationsService::class)->launch(
             ['scope' => 'stocks', 'stock_ids' => [$stock->id]], $actor->id, 'fence test', 'bootstrap-fence-key-001',
         )->run;
+        $this->ownedRunIds[] = (int) $run->id;
         $temporaryKey = bin2hex(random_bytes(8));
         $cacheDirectory = $this->configureSharedFileCache($temporaryKey);
         $oldReadyPath = sys_get_temp_dir().'/bootstrap-old-'.$temporaryKey.'.ready';
@@ -88,9 +142,7 @@ class FundamentalBootstrapQueueConcurrencyTest extends TestCase
         try {
             $oldProcess = $this->workerProcess('worker-old', $run->id, $oldReadyPath, $oldReleasePath);
             $oldProcess->start();
-            $deadline = microtime(true) + 20;
-            while (! is_file($oldReadyPath) && microtime(true) < $deadline && $oldProcess->isRunning()) usleep(20000);
-            self::assertFileExists($oldReadyPath, 'The first worker did not reach the out-of-transaction ingest barrier.');
+            $this->waitForBarrier($oldReadyPath, $oldProcess);
 
             $probe = $this->workerProcess('competing-worker', $run->id, $probePath, $oldReleasePath);
             $probe->run();
@@ -103,9 +155,7 @@ class FundamentalBootstrapQueueConcurrencyTest extends TestCase
             Cache::lock(FundamentalBootstrapService::PROCESS_LOCK_KEY, 900)->forceRelease();
             $newProcess = $this->workerProcess('worker-new', $run->id, $newReadyPath, $newReleasePath);
             $newProcess->start();
-            $deadline = microtime(true) + 20;
-            while (! is_file($newReadyPath) && microtime(true) < $deadline && $newProcess->isRunning()) usleep(20000);
-            self::assertFileExists($newReadyPath, 'The replacement worker did not reach its provider barrier.');
+            $this->waitForBarrier($newReadyPath, $newProcess);
             self::assertSame(2, (int) $run->jobs()->sole()->attempts);
 
             Cache::lock(FundamentalBootstrapService::PROCESS_LOCK_KEY, 900)->forceRelease();
@@ -132,7 +182,10 @@ class FundamentalBootstrapQueueConcurrencyTest extends TestCase
             @unlink($oldReleasePath);
             @unlink($newReadyPath);
             @unlink($newReleasePath);
+            @unlink($oldReadyPath.'.result');
+            @unlink($newReadyPath.'.result');
             @unlink($probePath);
+            @unlink($probePath.'.result');
             Cache::lock(FundamentalBootstrapService::PROCESS_LOCK_KEY, 900)->forceRelease();
             $this->removeOwnedCacheDirectory($cacheDirectory);
         }
@@ -145,10 +198,13 @@ class FundamentalBootstrapQueueConcurrencyTest extends TestCase
         }
 
         $stock = Stock::query()->create(['symbol' => 'BOOTSTRAPATTEMPT', 'exchange' => 'NSE', 'name' => 'Attempt fixture', 'is_active' => true, 'is_benchmark' => false]);
+        $this->ownedStockIds[] = (int) $stock->id;
         $actor = User::factory()->create(['is_admin' => true]);
+        $this->ownedUserIds[] = (int) $actor->id;
         $run = app(\App\Services\Fundamentals\BootstrapOperationsService::class)->launch(
             ['scope' => 'stocks', 'stock_ids' => [$stock->id]], $actor->id, 'attempt test', 'bootstrap-attempt-key-001',
         )->run;
+        $this->ownedRunIds[] = (int) $run->id;
         $temporaryKey = bin2hex(random_bytes(8));
         $cacheDirectory = $this->configureSharedFileCache($temporaryKey);
         $oldReadyPath = sys_get_temp_dir().'/bootstrap-attempt-old-'.$temporaryKey.'.ready';
@@ -184,6 +240,8 @@ class FundamentalBootstrapQueueConcurrencyTest extends TestCase
             @unlink($oldReleasePath);
             @unlink($newReadyPath);
             @unlink($newReleasePath);
+            @unlink($oldReadyPath.'.result');
+            @unlink($newReadyPath.'.result');
             Cache::lock(FundamentalBootstrapService::PROCESS_LOCK_KEY, 900)->forceRelease();
             $this->removeOwnedCacheDirectory($cacheDirectory);
         }
@@ -219,6 +277,7 @@ class FundamentalBootstrapQueueConcurrencyTest extends TestCase
             'CACHE_STORE' => 'file',
             'CACHE_PREFIX' => $this->sharedCachePrefix,
             'BOOTSTRAP_READY_PATH' => $readyPath, 'BOOTSTRAP_RELEASE_PATH' => $releasePath,
+            'BOOTSTRAP_RESULT_PATH' => $readyPath.'.result',
             'BOOTSTRAP_CACHE_DIRECTORY' => $this->sharedCacheDirectory,
         ];
         return new Process([PHP_BINARY, base_path('tests/Fixtures/fundamental-bootstrap-concurrency.php'), $role, (string) $runId], base_path(), $environment, null, 45);
@@ -242,7 +301,19 @@ class FundamentalBootstrapQueueConcurrencyTest extends TestCase
     {
         $deadline = microtime(true) + 20;
         while (! is_file($path) && microtime(true) < $deadline && $process->isRunning()) usleep(20000);
-        self::assertFileExists($path, 'Worker did not reach the out-of-transaction ingest barrier.');
+        if (! is_file($path)) {
+            $resultPath = $path.'.result';
+            self::fail(sprintf(
+                "Worker did not reach barrier %s; running=%s exit=%s command=%s\nRESULT:\n%s\nSTDOUT:\n%s\nSTDERR:\n%s",
+                $path,
+                $process->isRunning() ? 'yes' : 'no',
+                var_export($process->getExitCode(), true),
+                $process->getCommandLine(),
+                is_file($resultPath) ? (string) file_get_contents($resultPath) : '(no result file)',
+                $process->getOutput(),
+                $process->getErrorOutput(),
+            ));
+        }
     }
 
     private function removeOwnedCacheDirectory(string $directory): void

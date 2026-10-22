@@ -26,6 +26,10 @@ if (($argv[1] ?? '') === 'launch') {
     $result = app(\App\Services\Fundamentals\FundamentalBootstrapService::class)->process(
         \App\Models\V7\FundamentalBootstrapRun::query()->findOrFail((int) $argv[2]), 1,
     );
+    file_put_contents((string) getenv('BOOTSTRAP_RESULT_PATH'), json_encode([
+        'status' => $result['status'] ?? null,
+        'skipped_reason' => $result['skipped_reason'] ?? null,
+    ], JSON_THROW_ON_ERROR), LOCK_EX);
     file_put_contents((string) getenv('BOOTSTRAP_READY_PATH'), (string) ($result['skipped_reason'] ?? 'processed'), LOCK_EX);
 } elseif (in_array(($argv[1] ?? ''), ['worker-old', 'worker-new'], true)) {
     $role = $argv[1];
@@ -54,9 +58,13 @@ if (($argv[1] ?? '') === 'launch') {
         }
     };
     $app->instance(\App\Services\Fundamentals\FundamentalHistoricalIngestService::class, $ingest);
-    app(\App\Services\Fundamentals\FundamentalBootstrapService::class)->process(
+    $result = app(\App\Services\Fundamentals\FundamentalBootstrapService::class)->process(
         \App\Models\V7\FundamentalBootstrapRun::query()->findOrFail((int) $argv[2]), 1,
     );
+    file_put_contents((string) getenv('BOOTSTRAP_RESULT_PATH'), json_encode([
+        'status' => $result['status'] ?? null,
+        'skipped_reason' => $result['skipped_reason'] ?? null,
+    ], JSON_THROW_ON_ERROR), LOCK_EX);
 } else {
     app(\App\Services\Fundamentals\FundamentalBootstrapService::class)->process(
         \App\Models\V7\FundamentalBootstrapRun::query()->findOrFail((int) $argv[1]), 1,
