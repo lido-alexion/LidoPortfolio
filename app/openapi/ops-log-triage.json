@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "StoX Admin log error triage",
+    "title": "StoX automatic issue reporting and log triage",
     "version": "1.0.0",
-    "description": "Admin-only sanitized OPS-003 inspection. No raw logs or secrets. Existing Sanctum authentication and Admin authorization are required."
+    "description": "Sanitized operational contracts. Admin inspection endpoints require Sanctum authentication and Admin authorization; browser error intake requires Sanctum authentication and rate limiting. No raw browser diagnostic payloads are retained."
   },
   "security": [
     {
@@ -71,6 +71,33 @@
                     },
                     "github": {
                       "type": "object"
+                    },
+                    "reporting": {
+                      "type": "object",
+                      "properties": {
+                        "api": {
+                          "type": "object",
+                          "properties": {
+                            "enabled": {"type": "boolean"},
+                            "token_configured": {"type": "boolean"},
+                            "repository_configured": {"type": "boolean"},
+                            "repository_matches_expected": {"type": "boolean"},
+                            "records_by_sync_status": {"type": "object", "additionalProperties": {"type": "integer"}},
+                            "queue_uses_log_triage": {"type": "boolean"},
+                            "queue_is_async": {"type": "boolean"},
+                            "worker_configuration_status": {"type": "string", "enum": ["unknown_needs_operator_verification"]}
+                          }
+                        },
+                        "log_triage": {
+                          "type": "object",
+                          "properties": {
+                            "enabled": {"type": "boolean"},
+                            "queue_uses_log_triage": {"type": "boolean"},
+                            "queue_is_async": {"type": "boolean"},
+                            "worker_configuration_status": {"type": "string", "enum": ["unknown_needs_operator_verification"]}
+                          }
+                        }
+                      }
                     },
                     "confidence_threshold": {
                       "type": "number"
@@ -169,6 +196,34 @@
           "422": {
             "description": "Invalid filters"
           }
+        }
+      }
+    },
+    "/api/ops/browser-errors": {
+      "post": {
+        "summary": "Submit a bounded browser runtime fault",
+        "description": "Authenticated and rate-limited per account. Requires no active portfolio. This records a typed untrusted browser observation; it is not an AI code_bug classification or verified PHP evidence. Raw messages, stacks, URLs, query strings, request IDs, build/module/route strings, and user data are not accepted.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {"type": "string", "enum": ["react_render", "uncaught_exception", "unhandled_rejection"]}
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {"description": "Accepted for fail-open local incident handling"},
+          "401": {"description": "Authentication required"},
+          "422": {"description": "Payload rejected"},
+          "413": {"description": "Request body exceeds the bounded payload limit"},
+          "429": {"description": "Authenticated caller rate limit exceeded"}
         }
       }
     }

@@ -1,0 +1,18 @@
+[Unit]
+Description=StoX automatic issue reporter and log triage queue worker
+After=network.target mariadb.service
+
+[Service]
+User=nitty
+Group=www-data
+WorkingDirectory=/var/www/stoxla/current
+ExecStart=/usr/bin/php /var/www/stoxla/current/artisan queue:work log-triage --queue=log-triage --sleep=3 --tries=3 --timeout=120 --max-time=3600
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=180
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

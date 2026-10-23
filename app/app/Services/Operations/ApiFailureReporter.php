@@ -71,6 +71,19 @@ class ApiFailureReporter
         $this->observe([...$context, 'direction' => 'frontend_internal', 'component' => 'laravel-api', 'method' => $method, 'endpoint' => $endpoint, 'http_status' => $status, 'safe_message' => $message]);
     }
 
+    public function observeBrowserFault(string $type): void
+    {
+        if (! in_array($type, ['react_render', 'uncaught_exception', 'unhandled_rejection'], true)) return;
+        $build = (string) config('log_error_triage.build_sha', '');
+        $build = preg_match('/^[a-f0-9]{7,64}$/i', $build) ? strtolower($build) : 'unknown';
+        $this->observe([
+            'direction' => 'browser_runtime', 'component' => 'browser.'.str_replace('_', '-', $type),
+            'method' => 'CLIENT', 'endpoint' => '/browser/'.$type, 'http_status' => null,
+            'error_category' => 'untrusted_browser_observation',
+            'safe_message' => 'Typed browser runtime observation; client error details omitted (build '.$build.').',
+        ]);
+    }
+
     private function normalize(array $observation): array
     {
         $safe = $this->redactor->redact($observation['safe_message'] ?? $observation['message'] ?? null);

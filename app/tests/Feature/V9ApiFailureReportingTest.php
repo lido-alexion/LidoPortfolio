@@ -20,6 +20,14 @@ class V9ApiFailureReportingTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['api_failure_reporting.observed_provider_hosts' => [
+            ...config('api_failure_reporting.observed_provider_hosts', []), 'provider.example',
+        ]]);
+    }
+
     public function test_success_and_expected_statuses_are_not_reported(): void
     {
         $reporter = app(ApiFailureReporter::class);
@@ -116,6 +124,85 @@ class V9ApiFailureReportingTest extends TestCase
         $this->postJson('/api/ops/api-failures', $payload)->assertTooManyRequests();
     }
 
+    public function test_browser_error_ingestion_is_separate_bounded_authenticated_and_not_ai_code_bug(): void
+    {
+        Bus::fake();
+        config([
+            'api_failure_reporting.enabled' => true,
+            'api_failure_reporting.environments' => ['testing'],
+            'api_failure_reporting.queue_connection' => 'database',
+            'log_error_triage.build_sha' => 'abcdef123456',
+            'log_error_triage.enabled' => true,
+            'log_error_triage.environments' => ['testing'],
+        ]);
+
+        $this->postJson('/api/ops/browser-errors', ['type' => 'react_render'])->assertUnauthorized();
+        $this->assertDatabaseCount('portfolio_api_failure_incidents', 0);
+
+        $user = User::factory()->create();
+        $this->actingAs($user)
+            ->postJson('/api/ops/browser-errors', ['type' => 'react_render'])
+            ->assertStatus(202);
+        $this->assertDatabaseMissing('portfolio_profiles', ['user_id' => $user->id]);
+
+        $incident = ApiFailureIncident::query()->sole();
+        $this->assertSame('browser_runtime', $incident->direction);
+        $this->assertSame('browser.react-render', $incident->component);
+        $this->assertSame('untrusted_browser_observation', $incident->error_category);
+        $this->assertSame('Typed browser runtime observation; client error details omitted (build abcdef123456).', $incident->safe_message);
+        $this->assertNull($incident->trace_id);
+        $this->assertDatabaseCount('stox_log_error_triages', 0);
+        Bus::assertDispatched(CreateOrLinkGitHubIssueJob::class, fn ($job) => $job->incidentId === $incident->id);
+
+        $github = \Mockery::mock(\App\Services\Operations\GitHubIssueReporter::class);
+        $github->shouldReceive('report')->once()->withArgs(function ($marker, $title, $body, $labels, $seen) {
+            return str_starts_with($marker, '<!-- stox-browser-observation:')
+                && $title === '[Auto][Browser] StoX observed browser.react-render'
+                && str_contains($body, 'untrusted client signal, not a confirmed code bug')
+                && ! str_contains($body, 'componentStack')
+                && in_array('browser-observation', $labels, true);
+        })->andReturn(['status' => 'linked', 'number' => 42, 'url' => 'https://github.com/lido-alexion/LidoPortfolio/issues/42']);
+        (new CreateOrLinkGitHubIssueJob($incident->id))->handle($github);
+        $this->assertSame(42, $incident->fresh()->github_issue_number);
+
+        $this->postJson('/api/ops/browser-errors', ['type' => 'unknown', 'message' => 'Bearer secret'])
+            ->assertUnprocessable();
+        $this->postJson('/api/ops/browser-errors', [
+            'type' => 'uncaught_exception', 'route' => '/notes/PrivateTitle', 'module' => 'Alice',
+        ])->assertStatus(422);
+        $this->postJson('/api/ops/browser-errors', ['type' => 'unhandled_rejection', 'extra' => str_repeat('x', 600)])
+            ->assertStatus(413);
+        $this->assertDatabaseCount('portfolio_api_failure_incidents', 1);
+    }
+
+    public function test_browser_error_ingestion_throttles_by_authenticated_account_without_portfolio_resolution(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        for ($attempt = 0; $attempt < 30; $attempt++) {
+            $this->postJson('/api/ops/browser-errors', ['type' => 'unhandled_rejection'])->assertStatus(202);
+        }
+        $this->postJson('/api/ops/browser-errors', ['type' => 'unhandled_rejection'])->assertTooManyRequests();
+
+        $this->assertDatabaseMissing('portfolio_profiles', ['user_id' => $user->id]);
+        $this->assertSame(30, ApiFailureIncident::query()->sole()->occurrence_count);
+    }
+
+    public function test_each_supported_browser_fault_type_remains_an_untrusted_observation(): void
+    {
+        $this->actingAs(User::factory()->create());
+        foreach (['react_render', 'uncaught_exception', 'unhandled_rejection'] as $type) {
+            $this->postJson('/api/ops/browser-errors', ['type' => $type])->assertStatus(202);
+        }
+
+        $rows = ApiFailureIncident::query()->where('direction', 'browser_runtime')->orderBy('id')->get();
+        $this->assertSame([
+            'browser.react-render', 'browser.uncaught-exception', 'browser.unhandled-rejection',
+        ], $rows->pluck('component')->all());
+        $this->assertSame(['untrusted_browser_observation'], $rows->pluck('error_category')->unique()->values()->all());
+        $this->assertDatabaseCount('stox_log_error_triages', 0);
+    }
+
     public function test_external_http_observation_reports_non_2xx_but_not_2xx(): void
     {
         Http::fake([
@@ -124,12 +211,85 @@ class V9ApiFailureReportingTest extends TestCase
         ]);
 
         ExternalHttp::client()->get('https://provider.example/success');
+        Http::get('https://provider.example/success');
         ExternalHttp::client()->get('https://provider.example/failure');
 
         $incident = ApiFailureIncident::query()->sole();
         $this->assertSame('outbound_external', $incident->direction);
         $this->assertSame(503, $incident->http_status);
         $this->assertSame('https://provider.example/failure', $incident->endpoint);
+        $this->assertSame(1, $incident->occurrence_count);
+    }
+
+    public function test_direct_and_wrapper_clients_share_response_and_connection_observation(): void
+    {
+        Http::fake([
+            'https://provider.example/failure*' => Http::response([], 503),
+            'https://provider.example/ok*' => Http::response([], 204),
+        ]);
+        Http::get('https://provider.example/failure?token=query-secret');
+        ExternalHttp::client()->get('https://provider.example/failure?token=query-secret');
+        Http::get('https://provider.example/ok');
+        ExternalHttp::client()->get('https://provider.example/ok');
+
+        $incident = ApiFailureIncident::query()->sole();
+        $this->assertSame(2, $incident->occurrence_count);
+        $this->assertSame('https://provider.example/failure', $incident->endpoint);
+        $this->assertStringNotContainsString('query-secret', $incident->endpoint.(string) $incident->safe_message);
+    }
+
+    public function test_direct_and_wrapper_clients_observe_connection_failures_without_exception_text(): void
+    {
+        Http::fake([
+            'https://provider.example/connect' => Http::failedConnection('private host token=secret'),
+        ]);
+        try { Http::get('https://provider.example/connect'); } catch (\Illuminate\Http\Client\ConnectionException) {}
+        try { ExternalHttp::client()->get('https://provider.example/connect'); } catch (\Illuminate\Http\Client\ConnectionException) {}
+
+        $incident = ApiFailureIncident::query()->sole();
+        $this->assertSame(2, $incident->occurrence_count);
+        $this->assertSame('ConnectionException', $incident->failure_class);
+        $this->assertNull($incident->safe_message);
+    }
+
+    public function test_http_observer_handles_opt_out_arrays_and_excludes_secrets_and_reporter_traffic(): void
+    {
+        Http::fake(fn () => Http::response([], 503));
+        Http::withHeaders(['X-StoX-Skip-Api-Failure-Reporting' => '1'])
+            ->get('https://provider.example/failure?token=query-secret');
+        Http::get('https://api.telegram.org/botPATH_SECRET/sendMessage?chat_id=1');
+        Http::get('https://api.github.com/repos/lido-alexion/LidoPortfolio/issues');
+        Http::get('https://private-tenant.example/private-route/Alice');
+        Http::get('https://tenant.provider.example/private-route/Alice?token=query-secret');
+        config(['ai_runtime.base_url' => 'https://nseindia.com']);
+        try { app(\App\Services\AI\AiRuntimeClient::class)->capabilities(); } catch (\RuntimeException) {}
+
+        $incident = ApiFailureIncident::query()->sole();
+        $this->assertSame(1, $incident->occurrence_count);
+        $this->assertSame('https://provider.example/{resource}/{resource}', $incident->endpoint);
+        $this->assertStringNotContainsString('tenant', $incident->endpoint);
+        $this->assertStringNotContainsString('Alice', $incident->endpoint);
+        $this->assertStringNotContainsString('query-secret', $incident->endpoint);
+    }
+
+    public function test_allowlisted_provider_write_failure_is_observed_with_safe_endpoint_only(): void
+    {
+        Http::fake(['https://api.nseindia.com/api/market/data*' => Http::response([], 503)]);
+        Http::post('https://api.nseindia.com/api/market/data?account=private', ['private' => 'body-value']);
+
+        $incident = ApiFailureIncident::query()->sole();
+        $this->assertSame('POST', $incident->method);
+        $this->assertSame('https://nseindia.com/api/market/data', $incident->endpoint);
+        $this->assertNull($incident->safe_message);
+    }
+
+    public function test_expected_endpoint_status_suppresses_framework_observation(): void
+    {
+        config(['api_failure_reporting.expected_endpoint_statuses' => ['https://nseindia.com/api/market/data' => [503]]]);
+        Http::fake(['https://api.nseindia.com/api/market/data*' => Http::response([], 503)]);
+        Http::post('https://api.nseindia.com/api/market/data');
+
+        $this->assertDatabaseCount('portfolio_api_failure_incidents', 0);
     }
 
     public function test_queue_dispatch_failure_preserves_local_observation(): void

@@ -14,9 +14,11 @@ import { ThemeProvider } from './src/context/ThemeContext';
 import { getAppBase } from './src/appBase';
 import { appQueryClient } from './src/queryClient';
 import { registerBrowserOpenTelemetry } from './src/telemetry/otelBrowser';
+import { registerBrowserErrorReporter } from './src/telemetry/browserErrorReporter';
 
 const routerBasename = getAppBase() || undefined;
 
+registerBrowserErrorReporter();
 registerBrowserOpenTelemetry();
 
 function showBootFailure(message, error) {
