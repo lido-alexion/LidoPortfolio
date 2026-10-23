@@ -3,7 +3,7 @@
   "scope": "C: SSH runner incident diagnosis and normal release recovery",
   "acceptance": {
     "AC07": "satisfied: bounded stage diagnosis, full log retained and sha256 indexed; root cause remains unknown",
-    "AC08": "Historical normal1544 qualified recovery accepted; latest normal1550 failed before activation, current implementation delivery unresolved."
+    "AC08": "ACCEPTED: current normal CI1554 exact4e223f6f strict SSH/artifacts/activation/runtime/public health/mandatory authenticated smoke2of2 independently qualified."
   },
   "failed_incident": {
     "run_id": 39715911187,
@@ -73,11 +73,11 @@
     }
   },
   "limitations": [
-    "No direct SSH/network probe, credential read, manual rerun/dispatch, deployment, or infrastructure change was performed.",
-    "No cause is inferred for DNS, TCP, address-family, or keyscan failure from the failed log.",
-    "CI1544 proves the normal release path succeeded at that time; it does not prove the earlier transient cause or connectivity at a later time."
+    "Earlier1510/1550 failure cause remains UNKNOWN; later recovery does not establish DNS/TCP/address-family cause.",
+    "The150ms supplemental TCP probe failed while the unchanged decisive scan and authenticated release succeeded. Do not treat this sample as a persistent reachability finding.",
+    "No extra manual retry/dispatch/deploy, infrastructure change, credential read or heavy production test was performed. The single explicitly authorized PR frontend retry is separately recorded."
   ],
-  "latest_normal_release": {
+  "historical_normal_ci1550": {
     "run_id": 39926556873,
     "run_number": 1550,
     "attempt": 1,
@@ -165,5 +165,135 @@
       "authenticated_smoke": false
     },
     "next_dependency": "Approved runner diagnostic evidence or next independently legitimate normal qualified release; no manual/dummy trigger."
+  },
+  "latest_normal_release": {
+    "epic": "V9-OPS-004",
+    "root_reviewed_at": "2026-10-23T15:38:26.183157+00:00",
+    "run_id": 39971543972,
+    "run_number": 1554,
+    "attempt": 1,
+    "head_sha": "4e223f6f805ae959eedd04c454af6890ebdcf8b7",
+    "event": "push",
+    "conclusion": "success",
+    "deploy_job_id": 120492613340,
+    "package_job_id": 120492231521,
+    "release_artifact": {
+      "id": 12511612049,
+      "zip_sha256": "04e39c66e88350043df0ec06b6dad40a831e219cc32bed151338d97c7afe0ac5",
+      "tgz_sha256": "9f3b05a79f947c42b9aa7fc6a285be0ebc9f015d276f2b693f266bdf7b91baeb",
+      "independent_digest_match": true
+    },
+    "smoke_artifact": {
+      "id": 12511982415,
+      "zip_sha256": "8c405a22e3af900fd10893dc78c4339e02fe764c31efc3eb4e176c058e1d5032",
+      "independent_digest_match": true,
+      "stats": {
+        "total": 2,
+        "expected": 2,
+        "unexpected": 0,
+        "flaky": 0,
+        "skipped": 0,
+        "ok": true
+      }
+    },
+    "embedded_metadata": {
+      "build_id": "build-1554-attempt-1-4e223f6f805ae959eedd04c454af6890ebdcf8b7",
+      "commit_sha": "4e223f6f805ae959eedd04c454af6890ebdcf8b7",
+      "short_sha": "4e223f6f805a",
+      "ref": "master",
+      "workflow": "CI",
+      "run_id": "39971543972",
+      "run_number": "1554",
+      "run_attempt": "1",
+      "built_at": "2026-10-23T15:14:21.942Z"
+    },
+    "current_master_gate": "candidate equals current master at2026-10-23T15:15:02.9069491Z; existing production concurrency group serialized deployment",
+    "activation": "release20261023151445-4e223f6f805a live15:15:20.8161466Z",
+    "runtime_health": [
+      "green exact SHA15:15:18.6366376Z",
+      "green exact SHA15:15:26.4914189Z"
+    ],
+    "public_runtime": {
+      "observed_at": "2026-10-23T15:35:59.672892+00:00",
+      "authenticated_smoke": "CI1554 job120492613340 mandatory2/2; this fresh request is public only",
+      "root_status": 200,
+      "build_info_status": 200,
+      "build_info": {
+        "data": {
+          "build_id": "build-1554-attempt-1-4e223f6f805ae959eedd04c454af6890ebdcf8b7",
+          "commit_sha": "4e223f6f805ae959eedd04c454af6890ebdcf8b7",
+          "short_sha": "4e223f6f805a",
+          "ref": "master",
+          "workflow": "CI",
+          "run_id": "39971543972",
+          "run_number": "1554",
+          "run_attempt": "1",
+          "built_at": "2026-10-23T15:14:21.942Z"
+        }
+      }
+    },
+    "diagnostic_observations": [
+      "dns status=ok family=ipv4 address_count=1",
+      "tcp22 status=unreachable at150ms supplemental probe; not proof of decisive path failure",
+      "hostkey status=ok exit_kind=success; unchanged decisive scan once"
+    ],
+    "root_cause": "UNKNOWN; successful later normal release is bounded recovery, not a causal fix",
+    "root_reviewed_logs": [
+      {
+        "job_id": 120475235328,
+        "sha256": "e3e9bdd5ca27300f30cb101e590cdbf9ba2e629bf0dac11ce3e4140a8addad86",
+        "full": true,
+        "root_reviewed": true
+      },
+      {
+        "job_id": 120475235848,
+        "sha256": "18e789197613f736be1a335132cb96102360374e4e990fa84cc7e92430e450d8",
+        "full": true,
+        "root_reviewed": true
+      },
+      {
+        "job_id": 120475288393,
+        "sha256": "41cdb82f56a3f1e33a96a1f8fe0c610320dda6506798f2b6776df78e1e87986e",
+        "full": true,
+        "root_reviewed": true
+      },
+      {
+        "job_id": 120475288422,
+        "sha256": "fc3266fb254f1a12f8164d9cc7af4389c8d36540743b8bd8bb7dce0326411e2b",
+        "full": true,
+        "root_reviewed": true
+      },
+      {
+        "job_id": 120475288423,
+        "sha256": "ef8715bd34f158e5d021845ecc3158939650e69dedc48b75bd3eeae7a8edf89d",
+        "full": true,
+        "root_reviewed": true
+      },
+      {
+        "job_id": 120492231521,
+        "sha256": "41a89ec165a2cf1049b9224f4ca18c00f77e3c19b32c44c740c979d7a02e6fad",
+        "full": true,
+        "root_reviewed": true
+      },
+      {
+        "job_id": 120492613340,
+        "sha256": "71fa958cc86a588258897da6ef724fd974041b276f124138897bca9227dc6ba7",
+        "full": true,
+        "root_reviewed": true
+      }
+    ],
+    "source_checks": {
+      "node": 247,
+      "component": 618,
+      "browser_passed": 488,
+      "browser_governed_skips": 57,
+      "php": 2444,
+      "php_assertions": 17540,
+      "php_notices": 5,
+      "php_skips": 2,
+      "python": 56,
+      "watcher": 59
+    },
+    "historical_retry": "CI1553 initial45min timeout retained; exactly one explicitly authorized unchanged-head frontend retry passed. CI1554 normal attempt1 passed. No tests/limits/security gates weakened."
   }
 }

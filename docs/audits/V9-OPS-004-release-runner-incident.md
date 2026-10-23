@@ -1,5 +1,13 @@
 # V9-OPS-004 release runner incident (AC07–08)
 
+## Latest qualified recovery — normal CI1554, 23 October 2026
+
+Root accepts current normal recovery on exact master `4e223f6f805ae959eedd04c454af6890ebdcf8b7` through [CI1554](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39971543972), attempt1. Package120492231521/deploy120492613340 passed. Release ZIP12511612049 and smoke ZIP12511982415 were independently downloaded and hash-matched; embedded release metadata and decoded smoke report match the exact commit/run. Current-master equality passed15:15:02UTC, release activated15:15:20UTC, exact-SHA runtime/public health passed, mandatory authenticated smoke2/2 passed15:16:46UTC with no unexpected/flaky/skipped cases. Fresh public15:35:59UTC confirmed HTTP200/build1554. See the [evidence index](V9-OPS-004-release-runner-evidence-index.json) for full hashes/timestamps.
+
+New sanitized diagnostics show DNS success/oneIPv4, supplemental150ms TCP failure, then decisive host-key-scan success. A short failed sample does not contradict the subsequent successful strict SSH/authenticated upload or establish an enduring TCP outage. The underlying1510/1550 cause remains UNKNOWN. This is bounded later normal recovery, not proof of a network fix. AC07/08 are satisfied under the frozen specification; only future legitimate recurrence requires fresh diagnosis. All host-key/security/release gates remain unchanged.
+
+The following earlier findings and recovery/dependency records remain historical;1554 supersedes their unresolved-current-delivery statements.
+
 ## Finding
 
 The 2026-10-22 failed deploy for run 39715911187, attempt 1, job 119627574129, at commit `ae3976e5957bb10332681e2475498e83b771f691`, failed during SSH host-key discovery. The precise failing command is `ssh-keyscan -H "$STOXLA_HOST" >> ~/.ssh/known_hosts`; the job ended with exit code 1 at 2026-10-22 03:49:15.624 UTC, about five seconds after the command began. The step had already checked that host and private-key variables were nonempty and written the key file, but no `ssh`/`scp` authentication attempt followed. This is not evidence of a credential or authentication failure.

@@ -1,5 +1,39 @@
 # V9-OPS-004 implementation audit
 
+Status: **IMPLEMENTED / VERIFIED — 23 October 2026.** Root accepts all frozen AC01–AC12. Watcher/launcher source merged through [PR261](https://github.com/lido-alexion/LidoPortfolio/pull/261), runner diagnostics/live receipts through [PR263](https://github.com/lido-alexion/LidoPortfolio/pull/263). Normal [CI1554](https://github.com/lido-alexion/LidoPortfolio/actions/runs/39971543972), attempt1, released exact master `4e223f6f805ae959eedd04c454af6890ebdcf8b7` as build1554 and passed mandatory authenticated non-destructive smoke **2/2**. This documentation-only closure records the accepted runtime; it does not require another application release.
+
+Canonical [frozen specification](../archive/specs/V9-OPS-004-CI-Watcher-Recovery-Release-Runner-Diagnostics-Specification.md), [register](../archive/specs/LidoPortfolio-V9-Wishlist.md), [tracking issue #251](https://github.com/lido-alexion/LidoPortfolio/issues/251). Root owns packages A, B, C and final acceptance; no external reviewer is required.
+
+## Final frozen acceptance
+
+| AC | Accepted evidence |
+|---|---|
+| AC01 | Spec, register, issue, ownership PR260, implementation PR261/263 and this audit link to the same epic/root owner. |
+| AC02 | [Actual live lifecycle receipt](V9-OPS-004-live-lifecycle-qualification.json): authorized update/restart, changed-valid revision applied in process2967357, matching effective revision and one singleton. |
+| AC03 | Same receipt: invalid retention, real lease/owned-PAUSED deferral, exact config restoration, pending/history preservation. Offline active-child/dedupe regressions pass within the59-test suite. |
+| AC04 | Actual heartbeat/state receipt distinguishes disk/effective revision, loaded configured/enabled/report_only allowlist and global discovery. |
+| AC05 | [Reviewer qualification](V9-OPS-004-reviewer-qualification.json): actual current Codex starting/running/completed and harmless blocked/failure receipts. |
+| AC06 | Same qualification: exact-owned harmless recovery preserves output, confirms inactivity, refuses duplicate and permits clean replacement. Legacy2154507 remains untouched. |
+| AC07 | [Incident](V9-OPS-004-release-runner-incident.md) and [hashed full evidence](V9-OPS-004-release-runner-evidence-index.json):1510/1550 failed host-key discovery before authentication; underlying cause explicitly UNKNOWN.1554 supplies bounded normal recovery. |
+| AC08 | CI1554: strict host-key path, authenticated upload, independent artifact digest/metadata checks, current-master equality under existing serialized deployment, activation, exact runtime SHA/public health and mandatory authenticated smoke2/2. |
+| AC09 | Root reviewed full relevant CI1553 retry and CI1554 logs/artifacts.1554:247 Node checks,618 component tests,488 browser cases/57 governed skips,2444 PHP tests/17540 assertions/5 notices/2 skips,56 Python contracts and59 watcher/launcher/diagnostic tests. Typecheck/build and188-migration portability pass. |
+| AC10 | Versioned watcher/launcher operator runbooks retain inspection, ownership, supported recovery, denial handling, rollback/failure limits and evidence procedures. |
+| AC11 | Existing singleton/cooperative locks and gates preserved. Explicit watcher/live-probe/publication/one-job-retry approvals were applied only to their disclosed scope. No duplicate service/automation, unrelated termination, manual deployment, speculative infrastructure fix or heavy production verifier. |
+| AC12 | Root mapped all12 criteria to retained operational/source/release evidence and updates this canonical audit/register for verified closure. Tracking issue closes after this documentation passes normal CI/integration. No required implementation gap remains. |
+
+## Current release and diagnostic limits
+
+Package12511612049 ZIP SHA256 `04e39c66e88350043df0ec06b6dad40a831e219cc32bed151338d97c7afe0ac5` and smoke12511982415 ZIP SHA256 `8c405a22e3af900fd10893dc78c4339e02fe764c31efc3eb4e176c058e1d5032` independently match GitHub metadata and upload/download logs. Embedded metadata identifies build1554/attempt1/exact4e223f6f, built15:14:21.942UTC. The decoded smoke report records expected2, unexpected0, flaky0, skipped0; dedicated read-only identity opens an investor page. Runtime health passed at15:15:18 and15:15:26UTC. Fresh public root/build-info at15:35:59UTC returned200/exact4e223f6f. Full log hashes and timestamps are in the evidence index.
+
+At15:14:45UTC DNS resolved one IPv4 address. The supplemental150ms TCP probe failed; the unchanged decisive host-key scan succeeded, followed by authenticated release. These observations do not diagnose the earlier failure or establish persistent TCP unreachability. Earlier1510/1550 cause remains UNKNOWN; frozen AC07 permits this bounded conclusion and AC08 accepts ordinary verified recovery. No speculative network correction is claimed or needed for closure. Reopen diagnosis on a future independently legitimate recurrence with its actual evidence.
+
+CI1553 initially timed out at45minutes after slow dependency downloads, leaving one browser case unfinished. The PO explicitly approved one frontend-job rerun on the unchanged commit with all tests/limits preserved; that retry passed. The exception is consumed. CI1554 then passed on normal attempt1. Original failure/retry evidence remains retained; no source change was manufactured to obtain a rerun.
+
+## Retained historical implementation record
+
+Everything below is a dated historical record. Earlier open/blocked/current-production statements are superseded by the final acceptance and1554 receipt above; they do not describe current status.
+
+
 Status: **IMPLEMENTATION IN PROGRESS**. Reviewed source merged through [PR261](https://github.com/lido-alexion/LidoPortfolio/pull/261) at `ef4ed62e2bfe1a298f93e4339f38c8794630c743`. Root now accepts actual watcher activation and live lifecycle criteria AC02–04. Current normal release remains unresolved after CI1550 failed SSH host-key discovery before activation; this epic is not verified closed. Root owns final diagnosis, normal delivery and acceptance.
 
 Canonical [frozen specification](../archive/specs/V9-OPS-004-CI-Watcher-Recovery-Release-Runner-Diagnostics-Specification.md), [register](../archive/specs/LidoPortfolio-V9-Wishlist.md), [issue #251](https://github.com/lido-alexion/LidoPortfolio/issues/251).
