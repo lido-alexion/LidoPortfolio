@@ -33,6 +33,7 @@ class NotificationSettingsApiTest extends TestCase
             ->assertJsonPath('data.0.channel', 'in_app')
             ->assertJsonPath('data.0.enabled', true)
             ->assertJsonPath('data.0.can_disable', false)
+            ->assertJsonPath('data.1.configured', false)
             ->assertJsonCount(4, 'data');
 
         $this->actingAs($user)->putJson('/api/notification-settings/in_app', ['enabled' => false])
@@ -72,11 +73,31 @@ class NotificationSettingsApiTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('enabled');
     }
 
+    public function test_channel_test_without_saved_settings_returns_guidance_without_sending(): void
+    {
+        Mail::fake();
+        Http::fake();
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->postJson('/api/notification-settings/telegram/test')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('channel');
+
+        Http::assertNothingSent();
+        Mail::assertNothingOutgoing();
+        $this->assertDatabaseMissing('portfolio_notification_channel_settings', [
+            'user_id' => $user->id,
+            'channel' => 'telegram',
+        ]);
+    }
+
     public function test_verified_channel_can_be_enabled_and_secrets_are_encrypted_and_hidden(): void
     {
         $user = User::factory()->create();
         $payload = ['enabled' => false, 'bot_token' => 'secret-bot-token', 'chat_id' => 'chat-42'];
-        $this->actingAs($user)->putJson('/api/notification-settings/telegram', $payload)->assertOk();
+        $this->actingAs($user)->putJson('/api/notification-settings/telegram', $payload)
+            ->assertOk()
+            ->assertJsonPath('data.configured', true);
         app(NotificationChannelSettingsService::class)->markVerified($user, 'telegram');
 
         $this->actingAs($user)->putJson('/api/notification-settings/telegram', [...$payload, 'enabled' => true])

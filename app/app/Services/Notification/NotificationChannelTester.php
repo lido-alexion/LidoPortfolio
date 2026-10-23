@@ -7,6 +7,7 @@ use App\Models\NotificationChannelSetting;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class NotificationChannelTester
@@ -18,7 +19,13 @@ class NotificationChannelTester
         $setting = NotificationChannelSetting::query()
             ->where('user_id', $user->id)
             ->where('channel', $channel)
-            ->firstOrFail();
+            ->first();
+
+        if (! $setting) {
+            throw ValidationException::withMessages([
+                'channel' => ['Save channel settings before testing this channel.'],
+            ]);
+        }
 
         try {
             $successful = match ($channel) {

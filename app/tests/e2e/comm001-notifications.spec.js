@@ -60,3 +60,66 @@ test('notification history filters and read controls fit mobile screens', async 
     await page.getByRole('button', { name: 'Mark unread' }).click();
     await expectNoHorizontalOverflow(page);
 });
+
+test('notification channels follow save, test, then enable in a real browser', async ({ page }) => {
+    await installInvestorWorkflowApiMocks(page);
+    let telegram = { channel: 'telegram', configured: false, enabled: false, health_status: 'unverified', verified_at: null, last_test_status: null, bot_token_configured: false, chat_id: null };
+    const email = { channel: 'email', configured: false, enabled: false, health_status: 'unverified', verified_at: null, account_email: 'person@example.test', account_email_verified: false };
+    const webhook = { channel: 'webhook', configured: false, enabled: false, health_status: 'unverified', verified_at: null, url: null, signing_secret_configured: false };
+    let providerTests = 0;
+    let writes = [];
+    await page.route(/\/api\/notification-settings/, async (route) => {
+        const { pathname } = new URL(route.request().url());
+        if (pathname.endsWith('/notification-settings/email-destinations')) {
+            return route.fulfill({ json: { data: [{ id: 1, email: 'person@example.test', is_account_email: true, verified_at: null }] } });
+        }
+        if (pathname.endsWith('/notification-settings') && route.request().method() === 'GET') {
+            return route.fulfill({ json: { data: [{ channel: 'in_app', enabled: true }, telegram, email, webhook], optional_email_preferences: settings } });
+        }
+        if (pathname.endsWith('/notification-settings/telegram') && route.request().method() === 'PUT') {
+            const payload = route.request().postDataJSON();
+            writes.push(payload);
+            telegram = { ...telegram, configured: true, enabled: !!payload.enabled, chat_id: payload.chat_id, bot_token_configured: true, verified_at: payload.enabled ? telegram.verified_at : null, health_status: payload.enabled ? 'healthy' : 'unverified' };
+            return route.fulfill({ json: { data: telegram } });
+        }
+        if (pathname.endsWith('/notification-settings/telegram/test') && route.request().method() === 'POST') {
+            providerTests += 1;
+            telegram = { ...telegram, verified_at: '2026-10-16T00:00:00Z', last_test_status: 'succeeded', health_status: 'healthy' };
+            return route.fulfill({ json: { data: { successful: true, channel: 'telegram', message: 'Channel verified successfully.' } } });
+        }
+        return route.fallback();
+    });
+
+    await page.goto('/settings/notifications');
+    const card = page.getByRole('region', { name: 'telegram' });
+    await expect(card.getByRole('button', { name: 'Test channel' })).toHaveCount(0);
+    const enabled = card.getByRole('checkbox', { name: 'Enabled' });
+    await expect(enabled).toBeDisabled();
+    await expect(card.getByText('Save these settings and test the channel before enabling delivery.')).toBeVisible();
+    const help = card.locator('span[tabindex="0"]');
+    await help.focus();
+    await expect(help).toHaveAttribute('title', 'Save these settings and test the channel before enabling delivery.');
+
+    await card.getByLabel('Bot token').fill('synthetic-test-token');
+    await card.getByLabel('Chat ID').fill('synthetic-chat-42');
+    await expect(card.getByRole('button', { name: 'Test channel' })).toHaveCount(0);
+    await card.getByRole('button', { name: 'Save' }).click();
+    await expect(card.getByRole('button', { name: 'Test channel' })).toBeVisible();
+    await expect(card.getByLabel('Bot token')).toHaveValue('');
+    await page.reload();
+    const reloadedCard = page.getByRole('region', { name: 'telegram' });
+    await expect(reloadedCard.getByRole('button', { name: 'Test channel' })).toBeVisible();
+    await expect(reloadedCard.getByLabel('Bot token')).toHaveValue('');
+    await expect(reloadedCard.getByLabel('Chat ID')).toHaveValue('synthetic-chat-42');
+    await reloadedCard.getByRole('button', { name: 'Test channel' }).click();
+    await expect.poll(() => providerTests).toBe(1);
+    await expect(reloadedCard.getByLabel('Enabled')).toBeEnabled();
+    await expect(reloadedCard.getByText('Test passed · ready to enable')).toBeVisible();
+    await reloadedCard.getByLabel('Enabled').check();
+    await reloadedCard.getByRole('button', { name: 'Save' }).click();
+    await expect.poll(() => writes.length).toBe(2);
+    expect(writes[0]).toMatchObject({ bot_token: 'synthetic-test-token', chat_id: 'synthetic-chat-42', enabled: false });
+    expect(writes[1]).toMatchObject({ chat_id: 'synthetic-chat-42', enabled: true });
+    expect(writes[1]).not.toHaveProperty('bot_token');
+    expect(providerTests).toBe(1);
+});

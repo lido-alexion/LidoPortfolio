@@ -47,6 +47,8 @@ Supported external channels are email, Telegram, and webhook. A source may fan o
 
 **Current implementation anchors:** `NotificationDeliveryPlanner`, `NotificationChannelSetting`, `NotificationEmailDestination`, and `NotificationSettingsApiTest`.
 
+For the account-level settings UI, external channels follow a Save → Test → Enable sequence. Test is available after settings have been saved; a successful test unlocks enablement. Editing a Telegram credential/destination or Webhook URL disables the page's current selection immediately, then requires saving and testing the saved configuration before enabling it again. Email destination verification remains a separate signed-link flow.
+
 ## 6. In-App Notifications
 
 The notification bell, notification center/history, and critical banner consume the recipient notification record. History is account-scoped and supports unread/read state, condition state, recipient counts/views, and detail access. Opening a detail does not itself mark it read; explicit read actions change attention state only.
