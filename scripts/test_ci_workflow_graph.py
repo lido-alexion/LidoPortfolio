@@ -43,12 +43,26 @@ class WorkflowGraphTests(unittest.TestCase):
 
     def test_package_waits_for_each_applicable_canonical_check(self):
         needs = JOBS["package"]["needs"]
-        self.assertEqual(set(needs), {"changes", "backend", "frontend", "vps-health", "ai-runtime"})
+        self.assertEqual(set(needs), {"changes", "backend", "frontend", "vps-health", "ci-followup-watcher", "ai-runtime"})
         package = "\n".join(step.get("run", "") for step in JOBS["package"]["steps"])
         self.assertIn("ci_release_contract.py gate", package)
         self.assertIn("git rev-parse HEAD", package)
         change_detector = "\n".join(step.get("run", "") for step in JOBS["changes"]["steps"])
         self.assertIn('git diff --name-only "${{ github.event.before }}" HEAD', change_detector)
+
+    def test_watcher_tests_use_exact_path_scope_and_gate_packaging(self):
+        watcher = JOBS["ci-followup-watcher"]
+        self.assertEqual(watcher["if"], "needs.changes.outputs.ci_watcher == 'true'")
+        self.assertIn("python -m unittest discover -s tests -v",
+                      "\n".join(step.get("run", "") for step in watcher["steps"]))
+        change_detector = "\n".join(step.get("run", "") for step in JOBS["changes"]["steps"])
+        self.assertIn("ci_release_contract.py classify", change_detector)
+        package_condition = JOBS["package"]["if"]
+        self.assertIn("needs['ci-followup-watcher'].result == 'success'", package_condition)
+        gate_env = next(step["env"] for step in JOBS["package"]["steps"]
+                        if "ci_release_contract.py gate" in step.get("run", ""))
+        self.assertEqual(gate_env["CI_WATCHER_APPLICABLE"], "${{ needs.changes.outputs.ci_watcher }}")
+        self.assertEqual(gate_env["CI_WATCHER_RESULT"], "${{ needs['ci-followup-watcher'].result }}")
 
     def test_production_job_consumes_same_run_artifact(self):
         self.assertEqual(JOBS["deploy"]["needs"], ["package"])

@@ -1,0 +1,7 @@
+{"type":"thread.started"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"type":"command_execution","status":"in_progress"}}
+{"type":"item.completed","item":{"type":"command_execution","status":"completed"}}
+{"type":"item.started","item":{"type":"file_change","status":"in_progress"}}
+{"type":"item.completed","item":{"type":"file_change","status":"completed"}}
+{"type":"turn.completed"}

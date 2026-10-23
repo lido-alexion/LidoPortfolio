@@ -16,9 +16,11 @@ def gate(**updates):
         "BACKEND_APPLICABLE": "true",
         "FRONTEND_APPLICABLE": "true",
         "VPS_HEALTH_APPLICABLE": "false",
+        "CI_WATCHER_APPLICABLE": "false",
         "BACKEND_RESULT": "success",
         "FRONTEND_RESULT": "success",
         "VPS_HEALTH_RESULT": "skipped",
+        "CI_WATCHER_RESULT": "skipped",
         "AI_RUNTIME_RESULT": "success",
     }
     values.update(updates)
@@ -28,7 +30,7 @@ def gate(**updates):
 class ScopeTests(unittest.TestCase):
     def test_documentation_only_preserves_no_deploy_semantics(self):
         self.assertEqual(classify(["docs/current/guide.md"]), {
-            "backend": False, "frontend": False, "deployable": False, "vps_health": False,
+            "backend": False, "frontend": False, "deployable": False, "vps_health": False, "ci_watcher": False,
         })
 
     def test_backend_change_requires_backend_and_deployment(self):
@@ -53,6 +55,19 @@ class ScopeTests(unittest.TestCase):
         self.assertTrue(scope["vps_health"])
         self.assertFalse(scope["deployable"])
 
+    def test_ci_watcher_scope_preserves_all_existing_scopes(self):
+        scope = classify(["ops/ci-followup-watcher/watcher.py"])
+        self.assertEqual(scope, {
+            "backend": False, "frontend": False, "deployable": False,
+            "vps_health": False, "ci_watcher": True,
+        })
+
+    def test_ci_workflow_keeps_original_canonical_scopes(self):
+        self.assertEqual(classify([".github/workflows/ci.yml"]), {
+            "backend": True, "frontend": True, "deployable": True,
+            "vps_health": False, "ci_watcher": False,
+        })
+
     def test_release_gate_implementation_change_qualifies_its_activation(self):
         self.assertTrue(classify(["scripts/ci_release_contract.py"])['deployable'])
 
@@ -66,6 +81,13 @@ class ReleaseGateTests(unittest.TestCase):
 
     def test_applicable_skip_fails_closed(self):
         self.assertFalse(gate(**{"FRONTEND_RESULT": "skipped"}))
+        self.assertFalse(gate(**{"CI_WATCHER_APPLICABLE": "true", "CI_WATCHER_RESULT": "skipped"}))
+
+    def test_applicable_watcher_failure_cancel_and_missing_result_fail_closed(self):
+        for result in ("failure", "cancelled", ""):
+            with self.subTest(result=result):
+                self.assertFalse(gate(**{"CI_WATCHER_APPLICABLE": "true", "CI_WATCHER_RESULT": result}))
+        self.assertFalse(gate(**{"CI_WATCHER_APPLICABLE": "true"}))
 
     def test_failure_cancel_and_missing_results_fail_closed(self):
         for result in ("failure", "cancelled", ""):
