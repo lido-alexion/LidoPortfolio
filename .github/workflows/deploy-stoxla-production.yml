@@ -49,7 +49,7 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$STOXLA_SSH_PRIVATE_KEY" > ~/.ssh/stoxla_deploy_key
           chmod 600 ~/.ssh/stoxla_deploy_key
-          ssh-keyscan -H "$STOXLA_HOST" >> ~/.ssh/known_hosts
+          python3 ops/ci-followup-watcher/runner_path_diagnostics.py
 
       - name: Upload and activate release
         env:

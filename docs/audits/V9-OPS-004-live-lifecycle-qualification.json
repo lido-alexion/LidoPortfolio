@@ -1,0 +1,207 @@
+{
+  "activation": {
+    "time": "2026-10-23T10:02:54.806632+00:00",
+    "old_pid": 2043767,
+    "source_commit": "ef4ed62e2bfe1a298f93e4339f38c8794630c743",
+    "config_revision": "4ff13823a657f050b7f9177afbebd57913c9db14e09378eef96120243cbf77bc",
+    "preserved_state_sha256": "63c5b83a5c468417ad241561f1b5a68326b3532594f6efb46642f29bfeaba6b2",
+    "source_hashes": {
+      "watcher.py": "02f464df4c18fa6c4f7cd3c56c5ab561761298e08d8fbe96bfab65e1783f575a",
+      "config_lifecycle.py": "803f6bb6d7f9c135187c381afadba4b5765b08eba53fe4a7306b1bb23a0c6938",
+      "evidence_access.py": "81ef3d772f5e14396d2dc35bf695584b65b4468e1e6f9fe3ff1925c0d7e6a3a3",
+      "launcher.py": "f859eeba26e695bb6ea64ccc6a42556f8df471c91609ecb398bf2a7fefddd05d"
+    },
+    "ownership": "explicit user grant; same existing singleton and lease; unrelated processes untouched"
+  },
+  "live_qualification": {
+    "checked_at": "2026-10-23T10:08:01.086770+00:00",
+    "passed": true,
+    "pid": 2967357,
+    "original_config_restored": true,
+    "same_process_reload": true,
+    "no_new_launches": true,
+    "events_preserved": true,
+    "pending_preserved": true,
+    "receipts": [
+      {
+        "kind": "lease_busy",
+        "time": "2026-10-23T10:07:13.152521+00:00"
+      },
+      {
+        "effective_action": "defer_for_owner_marker",
+        "effective_revision": "4ff13823a657f050b7f9177afbebd57913c9db14e09378eef96120243cbf77bc",
+        "kind": "config_reload_deferred",
+        "owner": "watcher-pid:2967357",
+        "remaining_dependency": "marker_owner_must_clear_pause_or_stop",
+        "requested_action": "load_at_poll_boundary",
+        "requested_revision": "5137947acb4101a7dfc31a39c55dcf95fbdc1f3a63d561511a79d9eeaff4e98c",
+        "result": "deferred",
+        "time": "2026-10-23T10:07:28.171157+00:00"
+      },
+      {
+        "effective_action": "apply_in_process",
+        "effective_revision": "5137947acb4101a7dfc31a39c55dcf95fbdc1f3a63d561511a79d9eeaff4e98c",
+        "kind": "config_reload_applied",
+        "owner": "watcher-pid:2967357",
+        "pending_count": 2,
+        "previous_revision": "4ff13823a657f050b7f9177afbebd57913c9db14e09378eef96120243cbf77bc",
+        "remaining_dependency": "none_for_this_process",
+        "requested_action": "load_at_poll_boundary",
+        "requested_revision": "5137947acb4101a7dfc31a39c55dcf95fbdc1f3a63d561511a79d9eeaff4e98c",
+        "result": "applied",
+        "time": "2026-10-23T10:07:30.732764+00:00"
+      },
+      {
+        "effective_action": "retain_last_valid",
+        "effective_revision": "5137947acb4101a7dfc31a39c55dcf95fbdc1f3a63d561511a79d9eeaff4e98c",
+        "error": "configuration could not be read, parsed, or validated",
+        "kind": "config_reload_invalid",
+        "owner": "watcher-pid:2967357",
+        "remaining_dependency": "correct_config_then_next_poll",
+        "requested_action": "load_at_poll_boundary",
+        "requested_revision": "1087ad41328f963171347025a2caab0f046e4c27ec17943b3f4bb91d030c8bfe",
+        "result": "invalid",
+        "time": "2026-10-23T10:07:45.868504+00:00"
+      },
+      {
+        "effective_action": "apply_in_process",
+        "effective_revision": "4ff13823a657f050b7f9177afbebd57913c9db14e09378eef96120243cbf77bc",
+        "kind": "config_reload_applied",
+        "owner": "watcher-pid:2967357",
+        "pending_count": 2,
+        "previous_revision": "5137947acb4101a7dfc31a39c55dcf95fbdc1f3a63d561511a79d9eeaff4e98c",
+        "remaining_dependency": "none_for_this_process",
+        "requested_action": "load_at_poll_boundary",
+        "requested_revision": "4ff13823a657f050b7f9177afbebd57913c9db14e09378eef96120243cbf77bc",
+        "result": "applied",
+        "time": "2026-10-23T10:08:01.006152+00:00"
+      }
+    ],
+    "config_sources": {
+      "disk_revision": "1087ad41328f963171347025a2caab0f046e4c27ec17943b3f4bb91d030c8bfe",
+      "effective_dispatch_allowlist": [
+        {
+          "configured": false,
+          "enabled": false,
+          "kind": "pull_request",
+          "name": "integrated-pr-240-disabled",
+          "number": 240,
+          "report_only": false,
+          "workflow": "ci.yml"
+        },
+        {
+          "configured": false,
+          "enabled": false,
+          "kind": "pull_request",
+          "name": "integrated-pr-241-disabled",
+          "number": 241,
+          "report_only": false,
+          "workflow": "ci.yml"
+        },
+        {
+          "configured": false,
+          "enabled": false,
+          "kind": "pull_request",
+          "name": "integrated-pr-242-disabled",
+          "number": 242,
+          "report_only": false,
+          "workflow": "ci.yml"
+        },
+        {
+          "configured": false,
+          "enabled": false,
+          "kind": "pull_request",
+          "name": "integrated-pr-243-disabled",
+          "number": 243,
+          "report_only": false,
+          "workflow": "ci.yml"
+        },
+        {
+          "configured": false,
+          "enabled": false,
+          "kind": "pull_request",
+          "name": "integrated-pr-244-disabled",
+          "number": 244,
+          "report_only": false,
+          "workflow": "ci.yml"
+        },
+        {
+          "configured": false,
+          "enabled": false,
+          "kind": "pull_request",
+          "name": "integrated-pr-245-disabled",
+          "number": 245,
+          "report_only": false,
+          "workflow": "ci.yml"
+        },
+        {
+          "configured": false,
+          "enabled": false,
+          "kind": "pull_request",
+          "name": "integrated-pr-246-disabled",
+          "number": 246,
+          "report_only": false,
+          "workflow": "ci.yml"
+        },
+        {
+          "configured": true,
+          "enabled": true,
+          "kind": "nightly_master",
+          "name": "current-master-nightly-journey",
+          "number": null,
+          "report_only": false,
+          "workflow": "journey-nightly.yml"
+        },
+        {
+          "configured": false,
+          "enabled": false,
+          "kind": "pull_request",
+          "name": "integrated-pr-247-disabled",
+          "number": 247,
+          "report_only": false,
+          "workflow": "ci.yml"
+        },
+        {
+          "configured": false,
+          "enabled": false,
+          "kind": "pull_request",
+          "name": "integrated-pr-248-disabled",
+          "number": 248,
+          "report_only": false,
+          "workflow": "ci.yml"
+        },
+        {
+          "configured": false,
+          "enabled": false,
+          "kind": "pull_request",
+          "name": "integrated-pr-249-disabled",
+          "number": 249,
+          "report_only": false,
+          "workflow": "ci.yml"
+        },
+        {
+          "configured": false,
+          "enabled": false,
+          "kind": "pull_request",
+          "name": "integrated-pr-250-disabled",
+          "number": 250,
+          "report_only": false,
+          "workflow": "ci.yml"
+        },
+        {
+          "configured": false,
+          "enabled": false,
+          "kind": "pull_request",
+          "name": "integrated-pr-253-disabled",
+          "number": 253,
+          "report_only": false,
+          "workflow": "ci.yml"
+        }
+      ],
+      "effective_revision": "5137947acb4101a7dfc31a39c55dcf95fbdc1f3a63d561511a79d9eeaff4e98c",
+      "global_discovery": "all public runs returned by repository query; not an allowlist"
+    }
+  },
+  "authority": "Explicit user watcher-only update/restart approval, followed by explicit approval of disclosed bounded live config/pause/lease/wake verification. Initial probe was rejected before execution; later applicable user authority was recorded before permitted execution.",
+  "limits": "Legacy reviewer2154507 was not terminated. No singleton duplicate, host infrastructure/service change, manual release or production data action."
+}
