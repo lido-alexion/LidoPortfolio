@@ -363,6 +363,21 @@ Artisan::command('stox:fundamentals-bootstrap
     return 0;
 })->purpose('Process, retry, or safely cancel V8 historical fundamentals bootstrap runs');
 
+Artisan::command('stox:fundamentals-bootstrap-work-once {--batch=10}', function () {
+    foreach (['stox_fundamental_bootstrap_runs', 'stox_fund_bootstrap_control',
+        'stox_bootstrap_schedules', 'stox_bootstrap_schedule_occurrences',
+        'stox_fund_bootstrap_coverage_gaps', 'stox_fund_bootstrap_quality_warnings',
+        'stox_bootstrap_outcome_receipts', 'stox_bootstrap_projection_receipts',
+        'stox_bootstrap_occurrence_projection_checks'] as $table) {
+        if (! Schema::hasTable($table)) return 0;
+    }
+    // Only explicit Admin-managed requests and enabled Admin schedules can create
+    // ingestion work. Legacy rows are never adopted by this minute producer.
+    app(\App\Services\Fundamentals\BootstrapOperationsProducer::class)
+        ->tick(max(1, min((int) $this->option('batch'), 100)));
+    return 0;
+})->purpose('Advance explicit Admin bootstrap requests, schedules and bounded outcome projections');
+
 $cronTime = env('PORTFOLIO_CRON_TIME', '18:30');
 $timezone = env('PORTFOLIO_CRON_TIMEZONE', 'Asia/Kolkata');
 
@@ -690,5 +705,8 @@ Artisan::command('ai:reconcile-reservations', function () {
     app(\App\Services\AI\AiBudgetReservationService::class)->reconcile();
 })->purpose('Conservatively settle expired AI provider reservations');
 Schedule::command('ai:reconcile-reservations')->everyMinute()->withoutOverlapping();
+
+Schedule::command('stox:fundamentals-bootstrap-work-once --batch=10')
+    ->everyMinute()->timezone($timezone)->withoutOverlapping(5)->name('fundamentals-bootstrap-queue');
 
 Schedule::command('ops:maintain-log-triages')->everyTenMinutes()->withoutOverlapping()->name('log-triage-maintenance');

@@ -184,6 +184,8 @@ Strategy eligibility references Screeners (SD-030); Screener CRUD remains under 
 Additive discovery / I/O APIs. Does not replace Screener run or Strategy score paths.
 See [./Trading-Artifact-Registry-Migration.md](./Trading-Artifact-Registry-Migration.md).
 
+The current authenticated Artifact Library Bundle recovery surface includes `GET /api/v1/artifact-library/bundle-deployments/{uuid}`. It is scoped to the requesting actor and active Portfolio and returns only deployment UUID/status, a fixed failure code, and member UUID/version/action/resulting revision IDs. It is read-only. A lost deploy response is resolved by reading this same UUID; deploy POST remains an explicit non-idempotent mutation.
+
 ``` text
   GET      /api/v1/artifacts
   GET      /api/v1/artifacts/{type}

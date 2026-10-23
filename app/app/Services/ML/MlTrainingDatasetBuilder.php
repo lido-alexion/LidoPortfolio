@@ -347,6 +347,12 @@ class MlTrainingDatasetBuilder
         }
         $buckets = array_keys($bucketDates);
         sort($buckets);
+        $bucketStartDates = $bucketEndDates = [];
+        foreach ($buckets as $bucket) {
+            sort($bucketDates[$bucket]['dates']);
+            $bucketStartDates[$bucket] = $bucketDates[$bucket]['dates'][0];
+            $bucketEndDates[$bucket] = $bucketDates[$bucket]['dates'][array_key_last($bucketDates[$bucket]['dates'])];
+        }
         $bucketCount = count($buckets);
         if ($bucketCount < 3) {
             throw new RuntimeException('Insufficient chronological sampling buckets.');
@@ -362,15 +368,13 @@ class MlTrainingDatasetBuilder
         }
         $best = null;
         for ($trainEndIndex = 0; $trainEndIndex <= $bucketCount - 3; $trainEndIndex++) {
+            $validationMinimumLabelEnd = null;
             for ($validationEndIndex = $trainEndIndex + 1; $validationEndIndex <= $bucketCount - 2; $validationEndIndex++) {
-                $validationStart = $this->firstBucketDate($bucketDates, $buckets[$trainEndIndex + 1]);
-                $testStart = $this->firstBucketDate($bucketDates, $buckets[$validationEndIndex + 1]);
+                $validationStart = $bucketStartDates[$buckets[$trainEndIndex + 1]];
+                $testStart = $bucketStartDates[$buckets[$validationEndIndex + 1]];
                 $trainHasUsableRow = $prefixMinimumLabelEnd[$trainEndIndex] < $validationStart;
-                $validationMinimumLabelEnd = null;
-                for ($index = $trainEndIndex + 1; $index <= $validationEndIndex; $index++) {
-                    $candidate = $bucketDates[$buckets[$index]]['minimum_label_end'];
-                    $validationMinimumLabelEnd = $validationMinimumLabelEnd === null || $candidate < $validationMinimumLabelEnd ? $candidate : $validationMinimumLabelEnd;
-                }
+                $candidate = $bucketDates[$buckets[$validationEndIndex]]['minimum_label_end'];
+                $validationMinimumLabelEnd = $validationMinimumLabelEnd === null || $candidate < $validationMinimumLabelEnd ? $candidate : $validationMinimumLabelEnd;
                 $validationHasUsableRow = $validationMinimumLabelEnd !== null && $validationMinimumLabelEnd < $testStart;
                 if (! $trainHasUsableRow || ! $validationHasUsableRow) {
                     continue;
@@ -394,20 +398,13 @@ class MlTrainingDatasetBuilder
         $validationStartBucket = $buckets[$trainEndIndex + 1];
         $validationEndBucket = $buckets[$validationEndIndex];
         $testStartBucket = $buckets[$validationEndIndex + 1];
-        $firstDate = fn (string $bucket): string => $this->firstBucketDate($bucketDates, $bucket);
-        $lastDate = static function (array $bucketDates, string $bucket): string {
-            $dates = $bucketDates[$bucket]['dates'];
-            sort($dates);
-            return $dates[array_key_last($dates)];
-        };
-
         return [
-            'train_start' => $firstDate($buckets[0]),
-            'train_end' => $lastDate($bucketDates, $trainEndBucket),
-            'validation_start' => $firstDate($validationStartBucket),
-            'validation_end' => $lastDate($bucketDates, $validationEndBucket),
-            'test_start' => $firstDate($testStartBucket),
-            'test_end' => $lastDate($bucketDates, $buckets[array_key_last($buckets)]),
+            'train_start' => $bucketStartDates[$buckets[0]],
+            'train_end' => $bucketEndDates[$trainEndBucket],
+            'validation_start' => $bucketStartDates[$validationStartBucket],
+            'validation_end' => $bucketEndDates[$validationEndBucket],
+            'test_start' => $bucketStartDates[$testStartBucket],
+            'test_end' => $bucketEndDates[$buckets[array_key_last($buckets)]],
             'cutoff_date' => $cutoff->toDateString(),
             'split_basis' => 'chronological_monthly_sampling_buckets',
             'sampling_buckets' => $bucketPartitions,
@@ -429,13 +426,6 @@ class MlTrainingDatasetBuilder
                 'boundary_adjustment_score' => $best['score'],
             ],
         ];
-    }
-
-    private function firstBucketDate(array $bucketDates, string $bucket): string
-    {
-        $dates = $bucketDates[$bucket]['dates'];
-        sort($dates);
-        return $dates[0];
     }
 
     private function partitionForDate(string $date, array $partitions): string
@@ -1235,22 +1225,22 @@ class MlTrainingDatasetBuilder
         $equityLatest = isset($byKey['equity'][0]) ? (float) ($byKey['equity'][0]['value'] ?? 0) : null;
 
         return [
-            'roe' => $netIncome !== null && $equity ? ($netIncome / $equity) * 100 : null,
-            'debt_equity' => $debt !== null && $equity ? $debt / $equity : null,
-            'net_debt_equity' => $netDebt !== null && $equity && $equity != 0.0 ? $netDebt / $equity : null,
+            'roe' => $netIncome !== null && $equity !== null && $equity > 0 ? ($netIncome / $equity) * 100 : null,
+            'debt_equity' => $debt !== null && $equity !== null && $equity > 0 ? $debt / $equity : null,
+            'net_debt_equity' => $netDebt !== null && $equity !== null && $equity > 0 ? $netDebt / $equity : null,
             'revenue_growth' => $growth,
             'eps_growth_yoy' => $this->yoyGrowthPercent($epsSeries),
             'net_income_growth_yoy' => $this->yoyGrowthPercent($netIncomeSeries),
-            'operating_margin' => $revenueTtm && $operatingProfitTtm !== null ? ($operatingProfitTtm / $revenueTtm) * 100 : null,
-            'net_margin' => $revenueTtm && $netIncome !== null ? ($netIncome / $revenueTtm) * 100 : null,
-            'fcf_margin' => $revenueTtm && $fcfTtm !== null ? ($fcfTtm / $revenueTtm) * 100 : null,
+            'operating_margin' => $revenueTtm !== null && $revenueTtm > 0 && $operatingProfitTtm !== null ? ($operatingProfitTtm / $revenueTtm) * 100 : null,
+            'net_margin' => $revenueTtm !== null && $revenueTtm > 0 && $netIncome !== null ? ($netIncome / $revenueTtm) * 100 : null,
+            'fcf_margin' => $revenueTtm !== null && $revenueTtm > 0 && $fcfTtm !== null ? ($fcfTtm / $revenueTtm) * 100 : null,
             'ocf_to_net_income_ratio' => $netIncome !== null && $ocfTtm !== null && $netIncome != 0.0 ? $ocfTtm / $netIncome : null,
             'pe_ratio' => $close !== null && $epsTtm !== null && $epsTtm > 0 ? $close / $epsTtm : null,
             'pb_ratio' => $close !== null && $equityLatest !== null && $equityLatest > 0 ? $close / $equityLatest : null,
             'current_ratio' => $currentAssets !== null && $currentLiabilities !== null && $currentLiabilities > 0
                 ? $currentAssets / $currentLiabilities
                 : null,
-            'gross_margin' => $revenueTtm && $grossProfitTtm !== null ? ($grossProfitTtm / $revenueTtm) * 100 : null,
+            'gross_margin' => $revenueTtm !== null && $revenueTtm > 0 && $grossProfitTtm !== null ? ($grossProfitTtm / $revenueTtm) * 100 : null,
             ...$this->bankMetrics->metricsFromFactRows($facts, $asOf),
         ];
     }

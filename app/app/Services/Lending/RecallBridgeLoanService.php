@@ -10,6 +10,7 @@ use App\Models\RecallBridgeLoan;
 use App\Models\RecallBridgeLoanReturn;
 use App\Models\TradingStrategy;
 use App\Services\StockQuoteService;
+use App\Services\Strategy\StrategyLifecycleAdmission;
 use App\Services\Strategy\PortfolioCapitalAccountingService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -69,6 +70,27 @@ final class RecallBridgeLoanService
         if ((int) $bridgeLender->id === (int) $recall->lender_strategy_id) {
             throw ValidationException::withMessages([
                 'lender' => ['Bridge lender must differ from the recall lender.'],
+            ]);
+        }
+
+        return DB::transaction(function () use ($profile, $recall, $bridgeLender, $amount, $context) {
+        $lockedStrategies = app(StrategyLifecycleAdmission::class)->lockForNewObligation(
+            (int) $profile->id,
+            [(int) $recall->borrower_strategy_id, (int) $recall->lender_strategy_id, (int) $bridgeLender->id],
+        )->keyBy('id');
+        $lockedRecall = CapitalRecall::query()->whereKey($recall->id)->where('profile_id', $profile->id)
+            ->lockForUpdate()->firstOrFail();
+        if ((int) $lockedRecall->borrower_strategy_id !== (int) $recall->borrower_strategy_id
+            || (int) $lockedRecall->lender_strategy_id !== (int) $recall->lender_strategy_id) {
+            throw ValidationException::withMessages([
+                'recall' => ['Recall strategy ownership changed while the bridge was being prepared.'],
+            ]);
+        }
+        $recall = $lockedRecall;
+        $bridgeLender = $lockedStrategies->get((int) $bridgeLender->id);
+        if (! $bridgeLender) {
+            throw ValidationException::withMessages([
+                'lender' => ['Bridge lender no longer belongs to this portfolio.'],
             ]);
         }
 
@@ -135,6 +157,7 @@ final class RecallBridgeLoanService
         $this->notifications->bridgeCreated($profile, $loan);
 
         return $loan;
+        });
     }
 
     public function repay(RecallBridgeLoan $loan, float $amount, bool $postCash = true): RecallBridgeLoan

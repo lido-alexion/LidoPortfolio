@@ -4,6 +4,7 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -19,18 +20,28 @@ jobs:
     outputs:
       backend: ${{ steps.changed.outputs.backend }}
       frontend: ${{ steps.changed.outputs.frontend }}
+      deployable: ${{ steps.changed.outputs.deployable }}
       vps_health: ${{ steps.changed.outputs.vps_health }}
+      ci_watcher: ${{ steps.changed.outputs.ci_watcher }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}
           fetch-depth: 0
       - name: Classify changed files
         id: changed
         shell: bash
         run: |
           set -euo pipefail
+
+          # The backend scope includes app/scripts/**|app/tests/*.php (shared classifier below).
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            { echo "backend=true"; echo "frontend=true"; echo "deployable=true"; echo "vps_health=true"; echo "ci_watcher=true"; } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             git fetch --no-tags origin "${{ github.base_ref }}"
@@ -41,43 +52,14 @@ jobs:
             changed_files="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           fi
 
-          backend=false
-          frontend=false
-          vps_health=false
-
-          while IFS= read -r file; do
-            [[ -n "$file" ]] || continue
-
-            case "$file" in
-              app/scripts/vps-health/**|ops/vps-health/**)
-                vps_health=true
-                ;;
-            esac
-
-            case "$file" in
-              app/app/*|app/bootstrap/*|app/config/*|app/database/*|app/routes/*|app/scripts/**|app/tests/*.php|app/tests/**/*.php|app/composer.json|app/composer.lock|app/phpunit.xml|app/openapi/**|app/public/docs/openapi-v1.json|scripts/**|deploy/**|.github/workflows/*.yml|.github/workflows/*.yaml)
-                backend=true
-                ;;
-            esac
-
-            case "$file" in
-              app/resources/*|app/resources/**/*|app/tests/js/*|app/tests/js/**/*|app/tests/e2e/**|docs/user-journeys/**|app/package.json|app/package-lock.json|app/scripts/write-build-info.mjs|app/tsconfig.json|app/vite.config.js|app/vitest.config.js|scripts/**|.github/workflows/*.yml|.github/workflows/*.yaml)
-                frontend=true
-                ;;
-            esac
-          done <<< "$changed_files"
-
-          {
-            echo "backend=$backend"
-            echo "frontend=$frontend"
-            echo "vps_health=$vps_health"
-          } >> "$GITHUB_OUTPUT"
+          scope="$(printf '%s\n' "$changed_files" | python3 scripts/ci_release_contract.py classify)"
+          printf '%s\n' "$scope" >> "$GITHUB_OUTPUT"
 
   backend:
     name: PHPUnit (PHP 8.4)
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.backend == 'true' && (github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master'))
+    if: needs.changes.outputs.backend == 'true' && (github.event_name == 'pull_request' || ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/master'))
     timeout-minutes: 30
     services:
       mysql:
@@ -100,6 +82,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -121,8 +104,8 @@ jobs:
     name: Frontend tests and production build (Node 22)
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.frontend == 'true' && (github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master'))
-    timeout-minutes: 30
+    if: needs.changes.outputs.frontend == 'true' && (github.event_name == 'pull_request' || ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/master'))
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: app
@@ -131,6 +114,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
@@ -160,12 +144,33 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Run focused VPS health tests
         run: python -m unittest discover -s ops/vps-health/tests -v
+
+  ci-followup-watcher:
+    name: CI follow-up watcher tests (Python 3.12)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.ci_watcher == 'true'
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Run focused watcher tests
+        working-directory: ops/ci-followup-watcher
+        run: python -m unittest discover -s tests -v
 
   ai-runtime:
     name: Python AI and FastMCP contracts
@@ -176,6 +181,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -186,3 +192,159 @@ jobs:
         run: python -m pip install -r ai-runtime/requirements.lock -e ./ai-runtime
       - name: Verify private AI runtime and FastMCP
         run: python -m pytest ai-runtime/tests -q
+
+  package:
+    name: Package release artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    if: |
+      always() &&
+      github.ref == 'refs/heads/master' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      needs.changes.outputs.deployable == 'true' &&
+      (needs.backend.result == 'success' || needs.backend.result == 'skipped') &&
+      (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') &&
+      (needs['vps-health'].result == 'success' || needs['vps-health'].result == 'skipped') &&
+      (needs['ci-followup-watcher'].result == 'success' || needs['ci-followup-watcher'].result == 'skipped') &&
+      needs['ai-runtime'].result == 'success'
+    needs:
+      - changes
+      - backend
+      - frontend
+      - vps-health
+      - ci-followup-watcher
+      - ai-runtime
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Validate exact trusted candidate and canonical check outcomes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref }}
+          CANDIDATE_SHA: ${{ github.sha }}
+          DEPLOYABLE: ${{ needs.changes.outputs.deployable }}
+          BACKEND_APPLICABLE: ${{ needs.changes.outputs.backend }}
+          FRONTEND_APPLICABLE: ${{ needs.changes.outputs.frontend }}
+          VPS_HEALTH_APPLICABLE: ${{ needs.changes.outputs.vps_health }}
+          CI_WATCHER_APPLICABLE: ${{ needs.changes.outputs.ci_watcher }}
+          AI_RUNTIME_RESULT: ${{ needs['ai-runtime'].result }}
+          BACKEND_RESULT: ${{ needs.backend.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          VPS_HEALTH_RESULT: ${{ needs['vps-health'].result }}
+          CI_WATCHER_RESULT: ${{ needs['ci-followup-watcher'].result }}
+        run: CHECKED_OUT_SHA="$(git rev-parse HEAD)" python3 ../scripts/ci_release_contract.py gate
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: bcmath, curl, dom, fileinfo, gd, intl, mbstring, opentelemetry, pdo_mysql, pdo_sqlite, tokenizer, xml, zip
+          coverage: none
+          tools: composer
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install production Composer dependencies
+        run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-progress
+
+      - name: Install npm dependencies
+        run: npm ci --registry=https://registry.npmjs.org
+
+      - name: Write build metadata
+        env:
+          BUILD_ID: build-${{ github.run_number }}-attempt-${{ github.run_attempt }}-${{ github.sha }}
+        run: node scripts/write-build-info.mjs
+
+      - name: Build production assets for VPS root
+        env:
+          VITE_APP_BASE: /build/
+          VITE_LIDO_TELEMETRY_ENABLED: 'true'
+          VITE_LIDO_TELEMETRY_OTLP_TRACES_ENDPOINT: /api/telemetry/otlp/v1/traces
+          VITE_LIDO_TELEMETRY_SERVICE_NAME: stox
+          VITE_LIDO_TELEMETRY_SERVICE_VERSION: v8
+          VITE_LIDO_TELEMETRY_ENVIRONMENT: production
+        run: npm run build
+
+      - name: Stage repository runtime modules
+        run: |
+          rm -rf shared
+          if [[ -d ../shared ]]; then
+            cp -a ../shared ./shared
+          fi
+
+      - name: Stage reviewed ML acceptance deployment files
+        run: |
+          install -D -m 0644 ../deploy/systemd/stoxla-ml-acceptance.service.d/20-private-source-access.conf \
+            ./deploy/systemd/stoxla-ml-acceptance.service.d/20-private-source-access.conf
+          install -D -m 0755 ../deploy/scripts/stoxla-ml-acceptance-worker-preflight.sh \
+            ./deploy/scripts/stoxla-ml-acceptance-worker-preflight.sh
+
+      - name: Create release archive
+        run: |
+          tar \
+            --exclude='./.env' \
+            --exclude='./node_modules' \
+            --exclude='./storage' \
+            --exclude='./public/storage' \
+            --exclude='./public/hot' \
+            -czf ../stoxla-release.tgz .
+
+      - name: Verify release archive contents
+        run: |
+          python3 - ../stoxla-release.tgz <<'PY'
+          import hashlib
+          import pathlib
+          import sys
+          import tarfile
+
+          archive_path = pathlib.Path(sys.argv[1])
+          expected = {
+              "deploy/systemd/stoxla-ml-acceptance.service.d/20-private-source-access.conf": ("../deploy/systemd/stoxla-ml-acceptance.service.d/20-private-source-access.conf", False),
+              "deploy/scripts/stoxla-ml-acceptance-worker-preflight.sh": ("../deploy/scripts/stoxla-ml-acceptance-worker-preflight.sh", True),
+              "deploy/python/fundamentals-requirements.txt": ("deploy/python/fundamentals-requirements.txt", False),
+              "deploy/python/ml-requirements.txt": ("deploy/python/ml-requirements.txt", False),
+              "deploy/scripts/stoxla-run-fundamentals-bootstrap.sh": ("deploy/scripts/stoxla-run-fundamentals-bootstrap.sh", True),
+          }
+
+          with tarfile.open(archive_path, "r:gz") as archive:
+              members = {member.name.removeprefix("./"): member for member in archive.getmembers()}
+              for archive_name, (source_name, executable) in expected.items():
+                  member = members.get(archive_name)
+                  if member is None or not member.isfile():
+                      raise SystemExit(f"release archive is missing regular file {archive_name}")
+                  source = pathlib.Path(source_name).read_bytes()
+                  content = archive.extractfile(member).read()
+                  if hashlib.sha256(content).digest() != hashlib.sha256(source).digest():
+                      raise SystemExit(f"release archive hash mismatch for {archive_name}")
+                  if bool(member.mode & 0o111) != executable:
+                      raise SystemExit(f"release archive executable mode mismatch for {archive_name}")
+          print("release archive paths, hashes, modes and existing deployment assets verified")
+          PY
+
+      - name: Upload release archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: stoxla-release-${{ github.sha }}
+          path: stoxla-release.tgz
+          if-no-files-found: error
+          retention-days: 14
+
+  deploy:
+    name: Deploy to VPS
+    needs:
+      - package
+    if: always() && needs.package.result == 'success'
+    uses: ./.github/workflows/deploy-stoxla-production.yml
+    secrets: inherit

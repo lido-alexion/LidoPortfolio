@@ -6,6 +6,7 @@ use App\Engines\Evaluation\EvaluationEngine;
 use App\Engines\Evaluation\EvaluationParameterResolver;
 use App\Engines\Support\ApiEnvelope;
 use App\Http\Controllers\Controller;
+use App\Models\TradingStrategy;
 use App\Services\StrategyConfigurationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,6 +22,13 @@ class EvaluationController extends Controller
     public function evaluationRunsStore(): JsonResponse
     {
         $profile = \activePortfolio();
+
+        $hasStrategies = TradingStrategy::query()->where('profile_id', $profile->id)->exists();
+        $hasEnabledStrategy = TradingStrategy::query()->where('profile_id', $profile->id)
+            ->where('status', TradingStrategy::STATUS_ACTIVE)->exists();
+        if ($hasStrategies && ! $hasEnabledStrategy) {
+            return ApiEnvelope::error('NO_ENABLED_STRATEGY', 'Enable a strategy before starting a new evaluation run.', 422);
+        }
 
         try {
             $version = $this->strategies->ensureActive($profile);

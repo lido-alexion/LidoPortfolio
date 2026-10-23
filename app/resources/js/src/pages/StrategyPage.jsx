@@ -1,11 +1,14 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
+import { getActivePortfolioId } from '../portfolio/activePortfolioStorage';
 import { DataTableCard } from '../components/DataTable';
 import NumberInput from '../components/NumberInput';
 import AIStrategyPromptBuilder from '../components/strategy/AIStrategyPromptBuilder';
 import CreateStrategyPanel, { createdArtifactPath, createdStrategyId } from '../components/strategy/CreateStrategyPanel';
 import useApiGet from '../hooks/useApiGet';
+import usePortfolioChanged from '../hooks/usePortfolioChanged';
+import { usePortfolio } from '../context/PortfolioContext';
 import { runApiMutation } from '../hooks/useApiMutation';
 import { showToast } from '../toast';
 import {
@@ -163,6 +166,7 @@ function applyPayload(payload, setMeta, setConfig) {
         description: payload.description || '',
         modified_at: payload.modified_at,
         status: payload.status,
+        is_enabled: Boolean(payload.is_enabled),
         enabled_indicator_count: payload.enabled_indicator_count ?? payload.enabled_factor_count,
         weight_total: payload.weight_total,
         weights_valid: payload.weights_valid,
@@ -210,11 +214,17 @@ function strategyListLabel(row) {
 export default function StrategyPage() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
+    const { activePortfolio } = usePortfolio();
     const strategyId = searchParams.get('strategy_id') || '';
     const screenerCreatedId = searchParams.get(STRATEGY_SCREENER_CREATED_PARAM) || '';
     const screenerReturn = searchParams.get(STRATEGY_SCREENER_RETURN_PARAM) || '';
+    const strategyReadSequence = useRef(0);
+    const requestContextRef = useRef(null);
+    const currentPortfolioId = activePortfolio?.id == null ? null : String(activePortfolio.id);
+    requestContextRef.current = { strategyId, portfolioId: currentPortfolioId };
     const [section, setSection] = useState('general');
     const [saving, setSaving] = useState(false);
+    const [strategyLoadPending, setStrategyLoadPending] = useState(true);
     const [availableScreeners, setAvailableScreeners] = useState([]);
     const [strategyOptions, setStrategyOptions] = useState([]);
     const [meta, setMeta] = useState({
@@ -225,57 +235,102 @@ export default function StrategyPage() {
     const [benchmarkIndexes, setBenchmarkIndexes] = useState([]);
     const [showCreate, setShowCreate] = useState(false);
     const [lifecycleBusy, setLifecycleBusy] = useState(false);
+    const [archiveBlockers, setArchiveBlockers] = useState([]);
 
     const { loading, reload: load } = useApiGet({
-        deps: [strategyId, screenerCreatedId, screenerReturn],
+        // Return parameters are consumed by the current load. Removing them from
+        // the URL must not start a second server hydration over the restored draft.
+        // Wait for PortfolioProvider to resolve an initially empty selection, and
+        // reload when its real active profile changes. Do not bind request enablement
+        // to PortfolioProvider's background loading flag: same-profile refreshes
+        // must not rehydrate over an unsaved Strategy draft.
+        deps: [strategyId, currentPortfolioId],
+        enabled: Boolean(currentPortfolioId),
         errorFallback: 'Failed to load strategy',
         request: async () => {
-            const [{ data }, screenersRes, indexesRes, registryRes] = await Promise.all([
-                api.get('/v1/strategy', {
-                    params: strategyId ? { strategy_id: strategyId } : {},
-                    skipErrorToast: true,
-                }),
-                api.get('/screeners', { skipErrorToast: true }).catch(() => ({ data: [] })),
-                api.get('/indexes', { skipErrorToast: true }).catch(() => ({ data: {} })),
-                api.get('/v1/strategy-registry', { skipErrorToast: true }).catch(() => ({ data: { data: [] } })),
-            ]);
-            applyPayload(data?.data || {}, setMeta, setConfig);
-            const rows = Array.isArray(registryRes.data?.data) ? registryRes.data.data : [];
-            setStrategyOptions(rows);
-            const list = Array.isArray(screenersRes?.data?.data)
-                ? screenersRes.data.data
-                : (Array.isArray(screenersRes?.data) ? screenersRes.data : []);
-            setAvailableScreeners(list.filter((screener) => screener.artifact_status !== 'archived'));
-            setBenchmarkIndexes(indexesRes?.data?.data?.indexes || []);
+            const requestSequence = ++strategyReadSequence.current;
+            const requestedStrategyId = strategyId;
+            const requestedPortfolioId = currentPortfolioId;
+            const requestStillOwnsContext = () => (
+                requestSequence === strategyReadSequence.current
+                && String(requestContextRef.current?.strategyId ?? '') === String(requestedStrategyId ?? '')
+                && String(requestContextRef.current?.portfolioId ?? '') === String(requestedPortfolioId ?? '')
+                && String(getActivePortfolioId() ?? '') === String(requestedPortfolioId ?? '')
+            );
+            setStrategyLoadPending(true);
+            try {
+                const [{ data }, screenersRes, indexesRes, registryRes] = await Promise.all([
+                    api.get('/v1/strategy', {
+                        params: strategyId ? { strategy_id: strategyId } : {},
+                        skipErrorToast: true,
+                    }),
+                    api.get('/screeners', { skipErrorToast: true }).catch(() => ({ data: [] })),
+                    api.get('/indexes', { skipErrorToast: true }).catch(() => ({ data: {} })),
+                    api.get('/v1/strategy-registry', { skipErrorToast: true }).catch(() => ({ data: { data: [] } })),
+                ]);
+                if (!requestStillOwnsContext()) return data?.data;
 
-            const effectiveStrategyId = strategyId || String(data?.data?.strategy_id ?? data?.data?.id ?? '');
-            const shouldRestoreDraft = Boolean(screenerCreatedId)
-                || screenerReturn === STRATEGY_SCREENER_RETURN_CANCEL;
-            const draft = shouldRestoreDraft ? readStrategyScreenerReturnDraft() : null;
-            if (draft && String(draft.strategyId) === String(effectiveStrategyId)) {
-                setMeta(draft.meta);
-                let nextConfig = draft.config;
-                if (screenerCreatedId) {
-                    const scr = list.find((s) => Number(s.id) === Number(screenerCreatedId));
-                    nextConfig = configWithEligibilityScreener(nextConfig, screenerCreatedId, {
-                        name: scr?.name,
-                        description: scr?.description,
-                    });
-                    showToast(`“${scr?.name || 'Screener'}” added to eligibility sources.`, 'success');
-                } else {
-                    showToast('Returned to Strategy editor with your unsaved changes.', 'info');
+                const payload = data?.data || {};
+                applyPayload(payload, setMeta, setConfig);
+                const rows = Array.isArray(registryRes.data?.data) ? registryRes.data.data : [];
+                setStrategyOptions(rows);
+                const list = Array.isArray(screenersRes?.data?.data)
+                    ? screenersRes.data.data
+                    : (Array.isArray(screenersRes?.data) ? screenersRes.data : []);
+                setAvailableScreeners(list.filter((screener) => screener.artifact_status !== 'archived'));
+                setBenchmarkIndexes(indexesRes?.data?.data?.indexes || []);
+
+                const effectiveStrategyId = strategyId || String(payload.strategy_id ?? payload.id ?? '');
+                const shouldRestoreDraft = Boolean(screenerCreatedId)
+                    || screenerReturn === STRATEGY_SCREENER_RETURN_CANCEL;
+                const draft = shouldRestoreDraft ? readStrategyScreenerReturnDraft() : null;
+                const activePortfolioId = getActivePortfolioId();
+                const draftMatchesCurrentContext = draft
+                    && String(draft.strategyId) === String(effectiveStrategyId)
+                    && draft.portfolioId != null
+                    && String(draft.portfolioId) === String(requestedPortfolioId)
+                    && String(draft.portfolioId) === String(activePortfolioId);
+
+                if (shouldRestoreDraft && draft && !draftMatchesCurrentContext) {
+                    clearStrategyScreenerReturnDraft();
                 }
-                setConfig(nextConfig);
-                if (draft.section) setSection(draft.section);
-                clearStrategyScreenerReturnDraft();
-                if (effectiveStrategyId) {
+                if (draftMatchesCurrentContext) {
+                    setMeta({
+                        ...draft.meta,
+                        id: payload.id ?? payload.strategy_id ?? draft.meta.id,
+                        status: payload.status,
+                        is_enabled: Boolean(payload.is_enabled),
+                        setup_required: Boolean(payload.setup_required),
+                        readiness: payload.readiness || null,
+                        reusable_artifact_uuid: payload.reusable_artifact_uuid,
+                        compatibility_read_only: Boolean(payload.compatibility_read_only),
+                    });
+                    let nextConfig = draft.config;
+                    if (screenerCreatedId) {
+                        const scr = list.find((s) => Number(s.id) === Number(screenerCreatedId));
+                        nextConfig = configWithEligibilityScreener(nextConfig, screenerCreatedId, {
+                            name: scr?.name,
+                            description: scr?.description,
+                        });
+                        showToast(`“${scr?.name || 'Screener'}” added to eligibility sources.`, 'success');
+                    } else {
+                        showToast('Returned to Strategy editor with your unsaved changes.', 'info');
+                    }
+                    setConfig(nextConfig);
+                    if (draft.section) setSection(draft.section);
+                    clearStrategyScreenerReturnDraft();
+                }
+                if (shouldRestoreDraft && effectiveStrategyId) {
                     navigate(`/strategy?strategy_id=${encodeURIComponent(effectiveStrategyId)}`, { replace: true });
                 }
-            }
 
-            return data?.data;
+                return data?.data;
+            } finally {
+                if (requestStillOwnsContext()) setStrategyLoadPending(false);
+            }
         },
     });
+    usePortfolioChanged(load);
 
     const grouped = useMemo(() => {
         const map = {};
@@ -872,6 +927,7 @@ export default function StrategyPage() {
         }
         writeStrategyScreenerReturnDraft({
             strategyId: sid,
+            portfolioId: getActivePortfolioId(),
             meta,
             config,
             section: 'eligibility',
@@ -881,19 +937,15 @@ export default function StrategyPage() {
         );
     };
 
-    if (loading) {
+    if (loading || strategyLoadPending || !currentPortfolioId) {
         return <div className="container-fluid py-3 text-muted">Loading strategy…</div>;
     }
 
     const selectedStrategyId = strategyId || (meta.id != null ? String(meta.id) : '');
-    const enabledCount = strategyOptions.filter((row) => {
-        const status = row?.metadata?.status || row?.status || '';
-        return Boolean(row?.metadata?.is_enabled || row?.metadata?.is_selected || status === 'active');
-    }).length;
     const currentStatus = meta.status || '';
     const currentEnabled = currentStatus === 'active';
     const compatibilityReadOnly = Boolean(meta.compatibility_read_only);
-    const canArchive = currentEnabled && enabledCount > 1;
+    const isArchived = currentStatus === 'archived';
     const onSelectStrategy = (nextId) => {
         if (!nextId || nextId === selectedStrategyId) return;
         navigate(`/strategy?strategy_id=${encodeURIComponent(nextId)}`);
@@ -915,15 +967,45 @@ export default function StrategyPage() {
         }
     };
 
-    const onArchiveCurrent = async () => {
+    const onDisableCurrent = async () => {
         const id = selectedStrategyId;
-        if (!id || !canArchive) return;
-        if (!window.confirm(
-            'Archive this strategy? It will stop generating recommendations. Other enabled strategies stay enabled. Past holdings/recommendations keep their attribution.',
-        )) return;
+        if (!id || !window.confirm('Pause this strategy? New recommendations and future strategy runs stop. Existing holdings, orders, executions and settlement remain available. No automatic sell, cancellation or fund release occurs.')) return;
         setLifecycleBusy(true);
         try {
-            await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/archive`);
+            await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/disable`);
+            showToast('Strategy paused. Existing work remains available.');
+            await load();
+        } catch (err) {
+            showToast(err?.response?.data?.error?.message || err.message || 'Disable failed', 'danger');
+        } finally {
+            setLifecycleBusy(false);
+        }
+    };
+
+    const onRestoreCurrent = async () => {
+        const id = selectedStrategyId;
+        if (!id) return;
+        setLifecycleBusy(true);
+        try {
+            await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/restore`);
+            showToast('Strategy restored as disabled. Enable it explicitly after reviewing readiness.');
+            await load();
+        } catch (err) {
+            showToast(err?.response?.data?.error?.message || err.message || 'Restore failed', 'danger');
+        } finally {
+            setLifecycleBusy(false);
+        }
+    };
+
+    const onArchiveCurrent = async () => {
+        const id = selectedStrategyId;
+        if (!id || isArchived) return;
+        const reason = window.prompt(`Why are you retiring “${meta.name || 'this strategy'}”? The reason remains with the read-only history.`)?.trim();
+        if (!reason || reason.length < 3) return;
+        setLifecycleBusy(true);
+        setArchiveBlockers([]);
+        try {
+            await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/archive`, { reason });
             showToast(`“${meta.name}” archived.`);
             const remaining = strategyOptions.find((row) => {
                 const rid = strategyListId(row);
@@ -939,6 +1021,7 @@ export default function StrategyPage() {
             }
         } catch (err) {
             showToast(err?.response?.data?.error?.message || err.message || 'Archive failed', 'danger');
+            setArchiveBlockers(err?.response?.data?.meta?.blockers || []);
         } finally {
             setLifecycleBusy(false);
         }
@@ -973,7 +1056,7 @@ export default function StrategyPage() {
                     <Link className="btn btn-outline-secondary btn-sm" to="/screeners">Screeners</Link>
                     <Link className="btn btn-outline-secondary btn-sm" to="/recommendations">Recommendations</Link>
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load}>Refresh</button>
-                    <button type="button" className="btn btn-primary btn-sm" onClick={save} disabled={saving || compatibilityReadOnly}>
+                    <button type="button" className="btn btn-primary btn-sm" onClick={save} disabled={saving || compatibilityReadOnly || isArchived}>
                         {saving ? 'Saving…' : 'Save'}
                     </button>
                 </div>
@@ -1052,7 +1135,7 @@ export default function StrategyPage() {
                             </div>
                         </div>
                         <div className="col-md-6 col-lg-7 d-flex flex-wrap gap-2 align-items-end">
-                            {!currentEnabled && selectedStrategyId ? (
+                            {!currentEnabled && !isArchived && selectedStrategyId ? (
                                 <button
                                     type="button"
                                     id="strategy-editor-enable"
@@ -1064,20 +1147,20 @@ export default function StrategyPage() {
                                     Enable
                                 </button>
                             ) : null}
-                            {currentEnabled ? (
+                            {currentEnabled ? <button type="button" className="btn btn-outline-warning btn-sm" disabled={lifecycleBusy || compatibilityReadOnly} onClick={onDisableCurrent}>Disable</button> : null}
+                            {!isArchived && selectedStrategyId ? (
                                 <button
                                     type="button"
                                     id="strategy-editor-archive"
                                     className="btn btn-outline-secondary btn-sm"
-                                    disabled={lifecycleBusy || compatibilityReadOnly || !canArchive}
-                                    title={!canArchive
-                                        ? 'Enable another strategy before archiving the last enabled one'
-                                        : 'Archive this strategy'}
+                                    disabled={lifecycleBusy || compatibilityReadOnly}
+                                    title="Archive after all strategy-owned work is resolved"
                                     onClick={onArchiveCurrent}
                                 >
-                                    Archive
+                                    Retire
                                 </button>
                             ) : null}
+                            {isArchived ? <button type="button" className="btn btn-outline-primary btn-sm" disabled={lifecycleBusy} onClick={onRestoreCurrent}>Restore as disabled</button> : null}
                         </div>
                     </div>
                     <div className="row g-2 align-items-start">
@@ -1120,7 +1203,14 @@ export default function StrategyPage() {
                     </div>
                 </div>
             </div>
+            {archiveBlockers.length > 0 && (
+                <div className="alert alert-warning" role="alert">
+                    <strong>Resolve these records before retiring:</strong>
+                    <ul className="mb-0 mt-2">{archiveBlockers.map((blocker) => <li key={blocker.code}>{blocker.label} ({blocker.count}) — <Link to={blocker.href}>Open resolution view</Link></li>)}</ul>
+                </div>
+            )}
 
+            <fieldset disabled={isArchived} className="border-0 p-0 m-0">
             <AIStrategyPromptBuilder />
 
             <div className="btn-group flex-wrap mb-3" role="group">
@@ -1255,8 +1345,9 @@ export default function StrategyPage() {
                             ['watch', 'Watch'],
                         ].map(([key, label]) => (
                             <div className="col-md-4" key={key}>
-                                <label className="form-label">{label}</label>
+                                <label className="form-label" htmlFor={`strategy-threshold-${key}`}>{label}</label>
                                 <NumberInput
+                                    id={`strategy-threshold-${key}`}
                                     step="1"
                                     allowDecimals={false}
                                     buttonVariant="secondary"
@@ -1605,6 +1696,7 @@ export default function StrategyPage() {
                     })()}
                 </div>
             )}
+            </fieldset>
         </div>
     );
 }

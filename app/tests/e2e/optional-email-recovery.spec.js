@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { handleApiFailureDiagnosticForPage, registerApiFailureDiagnosticFixtureHooks } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticFixtureHooks(test);
 
 for (const viewport of [{ name: 'mobile', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 900 }]) {
     test(`E2E-17 retries optional email preference saving and retains categories, delivery and quiet hours (${viewport.name})`, async ({ page }, testInfo) => {
@@ -17,8 +20,9 @@ for (const viewport of [{ name: 'mobile', width: 390, height: 844 }, { name: 'de
             prefs = body; return r.fulfill({ json: { data: prefs } });
         });
         const rejected = [];
-        await page.route('**/*', r => {
+        await page.route('**/*', async r => {
             const q = r.request(); const url = new URL(q.url());
+            if (await handleApiFailureDiagnosticForPage(r, page, 'http://127.0.0.1:4177')) return;
             const allowed = ['GET', 'HEAD'].includes(q.method()) || (q.method() === 'PUT' && url.pathname === '/api/notification-settings/optional-emails') || (q.method() === 'POST' && url.pathname === '/api/logs/frontend');
             if (url.origin !== 'http://127.0.0.1:4177' || !allowed) { rejected.push(`${q.method()} ${url.pathname}`); return r.abort(); }
             return r.fallback();

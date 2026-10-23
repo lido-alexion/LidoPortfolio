@@ -47,6 +47,14 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->bind(\App\Services\Fundamentals\Scheduling\BootstrapScheduleLaunchAdapter::class,
+            \App\Services\Fundamentals\Scheduling\CanonicalBootstrapScheduleLaunchAdapter::class);
+        $this->app->bind(\App\Services\Fundamentals\Scheduling\BootstrapEligibleStockResolver::class, function ($app) {
+            return new class($app->make(\App\Services\Fundamentals\FundamentalBootstrapService::class)) implements \App\Services\Fundamentals\Scheduling\BootstrapEligibleStockResolver {
+                public function __construct(private \App\Services\Fundamentals\FundamentalBootstrapService $engine) {}
+                public function eligibleStockIds(array $requestedIds): array { return $this->engine->eligibleStockIds($requestedIds); }
+            };
+        });
         $this->app->tag([
             DashboardSummaryExportProvider::class,
             PortfolioSnapshotExportProvider::class,

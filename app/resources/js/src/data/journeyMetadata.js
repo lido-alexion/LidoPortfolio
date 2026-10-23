@@ -856,12 +856,13 @@ export const JOURNEY_TOPICS = Object.freeze([
     "route": "/settings/ml-scoring",
     "guide": "/docs/journeys/05-end-to-end.html#e2e-08-admin-production-ml-acceptance",
     "steps": [
-      "As StoX Admin, open Settings → ML Scoring (`/settings/ml-scoring`) and refresh Production ML acceptance. Unknown evidence remains blocking.",
-      "Queue campaign preflight for the desired cutoff; inspect each horizon's exact required source dates and blocking reasons.",
-      "Upload official dated NSE CSV/ZIP sources in the private upload panel. Reselect the identical file to resume an incomplete upload. Refresh to see queued validation results; resume queued validation after interrupted dispatch if needed.",
-      "Select sealed sources, queue a backfill dry-run, and review each date's mapping and provenance. Apply only after preview succeeds. Save the backfill ID to reopen status, resume completed progress, or cancel between dates.",
-      "Create a fresh campaign preflight after resolving blockers. When all three horizons pass, explicitly choose Start 1m/3m/6m training.",
-      "Refresh progress and inspect linked run, feature coverage/exclusion, calibration, fold, baseline and candidate evidence. Cancel requests cancellation through the existing training controls."
+      "As StoX Admin, open Settings → ML Scoring (`/settings/ml-scoring`). The seven-step wizard reloads saved server state; refresh is read-only and unknown evidence stays blocking.",
+      "Check the build, registry, configuration, migrations and dedicated queue readiness. Run discovery preflight for the desired cutoff; inspect the three horizon cards and the exact missing dates. Preflight prepares/checks datasets but does not train.",
+      "For each required date, select the official NSE source family and local CSV or single-CSV ZIP. Upload and validation remain explicit; reselect the identical file to resume an incomplete upload. StoX does not fetch an archive URL.",
+      "Select one sealed, matching source for every required date and run the safe preview. Review per-date mapping and provenance evidence. Confirm Apply only after the preview completes successfully; conflicting or unproven history remains blocked and is not overwritten.",
+      "After an apply, run a fresh final preflight. Continue only when all 1m/3m/6m horizons are ready. Changed inputs require fresh server evidence.",
+      "Confirm the cutoff, build and configuration before explicitly starting the three candidate runs. Progress is durable; refresh or reopen the page to recover. Cancel uses the existing campaign/training cancellation controls and retains completed evidence.",
+      "Review production qualification separately from candidate quality. Promotion, active models, lifecycle, schedules and drift remain separate explicit decisions; finishing the wizard only collapses the review."
     ],
     "prerequisites": [],
     "warnings": []
@@ -4032,26 +4033,27 @@ export const JOURNEY_TOPICS = Object.freeze([
   },
   {
     "id": "STR-14",
-    "title": "How do I archive or disable a strategy?",
+    "title": "How do I pause, retire, or restore a strategy?",
     "aliases": [
-      "Archive or disable a strategy",
+      "Pause, retire, or restore a strategy",
       "str-14"
     ],
     "keywords": [
-      "archive",
-      "disable",
+      "pause",
+      "retire",
+      "restore",
       "strategy"
     ],
     "synonyms": [],
     "category": "Strategies",
     "route": "/strategy/registry",
-    "guide": "/docs/journeys/02-strategies.html#str-14-archive-or-disable-a-strategy",
+    "guide": "/docs/journeys/02-strategies.html#str-14-pause-retire-or-restore-a-strategy",
     "steps": [
       "Open `/strategy/registry`.",
-      "Select the strategy to retire.",
-      "Check for live recommendations, pending execution and owned holdings that need deliberate handling.",
-      "Use the supported disable/archive lifecycle action.",
-      "Confirm the strategy is no longer enabled for future runs."
+      "Select the strategy. Disable is available at any time and pauses new recommendations and future strategy runs. It does not sell, cancel orders, release reservations, or change holdings, orders, execution, or settlement. Configuration stays editable; Enable resumes only after normal readiness checks.",
+      "To Retire, enter a reason. If the server reports blockers, follow each existing resolution link and finish the owned work through its normal workflow. Archive is allowed only after the strategy has no open owned holdings, actionable recommendations, pending executions/orders, reserved funds, or unsettled obligations.",
+      "Retired configuration is read-only. Its reason, versions, recommendations, transactions and ownership attribution remain available as history.",
+      "Restore changes a retired strategy to Disabled. Select Enable separately to run existing readiness checks."
     ],
     "prerequisites": [],
     "warnings": []

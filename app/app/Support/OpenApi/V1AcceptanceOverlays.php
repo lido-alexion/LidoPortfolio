@@ -11,6 +11,7 @@ final class V1AcceptanceOverlays
     {
         $operations = [
             'GET ' => [200, 'Inspect production acceptance evidence'],
+            'GET /wizard' => [200, 'Reconstruct production acceptance wizard state'],
             'GET /sources' => [200, 'List private source manifests (25 per page)'],
             'POST /sources' => [201, 'Create a private source manifest'],
             'GET /sources/{source}' => [200, 'Inspect a private source manifest'],
@@ -45,9 +46,12 @@ final class V1AcceptanceOverlays
             ],
             'POST /backfills/preview' => [
                 'sources' => ['type' => 'array', 'minItems' => 1, 'maxItems' => 5000, 'uniqueItems' => true, 'items' => ['type' => 'string', 'format' => 'uuid']],
+                'campaign_id' => ['type' => 'string', 'format' => 'uuid', 'nullable' => true, 'description' => 'Source-remediation campaign whose exact missing dates this preview addresses.'],
             ],
             'POST /campaigns' => [
                 'cutoff_date' => ['type' => 'string', 'format' => 'date', 'description' => 'Not later than today.'],
+                'final_preflight' => ['type' => 'boolean', 'description' => 'Records an explicit final-preflight intent.'],
+                'remediation_backfill_id' => ['type' => 'integer', 'nullable' => true, 'description' => 'Completed applied source remediation linked to the prior campaign.'],
             ],
         ];
         $overlays = [];
@@ -89,8 +93,14 @@ final class V1AcceptanceOverlays
                 }];
             }
             if (isset($bodies[$suffix])) {
+                $required = array_keys($bodies[$suffix]);
+                if ($suffix === 'POST /backfills/preview') {
+                    $required = ['sources'];
+                } elseif ($suffix === 'POST /campaigns') {
+                    $required = ['cutoff_date'];
+                }
                 $overlay['requestBody'] = ['required' => true, 'content' => ['application/json' => ['schema' => [
-                    'type' => 'object', 'required' => array_keys($bodies[$suffix]), 'properties' => $bodies[$suffix],
+                    'type' => 'object', 'required' => $required, 'properties' => $bodies[$suffix],
                 ]]]];
             }
             if ($suffix === 'GET /sources') {
@@ -98,6 +108,7 @@ final class V1AcceptanceOverlays
             }
             $overlays[$method.' /api/v1/admin/ml/acceptance'.$path] = $overlay;
         }
+        $overlays['GET /api/v1/admin/ml/acceptance/wizard']['description'] = 'Read-only aggregate of the current persisted acceptance campaign, its campaign-linked source/backfill remediation state, horizon evidence and authoritative evidence_current result. This endpoint does not dispatch work, probe Python, or mutate settings.';
 
         return $overlays;
     }

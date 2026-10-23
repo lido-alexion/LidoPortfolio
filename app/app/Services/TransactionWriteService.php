@@ -176,6 +176,7 @@ class TransactionWriteService
         ?User $user = null,
         bool $applyCash = true,
     ): Transaction {
+        $this->lockLifecycleOwner($profile, $input);
         $transaction = $this->insert($profile, $stock, $input);
         $this->applyLedgerDerivedState($profile, $stock);
         if ($applyCash) {
@@ -205,6 +206,7 @@ class TransactionWriteService
         }
 
         $normalized = $this->normalizeInput($profile, $stock, $input, $transaction);
+        $this->lockLifecycleOwner($profile, ['owner_key' => $normalized['owner_key']]);
         $oldStockId = (int) $transaction->stock_id;
 
         if ($applyCash) {
@@ -252,6 +254,25 @@ class TransactionWriteService
         }
 
         return $transaction;
+    }
+
+    /** Lock the exact strategy owner before creating or changing an owned holding. */
+    private function lockLifecycleOwner(PortfolioProfile $profile, array $input): void
+    {
+        $strategyId = null;
+        $recommendationId = (int) ($input['recommendation_id'] ?? 0);
+        if ($recommendationId > 0) {
+            $recommendation = TradingRecommendation::query()->forProfile($profile)->whereKey($recommendationId)->first();
+            $strategyId = $recommendation?->owningStrategyId();
+        }
+        if ($strategyId === null && is_string($input['owner_key'] ?? null)
+            && preg_match('/^strategy:(\\d+)$/', $input['owner_key'], $ownerMatch) === 1) {
+            $strategyId = (int) $ownerMatch[1];
+        }
+        if ($strategyId !== null) {
+            app(\App\Services\Strategy\StrategyLifecycleAdmission::class)
+                ->lockForNewObligation((int) $profile->id, [$strategyId]);
+        }
     }
 
     /**

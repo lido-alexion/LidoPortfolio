@@ -22,6 +22,7 @@ export default function StrategyRegistryDetailPage({ adminMode = false }) {
     const basePath = adminMode ? '/settings/strategy-registry' : '/strategy/registry';
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
+    const [archiveBlockers, setArchiveBlockers] = useState([]);
     const { env, versions, loading, readError, versionsError, versionsLoading, load, loadVersions, scopeRef } = useRegistryArtifact('strategy', id, { onScopeChange: () => { setError(''); setBusy(false); } });
 
     const onExport = async () => {
@@ -59,21 +60,51 @@ export default function StrategyRegistryDetailPage({ adminMode = false }) {
         }
     };
 
-    const onArchive = async () => {
-        if (!window.confirm(
-            'Archive this strategy? It will stop generating recommendations. Other enabled strategies stay enabled. Past holdings/recommendations keep their attribution.',
-        )) return;
+    const onDisable = async () => {
+        if (!window.confirm('Pause this strategy? New recommendations and future runs stop. Existing holdings, orders, executions and settlement remain available. No sell, cancellation or fund release is automatic.')) return;
         const scope = scopeRef.current;
         setBusy(true);
         setError('');
         try {
-            await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/archive`);
+            await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/disable`);
+            if (scope !== scopeRef.current) return;
+            showToast('Strategy paused. Existing work remains available.');
+            await load();
+        } catch (err) {
+            if (scope === scopeRef.current) setError(getApiErrorMessage(err, 'Disable failed'));
+        } finally { if (scope === scopeRef.current) setBusy(false); }
+    };
+
+    const onRestore = async () => {
+        const scope = scopeRef.current;
+        setBusy(true);
+        setError('');
+        try {
+            await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/restore`);
+            if (scope !== scopeRef.current) return;
+            showToast('Strategy restored as disabled. Enable it explicitly after reviewing readiness.');
+            await load();
+        } catch (err) {
+            if (scope === scopeRef.current) setError(getApiErrorMessage(err, 'Restore failed'));
+        } finally { if (scope === scopeRef.current) setBusy(false); }
+    };
+
+    const onArchive = async () => {
+        const reason = window.prompt(`Why are you retiring “${env?.name || id}”? The reason is retained with read-only history.`)?.trim();
+        if (!reason || reason.length < 3) return;
+        const scope = scopeRef.current;
+        setBusy(true);
+        setError('');
+        setArchiveBlockers([]);
+        try {
+            await api.post(`/v1/strategy-registry/${encodeURIComponent(id)}/archive`, { reason });
             if (scope !== scopeRef.current) return;
             showToast('Strategy archived.');
             await load();
         } catch (err) {
             if (scope !== scopeRef.current) return;
             setError(getApiErrorMessage(err, 'Archive failed'));
+            setArchiveBlockers(err?.response?.data?.meta?.blockers || []);
         } finally {
             if (scope === scopeRef.current) setBusy(false);
         }
@@ -81,6 +112,7 @@ export default function StrategyRegistryDetailPage({ adminMode = false }) {
 
     const meta = env?.metadata || {};
     const selected = !!meta.is_enabled || !!meta.is_selected || meta.status === 'active';
+    const lifecycleStatus = meta.lifecycle_status || meta.status;
 
     return (
         <div className="contentPane d-grid gap-3">
@@ -95,19 +127,22 @@ export default function StrategyRegistryDetailPage({ adminMode = false }) {
                 <div className="d-flex flex-wrap gap-2">
                     <Link to={basePath} className="btn btn-outline-secondary btn-sm">Back to registry</Link>
                     <Link to={`/strategy?strategy_id=${encodeURIComponent(id)}`} className="btn btn-outline-primary btn-sm">Open editor</Link>
-                    {!selected && (
+                    {lifecycleStatus === 'archived' ? (
+                        <button type="button" className="btn btn-outline-primary btn-sm" disabled={busy || !env || Boolean(readError)} onClick={onRestore}>Restore as disabled</button>
+                    ) : !selected && (
                         <button type="button" className="btn btn-primary btn-sm" disabled={busy || !env || Boolean(readError)} onClick={onActivate}>
                             Enable
                         </button>
                     )}
-                    {selected && (
+                    {selected && <button type="button" className="btn btn-outline-warning btn-sm" disabled={busy || !env || Boolean(readError)} onClick={onDisable}>Disable</button>}
+                    {lifecycleStatus !== 'archived' && (
                         <button
                             type="button"
                             className="btn btn-outline-secondary btn-sm"
                             disabled={busy || !env || Boolean(readError)}
                             onClick={onArchive}
                         >
-                            Archive
+                            Retire
                         </button>
                     )}
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={onExport} disabled={busy || !env || Boolean(readError)}>
@@ -118,6 +153,7 @@ export default function StrategyRegistryDetailPage({ adminMode = false }) {
 
             {readError && <div className="alert alert-danger mb-0" role="alert">{readError} <button type="button" className="btn btn-sm btn-outline-primary" disabled={loading || busy} onClick={load}>Retry registry artifact</button></div>}
             {error && <div className="alert alert-danger mb-0" role="alert">{error}</div>}
+            {archiveBlockers.length > 0 && <div className="alert alert-warning mb-0" role="alert"><strong>Resolve these records before retiring:</strong><ul className="mb-0 mt-2">{archiveBlockers.map((blocker) => <li key={blocker.code}>{blocker.label} ({blocker.count}) — <Link to={blocker.href}>Open resolution view</Link></li>)}</ul></div>}
             {versionsError && <div className="alert alert-warning mb-0" role="alert">{versionsError} <button type="button" className="btn btn-sm btn-outline-primary" disabled={versionsLoading || loading || busy} onClick={() => loadVersions()}>Retry registry versions</button></div>}
             {loading && <div className="text-muted">Loading…</div>}
 
@@ -131,7 +167,8 @@ export default function StrategyRegistryDetailPage({ adminMode = false }) {
                                 <dt className="col-sm-3">Summary</dt>
                                 <dd className="col-sm-9">{meta.summary || meta.description || '—'}</dd>
                                 <dt className="col-sm-3">Status / origin</dt>
-                                <dd className="col-sm-9">{meta.status || '—'} · {meta.origin || '—'} · {selected ? 'enabled' : 'not enabled'}</dd>
+                                <dd className="col-sm-9">{lifecycleStatus || '—'} · {meta.origin || '—'} · {selected ? 'enabled' : 'not enabled'}</dd>
+                                {lifecycleStatus === 'archived' ? <><dt className="col-sm-3">Retirement reason</dt><dd className="col-sm-9">{meta.archive_reason || '—'}{meta.archived_at ? ` · ${meta.archived_at}` : ''}</dd></> : null}
                                 <dt className="col-sm-3">Definition hash</dt>
                                 <dd className="col-sm-9"><code className="small">{env.definition_hash || '—'}</code></dd>
                                 <dt className="col-sm-3">Tags</dt>

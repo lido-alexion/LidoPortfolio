@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { journeyId, seedDeterministicJourney } from './journeyTestUtils.js';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
+import { handleApiFailureDiagnosticForPage, registerApiFailureDiagnosticFixtureHooks } from './apiFailureDiagnosticBoundary.js';
+
+registerApiFailureDiagnosticFixtureHooks(test);
 
 const TOKEN = '11111111-1111-4111-8111-111111111111';
 const DOWNLOAD = `/api/exports/${TOKEN}/download`;
@@ -9,8 +12,10 @@ async function prepare(page, name, writes) {
     await seedDeterministicJourney(page, `export-${name}`);
     await installInvestorWorkflowApiMocks(page);
     const rejected = [];
-    return { rejected, seal: () => page.route('**/*', route => {
+    const allowedOrigin = new URL(process.env.STOX_E2E_BASE_URL || 'http://127.0.0.1:4177').origin;
+    return { rejected, seal: () => page.route('**/*', async route => {
         const request = route.request(); const url = new URL(request.url());
+        if (await handleApiFailureDiagnosticForPage(route, page, allowedOrigin)) return;
         const allowed = ['GET', 'HEAD'].includes(request.method()) || [['POST', '/api/logs/frontend'], ...writes].some(([method, path]) => request.method() === method && url.pathname === path);
         if (url.origin !== 'http://127.0.0.1:4177' || !allowed) { rejected.push(`${request.method()} ${url.pathname}`); return route.abort(); }
         return route.fallback();
@@ -108,20 +113,85 @@ for (const viewport of VIEWPORTS) {
             const fields = ['snapshot_date', 'portfolio_value', 'invested_value'];
             const catalog = [{ id: 'portfolio-snapshots', label: 'Daily snapshots', fields, scopes: ['full', 'current', 'selected'] }, { id: 'portfolio-growth', label: 'Growth chart', fields, scopes: ['full', 'current'] }];
             let items = []; let failSave = true; let saves = 0; let failExport = true; let exports = 0;
+            const cloneJson = value => JSON.parse(JSON.stringify(value));
+            const filters = { range: '90d', sort_by: 'snapshot_date', sort_direction: 'asc' };
+            const initialSnapshot = { dataset: 'portfolio-snapshots', sheet_name: 'portfolio-snapshots', fields, scope: 'full', selected: [], filters };
+            const evidenceSnapshot = { dataset: 'portfolio-snapshots', sheet_name: 'Evidence', fields: ['snapshot_date', 'portfolio_value'], scope: 'selected', selected: ['101'], filters };
+            const correctedSnapshot = { ...evidenceSnapshot, selected: ['102'] };
+            const growthItem = { dataset: 'portfolio-growth', sheet_name: 'portfolio-growth', fields, scope: 'full', selected: [], filters };
+            const basketWritePlan = [
+                { phase: 'initial-add-failure', items: [initialSnapshot], status: 503 },
+                { phase: 'initial-add-retry', items: [initialSnapshot], status: 200 },
+                { phase: 'evidence-save-failure', items: [evidenceSnapshot], status: 503 },
+                { phase: 'evidence-save', items: [evidenceSnapshot], status: 200 },
+                { phase: 'add-growth', items: [evidenceSnapshot, growthItem], status: 200 },
+                { phase: 'rejected-export-preflight-save', items: [evidenceSnapshot, growthItem], status: 200 },
+                { phase: 'explicit-correction-save', items: [correctedSnapshot, growthItem], status: 200 },
+                { phase: 'retry-export-preflight-save', items: [correctedSnapshot, growthItem], status: 200 },
+            ];
+            const exportWritePlan = [
+                { phase: 'stale-export-rejection', items: [evidenceSnapshot, growthItem], status: 422, body: { message: 'Synthetic stale basket; review and retry.' } },
+                { phase: 'corrected-export-retry', items: [correctedSnapshot, growthItem], status: 202, body: { data: { token: TOKEN, status: 'queued', download_url: DOWNLOAD, expires_at: null } } },
+            ];
+            const mutationReceipts = []; const pendingMutationReceipts = []; const mutationOrder = [];
+            const immutableJson = value => {
+                const copy = cloneJson(value);
+                const freeze = current => {
+                    if (current && typeof current === 'object') { Object.values(current).forEach(freeze); Object.freeze(current); }
+                    return current;
+                };
+                return freeze(copy);
+            };
+            const beginTerminalMutationReceipt = (request, { phase, method, path, status, requestBody, responseBody }) => {
+                expect(request.method()).toBe(method);
+                const url = new URL(request.url());
+                expect(url.origin).toBe(new URL(process.env.STOX_E2E_BASE_URL || 'http://127.0.0.1:4177').origin);
+                expect(url.username).toBe(''); expect(url.password).toBe('');
+                expect(url.pathname).toBe(path); expect(url.search).toBe(''); expect(url.hash).toBe('');
+                const expectedRequestBody = immutableJson(requestBody);
+                const capturedRequestBody = immutableJson(request.postData() === null ? null : request.postDataJSON());
+                const capturedResponseBody = immutableJson(responseBody);
+                expect(capturedRequestBody).toEqual(expectedRequestBody);
+                const receipt = Object.freeze({ phase, method, path, status, requestBody: capturedRequestBody, responseBody: capturedResponseBody });
+                mutationReceipts.push(receipt);
+                const assertion = (async () => {
+                    const response = await request.response();
+                    expect(response).not.toBeNull(); expect(response.status()).toBe(receipt.status);
+                    expect(immutableJson(await response.json())).toEqual(receipt.responseBody);
+                    expect(await response.finished()).toBeNull();
+                })();
+                pendingMutationReceipts.push(assertion);
+                return assertion;
+            };
             await page.route('**/api/exports/catalog', route => route.fulfill({ json: { data: catalog } }));
-            await page.route('**/api/exports/basket', route => {
+            await page.route('**/api/exports/basket', async route => {
                 if (route.request().method() === 'GET') return route.fulfill({ json: { data: { items } } });
-                saves++;
-                if (failSave) { failSave = false; return route.fulfill({ status: 503, json: { message: 'Synthetic basket save unavailable.' } }); }
-                items = route.request().postDataJSON().items; return route.fulfill({ json: { data: { items } } });
+                const request = route.request(); const plan = basketWritePlan[saves++];
+                expect(plan).toBeDefined();
+                expect(request.postDataJSON()).toEqual({ items: plan.items });
+                mutationOrder.push(`basket-put:${plan.phase}`);
+                let status = 200; let body;
+                if (failSave) { failSave = false; status = 503; body = { message: 'Synthetic basket save unavailable.' }; }
+                else { items = cloneJson(plan.items); body = { data: { items: cloneJson(items) } }; }
+                expect(status).toBe(plan.status);
+                const receipt = beginTerminalMutationReceipt(request, { phase: plan.phase, method: 'PUT', path: '/api/exports/basket', status, requestBody: { items: plan.items }, responseBody: body });
+                await route.fulfill({ status, json: body });
+                await receipt;
             });
-            await page.route('**/api/exports/basket/export', route => {
-                exports++; expect(items).toHaveLength(2); expect(items[0]).toMatchObject({ dataset: 'portfolio-snapshots', sheet_name: 'Evidence', scope: 'selected', selected: ['101'], fields: ['snapshot_date', 'portfolio_value'] });
-                if (failExport) { failExport = false; return route.fulfill({ status: 422, json: { message: 'Synthetic stale basket; review and retry.' } }); }
-                return route.fulfill({ status: 202, json: { data: { token: TOKEN, status: 'queued', download_url: DOWNLOAD, expires_at: null } } });
+            await page.route('**/api/exports/basket/export', async route => {
+                const request = route.request(); const plan = exportWritePlan[exports++];
+                expect(plan).toBeDefined(); expect(items).toHaveLength(2); expect(items).toEqual(plan.items);
+                expect(items[0]).toMatchObject({ dataset: 'portfolio-snapshots', sheet_name: 'Evidence', scope: 'selected', selected: exports === 1 ? ['101'] : ['102'], fields: ['snapshot_date', 'portfolio_value'] });
+                expect(request.postData()).toBeNull(); mutationOrder.push(`basket-export:${plan.phase}`);
+                expect(failExport).toBe(plan.status === 422);
+                if (failExport) failExport = false;
+                const receipt = beginTerminalMutationReceipt(request, { phase: plan.phase, method: 'POST', path: '/api/exports/basket/export', status: plan.status, requestBody: null, responseBody: plan.body });
+                await route.fulfill({ status: plan.status, json: plan.body });
+                await receipt;
             });
             await page.route(`**/api/exports/${TOKEN}`, route => route.fulfill({ json: { data: { token: TOKEN, status: 'ready', download_url: DOWNLOAD, expires_at: '2099-01-01T00:00:00Z' } } }));
-            await page.route(`**${DOWNLOAD}`, route => route.fulfill({ contentType: 'application/octet-stream', headers: { 'content-disposition': 'attachment; filename="synthetic-basket.xlsx"' }, body: 'SYNTHETIC_DOWNLOAD_ROUTE_FIXTURE_NOT_WORKBOOK_QUALIFICATION' }));
+            let downloads = 0;
+            await page.route(`**${DOWNLOAD}`, route => { downloads++; return route.fulfill({ contentType: 'application/octet-stream', headers: { 'content-disposition': 'attachment; filename="synthetic-basket.xlsx"' }, body: 'SYNTHETIC_DOWNLOAD_ROUTE_FIXTURE_NOT_WORKBOOK_QUALIFICATION' }); });
             await page.route('**/api/dashboard', route => route.fulfill({ json: { portfolio_value: 100000, invested_value: 90000, total_gain_loss: 10000, portfolio_growth: [], alerts: [] } }));
             await safety.seal(); await page.goto('/'); await page.getByRole('button', { name: 'Export basket (0)' }).click();
             await page.getByRole('button', { name: 'Add Daily snapshots' }).click(); await expect(page.getByText('Synthetic basket save unavailable.', { exact: true })).toBeVisible();
@@ -137,11 +207,29 @@ for (const viewport of VIEWPORTS) {
             await config.getByRole('button', { name: 'Save item configuration' }).click(); await expect.poll(() => items[0]?.sheet_name).toBe('Evidence');
             await page.getByRole('button', { name: 'Add Growth chart' }).click(); await expect(page.getByRole('button', { name: 'Export basket (2)' })).toBeVisible();
             await page.reload(); await page.getByRole('button', { name: 'Export basket (0)' }).click(); await expect(config.getByLabel('Sheet name for portfolio-snapshots')).toHaveValue('Evidence');
+            await expect(config.getByLabel('Stable selected row IDs for portfolio-snapshots')).toHaveValue('101');
             await page.getByRole('button', { name: 'Export XLSX', exact: true }).click(); await expect(page.getByText('Synthetic stale basket; review and retry.', { exact: true })).toBeVisible();
+            expect(exports).toBe(1); expect(downloads).toBe(0); expect(items[0].selected).toEqual(['101']);
+            await expect(page.getByRole('region', { name: 'Latest export' })).toHaveCount(0);
+            await expect(config.getByLabel('Stable selected row IDs for portfolio-snapshots')).toHaveValue('101');
+            await config.getByLabel('Stable selected row IDs for portfolio-snapshots').fill('102');
+            await config.getByRole('button', { name: 'Save item configuration' }).click();
+            await expect.poll(() => items[0]?.selected).toEqual(['102']);
+            expect(items[1]).toEqual(growthItem);
+            await expect(config.getByLabel('Stable selected row IDs for portfolio-snapshots')).toHaveValue('102');
             await page.getByRole('button', { name: 'Export XLSX', exact: true }).click(); const job = page.getByRole('region', { name: 'Latest export' });
             await expect(job.getByRole('status')).toContainText('Export is queued.'); await expect(job.getByRole('link', { name: 'Download export' })).toHaveCount(0);
             await job.getByRole('button', { name: 'Refresh export status' }).click(); const downloadEvent = page.waitForEvent('download'); await job.getByRole('link', { name: 'Download export' }).click();
-            expect((await downloadEvent).suggestedFilename()).toBe('synthetic-basket.xlsx'); expect(exports).toBe(2); expect(safety.rejected).toEqual([]);
+            await Promise.all(pendingMutationReceipts);
+            expect((await downloadEvent).suggestedFilename()).toBe('synthetic-basket.xlsx'); expect(downloads).toBe(1); expect(exports).toBe(2); expect(saves).toBe(8);
+            expect(mutationReceipts).toHaveLength(10);
+            expect(mutationReceipts.find(receipt => receipt.phase === 'rejected-export-preflight-save').requestBody.items[0].selected).toEqual(['101']);
+            expect(mutationReceipts.find(receipt => receipt.phase === 'explicit-correction-save').requestBody.items[0].selected).toEqual(['102']);
+            expect(mutationReceipts.find(receipt => receipt.phase === 'retry-export-preflight-save').requestBody.items[0].selected).toEqual(['102']);
+            expect(mutationReceipts.find(receipt => receipt.phase === 'stale-export-rejection').status).toBe(422);
+            expect(mutationReceipts.find(receipt => receipt.phase === 'corrected-export-retry').status).toBe(202);
+            expect(mutationOrder.slice(-5)).toEqual(['basket-put:rejected-export-preflight-save', 'basket-export:stale-export-rejection', 'basket-put:explicit-correction-save', 'basket-put:retry-export-preflight-save', 'basket-export:corrected-export-retry']);
+            expect(safety.rejected).toEqual([]);
         });
     });
 }

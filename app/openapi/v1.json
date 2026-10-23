@@ -306,6 +306,1928 @@
                 "x-stox-admin": true
             }
         },
+        "/api/v1/admin/fundamentals/bootstrap-operations/coverage": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Read canonical fundamentals coverage",
+                "description": "Admin-only read projection by primary catalogue metric and quarterly/annual cadence, plus bounded actual known-period coverage. These buckets describe facts present; they are not missing-period coverage. Applicability and expected periods remain unknown where no authoritative expectation exists.",
+                "operationId": "get_admin_fundamentals_bootstrap-operations_coverage",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap-operations/gaps": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "List paginated coverage gaps",
+                "description": "Admin-only stock/metric/cadence gap occurrences with deterministic reason, state, bounded acknowledgement history, and observation count. period_end is null where no expected-period evidence exists.",
+                "operationId": "get_admin_fundamentals_bootstrap-operations_gaps",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "state",
+                        "in": "query",
+                        "required": false,
+                        "description": "actionable,reopened,accepted,resolved",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "reason",
+                        "in": "query",
+                        "required": false,
+                        "description": "deterministic reason category",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "metric",
+                        "in": "query",
+                        "required": false,
+                        "description": "primary catalogue fact key",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "cadence",
+                        "in": "query",
+                        "required": false,
+                        "description": "quarterly,annual",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "required": false,
+                        "description": "1..100",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap-operations/gaps/acknowledge": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Accept compatible gaps as expected missing",
+                "description": "Atomic bulk acknowledgement requires one metric, cadence, and reason. Records Admin, time, optional note, and retained acknowledgement history.",
+                "operationId": "post_admin_fundamentals_bootstrap-operations_gaps_acknowledge",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "ids"
+                                ],
+                                "properties": {
+                                    "ids": {
+                                        "type": "array",
+                                        "minItems": 1,
+                                        "maxItems": 100,
+                                        "uniqueItems": true,
+                                        "items": {
+                                            "type": "integer",
+                                            "minimum": 1
+                                        }
+                                    },
+                                    "note": {
+                                        "type": "string",
+                                        "maxLength": 1000,
+                                        "nullable": true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap-operations/health": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Read global bootstrap operational health",
+                "description": "Admin-only read-only aggregate projection: actual active owner, explicit managed queue count, last successful run, unresolved technical failures/warnings/gaps and next enabled schedule. Does not reconcile, dispatch ingestion, create records or notify.",
+                "operationId": "get_admin_fundamentals_bootstrap-operations_health",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap-operations/presets": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "List shared bootstrap presets (bounded pagination).",
+                "description": "List shared bootstrap presets (bounded pagination).",
+                "operationId": "get_bootstrap_schedule_31f1eb7469",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            },
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Create a shared Admin preset for the whole eligible universe or explicit eligible stocks. This reuses the existing scope and stock selection only; it does not accept cadence or provider overrides.",
+                "description": "Create a shared Admin preset for the whole eligible universe or explicit eligible stocks. This reuses the existing scope and stock selection only; it does not accept cadence or provider overrides.",
+                "operationId": "post_bootstrap_schedule_31f1eb7469",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                    "name",
+                                    "configuration"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "maxLength": 120
+                                    },
+                                    "configuration": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                            "scope"
+                                        ],
+                                        "properties": {
+                                            "scope": {
+                                                "type": "string",
+                                                "enum": [
+                                                    "all",
+                                                    "stocks"
+                                                ],
+                                                "description": "`all` means the whole currently eligible universe; `stocks` means explicit eligible stock IDs."
+                                            },
+                                            "stock_ids": {
+                                                "type": "array",
+                                                "maxItems": 500,
+                                                "uniqueItems": true,
+                                                "items": {
+                                                    "type": "integer",
+                                                    "minimum": 1
+                                                }
+                                            },
+                                            "force": {
+                                                "type": "boolean",
+                                                "default": false,
+                                                "description": "Optional governed forced rerun; requires scope=stocks and reason."
+                                            },
+                                            "reason": {
+                                                "type": "string",
+                                                "minLength": 3,
+                                                "maxLength": 2000
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap-operations/presets/{preset}": {
+            "delete": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Delete a preset only when no schedule references it.",
+                "description": "Delete a preset only when no schedule references it.",
+                "operationId": "delete_bootstrap_schedule_00a24c53f0",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "preset",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            },
+            "put": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Revise a preset; existing schedules retain their snapshots.",
+                "description": "Revise a preset; existing schedules retain their snapshots.",
+                "operationId": "put_bootstrap_schedule_00a24c53f0",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "preset",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                    "name",
+                                    "configuration"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "maxLength": 120
+                                    },
+                                    "configuration": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                            "scope"
+                                        ],
+                                        "properties": {
+                                            "scope": {
+                                                "type": "string",
+                                                "enum": [
+                                                    "all",
+                                                    "stocks"
+                                                ],
+                                                "description": "`all` means the whole currently eligible universe; `stocks` means explicit eligible stock IDs."
+                                            },
+                                            "stock_ids": {
+                                                "type": "array",
+                                                "maxItems": 500,
+                                                "uniqueItems": true,
+                                                "items": {
+                                                    "type": "integer",
+                                                    "minimum": 1
+                                                }
+                                            },
+                                            "force": {
+                                                "type": "boolean",
+                                                "default": false,
+                                                "description": "Optional governed forced rerun; requires scope=stocks and reason."
+                                            },
+                                            "reason": {
+                                                "type": "string",
+                                                "minLength": 3,
+                                                "maxLength": 2000
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap-operations/presets/{preset}/clone": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Clone a shared preset.",
+                "description": "Clone a shared preset.",
+                "operationId": "post_bootstrap_schedule_1ba68859fe",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "preset",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                    "name"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "maxLength": 120
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap-operations/reconcile": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Explicitly reconcile a bootstrap run",
+                "description": "Materializes durable gap observations and normalized warnings from run jobs and canonical facts. No ingestion or provider calls.",
+                "operationId": "post_admin_fundamentals_bootstrap-operations_reconcile",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "run_id"
+                                ],
+                                "properties": {
+                                    "run_id": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap-operations/runs": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "List normalized fundamentals bootstrap runs",
+                "description": "Admin-only, read-only paginated history. Run data is an allowlisted progress projection.",
+                "operationId": "get_admin_fundamentals_bootstrap-operations_runs",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            },
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Queue an Admin fundamentals bootstrap run",
+                "description": "Queues eligible active equities in FIFO order. A scheduler advances durable slices. Forced targeted reruns use the existing governed source resolver and preserve prior run/job history.",
+                "operationId": "post_admin_fundamentals_bootstrap-operations_runs",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true,
+                        "description": "Request identity is scoped to the authenticated Admin and operation payload.",
+                        "schema": {
+                            "type": "string",
+                            "minLength": 8,
+                            "maxLength": 128
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Exact idempotent replay; returns the existing normalized run."
+                    },
+                    "201": {
+                        "description": "New run queued; response contains normalized progress only."
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "scope"
+                                ],
+                                "properties": {
+                                    "scope": {
+                                        "type": "string",
+                                        "enum": [
+                                            "all",
+                                            "stocks"
+                                        ]
+                                    },
+                                    "stock_ids": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "integer"
+                                        },
+                                        "maxItems": 500
+                                    },
+                                    "force": {
+                                        "type": "boolean"
+                                    },
+                                    "reason": {
+                                        "type": "string",
+                                        "maxLength": 2000
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap-operations/runs/from-gaps": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Queue a compatible coverage-gap stock selection",
+                "description": "Admin-only explicit action. Select 1–100 actionable/reopened gaps sharing metric and cadence. The existing engine targets their exact eligible stocks across supported cadences; metrics and periods are provenance, not execution bounds. Persists the gap selection atomically with the run and replays the same actor-scoped request even if gaps later resolve.",
+                "operationId": "post_admin_fundamentals_bootstrap-operations_runs_from-gaps",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 8,
+                            "maxLength": 128,
+                            "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Original run returned for the same request."
+                    },
+                    "201": {
+                        "description": "A new managed run was queued."
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Caller is not an Admin."
+                    },
+                    "422": {
+                        "description": "Invalid, incompatible, ineligible or conflicting request."
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                    "gap_ids"
+                                ],
+                                "properties": {
+                                    "gap_ids": {
+                                        "type": "array",
+                                        "minItems": 1,
+                                        "maxItems": 100,
+                                        "uniqueItems": true,
+                                        "items": {
+                                            "type": "integer",
+                                            "minimum": 1
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap-operations/runs/{run}": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Read normalized bootstrap run progress and items",
+                "description": "Returns the normalized run, progress, and paginated items under the data envelope.",
+                "operationId": "get_admin_fundamentals_bootstrap-operations_runs_run",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "run",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap-operations/runs/{run}/cancel": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Cancel unfinished bootstrap items",
+                "description": "Live route: `POST /api/v1/admin/fundamentals/bootstrap-operations/runs/{run}/cancel`. Action: `App\\Http\\Controllers\\Api\\V1\\BootstrapOperationsController@cancel`. Requires admin (`is_admin`).",
+                "operationId": "post_admin_fundamentals_bootstrap-operations_runs_run_cancel",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "run",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Run cancelled or already terminal."
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "409": {
+                        "description": "A bootstrap slice holds the process fence; no cancellation was applied."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "reason"
+                                ],
+                                "properties": {
+                                    "reason": {
+                                        "type": "string",
+                                        "minLength": 3,
+                                        "maxLength": 2000
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap-operations/runs/{run}/export.csv": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Download a managed bootstrap run CSV",
+                "description": "Admin-only streamed CSV containing a run summary and normalized per-stock/per-period outcomes. It accepts an optional item status or failed-only filter. Only run-linked safe projections are exported; raw errors, provider payloads, checkpoints, credentials, and filesystem paths are excluded. The run must have the current OPS-managed version and origin.",
+                "operationId": "get_admin_fundamentals_bootstrap-operations_runs_run_export.csv",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "run",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "queued",
+                                "running",
+                                "retry",
+                                "complete_good",
+                                "complete_partial",
+                                "complete_no_data",
+                                "failed",
+                                "cancelled"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "failed_only",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Private CSV attachment with formula-safe string cells."
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Caller is not an Admin."
+                    },
+                    "404": {
+                        "description": "Run is not in the current OPS-managed scope."
+                    },
+                    "422": {
+                        "description": "Invalid filter or run exceeds the bounded export limit."
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap-operations/runs/{run}/retry-failed": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Queue a new run for failed items",
+                "description": "Creates a new run and preserves the source run and its job history.",
+                "operationId": "post_admin_fundamentals_bootstrap-operations_runs_run_retry-failed",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "run",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 8,
+                            "maxLength": 128
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap-operations/schedules": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "List recurring schedules and occurrence counts.",
+                "description": "List recurring schedules and occurrence counts.",
+                "operationId": "get_bootstrap_schedule_9a664933a9",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            },
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Create a disabled daily, weekly, or monthly schedule over the whole eligible universe or explicit eligible stocks. Bootstrap configuration does not accept cadence or provider overrides.",
+                "description": "Create a disabled daily, weekly, or monthly schedule over the whole eligible universe or explicit eligible stocks. Bootstrap configuration does not accept cadence or provider overrides.",
+                "operationId": "post_bootstrap_schedule_9a664933a9",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                    "name",
+                                    "frequency",
+                                    "timezone",
+                                    "starts_at_local"
+                                ],
+                                "anyOf": [
+                                    {
+                                        "required": [
+                                            "preset_id"
+                                        ]
+                                    },
+                                    {
+                                        "required": [
+                                            "configuration"
+                                        ]
+                                    }
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "maxLength": 120
+                                    },
+                                    "preset_id": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                    },
+                                    "configuration": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                            "scope"
+                                        ],
+                                        "properties": {
+                                            "scope": {
+                                                "type": "string",
+                                                "enum": [
+                                                    "all",
+                                                    "stocks"
+                                                ],
+                                                "description": "`all` means the whole currently eligible universe; `stocks` means explicit eligible stock IDs."
+                                            },
+                                            "stock_ids": {
+                                                "type": "array",
+                                                "maxItems": 500,
+                                                "uniqueItems": true,
+                                                "items": {
+                                                    "type": "integer",
+                                                    "minimum": 1
+                                                }
+                                            },
+                                            "force": {
+                                                "type": "boolean",
+                                                "default": false,
+                                                "description": "Optional governed forced rerun; requires scope=stocks and reason."
+                                            },
+                                            "reason": {
+                                                "type": "string",
+                                                "minLength": 3,
+                                                "maxLength": 2000
+                                            }
+                                        }
+                                    },
+                                    "frequency": {
+                                        "type": "string",
+                                        "enum": [
+                                            "daily",
+                                            "weekly",
+                                            "monthly"
+                                        ]
+                                    },
+                                    "interval": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 365
+                                    },
+                                    "weekday": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 7
+                                    },
+                                    "monthday": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 31
+                                    },
+                                    "timezone": {
+                                        "type": "string",
+                                        "description": "IANA timezone; recurrence uses local calendar boundaries."
+                                    },
+                                    "local_time": {
+                                        "type": "string",
+                                        "pattern": "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d)?$"
+                                    },
+                                    "starts_at_local": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}(:\\d{2})?$"
+                                    },
+                                    "ends_on_local": {
+                                        "type": "string",
+                                        "format": "date"
+                                    },
+                                    "max_occurrences": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 100000
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap-operations/schedules/{schedule}": {
+            "put": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Edit only future schedule occurrences.",
+                "description": "Edit only future schedule occurrences.",
+                "operationId": "put_bootstrap_schedule_f810731869",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "schedule",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                    "frequency",
+                                    "timezone",
+                                    "starts_at_local"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "maxLength": 120
+                                    },
+                                    "configuration": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                            "scope"
+                                        ],
+                                        "properties": {
+                                            "scope": {
+                                                "type": "string",
+                                                "enum": [
+                                                    "all",
+                                                    "stocks"
+                                                ],
+                                                "description": "`all` means the whole currently eligible universe; `stocks` means explicit eligible stock IDs."
+                                            },
+                                            "stock_ids": {
+                                                "type": "array",
+                                                "maxItems": 500,
+                                                "uniqueItems": true,
+                                                "items": {
+                                                    "type": "integer",
+                                                    "minimum": 1
+                                                }
+                                            },
+                                            "force": {
+                                                "type": "boolean",
+                                                "default": false,
+                                                "description": "Optional governed forced rerun; requires scope=stocks and reason."
+                                            },
+                                            "reason": {
+                                                "type": "string",
+                                                "minLength": 3,
+                                                "maxLength": 2000
+                                            }
+                                        }
+                                    },
+                                    "frequency": {
+                                        "type": "string",
+                                        "enum": [
+                                            "daily",
+                                            "weekly",
+                                            "monthly"
+                                        ]
+                                    },
+                                    "interval": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 365
+                                    },
+                                    "weekday": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 7
+                                    },
+                                    "monthday": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 31
+                                    },
+                                    "timezone": {
+                                        "type": "string",
+                                        "description": "IANA timezone; recurrence uses local calendar boundaries."
+                                    },
+                                    "local_time": {
+                                        "type": "string",
+                                        "pattern": "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d)?$"
+                                    },
+                                    "starts_at_local": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}(:\\d{2})?$"
+                                    },
+                                    "ends_on_local": {
+                                        "type": "string",
+                                        "format": "date"
+                                    },
+                                    "max_occurrences": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 100000
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap-operations/schedules/{schedule}/clone": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Clone a schedule as disabled.",
+                "description": "Clone a schedule as disabled.",
+                "operationId": "post_bootstrap_schedule_ca74ab1bb0",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "schedule",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                    "name"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "maxLength": 120
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap-operations/schedules/{schedule}/enabled": {
+            "put": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Enable or disable a schedule.",
+                "description": "Enable or disable a schedule.",
+                "operationId": "put_bootstrap_schedule_b6a53cefb8",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "schedule",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                    "enabled"
+                                ],
+                                "properties": {
+                                    "enabled": {
+                                        "type": "boolean"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap-operations/schedules/{schedule}/occurrences": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Read bounded immutable occurrence receipts.",
+                "description": "Read bounded immutable occurrence receipts.",
+                "operationId": "get_bootstrap_schedule_ba9a6a22e9",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "schedule",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap-operations/schedules/{schedule}/run-now": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Queue one manual run without advancing the recurring schedule.",
+                "description": "Queue one manual run without advancing the recurring schedule.",
+                "operationId": "post_bootstrap_schedule_cab972cf2e",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "schedule",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 8,
+                            "maxLength": 128,
+                            "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "maxProperties": 0
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap-operations/warnings": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "List paginated quality warning occurrences",
+                "description": "Admin-only normalized warning occurrences with bounded acknowledgement history.",
+                "operationId": "get_admin_fundamentals_bootstrap-operations_warnings",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "state",
+                        "in": "query",
+                        "required": false,
+                        "description": "unresolved,acknowledged",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "category",
+                        "in": "query",
+                        "required": false,
+                        "description": "normalized warning category",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "required": false,
+                        "description": "1..100",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/bootstrap-operations/warnings/acknowledge": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Acknowledge warning occurrences",
+                "description": "Atomic bulk acknowledgement records Admin, time, and optional note.",
+                "operationId": "post_admin_fundamentals_bootstrap-operations_warnings_acknowledge",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "ids"
+                                ],
+                                "properties": {
+                                    "ids": {
+                                        "type": "array",
+                                        "minItems": 1,
+                                        "maxItems": 100,
+                                        "uniqueItems": true,
+                                        "items": {
+                                            "type": "integer",
+                                            "minimum": 1
+                                        }
+                                    },
+                                    "note": {
+                                        "type": "string",
+                                        "maxLength": 1000,
+                                        "nullable": true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
         "/api/v1/admin/fundamentals/manual-import": {
             "post": {
                 "tags": [
@@ -810,6 +2732,12 @@
                                             "type": "string",
                                             "format": "uuid"
                                         }
+                                    },
+                                    "campaign_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true,
+                                        "description": "Source-remediation campaign whose exact missing dates this preview addresses."
                                     }
                                 }
                             }
@@ -1149,6 +3077,15 @@
                                         "type": "string",
                                         "format": "date",
                                         "description": "Not later than today."
+                                    },
+                                    "final_preflight": {
+                                        "type": "boolean",
+                                        "description": "Records an explicit final-preflight intent."
+                                    },
+                                    "remediation_backfill_id": {
+                                        "type": "integer",
+                                        "nullable": true,
+                                        "description": "Completed applied source remediation linked to the prior campaign."
                                     }
                                 }
                             }
@@ -1949,6 +3886,90 @@
                                 }
                             }
                         }
+                    },
+                    "413": {
+                        "description": "Content-Length exceeds the 1,500,000-byte acceptance request limit.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Laravel validation `{message, errors}`: invalid input, source quotas/state, queue prerequisites or campaign/backfill preconditions. Invalid base64 returns `{message, request_id}`."
+                    },
+                    "429": {
+                        "description": "Acceptance rate limit exceeded (60 requests per minute).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/ml/acceptance/wizard": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Reconstruct production acceptance wizard state",
+                "description": "Read-only aggregate of the current persisted acceptance campaign, its campaign-linked source/backfill remediation state, horizon evidence and authoritative evidence_current result. This endpoint does not dispatch work, probe Python, or mutate settings.",
+                "operationId": "get_admin_ml_acceptance_wizard",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Safe acceptance payload wrapped in `data`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
                     },
                     "413": {
                         "description": "Content-Length exceeds the 1,500,000-byte acceptance request limit.",
@@ -3460,6 +5481,57 @@
                     },
                     "401": {
                         "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/artifact-library/bundle-deployments/{uuid}": {
+            "get": {
+                "tags": [
+                    "artifact-library"
+                ],
+                "summary": "Read Bundle deployment evidence",
+                "description": "Reads the exact Bundle deployment for the authenticated requester and active Portfolio. Returns allowlisted status and member revision evidence; performs no mutation.",
+                "operationId": "get_artifact-library_bundle-deployments_uuid",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "404": {
+                        "description": "Deployment UUID is not available to this requester in the active Portfolio."
                     },
                     "422": {
                         "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
@@ -11713,9 +13785,146 @@
                 "tags": [
                     "strategy-registry"
                 ],
-                "summary": "POST archive",
-                "description": "Live route: `POST /api/v1/strategy-registry/{id}/archive`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyRegistryController@archive`.",
+                "summary": "Retire a fully resolved strategy",
+                "description": "Requires a user reason. Archives only when no strategy-owned holdings, actionable recommendations, pending executions/orders, reserved funds, or unsettled obligations remain. Returns HTTP 409 with exact blockers otherwise.",
                 "operationId": "post_strategy-registry_id_archive",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "409": {
+                        "description": "Strategy still has unresolved owned work; meta.blockers contains code, label, count, and an existing resolution href.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeError"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "reason"
+                                ],
+                                "properties": {
+                                    "reason": {
+                                        "type": "string",
+                                        "minLength": 3,
+                                        "maxLength": 1000
+                                    }
+                                },
+                                "additionalProperties": true
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/strategy-registry/{id}/archive-blockers": {
+            "get": {
+                "tags": [
+                    "strategy-registry"
+                ],
+                "summary": "Inspect strategy-owned archive blockers",
+                "description": "Returns exact unresolved strategy-owned records and their existing resolution routes. Other strategies and completed zero-balance history do not block retirement.",
+                "operationId": "get_strategy-registry_id_archive-blockers",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "404": {
+                        "description": "Strategy does not exist in the active portfolio.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeError"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/strategy-registry/{id}/disable": {
+            "post": {
+                "tags": [
+                    "strategy-registry"
+                ],
+                "summary": "Pause a strategy without changing existing obligations",
+                "description": "Stops future strategy recommendation runs. Existing holdings, recommendations, orders, reservations, execution and settlement remain under their existing workflows; no financial side effect is performed.",
+                "operationId": "post_strategy-registry_id_disable",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/XProfileId"
@@ -11750,18 +13959,6 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ErrorOrValidation"
                                 }
-                            }
-                        }
-                    }
-                },
-                "requestBody": {
-                    "required": false,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "additionalProperties": true,
-                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
                             }
                         }
                     }
@@ -11822,6 +14019,54 @@
                                 "type": "object",
                                 "additionalProperties": true,
                                 "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/strategy-registry/{id}/restore": {
+            "post": {
+                "tags": [
+                    "strategy-registry"
+                ],
+                "summary": "Restore a retired strategy as disabled",
+                "description": "Restoration never enables the strategy. A separate Enable action applies normal readiness checks.",
+                "operationId": "post_strategy-registry_id_restore",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
                             }
                         }
                     }

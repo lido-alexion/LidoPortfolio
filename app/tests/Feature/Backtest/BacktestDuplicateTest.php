@@ -250,6 +250,28 @@ class BacktestDuplicateTest extends TestCase
         $this->assertNotSame($current->id, $created['strategy_version_id']);
     }
 
+    public function test_backtest_without_explicit_version_uses_disabled_strategy_active_pointer(): void
+    {
+        [$user, $profile, $current] = $this->seedOriginalRun();
+        $this->stubFastEligibility();
+        TradingStrategy::query()->whereKey($current->strategy_id)->update(['status' => TradingStrategy::STATUS_DISABLED]);
+
+        $created = $this->actingAs($user)
+            ->withProfileHeader($user, $profile)
+            ->postJson('/api/v1/backtests', [
+                'from_date' => '2024-01-02',
+                'to_date' => '2024-01-03',
+                'initial_capital' => 1000000,
+                'session_token' => 'dddddddd-eeee-4fff-8000-111111111111',
+            ])
+            ->assertOk()
+            ->json('data.run');
+
+        $this->assertSame($current->id, $created['strategy_version_id']);
+        $this->assertSame(TradingStrategy::STATUS_DISABLED,
+            TradingStrategy::query()->findOrFail($current->strategy_id)->status);
+    }
+
     public function test_index_show_update_and_delete_remain_intact(): void
     {
         [$user, $profile, $current, $stale, $original] = $this->seedOriginalRun();

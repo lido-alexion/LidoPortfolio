@@ -21,7 +21,7 @@ test('Artifact Library exposes only explicit binding upgrade and transactional B
     assert.match(detail, /Upgrade binding/);
     assert.match(detail, /expected_lock_version: binding\.lock_version/);
     assert.match(detail, /bundle-plan/);
-    assert.match(detail, /bundle-deployments\/\$\{plan\.deployment_uuid\}\/deploy/);
+    assert.match(detail, /bundle-deployments\/\$\{deploymentUuid\}\/deploy/);
     assert.doesNotMatch(detail, /auto.?upgrade/i);
 });
 

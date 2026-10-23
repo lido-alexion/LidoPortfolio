@@ -16,6 +16,8 @@ class FundamentalBootstrapService
 {
     public const PROCESS_LOCK_KEY = 'stox:fundamentals:bootstrap-process';
 
+    public const OPS_MANAGED_VERSION = 1;
+
     public function __construct(
         protected FundamentalDataService $fundamentals,
         protected FundamentalDataProvider $provider,
@@ -37,7 +39,16 @@ class FundamentalBootstrapService
             ->pluck('count', 'status');
 
         return [
-            'latest_run' => $latest?->toArray(),
+            'latest_run' => $latest ? [
+                'id' => $latest->id, 'trigger' => $latest->trigger, 'scope' => $latest->scope, 'status' => $latest->status,
+                'counts' => [
+                    'requested' => $latest->requested, 'queued' => $latest->queued, 'running' => $latest->running,
+                    'completed' => $latest->completed, 'failed' => $latest->failed,
+                ],
+                'created_at' => $latest->created_at?->toIso8601String(),
+                'started_at' => $latest->started_at?->toIso8601String(),
+                'completed_at' => $latest->completed_at?->toIso8601String(),
+            ] : null,
             'terminal_counts' => $terminalCounts,
             'queued_jobs' => FundamentalBootstrapJob::query()->whereIn('status', ['queued', 'retry'])->count(),
             'running_jobs' => FundamentalBootstrapJob::query()->where('status', 'running')->count(),
@@ -54,11 +65,26 @@ class FundamentalBootstrapService
         ?int $createdByUserId = null,
         bool $dryRun = false,
     ): array|FundamentalBootstrapRun {
+        if ($scope === 'all' && $stockIds !== null) {
+            throw new \InvalidArgumentException('The all-equities scope does not accept stock IDs.');
+        }
+        if (! in_array($scope, ['all', 'stock', 'stocks', 'rerun_failed', 'rerun_partial'], true)) {
+            throw new \InvalidArgumentException('Unsupported bootstrap scope.');
+        }
         if (in_array($scope, ['stock', 'stocks'], true) && ($stockIds === null || $stockIds === [])) {
             throw new \InvalidArgumentException('No stock matched the requested symbol scope.');
         }
 
         $stocks = $this->resolveStocks($scope, $stockIds);
+        if (in_array($scope, ['stock', 'stocks'], true)) {
+            $requestedIds = array_values(array_unique(array_map('intval', $stockIds ?? [])));
+            $resolvedIds = $stocks->pluck('id')->map(fn ($id) => (int) $id)->all();
+            sort($requestedIds);
+            sort($resolvedIds);
+            if ($requestedIds !== $resolvedIds) {
+                throw new \InvalidArgumentException('Every requested stock must be an active eligible equity.');
+            }
+        }
         if (in_array($scope, ['stock', 'stocks'], true) && $stocks->isEmpty()) {
             throw new \InvalidArgumentException('No active equity matched the requested stock scope.');
         }
@@ -73,6 +99,9 @@ class FundamentalBootstrapService
         }
 
         return DB::transaction(function () use ($scope, $stocks, $createdByUserId): FundamentalBootstrapRun {
+            // Serialize all creators against FIFO claims and cancellation using
+            // the same first lock in the global control → run → job order.
+            DB::table('stox_fund_bootstrap_control')->where('id', 1)->lockForUpdate()->first();
             $run = FundamentalBootstrapRun::query()->create([
                 'trigger' => 'manual',
                 'scope' => $scope,
@@ -104,18 +133,85 @@ class FundamentalBootstrapService
             return $fresh?->toArray() ?? [];
         }
 
+        if ($this->fundamentals->settings()->paused) {
+            return array_merge($fresh->toArray(), ['skipped_reason' => 'fundamentals_globally_paused']);
+        }
+
+        // Acquire the process fence before publishing the durable active slot. A
+        // failed cache claim must never strand the control row on this run.
         $lock = Cache::lock(self::PROCESS_LOCK_KEY, 900);
         if (! $lock->get()) {
-            return array_merge($run->fresh()->toArray(), [
-                'skipped_reason' => 'another_bootstrap_slice_is_in_progress',
-            ]);
+            return array_merge($fresh->toArray(), ['skipped_reason' => 'another_bootstrap_slice_is_in_progress']);
         }
 
         try {
-            return $this->processLocked($run, $batch);
+            $slot = DB::transaction(function () use ($fresh): bool {
+                $control = DB::table('stox_fund_bootstrap_control')->where('id', 1)->lockForUpdate()->first();
+                if (! $control) {
+                    throw new \RuntimeException('Bootstrap control row is missing.');
+                }
+                $activeRun = $control->active_run_id === null ? null : FundamentalBootstrapRun::query()->whereKey($control->active_run_id)->first();
+                if ($activeRun && ! in_array($activeRun->status, ['queued', 'running'], true)) {
+                    DB::table('stox_fund_bootstrap_control')->where('id', 1)->update(['active_run_id' => null, 'updated_at' => now()]);
+                    $control->active_run_id = null;
+                    $activeRun = null;
+                }
+                if ($control->active_run_id !== null && (int) $control->active_run_id !== (int) $fresh->id) {
+                    $activeIsManaged = $activeRun !== null && $this->isOpsManagedRun($activeRun);
+                    if (! $this->isOpsManagedRun($fresh) || $activeIsManaged || $activeRun?->status !== 'queued') {
+                        return false;
+                    }
+                    // A legacy queued row is not a live owner and must never be
+                    // adopted or allowed to block the explicit OPS queue.
+                    DB::table('stox_fund_bootstrap_control')->where('id', 1)->update(['active_run_id' => null, 'updated_at' => now()]);
+                    $control->active_run_id = null;
+                }
+                if ($control->active_run_id === null) {
+                    if ($this->isOpsManagedRun($fresh)) {
+                        $legacyRunning = FundamentalBootstrapRun::query()->where('status', 'running')
+                            ->whereNotIn('id', FundamentalBootstrapRun::query()->opsManaged()->select('id'))
+                            ->exists();
+                        $olderManaged = FundamentalBootstrapRun::query()->where('id', '<', $fresh->id)
+                            ->whereIn('status', ['queued', 'running'])
+                            ->opsManaged()->exists();
+                        if ($legacyRunning || $olderManaged) return false;
+                    } elseif (FundamentalBootstrapRun::query()
+                        ->whereIn('status', ['queued', 'running'])->where('id', '<', $fresh->id)->exists()) {
+                        return false;
+                    }
+                }
+                DB::table('stox_fund_bootstrap_control')->where('id', 1)->update(['active_run_id' => $fresh->id, 'updated_at' => now()]);
+                return true;
+            });
+            if (! $slot) {
+                return array_merge($fresh->toArray(), ['skipped_reason' => 'another_bootstrap_run_is_active']);
+            }
+            // A worker may die after claiming a job. Owning the exclusive process
+            // fence proves no prior slice can still write; make those claims retryable.
+            DB::transaction(function () use ($fresh): void {
+                $control = DB::table('stox_fund_bootstrap_control')->where('id', 1)->lockForUpdate()->first();
+                if ((int) ($control->active_run_id ?? 0) !== (int) $fresh->id) {
+                    return;
+                }
+                FundamentalBootstrapRun::query()->whereKey($fresh->id)->lockForUpdate()->first();
+                FundamentalBootstrapJob::query()->where('run_id', $fresh->id)->where('status', FundamentalBootstrapJob::STATUS_RUNNING)
+                    ->update(['status' => FundamentalBootstrapJob::STATUS_RETRY, 'next_attempt_at' => now(), 'last_error' => 'Worker interrupted; safely requeued.', 'updated_at' => now()]);
+            });
+            $result = $this->processLocked($run, $batch);
+            if (! in_array($run->fresh()->status, ['queued', 'running'], true)) {
+                DB::table('stox_fund_bootstrap_control')->where('id', 1)->where('active_run_id', $run->id)
+                    ->update(['active_run_id' => null, 'updated_at' => now()]);
+            }
+            return $result;
         } finally {
             $lock->release();
         }
+    }
+
+    public function isOpsManagedRun(FundamentalBootstrapRun $run): bool
+    {
+        return (int) ($run->request_snapshot['managed_version'] ?? 0) === self::OPS_MANAGED_VERSION
+            && ($run->request_snapshot['origin'] ?? null) === 'admin_fundamentals_bootstrap_operations';
     }
 
     /**
@@ -146,6 +242,8 @@ class FundamentalBootstrapService
 
         try {
             return DB::transaction(function () use ($run, $actor, $reason): array {
+                // Global lock order: control row, run row, then job rows.
+                DB::table('stox_fund_bootstrap_control')->where('id', 1)->lockForUpdate()->first();
                 $lockedRun = FundamentalBootstrapRun::query()->whereKey($run->id)->lockForUpdate()->firstOrFail();
                 if ($lockedRun->status === 'cancelled') {
                     return $lockedRun->toArray();
@@ -196,6 +294,9 @@ class FundamentalBootstrapService
                     'completed_at' => $cancelledAt,
                 ])->save();
 
+                DB::table('stox_fund_bootstrap_control')->where('id', 1)->where('active_run_id', $lockedRun->id)
+                    ->update(['active_run_id' => null, 'updated_at' => now()]);
+
                 return $lockedRun->fresh()->toArray();
             });
         } finally {
@@ -209,6 +310,7 @@ class FundamentalBootstrapService
     protected function processLocked(FundamentalBootstrapRun $run, int $batch): array
     {
         $started = DB::transaction(function () use ($run): bool {
+            DB::table('stox_fund_bootstrap_control')->where('id', 1)->lockForUpdate()->first();
             $lockedRun = FundamentalBootstrapRun::query()->whereKey($run->id)->lockForUpdate()->first();
             if (! $lockedRun || ! in_array($lockedRun->status, ['queued', 'running'], true)) {
                 return false;
@@ -237,6 +339,9 @@ class FundamentalBootstrapService
             ->get();
 
         foreach ($jobs as $job) {
+            // A global pause stops new claims; provider work already in flight
+            // remains protected by the existing cancellation/attempt fences.
+            if ($settings->fresh()->paused) break;
             $claimedJob = $this->claimJob($run->id, $job->id);
             if (! $claimedJob) {
                 if (! in_array($run->fresh()->status, ['queued', 'running'], true)) {
@@ -247,7 +352,8 @@ class FundamentalBootstrapService
 
             try {
                 $stock = Stock::query()->findOrFail($claimedJob->stock_id);
-                $this->bootstrapStock($claimedJob, $stock);
+                $forceRerun = (bool) ($run->request_snapshot['force'] ?? false);
+                $this->bootstrapStock($claimedJob, $stock, $forceRerun);
             } catch (Throwable $error) {
                 $this->recordJobFailure($run->id, $claimedJob->id, $claimedJob->attempts, $settings->max_attempts, $error->getMessage());
             }
@@ -262,9 +368,9 @@ class FundamentalBootstrapService
         return $run->fresh()?->toArray() ?? [];
     }
 
-    protected function bootstrapStock(FundamentalBootstrapJob $job, Stock $stock): bool
+    protected function bootstrapStock(FundamentalBootstrapJob $job, Stock $stock, bool $forceRerun = false): bool
     {
-        if (! $this->isJobActive($job->run_id, $job->id)) {
+        if (! $this->isJobActive($job->run_id, $job->id, $job->attempts)) {
             return false;
         }
 
@@ -274,7 +380,7 @@ class FundamentalBootstrapService
                 'completed_at' => now(),
                 'next_attempt_at' => null,
                 'last_error' => 'benchmark instruments are excluded from bootstrap',
-            ]);
+            ], $job->attempts);
         }
 
         $totals = [
@@ -287,10 +393,10 @@ class FundamentalBootstrapService
         $cadenceStats = [];
 
         foreach ([FundamentalDataService::CADENCE_QUARTERLY, FundamentalDataService::CADENCE_ANNUAL] as $cadence) {
-            if (! $this->isJobActive($job->run_id, $job->id)) {
+            if (! $this->isJobActive($job->run_id, $job->id, $job->attempts)) {
                 return false;
             }
-            $rows = $this->historicalIngest->fetch($stock, $cadence);
+            $rows = $this->historicalIngest->fetch($stock, $cadence, manualStockRequest: $forceRerun);
             $accepted = [];
             $rejected = 0;
 
@@ -303,7 +409,7 @@ class FundamentalBootstrapService
                 $periodEnds[] = (string) $row['period_end'];
             }
 
-            $storeStats = $this->withActiveJob($job->run_id, $job->id, function () use ($stock, $cadence, $accepted, $rows): array {
+            $storeStats = $this->withActiveJob($job->run_id, $job->id, $job->attempts, function () use ($stock, $cadence, $accepted, $rows): array {
                 $stats = $accepted === []
                     ? ['inserted' => 0, 'deduped' => 0, 'restated' => 0]
                     : $this->fundamentals->storeFacts($stock, $accepted);
@@ -343,6 +449,7 @@ class FundamentalBootstrapService
                 'provider_rows' => count($rows),
                 'accepted_rows' => count($accepted),
                 'rejected_rows' => $rejected,
+                'providers' => collect($accepted)->pluck('provider')->filter()->unique()->values()->all(),
             ];
         }
 
@@ -377,12 +484,13 @@ class FundamentalBootstrapService
                 'cadences' => $cadenceStats,
                 'period_count' => count(array_unique($periodEnds)),
             ],
-        ]);
+        ], $job->attempts);
     }
 
     protected function claimJob(int $runId, int $jobId): ?FundamentalBootstrapJob
     {
         return DB::transaction(function () use ($runId, $jobId): ?FundamentalBootstrapJob {
+            DB::table('stox_fund_bootstrap_control')->where('id', 1)->lockForUpdate()->first();
             $run = FundamentalBootstrapRun::query()->whereKey($runId)->lockForUpdate()->first();
             if (! $run || $run->status !== 'running') {
                 return null;
@@ -407,11 +515,12 @@ class FundamentalBootstrapService
         });
     }
 
-    protected function isJobActive(int $runId, int $jobId): bool
+    protected function isJobActive(int $runId, int $jobId, int $attempts): bool
     {
         return $this->withActiveJob(
             $runId,
             $jobId,
+            $attempts,
             fn (FundamentalBootstrapJob $activeJob, FundamentalBootstrapRun $activeRun): bool => true,
         ) === true;
     }
@@ -420,16 +529,17 @@ class FundamentalBootstrapService
      * Run and job locks serialize every durable worker write against cancellation.
      * Provider I/O stays outside this transaction; stale workers fail closed here.
      */
-    protected function withActiveJob(int $runId, int $jobId, callable $callback): mixed
+    protected function withActiveJob(int $runId, int $jobId, int $attempts, callable $callback): mixed
     {
-        return DB::transaction(function () use ($runId, $jobId, $callback): mixed {
+        return DB::transaction(function () use ($runId, $jobId, $attempts, $callback): mixed {
+            DB::table('stox_fund_bootstrap_control')->where('id', 1)->lockForUpdate()->first();
             $run = FundamentalBootstrapRun::query()->whereKey($runId)->lockForUpdate()->first();
             if (! $run || $run->status !== 'running') {
                 return null;
             }
 
             $job = FundamentalBootstrapJob::query()->whereKey($jobId)->where('run_id', $runId)->lockForUpdate()->first();
-            if (! $job || $job->status !== FundamentalBootstrapJob::STATUS_RUNNING) {
+            if (! $job || $job->status !== FundamentalBootstrapJob::STATUS_RUNNING || (int) $job->attempts !== $attempts) {
                 return null;
             }
 
@@ -438,9 +548,9 @@ class FundamentalBootstrapService
     }
 
     /** @param array<string, mixed> $attributes */
-    protected function finishJob(int $runId, int $jobId, array $attributes): bool
+    protected function finishJob(int $runId, int $jobId, array $attributes, int $attempts): bool
     {
-        return $this->withActiveJob($runId, $jobId, function (FundamentalBootstrapJob $job) use ($attributes): bool {
+        return $this->withActiveJob($runId, $jobId, $attempts, function (FundamentalBootstrapJob $job) use ($attributes): bool {
             $job->forceFill($attributes)->save();
 
             return true;
@@ -449,7 +559,7 @@ class FundamentalBootstrapService
 
     protected function recordJobFailure(int $runId, int $jobId, int $attempts, int $maxAttempts, string $error): void
     {
-        $this->withActiveJob($runId, $jobId, function (FundamentalBootstrapJob $job, FundamentalBootstrapRun $run) use ($attempts, $maxAttempts, $error): void {
+        $this->withActiveJob($runId, $jobId, $attempts, function (FundamentalBootstrapJob $job, FundamentalBootstrapRun $run) use ($attempts, $maxAttempts, $error): void {
             $willRetry = $attempts < $maxAttempts;
             $job->forceFill([
                 'status' => $willRetry ? FundamentalBootstrapJob::STATUS_RETRY : FundamentalBootstrapJob::STATUS_FAILED,
@@ -464,6 +574,7 @@ class FundamentalBootstrapService
     protected function finishRunSlice(int $runId): void
     {
         DB::transaction(function () use ($runId): void {
+            DB::table('stox_fund_bootstrap_control')->where('id', 1)->lockForUpdate()->first();
             $run = FundamentalBootstrapRun::query()->whereKey($runId)->lockForUpdate()->first();
             if (! $run || $run->status !== 'running') {
                 return;
@@ -539,6 +650,14 @@ class FundamentalBootstrapService
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
             ->all();
+    }
+
+    /** @param list<int> $ids @return list<int> */
+    public function eligibleStockIds(array $ids): array
+    {
+        return Stock::query()->effectivelyActive()->where(function ($query): void {
+            $query->where('is_benchmark', false)->orWhereNull('is_benchmark');
+        })->whereIn('id', $ids)->orderBy('id')->pluck('id')->map(fn ($id) => (int) $id)->all();
     }
 
     /**

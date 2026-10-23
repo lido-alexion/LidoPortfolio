@@ -305,7 +305,7 @@ export default function MlScoringAdminPage() {
                     </div>
                 </div>
             ) : null}
-            <div className="row g-3">
+            <div className="row g-3" id="ml-candidate-review">
                 {(dashboard?.horizons || []).map((row) => (
                     <div className="col-xl-4" key={row.horizon}>
                         <div className="card h-100">

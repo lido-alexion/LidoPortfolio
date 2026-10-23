@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api';
 import PriceVolumeChart from '../charts/PriceVolumeChart';
@@ -47,17 +47,19 @@ function IndexChangeChips({ changePercent }) {
 export default function IndexSection({ index, panelId, expanded, onToggle }) {
     const [priceRows, setPriceRows] = useState([]);
     const [priceLoading, setPriceLoading] = useState(false);
-    const [priceLoaded, setPriceLoaded] = useState(false);
+    const priceLoadedRef = useRef(false);
+    const [priceRetry, setPriceRetry] = useState(0);
     const [priceError, setPriceError] = useState('');
     const [constituents, setConstituents] = useState([]);
     const [constituentsLoading, setConstituentsLoading] = useState(false);
-    const [constituentsLoaded, setConstituentsLoaded] = useState(false);
+    const constituentsLoadedRef = useRef(false);
+    const [constituentsRetry, setConstituentsRetry] = useState(0);
     const [constituentSearch, setConstituentSearch] = useState('');
     const [constituentsMessage, setConstituentsMessage] = useState('');
     const [constituentsError, setConstituentsError] = useState('');
 
     useEffect(() => {
-        if (!expanded || priceLoaded || !index.stock_id) {
+        if (!expanded || priceLoadedRef.current || !index.stock_id) {
             return;
         }
         let cancelled = false;
@@ -66,15 +68,25 @@ export default function IndexSection({ index, panelId, expanded, onToggle }) {
         api.get(`/stocks/${index.stock_id}/market-prices`)
             .then((res) => {
                 if (!cancelled) {
-                    setPriceRows(res.data?.data || []);
-                    setPriceLoaded(true);
+                    const stock = res.data?.stock;
+                    const rows = res.data?.data;
+                    if (
+                        !stock
+                        || String(stock.id) !== String(index.stock_id)
+                        || String(stock.symbol || '').toUpperCase() !== String(index.symbol || '').toUpperCase()
+                        || !Array.isArray(rows)
+                    ) {
+                        throw new Error('Invalid index history response');
+                    }
+                    priceLoadedRef.current = true;
+                    setPriceRows(rows);
                 }
             })
             .catch(() => {
                 if (!cancelled) {
+                    priceLoadedRef.current = true;
                     setPriceRows([]);
                     setPriceError('Index history could not be loaded.');
-                    setPriceLoaded(true);
                 }
             })
             .finally(() => {
@@ -83,10 +95,10 @@ export default function IndexSection({ index, panelId, expanded, onToggle }) {
                 }
             });
         return () => { cancelled = true; };
-    }, [expanded, index.stock_id, priceLoaded]);
+    }, [expanded, index.stock_id, priceRetry]);
 
     useEffect(() => {
-        if (!expanded || constituentsLoaded || !index.constituents_available) {
+        if (!expanded || constituentsLoadedRef.current || !index.constituents_available) {
             return;
         }
         let cancelled = false;
@@ -95,16 +107,32 @@ export default function IndexSection({ index, panelId, expanded, onToggle }) {
         api.get(`/indexes/${index.symbol}/constituents`)
             .then((res) => {
                 if (!cancelled) {
-                    setConstituents(res.data?.data?.constituents || []);
-                    setConstituentsMessage(res.data?.data?.message || '');
-                    setConstituentsLoaded(true);
+                    const payload = res.data?.data;
+                    if (
+                        !payload
+                        || String(payload.symbol || '').toUpperCase() !== String(index.symbol || '').toUpperCase()
+                        || typeof payload.available !== 'boolean'
+                        || !Array.isArray(payload.constituents)
+                    ) {
+                        throw new Error('Invalid index constituents response');
+                    }
+                    if (payload.available && payload.constituents.length === 0 && payload.message) {
+                        constituentsLoadedRef.current = true;
+                        setConstituents([]);
+                        setConstituentsMessage('');
+                        setConstituentsError(payload.message);
+                        return;
+                    }
+                    constituentsLoadedRef.current = true;
+                    setConstituents(payload.constituents);
+                    setConstituentsMessage(payload.message || '');
                 }
             })
             .catch(() => {
                 if (!cancelled) {
+                    constituentsLoadedRef.current = true;
                     setConstituents([]);
                     setConstituentsError('Index constituents could not be loaded.');
-                    setConstituentsLoaded(true);
                 }
             })
             .finally(() => {
@@ -113,7 +141,7 @@ export default function IndexSection({ index, panelId, expanded, onToggle }) {
                 }
             });
         return () => { cancelled = true; };
-    }, [expanded, index.symbol, index.constituents_available, constituentsLoaded]);
+    }, [expanded, index.symbol, index.constituents_available, constituentsRetry]);
 
     const constituentColumns = useMemo(() => [
         {
@@ -209,7 +237,7 @@ export default function IndexSection({ index, panelId, expanded, onToggle }) {
                     ) : null}
 
                     <div className="mt-3">
-                        {priceError ? <div className="alert alert-danger" role="alert"><p>{priceError}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={priceLoading} onClick={() => setPriceLoaded(false)}>Retry index history</button></div> : <PriceVolumeChart
+                        {priceError ? <div className="alert alert-danger" role="alert"><p>{priceError}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={priceLoading} onClick={() => { priceLoadedRef.current = false; setPriceRetry((retry) => retry + 1); }}>Retry index history</button></div> : <PriceVolumeChart
                             rows={priceRows}
                             loading={priceLoading}
                             title="Historical close"
@@ -225,7 +253,7 @@ export default function IndexSection({ index, panelId, expanded, onToggle }) {
 
                     {index.constituents_available ? (
                         <div className="mt-3">
-                            {constituentsError ? <div className="alert alert-danger" role="alert"><p>{constituentsError}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={constituentsLoading} onClick={() => setConstituentsLoaded(false)}>Retry index constituents</button></div> : <DataTableCard
+                            {constituentsError ? <div className="alert alert-danger" role="alert"><p>{constituentsError}</p><button type="button" className="btn btn-sm btn-outline-primary" disabled={constituentsLoading} onClick={() => { constituentsLoadedRef.current = false; setConstituentsRetry((retry) => retry + 1); }}>Retry index constituents</button></div> : <DataTableCard
                                 title={`Constituents (${constituents.length || '…'})`}
                                 headerExtra={(
                                     <input

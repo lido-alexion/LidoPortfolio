@@ -91,6 +91,8 @@ final class HoldingAdoptionService
             $isMerge,
             $preservedTarget,
         ) {
+            app(\App\Services\Strategy\StrategyLifecycleAdmission::class)
+                ->lockForNewObligation((int) $profile->id, [(int) $strategy->id]);
             $stock = $holding->stock ?? $holding->stock()->firstOrFail();
             $rec = $this->ensureAttributionRecommendation($profile, $holding, $strategy);
             $this->attributeUnmanagedBuys($profile, $holding, (int) $rec->id);

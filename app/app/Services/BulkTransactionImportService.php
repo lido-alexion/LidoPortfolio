@@ -60,6 +60,14 @@ class BulkTransactionImportService
         $prepared = $this->validateAndPrepare($profile, $rows);
 
         $committed = DB::transaction(function () use ($profile, $batchKey, $prepared, $user) {
+            $owners = [];
+            foreach ($prepared as $item) {
+                if (preg_match('/^strategy:(\\d+)$/', (string) ($item['input']['owner_key'] ?? ''), $matches) === 1) {
+                    $owners[] = ['profile_id' => (int) $profile->id, 'strategy_id' => (int) $matches[1]];
+                }
+            }
+            app(\App\Services\Strategy\StrategyLifecycleAdmission::class)->lockOwners($owners);
+
             $batch = TransactionImportBatch::query()->create([
                 'batch_key' => $batchKey,
                 'profile_id' => $profile->id,

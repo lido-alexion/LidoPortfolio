@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+config.json
+state.json
+heartbeat.json
+audit.jsonl
+*.lock
+PAUSED
+STOPPED
+WAKE
+actions-read-token
+reports/*
+evidence/

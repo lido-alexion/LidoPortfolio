@@ -50,7 +50,16 @@ final class V1OperationOverlays
             ],
         ];
 
-        return V1AcceptanceOverlays::all() + [
+        return V1AcceptanceOverlays::all() + V1BootstrapOperationsOverlays::all() + V1BootstrapCoverageOverlays::all() + V1BootstrapScheduleOverlays::all() + V1BootstrapOperationalOutcomeOverlays::all() + V1BootstrapIntegrationOverlays::all() + [
+            'GET /api/v1/artifact-library/bundle-deployments/{uuid}' => [
+                'summary' => 'Read Bundle deployment evidence',
+                'description' => 'Reads the exact Bundle deployment for the authenticated requester and active Portfolio. Returns allowlisted status and member revision evidence; performs no mutation.',
+                'pathParameterSchemas' => ['uuid' => ['type' => 'string']],
+                'responses' => [
+                    '404' => ['description' => 'Deployment UUID is not available to this requester in the active Portfolio.'],
+                ],
+                'noBody' => true,
+            ],
             'GET /api/v1/admin/vps-health' => [
                 'summary' => 'Read aggregate VPS health samples',
                 'description' => 'Returns recent aggregate VPS health samples. Requires admin access.',
@@ -818,6 +827,43 @@ final class V1OperationOverlays
                 'summary' => 'Reconcile one GTT protection with the broker',
                 'description' => 'Ingests GTT fills through the existing ledger path, then retries synchronization. Partial GTT sells are filled first; remaining quantity is synchronized on a later cycle. Ambiguous broker outcomes do not place a duplicate.',
                 'successStatus' => '200',
+                'noBody' => true,
+            ],
+            'POST /api/v1/strategy-registry/{id}/disable' => [
+                'summary' => 'Pause a strategy without changing existing obligations',
+                'description' => 'Stops future strategy recommendation runs. Existing holdings, recommendations, orders, reservations, execution and settlement remain under their existing workflows; no financial side effect is performed.',
+                'noBody' => true,
+            ],
+            'GET /api/v1/strategy-registry/{id}/archive-blockers' => [
+                'summary' => 'Inspect strategy-owned archive blockers',
+                'description' => 'Returns exact unresolved strategy-owned records and their existing resolution routes. Other strategies and completed zero-balance history do not block retirement.',
+                'noBody' => true,
+                'responses' => [
+                    '404' => [
+                        'description' => 'Strategy does not exist in the active portfolio.',
+                        'content' => ['application/json' => ['schema' => ['$ref' => '#/components/schemas/EnvelopeError']]],
+                    ],
+                ],
+            ],
+            'POST /api/v1/strategy-registry/{id}/archive' => [
+                'summary' => 'Retire a fully resolved strategy',
+                'description' => 'Requires a user reason. Archives only when no strategy-owned holdings, actionable recommendations, pending executions/orders, reserved funds, or unsettled obligations remain. Returns HTTP 409 with exact blockers otherwise.',
+                'requestBody' => $json([
+                    'type' => 'object',
+                    'required' => ['reason'],
+                    'properties' => ['reason' => ['type' => 'string', 'minLength' => 3, 'maxLength' => 1000]],
+                    'additionalProperties' => true,
+                ]),
+                'responses' => [
+                    '409' => [
+                        'description' => 'Strategy still has unresolved owned work; meta.blockers contains code, label, count, and an existing resolution href.',
+                        'content' => ['application/json' => ['schema' => ['$ref' => '#/components/schemas/EnvelopeError']]],
+                    ],
+                ],
+            ],
+            'POST /api/v1/strategy-registry/{id}/restore' => [
+                'summary' => 'Restore a retired strategy as disabled',
+                'description' => 'Restoration never enables the strategy. A separate Enable action applies normal readiness checks.',
                 'noBody' => true,
             ],
             'PUT /api/v1/admin/users/{user}/automated-execution-entitlement' => [

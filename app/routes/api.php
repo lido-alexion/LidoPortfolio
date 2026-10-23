@@ -605,6 +605,38 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::post('/broker/kite/emergency-cancel-open-orders-disconnect', [TradingOsExecutionSafetyController::class, 'cancelOpenOrdersAndDisconnect'])->middleware('token.scope:execution:submit');
 
     Route::middleware('admin')->group(function () {
+        Route::prefix('/admin/fundamentals/bootstrap-operations')->group(function () {
+            $controller = \App\Http\Controllers\Api\V1\BootstrapOperationsController::class;
+            $coverage = \App\Http\Controllers\Api\V1\BootstrapCoverageOperationsController::class;
+            Route::get('/coverage', [$coverage, 'summary']);
+            Route::get('/gaps', [$coverage, 'gaps']);
+            Route::get('/warnings', [$coverage, 'warnings']);
+            Route::post('/reconcile', [$coverage, 'reconcile']);
+            Route::post('/gaps/acknowledge', [$coverage, 'acknowledgeGaps']);
+            Route::post('/warnings/acknowledge', [$coverage, 'acknowledgeWarnings']);
+            Route::post('/runs/from-gaps', [$controller, 'fromGaps']);
+            Route::get('/health', [$controller, 'health']);
+            Route::get('/runs', [$controller, 'index']);
+            Route::post('/runs', [$controller, 'launch']);
+            Route::get('/runs/{run}', [$controller, 'show'])->whereNumber('run');
+            Route::post('/runs/{run}/retry-failed', [$controller, 'retry'])->whereNumber('run');
+            Route::post('/runs/{run}/cancel', [$controller, 'cancel'])->whereNumber('run');
+            $schedules = \App\Http\Controllers\Api\V1\BootstrapScheduleOperationsController::class;
+            Route::get('/presets', [$schedules, 'presets']);
+            Route::post('/presets', [$schedules, 'createPreset']);
+            Route::put('/presets/{preset}', [$schedules, 'updatePreset'])->whereNumber('preset');
+            Route::post('/presets/{preset}/clone', [$schedules, 'clonePreset'])->whereNumber('preset');
+            Route::delete('/presets/{preset}', [$schedules, 'deletePreset'])->whereNumber('preset');
+            Route::get('/schedules', [$schedules, 'schedules']);
+            Route::post('/schedules', [$schedules, 'createSchedule']);
+            Route::put('/schedules/{schedule}', [$schedules, 'updateSchedule'])->whereNumber('schedule');
+            Route::put('/schedules/{schedule}/enabled', [$schedules, 'enable'])->whereNumber('schedule');
+            Route::post('/schedules/{schedule}/clone', [$schedules, 'cloneSchedule'])->whereNumber('schedule');
+            Route::get('/schedules/{schedule}/occurrences', [$schedules, 'occurrences'])->whereNumber('schedule');
+            Route::post('/schedules/{schedule}/run-now', [$schedules, 'runNow'])->whereNumber('schedule');
+            Route::get('/runs/{run}/export.csv', \App\Http\Controllers\Api\V1\BootstrapOperationsExportController::class)->whereNumber('run');
+
+        });
         Route::put('/admin/users/{user}/automated-execution-entitlement', [TradingOsAdminEntitlementController::class, 'update']);
         Route::get('/admin/fundamentals', [FundamentalDataController::class, 'adminStatus']);
         Route::put('/admin/fundamentals/settings', [FundamentalDataController::class, 'updateSettings']);
@@ -617,6 +649,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
         Route::prefix('/admin/ml/acceptance')->middleware(['throttle:60,1', \App\Http\Middleware\MlAcceptanceRequestLimit::class])->group(function () {
             $controller = \App\Http\Controllers\Api\V1\MlAcceptanceController::class;
             Route::get('/', [$controller, 'report']);
+            Route::get('/wizard', [$controller, 'wizard']);
             Route::get('/sources', [$controller, 'sources']);
             Route::post('/sources', [$controller, 'createSource']);
             Route::get('/sources/{source}', [$controller, 'source'])->whereUuid('source');
@@ -744,6 +777,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::post('/artifact-library/versions/{version}/export', [ArtifactActionController::class, 'export'])->whereNumber('version');
     Route::post('/artifact-library/import', [ArtifactActionController::class, 'import']);
     Route::post('/artifact-library/versions/{version}/bundle-plan', [ArtifactActionController::class, 'planBundle'])->whereNumber('version');
+    Route::get('/artifact-library/bundle-deployments/{uuid}', [ArtifactActionController::class, 'bundleDeployment'])->whereUuid('uuid');
     Route::post('/artifact-library/bundle-deployments/{uuid}/deploy', [ArtifactActionController::class, 'deployBundle'])->whereUuid('uuid');
     Route::put('/artifact-bindings/{uuid}/upgrade', [ArtifactActionController::class, 'upgrade'])->whereUuid('uuid');
     Route::put('/artifact-bindings/{uuid}/settings', [ArtifactActionController::class, 'settings'])->whereUuid('uuid');
@@ -804,7 +838,13 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
         ->where('id', '[A-Za-z0-9_\\-]+');
     Route::post('/strategy-registry/{id}/activate', [StrategyRegistryController::class, 'activate'])
         ->where('id', '[A-Za-z0-9_\\-]+');
+    Route::post('/strategy-registry/{id}/disable', [StrategyRegistryController::class, 'disable'])
+        ->where('id', '[A-Za-z0-9_\\-]+');
+    Route::get('/strategy-registry/{id}/archive-blockers', [StrategyRegistryController::class, 'archiveBlockers'])
+        ->where('id', '[A-Za-z0-9_\\-]+');
     Route::post('/strategy-registry/{id}/archive', [StrategyRegistryController::class, 'archive'])
+        ->where('id', '[A-Za-z0-9_\\-]+');
+    Route::post('/strategy-registry/{id}/restore', [StrategyRegistryController::class, 'restore'])
         ->where('id', '[A-Za-z0-9_\\-]+');
 
     Route::middleware('admin')->group(function () {

@@ -45,6 +45,21 @@ class NseXbrlFactsParserTest extends TestCase
 XML;
     }
 
+    /** @param list<string> $values */
+    private function documentWithDuplicateRevenueFacts(array $values): string
+    {
+        $facts = implode("\n", array_map(
+            static fn (string $value): string => '<ind:RevenueFromOperations contextRef="quarter" unitRef="INR">'.$value.'</ind:RevenueFromOperations>',
+            $values,
+        ));
+
+        return str_replace(
+            '<ind:RevenueFromOperations contextRef="quarter" unitRef="INR" decimals="-3">858634000</ind:RevenueFromOperations>',
+            $facts,
+            $this->document(),
+        );
+    }
+
     public function test_parses_only_comparable_quarter_and_instant_facts_without_dimensions(): void
     {
         $rows = (new NseXbrlFactsParser)->parse($this->document(), [
@@ -111,6 +126,61 @@ HTML;
         $this->assertSame('858634000', $byKey['revenue']['value']);
         $this->assertSame('-214344000', $byKey['net_income']['value']);
         $this->assertSame('2026-03-31', $byKey['revenue']['period_end']);
+    }
+
+    public function test_conflicting_duplicate_values_stay_quarantined_for_the_document(): void
+    {
+        $filing = [
+            'seq_Id' => 'synthetic-conflict',
+            'consolidated' => 'Standalone',
+            'broadcast_Date' => '13-May-2026 13:20:09',
+        ];
+
+        foreach ([['1', '2', '1'], ['1', '1', '2'], ['2', '1', '1'], ['1', '2', '3']] as $values) {
+            $rows = (new NseXbrlFactsParser)->parse($this->documentWithDuplicateRevenueFacts($values), $filing, 'quarterly');
+            $byKey = collect($rows)->keyBy('fact_key');
+
+            $this->assertArrayNotHasKey('revenue', $byKey->all(), 'Any conflicting values must quarantine the canonical fact, regardless of order.');
+            $this->assertArrayHasKey('net_income', $byKey->all(), 'An independent valid fact must remain available.');
+            $this->assertArrayHasKey('equity', $byKey->all(), 'A separate instant fact must remain available.');
+            $this->assertSame('non_pit', $byKey['net_income']['source_meta']['availability_quality']);
+        }
+    }
+
+    public function test_identical_duplicate_facts_keep_one_row_and_inline_conflicts_are_quarantined(): void
+    {
+        $filing = [
+            'seq_Id' => 'synthetic-repeat',
+            'consolidated' => 'Standalone',
+            'broadcast_Date' => '13-May-2026 13:20:09',
+        ];
+        $sameRows = (new NseXbrlFactsParser)->parse($this->documentWithDuplicateRevenueFacts(['77', '77', '77']), $filing, 'quarterly');
+        $sameRevenue = array_values(array_filter($sameRows, static fn (array $row): bool => $row['fact_key'] === 'revenue'));
+
+        $this->assertCount(1, $sameRevenue);
+        $this->assertSame('77', $sameRevenue[0]['value']);
+        $this->assertSame('nse_official', $sameRevenue[0]['provider']);
+        $this->assertSame('INR', $sameRevenue[0]['currency']);
+        $this->assertSame('non_pit', $sameRevenue[0]['source_meta']['availability_quality']);
+
+        $html = <<<'HTML'
+<html xmlns:ix="http://www.xbrl.org/2013/inlineXBRL" xmlns:xbrli="http://www.xbrl.org/2003/instance" xmlns:iso4217="http://www.xbrl.org/2003/iso4217" xmlns:ind="http://www.sebi.gov.in/xbrl/2026-01-31/in-capmkt">
+<head><meta charset="utf-8"></head><body><ix:header><ix:resources>
+<xbrli:context id="q"><xbrli:entity><xbrli:identifier scheme="test">ISSUER</xbrli:identifier></xbrli:entity><xbrli:period><xbrli:startDate>2026-01-01</xbrli:startDate><xbrli:endDate>2026-03-31</xbrli:endDate></xbrli:period></xbrli:context>
+<xbrli:unit id="INR"><xbrli:measure>iso4217:INR</xbrli:measure></xbrli:unit>
+</ix:resources></ix:header><table>
+<ix:nonFraction name="ind:RevenueFromOperations" contextRef="q" unitRef="INR">11</ix:nonFraction>
+<ix:nonFraction name="ind:RevenueFromOperations" contextRef="q" unitRef="INR">12</ix:nonFraction>
+<ix:nonFraction name="ind:RevenueFromOperations" contextRef="q" unitRef="INR">11</ix:nonFraction>
+<ix:nonFraction name="ind:ProfitLossForPeriod" contextRef="q" unitRef="INR">-5</ix:nonFraction>
+</table></body></html>
+HTML;
+        $inlineRows = (new NseXbrlFactsParser)->parse($html, $filing, 'quarterly');
+        $inlineByKey = collect($inlineRows)->keyBy('fact_key');
+
+        $this->assertArrayNotHasKey('revenue', $inlineByKey->all());
+        $this->assertSame('-5', $inlineByKey['net_income']['value']);
+        $this->assertSame('non_pit', $inlineByKey['net_income']['source_meta']['availability_quality']);
     }
 
     public function test_rejects_non_xbrl_and_unknown_cadence(): void

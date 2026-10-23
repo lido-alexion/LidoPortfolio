@@ -1,112 +1,350 @@
 import React from 'react';
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 import MlAcceptancePanel from '../../../resources/js/src/pages/MlAcceptancePanel';
 import api from '../../../resources/js/src/api';
 
 vi.mock('../../../resources/js/src/api', () => ({ default: { get: vi.fn(), post: vi.fn(), put: vi.fn() } }));
-const report = { campaign_id: 'campaign-1', campaign_status: 'ready', readiness: { ready: false, reason: 'acceptance_required' }, runtime: { queue_configuration_ready: true } };
+const steps = (current = 2, discovery = 'action_required') => [
+    { id: 'readiness', status: 'complete', reason_codes: [] }, { id: 'discovery', status: discovery, reason_codes: discovery === 'action_required' ? ['preflight_not_recorded'] : [] },
+    { id: 'sources', status: 'blocked', reason_codes: [] }, { id: 'backfill', status: 'blocked', reason_codes: [] },
+    { id: 'final_preflight', status: 'blocked', reason_codes: [] }, { id: 'training', status: 'blocked', reason_codes: [] }, { id: 'review', status: 'action_required', reason_codes: [] },
+];
+const wizard = (overrides = {}) => ({
+    reported_at: '2026-10-16T00:00:00Z', current_step: 2, steps: steps(), campaign: null, backfill: null,
+    required_sources: [], horizons: {}, migrations: {}, readiness: { ready: false },
+    identity: { build_id: 'build-a', environment: 'production', registry_version: 'registry-13', configuration_sha256: 'config-a', commit_sha: 'a'.repeat(40) },
+    runtime: { queue_configuration_ready: true }, lifecycle: { enabled: false, drift_trigger_enabled: false, horizons: {} },
+    ...overrides,
+});
+const sourcePage = { data: [], current_page: 1, last_page: 1 };
+let state;
 beforeEach(() => {
     vi.clearAllMocks();
-    api.get.mockImplementation(async (url) => ({ data: { data: url.endsWith('/sources') ? { data: [] } : report } }));
+    state = wizard();
+    api.get.mockImplementation(async (url) => ({ data: { data: url.endsWith('/wizard') ? state : sourcePage } }));
     api.post.mockResolvedValue({ data: { data: {} } });
 });
-afterEach(cleanup);
-describe('ML acceptance controls', () => {
-    it('opening and refreshing the panel only reads evidence', async () => {
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+describe('ML acceptance wizard', () => {
+    it('loads server-owned step state and renders all seven steps without mutating', async () => {
         render(<MlAcceptancePanel />);
-        await screen.findByText(/Campaign: ready/);
+        await screen.findByText('Run discovery preflight');
+        expect(screen.getByRole('navigation', { name: 'Production acceptance steps' })).toBeInTheDocument();
+        for (const name of ['Understand & check readiness', 'Discover required data', 'Add historical sources', 'Preview & apply backfill', 'Run final preflight', 'Train candidates', 'Review completion']) {
+            expect(screen.getByRole('navigation').textContent).toContain(name);
+        }
+        expect(api.get).toHaveBeenCalledWith('/v1/admin/ml/acceptance/wizard');
         expect(api.post).not.toHaveBeenCalled();
         expect(api.put).not.toHaveBeenCalled();
-        fireEvent.click(screen.getByRole('button', { name: 'Refresh acceptance report' }));
-        await waitFor(() => expect(api.get).toHaveBeenCalledTimes(4));
+    });
+
+    it('keeps the authoritative campaign identity visible after discovery advances to sources', async () => {
+        state = wizard({ current_step: 3, campaign: { id: 'campaign-88', status: 'preflight', cutoff_date: '2026-10-01' }, steps: steps(3, 'complete') });
+        render(<MlAcceptancePanel />);
+        const summary = await screen.findByRole('group', { name: 'Current acceptance campaign' });
+        expect(summary).toHaveTextContent('campaign-88');
+        expect(summary).toHaveTextContent('preflight');
+        expect(summary).toHaveTextContent('2026-10-01');
+    });
+
+    it('allows discovery before source upload and clearly explains that it does not train', async () => {
+        render(<MlAcceptancePanel />);
+        await screen.findByRole('button', { name: 'Run discovery preflight' });
+        expect(screen.getByText(/Preflight checks the canonical datasets/)).toBeInTheDocument();
+        expect(screen.getByLabelText('Training cutoff', { selector: 'input' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Run discovery preflight' })).toBeEnabled();
+    });
+
+    it('shows only the server-authorized recovery action for an existing backfill', async () => {
+        const base = { current_step: 4, campaign: { id: 'campaign-remediation', status: 'blocked' },
+            required_sources: [{ date: '2026-09-01', horizons: ['1m'], accepted_families: ['nse_cash_bhavcopy'], sources: [] }],
+            steps: ['complete', 'complete', 'complete', 'in_progress', 'blocked', 'blocked', 'action_required'].map((status, i) => ({ id: steps()[i].id, status, reason_codes: [] })),
+            backfill: { id: 44, status: 'running', mode: 'preview', cursor: 0, requested_dates: ['2026-09-01'], can_apply: false, can_retry_preview: false, resumable: false } };
+        state = wizard(base);
+        render(<MlAcceptancePanel />);
+        expect(await screen.findByText(/Backfill status:/)).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Run safe preview' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Resume backfill' })).not.toBeInTheDocument();
+
+        state = wizard({ ...base, backfill: { ...base.backfill, status: 'failed', resumable: true } });
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+        expect(await screen.findByRole('button', { name: 'Resume backfill' })).toBeEnabled();
+        expect(screen.queryByRole('button', { name: 'Run safe preview' })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Resume backfill' }));
+        await waitFor(() => expect(api.post).toHaveBeenCalledWith('/v1/admin/ml/acceptance/backfills/44/resume'));
+    });
+
+    it('offers a new safe preview after server-confirmed backfill cancellation', async () => {
+        state = wizard({ current_step: 4, campaign: { id: 'campaign-remediation', status: 'blocked' },
+            required_sources: [{ date: '2026-09-01', horizons: ['1m'], accepted_families: ['nse_cash_bhavcopy'], sources: [{ id: 'sealed-retry', status: 'sealed', family: 'nse_cash_bhavcopy', date: '2026-09-01' }] }],
+            steps: ['complete', 'complete', 'complete', 'cancelled', 'blocked', 'blocked', 'action_required'].map((status, i) => ({ id: steps()[i].id, status, reason_codes: [] })),
+            backfill: { id: 45, status: 'cancelled', mode: 'preview', cursor: 0, requested_dates: ['2026-09-01'], can_apply: false, can_retry_preview: true, resumable: false } });
+        render(<MlAcceptancePanel />);
+        expect(await screen.findByText((_, element) => element?.tagName === 'P' && element.textContent.includes('Backfill status: cancelled'))).toBeInTheDocument();
+        const preview = await screen.findByRole('button', { name: 'Run safe preview' });
+        expect(preview).toBeEnabled();
+        fireEvent.click(preview);
+        await waitFor(() => expect(api.post).toHaveBeenCalledWith('/v1/admin/ml/acceptance/backfills/preview', expect.objectContaining({
+            campaign_id: 'campaign-remediation', sources: ['sealed-retry'],
+        })));
+    });
+
+    it('shows how to recover a failed source validation with a new exact-date upload', async () => {
+        state = wizard({ current_step: 3, campaign: { id: 'campaign-sources', status: 'blocked' },
+            required_sources: [{ date: '2026-09-01', horizons: ['1m'], accepted_families: ['nse_cash_bhavcopy'], sources: [] }],
+            steps: ['complete', 'complete', 'action_required', 'blocked', 'blocked', 'blocked', 'action_required'].map((status, i) => ({ id: steps()[i].id, status, reason_codes: [] })) });
+        api.get.mockImplementation(async (url) => ({ data: { data: url.includes('/sources') ? { ...sourcePage, data: [{ id: 'bad-source', status: 'failed', received: 20, manifest: { filename: 'wrong.csv', date: '2026-09-01', source: 'nse_cash_bhavcopy' } }] } : state } }));
+        render(<MlAcceptancePanel />);
+        expect(await screen.findByText(/Validation failed\. Check the official filename and content date, then start a new upload\./)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Upload and queue validation' })).toBeDisabled();
+        fireEvent.change(screen.getByLabelText('Required date'), { target: { value: '2026-09-01' } });
+        fireEvent.change(screen.getByLabelText('Official CSV or ZIP'), { target: { files: [new File(['invalid fixture'], 'cm01SEP2026bhav.csv', { type: 'text/csv' })] } });
+        expect(screen.getByRole('button', { name: 'Upload and queue validation' })).toBeEnabled();
         expect(api.post).not.toHaveBeenCalled();
     });
-    it('training requires an explicit click after successful preflight', async () => {
+
+    it('shows plain-language copy and preserves unknown codes in advanced diagnostics', async () => {
+        state = wizard({ current_step: 2, steps: [{ ...steps()[0] }, { id: 'discovery', status: 'blocked', reason_codes: ['unknown_new_blocker'] }, ...steps().slice(2)] });
         render(<MlAcceptancePanel />);
-        const start = await screen.findByRole('button', { name: 'Start 1m/3m/6m training' });
-        await waitFor(() => expect(start).not.toBeDisabled());
+        await screen.findByText(/unrecognized blocker/i);
+        expect(screen.getByText(/Open Advanced diagnostics and copy the blocker code/)).toBeInTheDocument();
+        const details = screen.getByText('Advanced diagnostics').closest('details');
+        expect(details.open).toBe(false);
+        fireEvent.click(screen.getByText('Advanced diagnostics'));
+        expect(details.open).toBe(true);
+        expect(details.textContent).toContain('unknown_new_blocker');
+    });
+
+    it('routes a source-missing discovery result to source step and keeps read-only steps safe', async () => {
+        state = wizard({ current_step: 3, steps: [
+            { id: 'readiness', status: 'complete', reason_codes: [] }, { id: 'discovery', status: 'complete', reason_codes: [] },
+            { id: 'sources', status: 'action_required', reason_codes: ['missing_required_source_date'] }, ...steps().slice(3),
+        ], required_sources: [{ date: '2026-09-01', horizons: ['1m'], accepted_families: ['nse_cash_bhavcopy'],
+            sources: [{ id: 'sealed-1', status: 'sealed', family: 'nse_cash_bhavcopy', date: '2026-09-01' }] }] });
+        api.get.mockImplementation(async (url) => ({ data: { data: url.includes('/sources') ? { ...sourcePage, data: [{ id: 'sealed-1', status: 'sealed', received: 10, manifest: { filename: 'cm01SEP2026bhav.csv', date: '2026-09-01', source: 'nse_cash_bhavcopy' } }] } : state } }));
+        render(<MlAcceptancePanel />);
+        expect(await screen.findByText('2026-09-01 — 1m horizon(s)')).toBeInTheDocument();
+        expect(screen.getByRole('checkbox', { name: 'Select cm01SEP2026bhav.csv' })).toBeEnabled();
+        await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Select cm01SEP2026bhav.csv' })).toBeChecked());
         expect(api.post).not.toHaveBeenCalled();
-        fireEvent.click(start);
+    });
+
+    it('continues from selected sealed sources into Backfill and runs an explicit safe preview', async () => {
+        state = wizard({ current_step: 3, campaign: { id: 'campaign-sources', status: 'blocked', cutoff_date: '2026-10-01' }, steps: [
+            { id: 'readiness', status: 'complete', reason_codes: [] }, { id: 'discovery', status: 'complete', reason_codes: [] },
+            { id: 'sources', status: 'action_required', reason_codes: ['missing_required_source_date'] }, { id: 'backfill', status: 'action_required', reason_codes: [] }, ...steps().slice(4),
+        ], required_sources: [{ date: '2026-09-01', horizons: ['1m'], accepted_families: ['nse_cash_bhavcopy'],
+            sources: [{ id: 'sealed-1', status: 'sealed', family: 'nse_cash_bhavcopy', date: '2026-09-01' }] }] });
+        api.get.mockImplementation(async (url) => ({ data: { data: url.includes('/sources')
+            ? { ...sourcePage, data: [{ id: 'sealed-1', status: 'sealed', received: 10, manifest: { filename: 'cm01SEP2026bhav.csv', date: '2026-09-01', source: 'nse_cash_bhavcopy' } }] }
+            : state } }));
+        render(<MlAcceptancePanel />);
+
+        await screen.findByText('2026-09-01 — 1m horizon(s)');
+        const source = await screen.findByRole('checkbox', { name: 'Select cm01SEP2026bhav.csv' });
+        await waitFor(() => expect(source).toBeChecked());
+        fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+        expect(await screen.findByRole('heading', { name: 'Preview & apply backfill' })).toBeInTheDocument();
+        const preview = await screen.findByRole('button', { name: 'Run safe preview' });
+        fireEvent.click(preview);
+        await waitFor(() => expect(api.post).toHaveBeenCalledWith('/v1/admin/ml/acceptance/backfills/preview', expect.objectContaining({
+            campaign_id: 'campaign-sources', sources: ['sealed-1'],
+        })));
+    });
+
+    it('requires a successful preview and explicit confirmation before backfill apply', async () => {
+        state = wizard({ current_step: 4, steps: [
+            { id: 'readiness', status: 'complete', reason_codes: [] }, { id: 'discovery', status: 'complete', reason_codes: [] },
+            { id: 'sources', status: 'complete', reason_codes: [] }, { id: 'backfill', status: 'action_required', reason_codes: [] }, ...steps().slice(4),
+        ], backfill: { id: 42, status: 'completed', mode: 'preview', can_apply: true, cursor: 1, requested_dates: ['2026-09-01'], results: { '2026-09-01': { snapshot_sha256: 'abc', diagnostics: { mapping_percentage: 95 } } } } });
+        render(<React.StrictMode><MlAcceptancePanel /></React.StrictMode>);
+        const apply = await screen.findByRole('button', { name: 'Apply reviewed backfill' });
+        apply.focus();
+        fireEvent.click(apply);
+        let dialog = await screen.findByRole('alertdialog');
+        expect(dialog).toHaveTextContent('Matching proven data is idempotent');
+        expect(dialog.querySelector('[data-confirmation-title]')).toHaveFocus();
+        fireEvent.keyDown(document, { key: 'Escape' });
+        await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+        expect(apply).toHaveFocus();
+        fireEvent.click(apply);
+        dialog = await screen.findByRole('alertdialog');
+        expect(dialog.querySelector('[data-confirmation-title]')).toHaveFocus();
+        expect(api.post).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('button', { name: 'Confirm apply' }));
+        await waitFor(() => expect(api.post).toHaveBeenCalledWith('/v1/admin/ml/acceptance/backfills/42/apply'));
+    });
+
+    it('requires explicit training confirmation and says all horizons remain candidates', async () => {
+        state = wizard({ current_step: 6, campaign: { id: 'campaign-1', status: 'ready', cutoff_date: '2026-10-01', identity: { build_id: 'build-a', configuration_sha256: 'config-a' } },
+            steps: ['complete', 'complete', 'not_required', 'not_required', 'complete', 'action_required', 'blocked'].map((status, i) => ({ id: steps()[i].id, status, reason_codes: [] })) });
+        render(<MlAcceptancePanel />);
+        const startTraining = await screen.findByRole('button', { name: 'Start 1m/3m/6m candidate training' });
+        startTraining.focus();
+        fireEvent.click(startTraining);
+        const dialog = await screen.findByRole('alertdialog');
+        expect(dialog).toHaveTextContent('active models, schedules and drift settings will not change');
+        expect(dialog).toHaveAttribute('aria-modal', 'false');
+        expect(dialog.querySelector('[data-confirmation-title]')).toHaveFocus();
+        fireEvent.keyDown(document, { key: 'Escape' });
+        await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+        expect(startTraining).toHaveFocus();
+        fireEvent.click(startTraining);
+        expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+        expect(api.post).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('button', { name: 'Confirm and start' }));
         await waitFor(() => expect(api.post).toHaveBeenCalledWith('/v1/admin/ml/acceptance/campaigns/campaign-1/start'));
+    });
+
+    it.each(['failed', 'cancelled'])('offers a server-gated fresh campaign recovery after %s training', async (terminalStatus) => {
+        state = wizard({ current_step: 6, campaign: { id: `campaign-${terminalStatus}`, status: terminalStatus, cutoff_date: '2026-10-01' },
+            steps: ['complete', 'complete', 'not_required', 'not_required', 'complete', terminalStatus, 'action_required'].map((status, i) => ({ id: steps()[i].id, status, reason_codes: [] })) });
+        api.post.mockImplementation(async (url, payload) => {
+            if (url.endsWith('/campaigns')) {
+                expect(payload).toEqual({ cutoff_date: '2026-10-01' });
+                state = wizard({ current_step: 2, campaign: { id: 'campaign-fresh', status: 'preflight', cutoff_date: payload.cutoff_date }, steps: steps(2, 'in_progress') });
+            }
+            return { data: { data: { id: 'campaign-fresh' } } };
+        });
+        render(<MlAcceptancePanel />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Start a fresh acceptance campaign' }));
+        const dialog = await screen.findByRole('alertdialog');
+        expect(dialog).toHaveTextContent('prior campaign and run evidence remain saved');
+        expect(dialog).toHaveTextContent('No training starts');
+        fireEvent.click(screen.getByRole('button', { name: 'Start discovery preflight' }));
+        expect(await screen.findByText('campaign-fresh')).toBeInTheDocument();
+        expect(await screen.findByText('Preflight is running. Closing this page will not stop it.')).toBeInTheDocument();
+        expect(api.post).toHaveBeenCalledWith('/v1/admin/ml/acceptance/campaigns', { cutoff_date: '2026-10-01' });
         expect(api.post).toHaveBeenCalledTimes(1);
     });
-    it('loads older sources and resumes queued validation explicitly', async () => {
-        api.get.mockImplementation(async (url) => ({ data: { data: url.includes('/sources') ? {
-            current_page: url.includes('?page=2') ? 2 : 1, last_page: 2,
-            data: url.includes('?page=2') ? [{ id: 'older-source', status: 'queued', manifest: { filename: 'older.csv', date: '2026-09-01' } }] : [],
-        } : report } }));
+
+    it('opens information help on touch, closes it on outside touch and Escape', async () => {
         render(<MlAcceptancePanel />);
-        const next = await screen.findByRole('button', { name: 'Next sources' });
-        await waitFor(() => expect(next).not.toBeDisabled());
-        fireEvent.click(next);
-        await screen.findByText('older.csv');
-        expect(api.get).toHaveBeenCalledWith('/v1/admin/ml/acceptance/sources?page=2');
+        const help = await screen.findByRole('button', { name: 'More information about training cutoff' });
+        expect(help).toHaveAttribute('aria-expanded', 'false');
+        expect(help).toHaveAttribute('aria-describedby');
+        expect(help).toHaveClass('acceptance-help');
+        fireEvent.click(help);
+        expect(help).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getByRole('tooltip')).toBeVisible();
+        fireEvent.pointerDown(document.body);
+        expect(help).toHaveAttribute('aria-expanded', 'false');
+        fireEvent.click(help);
+        expect(help).toHaveAttribute('aria-expanded', 'true');
+        fireEvent.keyDown(document, { key: 'Escape' });
+        expect(help).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('distinguishes quality rejection from operational failure', async () => {
+        state = wizard({ current_step: 7, campaign: { id: 'campaign-2', status: 'qualified', qualified_at: '2026-10-16T00:00:00Z' },
+            steps: steps(7, 'complete').map((item) => ({ ...item, status: 'complete' })), evidence_current: true,
+            horizons: { '1m': { training: { run_id: 1, status: 'completed_rejected', evidence_complete: true } } }, readiness: { ready: true } });
+        render(<MlAcceptancePanel />);
+        expect(await screen.findByText('Production acceptance is current for this build and configuration.')).toBeInTheDocument();
+        expect(screen.getByText('Training run 1: Completed — quality gates not met')).toBeInTheDocument();
+        expect(screen.getByText(/Promotion, schedules, lifecycle automation and drift are separate actions/)).toBeInTheDocument();
         expect(api.post).not.toHaveBeenCalled();
-        const resume = screen.getByRole('button', { name: 'Resume validation' });
-        await waitFor(() => expect(resume).not.toBeDisabled());
-        fireEvent.click(resume);
-        await waitFor(() => expect(api.post).toHaveBeenCalledWith('/v1/admin/ml/acceptance/sources/older-source/resume'));
-        expect(await screen.findByText('Source page 2 of 2')).toBeInTheDocument();
     });
 
-    it('uploads from zero when a new source response omits the offset', async () => {
-        const contents = new Uint8Array([1, 2, 3]);
-        const file = new File([contents], 'cm30SEP2026bhav.csv');
-        Object.defineProperty(file, 'arrayBuffer', { value: async () => contents.buffer });
-        vi.stubGlobal('crypto', { subtle: { digest: vi.fn(async () => new Uint8Array(32).buffer) } });
-        api.post.mockImplementation(async (url) => url.endsWith('/sources')
-            ? { data: { data: { id: 'new-source', manifest: { bytes: 3 } } } }
-            : { data: { data: { status: 'queued' } } });
+    it('refreshes authoritative state after an idle-to-active successful mutation', async () => {
+        api.post.mockImplementationOnce(async () => {
+            state = wizard({ current_step: 2, campaign: { id: 'campaign-new', status: 'preflight', cutoff_date: '2026-10-16' }, steps: steps(2, 'in_progress') });
+            return { data: { data: { id: 'campaign-new' } } };
+        });
         render(<MlAcceptancePanel />);
-        await screen.findByText(/Campaign: ready/);
-        fireEvent.change(screen.getByLabelText('Official CSV or ZIP'), { target: { files: [file] } });
-        fireEvent.click(screen.getByRole('button', { name: 'Upload and queue validation' }));
-        await waitFor(() => expect(api.post).toHaveBeenCalledWith('/v1/admin/ml/acceptance/sources/new-source/finalize'));
-        expect(api.put).toHaveBeenCalledWith('/v1/admin/ml/acceptance/sources/new-source/chunks', { offset: 0, chunk: btoa('\u0001\u0002\u0003') });
-        vi.unstubAllGlobals();
+        fireEvent.click(await screen.findByRole('button', { name: 'Run discovery preflight' }));
+        expect(await screen.findByText('campaign-new')).toBeInTheDocument();
+        expect(screen.getByText(/preflight; cutoff/)).toBeInTheDocument();
+        await waitFor(() => expect(api.get.mock.calls.filter(([url]) => url.endsWith('/wizard')).length).toBeGreaterThanOrEqual(2));
+        expect(screen.queryByRole('button', { name: 'Run discovery preflight' })).not.toBeInTheDocument();
+        expect(api.post).toHaveBeenCalledTimes(1);
     });
 
-    it('resumes an existing partial upload from its validated server offset', async () => {
-        const contents = new Uint8Array(1024 * 1024 + 3);
-        const file = new File([contents], 'cm30SEP2026bhav.csv');
-        Object.defineProperty(file, 'arrayBuffer', { value: async () => contents.buffer });
-        vi.stubGlobal('crypto', { subtle: { digest: vi.fn(async () => new Uint8Array(32).buffer) } });
-        const partial = { id: 'partial-source', status: 'uploading', received: 1024 * 1024,
-            manifest: { filename: file.name, bytes: file.size, sha256: '0'.repeat(64) } };
-        api.get.mockImplementation(async (url) => ({ data: { data: url.endsWith('/sources')
-            ? { data: [partial] }
-            : url.endsWith('/sources/partial-source') ? partial : report } }));
-        api.post.mockResolvedValue({ data: { data: { status: 'queued' } } });
+    it('keeps an uncertain action message and suppresses a duplicate when refresh shows it started', async () => {
+        const timeout = Object.assign(new Error('timeout'), { code: 'ECONNABORTED' });
+        api.post.mockImplementationOnce(async () => {
+            state = wizard({ current_step: 2, campaign: { id: 'campaign-accepted', status: 'preflight', cutoff_date: '2026-10-16' }, steps: steps(2, 'in_progress') });
+            throw timeout;
+        });
         render(<MlAcceptancePanel />);
-        await screen.findByText(/Campaign: ready/);
-        fireEvent.change(screen.getByLabelText('Official CSV or ZIP'), { target: { files: [file] } });
-        fireEvent.change(screen.getByLabelText('Resume upload'), { target: { value: 'partial-source' } });
-        fireEvent.click(screen.getByRole('button', { name: 'Upload and queue validation' }));
-        await waitFor(() => expect(api.post).toHaveBeenCalledWith('/v1/admin/ml/acceptance/sources/partial-source/finalize'));
-        expect(api.put).toHaveBeenCalledWith('/v1/admin/ml/acceptance/sources/partial-source/chunks', expect.objectContaining({ offset: 1024 * 1024 }));
-        vi.unstubAllGlobals();
+        fireEvent.click(await screen.findByRole('button', { name: 'Run discovery preflight' }));
+        expect(await screen.findByText(/may have accepted the action/)).toBeInTheDocument();
+        await waitFor(() => expect(api.get.mock.calls.filter(([url]) => url.endsWith('/wizard')).length).toBeGreaterThanOrEqual(2));
+        expect(await screen.findByText('campaign-accepted')).toBeInTheDocument();
+        expect(screen.getByText(/preflight; cutoff/)).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Run discovery preflight' })).not.toBeInTheDocument();
+        expect(api.post).toHaveBeenCalledTimes(1);
     });
 
-    it('refuses an invalid existing offset without uploading or finalizing', async () => {
-        const contents = new Uint8Array([1, 2, 3]);
-        const file = new File([contents], 'cm30SEP2026bhav.csv');
-        Object.defineProperty(file, 'arrayBuffer', { value: async () => contents.buffer });
-        vi.stubGlobal('crypto', { subtle: { digest: vi.fn(async () => new Uint8Array(32).buffer) } });
-        const invalid = { id: 'bad-source', status: 'uploading', received: -1,
-            manifest: { filename: file.name, bytes: file.size, sha256: '0'.repeat(64) } };
-        api.get.mockImplementation(async (url) => ({ data: { data: url.endsWith('/sources')
-            ? { data: [invalid] }
-            : url.endsWith('/sources/bad-source') ? invalid : report } }));
+    it('recovers from a failed status poll without discarding the page', async () => {
+        let failFirstWizardGet = true;
+        api.get.mockImplementation(async (url) => {
+            if (url.endsWith('/wizard') && failFirstWizardGet) { failFirstWizardGet = false; throw new Error('network'); }
+            return { data: { data: url.endsWith('/wizard') ? state : sourcePage } };
+        });
         render(<MlAcceptancePanel />);
-        await screen.findByText(/Campaign: ready/);
-        fireEvent.change(screen.getByLabelText('Official CSV or ZIP'), { target: { files: [file] } });
-        fireEvent.change(screen.getByLabelText('Resume upload'), { target: { value: 'bad-source' } });
-        fireEvent.click(screen.getByRole('button', { name: 'Upload and queue validation' }));
-        expect(await screen.findByText(/Could not read a valid current upload offset/)).toBeInTheDocument();
-        expect(api.put).not.toHaveBeenCalled();
-        expect(api.post).not.toHaveBeenCalled();
-        vi.unstubAllGlobals();
+        expect(await screen.findByText(/Status refresh failed/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Retry status' }));
+        expect(await screen.findByRole('button', { name: 'Run discovery preflight' })).toBeInTheDocument();
+        expect(screen.queryByText(/Status refresh failed/)).not.toBeInTheDocument();
     });
 
+    it('keeps polling through repeated transient failures and recovers without a manual retry', async () => {
+        vi.useFakeTimers();
+        state = wizard({ current_step: 2, campaign: { id: 'campaign-polling', status: 'preflight', cutoff_date: '2026-10-16' }, steps: steps(2, 'in_progress') });
+        let wizardReads = 0;
+        api.get.mockImplementation(async (url) => {
+            if (url.endsWith('/wizard')) {
+                wizardReads += 1;
+                if (wizardReads === 2 || wizardReads === 3) throw new Error('transient poll failure');
+                return { data: { data: state } };
+            }
+            return { data: { data: sourcePage } };
+        });
+        render(<MlAcceptancePanel />);
+        await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+        expect(screen.getByText('campaign-polling')).toBeInTheDocument();
+        await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+        await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+        await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+        expect(wizardReads).toBeGreaterThanOrEqual(4);
+        expect(screen.queryByText(/Status refresh failed/)).not.toBeInTheDocument();
+        expect(screen.getByText('campaign-polling')).toBeInTheDocument();
+        vi.useRealTimers();
+    });
+
+    it('ignores an older refresh response after a newer authoritative response', async () => {
+        let releaseOlder;
+        let reads = 0;
+        api.get.mockImplementation((url) => {
+            if (!url.endsWith('/wizard')) return Promise.resolve({ data: { data: sourcePage } });
+            reads += 1;
+            if (reads === 1) return Promise.resolve({ data: { data: state } });
+            if (reads === 2) return new Promise((resolve) => { releaseOlder = resolve; });
+            state = wizard({ current_step: 2, campaign: { id: 'newer-campaign', status: 'blocked' } });
+            return Promise.resolve({ data: { data: state } });
+        });
+        render(<MlAcceptancePanel />);
+        await screen.findByText('Run discovery preflight');
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+        expect(await screen.findByText('newer-campaign')).toBeInTheDocument();
+        releaseOlder({ data: { data: wizard({ current_step: 2, campaign: { id: 'older-campaign', status: 'preflight' } }) } });
+        await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+        expect(screen.getByText('newer-campaign')).toBeInTheDocument();
+        expect(screen.queryByText('older-campaign')).not.toBeInTheDocument();
+    });
+
+    it('uses backend evidence freshness verbatim for qualified completion', async () => {
+        state = wizard({ current_step: 5, campaign: { id: 'campaign-stale', status: 'qualified', qualified_at: '2026-10-16T00:00:00Z', identity: { build_id: 'old-build', registry: 'registry-12', configuration_sha256: 'old-config', commit_sha: 'b'.repeat(40) } },
+            evidence_current: false, readiness: { ready: true },
+            steps: ['complete', 'complete', 'not_required', 'not_required', 'action_required', 'complete', 'action_required'].map((status, index) => ({ id: steps()[index].id, status, reason_codes: [] })) });
+        render(<MlAcceptancePanel />);
+        fireEvent.click(await screen.findByRole('button', { name: /Review completion/ }));
+        expect(await screen.findByText(/Saved evidence is stale/)).toBeInTheDocument();
+        expect(screen.getByText(/old-build \/ build-a/)).toBeInTheDocument();
+        expect(screen.queryByText('Production acceptance is current for this build and configuration.')).not.toBeInTheDocument();
+    });
 });
