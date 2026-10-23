@@ -36,6 +36,7 @@ DEPLOYABLE = (
     ".github/workflows/*.yml", ".github/workflows/*.yaml",
 )
 VPS_HEALTH = ("app/scripts/vps-health/**", "ops/vps-health/**")
+CI_WATCHER = ("ops/ci-followup-watcher/**",)
 
 
 def matches(path: str, patterns: tuple[str, ...]) -> bool:
@@ -48,6 +49,7 @@ def classify(paths: list[str]) -> dict[str, bool]:
         "frontend": any(matches(path, FRONTEND) for path in paths),
         "deployable": any(matches(path, DEPLOYABLE) for path in paths),
         "vps_health": any(matches(path, VPS_HEALTH) for path in paths),
+        "ci_watcher": any(matches(path, CI_WATCHER) for path in paths),
     }
 
 
@@ -63,7 +65,7 @@ def release_allowed(values: dict[str, str]) -> tuple[bool, str]:
         return False, "checked out commit does not match the candidate SHA"
     if values.get("DEPLOYABLE") != "true":
         return False, "change set is not deployable"
-    for area in ("BACKEND", "FRONTEND", "VPS_HEALTH"):
+    for area in ("BACKEND", "FRONTEND", "VPS_HEALTH", "CI_WATCHER"):
         applicable = values.get(f"{area}_APPLICABLE")
         result = values.get(f"{area}_RESULT")
         if applicable not in {"true", "false"}:

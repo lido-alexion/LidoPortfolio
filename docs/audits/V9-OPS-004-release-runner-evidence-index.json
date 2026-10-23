@@ -1,0 +1,80 @@
+{
+  "epic": "V9-OPS-004",
+  "scope": "C: SSH runner incident diagnosis and normal release recovery",
+  "acceptance": {
+    "AC07": "satisfied: bounded stage diagnosis, full log retained and sha256 indexed; root cause remains unknown",
+    "AC08": "satisfied: existing normal CI1544 release receipt passed workflow deployment and authenticated smoke"
+  },
+  "failed_incident": {
+    "run_id": 39715911187,
+    "run_number": 1510,
+    "attempt": 1,
+    "job_id": 119627574129,
+    "head_sha": "ae3976e5957bb10332681e2475498e83b771f691",
+    "log": "CONTROL evidence store: original full CI1510 deploy log; sha256 retained below",
+    "sha256": "d084c9e2ac927a2e5764eeeb2679d1ea10b6a471bb7a8fbb85e7f80fc05aa179",
+    "stage": "SSH host-key discovery: ssh-keyscan -H $STOXLA_HOST >> ~/.ssh/known_hosts",
+    "observed_failure_utc": "2026-10-22T03:49:15.6241117Z",
+    "classification": "keyscan step failed before SSH authentication, upload, activation, health check, or smoke",
+    "cause": "unknown; DNS, address family, TCP/path reachability, and keyscan behavior cannot be distinguished from this log"
+  },
+  "successful_normal_release": {
+    "run_id": 39853227890,
+    "run_number": 1544,
+    "attempt": 1,
+    "conclusion": "success",
+    "updated_at": "2026-10-22T21:24:22Z",
+    "head_sha": "24bae26435efb586455e9a0f4e1516f25b1eb138",
+    "release_artifact": {
+      "id": 12459414675,
+      "sha256": "968c0d9e3a139fe2fcf6ddc70a44cded48b6bc11e756a6bf3bf60e1bd73f4f53",
+      "digest_match": true
+    },
+    "smoke_artifact": {
+      "id": 12460180778,
+      "sha256": "4541cafd29cdf16a68582664739d1eb39657ed1e271db5ecb7993b33d13282d2",
+      "digest_match": true,
+      "expected": 2,
+      "passed": 2,
+      "unexpected": 0,
+      "flaky": 0,
+      "skipped": 0
+    },
+    "deploy_job_id": 120096555245,
+    "deploy_log": "watcher evidence store: CI1544 deploy log; sha256 retained below",
+    "deploy_log_sha256": "e15d3df62ace6aa69a42cdf3bc9c7049ddc3e345cea51f0828a9d36f981efdb5",
+    "build_job_id": 120096230228,
+    "build_log_sha256": "02de2ea148acb4c225aa16790b534627644e5b03640f762d02e3a437fc110989",
+    "current_master_gate": "passed; log records candidate equals current master at 2026-10-22T21:22:37.0809201Z",
+    "activation": "release 20261022212220-24bae26435ef recorded live at 2026-10-22T21:22:53.2724522Z",
+    "runtime_health": "green for exact SHA 24bae26435efb586455e9a0f4e1516f25b1eb138 at 2026-10-22T21:22:50.8188521Z; repeat exact-SHA health passed at 21:22:58.7301451Z",
+    "authenticated_smoke": "Read-only production smoke passed 2/2, zero skipped/flaky/unexpected cases; smoke completed 2026-10-22T21:24:16Z. The 21:21:57.657Z built_at timestamp belongs to release metadata, not smoke report metadata.",
+    "release_built_at": "2026-10-22T21:21:57.657Z"
+  },
+  "workflow": {
+    "failed_sha": "ae3976e5957bb10332681e2475498e83b771f691",
+    "failed_workflow": ".github/workflows/deploy-stoxla-production.yml",
+    "failed_sha_inspection": "git show at failed SHA; normal ssh-keyscan, strict known_hosts SSH options, deployment concurrency, current-master equality gate, exact-SHA health and smoke present",
+    "successful_sha": "24bae26435efb586455e9a0f4e1516f25b1eb138",
+    "successful_workflow_revision": "job log identifies this workflow revision; ordinary keyscan/authenticated deploy path succeeds"
+  },
+  "other_receipts": {
+    "archive_inspection": "CONTROL CI1544 archive inspection receipt",
+    "release_evidence": "CONTROL CI1544 release artifact evidence receipt",
+    "failed_log_full": true,
+    "credential_values_included": false,
+    "ops001_audit_requested": "git show e5efb6d4:docs/current/V9-OPS-001-IMPLEMENTATION-AUDIT.md",
+    "ops001_audit_status": "At the time, the C lane could not read the requested abbreviated commit from its local object database. On 2026-10-23, root read the current canonical docs/current/V9-OPS-001-IMPLEMENTATION-AUDIT.md at source commit 35ee24901cc5e30f9363defc4ee9f075591c4668.",
+    "root_corroboration": {
+      "reviewed_at": "2026-10-23",
+      "source_commit": "35ee24901cc5e30f9363defc4ee9f075591c4668",
+      "canonical_document": "docs/current/V9-OPS-001-IMPLEMENTATION-AUDIT.md",
+      "finding": "Root read the latest canonical audit and corroborated the CI1544 qualified normal release evidence."
+    }
+  },
+  "limitations": [
+    "No direct SSH/network probe, credential read, manual rerun/dispatch, deployment, or infrastructure change was performed.",
+    "No cause is inferred for DNS, TCP, address-family, or keyscan failure from the failed log.",
+    "CI1544 proves the normal release path succeeded at that time; it does not prove the earlier transient cause or connectivity at a later time."
+  ]
+}

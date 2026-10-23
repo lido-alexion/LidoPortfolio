@@ -1,0 +1,31 @@
+{
+  "repository": "lido-alexion/LidoPortfolio",
+  "poll_seconds": 300,
+  "targets": [
+    {
+      "name": "integrated-pr-240-disabled",
+      "kind": "pull_request",
+      "number": 240,
+      "branch": "",
+      "workflow": "ci.yml",
+      "worktree": "",
+      "enabled": false
+    },
+    {
+      "name": "owned-pr-241-ci-consolidation",
+      "kind": "pull_request",
+      "number": 241,
+      "branch": "chore/ci-cd-consolidation-20261020",
+      "workflow": "ci.yml",
+      "worktree": "",
+      "enabled": false
+    },
+    {
+      "name": "current-master-nightly-journey",
+      "kind": "nightly_master",
+      "workflow": "journey-nightly.yml",
+      "worktree": "",
+      "enabled": false
+    }
+  ]
+}

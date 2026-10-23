@@ -1,0 +1,45 @@
+{
+  "epic": "V9-OPS-004",
+  "root_reviewed_at": "2026-10-23T07:52:16.856459+00:00",
+  "scope": "new adapter-owned tasks only; legacy reviewer2154507 and live watcher2043767 untouched",
+  "source_sha256": "f859eeba26e695bb6ea64ccc6a42556f8df471c91609ecb398bf2a7fefddd05d",
+  "actual_codex": {
+    "task_id": "ops004-source-reference-audit",
+    "task_uuid": "18892691-b1c3-4cda-90e3-79980b395942",
+    "pid": 2933447,
+    "start_ticks": 46642460,
+    "approval_policy": "never",
+    "states_observed": [
+      "starting",
+      "running",
+      "completed"
+    ],
+    "meaningful_events": 8,
+    "started_at": "2026-10-23T07:49:49.815730+00:00",
+    "finished_at": "2026-10-23T07:50:07.318577+00:00",
+    "returncode": 0,
+    "final_receipt": "exit status recorded; output retained",
+    "raw_output_sha256": "5453f136e3f5a759b04dca45390319866de74174a31ab6d1cd5133a793adf7b3",
+    "root_observations_sha256": "e42a73ba0fa9bd6c42189e3e2c1df0738705403fe8cf349fa6210e2d247c085c"
+  },
+  "harmless_fixture": {
+    "observed_at": "2026-10-23T07:50:33.003315+00:00",
+    "owned_pid": 2934379,
+    "start_ticks": 46646768,
+    "states_observed": [
+      "waiting_input",
+      "cancelled",
+      "completed"
+    ],
+    "duplicate_refused": true,
+    "partial_output_retained": true,
+    "cancelled_group_inactive": true,
+    "no_remaining_owned_group": true,
+    "receipt_sha256": "3030d157bc698d3749a2d262aaf828c61716a71a9c757b53a1b1eb259afb5ea2"
+  },
+  "root_decision": {
+    "AC05": "accepted: real current CLI starting/running/completed plus isolated waiting/failure coverage",
+    "AC06": "accepted: permitted harmless exact-owned recovery preserved output, refused duplicate and confirmed inactivity; no legacy capability inferred"
+  },
+  "remaining_dependency": "AC02 live watcher activation remains blocked by prior binding denials; no restart/source swap/replacement dispatcher attempted"
+}
