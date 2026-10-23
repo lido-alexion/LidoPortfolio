@@ -62,7 +62,9 @@ export function registerBrowserErrorReporter() {
     if (registered || typeof window === 'undefined') return false;
     registered = true;
     window.addEventListener('error', (event) => {
-        if (event?.target !== window || !(event.error instanceof Error) || !event.filename) return;
+        // Compare the event's own dispatch identities; test/browser wrappers may
+        // expose a different Window proxy through the global binding.
+        if (event?.target !== event?.currentTarget || !(event.error instanceof Error) || !event.filename) return;
         try {
             if (new URL(event.filename, window.location.origin).origin !== window.location.origin) return;
         } catch { return; }

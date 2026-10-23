@@ -67,6 +67,13 @@ describe('browser runtime error reporter', () => {
         const reporter = await loadReporter();
         reporter.registerBrowserErrorReporter();
         window.dispatchEvent(new Event('error'));
+        const resource = document.createElement('img');
+        document.body.append(resource);
+        resource.dispatchEvent(new ErrorEvent('error', {
+            bubbles: true, error: new Error('resource'),
+            filename: `${window.location.origin}/build/assets/app.js`,
+        }));
+        resource.remove();
         window.dispatchEvent(new ErrorEvent('error', {
             error: new Error('external'), filename: 'chrome-extension://private-id/file.js',
         }));
