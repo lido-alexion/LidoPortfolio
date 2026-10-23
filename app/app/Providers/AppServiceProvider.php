@@ -31,6 +31,8 @@ use Illuminate\Console\Events\ScheduledTaskStarting;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
+use Illuminate\Http\Client\Events\ResponseReceived;
+use Illuminate\Http\Client\Events\ConnectionFailed;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
@@ -96,6 +98,15 @@ class AppServiceProvider extends ServiceProvider
     {
         Schema::defaultStringLength(191);
 
+        Event::listen(ResponseReceived::class, function (ResponseReceived $event): void {
+            app(\App\Services\Operations\ExternalHttpFailureObserver::class)
+                ->response($event->request, $event->response->status());
+        });
+        Event::listen(ConnectionFailed::class, function (ConnectionFailed $event): void {
+            app(\App\Services\Operations\ExternalHttpFailureObserver::class)
+                ->connectionFailure($event->request, $event->exception);
+        });
+
         if ($rootUrl = config('app.url')) {
             URL::forceRootUrl($rootUrl);
             if (str_starts_with($rootUrl, 'https://')) {
@@ -127,6 +138,9 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('stock-search', function (Request $request) {
             return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+        });
+        RateLimiter::for('browser-error-report', function (Request $request) {
+            return Limit::perMinute(30)->by($request->user()?->id ?: $request->ip());
         });
 
         RateLimiter::for('stock-validate', function (Request $request) {

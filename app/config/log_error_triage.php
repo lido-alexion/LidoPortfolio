@@ -11,6 +11,6 @@ return [
     'build_sha' => env('STOX_DEPLOY_SHA', env('APP_BUILD_SHA', '')),
     'ignored_exceptions' => [\Illuminate\Validation\ValidationException::class, \Illuminate\Auth\AuthenticationException::class],
     'ignored_messages' => [],
-    'ignored_routes' => ['up', 'api/health', 'api/ops/api-failures', 'api/telemetry/otlp/v1/traces', 'api/telemetry/route-view', 'api/logs/frontend', 'api/internal/v1/ai-runtime/configuration', 'api/internal/v1/ai-runtime/reservations', 'api/internal/v1/ai-runtime/inference-events', 'api/internal/v1/ai-runtime/settlements'],
+    'ignored_routes' => ['up', 'api/health', 'api/ops/api-failures', 'api/ops/browser-errors', 'api/telemetry/otlp/v1/traces', 'api/telemetry/route-view', 'api/logs/frontend', 'api/internal/v1/ai-runtime/configuration', 'api/internal/v1/ai-runtime/reservations', 'api/internal/v1/ai-runtime/inference-events', 'api/internal/v1/ai-runtime/settlements'],
     'retention_days' => (int) env('STOX_LOG_ERROR_TRIAGE_RETENTION_DAYS', 90),
 ];

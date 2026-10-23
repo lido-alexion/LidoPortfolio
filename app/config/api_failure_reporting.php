@@ -15,4 +15,7 @@ return [
     'retention_days' => max(1, (int) env('STOX_GITHUB_INCIDENT_RETENTION_DAYS', 90)),
     'expected_statuses' => array_values(array_filter(array_map('intval', explode(',', (string) env('STOX_API_FAILURE_EXPECTED_STATUSES', ''))))),
     'expected_endpoint_statuses' => json_decode((string) env('STOX_API_FAILURE_EXPECTED_ENDPOINT_STATUSES', '{}'), true) ?: [],
+    // Only these fixed provider domains are eligible for outbound HTTP observation.
+    // Add a provider only with an explicit review of its auth and endpoint policy.
+    'observed_provider_hosts' => ['nseindia.com', 'bseindia.com', 'yahoo.com', 'alphavantage.co', 'kite.trade'],
 ];

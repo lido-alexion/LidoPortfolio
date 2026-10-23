@@ -309,7 +309,14 @@ class V9LogErrorTriageTest extends TestCase
         $this->getJson('/api/admin/log-error-triages')->assertUnauthorized();
         $this->actingAs(User::factory()->create())->getJson('/api/admin/log-error-triages')->assertForbidden();
         $this->actingAs(User::factory()->create(['is_admin' => true]));
-        $response = $this->getJson('/api/admin/log-error-triages?classification=code_bug&min_confidence=0.9')->assertOk()->assertJsonPath('triages.total', 1)->assertJsonPath('decision_ttl_seconds', 21600);
+        $response = $this->getJson('/api/admin/log-error-triages?classification=code_bug&min_confidence=0.9')->assertOk()->assertJsonPath('triages.total', 1)->assertJsonPath('decision_ttl_seconds', 21600)
+            ->assertJsonPath('github.enabled', true)
+            ->assertJsonPath('reporting.api.enabled', true)
+            ->assertJsonPath('reporting.api.token_configured', true)
+            ->assertJsonPath('reporting.api.queue_uses_log_triage', true)
+            ->assertJsonPath('reporting.api.worker_configuration_status', 'unknown_needs_operator_verification')
+            ->assertJsonMissingPath('reporting.github.state');
+        self::assertIsBool($response->json('reporting.api.token_configured'));
         self::assertStringNotContainsString('person@example.com', $response->getContent());
         self::assertStringNotContainsString('fake-test-token', $response->getContent());
         $this->getJson('/api/admin/log-error-triages/'.$row->id)->assertOk()->assertJsonPath('triage.github_issue_number', 43)->assertJsonPath('decisions.total', 1);

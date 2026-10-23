@@ -25,8 +25,12 @@ class CreateOrLinkGitHubIssueJob implements ShouldQueue
             try {
                 $incident = ApiFailureIncident::find($this->incidentId);
                 if (! $incident) return;
-                $marker = '<!-- stox-api-failure:'.$incident->fingerprint.' -->';
-                $result = $github->report($marker, '[Auto][API] '.($incident->component ?: 'StoX').' '.($incident->http_status ?: $incident->failure_class ?: 'failure'), $this->body($incident, $marker), ['automated', 'api-failure', app()->environment()], $incident->last_seen_at);
+                $browser = $incident->direction === 'browser_runtime';
+                $marker = '<!-- '.($browser ? 'stox-browser-observation:' : 'stox-api-failure:').$incident->fingerprint.' -->';
+                $title = $browser
+                    ? '[Auto][Browser] StoX observed '.($incident->component ?: 'a browser runtime fault')
+                    : '[Auto][API] '.($incident->component ?: 'StoX').' '.($incident->http_status ?: $incident->failure_class ?: 'failure');
+                $result = $github->report($marker, $title, $this->body($incident, $marker), ['automated', $browser ? 'browser-observation' : 'api-failure', app()->environment()], $incident->last_seen_at);
                 $incident->update([
                     'sync_status' => $result['status'], 'sync_error' => $result['reason'] ?? null,
                     'github_issue_number' => $result['number'] ?? $incident->github_issue_number,
@@ -41,8 +45,11 @@ class CreateOrLinkGitHubIssueJob implements ShouldQueue
 
     private function body(ApiFailureIncident $incident, string $marker): string
     {
+        $browser = $incident->direction === 'browser_runtime';
         return implode("\n", [
-            'Automated StoX API failure report.',
+            $browser
+                ? 'Automated StoX browser runtime observation. This is an untrusted client signal, not a confirmed code bug; no client message, stack, URL, or account data is retained.'
+                : 'Automated StoX API failure report.',
             '',
             '- Environment: `'.$incident->environment.'`',
             '- Direction: `'.$incident->direction.'`',

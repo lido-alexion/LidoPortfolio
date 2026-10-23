@@ -1,4 +1,5 @@
 import React from 'react';
+import { reportReactRenderFailure } from '../telemetry/browserErrorReporter';
 import logger from '../services/logger';
 
 function persistRenderError(message, info) {
@@ -30,6 +31,7 @@ export default class ErrorBoundary extends React.Component {
     }
 
     componentDidCatch(error, info) {
+        reportReactRenderFailure();
         logger.error('React rendering failure', {
             category: 'UI',
             message: error?.message,

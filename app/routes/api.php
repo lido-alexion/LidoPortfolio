@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AccountPerformanceController;
 use App\Http\Controllers\Api\ApiFailureReportController;
+use App\Http\Controllers\Api\BrowserErrorReportController;
 use App\Http\Controllers\Api\AdminAuditExplorerController;
 use App\Http\Controllers\Api\AdminStockController;
 use App\Http\Controllers\Api\AiPlatformAdminController;
@@ -207,6 +208,10 @@ Route::prefix('developer-options')->middleware('auth:sanctum')
     ->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class)->group(function () {
         Route::post('/guided-tour/reset', [DeveloperOptionsController::class, 'resetGuidedTour']);
     });
+
+Route::post('/ops/browser-errors', [BrowserErrorReportController::class, 'store'])
+    ->middleware(['auth:sanctum', 'throttle:browser-error-report'])
+    ->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class);
 
 Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/ai/assistant/feedback', [AiAssistantStreamController::class, 'feedback'])->middleware('throttle:20,1');
