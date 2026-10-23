@@ -3,7 +3,7 @@
   "scope": "C: SSH runner incident diagnosis and normal release recovery",
   "acceptance": {
     "AC07": "satisfied: bounded stage diagnosis, full log retained and sha256 indexed; root cause remains unknown",
-    "AC08": "satisfied: existing normal CI1544 release receipt passed workflow deployment and authenticated smoke"
+    "AC08": "Historical normal1544 qualified recovery accepted; latest normal1550 failed before activation, current implementation delivery unresolved."
   },
   "failed_incident": {
     "run_id": 39715911187,
@@ -76,5 +76,94 @@
     "No direct SSH/network probe, credential read, manual rerun/dispatch, deployment, or infrastructure change was performed.",
     "No cause is inferred for DNS, TCP, address-family, or keyscan failure from the failed log.",
     "CI1544 proves the normal release path succeeded at that time; it does not prove the earlier transient cause or connectivity at a later time."
-  ]
+  ],
+  "latest_normal_release": {
+    "run_id": 39926556873,
+    "run_number": 1550,
+    "attempt": 1,
+    "head_sha": "ef4ed62e2bfe1a298f93e4339f38c8794630c743",
+    "conclusion": "failure",
+    "deploy_job_id": 120333863030,
+    "package_job_id": 120333526017,
+    "stage": "SSH host-key discovery; before authentication/upload/activation",
+    "failure_utc": "2026-10-23T09:06:59.1455754Z",
+    "cause": "UNKNOWN: no discriminating DNS/TCP/address-family/keyscan evidence",
+    "release_artifact": {
+      "artifact_id": 12491236137,
+      "zip_sha256": "d7a03022ce5ddaec35fd6b1a95ced545bb550f9243d333131d294a70ba01cb98",
+      "tgz_sha256": "b7fc9af6fe188b816279a6a49c82eaaa826df0d9a6f221eea19e7fe5cf378c21",
+      "zip_entries": [
+        "stoxla-release.tgz"
+      ],
+      "release_entry_count": 11142,
+      "metadata_paths": [
+        "./bootstrap/build-info.json",
+        "./scripts/write-build-info.mjs"
+      ]
+    },
+    "embedded_metadata": {
+      "build_id": "build-1550-attempt-1-ef4ed62e2bfe1a298f93e4339f38c8794630c743",
+      "commit_sha": "ef4ed62e2bfe1a298f93e4339f38c8794630c743",
+      "short_sha": "ef4ed62e2bfe",
+      "ref": "master",
+      "workflow": "CI",
+      "run_id": "39926556873",
+      "run_number": "1550",
+      "run_attempt": "1",
+      "built_at": "2026-10-23T09:06:27.389Z"
+    },
+    "root_reviewed_logs": [
+      {
+        "job_id": 120324270346,
+        "file": "ci1550-120324270346.log",
+        "sha256": "ccbb353f951885c47ce27a6c6f44cc0d90e15e5dd0b00dc57cb79261aa7ee16d",
+        "full": true
+      },
+      {
+        "job_id": 120324270664,
+        "file": "ci1550-120324270664.log",
+        "sha256": "3991e0a9c15671f464690b2a5ed2a28239038d455a5630ad09aafdf19dffc87d",
+        "full": true
+      },
+      {
+        "job_id": 120324335893,
+        "file": "ci1550-120324335893.log",
+        "sha256": "2d2db98c55eef83c208b7ef0517982d4c32597a9a1d53bf8d084f4978efe5238",
+        "full": true
+      },
+      {
+        "job_id": 120324335914,
+        "file": "ci1550-120324335914.log",
+        "sha256": "61d832f90c00dd422a095fe4287b7cb625872c2f96d5f6e0cc5cc9568295aa35",
+        "full": true
+      },
+      {
+        "job_id": 120324335940,
+        "file": "ci1550-120324335940.log",
+        "sha256": "d8c33916aef6127ea30f7a43eb0e8aabba6c8f9d441b05db1c8aa94b456907ec",
+        "full": true
+      },
+      {
+        "job_id": 120333526017,
+        "file": "ci1550-120333526017.log",
+        "sha256": "1f24ad36c4fab498d2c3fa89e69cf159c11abe48abecd8d9d98e0b2acaa586aa",
+        "full": true
+      },
+      {
+        "job_id": 120333863030,
+        "file": "ci1550-120333863030.log",
+        "sha256": "2e00191a2738a967f3fed90768c719b3acee8a291d4b3408834094af84fa3ad4",
+        "full": true
+      }
+    ],
+    "smoke_artifact": null,
+    "current_public_runtime": {
+      "http_status": 200,
+      "build": 1544,
+      "head_sha": "24bae26435efb586455e9a0f4e1516f25b1eb138",
+      "observed_at": "2026-10-23T09:37:18.331870+00:00",
+      "authenticated_smoke": false
+    },
+    "next_dependency": "Approved runner diagnostic evidence or next independently legitimate normal qualified release; no manual/dummy trigger."
+  }
 }

@@ -23,3 +23,12 @@ The deployment workflow read at failed SHA `ae3976e...` retains normal `ssh-keys
 ## Root corroboration added 2026-10-23
 
 Root later read the latest canonical `docs/current/V9-OPS-001-IMPLEMENTATION-AUDIT.md` at source commit `35ee24901cc5e30f9363defc4ee9f075591c4668` and corroborated the qualified CI1544 normal-release record. The earlier C-lane unavailable-file finding remains as a dated historical observation. Release `built_at` and smoke completion/report metadata are distinct, as detailed above and in the evidence index.
+
+
+## Recurrence on normal CI1550 — 23 October 2026
+
+The legitimate PR261 merge produced normal master run39926556873 / build1550, attempt1, SHA `ef4ed62e2bfe1a298f93e4339f38c8794630c743`. All applicable checks and package job120333526017 passed. Release artifact12491236137 was uploaded and downloaded with matching SHA-256 `d7a03022ce5ddaec35fd6b1a95ced545bb550f9243d333131d294a70ba01cb98`; root independently verified the downloaded ZIP bytes and embedded exact-SHA metadata.
+
+Deploy job120333863030 again failed during `Configure SSH`: keyscan started at09:06:54.113UTC and exited1 at09:06:59.1455754UTC. No authentication, upload, activation, health or authenticated smoke followed, so the new candidate is not a successful release and no rollback occurred. Public identity subsequently remained HTTP200/build1544, exact SHA `24bae26435efb586455e9a0f4e1516f25b1eb138`.
+
+The failure log does not distinguish DNS, address family, TCP/path or keyscan behavior. Recurrence prevents treating historical1544 success as proof of present runner reachability. Historical AC08 success remains retained, but current delivery is unresolved. No evidenced code remedy is available from these logs. Preserve normal host verification and do not infer invalid credentials when authentication never ran. Additional approved runner diagnostics or a later independently legitimate normal release are needed; no manual rerun/dispatch/dummy release or infrastructure changes are authorized.
