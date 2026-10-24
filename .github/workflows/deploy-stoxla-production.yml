@@ -58,6 +58,7 @@ jobs:
           RELEASE_SHA: ${{ github.sha }}
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          STOX_GITHUB_TOKEN: ${{ secrets.STOX_GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           test -n "$STOXLA_HOST"
@@ -91,6 +92,7 @@ jobs:
               raise SystemExit(f"Production activation blocked: candidate {candidate_sha} is not current master {master_sha}")
           print(f"Current master matches candidate {candidate_sha}")
           '
+          python3 ops/issue-reporting/transfer_secret.py --release-sha "$RELEASE_SHA"
           ssh $SSH_OPTS "${STOXLA_SSH_USER}@${STOXLA_HOST}" \
             "STOXLA_RELEASE_ID='${RELEASE_ID}' STOXLA_EXPECTED_COMMIT='${RELEASE_SHA}' '${REMOTE_DIR}/stoxla-deploy-release.sh' '${REMOTE_DIR}/stoxla-release.tgz'"
 
