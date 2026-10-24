@@ -61,6 +61,59 @@ test('notification history filters and read controls fit mobile screens', async 
     await expectNoHorizontalOverflow(page);
 });
 
+test('notification bell deep link survives read failure and reload, with a retry for detail failure', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installCommMocks(page);
+    let failDetail = false;
+    let detailRequests = 0;
+    const notification = { id: 17, attention_state: 'unread', condition_state: 'na', type: 'recommendation.changed', severity: 'info', title: 'Recommendation changed', message: 'A product update is ready.', occurrence_count: 1, timeline: [], deliveries: [] };
+    // These fixtures exercise the deployed UI contract without any real account writes.
+    await page.route(/\/api\/notification-center(?:\/17(?:\/read)?)?(?:\?|$)/, async (route) => {
+        const { pathname } = new URL(route.request().url());
+        if (pathname.endsWith('/notification-center/17/read') && route.request().method() === 'POST') {
+            return route.fulfill({ status: 503, json: { message: 'Synthetic read-update failure' } });
+        }
+        if (pathname.endsWith('/notification-center/17') && route.request().method() === 'GET') {
+            detailRequests += 1;
+            return failDetail
+                ? route.fulfill({ status: 503, json: { message: 'Synthetic detail failure' } })
+                : route.fulfill({ json: { data: notification } });
+        }
+        if (pathname.endsWith('/notification-center') && route.request().method() === 'GET') {
+            return route.fulfill({ json: { data: [notification], meta: { unread_count: 1, active_critical_count: 0 } } });
+        }
+        return route.fallback();
+    });
+
+    await page.goto('/notification-history');
+    await page.getByRole('button', { name: '1 unread notifications', exact: true }).click();
+    const pane = page.locator('.lido-notification-menu');
+    await expect(pane).toBeVisible();
+    const bounds = await pane.boundingBox();
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+    await pane.getByRole('link', { name: /Recommendation changed/ }).click();
+    await expect(page).toHaveURL(/notification-history\?notification=17$/);
+    const detail = page.getByRole('region', { name: 'Notification detail', exact: true });
+    await expect(detail.getByText('A product update is ready.')).toBeVisible();
+    await expect(detail.getByText('Notification loaded, but its read status could not be updated.')).toBeVisible();
+    await page.reload();
+    await expect(detail.getByText('A product update is ready.')).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+
+    failDetail = true;
+    await page.reload();
+    await expect(page.getByText('Notification details unavailable')).toBeVisible();
+    await expect(detail).toHaveCount(0);
+    failDetail = false;
+    const beforeRetry = detailRequests;
+    await page.getByRole('button', { name: 'Retry notification', exact: true }).click();
+    await expect(detail.getByText('A product update is ready.')).toBeVisible();
+    expect(detailRequests).toBeGreaterThan(beforeRetry);
+    await page.reload();
+    await expect(detail.getByText('A product update is ready.')).toBeVisible();
+});
+
 test('notification channels follow save, test, then enable in a real browser', async ({ page }) => {
     await installInvestorWorkflowApiMocks(page);
     let telegram = { channel: 'telegram', configured: false, enabled: false, health_status: 'unverified', verified_at: null, last_test_status: null, bot_token_configured: false, chat_id: null };
