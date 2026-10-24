@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import api from '../api';
 import { useNotifications } from '../context/NotificationContext';
@@ -33,7 +33,9 @@ export default function NotificationHistoryPage() {
     const [params, setParams] = useSearchParams();
     const { refresh: refreshChrome } = useNotifications();
     const [payload, setPayload] = useState({ data: [], meta: {} });
-    const [detail, setDetail] = useState(null);
+    const [detailState, setDetailState] = useState({ id: null, status: 'idle', data: null, notice: null });
+    const [detailAttempt, setDetailAttempt] = useState(0);
+    const detailRequest = useRef(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [retryingDelivery, setRetryingDelivery] = useState(null);
@@ -41,6 +43,10 @@ export default function NotificationHistoryPage() {
     const [appliedFilters, setAppliedFilters] = useState({});
     const view = params.get('view') || 'all';
     const selectedId = params.get('notification');
+    const selectedIdRef = useRef(selectedId);
+    selectedIdRef.current = selectedId;
+    const detail = detailState.id === selectedId ? detailState.data : null;
+    const detailLoading = selectedId && (detailState.id !== selectedId || detailState.status === 'loading');
     const primaryAction = safePrimaryAction(detail?.primary_action);
 
     const load = useCallback(async () => {
@@ -58,24 +64,54 @@ export default function NotificationHistoryPage() {
         }
     }, [view, appliedFilters]);
 
+    const reloadAll = () => Promise.all([load(), refreshChrome()]);
+    const reloadAllRef = useRef(reloadAll);
+    reloadAllRef.current = reloadAll;
+
     useEffect(() => { load(); }, [load]);
     useEffect(() => {
+        const request = {};
+        detailRequest.current = request;
+        const isCurrent = () => detailRequest.current === request && selectedIdRef.current === selectedId;
         if (!selectedId) {
-            setDetail(null);
-            return;
-        }
-        api.get(`/notification-center/${selectedId}`, { skipErrorToast: true })
-            .then(async (response) => {
-                setDetail(response.data?.data || null);
-                await api.post(`/notification-center/${selectedId}/read`, null, { skipErrorToast: true });
-                await reloadAll();
-            })
-            .catch(() => setDetail(null));
-        // Opening one notification intentionally marks attention read.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedId]);
+            setDetailState({ id: null, status: 'idle', data: null, notice: null });
+        } else {
+            setDetailState({ id: selectedId, status: 'loading', data: null, notice: null });
+            const loadDetail = async () => {
+                let data;
+                try {
+                    const response = await api.get(`/notification-center/${encodeURIComponent(selectedId)}`, { skipErrorToast: true });
+                    data = response.data?.data;
+                    if (!data) throw new Error('Notification detail unavailable');
+                } catch {
+                    if (isCurrent()) setDetailState({ id: selectedId, status: 'error', data: null, notice: null });
+                    return;
+                }
+                if (!isCurrent()) return;
+                setDetailState({ id: selectedId, status: 'ready', data, notice: null });
 
-    const reloadAll = () => Promise.all([load(), refreshChrome()]);
+                // Attention updates are secondary: their failure must not erase loaded detail.
+                try {
+                    await api.post(`/notification-center/${encodeURIComponent(selectedId)}/read`, null, { skipErrorToast: true });
+                } catch {
+                    if (isCurrent()) setDetailState((current) => ({ ...current, notice: 'Notification loaded, but its read status could not be updated.' }));
+                    return;
+                }
+                if (!isCurrent()) return;
+                try {
+                    await reloadAllRef.current();
+                } catch {
+                    if (isCurrent()) setDetailState((current) => ({ ...current, notice: 'Notification loaded, but the notification list could not be refreshed.' }));
+                }
+            };
+            void loadDetail();
+        }
+        return () => {
+            if (detailRequest.current === request) detailRequest.current = null;
+        };
+        // Opening one notification intentionally marks attention read.
+    }, [selectedId, detailAttempt]);
+
     const markRead = async (id) => {
         await api.post(`/notification-center/${id}/read`, null, { skipErrorToast: true });
         await reloadAll();
@@ -91,16 +127,21 @@ export default function NotificationHistoryPage() {
 
     const retryDelivery = async (deliveryId) => {
         if (!selectedId) return;
-        setRetryingDelivery(deliveryId);
+        const request = detailRequest.current;
+        const attempt = { selectedId, deliveryId };
+        const isCurrent = () => detailRequest.current === request && selectedIdRef.current === selectedId;
+        setRetryingDelivery(attempt);
         try {
             await api.post(`/notification-center/${selectedId}/deliveries/${deliveryId}/retry`, null, { skipErrorToast: true });
+            if (!isCurrent()) return;
             const response = await api.get(`/notification-center/${selectedId}`, { skipErrorToast: true });
-            setDetail(response.data?.data || null);
+            if (!isCurrent()) return;
+            setDetailState((current) => ({ ...current, data: response.data?.data || current.data }));
             showToast('Delivery queued for retry.', 'success');
         } catch (requestError) {
-            showToast(requestError.response?.data?.message || 'Could not queue delivery retry.', 'danger');
+            if (isCurrent()) showToast(requestError.response?.data?.message || 'Could not queue delivery retry.', 'danger');
         } finally {
-            setRetryingDelivery(null);
+            setRetryingDelivery((current) => current === attempt ? null : current);
         }
     };
 
@@ -131,9 +172,14 @@ export default function NotificationHistoryPage() {
                 <div className="col-12"><button className="btn btn-sm btn-primary" type="submit">Apply filters</button><button className="btn btn-sm btn-link" type="button" onClick={() => { const empty = { q: '', from: '', to: '', category: '', channel: '', delivery_status: '', read_state: '' }; setFilters(empty); setAppliedFilters(empty); }}>Clear</button></div>
             </form>
 
+            {detailLoading && <DataState variant="loading" message="Loading notification details." className="mb-3" />}
+            {selectedId && detailState.id === selectedId && detailState.status === 'error' && (
+                <DataState variant="error" title="Notification details unavailable" message="This notification could not be loaded. It may no longer be available, or the request failed." className="mb-3" action={<button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setDetailAttempt((value) => value + 1)}>Retry notification</button>} />
+            )}
             {selectedId && detail && (
                 <section className="card mb-3" aria-label="Notification detail">
                     <div className="card-body">
+                        {detailState.notice && <p className="alert alert-warning" role="alert">{detailState.notice}</p>}
                         <div className="d-flex justify-content-between gap-3">
                             <div>
                                 <span className={`badge ${severityClass(detail.severity)}`}>{detail.severity.replace('_', ' ')}</span>
@@ -173,10 +219,10 @@ export default function NotificationHistoryPage() {
                                                             type="button"
                                                             className="btn btn-outline-primary btn-sm"
                                                             aria-label={`Retry ${delivery.channel} delivery`}
-                                                            disabled={retryingDelivery === delivery.id}
+                                                            disabled={retryingDelivery?.selectedId === selectedId && retryingDelivery?.deliveryId === delivery.id}
                                                             onClick={() => retryDelivery(delivery.id)}
                                                         >
-                                                            {retryingDelivery === delivery.id ? 'Queuing…' : 'Retry'}
+                                                            {retryingDelivery?.selectedId === selectedId && retryingDelivery?.deliveryId === delivery.id ? 'Queuing…' : 'Retry'}
                                                         </button>
                                                     )}
                                                 </div>

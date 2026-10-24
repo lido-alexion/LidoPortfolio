@@ -4711,8 +4711,9 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     position: fixed;
     top: 4.5rem;
     right: 1rem;
-    width: min(24rem, calc(100vw - 2rem));
-    max-width: calc(100vw - 2rem);
+    /* Keep the pane inside the available width when a scrollbar is present. */
+    width: min(24rem, calc(100% - 2rem));
+    max-width: calc(100% - 2rem);
     max-height: min(70vh, 32rem);
     overflow-y: auto;
     z-index: 1050;
@@ -4729,8 +4730,8 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     .lido-notification-menu {
         top: 4rem;
         right: 0.5rem;
-        width: calc(100vw - 1rem);
-        max-width: calc(100vw - 1rem);
+        width: calc(100% - 1rem);
+        max-width: calc(100% - 1rem);
     }
 }
 
