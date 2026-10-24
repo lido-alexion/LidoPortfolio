@@ -61,8 +61,9 @@ test('notification history filters and read controls fit mobile screens', async 
     await expectNoHorizontalOverflow(page);
 });
 
-test('notification bell deep link survives read failure and reload, with a retry for detail failure', async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
+for (const width of [390, 1280]) {
+test(`notification bell deep link survives read failure and reload, with a retry for detail failure (${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
     await installCommMocks(page);
     let failDetail = false;
     let detailRequests = 0;
@@ -90,8 +91,9 @@ test('notification bell deep link survives read failure and reload, with a retry
     const pane = page.locator('.lido-notification-menu');
     await expect(pane).toBeVisible();
     const bounds = await pane.boundingBox();
+    const viewportWidth = await page.evaluate(() => document.documentElement.clientWidth);
     expect(bounds.x).toBeGreaterThanOrEqual(0);
-    expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewportWidth);
     await pane.getByRole('link', { name: /Recommendation changed/ }).click();
     await expect(page).toHaveURL(/notification-history\?notification=17$/);
     const detail = page.getByRole('region', { name: 'Notification detail', exact: true });
@@ -113,6 +115,7 @@ test('notification bell deep link survives read failure and reload, with a retry
     await page.reload();
     await expect(detail.getByText('A product update is ready.')).toBeVisible();
 });
+}
 
 test('notification channels follow save, test, then enable in a real browser', async ({ page }) => {
     await installInvestorWorkflowApiMocks(page);
