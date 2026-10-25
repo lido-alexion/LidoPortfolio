@@ -56,6 +56,7 @@ class UniverseDailyBhavcopySyncService
             'stocks' => $stocks->sortBy('id')->map(fn ($s) => [
                 (int) $s->id, $s->exchange, $s->symbol, $s->series, $s->isin, $s->bse_scrip_code,
             ])->values()->all(),
+            'identity_evidence_sha256' => $this->matcher->evidenceHash(),
             'ignored' => $ignored->map(fn ($g) => [$g->stock_id, $g->gap_from->toDateString(), $g->gap_to->toDateString()])->all(),
         ], JSON_THROW_ON_ERROR));
         Cache::forget('setting.'.self::KEY_RECEIPTS);
@@ -71,6 +72,7 @@ class UniverseDailyBhavcopySyncService
             'from_date' => $from->toDateString(), 'to_date' => $to->toDateString(),
             'dry_run' => $dryRun, 'files_downloaded' => 0, 'file_cache_hits' => 0,
             'file_errors' => 0, 'identity_conflicts' => 0, 'projected_rows' => 0,
+            'historical_identity_rows' => 0, 'historical_adjustment_required' => 0,
             'files' => [], 'unavailable_stocks' => 0, 'unavailable_samples' => [],
         ];
         for ($day = $from->copy(); $day->lte($to); $day->addDay()) {
@@ -87,6 +89,7 @@ class UniverseDailyBhavcopySyncService
                 $receipt = $entries[$key] ?? null;
                 if (! $force && is_array($receipt) && ($receipt['coverage_hash'] ?? null) === $coverageHash) {
                     $stats['bulk']['file_cache_hits']++;
+                    $stats['bulk']['historical_identity_rows'] += $receipt['historical_identity_rows'] ?? 0;
                     $stats['bulk']['files'][] = array_merge($receipt, ['status' => 'receipt_cached']);
                     continue;
                 }
@@ -95,9 +98,24 @@ class UniverseDailyBhavcopySyncService
                     $stats['bulk']['files_downloaded']++;
                     $data = ($exchange === 'NSE' ? $this->nse : $this->bse)->fetchDailyRows($day);
                     $matched = $this->matcher->match($exchangeStocks, $data['rows'], $exchange);
+                    $historicalBlocked = 0;
+                    foreach ($matched['historical_stock_ids'] as $id) {
+                        if (! isset($coverage[$id]) && ! $this->isIgnored($ignoredByStock->get($id, collect()), $day)) {
+                            // Source bars predate a split. Identity evidence is
+                            // not authority to mix raw bars into adjusted history.
+                            $matched['conflicts'][$id] = 'historical_adjustment_required';
+                            $historicalBlocked++;
+                            unset($matched['rows_by_stock_id'][$id]);
+                        }
+                    }
+                    $historicalAccepted = count($matched['historical_stock_ids']) - $historicalBlocked;
+                    $stats['bulk']['historical_identity_rows'] += $historicalAccepted;
+                    $stats['bulk']['historical_adjustment_required'] += $historicalBlocked;
                     $file += [
                         'source_rows' => $data['source_rows'], 'invalid_rows' => $data['invalid_rows'],
                         'matched_rows' => count($matched['rows_by_stock_id']),
+                        'historical_identity_rows' => $historicalAccepted,
+                        'historical_adjustment_required' => $historicalBlocked,
                         'identity_conflicts' => count($matched['conflicts']),
                     ];
                     $conflicted += $matched['conflicts'];

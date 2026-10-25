@@ -38,6 +38,10 @@ Daily, universe, index/benchmark, historical backfill, and targeted gap fill are
 
 **Current implementation anchors:** `DailyMarketSyncService`, `UniversePriceSyncService`, `UniversePriceBatchExecutor`, `IndexPriceSyncService`, `DailyMarketDataJob`, and sync controllers/commands.
 
+The daily bhavcopy matcher has a separate reviewed NSE price-identity catalogue (`universe_nse_price_identities`). It records official source hashes and bounded trade-date intervals for evidenced subdivisions. The catalogue reuses the pure identity-chain validator but does not change ML membership or policy. Only a unique matching current symbol/EQ-series/ISIN target can acknowledge an old identity. Already-cached adjusted bars remain untouched; a missing pre-action bar remains `historical_adjustment_required` rather than inserting raw pre-split OHLCV. Receipt fingerprints include the catalogue hash so revised or revoked evidence forces revalidation.
+
+The BSE active-equity adapter reads the exchange's `ISIN_NUMBER` and `Status` fields, retaining unavailable or malformed ISINs as null. This normalization is not authority to deactivate absent securities, ignore gaps, alter holdings, or fabricate unavailable prices.
+
 ## 6. Sync State And Observability
 
 Sync observability includes attempted/successful time, status, counts, failures, partial outcomes, progress/locks, and sync logs/admin surfaces. A partial run must say what succeeded and failed; it must not be promoted to complete dataset readiness merely because the command ran.
