@@ -445,6 +445,9 @@ export default function UniversePriceSyncPage() {
         if (!status || universeCount <= 0) {
             return '—';
         }
+        if (status.last_run?.collection_method === 'exchange_bhavcopy') {
+            return `Full scope inspected — ${status.last_run.failed ?? 0} stocks with unavailable history`;
+        }
         if (remainingInCycle <= 0 && (status.cursor_stock_id ?? 0) === 0) {
             return status.last_run?.cycle_completed
                 ? 'At universe start — last batch finished a full cycle'
@@ -492,7 +495,7 @@ export default function UniversePriceSyncPage() {
                 <div>
                     <h1 className="h4 mb-1">Universe price sync</h1>
                     <p className="text-muted small mb-0">
-                        Bulk OHLCV for NSE equities. Use batches on cPanel — one HTTP request per batch.
+                        Daily NSE + BSE-only OHLCV uses exchange bhavcopy files for the full universe. Batch size applies to historical backfill.
                     </p>
                 </div>
                 <Link to="/settings/global" className="btn btn-outline-secondary btn-sm">
@@ -588,7 +591,7 @@ export default function UniversePriceSyncPage() {
                                     <p className="text-muted small mb-2">
                                         Tracks the rolling cursor pass over all universe stocks.
                                         {' '}
-                                        <strong>Last batch completed</strong>
+                                        <strong>Last run completed</strong>
                                         {' '}
                                         (below) is the latest activity time — not the same as
                                         {' '}
@@ -606,8 +609,8 @@ export default function UniversePriceSyncPage() {
                                         </StatusRow>
                                         <StatusRow
                                             termId="in-progress"
-                                            label="Batch running"
-                                            hint="Yes while a single batch HTTP request is active on the server (usually under a few minutes). Nightly maintenance runs many short batches across the evening window."
+                                            label="Sync running"
+                                            hint="Yes while a universe sync is active. Daily collection checks the full universe using one exchange file per valid session."
                                         >
                                             <span className={`badge ${status?.in_progress ? 'bg-info text-dark' : 'bg-secondary'}`}>
                                                 {status?.in_progress ? 'yes' : 'no'}
@@ -616,7 +619,7 @@ export default function UniversePriceSyncPage() {
                                         <StatusRow
                                             termId="cycle-status"
                                             label="Cycle status"
-                                            hint="Whether tonight's cursor pass has finished the full universe. The cursor does not reset at 19:00 — it resumes the next evening until every stock has been processed once."
+                                            hint="Daily runs inspect the full universe. Completion describes scope inspection; missing coverage is reported separately. Historical backfill uses a resumable cursor."
                                         >
                                             {cycleStatusLabel}
                                         </StatusRow>
@@ -638,7 +641,7 @@ export default function UniversePriceSyncPage() {
                                         <StatusRow
                                             termId="cursor"
                                             label="Cycle cursor"
-                                            hint="Last stock ID processed in the most recent batch. The next nightly batch continues with stocks after this ID in universe order. Not the same as 'stock 4968 of 6971' — IDs are database keys."
+                                            hint="Daily bulk runs do not use a stock cursor. Historical backfill preserves its separate resumable cursor."
                                         >
                                             {status?.cursor_symbol || '—'}
                                             {status?.cursor_stock_id ? ` (#${status.cursor_stock_id})` : ''}
@@ -646,7 +649,7 @@ export default function UniversePriceSyncPage() {
                                         <StatusRow
                                             termId="cycle-progress"
                                             label="Cycle progress"
-                                            hint="Share of the universe reached in the current cursor pass (stocks with ID ≤ cycle cursor ÷ universe size). This is not progress within one 125-stock batch."
+                                            hint="Share of the universe inspected by the daily run, or reached in the historical cursor pass. This does not measure complete OHLCV coverage."
                                         >
                                             {universeCount > 0
                                                 ? `${progressPercent}% (${processedThrough.toLocaleString()} / ${universeCount.toLocaleString()})`
@@ -655,13 +658,13 @@ export default function UniversePriceSyncPage() {
                                         <StatusRow
                                             termId="remaining"
                                             label="Remaining in cycle"
-                                            hint="How many universe stocks are still ahead of the cursor before this pass completes and the cursor returns to the start."
+                                            hint="Stocks still to inspect in the current scope pass. See Failed for required price coverage still unavailable."
                                         >
                                             {universeCount > 0 ? remainingInCycle.toLocaleString() : '—'}
                                         </StatusRow>
                                         <StatusRow
                                             termId="last-batch"
-                                            label="Last batch completed"
+                                            label="Last run completed"
                                             hint="When the most recent universe sync batch finished. Use this (or Sync logs) to see whether nightly maintenance is still running — e.g. 23:45 is the last slot in the window."
                                         >
                                             {formatStatusTime(status?.last_run?.completed_at)}
@@ -669,7 +672,7 @@ export default function UniversePriceSyncPage() {
                                         <StatusRow
                                             termId="last-cycle"
                                             label="Last full cycle completed"
-                                            hint="When a batch last processed through the highest-ID stock and reset the cursor to the start. Can be hours or days earlier than 'Last batch completed' while a new pass is still in progress."
+                                            hint="When a batch last processed through the highest-ID stock and reset the cursor to the start. Can be hours or days earlier than 'Last run completed' while a new pass is still in progress."
                                         >
                                             {formatStatusTime(status?.last_cycle_completed_at)}
                                         </StatusRow>
@@ -683,10 +686,10 @@ export default function UniversePriceSyncPage() {
                                         <StatusRow
                                             termId="nightly-capacity"
                                             label="Nightly capacity"
-                                            hint="Approximate stocks processed per evening if every slot runs (runs per night × batch size). If universe size exceeds this, one full cursor cycle spans multiple nights."
+                                            hint="Daily exchange-file collection covers the full eligible universe per run. Later slots reuse validated files when coverage and stock membership are unchanged."
                                         >
                                             {status?.maintenance
-                                                ? `${status.maintenance.nightly_stock_capacity.toLocaleString()} stocks (${status.maintenance.runs_per_night} runs × ${status.maintenance.batch_size})`
+                                                ? `${status.maintenance.nightly_stock_capacity.toLocaleString()} stocks per daily run`
                                                 : '—'}
                                         </StatusRow>
                                     </dl>
@@ -728,12 +731,12 @@ export default function UniversePriceSyncPage() {
 
                 <div className="col-12 col-lg-4">
                     <div className="card h-100">
-                        <div className="card-header">Last batch details</div>
+                        <div className="card-header">Last run details</div>
                         <div className="card-body small">
                             {status?.last_run ? (
                                 <>
                                     <p className="text-muted mb-2">
-                                        Metrics from the most recent completed batch. See
+                                        Metrics from the most recent completed run. See
                                         {' '}
                                         <strong>Completed at</strong>
                                         {' '}
@@ -747,31 +750,38 @@ export default function UniversePriceSyncPage() {
                                         >
                                             {status.last_run.mode}
                                         </StatusRow>
+                                        {status.last_run.bulk ? (
+                                            <>
+                                                <StatusRow termId="bulk-source" label="Daily source" hint="Validated NSE and BSE bhavcopy files; no per-stock daily fallback.">NSE / BSE bhavcopy</StatusRow>
+                                                <StatusRow termId="bulk-files" label="Files downloaded / reused">{status.last_run.bulk.files_downloaded ?? 0} / {status.last_run.bulk.file_cache_hits ?? 0}</StatusRow>
+                                                <StatusRow termId="bulk-errors" label="File errors / identity conflicts">{status.last_run.bulk.file_errors ?? 0} / {status.last_run.bulk.identity_conflicts ?? 0}</StatusRow>
+                                            </>
+                                        ) : null}
                                         <StatusRow
                                             termId="batch-processed"
-                                            label="Stocks in batch"
-                                            hint="How many symbols were attempted in that single HTTP request (up to the configured batch size)."
+                                            label="Stocks inspected"
+                                            hint="Daily: the full eligible universe. Historical: up to the configured batch size."
                                         >
                                             {status.last_run.processed}
                                         </StatusRow>
                                         <StatusRow
                                             termId="batch-failed"
                                             label="Failed"
-                                            hint="Symbols in the batch where the provider returned no usable OHLCV."
+                                            hint="Stocks with required history still unavailable after collection. File errors are listed separately."
                                         >
                                             {status.last_run.failed}
                                         </StatusRow>
                                         <StatusRow
                                             termId="batch-stored"
                                             label="Stored rows"
-                                            hint="New or updated price rows written to portfolio_stock_prices in that batch."
+                                            hint="Price rows stored by the run. Daily bulk collection inserts missing rows and preserves existing prices and repairs."
                                         >
                                             {status.last_run.stored_rows}
                                         </StatusRow>
                                         <StatusRow
                                             termId="batch-cache"
                                             label="Cache hits"
-                                            hint="Stocks that already had sufficient cached history so no provider fetch was needed."
+                                            hint="Stocks whose required history is covered without a newly stored row. Daily source downloads are counted separately."
                                         >
                                             {status.last_run.cache_hits ?? 0}
                                         </StatusRow>
@@ -785,7 +795,7 @@ export default function UniversePriceSyncPage() {
                                         <StatusRow
                                             termId="batch-cycle-flag"
                                             label="Finished full cycle"
-                                            hint="Yes only if this batch processed through the last stock in the universe and reset the cursor to the start. Most nightly batches answer No while the cursor is mid-pass."
+                                            hint="Yes when the full scope was inspected. This does not mean that every stock has complete history."
                                         >
                                             {status.last_run.cycle_completed ? 'yes' : 'no'}
                                         </StatusRow>
@@ -816,7 +826,7 @@ export default function UniversePriceSyncPage() {
                                     </dl>
                                 </>
                             ) : (
-                                <p className="text-muted mb-0">No batch run recorded yet.</p>
+                                <p className="text-muted mb-0">No run recorded yet.</p>
                             )}
                         </div>
                     </div>
@@ -827,13 +837,13 @@ export default function UniversePriceSyncPage() {
                         <div className="card-header">Configuration</div>
                         <div className="card-body small">
                             <p className="text-muted mb-2">
-                                Production values from env / config. Nightly maintenance uses batch size and interval below.
+                                Daily collection uses NSE/BSE bhavcopy for the full scope. Historical backfill uses the stock batch size and delay below.
                             </p>
                             <dl className="row mb-0">
                                 <StatusRow
                                     termId="cfg-batch"
                                     label="Batch size"
-                                    hint="Stocks per HTTP request (UNIVERSE_PRICE_SYNC_BATCH_SIZE). Nightly job runs one batch per scheduled slot."
+                                    hint="Stocks per historical backfill request (UNIVERSE_PRICE_SYNC_BATCH_SIZE). Daily collection ignores this limit."
                                 >
                                     {status?.config?.batch_size ?? '—'}
                                 </StatusRow>
@@ -912,7 +922,7 @@ export default function UniversePriceSyncPage() {
                             </select>
                         </div>
                         <div className="col-12 col-md-2">
-                            <label className="form-label" htmlFor="universe-batch">Batch size</label>
+                            <label className="form-label" htmlFor="universe-batch">Historical batch size</label>
                             <input
                                 id="universe-batch"
                                 type="number"
@@ -931,13 +941,13 @@ export default function UniversePriceSyncPage() {
                                     type="button"
                                     className="btn btn-primary btn-sm"
                                     disabled={running || !status?.enabled}
-                                    title="Run one incremental daily sync batch for the selected scope."
+                                    title="Collect daily NSE/BSE exchange files for the full selected scope."
                                     onClick={() => runSync({
                                         mode: 'daily',
                                         batch: batchSize ? Number(batchSize) : undefined,
                                     })}
                                 >
-                                    {running ? 'Running…' : 'Run daily batch'}
+                                    {running ? 'Running…' : 'Run daily sync'}
                                 </button>
                                 <button
                                     type="button"

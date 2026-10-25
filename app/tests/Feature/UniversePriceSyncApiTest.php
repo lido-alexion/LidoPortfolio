@@ -9,6 +9,7 @@ use App\Services\BenchmarkPriceSyncService;
 use App\Services\PriceFetchService;
 use App\Services\StockMasterSyncService;
 use App\Services\UniversePriceSyncService;
+use App\Services\UniversePrice\UniverseDailyBhavcopySyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
@@ -243,7 +244,7 @@ class UniversePriceSyncApiTest extends TestCase
         $response->assertJsonPath('data.last_run.cycle_completed', true);
     }
 
-    public function test_admin_can_trigger_daily_batch(): void
+    public function test_admin_can_trigger_full_daily_bulk_sync(): void
     {
         config(['portfolio.universe_price_sync.delay_ms_between_stocks' => 0]);
 
@@ -263,15 +264,17 @@ class UniversePriceSyncApiTest extends TestCase
         ]);
 
         $priceFetch = Mockery::mock(PriceFetchService::class);
-        $priceFetch->shouldReceive('syncStock')
-            ->once()
-            ->andReturn([
-                'success' => true,
-                'stored_rows' => 2,
-                'cache_hit' => false,
-                'errors' => [],
-            ]);
+        $priceFetch->shouldNotReceive('syncStock');
         $this->app->instance(PriceFetchService::class, $priceFetch);
+        $bulk = Mockery::mock(UniverseDailyBhavcopySyncService::class);
+        $bulk->shouldReceive('run')->once()->andReturnUsing(function ($stocks, $from, $to, $runId, $jobName, $stats) {
+            return ['stats' => array_merge($stats, [
+                'processed' => $stocks->count(), 'succeeded' => $stocks->count(),
+                'stored_rows' => 2, 'collection_method' => 'exchange_bhavcopy',
+                'bulk' => ['file_errors' => 0, 'identity_conflicts' => 0],
+            ]), 'last_stock_id' => 0];
+        });
+        $this->app->instance(UniverseDailyBhavcopySyncService::class, $bulk);
 
         $benchmark = Mockery::mock(BenchmarkPriceSyncService::class);
         $benchmark->shouldReceive('syncIfNeeded')
@@ -288,6 +291,7 @@ class UniversePriceSyncApiTest extends TestCase
 
         $response->assertJsonPath('data.run.processed', 1);
         $response->assertJsonPath('data.run.succeeded', 1);
+        $response->assertJsonPath('data.run.collection_method', 'exchange_bhavcopy');
     }
 
     public function test_run_returns_conflict_when_already_in_progress(): void

@@ -253,7 +253,7 @@ class PriceFetchService
         return ['rows' => [], 'provider' => 'none', 'errors' => $errors, 'providers_tried' => $providersTried];
     }
 
-    public function storeHistoricalRows(Stock $stock, array $rows, string $provider): int
+    public function storeHistoricalRows(Stock $stock, array $rows, string $provider, bool $onlyMissing = false): int
     {
         $stored = 0;
 
@@ -267,27 +267,33 @@ class PriceFetchService
                 $row = IndiaVixScale::normalizeRow($row);
             }
 
-            StockPrice::query()->updateOrCreate(
-                [
-                    'stock_id' => $stock->id,
-                    // Match the model's date serialization exactly. Providers may
-                    // return the same session as Y-m-d, ISO-8601, or a timestamp;
-                    // mixing the raw value with Eloquent's stored midnight value
-                    // can miss the row and violate the unique session key.
-                    'price_date' => $priceDate,
-                ],
-                [
-                    'open_price' => $row['open_price'],
-                    'high_price' => $row['high_price'],
-                    'low_price' => $row['low_price'],
-                    'close_price' => $row['close_price'],
-                    'volume' => $this->normalizeVolumeForStorage($row['volume'] ?? null, $stock),
-                    'adjusted_close_price' => $row['adjusted_close_price'] ?? $row['close_price'],
-                    'provider_source' => $provider,
-                    'data_source' => $provider,
-                    'created_at' => now(),
-                ],
-            );
+            $key = [
+                'stock_id' => $stock->id,
+                // Match the model's date serialization exactly. Providers may
+                // return the same session as Y-m-d, ISO-8601, or a timestamp;
+                // mixing the raw value with Eloquent's stored midnight value
+                // can miss the row and violate the unique session key.
+                'price_date' => $priceDate,
+            ];
+            $attributes = [
+                'open_price' => $row['open_price'],
+                'high_price' => $row['high_price'],
+                'low_price' => $row['low_price'],
+                'close_price' => $row['close_price'],
+                'volume' => $this->normalizeVolumeForStorage($row['volume'] ?? null, $stock),
+                'adjusted_close_price' => $row['adjusted_close_price'] ?? $row['close_price'],
+                'provider_source' => $provider,
+                'data_source' => $provider,
+                'created_at' => now(),
+            ];
+            if ($onlyMissing) {
+                // Preserve an existing repaired/adjusted row even if another writer
+                // fills the same session between our coverage check and insert.
+                $record = new StockPrice(array_merge($key, $attributes));
+                $stored += StockPrice::query()->insertOrIgnore($record->getAttributes());
+                continue;
+            }
+            StockPrice::query()->updateOrCreate($key, $attributes);
             $stored++;
         }
 

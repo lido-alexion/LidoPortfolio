@@ -257,6 +257,28 @@ class PriceFetchServiceTest extends TestCase
             ->map(fn ($row) => $row->price_date->toDateString())->all());
     }
 
+    public function test_missing_only_import_is_atomic_and_preserves_existing_adjustments_and_provenance(): void
+    {
+        $stock = \App\Models\Stock::query()->create([
+            'symbol' => 'IMMUTABLECACHE', 'exchange' => 'NSE', 'name' => 'Preserved repair',
+            'is_active' => true, 'is_benchmark' => false,
+        ]);
+        $service = app(PriceFetchService::class);
+        $row = ['price_date' => '2026-10-26', 'open_price' => 100, 'high_price' => 105,
+            'low_price' => 95, 'close_price' => 102, 'volume' => 1000, 'adjusted_close_price' => 80];
+        $service->storeHistoricalRows($stock, [$row], 'manual');
+        $before = \App\Models\StockPrice::query()->where('stock_id', $stock->id)->first()->getAttributes();
+
+        $this->assertSame(0, $service->storeHistoricalRows(
+            $stock, [array_replace($row, ['close_price' => 103, 'adjusted_close_price' => 103])], 'nse_bhavcopy', true,
+        ));
+        $this->assertSame($before, \App\Models\StockPrice::query()->where('stock_id', $stock->id)->first()->getAttributes());
+        $this->assertSame(1, $service->storeHistoricalRows(
+            $stock, [array_replace($row, ['price_date' => '2026-10-27'])], 'nse_bhavcopy', true,
+        ));
+        $this->assertSame(2, \App\Models\StockPrice::query()->where('stock_id', $stock->id)->count());
+    }
+
     public function test_store_historical_rows_updates_same_session_across_provider_date_formats(): void
     {
         $stock = \App\Models\Stock::query()->create([

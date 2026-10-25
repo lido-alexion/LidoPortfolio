@@ -8,6 +8,7 @@ use App\Models\StockPrice;
 use App\Models\SyncLog;
 use App\Models\SyncRun;
 use App\Services\UniversePrice\UniversePriceBatchExecutor;
+use App\Services\UniversePrice\UniverseDailyBhavcopySyncService;
 use App\Support\TradingCalendar;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -37,6 +38,7 @@ class UniversePriceSyncService
         protected SyncLogService $syncLog,
         protected PortfolioLoggerService $logger,
         ?UniversePriceBatchExecutor $executor = null,
+        protected ?UniverseDailyBhavcopySyncService $dailyBulk = null,
     ) {
         $this->executor = $executor ?? new UniversePriceBatchExecutor($this->priceFetch, $this->syncLog);
     }
@@ -287,7 +289,7 @@ class UniversePriceSyncService
     {
         $batchSize = (int) config('portfolio.universe_price_sync.batch_size', 125);
         $runsPerNight = $this->maintenanceRunsPerNight();
-        $nightlyCapacity = $runsPerNight * $batchSize;
+        $nightlyCapacity = $universeCount;
         $timezone = $this->cronTimezone();
         $windowLabel = sprintf(
             '%02d:00–%02d:%02d %s',
@@ -308,9 +310,11 @@ class UniversePriceSyncService
             'interval_minutes' => $this->maintenanceIntervalMinutes(),
             'runs_per_night' => $runsPerNight,
             'batch_size' => $batchSize,
+            'daily_collection_method' => UniverseDailyBhavcopySyncService::METHOD,
+            'batch_size_applies_to' => 'historical backfill',
             'nightly_stock_capacity' => $nightlyCapacity,
             'nights_for_full_cycle' => $universeCount > 0
-                ? (int) ceil($universeCount / max(1, $nightlyCapacity))
+                ? 1
                 : 0,
             'skip_weekends' => $this->skipsWeekends(),
             'weekend_retry_on_prior_session_failures' => $this->weekendRetryOnPriorFailures(),
@@ -339,6 +343,11 @@ class UniversePriceSyncService
         $progressPercent = $universeCount > 0
             ? round(min(100, ($processedThrough / $universeCount) * 100), 1)
             : 0.0;
+        if (($lastRun['collection_method'] ?? null) === UniverseDailyBhavcopySyncService::METHOD
+            && ($lastRun['scope'] ?? null) === $scope) {
+            $processedThrough = min($universeCount, (int) ($lastRun['processed'] ?? 0));
+            $progressPercent = $universeCount > 0 ? round(100 * $processedThrough / $universeCount, 1) : 0.0;
+        }
 
         $finishedRun = $this->syncLog->latestFinishedRun(SyncLogService::JOB_UNIVERSE_PRICE_SYNC);
         $latestSyncRun = $finishedRun !== null
@@ -356,6 +365,7 @@ class UniversePriceSyncService
                 'daily_lookback_days' => (int) config('portfolio.universe_price_sync.daily_lookback_days', 10),
                 'delay_ms_between_stocks' => (int) config('portfolio.universe_price_sync.delay_ms_between_stocks', 400),
                 'batch_size' => (int) config('portfolio.universe_price_sync.batch_size', 125),
+                'daily_collection_method' => UniverseDailyBhavcopySyncService::METHOD,
                 'default_scope' => $this->resolver->defaultScope(),
                 'maintenance_interval_minutes' => $this->maintenanceIntervalMinutes(),
             ],
@@ -523,11 +533,16 @@ class UniversePriceSyncService
             'completed_at' => is_string($context['completed_at'] ?? null) ? $context['completed_at'] : null,
             'failure_rate_percent' => isset($context['failure_rate_percent']) ? (float) $context['failure_rate_percent'] : null,
             'errors' => is_array($context['errors'] ?? null) ? $context['errors'] : [],
+            'collection_method' => $context['collection_method'] ?? null,
+            'bulk' => is_array($context['bulk'] ?? null) ? $context['bulk'] : null,
         ];
     }
 
     protected function resolveCursorStockId(?array $lastRun): int
     {
+        if (($lastRun['collection_method'] ?? null) === UniverseDailyBhavcopySyncService::METHOD) {
+            return 0;
+        }
         Cache::forget('setting.'.self::KEY_CURSOR_STOCK_ID);
         $cursorId = (int) Setting::getValue(self::KEY_CURSOR_STOCK_ID, '0');
 
@@ -550,6 +565,9 @@ class UniversePriceSyncService
      */
     protected function healCursorFromLastRun(array $lastRun): void
     {
+        if (($lastRun['collection_method'] ?? null) === UniverseDailyBhavcopySyncService::METHOD) {
+            return;
+        }
         if (! isset($lastRun['cursor_stock_id'])) {
             return;
         }
@@ -792,6 +810,19 @@ class UniversePriceSyncService
         bool $resetCursor = false,
     ): array {
         if (! $this->isEnabled()) {
+            return $this->syncWithExistingFlag($mode, $scope, $batchSize, $processAll, $resetCursor);
+        }
+        $result = Cache::store('database')->lock('portfolio-universe-price-sync', ($this->staleLockMinutes() + 5) * 60)
+            ->get(fn () => $this->syncWithExistingFlag($mode, $scope, $batchSize, $processAll, $resetCursor));
+
+        return is_array($result) ? $result
+            : $this->emptyResult($scope ?? $this->resolver->defaultScope(), $mode, skipped: 1);
+    }
+
+    protected function syncWithExistingFlag(
+        string $mode, ?string $scope, ?int $batchSize, bool $processAll, bool $resetCursor,
+    ): array {
+        if (! $this->isEnabled()) {
             $this->logger->scheduler('debug', 'Universe sync skipped: disabled', [
                 'event' => 'universe_sync_skip',
                 'reason' => 'universe_disabled',
@@ -846,6 +877,7 @@ class UniversePriceSyncService
         bool $resetCursor = false,
     ): array {
         $scope = $this->resolver->normalizeScope($scope ?? $this->resolver->defaultScope());
+        $daily = $mode === 'daily';
         $batchSize = $batchSize ?? (int) config('portfolio.universe_price_sync.batch_size', 125);
         $delayMs = (int) config('portfolio.universe_price_sync.delay_ms_between_stocks', 400);
 
@@ -859,7 +891,7 @@ class UniversePriceSyncService
             'mode' => $mode,
             'scope' => $scope,
             'batch_size' => $batchSize,
-            'process_all' => $processAll,
+            'process_all' => $daily || $processAll,
             'reset_cursor' => $resetCursor,
             'from_date' => $from->toDateString(),
             'to_date' => $to->toDateString(),
@@ -886,11 +918,11 @@ class UniversePriceSyncService
             return $this->emptyResult($scope, $mode, universeCount: 0);
         }
 
-        if ($resetCursor) {
+        if ($resetCursor && ! $daily) {
             $this->setCursor(0);
         }
 
-        $stocks = $processAll
+        $stocks = $daily || $processAll
             ? $this->resolver->stockQuery($scope)->get()
             : $this->nextBatch($scope, $batchSize);
 
@@ -917,24 +949,35 @@ class UniversePriceSyncService
             'scope' => $scope,
             'mode' => $mode,
             'batch_size' => $stocks->count(),
-            'process_all' => $processAll,
+            'process_all' => $daily || $processAll,
             'from_date' => $from->toDateString(),
             'to_date' => $to->toDateString(),
             'universe_count' => $universeCount,
         ]);
 
         try {
-            $batchResult = $this->executor->run($stocks, $from, $to, $delayMs, $runId, $jobName, $stats);
+            $batchResult = $daily
+                ? ($this->dailyBulk ?? app(UniverseDailyBhavcopySyncService::class))
+                    ->run($stocks, $from, $to, $runId, $jobName, $stats, $resetCursor)
+                : $this->executor->run($stocks, $from, $to, $delayMs, $runId, $jobName, $stats);
             $stats = $batchResult['stats'];
             $lastStockId = $batchResult['last_stock_id'];
 
-            if ($lastStockId > 0) {
+            if (! $daily && $lastStockId > 0) {
                 $this->setCursor($lastStockId);
                 $stats['cursor_stock_id'] = $lastStockId;
             }
 
-            $stats['cycle_completed'] = $this->markCycleIfComplete($scope, $lastStockId, $processAll);
-            $stats['cursor_stock_id'] = (int) Setting::getValue(self::KEY_CURSOR_STOCK_ID, '0');
+            if ($daily) {
+                // Scope inspection is complete; coverage failures remain explicit.
+                // Preserve the cursor of an unfinished historical backfill.
+                $stats['cycle_completed'] = true;
+                $stats['cursor_stock_id'] = 0;
+                Setting::setValue(self::KEY_LAST_CYCLE_COMPLETED_AT, now()->toIso8601String());
+            } else {
+                $stats['cycle_completed'] = $this->markCycleIfComplete($scope, $lastStockId, $processAll);
+                $stats['cursor_stock_id'] = (int) Setting::getValue(self::KEY_CURSOR_STOCK_ID, '0');
+            }
             $stats['completed_at'] = now()->toIso8601String();
             $stats['failure_rate_percent'] = $stats['processed'] > 0
                 ? round(($stats['failed'] / $stats['processed']) * 100, 1)
@@ -942,7 +985,9 @@ class UniversePriceSyncService
 
             Setting::setValue(self::KEY_LAST_RUN_JSON, json_encode($stats));
 
-            $status = $stats['failed'] === 0 ? 'success' : ($stats['succeeded'] > 0 ? 'partial' : 'failed');
+            $bulkErrors = ($stats['bulk']['file_errors'] ?? 0) + ($stats['bulk']['identity_conflicts'] ?? 0);
+            $status = $stats['failed'] === 0 && $bulkErrors === 0
+                ? 'success' : ($stats['succeeded'] > 0 ? 'partial' : 'failed');
             $summary = sprintf(
                 'Universe price sync (%s/%s): processed=%d ok=%d fail=%d stored=%d cache_hits=%d',
                 $mode,
@@ -953,6 +998,11 @@ class UniversePriceSyncService
                 $stats['stored_rows'],
                 $stats['cache_hits'],
             );
+            if ($daily) {
+                $summary .= sprintf(' source=exchange_bhavcopy files=%d reused=%d unavailable=%d',
+                    $stats['bulk']['files_downloaded'] ?? 0, $stats['bulk']['file_cache_hits'] ?? 0,
+                    $stats['bulk']['unavailable_stocks'] ?? 0);
+            }
 
             $this->syncLog->log($runId, $jobName, 'info', 'Universe price sync completed', $stats);
             $this->syncLog->completeRun($runId, $status, [
