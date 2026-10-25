@@ -23,7 +23,7 @@ class BhavcopyStockMatcherTest extends TestCase
 
     public function test_matches_nse_series_exactly_and_allows_an_unambiguous_isin_rename(): void
     {
-        $matcher = new BhavcopyStockMatcher(new ProviderResolverService);
+        $matcher = new BhavcopyStockMatcher(new ProviderResolverService, $this->emptyEvidence());
         $stocks = collect([$this->stock(1, ['series' => 'BE'])]);
         $this->assertSame([], $matcher->match($stocks, [$this->row()], 'NSE')['rows_by_stock_id']);
         $result = $matcher->match($stocks, [$this->row(['series' => 'BE', 'symbol' => 'NEWAAA'])], 'NSE');
@@ -32,7 +32,7 @@ class BhavcopyStockMatcherTest extends TestCase
 
     public function test_conflicting_symbol_suffix_and_master_series_are_rejected(): void
     {
-        $result = (new BhavcopyStockMatcher(new ProviderResolverService))->match(
+        $result = (new BhavcopyStockMatcher(new ProviderResolverService, $this->emptyEvidence()))->match(
             collect([$this->stock(1, ['symbol' => 'AAA-BE', 'series' => 'EQ'])]), [$this->row()], 'NSE',
         );
         $this->assertSame([], $result['rows_by_stock_id']);
@@ -41,7 +41,7 @@ class BhavcopyStockMatcherTest extends TestCase
 
     public function test_an_isin_conflict_never_falls_through_to_a_matching_ticker(): void
     {
-        $result = (new BhavcopyStockMatcher(new ProviderResolverService))->match(
+        $result = (new BhavcopyStockMatcher(new ProviderResolverService, $this->emptyEvidence()))->match(
             collect([$this->stock(1)]), [$this->row(['isin' => 'INE002A01010'])], 'NSE',
         );
         $this->assertSame([], $result['rows_by_stock_id']);
@@ -55,7 +55,7 @@ class BhavcopyStockMatcherTest extends TestCase
             $this->stock(2, ['exchange' => 'BSE', 'isin' => null, 'bse_scrip_code' => null]),
             $this->stock(3),
         ]);
-        $result = (new BhavcopyStockMatcher(new ProviderResolverService))->match(
+        $result = (new BhavcopyStockMatcher(new ProviderResolverService, $this->emptyEvidence()))->match(
             $stocks, [$this->row(['scrip_code' => '500001'])], 'BSE',
         );
         $this->assertSame([1], array_keys($result['rows_by_stock_id']));
@@ -63,13 +63,24 @@ class BhavcopyStockMatcherTest extends TestCase
 
     public function test_ambiguous_master_identities_and_multiple_rows_for_one_stock_are_rejected(): void
     {
-        $matcher = new BhavcopyStockMatcher(new ProviderResolverService);
+        $matcher = new BhavcopyStockMatcher(new ProviderResolverService, $this->emptyEvidence());
         $ambiguous = $matcher->match(collect([$this->stock(1), $this->stock(2)]), [$this->row()], 'NSE');
         $this->assertSame([], $ambiguous['rows_by_stock_id']);
         $this->assertCount(2, $ambiguous['conflicts']);
         $duplicate = $matcher->match(collect([$this->stock(1)]), [$this->row(), $this->row(['scrip_code' => '1002'])], 'NSE');
         $this->assertSame([], $duplicate['rows_by_stock_id']);
         $this->assertArrayHasKey(1, $duplicate['conflicts']);
+    }
+
+    private function emptyEvidence(): \App\Services\Bhavcopy\NsePriceIdentityEvidence
+    {
+        return new class extends \App\Services\Bhavcopy\NsePriceIdentityEvidence
+        {
+            public function document(): array
+            {
+                return [];
+            }
+        };
     }
 
     private function historicalMatcher(): BhavcopyStockMatcher

@@ -11,12 +11,12 @@ class BhavcopyStockMatcher
 {
     public function __construct(
         protected ProviderResolverService $symbols,
-        protected ?NsePriceIdentityEvidence $identities = null,
+        protected NsePriceIdentityEvidence $identities,
     ) {}
 
     public function evidenceHash(): string
     {
-        return $this->identities?->hash() ?? 'strict-current-identity';
+        return $this->identities->hash();
     }
 
     public function match(Collection $stocks, array $rows, string $exchange): array
@@ -53,7 +53,6 @@ class BhavcopyStockMatcher
             // Only the same symbol/EQ series and one unique current target can
             // acknowledge a dated old ISIN. Never steal another current identity.
             if ($exchange === 'NSE' && $row['series'] === 'EQ' && count($primary) === 1 && $isin === []
-                && $this->identities !== null
                 && $this->nseIdentity($primary[0])[0] === $row['symbol']) {
                 $evidenced = $this->identities->canonicalIsin([
                     'symbol' => $row['symbol'], 'isin' => $row['isin'],
