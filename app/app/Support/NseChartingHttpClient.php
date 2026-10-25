@@ -22,8 +22,10 @@ class NseChartingHttpClient
             ->timeout(25)
             ->retry(1, 500);
 
+        // The cookie jar is shared, while the optional warm-up opt-out is not.
+        $warmup = (clone $client)->withHeaders(['X-StoX-Skip-Api-Failure-Reporting' => '1']);
         try {
-            $client->get('https://charting.nseindia.com/');
+            $warmup->get('https://charting.nseindia.com/');
         } catch (\Throwable) {
             // Continue — data call may still succeed.
         }

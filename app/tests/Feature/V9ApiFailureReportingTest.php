@@ -203,6 +203,46 @@ class V9ApiFailureReportingTest extends TestCase
         $this->assertDatabaseCount('stox_log_error_triages', 0);
     }
 
+    public function test_optional_nse_warmups_do_not_report_failures_or_disable_data_observation(): void
+    {
+        Http::fake(fn ($request) => Http::response([], parse_url($request->url(), PHP_URL_PATH) === '/'
+            || str_ends_with($request->url(), '/api/marketStatus') ? 403 : 200));
+
+        foreach ([
+            [\App\Support\NseHttpClient::class, 'https://www.nseindia.com/api/historical/cm/equity'],
+            [\App\Support\NseChartingHttpClient::class, 'https://charting.nseindia.com/v1/charts/symbolHistoricalData'],
+        ] as [$factory, $dataUrl]) {
+            $client = $factory::create();
+            $this->assertTrue($client->get($dataUrl)->successful());
+            Http::assertSent(fn ($request) => $request->url() === $dataUrl
+                && ! in_array('1', (array) $request->header('X-StoX-Skip-Api-Failure-Reporting'), true));
+        }
+
+        $this->assertDatabaseCount('portfolio_api_failure_incidents', 0);
+    }
+
+    public function test_real_nse_data_403_remains_reportable_after_failed_warmups(): void
+    {
+        Http::fake(fn () => Http::response([], 403));
+
+        foreach ([
+            [\App\Support\NseHttpClient::class, 'https://www.nseindia.com/api/historical/cm/equity'],
+            [\App\Support\NseChartingHttpClient::class, 'https://charting.nseindia.com/v1/charts/symbolHistoricalData'],
+        ] as [$factory, $dataUrl]) {
+            $client = $factory::create();
+            try { $client->get($dataUrl); } catch (\Illuminate\Http\Client\RequestException) {}
+            Http::assertSent(fn ($request) => $request->url() === $dataUrl
+                && ! in_array('1', (array) $request->header('X-StoX-Skip-Api-Failure-Reporting'), true));
+        }
+
+        $this->assertDatabaseCount('portfolio_api_failure_incidents', 2);
+        foreach (ApiFailureIncident::all() as $incident) {
+            $this->assertSame(403, $incident->http_status);
+            $this->assertNotSame('https://nseindia.com/', $incident->endpoint);
+            $this->assertSame(1, $incident->occurrence_count);
+        }
+    }
+
     public function test_external_http_observation_reports_non_2xx_but_not_2xx(): void
     {
         Http::fake([

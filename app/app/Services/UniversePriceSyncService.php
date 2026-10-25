@@ -850,7 +850,7 @@ class UniversePriceSyncService
         $delayMs = (int) config('portfolio.universe_price_sync.delay_ms_between_stocks', 400);
 
         $from = $this->rangeFrom($mode);
-        $to = now()->startOfDay();
+        $to = TradingCalendar::normalizeToSessionDate(now());
 
         $this->logger->scheduler('debug', 'Universe sync batch starting', [
             'event' => 'universe_sync_start',

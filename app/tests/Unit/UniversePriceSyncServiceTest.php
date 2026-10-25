@@ -4,12 +4,14 @@ namespace Tests\Unit;
 
 use App\Models\Setting;
 use App\Models\Stock;
+use App\Models\CalendarEvent;
 use App\Services\BenchmarkPriceSyncService;
 use App\Services\PortfolioLoggerService;
 use App\Services\PriceFetchService;
 use App\Services\SyncLogService;
 use App\Services\UniversePriceSyncService;
 use App\Services\UniverseStockResolverService;
+use App\Support\TradingCalendar;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
@@ -23,6 +25,8 @@ class UniversePriceSyncServiceTest extends TestCase
 
     protected function tearDown(): void
     {
+        Carbon::setTestNow();
+        TradingCalendar::clearHolidayCache();
         Mockery::close();
         parent::tearDown();
     }
@@ -99,6 +103,7 @@ class UniversePriceSyncServiceTest extends TestCase
 
     public function test_backfill_all_resets_cursor_and_marks_cycle_complete(): void
     {
+        Carbon::setTestNow('2026-10-23 16:00:00');
         config([
             'portfolio.universe_price_sync.enabled' => true,
             'portfolio.universe_price_sync.history_days' => 30,
@@ -160,6 +165,7 @@ class UniversePriceSyncServiceTest extends TestCase
 
     public function test_daily_sync_uses_fixed_daily_lookback_config(): void
     {
+        Carbon::setTestNow('2026-10-23 16:00:00');
         config([
             'portfolio.universe_price_sync.enabled' => true,
             'portfolio.universe_price_sync.batch_size' => 1,
@@ -214,6 +220,52 @@ class UniversePriceSyncServiceTest extends TestCase
 
         $this->assertSame(1, $result['processed']);
         $this->assertSame(1, $result['succeeded']);
+    }
+
+    public function test_sync_keeps_the_current_session_but_skips_closed_calendar_tails(): void
+    {
+        config([
+            'portfolio.universe_price_sync.enabled' => true,
+            'portfolio.universe_price_sync.delay_ms_between_stocks' => 0,
+        ]);
+        CalendarEvent::query()->create([
+            'profile_id' => null, 'category' => CalendarEvent::CATEGORY_TRADE_HOLIDAY,
+            'title' => 'Test trade holiday', 'color' => CalendarEvent::TRADE_HOLIDAY_DEFAULT_COLOR,
+            'anchor_date' => '2026-10-26', 'recurrence_type' => CalendarEvent::RECURRENCE_NONE,
+            'reminder_enabled' => false, 'is_active' => true,
+        ]);
+        TradingCalendar::clearHolidayCache();
+        Stock::query()->create([
+            'symbol' => 'SESSION', 'exchange' => 'NSE', 'name' => 'SESSION',
+            'is_active' => true, 'is_benchmark' => false,
+        ]);
+        $requestedDates = [];
+        $priceFetch = Mockery::mock(PriceFetchService::class);
+        $priceFetch->shouldReceive('syncStock')->times(4)
+            ->andReturnUsing(function (Stock $stock, Carbon $from, Carbon $to) use (&$requestedDates) {
+                $requestedDates[] = $to->toDateString();
+                return ['success' => true, 'stored_rows' => 0, 'cache_hit' => true, 'errors' => []];
+            });
+        $benchmark = Mockery::mock(BenchmarkPriceSyncService::class);
+        $benchmark->shouldReceive('syncIfNeeded')->times(4)->andReturn(['skipped' => true, 'success' => true]);
+        $syncLog = Mockery::mock(SyncLogService::class);
+        $syncLog->shouldReceive('beginRun')->times(4)->andReturn('session-test');
+        $syncLog->shouldReceive('log')->andReturnNull();
+        $syncLog->shouldReceive('completeRun')->times(4);
+        $logger = Mockery::mock(PortfolioLoggerService::class);
+        $logger->shouldReceive('scheduler')->andReturnNull();
+        $service = new UniversePriceSyncService(app(UniverseStockResolverService::class), $priceFetch, $benchmark, $syncLog, $logger);
+
+        foreach (['2026-10-23', '2026-10-24', '2026-10-25', '2026-10-26'] as $day) {
+            Carbon::setTestNow($day.' 16:00:00');
+            $result = $service->sync(mode: 'daily', batchSize: 1);
+            $this->assertSame(1, $result['succeeded']);
+            $this->assertSame(1, $result['cache_hits']);
+            $this->assertSame(0, $result['failed']);
+            $this->assertSame(0, $result['stored_rows']);
+        }
+
+        $this->assertSame(['2026-10-23', '2026-10-23', '2026-10-23', '2026-10-23'], $requestedDates);
     }
 
     public function test_sync_batch_prioritizes_holdings_before_other_stocks(): void
