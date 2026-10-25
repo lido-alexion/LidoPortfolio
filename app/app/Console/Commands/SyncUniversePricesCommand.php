@@ -10,13 +10,13 @@ use InvalidArgumentException;
 class SyncUniversePricesCommand extends Command
 {
     protected $signature = 'portfolio:sync-universe-prices
-        {--mode=daily : daily (incremental) or backfill (full history window)}
+        {--mode=daily : daily (NSE/BSE exchange files) or backfill (historical providers)}
         {--scope= : all_equities, all_nse (deprecated), or nifty500 (default from config)}
-        {--batch= : Stocks per run when not using --all}
+        {--batch= : Historical stocks per run when not using --all}
         {--all : Process entire universe in one run (for initial backfill)}
-        {--reset-cursor : Start from the first stock in the universe}';
+        {--reset-cursor : Restart historical cursor, or refresh daily exchange-file receipts}';
 
-    protected $description = 'Sync OHLCV price history for the NSE stock universe (rate-limited batches)';
+    protected $description = 'Collect daily NSE/BSE bhavcopy OHLCV or run historical universe backfill';
 
     public function handle(
         UniversePriceSyncService $sync,
@@ -57,7 +57,7 @@ class SyncUniversePricesCommand extends Command
             $mode,
             $scope,
             $universeCount,
-            $processAll ? 'yes' : 'no',
+            $mode === 'daily' || $processAll ? 'yes' : 'no',
         ));
 
         if ($universeCount === 0) {
@@ -71,6 +71,10 @@ class SyncUniversePricesCommand extends Command
 
         if ($mode === 'backfill' && ! $processAll) {
             $this->comment('Backfill runs in batches. Re-run until cycle completes, or use --all for a single long run.');
+        }
+
+        if ($mode === 'daily') {
+            $this->info('Daily source: NSE/BSE bhavcopy; full scope; stock batch limit applies to historical backfill.');
         }
 
         $stats = $sync->sync(
