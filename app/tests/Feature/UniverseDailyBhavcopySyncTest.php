@@ -212,6 +212,7 @@ class UniverseDailyBhavcopySyncTest extends TestCase
         try {
             $result = app(UniversePriceSyncService::class)->sync();
             $this->assertSame(1, $result['skipped']);
+            $this->assertSame('exchange_bhavcopy', $result['collection_method']);
             $this->assertSame(0, $result['processed']);
             $this->assertDatabaseCount('portfolio_sync_runs', 0);
             $this->assertSame([], app(UniversePriceSyncService::class)->lastRunStats() ?? []);

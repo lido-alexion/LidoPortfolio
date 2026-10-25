@@ -1146,6 +1146,7 @@ class UniversePriceSyncService
         return [
             'scope' => $scope,
             'mode' => $mode,
+            'collection_method' => $mode === 'daily' ? UniverseDailyBhavcopySyncService::METHOD : 'per_stock',
             'universe_count' => $universeCount,
             'processed' => 0,
             'succeeded' => 0,
