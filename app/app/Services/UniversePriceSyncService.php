@@ -849,6 +849,8 @@ class UniversePriceSyncService
         $batchSize = $batchSize ?? (int) config('portfolio.universe_price_sync.batch_size', 125);
         $delayMs = (int) config('portfolio.universe_price_sync.delay_ms_between_stocks', 400);
 
+        // A queue worker may have cached a date before an admin marked it closed.
+        TradingCalendar::clearHolidayCache();
         $from = $this->rangeFrom($mode);
         $to = TradingCalendar::normalizeToSessionDate(now());
 

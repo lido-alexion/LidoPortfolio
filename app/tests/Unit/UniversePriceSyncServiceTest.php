@@ -228,13 +228,14 @@ class UniversePriceSyncServiceTest extends TestCase
             'portfolio.universe_price_sync.enabled' => true,
             'portfolio.universe_price_sync.delay_ms_between_stocks' => 0,
         ]);
+        // Simulate a long-lived worker's negative lookup before a calendar edit.
+        $this->assertTrue(TradingCalendar::isEquitySessionDate(Carbon::parse('2026-10-26')));
         CalendarEvent::query()->create([
             'profile_id' => null, 'category' => CalendarEvent::CATEGORY_TRADE_HOLIDAY,
             'title' => 'Test trade holiday', 'color' => CalendarEvent::TRADE_HOLIDAY_DEFAULT_COLOR,
             'anchor_date' => '2026-10-26', 'recurrence_type' => CalendarEvent::RECURRENCE_NONE,
             'reminder_enabled' => false, 'is_active' => true,
         ]);
-        TradingCalendar::clearHolidayCache();
         Stock::query()->create([
             'symbol' => 'SESSION', 'exchange' => 'NSE', 'name' => 'SESSION',
             'is_active' => true, 'is_benchmark' => false,

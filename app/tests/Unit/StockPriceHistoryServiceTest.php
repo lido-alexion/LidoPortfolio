@@ -473,12 +473,132 @@ $dates = [];
         $this->assertDatabaseCount('portfolio_stock_prices', 1);
     }
 
+    public function test_empty_and_cached_ranges_fetch_only_the_missing_session_after_a_closed_weekend(): void
+    {
+        $this->addClosedMonday();
+        foreach ([false, true] as $cached) {
+            $symbol = $cached ? 'SESSIONTAIL' : 'EMPTYSESSION';
+            $stock = $this->makeStock($symbol);
+            if ($cached) {
+                $this->seedPrices($stock, ['2026-10-23']);
+            }
+            $fetch = Mockery::mock(PriceFetchService::class);
+            $fetch->shouldReceive('providerChainForStock')->once()->andReturn(['nse']);
+            $fetch->shouldReceive('fetchFromProvider')->twice()
+                ->withArgs(fn ($provider, $requestedSymbol, Carbon $from, Carbon $to) => $provider === 'nse'
+                    && $requestedSymbol === $symbol && $from->toDateString() === '2026-10-27'
+                    && $to->toDateString() === '2026-10-27')
+                ->andReturn(['rows' => [], 'errors' => ['nse: required session unavailable']]);
+            $fetch->shouldNotReceive('storeHistoricalRows');
+            $this->app->instance(PriceFetchService::class, $fetch);
+
+            $result = $this->makeService()->fetchMissingHistory(
+                $stock, Carbon::parse($cached ? '2026-10-23' : '2026-10-24'), Carbon::parse('2026-10-27'), false,
+            );
+
+            $this->assertFalse($result['success']);
+            $this->assertSame([['from' => '2026-10-27', 'to' => '2026-10-27']], $result['attempted_ranges']);
+            $this->assertSame($result['attempted_ranges'], $result['remaining_ranges']);
+            $this->assertSame(0, $result['stored_rows']);
+        }
+    }
+
+    public function test_established_prefix_range_trims_weekend_start_and_calendar_holiday_end(): void
+    {
+        $this->addClosedMonday();
+        $stock = $this->makeStock('SESSIONPREFIX');
+        $stock->forceFill(['created_at' => Carbon::parse('2020-01-01')])->save();
+        $this->seedPrices($stock, ['2026-10-27']);
+        $from = Carbon::parse('2026-10-17');
+        $to = Carbon::parse('2026-10-27');
+
+        $ranges = $this->makeService()->getMissingHistoryRanges($stock, $from, $to);
+
+        $this->assertCount(1, $ranges);
+        $this->assertSame('2026-10-19', $ranges[0]['from']->toDateString());
+        $this->assertSame('2026-10-23', $ranges[0]['to']->toDateString());
+        $this->assertSame('2026-10-17', $from->toDateString());
+        $this->assertSame('2026-10-27', $to->toDateString());
+    }
+
+    public function test_long_internal_closure_is_a_cache_hit_without_provider_requests(): void
+    {
+        foreach (['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-11-02'] as $day) {
+            $this->addTradeHoliday($day);
+        }
+        config(['portfolio.history.max_internal_gap_days' => 7]);
+        $stock = $this->makeStock('INTERNALCLOSED');
+        $this->seedPrices($stock, ['2026-10-23', '2026-11-03']);
+        $fetch = Mockery::mock(PriceFetchService::class);
+        $fetch->shouldNotReceive('fetchFromProvider');
+        $this->app->instance(PriceFetchService::class, $fetch);
+
+        $result = $this->makeService()->fetchMissingHistory(
+            $stock, Carbon::parse('2026-10-23'), Carbon::parse('2026-11-03'), false,
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertTrue($result['cache_hit']);
+        $this->assertSame([], $result['attempted_ranges']);
+        $this->assertSame(0, $result['stored_rows']);
+        $this->assertDatabaseCount('portfolio_stock_prices', 2);
+    }
+
+    public function test_internal_closure_preserves_a_real_missing_session_and_its_failure(): void
+    {
+        foreach (['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-11-02'] as $day) {
+            $this->addTradeHoliday($day);
+        }
+        config(['portfolio.history.max_internal_gap_days' => 7]);
+        $stock = $this->makeStock('INTERNALREAL');
+        $this->seedPrices($stock, ['2026-10-23', '2026-11-03']);
+        $fetch = Mockery::mock(PriceFetchService::class);
+        $fetch->shouldReceive('providerChainForStock')->once()->andReturn(['nse']);
+        $fetch->shouldReceive('fetchFromProvider')->twice()
+            ->withArgs(fn ($provider, $symbol, Carbon $from, Carbon $to) => $provider === 'nse'
+                && $symbol === 'INTERNALREAL' && $from->toDateString() === '2026-10-30'
+                && $to->toDateString() === '2026-10-30')
+            ->andReturn(['rows' => [], 'errors' => ['nse: required Friday unavailable']]);
+        $fetch->shouldNotReceive('storeHistoricalRows');
+        $this->app->instance(PriceFetchService::class, $fetch);
+
+        $result = $this->makeService()->fetchMissingHistory(
+            $stock, Carbon::parse('2026-10-23'), Carbon::parse('2026-11-03'), false,
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertSame([['from' => '2026-10-30', 'to' => '2026-10-30']], $result['remaining_ranges']);
+        $this->assertNotEmpty($result['errors']);
+        $this->assertDatabaseCount('portfolio_stock_prices', 2);
+    }
+
+    public function test_raw_and_session_normalized_ignored_ranges_remain_effective(): void
+    {
+        $this->addClosedMonday();
+        foreach (['2026-10-24', '2026-10-27'] as $ignoredFrom) {
+            $stock = $this->makeStock('IGNORED'.str_replace('-', '', $ignoredFrom));
+            $this->seedPrices($stock, ['2026-10-23']);
+            app(IgnoredPriceGapService::class)->ignore($stock->id, $ignoredFrom, '2026-10-27');
+
+            $ranges = $this->makeService()->getMissingHistoryRanges(
+                $stock, Carbon::parse('2026-10-23'), Carbon::parse('2026-10-27'),
+            );
+
+            $this->assertSame([], $ranges);
+        }
+    }
+
     private function addClosedMonday(): void
+    {
+        $this->addTradeHoliday('2026-10-26');
+    }
+
+    private function addTradeHoliday(string $date): void
     {
         CalendarEvent::query()->create([
             'profile_id' => null, 'category' => CalendarEvent::CATEGORY_TRADE_HOLIDAY,
             'title' => 'Test trade holiday', 'color' => CalendarEvent::TRADE_HOLIDAY_DEFAULT_COLOR,
-            'anchor_date' => '2026-10-26', 'recurrence_type' => CalendarEvent::RECURRENCE_NONE,
+            'anchor_date' => $date, 'recurrence_type' => CalendarEvent::RECURRENCE_NONE,
             'reminder_enabled' => false, 'is_active' => true,
         ]);
         TradingCalendar::clearHolidayCache();
