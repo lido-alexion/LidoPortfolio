@@ -26,9 +26,11 @@ class NseHttpClient
             ->timeout(20)
             ->retry(1, 500);
 
+        // Cookie warm-up is optional. Keep its opt-out off the returned data client.
+        $warmup = (clone $client)->withHeaders(['X-StoX-Skip-Api-Failure-Reporting' => '1']);
         try {
-            $client->get('https://www.nseindia.com/');
-            $client->get('https://www.nseindia.com/api/marketStatus');
+            $warmup->get('https://www.nseindia.com/');
+            $warmup->get('https://www.nseindia.com/api/marketStatus');
         } catch (\Throwable) {
             // Continue — quote/historical call may still succeed.
         }

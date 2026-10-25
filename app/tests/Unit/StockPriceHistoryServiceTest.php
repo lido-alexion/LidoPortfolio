@@ -4,6 +4,7 @@ namespace Tests\Unit;
 
 use App\Models\Stock;
 use App\Models\StockPrice;
+use App\Models\CalendarEvent;
 use App\Services\IgnoredPriceGapService;
 use App\Services\PortfolioLoggerService;
 use App\Services\PriceFetchService;
@@ -20,6 +21,8 @@ class StockPriceHistoryServiceTest extends TestCase
 
     protected function tearDown(): void
     {
+        Carbon::setTestNow();
+        TradingCalendar::clearHolidayCache();
         Mockery::close();
         parent::tearDown();
     }
@@ -401,6 +404,84 @@ $dates = [];
         $this->assertCount(1, $ranges);
         $this->assertSame('2025-07-09', $ranges[0]['from']->toDateString());
         $this->assertSame('2025-10-07', $ranges[0]['to']->toDateString());
+    }
+
+    public function test_cached_friday_needs_no_weekend_or_holiday_fetch(): void
+    {
+        $this->addClosedMonday();
+        $stock = $this->makeStock('CLOSEDTAIL');
+        $this->seedPrices($stock, ['2026-10-23']);
+        $fetch = Mockery::mock(PriceFetchService::class);
+        $fetch->shouldNotReceive('fetchFromProvider');
+        $this->app->instance(PriceFetchService::class, $fetch);
+
+        foreach (['2026-10-24', '2026-10-25', '2026-10-26'] as $end) {
+            $result = $this->makeService()->fetchMissingHistory(
+                $stock, Carbon::parse('2026-10-23'), Carbon::parse($end), false,
+            );
+            $this->assertTrue($result['success']);
+            $this->assertTrue($result['cache_hit']);
+            $this->assertSame([], $result['providers_tried']);
+            $this->assertSame([], $result['remaining_ranges']);
+            $this->assertSame(0, $result['stored_rows']);
+        }
+        $this->assertDatabaseCount('portfolio_stock_prices', 1);
+    }
+
+    public function test_closed_only_request_without_prices_does_not_fetch_or_invent_rows(): void
+    {
+        $stock = $this->makeStock('CLOSEDONLY');
+        $fetch = Mockery::mock(PriceFetchService::class);
+        $fetch->shouldNotReceive('fetchFromProvider');
+        $this->app->instance(PriceFetchService::class, $fetch);
+
+        $result = $this->makeService()->fetchMissingHistory(
+            $stock, Carbon::parse('2026-10-24'), Carbon::parse('2026-10-25'), false,
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame([], $result['attempted_ranges']);
+        $this->assertSame(0, $result['stored_rows']);
+        $this->assertDatabaseCount('portfolio_stock_prices', 0);
+    }
+
+    public function test_closed_tail_keeps_a_real_missing_friday_and_reports_provider_failure(): void
+    {
+        $this->addClosedMonday();
+        $stock = $this->makeStock('REALSUFFIX');
+        $this->seedPrices($stock, ['2026-10-22']);
+        $fetch = Mockery::mock(PriceFetchService::class);
+        $fetch->shouldReceive('providerChainForStock')->once()->andReturn(['nse']);
+        $fetch->shouldReceive('fetchFromProvider')->twice()
+            ->withArgs(fn ($provider, $symbol, Carbon $from, Carbon $to) => $provider === 'nse'
+                && $symbol === 'REALSUFFIX' && $from->toDateString() === '2026-10-23'
+                && $to->toDateString() === '2026-10-23')
+            ->andReturn(['rows' => [], 'errors' => ['nse: no data for required session']]);
+        $fetch->shouldNotReceive('storeHistoricalRows');
+        $this->app->instance(PriceFetchService::class, $fetch);
+
+        $result = $this->makeService()->fetchMissingHistory(
+            $stock, Carbon::parse('2026-10-22'), Carbon::parse('2026-10-26'), false,
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertFalse($result['cache_hit']);
+        $this->assertSame([['from' => '2026-10-23', 'to' => '2026-10-23']], $result['remaining_ranges']);
+        $this->assertSame(['nse'], $result['providers_tried']);
+        $this->assertNotEmpty($result['errors']);
+        $this->assertSame(0, $result['stored_rows']);
+        $this->assertDatabaseCount('portfolio_stock_prices', 1);
+    }
+
+    private function addClosedMonday(): void
+    {
+        CalendarEvent::query()->create([
+            'profile_id' => null, 'category' => CalendarEvent::CATEGORY_TRADE_HOLIDAY,
+            'title' => 'Test trade holiday', 'color' => CalendarEvent::TRADE_HOLIDAY_DEFAULT_COLOR,
+            'anchor_date' => '2026-10-26', 'recurrence_type' => CalendarEvent::RECURRENCE_NONE,
+            'reminder_enabled' => false, 'is_active' => true,
+        ]);
+        TradingCalendar::clearHolidayCache();
     }
 
     protected function makeStock(string $symbol, bool $benchmark = false): Stock

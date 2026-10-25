@@ -76,7 +76,9 @@ class StockPriceHistoryService
         bool $includePreListingPrefix = false,
     ): array {
         $requiredFrom = $requiredFrom->copy()->startOfDay();
-        $requiredTo = $requiredTo->copy()->startOfDay();
+        // A closed-session tail is not missing OHLCV. Keep genuine session-day
+        // suffix gaps, including today's bar when the nightly sync requests it.
+        $requiredTo = TradingCalendar::normalizeToSessionDate($requiredTo);
 
         if ($requiredFrom->gt($requiredTo)) {
             return [];
