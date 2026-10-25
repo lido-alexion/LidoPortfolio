@@ -10,6 +10,7 @@ use App\Services\PortfolioLoggerService;
 use App\Services\PriceFetchService;
 use App\Services\SyncLogService;
 use App\Services\UniversePriceSyncService;
+use App\Services\UniversePrice\UniverseDailyBhavcopySyncService;
 use App\Services\UniverseStockResolverService;
 use App\Support\TradingCalendar;
 use Carbon\Carbon;
@@ -31,7 +32,22 @@ class UniversePriceSyncServiceTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_sync_processes_batch_and_advances_cursor(): void
+    private function fakeBulk(callable $assertDates, int $calls = 1, int $stored = 0): void
+    {
+        $bulk = Mockery::mock(UniverseDailyBhavcopySyncService::class);
+        $bulk->shouldReceive('run')->times($calls)
+            ->andReturnUsing(function ($stocks, Carbon $from, Carbon $to, $runId, $jobName, array $stats) use ($assertDates, $stored) {
+                $assertDates($stocks, $from, $to);
+                return ['stats' => array_merge($stats, [
+                    'processed' => $stocks->count(), 'succeeded' => $stocks->count(),
+                    'stored_rows' => $stored, 'cache_hits' => $stored === 0 ? $stocks->count() : 0,
+                    'collection_method' => 'exchange_bhavcopy', 'bulk' => ['file_errors' => 0, 'identity_conflicts' => 0],
+                ]), 'last_stock_id' => 0];
+            });
+        $this->app->instance(UniverseDailyBhavcopySyncService::class, $bulk);
+    }
+
+    public function test_backfill_processes_batch_and_advances_cursor(): void
     {
         config([
             'portfolio.universe_price_sync.enabled' => true,
@@ -93,7 +109,7 @@ class UniversePriceSyncServiceTest extends TestCase
             $logger,
         );
 
-        $result = $service->sync(mode: 'daily', processAll: false, batchSize: 2);
+        $result = $service->sync(mode: 'backfill', processAll: false, batchSize: 2);
 
         $this->assertSame(2, $result['processed']);
         $this->assertSame(2, $result['succeeded']);
@@ -182,20 +198,13 @@ class UniversePriceSyncServiceTest extends TestCase
         ]);
 
         $priceFetch = Mockery::mock(PriceFetchService::class);
-        $priceFetch->shouldReceive('syncStock')
-            ->once()
-            ->withArgs(function ($s, Carbon $from, Carbon $to) use ($stock) {
-                return $s->id === $stock->id
-                    && $from->lte(now()->subDays(10))
-                    && $from->gte(now()->subDays(11))
-                    && $to->isToday();
-            })
-            ->andReturn([
-                'success' => true,
-                'stored_rows' => 1,
-                'cache_hit' => false,
-                'errors' => [],
-            ]);
+        $priceFetch->shouldNotReceive('syncStock');
+        $this->fakeBulk(function ($stocks, Carbon $from, Carbon $to) use ($stock): void {
+            $this->assertSame([$stock->id], $stocks->pluck('id')->all());
+            $this->assertTrue($from->lte(now()->subDays(10)));
+            $this->assertTrue($from->gte(now()->subDays(11)));
+            $this->assertTrue($to->isToday());
+        }, stored: 1);
 
         $benchmarkSync = Mockery::mock(BenchmarkPriceSyncService::class);
         $benchmarkSync->shouldReceive('syncIfNeeded')->once()->andReturn(['skipped' => true, 'success' => true]);
@@ -242,11 +251,10 @@ class UniversePriceSyncServiceTest extends TestCase
         ]);
         $requestedDates = [];
         $priceFetch = Mockery::mock(PriceFetchService::class);
-        $priceFetch->shouldReceive('syncStock')->times(4)
-            ->andReturnUsing(function (Stock $stock, Carbon $from, Carbon $to) use (&$requestedDates) {
-                $requestedDates[] = $to->toDateString();
-                return ['success' => true, 'stored_rows' => 0, 'cache_hit' => true, 'errors' => []];
-            });
+        $priceFetch->shouldNotReceive('syncStock');
+        $this->fakeBulk(function ($stocks, Carbon $from, Carbon $to) use (&$requestedDates): void {
+            $requestedDates[] = $to->toDateString();
+        }, calls: 4);
         $benchmark = Mockery::mock(BenchmarkPriceSyncService::class);
         $benchmark->shouldReceive('syncIfNeeded')->times(4)->andReturn(['skipped' => true, 'success' => true]);
         $syncLog = Mockery::mock(SyncLogService::class);
@@ -269,7 +277,7 @@ class UniversePriceSyncServiceTest extends TestCase
         $this->assertSame(['2026-10-23', '2026-10-23', '2026-10-23', '2026-10-23'], $requestedDates);
     }
 
-    public function test_sync_batch_prioritizes_holdings_before_other_stocks(): void
+    public function test_backfill_batch_prioritizes_holdings_before_other_stocks(): void
     {
         config([
             'portfolio.universe_price_sync.enabled' => true,
@@ -346,7 +354,7 @@ class UniversePriceSyncServiceTest extends TestCase
             $logger,
         );
 
-        $result = $service->sync(mode: 'daily', processAll: false, batchSize: 1);
+        $result = $service->sync(mode: 'backfill', processAll: false, batchSize: 1);
 
         $this->assertSame([$holding->id], $syncedIds);
         $this->assertSame($holding->id, (int) Setting::getValue(UniversePriceSyncService::KEY_CURSOR_STOCK_ID));

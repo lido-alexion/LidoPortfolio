@@ -5252,15 +5252,23 @@
     "title": "Universe price sync",
     "path": "app/resources/js/src/data/appDocumentation.js",
     "section": "Overview",
-    "snippet": "Admin control of NSE universe OHLCV batch sync, gaps, and depth backfill. Universe sync deepens and refreshes daily bars for the broader equity universe used by Explorer, Screeners, and Market Analysis. Related pages cover gap-fill failures and ignored gaps. Evening maintenance runs 19:00–23:45 on weekdays; weekends are skipped unless the prior session’s last maintenance batch ended failed/partial (then Saturday/Sunday retry to heal). Daily holdings/benchmark/index sync also skip weekends and trade holidays. Ops overdue Telegram follows the same Friday-success silence. Provider “rate limit” alerts require real throttle signals — empty provider responses alone are treated as sync failures, not rate limits.\n\nUniverse sync health determines quality for Explorer, many Screeners, and market analytics. Treat this page as operational maintenance: monitor drift, investigate gaps, and keep histor",
+    "snippet": "Admin control of NSE/BSE daily bhavcopy collection, gaps, and historical backfill. Daily universe sync reads NSE bulk bhavcopy and BSE bhavcopy for the full eligible NSE + BSE-only universe used by Explorer, Screeners, and Market Analysis. One file per exchange and session serves every matching stock; the stock batch-size setting applies to historical backfill only. A bounded recent-session recovery window excludes weekends and active StoX trading holidays. Existing cached and repaired bars are preserved. Missing files, invalid identities, and unavailable stock coverage stay explicit; daily maintenance does not fall back to per-stock Yahoo calls or automatically launch legacy gap-fill retries. Related pages cover gap-fill failures and ignored gaps. Evening maintenance runs 19:00–23:45 on weekdays; weekends are skipped unless the prior session’s last maintenance batch ended failed/partial",
     "url": "/docs/universe-price-sync.html"
   },
   {
-    "source_id": "product:universe-price-sync:concept:batch-executor",
+    "source_id": "product:universe-price-sync:concept:daily-exchange-files",
     "title": "Universe price sync",
     "path": "app/resources/js/src/data/appDocumentation.js",
-    "section": "Batch executor",
-    "snippet": "Per-stock provider fetch loop with rate-limit awareness and sync logging.",
+    "section": "Daily exchange files",
+    "snippet": "NSE UDiFF ZIP and the existing BSE bhavcopy downloader provide daily OHLCV. Strict date, exchange, schema, price, and identity checks precede insertion. Successful file receipts avoid repeated downloads; changed membership or deleted coverage triggers a fresh check.",
+    "url": "/docs/universe-price-sync.html"
+  },
+  {
+    "source_id": "product:universe-price-sync:concept:historical-batches",
+    "title": "Universe price sync",
+    "path": "app/resources/js/src/data/appDocumentation.js",
+    "section": "Historical batches",
+    "snippet": "Explicit history/depth/gap backfills retain their existing provider workflows and batch controls. Holdings, benchmark, and index sync are separate jobs.",
     "url": "/docs/universe-price-sync.html"
   },
   {
@@ -5308,7 +5316,7 @@
     "title": "Universe price sync",
     "path": "app/resources/js/src/data/appDocumentation.js",
     "section": "Sync status / controls",
-    "snippet": "Monitor batch progress, windows, and enablement.",
+    "snippet": "Monitor daily source files, missing coverage, full-scope progress, windows, and enablement.",
     "url": "/docs/universe-price-sync.html"
   },
   {
@@ -5324,7 +5332,7 @@
     "title": "Universe price sync",
     "path": "app/resources/js/src/data/appDocumentation.js",
     "section": "Manual run",
-    "snippet": "You can still trigger a batch anytime from the UI/CLI, including weekends, even when the scheduler skips.",
+    "snippet": "Run daily bulk collection or a separate historical batch from the UI/CLI. A weekend run can recover earlier valid sessions; it never requests weekend or marked-holiday bars.",
     "url": "/docs/universe-price-sync.html"
   },
   {

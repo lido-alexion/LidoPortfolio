@@ -9,6 +9,7 @@ use App\Services\PriceHistoryGapService;
 use App\Services\SettingsService;
 use App\Services\UniversePriceSyncService;
 use App\Services\UniverseStockResolverService;
+use App\Services\UniversePrice\UniverseDailyBhavcopySyncService;
 use Illuminate\Console\Command;
 use InvalidArgumentException;
 
@@ -122,6 +123,7 @@ class RunUniverseMaintenanceCommand extends Command
             processAll: false,
             resetCursor: $resetCursor,
         );
+        $bulkDaily = ($daily['collection_method'] ?? null) === UniverseDailyBhavcopySyncService::METHOD;
 
         $logger->scheduler('debug', 'Universe maintenance daily batch result', [
             'event' => 'universe_maintenance_daily_result',
@@ -178,7 +180,7 @@ class RunUniverseMaintenanceCommand extends Command
             );
         }
 
-        if ($this->shouldRunGapFill() && ! $this->option('skip-gap-fill')) {
+        if (! $bulkDaily && $this->shouldRunGapFill() && ! $this->option('skip-gap-fill')) {
             $resetGapCursor = $sync->isMaintenanceWindowStart();
             $logger->scheduler('debug', 'Universe maintenance gap fill starting', [
                 'event' => 'universe_maintenance_gap_start',
@@ -226,10 +228,11 @@ class RunUniverseMaintenanceCommand extends Command
                 'event' => 'universe_maintenance_gap_skip',
                 'enabled' => $this->shouldRunGapFill(),
                 'skip_option' => (bool) $this->option('skip-gap-fill'),
+                'daily_collection_method' => $daily['collection_method'] ?? 'per_stock',
             ]);
         }
 
-        if (($daily['failed'] ?? 0) > 0 && $gapRetries > 0) {
+        if (! $bulkDaily && ($daily['failed'] ?? 0) > 0 && $gapRetries > 0) {
             $this->warn(sprintf(
                 'Daily batch had %d failure(s). Running %d extra gap fill batch(es).',
                 $daily['failed'],

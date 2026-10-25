@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Universe price sync — StoX docs</title>
-  <meta name="description" content="Admin control of NSE universe OHLCV batch sync, gaps, and depth backfill.">
+  <meta name="description" content="Admin control of NSE/BSE daily bhavcopy collection, gaps, and historical backfill.">
   <link rel="canonical" href="universe-price-sync.html">
   <style>
     :root {
@@ -110,11 +110,11 @@
     <article>
       <h1 style="font-size:1.6rem;margin:0 0 0.4rem">Universe price sync</h1>
       <p class="muted"><code>universe-price-sync</code> · screen: <code>/settings/universe-price-sync</code></p>
-      <p>Admin control of NSE universe OHLCV batch sync, gaps, and depth backfill.</p>
+      <p>Admin control of NSE/BSE daily bhavcopy collection, gaps, and historical backfill.</p>
 
       <section class="panel">
         <h2>Overview</h2>
-        <p>Universe sync deepens and refreshes daily bars for the broader equity universe used by Explorer, Screeners, and Market Analysis. Related pages cover gap-fill failures and ignored gaps. Evening maintenance runs 19:00–23:45 on weekdays; weekends are skipped unless the prior session’s last maintenance batch ended failed/partial (then Saturday/Sunday retry to heal). Daily holdings/benchmark/index sync also skip weekends and trade holidays. Ops overdue Telegram follows the same Friday-success silence. Provider “rate limit” alerts require real throttle signals — empty provider responses alone are treated as sync failures, not rate limits.</p>
+        <p>Daily universe sync reads NSE bulk bhavcopy and BSE bhavcopy for the full eligible NSE + BSE-only universe used by Explorer, Screeners, and Market Analysis. One file per exchange and session serves every matching stock; the stock batch-size setting applies to historical backfill only. A bounded recent-session recovery window excludes weekends and active StoX trading holidays. Existing cached and repaired bars are preserved. Missing files, invalid identities, and unavailable stock coverage stay explicit; daily maintenance does not fall back to per-stock Yahoo calls or automatically launch legacy gap-fill retries. Related pages cover gap-fill failures and ignored gaps. Evening maintenance runs 19:00–23:45 on weekdays; weekends are skipped unless the prior session’s last maintenance batch ended failed/partial (then Saturday/Sunday retry to heal). Daily holdings/benchmark/index sync also skip weekends and trade holidays. Ops overdue Telegram follows the same Friday-success silence. Provider “rate limit” alerts require real throttle signals — empty provider responses alone are treated as sync failures, not rate limits.</p>
 <p>Universe sync health determines quality for Explorer, many Screeners, and market analytics. Treat this page as operational maintenance: monitor drift, investigate gaps, and keep history depth sufficient. Weekday evenings are the normal window; weekends only retry when the prior session’s last batch failed or was partial.</p>
 <p>Practical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).</p>
 
@@ -124,13 +124,13 @@
         <h2>Controls</h2>
         <dl class="doc-list">
         <dt>Sync status / controls</dt>
-        <dd>Monitor batch progress, windows, and enablement.</dd>
+        <dd>Monitor daily source files, missing coverage, full-scope progress, windows, and enablement.</dd>
 
         <dt>Gap failures / ignored gaps</dt>
         <dd>Drill into symbols that failed fill or were intentionally skipped.</dd>
 
         <dt>Manual run</dt>
-        <dd>You can still trigger a batch anytime from the UI/CLI, including weekends, even when the scheduler skips.</dd>
+        <dd>Run daily bulk collection or a separate historical batch from the UI/CLI. A weekend run can recover earlier valid sessions; it never requests weekend or marked-holiday bars.</dd>
 
         <dt>Typical flow</dt>
         <dd>Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.</dd>
@@ -143,8 +143,11 @@
       <section class="panel">
         <h2>Concepts</h2>
         <dl class="doc-list">
-        <dt>Batch executor</dt>
-        <dd>Per-stock provider fetch loop with rate-limit awareness and sync logging.</dd>
+        <dt>Daily exchange files</dt>
+        <dd>NSE UDiFF ZIP and the existing BSE bhavcopy downloader provide daily OHLCV. Strict date, exchange, schema, price, and identity checks precede insertion. Successful file receipts avoid repeated downloads; changed membership or deleted coverage triggers a fresh check.</dd>
+
+        <dt>Historical batches</dt>
+        <dd>Explicit history/depth/gap backfills retain their existing provider workflows and batch controls. Holdings, benchmark, and index sync are separate jobs.</dd>
 
         <dt>History depth</dt>
         <dd>Longer windows improve indicators and backtests.</dd>

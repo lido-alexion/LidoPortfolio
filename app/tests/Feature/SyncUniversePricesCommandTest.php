@@ -3,56 +3,67 @@
 namespace Tests\Feature;
 
 use App\Models\Stock;
+use App\Services\BenchmarkPriceSyncService;
 use App\Services\PriceFetchService;
+use App\Support\TradingCalendar;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Mockery;
+use Tests\Concerns\BhavcopyFixtures;
 use Tests\TestCase;
 
 class SyncUniversePricesCommandTest extends TestCase
 {
+    use BhavcopyFixtures;
     use RefreshDatabase;
 
     protected function tearDown(): void
     {
+        Carbon::setTestNow();
+        TradingCalendar::clearHolidayCache();
         Mockery::close();
         parent::tearDown();
     }
 
-    public function test_command_runs_daily_batch_for_active_nse_stocks(): void
+    public function test_daily_command_collects_both_exchange_files_for_the_full_scope_despite_a_batch_limit(): void
     {
+        Carbon::setTestNow('2026-10-26 20:00:00');
+        TradingCalendar::clearHolidayCache();
         config([
             'portfolio.universe_price_sync.enabled' => true,
-            'portfolio.universe_price_sync.delay_ms_between_stocks' => 0,
+            'portfolio.universe_price_sync.daily_lookback_days' => 1,
+            'portfolio.universe_price_sync.batch_size' => 1,
+        ]);
+        $nse = Stock::query()->create([
+            'symbol' => 'INFY', 'exchange' => 'NSE', 'name' => 'Infosys',
+            'is_active' => true, 'is_benchmark' => false,
+        ]);
+        $bse = Stock::query()->create([
+            'symbol' => 'BSEONLY', 'exchange' => 'BSE', 'name' => 'BSE only',
+            'bse_scrip_code' => '500001', 'is_active' => true, 'is_benchmark' => false,
+        ]);
+        $prices = Mockery::mock(PriceFetchService::class)->makePartial();
+        $prices->shouldNotReceive('syncStock');
+        $prices->shouldNotReceive('fetchHistoricalWithFallback');
+        $this->app->instance(PriceFetchService::class, $prices);
+        $benchmark = Mockery::mock(BenchmarkPriceSyncService::class);
+        $benchmark->shouldReceive('syncIfNeeded')->once()->andReturn(['skipped' => true, 'success' => true]);
+        $this->app->instance(BenchmarkPriceSyncService::class, $benchmark);
+        Http::preventStrayRequests();
+        Http::fake([
+            'nsearchives.nseindia.com/*' => Http::response($this->bhavcopyZip($this->bhavcopyCsv(rows: [['TckrSymb' => 'INFY']]))),
+            'www.bseindia.com/*' => Http::response($this->bhavcopyCsv('BSE', rows: [
+                ['TckrSymb' => 'BSEONLY', 'FinInstrmId' => '500001', 'ISIN' => 'INE002A01010'],
+            ])),
         ]);
 
-        // Benchmark sync compares dates in cron_timezone (Asia/Kolkata); seeding
-        // with the UTC date left the guard open between midnight and 05:30 IST,
-        // so syncStock was called an extra time for the benchmark symbol.
-        \App\Models\Setting::setValue(
-            \App\Services\BenchmarkPriceSyncService::KEY_LAST_SYNC_DATE,
-            \Carbon\Carbon::now(app(\App\Services\SettingsService::class)->get('cron_timezone', 'Asia/Kolkata'))->toDateString(),
-        );
-
-        Stock::query()->create([
-            'symbol' => 'INFY',
-            'exchange' => 'NSE',
-            'name' => 'Infosys',
-            'is_active' => true,
-            'is_benchmark' => false,
-        ]);
-
-        $priceFetch = Mockery::mock(PriceFetchService::class);
-        $priceFetch->shouldReceive('syncStock')
-            ->once()
-            ->andReturn([
-                'success' => true,
-                'stored_rows' => 3,
-                'cache_hit' => true,
-                'errors' => [],
-            ]);
-        $this->app->instance(PriceFetchService::class, $priceFetch);
-
-        $this->artisan('portfolio:sync-universe-prices', ['--mode' => 'daily'])
+        $this->artisan('portfolio:sync-universe-prices', ['--mode' => 'daily', '--batch' => 1])
+            ->expectsOutputToContain('Daily source: NSE/BSE bhavcopy; full scope')
             ->assertSuccessful();
+
+        Http::assertSentCount(2);
+        $this->assertDatabaseHas('portfolio_stock_prices', ['stock_id' => $nse->id, 'provider_source' => 'nse_bhavcopy']);
+        $this->assertDatabaseHas('portfolio_stock_prices', ['stock_id' => $bse->id, 'provider_source' => 'bse_bhavcopy']);
     }
 }

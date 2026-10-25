@@ -11,6 +11,17 @@ class BseBhavcopyService
 {
     public const BASE_URL = 'https://www.bseindia.com/';
 
+    /** Reuse the established BSE downloader with strict daily-file validation. */
+    public function fetchDailyRows(Carbon $date): array
+    {
+        if (! TradingCalendar::isEquitySessionDate($date)) {
+            return ['rows' => [], 'source_rows' => 0, 'invalid_rows' => 0, 'excluded_rows' => 0];
+        }
+
+        return app(\App\Services\Bhavcopy\UdiffBhavcopyParser::class)
+            ->parse($this->downloadForDate($date), $date, 'BSE');
+    }
+
     /**
      * Stream equity rows for one session day without loading the full CSV into memory.
      *

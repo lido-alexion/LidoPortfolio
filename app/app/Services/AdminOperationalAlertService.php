@@ -85,6 +85,8 @@ class AdminOperationalAlertService
             $status = $this->universeSync->status();
             $lastRun = $status['last_run'] ?? null;
             $recentIssues = $status['rate_limits']['recent_issues'] ?? [];
+            $bulkDaily = ($lastRun['collection_method'] ?? null) === 'exchange_bhavcopy';
+            $failureTitle = $bulkDaily ? 'Universe daily bhavcopy sync failed' : 'Universe sync batch failed';
 
             if ($this->universeSync->isLikelyRateLimitedPublic($lastRun, $recentIssues)) {
                 $hits = (int) ($lastRun['rate_limit_hits'] ?? 0);
@@ -92,7 +94,9 @@ class AdminOperationalAlertService
                     self::KEY_PROVIDER_RATE_LIMIT,
                     'warning',
                     'Provider rate limits detected',
-                    'Universe price sync is hitting provider rate limits. Increase UNIVERSE_PRICE_SYNC_DELAY_MS, use smaller batches, or wait before retrying.',
+                    $bulkDaily
+                        ? 'Recent provider rate-limit signals were detected. Review the affected source in Sync logs and wait before retrying; daily bhavcopy collection does not use historical stock batch-size or delay settings.'
+                        : 'Universe price sync is hitting provider rate limits. Increase UNIVERSE_PRICE_SYNC_DELAY_MS, use smaller batches, or wait before retrying.',
                     [
                         'last_run_rate_limit_hits' => $hits,
                         'last_run_failure_rate_percent' => $lastRun['failure_rate_percent'] ?? null,
@@ -105,7 +109,7 @@ class AdminOperationalAlertService
                 $alerts[] = $this->alert(
                     self::KEY_UNIVERSE_SYNC_FAILED,
                     'critical',
-                    'Universe sync batch failed',
+                    $failureTitle,
                     $this->formatRunFailureMessage('Universe price sync', $universeRun),
                     $this->runContext($universeRun),
                 );
@@ -113,7 +117,7 @@ class AdminOperationalAlertService
                 $alerts[] = $this->alert(
                     self::KEY_UNIVERSE_SYNC_FAILED,
                     'critical',
-                    'Universe sync batch failed',
+                    $failureTitle,
                     sprintf(
                         'Latest universe batch processed %d stock(s) with %d failure(s) and no successes.',
                         (int) ($lastRun['processed'] ?? 0),
