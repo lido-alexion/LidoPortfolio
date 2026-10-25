@@ -87,7 +87,7 @@ class StockPriceHistoryService
         $available = $this->getAvailableHistoryRange($stock);
 
         if ($available === null) {
-            return $this->ignoredGaps->filterRanges((int) $stock->id, [
+            return $this->filterMissingSessionRanges((int) $stock->id, [
                 ['from' => $requiredFrom, 'to' => $requiredTo],
             ]);
         }
@@ -130,7 +130,28 @@ class StockPriceHistoryService
 
         $ranges = $this->mergeAdjacentRanges($ranges);
 
-        return $this->ignoredGaps->filterRanges((int) $stock->id, $ranges);
+        return $this->filterMissingSessionRanges((int) $stock->id, $ranges);
+    }
+
+    /**
+     * Trim closed-session edges without splitting historical range API requests.
+     * Keep stored raw-range ignores effective, then also honor normalized keys.
+     *
+     * @param  array<int, array{from: Carbon, to: Carbon}>  $ranges
+     * @return array<int, array{from: Carbon, to: Carbon}>
+     */
+    protected function filterMissingSessionRanges(int $stockId, array $ranges): array
+    {
+        $sessions = [];
+        foreach ($this->ignoredGaps->filterRanges($stockId, $ranges) as $range) {
+            $from = TradingCalendar::nextSessionOnOrAfter($range['from']);
+            $to = TradingCalendar::normalizeToSessionDate($range['to']);
+            if ($from->lte($to)) {
+                $sessions[] = ['from' => $from, 'to' => $to];
+            }
+        }
+
+        return $this->ignoredGaps->filterRanges($stockId, $sessions);
     }
 
     /**

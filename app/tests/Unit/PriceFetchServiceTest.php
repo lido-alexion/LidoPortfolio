@@ -11,6 +11,8 @@ use App\Services\PortfolioLoggerService;
 use App\Services\ProviderResolverService;
 use App\Services\SystemLogService;
 use App\Services\TelegramNotificationService;
+use App\Models\CalendarEvent;
+use App\Support\TradingCalendar;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
@@ -21,6 +23,7 @@ class PriceFetchServiceTest extends TestCase
     use RefreshDatabase;
     protected function tearDown(): void
     {
+        TradingCalendar::clearHolidayCache();
         Mockery::close();
         parent::tearDown();
     }
@@ -226,6 +229,32 @@ class PriceFetchServiceTest extends TestCase
         $row = \App\Models\StockPrice::query()->where('stock_id', $stock->id)->first();
         $this->assertNotNull($row);
         $this->assertNull($row->volume);
+    }
+
+    public function test_store_historical_rows_excludes_weekends_and_recurring_stox_trade_holidays(): void
+    {
+        CalendarEvent::query()->create([
+            'profile_id' => null, 'category' => CalendarEvent::CATEGORY_TRADE_HOLIDAY,
+            'title' => 'Recurring trade holiday', 'color' => CalendarEvent::TRADE_HOLIDAY_DEFAULT_COLOR,
+            'anchor_date' => '2025-10-26', 'recurrence_type' => CalendarEvent::RECURRENCE_YEARLY_DAY,
+            'reminder_enabled' => false, 'is_active' => true,
+        ]);
+        TradingCalendar::clearHolidayCache();
+        $stock = \App\Models\Stock::query()->create([
+            'symbol' => 'SESSIONSTORE', 'exchange' => 'NSE', 'name' => 'Session Store',
+            'is_active' => true, 'is_benchmark' => false,
+        ]);
+        $base = ['open_price' => 100, 'high_price' => 105, 'low_price' => 99, 'close_price' => 101, 'volume' => 1000];
+        $rows = array_map(fn ($day) => $base + ['price_date' => $day], [
+            '2026-10-23', '2026-10-24', '2026-10-25', '2026-10-26', '2026-10-27',
+        ]);
+
+        $stored = app(PriceFetchService::class)->storeHistoricalRows($stock, $rows, 'nse');
+
+        $this->assertSame(2, $stored);
+        $this->assertSame(['2026-10-23', '2026-10-27'], \App\Models\StockPrice::query()
+            ->where('stock_id', $stock->id)->orderBy('price_date')->get()
+            ->map(fn ($row) => $row->price_date->toDateString())->all());
     }
 
     public function test_store_historical_rows_updates_same_session_across_provider_date_formats(): void
