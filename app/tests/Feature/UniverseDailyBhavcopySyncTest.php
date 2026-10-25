@@ -255,10 +255,11 @@ class UniverseDailyBhavcopySyncTest extends TestCase
             $stocks->push($stock);
             app(PriceFetchService::class)->storeHistoricalRows($stock, [[
                 'price_date' => '2026-10-15', 'open_price' => 10, 'high_price' => 11,
-                'low_price' => 9, 'close_price' => 10.5, 'adjusted_close' => 10.25, 'volume' => 5000,
+                'low_price' => 9, 'close_price' => 10.5, 'adjusted_close_price' => 10.25, 'volume' => 5000,
             ]], 'adjusted_cache');
             $rows[] = ['FinInstrmId' => (string) (1001 + $i), 'TckrSymb' => $symbol, 'ISIN' => $old];
         }
+        $this->assertSame([10.25, 10.25, 10.25], StockPrice::query()->orderBy('id')->pluck('adjusted_close_price')->map(fn ($v) => (float) $v)->all());
         $before = StockPrice::query()->orderBy('id')->get()->map->getAttributes()->all();
         $this->source('NSE', $rows, 2);
         $service = app(UniverseDailyBhavcopySyncService::class);
