@@ -241,6 +241,70 @@ class UniverseDailyBhavcopySyncTest extends TestCase
         }
     }
 
+
+    public function test_dated_isin_acknowledgement_preserves_cached_adjusted_prices_and_reuses_receipt(): void
+    {
+        $stocks = collect();
+        $rows = [];
+        foreach ([
+            ['AZADIND', 'INE566M01025', 'INE566M01017'],
+            ['BANSALWIRE', 'INE0B9K01033', 'INE0B9K01025'],
+            ['JSWDULUX', 'INE133A01029', 'INE133A01011'],
+        ] as $i => [$symbol, $current, $old]) {
+            $stock = $this->stock($symbol, ['isin' => $current]);
+            $stocks->push($stock);
+            app(PriceFetchService::class)->storeHistoricalRows($stock, [[
+                'price_date' => '2026-10-15', 'open_price' => 10, 'high_price' => 11,
+                'low_price' => 9, 'close_price' => 10.5, 'adjusted_close_price' => 10.25, 'volume' => 5000,
+            ]], 'adjusted_cache');
+            $rows[] = ['FinInstrmId' => (string) (1001 + $i), 'TckrSymb' => $symbol, 'ISIN' => $old];
+        }
+        $this->assertSame([10.25, 10.25, 10.25], StockPrice::query()->orderBy('id')->pluck('adjusted_close_price')->map(fn ($v) => (float) $v)->all());
+        $before = StockPrice::query()->orderBy('id')->get()->map->getAttributes()->all();
+        $this->source('NSE', $rows, 2);
+        $service = app(UniverseDailyBhavcopySyncService::class);
+        $day = Carbon::parse('2026-10-15');
+        $runId = app(SyncLogService::class)->beginRun('universe-price-sync');
+        $run = fn () => $service->run($stocks, $day, $day, $runId, 'universe-price-sync', $this->initialStats())['stats'];
+
+        $first = $run();
+        $second = $run();
+        $this->assertSame(3, $first['bulk']['historical_identity_rows']);
+        $this->assertSame(0, $first['bulk']['identity_conflicts']);
+        $this->assertSame(0, $first['stored_rows']);
+        $this->assertSame(1, $second['bulk']['file_cache_hits']);
+        $this->assertSame(3, $second['bulk']['historical_identity_rows']);
+        $this->assertSame(0, $second['bulk']['files_downloaded']);
+
+        // Even a catalogue revision must revalidate cached file receipts.
+        config(['universe_nse_price_identities.version' => 2]);
+        $third = $run();
+        $this->assertSame(1, $third['bulk']['files_downloaded']);
+        $this->assertSame(0, $third['bulk']['file_cache_hits']);
+        $this->assertSame($before, StockPrice::query()->orderBy('id')->get()->map->getAttributes()->all());
+    }
+
+    public function test_missing_pre_split_bar_remains_blocked_instead_of_inserting_raw_ohlcv(): void
+    {
+        $stock = $this->stock('AZADIND', ['isin' => 'INE566M01025']);
+        $this->source('NSE', [['TckrSymb' => 'AZADIND', 'ISIN' => 'INE566M01017']]);
+        $day = Carbon::parse('2026-10-15');
+        $runId = app(SyncLogService::class)->beginRun('universe-price-sync');
+        $result = app(UniverseDailyBhavcopySyncService::class)->run(
+            collect([$stock]), $day, $day, $runId, 'universe-price-sync', $this->initialStats(),
+        )['stats'];
+
+        $this->assertSame(1, $result['bulk']['identity_conflicts']);
+        $this->assertSame(1, $result['bulk']['historical_adjustment_required']);
+        $this->assertSame(0, $result['bulk']['historical_identity_rows']);
+        $this->assertSame(0, $result['stored_rows']);
+        $this->assertSame(0, $result['bulk']['projected_rows']);
+        $this->assertSame(1, $result['failed']);
+        $this->assertSame('historical_adjustment_required', $result['bulk']['unavailable_samples'][0]['reason']);
+        $this->assertDatabaseCount('portfolio_stock_prices', 0);
+        $this->assertNull(Setting::getValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS));
+    }
+
     private function initialStats(): array
     {
         return ['processed' => 0, 'succeeded' => 0, 'failed' => 0, 'skipped' => 0,

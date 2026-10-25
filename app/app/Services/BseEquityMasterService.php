@@ -90,7 +90,7 @@ class BseEquityMasterService
      */
     protected function mapApiRow(array $row): ?array
     {
-        $status = strtoupper(trim((string) ($row['STATUS'] ?? $row['status'] ?? 'ACTIVE')));
+        $status = strtoupper(trim((string) ($row['STATUS'] ?? $row['Status'] ?? $row['status'] ?? 'ACTIVE')));
         if ($status !== '' && $status !== 'ACTIVE') {
             return null;
         }
@@ -100,8 +100,8 @@ class BseEquityMasterService
             return null;
         }
 
-        $isin = trim((string) ($row['ISIN'] ?? $row['ISIN_NO'] ?? $row['isin_no'] ?? $row['ISIN No'] ?? ''));
-        $isin = $isin !== '' ? strtoupper($isin) : null;
+        $isin = trim((string) ($row['ISIN_NUMBER'] ?? $row['ISIN'] ?? $row['ISIN_NO'] ?? $row['isin_no'] ?? $row['ISIN No'] ?? ''));
+        $isin = $this->normalizeIsin($isin);
 
         $symbol = $this->resolveTradingSymbol($row);
         if ($symbol === null) {
@@ -184,7 +184,7 @@ class BseEquityMasterService
 
         $symbolIdx = $headerMap['SECURITY ID'] ?? $headerMap['SYMBOL'] ?? $headerMap['SCRIP_ID'] ?? 0;
         $nameIdx = $headerMap['ISSUER NAME'] ?? $headerMap['SECURITY NAME'] ?? $headerMap['NAME'] ?? 1;
-        $isinIdx = $headerMap['ISIN NO'] ?? $headerMap['ISIN'] ?? $headerMap['ISIN NUMBER'] ?? null;
+        $isinIdx = $headerMap['ISIN_NUMBER'] ?? $headerMap['ISIN NO'] ?? $headerMap['ISIN'] ?? $headerMap['ISIN NUMBER'] ?? null;
         $scripCodeIdx = $headerMap['SC_CODE'] ?? $headerMap['SCRIP_CD'] ?? $headerMap['SCRIP CODE'] ?? null;
 
         $rows = [];
@@ -202,7 +202,7 @@ class BseEquityMasterService
             $isin = null;
             if ($isinIdx !== null) {
                 $rawIsin = trim($cols[$isinIdx] ?? '');
-                $isin = $rawIsin !== '' ? strtoupper($rawIsin) : null;
+                $isin = $this->normalizeIsin($rawIsin);
             }
 
             $scripCode = null;
@@ -222,6 +222,13 @@ class BseEquityMasterService
         }
 
         return $rows;
+    }
+
+    protected function normalizeIsin(string $value): ?string
+    {
+        $value = strtoupper(trim($value));
+
+        return preg_match('/^IN[A-Z0-9]{9}[0-9]$/', $value) === 1 ? $value : null;
     }
 
     protected function download(string $url): string
