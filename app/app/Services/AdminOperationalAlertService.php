@@ -95,7 +95,7 @@ class AdminOperationalAlertService
                     'warning',
                     'Provider rate limits detected',
                     $bulkDaily
-                        ? 'Universe daily bhavcopy download is hitting exchange rate limits. Review the failed file in Sync logs and wait before retrying.'
+                        ? 'Recent provider rate-limit signals were detected. Review the affected source in Sync logs and wait before retrying; daily bhavcopy collection does not use historical stock batch-size or delay settings.'
                         : 'Universe price sync is hitting provider rate limits. Increase UNIVERSE_PRICE_SYNC_DELAY_MS, use smaller batches, or wait before retrying.',
                     [
                         'last_run_rate_limit_hits' => $hits,

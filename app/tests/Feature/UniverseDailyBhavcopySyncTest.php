@@ -169,6 +169,26 @@ class UniverseDailyBhavcopySyncTest extends TestCase
         $this->assertSame('manual', StockPrice::query()->value('provider_source'));
     }
 
+    public function test_rate_limit_counts_require_an_explicit_http_throttle_response(): void
+    {
+        $this->stock();
+        $source = Mockery::mock(NseBhavcopyService::class);
+        $source->shouldReceive('fetchDailyRows')->twice()->andThrowExceptions([
+            new \RuntimeException('NSE connection timeout (request 4290)'),
+            new \RuntimeException('NSE daily bhavcopy download failed: HTTP 429'),
+        ]);
+        $this->app->instance(NseBhavcopyService::class, $source);
+        $sync = app(UniversePriceSyncService::class);
+
+        $connectionFailure = $sync->sync();
+        $throttle = $sync->sync();
+
+        $this->assertSame(1, $connectionFailure['bulk']['file_errors']);
+        $this->assertSame(0, $connectionFailure['rate_limit_hits']);
+        $this->assertSame(1, $throttle['bulk']['file_errors']);
+        $this->assertSame(1, $throttle['rate_limit_hits']);
+    }
+
     public function test_recovery_skips_weekends_and_a_marked_holiday(): void
     {
         $stock = $this->stock();

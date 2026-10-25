@@ -133,7 +133,7 @@ class UniverseDailyBhavcopySyncService
                 } catch (\Throwable $e) {
                     $stats['bulk']['file_errors']++;
                     $file['error'] = $this->redactor->message($e->getMessage());
-                    if (str_contains((string) $file['error'], '429')) {
+                    if (preg_match('/\bHTTP\s+429\b/i', (string) $file['error']) === 1) {
                         $stats['rate_limit_hits']++;
                     }
                     if (count($stats['errors']) < 20) {
