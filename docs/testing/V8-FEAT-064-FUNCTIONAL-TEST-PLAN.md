@@ -61,7 +61,7 @@ Each corresponding command was executed once without `--dry-run` after its dry r
 - [x] Build 493 recorded; all four Strategy pins resolve to the reconciled Screener versions.
 - [x] Deployed readiness and exact-pin runtime checks passed; run IDs and resolver results are in the audit.
 - [x] CI regression coverage verifies unresolved Strategies cannot activate or execute or trigger recommendation cancellation/generation.
-- [ ] Observe recommendation generation for eligible resolved Strategies in a controlled workflow; no recommendation pipeline was invoked during provenance verification.
+- [x] Controlled profile-1 pipeline run 57 on 2026-10-10 generated 392 recommendations with exact Screener pins and no orders/trades; see the audit's recommendation-resume evidence. This corrects the earlier stale checkbox, not a new production invocation.
 - [ ] With two controlled accounts, verify Screener instances remain private and sharing creates a definition copy, not a shared mutable instance.
 - [ ] Exercise ordinary Screener create/edit/run/backtest and Strategy create/edit/enable/archive flows without requiring Artifact Library for normal CRUD.
 - [ ] Verify multiple active Strategies remain supported and incomplete Strategies remain Setup Required.
@@ -74,3 +74,15 @@ Each corresponding command was executed once without `--dry-run` after its dry r
 For each check, record date/time UTC, operator, build/commit, account/fixture IDs, exact version/revision/run IDs, result, and sanitized logs/screenshots. Restore any test-only state and record restoration.
 
 FEAT-064 is **IMPLEMENTED / FUNCTIONAL ACCEPTANCE OPEN** after implementation, immutable snapshot recovery, exact-pin adoption and deployed runtime proof pass. Keep the listed broader workflow checks open in the audit; do not describe the epic as fully accepted until those checks are completed.
+
+## Remaining acceptance scope — 2026-10-26 clarification
+
+Run-pinning/membership-continuation correction is tracked separately in [#286](https://github.com/lido-alexion/LidoPortfolio/issues/286); its isolated regression suite must not be mistaken for a deployed two-account or assistive-technology pass.
+
+Use the current ownership contract for the controlled account matrix:
+
+1. User A's owning profile creates a definition; another profile of the **same account** imports a private independent copy. Later source/copy edits and source retirement must not propagate to the other instance.
+2. Independent User B cannot list, inspect, run or import User A's private/same-account shared runtime identity. Test the non-disclosing denial, including classic and registry paths.
+3. Any deliberate cross-user definition transfer uses an owner-chosen portable definition or the existing explicit artifact grant path. It must not widen `is_shared` to global visibility.
+4. Membership-change acceptance uses isolated test-owned data and records before/after version, selector, run and security IDs. It must not mutate live investor portfolios or generate trades just to close the epic.
+5. Native keyboard/screen-reader/device evidence records the actual OS, browser, assistive technology, build and outcome. A passing axe or fixture browser test is supporting evidence, not a native-device result.

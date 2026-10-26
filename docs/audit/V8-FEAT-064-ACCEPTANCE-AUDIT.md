@@ -121,3 +121,13 @@ The remaining issue is production data and rollout, not an unimplemented guard: 
 | Deployed keyboard and native screen-reader/device acceptance | Open; local Chromium/axe evidence exists, no deployed assistive-technology session recorded. |
 
 These broader checks do not block the IMPLEMENTED disposition; retain FUNCTIONAL ACCEPTANCE OPEN until evidence is added.
+
+## Runtime continuity correction — 2026-10-26 (GH #286)
+
+A further source audit found that ordinary chunked runs recorded `screener_version_id` but still read the current mutable rule and re-resolved current membership on each chunk. A mid-run edit or membership change could therefore produce mixed evidence under one old version ID. Earlier pin-presence and metadata tests did not exercise this continuation scenario.
+
+The correction executes ordinary definitions/selectors from the pinned semantic row and captures ordered membership once per new run. Continuation preserves that snapshot; missing legacy run snapshots fail explicitly rather than inventing original membership. Mapped runs require consistent semantic and artifact/binding evidence. The explicit binding projection owner versions changed conditions/selectors, reuses unchanged semantics, and reloads the active revision after its FK changes. No historical row is overwritten or retroactively assigned a new pin.
+
+`ScreenerRunSnapshotTest` covers mid-run rule/selector edits, watchlist and index membership drift, legacy continuation and idempotent failure, missing/foreign pins, empty and bounded/invalid snapshots, quality/status changes, mapped publication and selector-only binding revisions, and explicit copy-on-write recovery. The original mapped-runtime fixture and hit/artifact assertions remain; a semantic agreement assertion strengthens that check. Canonical CI and normal release evidence are tracked in [#286](https://github.com/lido-alexion/LidoPortfolio/issues/286).
+
+This correction does not constitute the still-open controlled two-account deployed workflow or native assistive-technology/device acceptance. Current sharing authority is [Discovery §18](../current/discovery-screeners-registries.md): classic shared definitions remain within the same user's portfolios; cross-user private resources are denied, and any cross-user distribution needs an existing explicit grant or an owner-chosen portable definition. The older “User A / User B” design wording is not permission to expose existing same-account shared records globally.
