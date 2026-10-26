@@ -100,7 +100,7 @@ class AppServiceProvider extends ServiceProvider
 
         Event::listen(ResponseReceived::class, function (ResponseReceived $event): void {
             app(\App\Services\Operations\ExternalHttpFailureObserver::class)
-                ->response($event->request, $event->response->status());
+                ->response($event->request, $event->response);
         });
         Event::listen(ConnectionFailed::class, function (ConnectionFailed $event): void {
             app(\App\Services\Operations\ExternalHttpFailureObserver::class)
