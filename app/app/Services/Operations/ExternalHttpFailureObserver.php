@@ -2,15 +2,19 @@
 
 namespace App\Services\Operations;
 
+use App\Services\PortfolioLoggerService;
+use App\Support\PriceProviderRequestContext;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\Response;
 use Throwable;
 
 class ExternalHttpFailureObserver
 {
-    public function response(Request $request, int $status): void
+    public function response(Request $request, Response|int $response): void
     {
+        $status = $response instanceof Response ? $response->status() : $response;
         if ($status >= 200 && $status < 300) return;
-        $this->observe($request, $status, null);
+        $this->observe($request, $status, null, $response instanceof Response ? $response : null);
     }
 
     public function connectionFailure(Request $request, Throwable $error): void
@@ -18,7 +22,7 @@ class ExternalHttpFailureObserver
         $this->observe($request, null, $error);
     }
 
-    private function observe(Request $request, ?int $status, ?Throwable $error): void
+    private function observe(Request $request, ?int $status, ?Throwable $error, ?Response $response = null): void
     {
         try {
             $url = $request->url();
@@ -49,15 +53,54 @@ class ExternalHttpFailureObserver
             // are security/financial operations and stay out of issue evidence.
             if ($providerHost === 'kite.trade' && ! preg_match('~^/(?:quote|instruments)(?:/|$)~i', $path)) return;
 
-            $safePath = $this->safePath($path);
+            $operation = ProviderFailureEvidence::operation($providerHost, $path);
+            $safePath = $operation['path'] ?? $this->safePath($path);
             $safeEndpoint = $scheme.'://'.$providerHost.$safePath; // only approved host and route vocabulary survive
             $failureClass = $error ? class_basename($error) : null;
-            app(ApiFailureReporter::class)->observeExternalResponse(
-                'external-http', $request->method(), $safeEndpoint, $status,
-                ['failure_class' => $failureClass, 'error_category' => $error ? 'transport' : 'http'],
-            );
+            $providerError = ProviderFailureEvidence::category($operation, $status, $response);
+            $privateContext = PriceProviderRequestContext::current();
+            $roots = ['nse' => 'nseindia.com', 'bse_bhavcopy' => 'bseindia.com', 'yahoo' => 'yahoo.com', 'alpha_vantage' => 'alphavantage.co'];
+            if (($roots[$privateContext['provider'] ?? ''] ?? null) !== $providerHost) {
+                $privateContext = null;
+            }
+            if ($privateContext !== null && ($operation['id'] ?? null) === 'yahoo.chart'
+                && strtoupper(rawurldecode(basename($path))) !== $privateContext['provider_symbol']) {
+                $privateContext = null;
+            }
+            try {
+                app(ApiFailureReporter::class)->observeExternalResponse(
+                    'external-http', $request->method(), $safeEndpoint, $status,
+                    [
+                        'failure_class' => $failureClass,
+                        'error_category' => $error ? 'transport' : 'http',
+                        'safe_message' => $operation === null ? null : 'operation='.$operation['id'].'; provider_error='.$providerError,
+                        'trace_id' => $privateContext['request_id'] ?? null,
+                    ],
+                );
+            } catch (Throwable) {
+                // A capture/container failure must not suppress independent private evidence.
+            }
+            if ($privateContext !== null) {
+                try {
+                    if (! app(ApiFailurePolicy::class)->reportable($status, $failureClass, ['endpoint' => $safeEndpoint])) {
+                        return;
+                    }
+                    // These are existing canonical provider inputs, not parsed
+                    // request/query/body values. They stay in protected logs.
+                    app(PortfolioLoggerService::class)->provider('error', 'Provider HTTP failure evidence', [
+                        ...$privateContext,
+                        'operation' => $operation['id'] ?? 'provider.http',
+                        'endpoint' => $safeEndpoint,
+                        'http_status' => $status,
+                        'failure_class' => $failureClass,
+                        'provider_error' => $providerError,
+                    ]);
+                } catch (Throwable) {
+                    // Logging must not change the request or its incident capture.
+                }
+            }
         } catch (Throwable) {
-            // Observation remains fail-open and never logs request data.
+            // Observation remains fail-open and never exports raw request data.
         }
     }
 
