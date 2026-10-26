@@ -12,6 +12,7 @@ use App\Models\ScreenerBacktestHit;
 use App\Models\ScreenerRun;
 use App\Models\ScreenerRunDiagnostic;
 use App\Models\ScreenerRunHit;
+use App\Models\ScreenerVersion;
 use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Models\Watchlist;
@@ -19,6 +20,7 @@ use App\Models\WatchlistItem;
 use App\Services\Artifacts\ArtifactRuntimeBindingResolver;
 use App\Services\Artifacts\ArtifactStatus;
 use App\Services\Artifacts\ArtifactType;
+use App\Services\Artifacts\DefinitionHasher;
 use App\Services\DataQualityGuardService;
 use App\Services\EquityUniverseService;
 use App\Services\IndexCatalogService;
@@ -30,6 +32,9 @@ use Throwable;
 
 class ScreenerRunService
 {
+    /** Bound persisted run evidence without silently truncating an eligible universe. */
+    private const MAX_UNIVERSE_SNAPSHOT_STOCKS = 100000;
+
     public function __construct(
         protected ScreenerEvaluationService $evaluation,
         protected EquityUniverseService $universe,
@@ -60,7 +65,23 @@ class ScreenerRunService
                 'ARTIFACT_BINDING_UNAVAILABLE',
             );
         }
-        $screenerVersion = app(ScreenerVersioningService::class)->ensureCurrentVersion($screener);
+        $versioning = app(ScreenerVersioningService::class);
+        $screenerVersion = $runtimeSelection !== null
+            ? $versioning->ensureArtifactRuntimeVersion($runtimeSelection)
+            : $versioning->ensureCurrentVersion($screener);
+        $this->assertVersionEvidence($screenerVersion, $screener);
+        [$stockIds, $warning] = $this->resolveStockIds($this->withVersionSemantics($screener, $screenerVersion));
+        $this->assertSnapshotStockIds($stockIds);
+        $universeSnapshot = [
+            'schema_version' => 1,
+            'screener_version_id' => (int) $screenerVersion->id,
+            'scope' => $screenerVersion->scope,
+            'watchlist_id' => $screenerVersion->watchlist_id,
+            'index_symbol' => $screenerVersion->index_symbol,
+            'captured_at' => now()->toIso8601String(),
+            'stock_ids' => $stockIds,
+            'warning' => $warning,
+        ];
         $run = ScreenerRun::query()->create([
             'screener_id' => $screener->id,
             'screener_version_id' => $screenerVersion->id,
@@ -75,7 +96,8 @@ class ScreenerRunService
                 'skipped_insufficient_data' => 0,
                 'errors' => 0,
                 'cursor' => 0,
-                'total' => 0,
+                'total' => count($stockIds),
+                'universe_snapshot' => $universeSnapshot,
                 'warnings' => [],
                 'telegram_sent' => false,
                 'telegram_failed' => false,
@@ -118,7 +140,10 @@ class ScreenerRunService
         }
 
         try {
-            [$stockIds, $warning] = $this->resolveStockIds($screener);
+            $version = ScreenerVersion::query()->find($run->screener_version_id);
+            $this->assertVersionEvidence($version, $screener);
+            $runtimeScreener = $this->withVersionSemantics($screener, $version);
+            [$stockIds, $warning] = $this->universeForRun($run, $version);
             $stats = $run->stats_json ?? [];
             if ($warning !== null) {
                 $warnings = $stats['warnings'] ?? [];
@@ -128,11 +153,21 @@ class ScreenerRunService
                 }
             }
             $stats['total'] = count($stockIds);
-            $cursor = (int) ($stats['cursor'] ?? 0);
+            $cursor = $stats['cursor'] ?? 0;
+            if (! is_int($cursor) || $cursor < 0 || $cursor > count($stockIds)) {
+                throw new DomainException('The Screener run cursor is invalid; start a new run.', 'SCREENER_RUN_CURSOR_INVALID');
+            }
             $chunkSize = ScreenerCatalog::CHUNK_SIZE;
             $chunkIds = array_slice($stockIds, $cursor, $chunkSize);
 
-            $definition = $this->definitionForRun($run, $screener);
+            if ($this->dataQualityGuard->blockedStockIdMap($chunkIds) !== []) {
+                throw new DomainException(
+                    'Market-data quality changed for this run. Resolve the data issue and start a new run.',
+                    'SCREENER_RUN_DATA_QUALITY_CHANGED',
+                );
+            }
+
+            $definition = $this->definitionForRun($run, $screener, $version);
             $lookback = $this->evaluation->maxLookback($definition);
             $fetchLimit = $lookback + 5;
 
@@ -151,7 +186,7 @@ class ScreenerRunService
                 $stats['matched'] = 0;
                 $stats['cursor'] = 0;
                 $run->stats_json = $stats;
-                $this->complete($run, $screener);
+                $this->complete($run, $runtimeScreener);
 
                 return [
                     'run' => $this->formatRun($run->fresh()),
@@ -164,6 +199,13 @@ class ScreenerRunService
                 ->whereIn('id', $chunkIds)
                 ->get()
                 ->keyBy('id');
+
+            if ($stocks->contains(fn (Stock $stock) => ! $stock->is_active || $stock->isAdminDeactivated())) {
+                throw new DomainException(
+                    'Security eligibility changed for this run. Resolve the status and start a new run.',
+                    'SCREENER_RUN_SECURITY_STATUS_CHANGED',
+                );
+            }
 
             foreach ($chunkIds as $stockId) {
                 $stock = $stocks->get($stockId);
@@ -239,7 +281,7 @@ class ScreenerRunService
             $run->save();
 
             if ($cursor >= count($stockIds)) {
-                $this->complete($run, $screener);
+                $this->complete($run, $runtimeScreener);
 
                 return [
                     'run' => $this->formatRun($run->fresh()),
@@ -272,7 +314,77 @@ class ScreenerRunService
     }
 
     /** @return array<string, mixed> */
-    private function definitionForRun(ScreenerRun $run, Screener $screener): array
+
+    private function assertVersionEvidence(?ScreenerVersion $version, Screener $screener): void
+    {
+        if ($version === null || (int) $version->screener_id !== (int) $screener->id
+            || ! in_array($version->scope, ScreenerCatalog::SCOPES, true)
+            || ! is_array($version->definition_json)
+            || ! is_array($version->definition_json['root'] ?? null)) {
+            throw new DomainException(
+                'The Screener run immutable version evidence is unavailable; start a new run after resolving its version.',
+                'SCREENER_RUN_VERSION_EVIDENCE_INVALID',
+            );
+        }
+    }
+
+    /** A detached execution projection; never persist these historical semantics as current state. */
+    private function withVersionSemantics(Screener $screener, ScreenerVersion $version): Screener
+    {
+        $runtime = clone $screener;
+        $runtime->forceFill([
+            'scope' => $version->scope,
+            'watchlist_id' => $version->watchlist_id,
+            'index_symbol' => $version->index_symbol,
+            'definition_json' => $version->definition_json,
+        ]);
+
+        return $runtime;
+    }
+
+    /** @return array{0:list<int>,1:?string} */
+    private function universeForRun(ScreenerRun $run, ScreenerVersion $version): array
+    {
+        $snapshot = $run->stats_json['universe_snapshot'] ?? null;
+        if (! is_array($snapshot) || ($snapshot['schema_version'] ?? null) !== 1
+            || ($snapshot['screener_version_id'] ?? null) !== (int) $version->id
+            || ($snapshot['scope'] ?? null) !== $version->scope
+            || ($snapshot['watchlist_id'] ?? null) !== $version->watchlist_id
+            || ($snapshot['index_symbol'] ?? null) !== $version->index_symbol
+            || ! is_string($snapshot['captured_at'] ?? null) || trim($snapshot['captured_at']) === ''
+            || ! array_key_exists('warning', $snapshot)
+            || ($snapshot['warning'] !== null && ! is_string($snapshot['warning']))) {
+            // A legacy continuation cannot reconstruct its original membership from
+            // today's data, even if it has an immutable condition-version pin.
+            throw new DomainException(
+                'The Screener run has no valid captured universe evidence; start a new run. Existing history is preserved.',
+                'SCREENER_RUN_UNIVERSE_EVIDENCE_INVALID',
+            );
+        }
+        $ids = $snapshot['stock_ids'] ?? null;
+        if (! is_array($ids)) {
+            throw new DomainException('The Screener run universe is invalid; start a new run.', 'SCREENER_RUN_UNIVERSE_EVIDENCE_INVALID');
+        }
+        $this->assertSnapshotStockIds($ids);
+
+        return [$ids, $snapshot['warning']];
+    }
+
+    private function assertSnapshotStockIds(array $ids): void
+    {
+        if (! array_is_list($ids) || count($ids) > self::MAX_UNIVERSE_SNAPSHOT_STOCKS) {
+            throw new DomainException('The Screener run universe is invalid or exceeds its evidence limit.', 'SCREENER_RUN_UNIVERSE_EVIDENCE_INVALID');
+        }
+        $seen = [];
+        foreach ($ids as $id) {
+            if (! is_int($id) || $id <= 0 || isset($seen[$id])) {
+                throw new DomainException('The Screener run universe contains an invalid or repeated security identity.', 'SCREENER_RUN_UNIVERSE_EVIDENCE_INVALID');
+            }
+            $seen[$id] = true;
+        }
+    }
+
+    private function definitionForRun(ScreenerRun $run, Screener $screener, ScreenerVersion $semanticVersion): array
     {
         if ($run->reusable_artifact_version_id !== null) {
             $version = $run->reusableArtifactVersion()->with('artifact')->first();
@@ -295,7 +407,32 @@ class ScreenerRunService
                 );
             }
 
-            return $definition;
+            if (DefinitionHasher::hash($definition) !== DefinitionHasher::hash($semanticVersion->definition_json)) {
+                throw new DomainException(
+                    'The bound artifact and pinned Screener rules disagree; start a new run after resolving the version.',
+                    'SCREENER_RUN_SEMANTICS_CONFLICT',
+                );
+            }
+            $settings = $revision->settings_json ?? [];
+            $content = $version->content_json ?? [];
+            $universe = (string) ($settings['scope'] ?? $content['metadata']['universe'] ?? $semanticVersion->scope);
+            $scope = match ($universe) {
+                'all', 'all_active_equities' => 'all_equities',
+                'portfolio', 'holding' => 'holdings',
+                default => $universe,
+            };
+            if ($scope !== $semanticVersion->scope
+                || (array_key_exists('watchlist_id', $settings) && $scope === 'watchlist'
+                    && (int) $settings['watchlist_id'] !== (int) $semanticVersion->watchlist_id)
+                || (array_key_exists('index_symbol', $settings) && $scope === 'index'
+                    && strtoupper(trim((string) $settings['index_symbol'])) !== $semanticVersion->index_symbol)) {
+                throw new DomainException(
+                    'The bound artifact and pinned Screener universe disagree; start a new run after resolving the version.',
+                    'SCREENER_RUN_SEMANTICS_CONFLICT',
+                );
+            }
+
+            return $semanticVersion->definition_json;
         }
         if ($screener->reusable_artifact_id !== null) {
             throw new DomainException(
@@ -304,9 +441,7 @@ class ScreenerRunService
             );
         }
 
-        return is_array($screener->definition_json)
-            ? $screener->definition_json
-            : ['root' => $screener->definition_json];
+        return $semanticVersion->definition_json;
     }
 
     /**

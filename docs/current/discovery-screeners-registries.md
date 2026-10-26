@@ -84,6 +84,12 @@ Classic shared screeners are visible only across the same user's portfolios and 
 
 Definitions/version records and artifact bindings preserve exact runtime evidence. Historical screener runs, recommendations, backtests, and replays should retain pins rather than resolve against mutable current registry state. Archive removes future usability but not historical explanation.
 
+Ordinary Screener runs execute the pinned `ScreenerVersion` definition and selector. Each new run captures an ordered universe of security IDs once in internal `stats_json.universe_snapshot`, with its version ID, selector and capture time. Continuation uses that evidence instead of today's mutable Screener or membership list; the API returns compact counters rather than the internal ID snapshot. Capture is bounded at 100,000 IDs and fails rather than truncating. Newly blocked market data or security deactivation fails the run without shifting its frozen cursor or evaluating ineligible inputs.
+
+Mapped artifact runs additionally require agreement between the immutable artifact/binding evidence and semantic version. Explicit binding revisions create a new semantic version for changed conditions or selectors through `ScreenerVersioningService`; operational-only revisions reuse the version. Projection reloads the selected binding revision so cached old settings cannot become new evidence. Conflicting semantic rows and missing historical version gaps are never rewritten or inferred by run start.
+
+An existing in-progress run without a captured universe fails with an instruction to start a new run. It is not silently restarted or assigned today's membership as its historical universe. Completed historical runs and their results remain readable. The existing explicit version/binding adoption owner remains the recovery path for inconsistent version evidence.
+
 ## 20. API Contract
 
 - Classic screeners/runs/backtests: `/api/screeners/*`, `/api/screener-runs/*`, `/api/screener-backtests/*`.
@@ -116,7 +122,7 @@ Malformed definition, unsupported operator/indicator/parameter, insufficient loo
 
 ## 25. Test Anchors
 
-`ScreenerTest`, `TechnicalIndicatorServiceTest`, `LiquidityTradabilityRuntimeTest`, `IndicatorSeriesParityTest`, and `ScreenerBacktestCalendarTest` cover runtime/calculation/volume/parity/calendar behavior. `DataQualityPipelineGatingTest` and `DataQualityEvaluationGatingTest` cover integrity gates. `ScreenerRegistryApiTest`, `ScreenerArtifactRuntimeTest`, `ArtifactRuntimeBindingResolverTest`, `ArtifactBindingServiceTest`, and `ArtifactBindingUsabilityServiceTest` cover registry/runtime/binding boundaries.
+`ScreenerTest`, `TechnicalIndicatorServiceTest`, `LiquidityTradabilityRuntimeTest`, `IndicatorSeriesParityTest`, and `ScreenerBacktestCalendarTest` cover runtime/calculation/volume/parity/calendar behavior. `DataQualityPipelineGatingTest` and `DataQualityEvaluationGatingTest` cover integrity gates. `ScreenerRegistryApiTest`, `ScreenerArtifactRuntimeTest`, `ScreenerRunSnapshotTest`, `ArtifactRuntimeBindingResolverTest`, `ArtifactBindingServiceTest`, and `ArtifactBindingUsabilityServiceTest` cover registry/runtime/binding boundaries.
 
 **Test coverage gap — implementation audit follow-up:** full parser diagnostics, all lookback/missing-volume UI states, scheduled discovery idempotency, historical pinning across every run type, and cross-portfolio sharing reachability.
 
