@@ -390,7 +390,7 @@ class ScreenerRunSnapshotTest extends TestCase
         $conflict = ScreenerVersion::query()->where('screener_id', $screener->id)
             ->where('version', $screener->artifact_version)->sole();
         $conflict->forceFill(['definition_json' => $this->definition(200), 'definition_hash' => 'unresolved-legacy-proof'])->save();
-        $before = $conflict->getAttributes();
+        $before = $conflict->fresh()->getAttributes();
         $versionsBefore = ScreenerVersion::query()->count();
         try {
             app(ScreenerRunService::class)->start($screener);
