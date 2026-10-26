@@ -10,6 +10,7 @@ use App\Services\PriceProviders\BseBhavcopyPriceProvider;
 use App\Services\PriceProviders\NsePriceProvider;
 use App\Services\PriceProviders\YahooPriceProvider;
 use App\Support\IndiaVixScale;
+use App\Support\PriceProviderRequestContext;
 use App\Support\TradingCalendar;
 use Carbon\Carbon;
 
@@ -60,7 +61,7 @@ class PriceFetchService
         try {
             $providerSymbols = $stock ? $this->providerResolver->providerSymbolsForStock($stock) : [];
             $providerSymbol = $providerSymbols[$providerName] ?? null;
-            $rows = $provider->fetchHistorical($symbol, $from, $to, $providerSymbol);
+            $rows = $this->requestHistoricalRows($providerName, $provider, $symbol, $from, $to, $providerSymbol, $stock);
             $rows = $this->filterRowsToRange($rows, $from, $to);
 
             if ($rows === []) {
@@ -87,7 +88,7 @@ class PriceFetchService
 
         foreach ($this->providerResolver->yahooSymbolCandidates($stock) as $yahooSymbol) {
             try {
-                $rows = $provider->fetchHistorical($symbol, $from, $to, $yahooSymbol);
+                $rows = $this->requestHistoricalRows('yahoo', $provider, $symbol, $from, $to, $yahooSymbol, $stock);
                 $rows = $this->filterRowsToRange($rows, $from, $to);
 
                 if ($rows !== []) {
@@ -188,7 +189,7 @@ class PriceFetchService
                         }
                     } else {
                         $providerSymbol = $providerSymbols[$provider->getName()] ?? null;
-                        $rows = $provider->fetchHistorical($symbol, $from, $to, $providerSymbol);
+                        $rows = $this->requestHistoricalRows($providerName, $provider, $symbol, $from, $to, $providerSymbol, $stock);
                         $rows = $this->filterRowsToRange($rows, $from, $to);
                     }
 
@@ -251,6 +252,21 @@ class PriceFetchService
         }
 
         return ['rows' => [], 'provider' => 'none', 'errors' => $errors, 'providers_tried' => $providersTried];
+    }
+
+    protected function requestHistoricalRows(
+        string $providerName,
+        PriceProviderInterface $provider,
+        string $symbol,
+        Carbon $from,
+        Carbon $to,
+        ?string $providerSymbol,
+        ?Stock $stock,
+    ): array {
+        return PriceProviderRequestContext::run(
+            $stock, $providerName, $providerSymbol, $from, $to,
+            fn () => $provider->fetchHistorical($symbol, $from, $to, $providerSymbol),
+        );
     }
 
     public function storeHistoricalRows(Stock $stock, array $rows, string $provider, bool $onlyMissing = false): int

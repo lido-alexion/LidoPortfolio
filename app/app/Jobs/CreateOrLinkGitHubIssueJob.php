@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\ApiFailureIncident;
 use App\Services\Operations\GitHubIssueReporter;
 use App\Services\Operations\LogTriageGuard;
+use App\Services\Operations\ProviderFailureEvidence;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
@@ -29,7 +30,7 @@ class CreateOrLinkGitHubIssueJob implements ShouldQueue
                 $marker = '<!-- '.($browser ? 'stox-browser-observation:' : 'stox-api-failure:').$incident->fingerprint.' -->';
                 $title = $browser
                     ? '[Auto][Browser] StoX observed '.($incident->component ?: 'a browser runtime fault')
-                    : '[Auto][API] '.($incident->component ?: 'StoX').' '.($incident->http_status ?: $incident->failure_class ?: 'failure');
+                    : '[Auto][API] '.(ProviderFailureEvidence::labelForEndpoint((string) $incident->endpoint) ?? ($incident->component ?: 'StoX')).' '.($incident->http_status ?: $incident->failure_class ?: 'failure');
                 $result = $github->report($marker, $title, $this->body($incident, $marker), ['automated', $browser ? 'browser-observation' : 'api-failure', app()->environment()], $incident->last_seen_at);
                 $incident->update([
                     'sync_status' => $result['status'], 'sync_error' => $result['reason'] ?? null,

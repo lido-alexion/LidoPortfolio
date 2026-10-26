@@ -24,6 +24,18 @@ The shared Laravel HTTP response/connection events cover both direct `Http` clie
 
 GitHub, AI, telemetry, internal/app hosts, unsupported hosts, and explicit opt-outs are excluded. Kite account, session, holdings, positions, orders, trades, and margin routes are excluded. Telegram is not eligible because its credential appears in the URL path. Other sensitive route segments are excluded, query strings and bodies are never retained, and only allowlisted provider route vocabulary survives in stored endpoint identity; unknown segments become `{resource}`. Expected statuses still use the existing API failure policy.
 
+## Provider failure evidence and correlation
+
+Known NSE operation paths and the Yahoo chart family retain fixed, reviewed operation names; unknown path segments remain redacted. New issue titles use those fixed provider/operation labels where available. Symbols, date bounds and trace IDs do not enter fingerprints, so repeat requests for different instruments still aggregate. Distinct NSE operations have distinct endpoint identities rather than one ambiguous `/api/{resource}` incident.
+
+Recognized Yahoo chart failures may include a fixed error enum derived from a bounded seekable JSON error body. Arbitrary error codes/descriptions, HTML, headers, raw URLs, queries and bodies are never stored or published. `chart_not_found` means only that Yahoo returned that code; it does not establish delisting. Evidence extraction preserves response stream position and never changes provider retries, fallback, return values, or exception handling.
+
+Canonical price-history calls carry an in-process server-generated correlation ID, cleared in `finally` and never sent in an HTTP header. Only the ID, fixed operation/error enum, sanitized endpoint and ordinary HTTP status reach the public incident. The existing protected provider log records the same ID with the canonical symbol, provider symbol, exchange, required dates and timezones. This lets an operator reconstruct a future request from private evidence without exporting instrument-specific inputs to GitHub. Noncanonical lookup requests have no such private context. Logging/capture failures remain fail-open and independent of each other; expected endpoint/status policies also suppress protected error evidence. Reporting policy and queue/deduplication limits remain unchanged.
+
+Protected correlation context follows the existing provider-log retention, currently **two days** in production. Public operation/error enums and correlation IDs remain with the incident, but exact private replay inputs are not promised after log rotation. Capture the relevant protected log evidence within that retention window; a longer retention policy is a separate reviewed operational choice. The implementation does not change log thresholds, retention or permissions.
+
+The correlation/evidence change addresses the diagnostic gap tracked in #285. It cannot reconstruct request details already lost from historical issues #272, #273 or #277, and does not by itself prove those provider failures resolved.
+
 ## Approved operator provisioning checklist
 
 The persistent production environment is `/var/www/stoxla/shared/.env`. An authorized operator must provision a repository-limited credential with Issues read/write through the established secret workflow; never paste it into chat, commit it, or expose it in `config:show` output. The variable is `STOX_GITHUB_TOKEN`; the target is `STOX_GITHUB_REPOSITORY=lido-alexion/LidoPortfolio`. Keep the existing token/credential purpose separate from CI-read or deployment credentials. See [GitHub fine-grained permission documentation](https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens).
