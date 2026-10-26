@@ -2,20 +2,105 @@
 
 namespace App\Services\Screener;
 
+use App\Exceptions\DomainException;
 use App\Models\Screener;
 use App\Models\ScreenerVersion;
 use App\Services\Artifacts\DefinitionHasher;
+use App\Services\Artifacts\ScreenerRuntimeSelection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
  * Snapshot Screener definition versions for the Screener Artifact Registry.
- * Does not affect Screener execution.
+ * Supplies immutable semantic identity to Screener execution and historical audit.
  */
 final class ScreenerVersioningService
 {
     /**
-     * After create: ensure registry columns + v1 snapshot.
+     * Capture the selected immutable binding's effective semantics for a NEW run.
+     * Never repair an older version, rewrite a conflicting snapshot, or persist
+     * the potentially drifted mutable projection as the selected definition.
      */
+    public function ensureArtifactRuntimeVersion(ScreenerRuntimeSelection $selection): ScreenerVersion
+    {
+        return $this->captureArtifactVersion($selection, false);
+    }
+
+    /** An explicit binding revision may adopt NEW semantics, never rewrite the old version. */
+    public function captureArtifactBindingVersion(ScreenerRuntimeSelection $selection): ScreenerVersion
+    {
+        return $this->captureArtifactVersion($selection, true);
+    }
+
+    private function captureArtifactVersion(ScreenerRuntimeSelection $selection, bool $adoptNewSemantics): ScreenerVersion
+    {
+        return DB::transaction(function () use ($selection, $adoptNewSemantics) {
+            $source = $selection->legacyScreener;
+            $locked = Screener::query()->lockForUpdate()->findOrFail($source->id);
+            if ((int) $locked->profile_id !== (int) $source->profile_id
+                || (int) $locked->reusable_artifact_id !== (int) $selection->artifactVersion->artifact_id
+                || (int) $locked->artifact_version !== (int) $source->artifact_version) {
+                throw new DomainException('The Screener binding changed; refresh before starting a run.', 'SCREENER_RUNTIME_CHANGED');
+            }
+            $settings = $selection->bindingRevision->settings_json ?? [];
+            $content = $selection->artifactVersion->content_json ?? [];
+            $universe = (string) ($settings['scope'] ?? $content['metadata']['universe'] ?? $locked->scope);
+            $scope = ScreenerCatalog::normalizeUniverseScope($universe);
+            $runtime = clone $locked;
+            $runtime->forceFill([
+                'definition_json' => $selection->definition,
+                'scope' => $scope,
+                'watchlist_id' => $scope === 'watchlist' ? ($settings['watchlist_id'] ?? $locked->watchlist_id) : null,
+                'index_symbol' => $scope === 'index'
+                    ? strtoupper(trim((string) ($settings['index_symbol'] ?? $locked->index_symbol))) : null,
+            ]);
+            $payload = $this->semanticPayload($runtime);
+            $hash = DefinitionHasher::hash($payload);
+            $number = max(1, (int) $locked->artifact_version);
+            $version = ScreenerVersion::query()->where('screener_id', $locked->id)->where('version', $number)->first();
+            if ($version) {
+                $stored = clone $locked;
+                $stored->forceFill([
+                    'definition_json' => $version->definition_json, 'scope' => $version->scope,
+                    'watchlist_id' => $version->watchlist_id, 'index_symbol' => $version->index_symbol,
+                ]);
+                $storedEvidenceComplete = in_array($version->scope, ScreenerCatalog::SCOPES, true)
+                    && is_array($version->definition_json) && is_array($version->definition_json['root'] ?? null);
+                if ($storedEvidenceComplete && $hash === DefinitionHasher::hash($this->semanticPayload($stored))) {
+                    return $version;
+                }
+                if (! $adoptNewSemantics) {
+                    throw new DomainException(
+                        'The bound artifact and Screener semantic version disagree. Resolve the version before starting a run.',
+                        'SCREENER_RUNTIME_SEMANTICS_CONFLICT',
+                    );
+                }
+                $number = max($number, (int) ScreenerVersion::query()->where('screener_id', $locked->id)->max('version')) + 1;
+            } elseif ($number < (int) ScreenerVersion::query()->where('screener_id', $locked->id)->max('version')) {
+                if (! $adoptNewSemantics) {
+                    throw new DomainException(
+                        'A historical Screener version gap cannot be inferred from a new run.',
+                        'SCREENER_RUNTIME_SEMANTICS_CONFLICT',
+                    );
+                }
+                $number = ((int) ScreenerVersion::query()->where('screener_id', $locked->id)->max('version')) + 1;
+            }
+            $this->writeVersionRow($locked, $number, $payload, $hash,
+                'Captured selected immutable artifact/binding semantics; historical rows preserved', [
+                    'captured_for_runtime_at' => now()->toIso8601String(),
+                    'reusable_artifact_version_id' => (int) $selection->artifactVersion->id,
+                    'artifact_binding_revision_id' => (int) $selection->bindingRevision->id,
+                ]);
+
+            if ($number !== (int) $locked->artifact_version) {
+                $locked->forceFill(['artifact_version' => $number])->save();
+            }
+
+            return ScreenerVersion::query()->where('screener_id', $locked->id)->where('version', $number)->firstOrFail();
+        });
+    }
+
+    /** Resolve the current ordinary Screener semantic version. */
     public function ensureCurrentVersion(Screener $screener): ScreenerVersion
     {
         $versionNumber = max(1, (int) ($screener->artifact_version ?? 1));
@@ -185,7 +270,7 @@ final class ScreenerVersioningService
     /**
      * @param  array<string, mixed>  $payload
      */
-    private function writeVersionRow(Screener $screener, int $version, array $payload, string $hash, string $notes): void
+    private function writeVersionRow(Screener $screener, int $version, array $payload, string $hash, string $notes, array $runtimeEvidence = []): void
     {
         $definition = $payload['definition'] ?? $payload;
         ScreenerVersion::query()->create([
@@ -195,7 +280,7 @@ final class ScreenerVersioningService
             'scope' => $payload['scope'] ?? $screener->scope,
             'watchlist_id' => $payload['watchlist_id'] ?? $screener->watchlist_id,
             'index_symbol' => $payload['index_symbol'] ?? $screener->index_symbol,
-            'metadata_json' => [
+            'metadata_json' => array_merge([
                 'name' => $screener->name,
                 'slug' => $screener->slug,
                 'intent' => $screener->intent,
@@ -203,7 +288,7 @@ final class ScreenerVersioningService
                 'tags' => $screener->tags_json,
                 'is_shared' => (bool) $screener->is_shared,
                 'is_factory' => (bool) $screener->is_factory,
-            ],
+            ], $runtimeEvidence),
             'definition_hash' => $hash,
             'change_notes' => Str::limit($notes, 1000, ''),
         ]);

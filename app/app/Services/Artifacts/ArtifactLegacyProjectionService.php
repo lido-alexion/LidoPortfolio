@@ -9,7 +9,9 @@ use App\Models\Screener;
 use App\Models\TradingStrategy;
 use App\Models\TradingStrategyVersion;
 use App\Models\Watchlist;
+use App\Services\Screener\ScreenerCatalog;
 use App\Services\Screener\ScreenerDefinitionValidator;
+use App\Services\Screener\ScreenerVersioningService;
 use App\Services\Strategy\StrategyRegistrySupport;
 use App\Services\StrategyConfigurationService;
 use App\Services\StrategyEligibilityService;
@@ -27,11 +29,14 @@ final class ArtifactLegacyProjectionService
         private StrategyConfigurationService $strategyConfiguration,
         private StrategyEligibilityService $strategyEligibility,
         private ScreenerDefinitionValidator $screenerValidator,
+        private ScreenerVersioningService $screenerVersioning,
     ) {}
 
     public function sync(ArtifactBinding $binding, ReusableArtifactVersion $version): void
     {
-        $binding->loadMissing('profile', 'artifact', 'activeRevision');
+        $binding->loadMissing('profile', 'artifact');
+        // The revision FK may just have changed on an instance with the old relation cached.
+        $binding->load('activeRevision');
         $content = is_array($version->content_json) ? $version->content_json : [];
         $definition = is_array($content['definition'] ?? null) ? $content['definition'] : [];
         $settings = is_array($binding->activeRevision?->settings_json) ? $binding->activeRevision->settings_json : [];
@@ -137,11 +142,7 @@ final class ArtifactLegacyProjectionService
         $metadata = is_array($content['metadata'] ?? null) ? $content['metadata'] : [];
         if (! $screener) {
             $universe = (string) ($settings['scope'] ?? $metadata['universe'] ?? 'all_equities');
-            $scope = match ($universe) {
-                'all', 'all_active_equities' => 'all_equities',
-                'portfolio', 'holding' => 'holdings',
-                default => in_array($universe, ['holdings', 'watchlist', 'all_equities', 'index'], true) ? $universe : 'all_equities',
-            };
+            $scope = ScreenerCatalog::normalizeUniverseScope($universe);
             [$watchlistId, $indexSymbol] = $this->screenerScopeSettings($profile, $scope, $settings);
             $screener = Screener::query()->create([
                 'profile_id' => $profile->id,
@@ -166,15 +167,8 @@ final class ArtifactLegacyProjectionService
             ]);
         }
         $universe = (string) ($settings['scope'] ?? $metadata['universe'] ?? $screener->scope);
-        $scope = match ($universe) {
-            'all', 'all_active_equities' => 'all_equities',
-            'portfolio', 'holding' => 'holdings',
-            default => in_array($universe, ['holdings', 'watchlist', 'all_equities', 'index'], true) ? $universe : 'all_equities',
-        };
+        $scope = ScreenerCatalog::normalizeUniverseScope($universe);
         [$watchlistId, $indexSymbol] = $this->screenerScopeSettings($profile, $scope, $settings, $screener);
-        if ($screener->definition_hash !== $version->definition_hash) {
-            $screener->artifact_version = max(1, (int) $screener->artifact_version + 1);
-        }
         $screener->forceFill([
             'definition_json' => $definition,
             'definition_hash' => $version->definition_hash,
@@ -187,6 +181,12 @@ final class ArtifactLegacyProjectionService
             'schedule_days' => is_array($settings['schedule_days'] ?? null) ? $settings['schedule_days'] : ($screener->schedule_days ?? []),
             'telegram_enabled' => (bool) ($settings['telegram_enabled'] ?? $screener->telegram_enabled ?? false),
         ])->save();
+
+        // A binding revision is the explicit adoption point. Scope/selector
+        // changes are semantic even when the artifact definition is unchanged.
+        $this->screenerVersioning->captureArtifactBindingVersion(new ScreenerRuntimeSelection(
+            $screener, $version, $binding->activeRevision, $definition,
+        ));
     }
 
     /** @param array<string,mixed> $settings @return array{0:?int,1:?string} */

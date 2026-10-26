@@ -18,6 +18,16 @@ class ScreenerCatalog
 {
     public const SCOPES = ['holdings', 'watchlist', 'all_equities', 'index'];
 
+    /** Preserve the binding projection owner's established aliases and fallback. */
+    public static function normalizeUniverseScope(string $universe): string
+    {
+        return match ($universe) {
+            'all', 'all_active_equities' => 'all_equities',
+            'portfolio', 'holding' => 'holdings',
+            default => in_array($universe, self::SCOPES, true) ? $universe : 'all_equities',
+        };
+    }
+
     public const OPERATORS = [
         ['id' => 'gt', 'label' => '>'],
         ['id' => 'gte', 'label' => '≥'],
