@@ -16,6 +16,7 @@ use App\Models\StockPrice;
 use App\Models\User;
 use App\Models\Watchlist;
 use App\Models\WatchlistItem;
+use App\Services\EquityUniverseService;
 use App\Services\IndexConstituentService;
 use App\Services\Screener\ScreenerCatalog;
 use App\Services\Screener\ScreenerRunService;
@@ -99,6 +100,49 @@ class ScreenerRunSnapshotTest extends TestCase
         $this->assertTrue($run->hits()->where('stock_id', $lastStock->id)->exists());
         $this->assertFalse($run->hits()->where('stock_id', $late->id)->exists());
         $this->assertSame($original, $run->fresh()->stats_json['universe_snapshot']);
+    }
+
+    public function test_new_run_excludes_already_ineligible_members_without_changing_the_public_resolver(): void
+    {
+        [, $profile, $watchlist, $stocks, $screener] = $this->fixture(1);
+        $eligible = [$stocks->first()->id];
+        $ineligible = [];
+        foreach ([['ACPTACTIVE', true, false], ['ACPTINACTIVE', false, false], ['ACPTADMIN', true, true]] as [$symbol, $active, $admin]) {
+            $stock = Stock::query()->create(['symbol' => $symbol, 'name' => $symbol, 'exchange' => 'NSE', 'is_active' => $active]);
+            $stock->forceFill(['admin_deactivated' => $admin])->save();
+            StockPrice::query()->create($this->bar($stock->id));
+            WatchlistItem::query()->create(['profile_id' => $profile->id, 'watchlist_id' => $watchlist->id, 'stock_id' => $stock->id]);
+            if ($active && ! $admin) {
+                $eligible[] = $stock->id;
+            } else {
+                $ineligible[] = $stock->id;
+            }
+        }
+        $service = app(ScreenerRunService::class);
+        [$resolved] = $service->resolveStockIds($screener);
+        $this->assertEqualsCanonicalizing([...$eligible, ...$ineligible], $resolved);
+        $expectedOrder = array_values(array_filter($resolved, fn ($id) => in_array($id, $eligible, true)));
+
+        $result = $service->start($screener);
+        $run = ScreenerRun::query()->findOrFail($result['run']['id']);
+        $this->assertTrue($result['completed']);
+        $this->assertSame('completed', $run->status);
+        $this->assertSame(2, $result['run']['stats']['total']);
+        $this->assertSame(2, $result['run']['stats']['matched']);
+        $this->assertSame($expectedOrder, $run->stats_json['universe_snapshot']['stock_ids']);
+        $this->assertEqualsCanonicalizing($eligible, $run->hits()->pluck('stock_id')->map(fn ($id) => (int) $id)->all());
+        $this->assertFalse($run->hits()->whereIn('stock_id', $ineligible)->exists());
+        [$after] = $service->resolveStockIds($screener);
+        $this->assertSame($resolved, $after);
+
+        Stock::query()->whereIn('id', $eligible)->update(['is_active' => false]);
+        $empty = $service->start($screener);
+        $emptyRun = ScreenerRun::query()->findOrFail($empty['run']['id']);
+        $this->assertTrue($empty['completed']);
+        $this->assertSame(0, $empty['run']['stats']['total']);
+        $this->assertSame([], $emptyRun->stats_json['universe_snapshot']['stock_ids']);
+        $this->assertSame($expectedOrder, $run->fresh()->stats_json['universe_snapshot']['stock_ids']);
+        $this->assertSame(2, $run->hits()->count());
     }
 
     public function test_index_membership_is_resolved_once_for_the_whole_run(): void
@@ -273,6 +317,46 @@ class ScreenerRunSnapshotTest extends TestCase
         $this->assertSame($alternate->id, $laterPin->watchlist_id);
         $this->assertSame(0, $later['run']['stats']['total']);
         $this->assertSame($pinBefore, $pin->fresh()->getAttributes());
+    }
+
+    public function test_publishable_free_form_universe_preserves_projection_fallback_through_continuation(): void
+    {
+        [$user, $profile, , $stocks, $screener] = $this->fixture();
+        $this->assertSame(0, app(LegacyArtifactBackfillService::class)->backfill($profile)['failed']);
+        $source = $screener->fresh('reusableArtifact')->reusableArtifact->bindings()
+            ->where('profile_id', $profile->id)->sole()->activeRevision->artifactVersion;
+        $content = $source->content_json;
+        $content['slug'] = 'legacy_universe_fallback';
+        $content['name'] = 'Legacy universe fallback';
+        $content['metadata']['universe'] = 'legacy free-form equities label';
+        $lifecycle = app(ReusableArtifactLifecycleService::class);
+        $artifact = $lifecycle->publish($lifecycle->createDraft(
+            $user, $source->artifact->artifact_type, $content['slug'], $content['name'], $content,
+        ), $user);
+        $binding = app(ArtifactBindingService::class)->bind($profile, $artifact, $user, [], true);
+        $mapped = Screener::query()->where('profile_id', $profile->id)->where('reusable_artifact_id', $artifact->artifact_id)->sole();
+        $this->assertSame('all_equities', $mapped->scope);
+        $provider = Mockery::mock(EquityUniverseService::class);
+        $provider->shouldReceive('universeStockQuery')->once()->andReturn(Stock::query()->whereIn('id', $stocks->pluck('id')->all()));
+        $this->app->instance(EquityUniverseService::class, $provider);
+        $service = app(ScreenerRunService::class);
+
+        $first = $service->start($mapped);
+        $run = ScreenerRun::query()->findOrFail($first['run']['id']);
+        $pin = ScreenerVersion::query()->findOrFail($run->screener_version_id);
+        $this->assertFalse($first['completed']);
+        $this->assertSame('all_equities', $pin->scope);
+        $this->assertSame('all_equities', $run->stats_json['universe_snapshot']['scope']);
+        $this->assertSame(DefinitionHasher::hash($content['definition']), DefinitionHasher::hash($pin->definition_json));
+        $this->assertSame($artifact->id, $run->reusable_artifact_version_id);
+        $this->assertSame($binding->active_revision_id, $run->artifact_binding_revision_id);
+
+        $continued = $service->continue($run);
+        $this->assertTrue($continued['completed']);
+        $this->assertSame('completed', $run->fresh()->status);
+        $this->assertSame(ScreenerCatalog::CHUNK_SIZE + 1, $continued['run']['stats']['matched']);
+        $this->assertTrue($run->hits()->where('stock_id', $stocks->last()->id)->exists());
+        $this->assertSame($pin->id, $run->fresh()->screener_version_id);
     }
 
     public function test_mapped_runtime_captures_the_artifact_not_a_drifted_mutable_definition(): void

@@ -9,6 +9,7 @@ use App\Models\Screener;
 use App\Models\TradingStrategy;
 use App\Models\TradingStrategyVersion;
 use App\Models\Watchlist;
+use App\Services\Screener\ScreenerCatalog;
 use App\Services\Screener\ScreenerDefinitionValidator;
 use App\Services\Screener\ScreenerVersioningService;
 use App\Services\Strategy\StrategyRegistrySupport;
@@ -141,11 +142,7 @@ final class ArtifactLegacyProjectionService
         $metadata = is_array($content['metadata'] ?? null) ? $content['metadata'] : [];
         if (! $screener) {
             $universe = (string) ($settings['scope'] ?? $metadata['universe'] ?? 'all_equities');
-            $scope = match ($universe) {
-                'all', 'all_active_equities' => 'all_equities',
-                'portfolio', 'holding' => 'holdings',
-                default => in_array($universe, ['holdings', 'watchlist', 'all_equities', 'index'], true) ? $universe : 'all_equities',
-            };
+            $scope = ScreenerCatalog::normalizeUniverseScope($universe);
             [$watchlistId, $indexSymbol] = $this->screenerScopeSettings($profile, $scope, $settings);
             $screener = Screener::query()->create([
                 'profile_id' => $profile->id,
@@ -170,11 +167,7 @@ final class ArtifactLegacyProjectionService
             ]);
         }
         $universe = (string) ($settings['scope'] ?? $metadata['universe'] ?? $screener->scope);
-        $scope = match ($universe) {
-            'all', 'all_active_equities' => 'all_equities',
-            'portfolio', 'holding' => 'holdings',
-            default => in_array($universe, ['holdings', 'watchlist', 'all_equities', 'index'], true) ? $universe : 'all_equities',
-        };
+        $scope = ScreenerCatalog::normalizeUniverseScope($universe);
         [$watchlistId, $indexSymbol] = $this->screenerScopeSettings($profile, $scope, $settings, $screener);
         $screener->forceFill([
             'definition_json' => $definition,

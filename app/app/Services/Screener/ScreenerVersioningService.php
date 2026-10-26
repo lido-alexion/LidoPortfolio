@@ -45,14 +45,7 @@ final class ScreenerVersioningService
             $settings = $selection->bindingRevision->settings_json ?? [];
             $content = $selection->artifactVersion->content_json ?? [];
             $universe = (string) ($settings['scope'] ?? $content['metadata']['universe'] ?? $locked->scope);
-            $scope = match ($universe) {
-                'all', 'all_active_equities' => 'all_equities',
-                'portfolio', 'holding' => 'holdings',
-                default => $universe,
-            };
-            if (! in_array($scope, ScreenerCatalog::SCOPES, true)) {
-                throw new DomainException('The bound Screener universe is invalid.', 'SCREENER_RUNTIME_SEMANTICS_INVALID');
-            }
+            $scope = ScreenerCatalog::normalizeUniverseScope($universe);
             $runtime = clone $locked;
             $runtime->forceFill([
                 'definition_json' => $selection->definition,

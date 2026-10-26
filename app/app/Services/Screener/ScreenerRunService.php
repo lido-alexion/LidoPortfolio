@@ -72,6 +72,7 @@ class ScreenerRunService
         $this->assertVersionEvidence($screenerVersion, $screener);
         [$stockIds, $warning] = $this->resolveStockIds($this->withVersionSemantics($screener, $screenerVersion));
         $this->assertSnapshotStockIds($stockIds);
+        $stockIds = $this->eligibleSnapshotStockIds($stockIds);
         $universeSnapshot = [
             'schema_version' => 1,
             'screener_version_id' => (int) $screenerVersion->id,
@@ -370,6 +371,22 @@ class ScreenerRunService
         return [$ids, $snapshot['warning']];
     }
 
+    /**
+     * Capture-only filter: historical/public universe resolution keeps its own contract.
+     * Preserve the resolver's order rather than using database result order as a cursor.
+     */
+    private function eligibleSnapshotStockIds(array $ids): array
+    {
+        $eligible = [];
+        foreach (array_chunk($ids, 1000) as $chunk) {
+            foreach (Stock::query()->whereIn('id', $chunk)->effectivelyActive()->pluck('id') as $id) {
+                $eligible[(int) $id] = true;
+            }
+        }
+
+        return array_values(array_filter($ids, fn ($id) => isset($eligible[$id])));
+    }
+
     private function assertSnapshotStockIds(array $ids): void
     {
         if (! array_is_list($ids) || count($ids) > self::MAX_UNIVERSE_SNAPSHOT_STOCKS) {
@@ -416,11 +433,7 @@ class ScreenerRunService
             $settings = $revision->settings_json ?? [];
             $content = $version->content_json ?? [];
             $universe = (string) ($settings['scope'] ?? $content['metadata']['universe'] ?? $semanticVersion->scope);
-            $scope = match ($universe) {
-                'all', 'all_active_equities' => 'all_equities',
-                'portfolio', 'holding' => 'holdings',
-                default => $universe,
-            };
+            $scope = ScreenerCatalog::normalizeUniverseScope($universe);
             if ($scope !== $semanticVersion->scope
                 || (array_key_exists('watchlist_id', $settings) && $scope === 'watchlist'
                     && (int) $settings['watchlist_id'] !== (int) $semanticVersion->watchlist_id)
