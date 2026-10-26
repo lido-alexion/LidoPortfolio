@@ -15,6 +15,207 @@ class StockMasterSyncService
         protected DualListedNseRepairService $dualListedRepair,
     ) {}
 
+
+    /**
+     * Preview by default. Apply fills only absent ISINs under an exact reviewed
+     * plan; it never calls ordinary sync, deactivation, backfill or dual repair.
+     */
+    public function reconcileMissingBseIsins(bool $apply = false, ?string $expectedPlan = null): array
+    {
+        if ($apply && preg_match('/^[a-f0-9]{64}$/', (string) $expectedPlan) !== 1) {
+            throw new \InvalidArgumentException('Apply requires the SHA-256 from a fresh BSE identity preview.');
+        }
+        $parts = parse_url($this->bseMaster->listApiUrl());
+        parse_str((string) ($parts['query'] ?? ''), $query);
+        if (($parts['scheme'] ?? '') !== 'https' || ($parts['host'] ?? '') !== 'api.bseindia.com'
+            || rtrim((string) ($parts['path'] ?? ''), '/') !== '/BseIndiaAPI/api/ListofScripData/w'
+            || isset($parts['user']) || isset($parts['pass']) || (isset($parts['port']) && $parts['port'] !== 443)
+            || strtoupper((string) ($query['status'] ?? '')) !== 'ACTIVE'
+            || strtoupper((string) ($query['segment'] ?? '')) !== 'EQUITY') {
+            throw new \RuntimeException('BSE identity reconciliation requires the official active-equity API.');
+        }
+        if ($apply && ! $this->syncLog->isEnabled()) {
+            throw new \RuntimeException('Enable sync-log retention before applying an audited BSE identity plan.');
+        }
+        $lock = null;
+        $leaseAcquired = false;
+        $failure = null;
+        $runId = null;
+        $jobName = 'bse-identity-reconciliation';
+        try {
+            // Network acquisition precedes the short database transaction.
+            $source = $this->bseMaster->fetchFromApi();
+            if ($source === [] || count($source) > 20000) {
+                throw new \RuntimeException('BSE active-equity source is empty or exceeds the bounded reconciliation size.');
+            }
+            $sourceFetchedAt = now('UTC');
+            $readStocks = fn (bool $lockRows) => Stock::query()->orderBy('id')
+                ->when($lockRows, fn ($query) => $query->lockForUpdate())
+                ->limit(20001)
+                ->get(['id', 'symbol', 'exchange', 'isin', 'bse_scrip_code', 'is_active', 'is_benchmark', 'admin_deactivated'])
+                ->map(fn (Stock $stock) => $stock->getAttributes())->all();
+            $planner = new BseIdentityReconciliationPlan;
+            if (! $apply) {
+                $stocks = $readStocks(false);
+                if (count($stocks) > 20000) {
+                    throw new \RuntimeException('Master exceeds the bounded reconciliation size; no changes applied.');
+                }
+
+                return $planner->build($stocks, $source) + ['applied_count' => 0, 'dry_run' => true];
+            }
+            // Network work does not consume the universe writer lease.
+            $cache = \Illuminate\Support\Facades\Cache::store('database');
+            $store = $cache->getStore();
+            if (! $store instanceof \Illuminate\Cache\DatabaseStore) {
+                throw new \RuntimeException('BSE identity apply requires the existing database universe lease.');
+            }
+            $lock = $cache->lock('portfolio-universe-price-sync', 300);
+            $db = (new Stock)->getConnection();
+            if (! $lock instanceof \Illuminate\Cache\DatabaseLock || $lock->getConnectionName() !== $db->getName()) {
+                throw new \RuntimeException('Universe lease and identity writes must share one database connection.');
+            }
+            if (! $lock->get()) {
+                throw new \RuntimeException('Universe metadata/price owner is busy; no identity changes applied.');
+            }
+            $leaseAcquired = true;
+            $startedAt = now()->getTimestamp();
+            $startedMonotonic = hrtime(true);
+            $lockTable = config('cache.stores.database.lock_table') ?: 'cache_locks';
+            $lockKey = $store->getPrefix().'portfolio-universe-price-sync';
+            $runId = $this->syncLog->beginRun($jobName);
+            if ($runId === null) {
+                throw new \RuntimeException('Could not create an audited BSE identity run; no identities changed.');
+            }
+            $result = $db->transaction(function () use ($db, $lock, $lockTable, $lockKey, $startedAt, $startedMonotonic, $readStocks, $planner, $source, $sourceFetchedAt, $expectedPlan, $runId, $jobName): array {
+                // This row fence stays held through commit/rollback. Even an
+                // expired cache lease cannot be replaced by a new price owner
+                // while this metadata transaction is still active.
+                $db->table($lockTable)->where('key', $lockKey)->lockForUpdate()->first();
+                $assertLease = function () use ($db, $lock, $lockTable, $lockKey, $startedAt, $startedMonotonic): void {
+                    $lease = $db->table($lockTable)->where('key', $lockKey)->first();
+                    $now = now()->getTimestamp();
+                    if ($lease === null || ! hash_equals($lock->owner(), (string) $lease->owner)
+                        || (int) $lease->expiration <= $now) {
+                        throw new \RuntimeException('BSE identity lease was lost or expired; all changes rolled back.');
+                    }
+                    if (max((hrtime(true) - $startedMonotonic) / 1_000_000_000, abs($now - $startedAt)) >= 120) {
+                        throw new \RuntimeException('BSE identity apply budget exhausted; all changes rolled back.');
+                    }
+                };
+                $assertLease();
+                $stocks = $readStocks(true);
+                if (count($stocks) > 20000) {
+                    throw new \RuntimeException('Master exceeds the bounded reconciliation size; no changes applied.');
+                }
+                $plan = $planner->build($stocks, $source);
+                if ($plan['candidate_count'] > 5000) {
+                    throw new \RuntimeException('Identity plan exceeds the bounded apply size; no changes applied.');
+                }
+                if (! hash_equals($plan['plan_sha256'], (string) $expectedPlan)) {
+                    throw new \RuntimeException('BSE source or stock identities changed since preview; generate and review a new plan.');
+                }
+                $this->syncLog->log($runId, $jobName, 'info', 'Applying reviewed BSE identity-only plan', [
+                    'plan_sha256' => $plan['plan_sha256'], 'source_rows_sha256' => $plan['source_rows_sha256'],
+                    'master_rows_sha256' => $plan['master_rows_sha256'], 'candidate_count' => $plan['candidate_count'],
+                ]);
+                $header = \App\Models\SyncLog::query()->where('run_id', $runId)
+                    ->where('message', 'Applying reviewed BSE identity-only plan')->get();
+                if ($header->count() !== 1 || ($header->first()->context['plan_sha256'] ?? '') !== $plan['plan_sha256']
+                    || ($header->first()->context['source_rows_sha256'] ?? '') !== $plan['source_rows_sha256']
+                    || ($header->first()->context['master_rows_sha256'] ?? '') !== $plan['master_rows_sha256']
+                    || ($header->first()->context['candidate_count'] ?? null) !== $plan['candidate_count']) {
+                    throw new \RuntimeException('Required BSE identity plan audit was not persisted; no identities changed.');
+                }
+                foreach ($plan['targets'] as $target) {
+                    $assertLease();
+                    $changed = Stock::query()->whereKey($target['stock_id'])
+                        ->where('exchange', 'BSE')->where('is_active', true)->where('admin_deactivated', false)
+                        ->where('is_benchmark', false)->where('symbol', $target['symbol'])
+                        ->where('bse_scrip_code', $target['scrip_code'])
+                        ->where(function ($query) { $query->whereNull('isin')->orWhere('isin', ''); })
+                        ->update(['isin' => $target['new_isin']]);
+                    if ($changed !== 1) {
+                        throw new \RuntimeException('A BSE identity target changed during apply; all changes rolled back.');
+                    }
+                }
+                foreach (array_chunk($plan['targets'], 100) as $targets) {
+                    $this->syncLog->log($runId, $jobName, 'info', 'BSE identity-only changes', [
+                        'plan_sha256' => $plan['plan_sha256'], 'changes' => $targets,
+                    ]);
+                }
+
+                $recorded = \App\Models\SyncLog::query()->where('run_id', $runId)
+                    ->where('message', 'BSE identity-only changes')->orderBy('id')->get();
+                $changes = [];
+                foreach ($recorded as $log) {
+                    if (($log->context['plan_sha256'] ?? '') !== $plan['plan_sha256']) {
+                        throw new \RuntimeException('BSE identity change audit does not match the reviewed plan.');
+                    }
+                    array_push($changes, ...($log->context['changes'] ?? []));
+                }
+                // MySQL JSON normalizes object key order. Preserve the ordered
+                // list and exact keys/scalar types/values, canonicalizing only
+                // each flat change object's associative key order.
+                $canonicalChanges = static fn (array $rows): array => array_map(static function (array $row): array {
+                    ksort($row, SORT_STRING);
+
+                    return $row;
+                }, $rows);
+                if ($canonicalChanges($changes) !== $canonicalChanges($plan['targets'])) {
+                    throw new \RuntimeException('Required BSE identity change audit was not persisted; all changes rolled back.');
+                }
+                $assertLease();
+                $this->syncLog->completeRun($runId, 'success', [
+                    'processed' => $plan['candidate_count'],
+                    'skipped' => array_sum($plan['reason_counts']) - $plan['candidate_count'],
+                ], 'BSE ISIN-only reconciliation completed; prices, holdings and lifecycle were not changed.');
+                $completed = \App\Models\SyncRun::query()->find($runId);
+                if ($completed === null || $completed->status !== 'success'
+                    || (int) $completed->stocks_processed !== $plan['candidate_count']) {
+                    throw new \RuntimeException('Required BSE identity success audit was not persisted; all changes rolled back.');
+                }
+
+                $assertLease();
+                $result = ['applied_count' => $plan['candidate_count'], 'dry_run' => false];
+                $audit = \App\Models\BseIdentityReconciliationAudit::query()->create([
+                    'id' => $runId, 'plan_sha256' => $plan['plan_sha256'],
+                    'plan_json' => $plan, 'result_json' => $result,
+                    'source_fetched_at' => $sourceFetchedAt, 'applied_at' => now('UTC'),
+                ])->fresh();
+                if ($audit === null || $audit->plan_sha256 !== $plan['plan_sha256']
+                    || $planner->hashPlan($audit->plan_json) !== $plan['plan_sha256']
+                    || ($audit->result_json['applied_count'] ?? null) !== $plan['candidate_count']
+                    || ($audit->result_json['dry_run'] ?? null) !== false) {
+                    throw new \RuntimeException('Durable BSE identity audit was not persisted; all changes rolled back.');
+                }
+                $assertLease();
+
+                return $plan + $result + ['audit_id' => $audit->id];
+            });
+            return $result;
+        } catch (\Throwable $error) {
+            $failure = $error;
+            if ($runId !== null) {
+                try {
+                    $this->syncLog->completeRun($runId, 'failed', [], 'BSE ISIN-only reconciliation refused or rolled back.');
+                } catch (\Throwable) {
+                    // Preserve the original refusal/persistence failure.
+                }
+            }
+            throw $error;
+        } finally {
+            try {
+                if ($leaseAcquired) {
+                    $lock?->release();
+                }
+            } catch (\Throwable $releaseError) {
+                if ($failure === null) {
+                    throw $releaseError;
+                }
+            }
+        }
+    }
+
     /**
      * @return array{
      *   added: int,
