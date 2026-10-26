@@ -89,6 +89,9 @@ class ExternalHttpFailureObserver
                     // request/query/body values. They stay in protected logs.
                     app(PortfolioLoggerService::class)->provider('error', 'Provider HTTP failure evidence', [
                         ...$privateContext,
+                        // Deterministic API capture above owns this provider failure.
+                        // Keep protected replay evidence out of optional AI log triage.
+                        'skip_log_error_triage' => true,
                         'operation' => $operation['id'] ?? 'provider.http',
                         'endpoint' => $safeEndpoint,
                         'http_status' => $status,
