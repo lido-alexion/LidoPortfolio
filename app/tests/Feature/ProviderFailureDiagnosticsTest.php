@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Jobs\CreateOrLinkGitHubIssueJob;
+use App\Jobs\TriageLogErrorJob;
 use App\Models\ApiFailureIncident;
+use App\Models\LogErrorTriage;
 use App\Models\Stock;
 use App\Services\Operations\ApiFailureReporter;
 use App\Services\Operations\GitHubIssueReporter;
@@ -16,8 +18,10 @@ use GuzzleHttp\Psr7\NoSeekStream;
 use GuzzleHttp\Psr7\Response as PsrResponse;
 use GuzzleHttp\Psr7\Utils;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Mockery;
@@ -41,6 +45,59 @@ class ProviderFailureDiagnosticsTest extends TestCase
             'symbol' => 'RELIANCE', 'name' => 'Reliance', 'exchange' => 'NSE',
             'series' => 'EQ', 'isin' => 'INE002A01018', 'is_active' => true,
         ]);
+    }
+
+
+    public function test_protected_provider_evidence_stays_out_of_enabled_ai_triage_without_disabling_api_reporting(): void
+    {
+        config([
+            'log_error_triage.enabled' => true,
+            'log_error_triage.environments' => ['testing'],
+            'log_error_triage.build_sha' => 'abcdef0123456',
+            'log_error_triage.queue_connection' => 'database',
+            'api_failure_reporting.enabled' => true,
+            'api_failure_reporting.environments' => ['testing'],
+            'api_failure_reporting.queue_connection' => 'database',
+            'ai_runtime.enabled' => true,
+            'ai_runtime.base_url' => 'http://ai.test',
+        ]);
+        $protected = [];
+        Event::listen(MessageLogged::class, function (MessageLogged $event) use (&$protected): void {
+            if ($event->message === 'Provider HTTP failure evidence') {
+                $protected[] = $event;
+            }
+        });
+        Http::fake([
+            'https://www.nseindia.com/api/quote-equity' => Http::response([], 403),
+        ]);
+        $stock = $this->stock();
+        $day = Carbon::parse('2026-10-15');
+        $response = PriceProviderRequestContext::run($stock, 'nse', 'RELIANCE', $day, $day,
+            fn () => Http::get('https://www.nseindia.com/api/quote-equity'));
+
+        $this->assertSame(403, $response->status());
+        $incident = ApiFailureIncident::query()->sole();
+        $this->assertSame(403, $incident->http_status);
+        $this->assertSame('https://nseindia.com/api/quote-equity', $incident->endpoint);
+        $this->assertCount(1, $protected);
+        $this->assertSame('error', $protected[0]->level);
+        $this->assertTrue($protected[0]->context['skip_log_error_triage']);
+        $this->assertSame('RELIANCE', $protected[0]->context['symbol']);
+        $this->assertSame($incident->trace_id, $protected[0]->context['request_id']);
+        $this->assertDatabaseCount('stox_log_error_triages', 0);
+        Bus::assertNotDispatched(TriageLogErrorJob::class);
+        Bus::assertDispatched(CreateOrLinkGitHubIssueJob::class, fn ($job) => $job->incidentId === $incident->id);
+        Bus::assertDispatchedTimes(CreateOrLinkGitHubIssueJob::class, 1);
+
+        // Positive control: the same enabled event path must still admit an
+        // ordinary application error, so exclusion cannot pass via disabled triage.
+        app(PortfolioLoggerService::class)->api('error', 'Ordinary application failure control');
+        $this->assertDatabaseCount('stox_log_error_triages', 1);
+        Bus::assertDispatchedTimes(TriageLogErrorJob::class, 1);
+        Bus::assertDispatchedTimes(CreateOrLinkGitHubIssueJob::class, 1);
+        $this->assertDatabaseCount('portfolio_api_failure_incidents', 1);
+        Http::assertSentCount(1);
+        $this->assertNull(PriceProviderRequestContext::current());
     }
 
     public function test_fixed_nse_operations_are_actionable_and_still_request_invariant(): void
