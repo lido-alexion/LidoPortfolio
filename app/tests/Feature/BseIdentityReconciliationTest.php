@@ -97,7 +97,7 @@ class BseIdentityReconciliationTest extends TestCase
             'stock_id' => $stock->id, 'price_date' => '2026-10-23',
             'open_price' => 10, 'high_price' => 12, 'low_price' => 9,
             'close_price' => 11, 'adjusted_close_price' => 10.5, 'volume' => 123,
-            'provider_source' => 'manual_repair', 'created_at' => now(),
+            'provider_source' => 'manual_repair', 'data_source' => 'manual_repair', 'created_at' => now(),
         ]);
         $profile = $this->defaultPortfolioFor(User::factory()->create());
         $holding = Holding::query()->create([
