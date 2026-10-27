@@ -100,8 +100,8 @@ class NseCurrentClassificationSourceTest extends TestCase
         $this->assertSame(StockClassificationService::TAXONOMY, $row->taxonomy_version);
         $this->assertSame(StockClassificationService::CURRENT_SOURCE_URL.'?functionName=getSymbolData&marketType=N&series=EQ&symbol=INFY', $row->source_url);
         Http::assertSentCount(4);
-        Http::assertSent(fn ($request) => $request['functionName'] === 'getMetaData' && $request['symbol'] === 'INFY');
-        Http::assertSent(fn ($request) => $request['functionName'] === 'getSymbolData' && $request['marketType'] === 'N'
+        Http::assertSent(fn ($request) => ($request['functionName'] ?? null) === 'getMetaData' && $request['symbol'] === 'INFY');
+        Http::assertSent(fn ($request) => ($request['functionName'] ?? null) === 'getSymbolData' && $request['marketType'] === 'N'
             && $request['series'] === 'EQ' && $request['symbol'] === 'INFY');
         Http::assertNotSent(fn ($request) => str_contains($request->url(), '/api/quote-equity'));
 
@@ -165,7 +165,7 @@ class NseCurrentClassificationSourceTest extends TestCase
 
         app(StockClassificationService::class)->refresh($stock);
 
-        Http::assertSent(fn ($request) => $request['functionName'] === 'getSymbolData' && $request['series'] === $expected);
+        Http::assertSent(fn ($request) => ($request['functionName'] ?? null) === 'getSymbolData' && $request['series'] === $expected);
         $this->assertSame($stored, $stock->fresh()->series);
     }
 
@@ -226,7 +226,7 @@ class NseCurrentClassificationSourceTest extends TestCase
         $this->assertDatabaseCount('portfolio_stock_prices', 0);
         if (in_array($case, ['metadata symbol mismatch', 'metadata ISIN malformed', 'conflicting current master ISIN',
             'missing selected series', 'ambiguous unselected series', 'invalid market selector', 'metadata HTTP 403'], true)) {
-            Http::assertNotSent(fn ($request) => $request['functionName'] === 'getSymbolData');
+            Http::assertNotSent(fn ($request) => ($request['functionName'] ?? null) === 'getSymbolData');
         }
     }
 

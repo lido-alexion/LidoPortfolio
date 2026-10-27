@@ -66,7 +66,7 @@ class NseStockValidationSourceTest extends TestCase
         $this->assertDatabaseCount('stox_stock_classification_observations', 0);
         $this->assertDatabaseCount('portfolio_stock_prices', 0);
         Http::assertSentCount(4);
-        Http::assertSent(fn ($request) => $request['functionName'] === 'getSymbolData'
+        Http::assertSent(fn ($request) => ($request['functionName'] ?? null) === 'getSymbolData'
             && $request['symbol'] === 'INFY' && $request['series'] === 'EQ');
         Http::assertNotSent(fn ($request) => str_contains($request->url(), '/api/quote-equity'));
     }
@@ -113,7 +113,7 @@ class NseStockValidationSourceTest extends TestCase
         $this->assertSame('INE009A01021', $stock->fresh()->isin);
         $this->assertSame('Infosys Limited', $stock->fresh()->name);
         $this->assertDatabaseCount('portfolio_stocks', 1);
-        Http::assertSent(fn ($request) => $request['functionName'] === 'getSymbolData' && $request['series'] === 'BE');
+        Http::assertSent(fn ($request) => ($request['functionName'] ?? null) === 'getSymbolData' && $request['series'] === 'BE');
     }
 
     #[DataProvider('invalidCases')]
@@ -159,7 +159,7 @@ class NseStockValidationSourceTest extends TestCase
                 ? 'NSE blocked automated access (403)' : 'NSE temporarily unavailable (503)', $friendly);
         }
         if (in_array($case, ['foreign metadata symbol', 'conflicting master ISIN', 'unoffered stored series', 'metadata HTTP 403'], true)) {
-            Http::assertNotSent(fn ($request) => $request['functionName'] === 'getSymbolData');
+            Http::assertNotSent(fn ($request) => ($request['functionName'] ?? null) === 'getSymbolData');
         }
     }
 
