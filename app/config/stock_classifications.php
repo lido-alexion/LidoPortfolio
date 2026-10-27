@@ -45,6 +45,8 @@ return [
                         'Insurance' => 'Insurance',
                         'IT Services' => 'IT Services',
                         'Software' => 'IT Services',
+                        // Current NSE INDUSTRY vocabulary; retains the existing Software mapping.
+                        'IT - Software' => 'IT Services',
                         'Software Products' => 'Software Products',
                         'Pharmaceuticals' => 'Pharmaceuticals',
                         'Healthcare Services' => 'Healthcare Services',

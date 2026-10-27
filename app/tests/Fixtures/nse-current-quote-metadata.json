@@ -1,0 +1,9 @@
+{
+  "symbol": "INFY",
+  "activeSeries": [
+    "EQ",
+    "T0"
+  ],
+  "isin": "INE009A01021",
+  "marketType": "N"
+}

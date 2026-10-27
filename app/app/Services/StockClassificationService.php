@@ -7,7 +7,6 @@ use App\Models\StockClassificationObservation;
 use App\Models\StockClassificationOverride;
 use App\Models\StockClassificationOverrideRevision;
 use App\Models\StockClassificationRefreshState;
-use App\Support\NseHttpClient;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -17,6 +16,7 @@ class StockClassificationService
     public const PROVIDER = 'nse_quote_equity_free';
     public const TAXONOMY = 'nse-indices-4-tier-v1';
     public const SOURCE_URL = 'https://www.nseindia.com/api/quote-equity';
+    public const CURRENT_SOURCE_URL = NseEquityQuoteService::SOURCE_URL;
 
     /** @return array{sectors:list<string>,industries:array<string,list<string>>,taxonomy_version:string} */
     public function options(?string $sector = null): array
@@ -62,14 +62,10 @@ class StockClassificationService
         ]);
         $state->forceFill(['last_attempted_at' => now()])->save();
         try {
-            $response = NseHttpClient::create()->get(self::SOURCE_URL, ['symbol' => strtoupper($stock->symbol)]);
-            if (! $response->successful()) {
-                throw new \RuntimeException('NSE classification request failed with HTTP '.$response->status());
-            }
-            $payload = $response->json();
-            if (! is_array($payload)) {
-                throw new \RuntimeException('NSE classification response was not JSON.');
-            }
+            $payload = app(NseEquityQuoteService::class)->fetch(
+                (string) $stock->symbol, $stock->series, $stock->isin,
+            );
+            $result = $this->recordObservation($stock, $payload, $observedAt);
         } catch (\Throwable $error) {
             $attempts = (int) $state->attempts + 1;
             $state->forceFill([
@@ -80,7 +76,6 @@ class StockClassificationService
             throw $error;
         }
 
-        $result = $this->recordObservation($stock, $payload, $observedAt);
         $state->forceFill([
             'attempts' => 0, 'next_attempt_at' => now()->addDays(7),
             'last_successful_at' => now(), 'last_error' => null,
@@ -91,7 +86,14 @@ class StockClassificationService
     /** @param array<string,mixed> $payload */
     public function recordObservation(Stock $stock, array $payload, ?Carbon $observedAt = null): array
     {
-        $info = is_array($payload['industryInfo'] ?? null) ? $payload['industryInfo'] : [];
+        $current = array_key_exists('quote_metadata', $payload) || array_key_exists('equity_quote', $payload);
+        if ($current) {
+            [$info, $sourceUrl] = $this->currentIndustryInfo($stock, $payload);
+        } else {
+            // Preserve the established import/recording contract and its actual source identity.
+            $info = is_array($payload['industryInfo'] ?? null) ? $payload['industryInfo'] : [];
+            $sourceUrl = self::SOURCE_URL.'?symbol='.rawurlencode(strtoupper((string) $stock->symbol));
+        }
         $sector = $this->label($info['sector'] ?? null);
         $industry = $this->label($info['industry'] ?? null);
         $providerSector = $sector;
@@ -116,7 +118,7 @@ class StockClassificationService
                 'provider_industry' => $providerIndustry,
                 'sector' => $sector,
                 'industry' => $industry,
-                'source_url' => self::SOURCE_URL.'?symbol='.rawurlencode(strtoupper((string) $stock->symbol)),
+                'source_url' => $sourceUrl,
                 'raw_evidence_sha256' => $hash,
                 'raw_evidence' => $payload,
                 'first_observed_at' => $observedAt,
@@ -203,6 +205,28 @@ class StockClassificationService
             }
             return $this->classificationFor($stock);
         });
+    }
+
+    /** Classification policy remains here; the shared adapter owns only quote identity. */
+    private function currentIndustryInfo(Stock $stock, array $payload): array
+    {
+        if (strtoupper((string) $stock->exchange) !== 'NSE') {
+            throw new \RuntimeException('Free NSE classification source only supports NSE stocks.');
+        }
+        $source = app(NseEquityQuoteService::class)->inspect(
+            $payload, (string) $stock->symbol, $stock->series, $stock->isin,
+        );
+        $info = $source['security_info'];
+        if (! is_array($info)
+            || ! is_string($info['sector'] ?? null) || trim($info['sector']) === ''
+            || ! is_string($info['industryInfo'] ?? null) || trim($info['industryInfo']) === '') {
+            throw new \RuntimeException('NSE classification quote industry fields did not match.');
+        }
+
+        return [
+            ['sector' => $info['sector'], 'industry' => $info['industryInfo']],
+            $source['source_url'],
+        ];
     }
 
     private function label(mixed $value): ?string

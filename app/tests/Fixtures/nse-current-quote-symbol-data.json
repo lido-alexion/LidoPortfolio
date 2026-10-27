@@ -1,0 +1,18 @@
+{
+  "equityResponse": [
+    {
+      "metaData": {
+        "symbol": "INFY",
+        "isinCode": "INE009A01021",
+        "series": "EQ",
+        "marketType": "N"
+      },
+      "secInfo": {
+        "macro": "Information Technology",
+        "sector": "Information Technology",
+        "industryInfo": "IT - Software",
+        "basicIndustry": "Computers - Software & Consulting"
+      }
+    }
+  ]
+}

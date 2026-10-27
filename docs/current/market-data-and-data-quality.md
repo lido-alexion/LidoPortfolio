@@ -10,6 +10,8 @@ This document owns the security master, cached market prices, indices, trade-cal
 
 Admin manages global security-master state. Inactive/admin-deactivated securities are excluded from discovery, evaluation, screener, pattern, and recommendation contexts rather than silently treated as valid candidates.
 
+Forward sector/industry refresh uses the current official NSE metadata/quote protocol through the existing classification owner. Exact symbol/ISIN/series/market evidence, raw response provenance, explicit taxonomy mapping and bounded failure state are described in [Current NSE classification source](./nse-current-classification-source.md). Current observations and Admin overrides never backfill historical membership classifications.
+
 **Current implementation anchors:** `Stock`, `EquityUniverseService`, `StockMasterSyncService`, `AdminStockController`, and stock routes in `routes/api.php`.
 
 ## 3. OHLCV Data Model

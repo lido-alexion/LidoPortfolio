@@ -149,12 +149,12 @@ class ProviderResolverService
    */
   public function providerSymbolsForStock(Stock $stock): array
   {
-    $stock = $this->applyProviderSymbols($stock);
+    $stock = $this->applyProviderSymbols(clone $stock);
 
     return [
       'nse' => $this->nseTradeSymbol($stock),
       'bse_bhavcopy' => trim((string) ($stock->bse_scrip_code ?? '')),
-      'yahoo' => $stock->yahoo_symbol,
+      'yahoo' => $this->reviewedYahooSymbol($stock) ?? $stock->yahoo_symbol,
       'alpha_vantage' => $stock->alpha_vantage_symbol,
     ];
   }
@@ -166,7 +166,7 @@ class ProviderResolverService
    */
   public function yahooSymbolCandidates(Stock $stock): array
   {
-    $stock = $this->applyProviderSymbols($stock);
+    $stock = $this->applyProviderSymbols(clone $stock);
 
     if (app(IndexCatalogService::class)->isConfiguredIndex((string) $stock->symbol)) {
       $yahoo = $stock->yahoo_symbol ?: $this->yahooSymbol($stock->symbol, $stock->exchange);
@@ -178,13 +178,44 @@ class ProviderResolverService
     $ns = $base.'.NS';
     $bo = $base.'.BO';
     $exchange = strtoupper((string) $stock->exchange);
+    $primary = $this->reviewedYahooSymbol($stock) ?? $stock->yahoo_symbol;
 
     if ($exchange === 'BSE') {
-      $ordered = [$stock->yahoo_symbol ?: $bo, $bo];
+      $ordered = [$primary ?: $bo, $bo];
     } else {
-      $ordered = [$stock->yahoo_symbol ?: $ns, $ns, $bo];
+      $ordered = [$primary ?: $ns, $ns, $bo];
     }
 
     return array_values(array_unique(array_filter($ordered)));
+  }
+
+  /** Reviewed request aliases never rewrite the canonical stock or explicit custom symbols. */
+  private function reviewedYahooSymbol(Stock $stock): ?string
+  {
+    if ($stock->is_benchmark) {
+      return null;
+    }
+
+    $canonical = $this->yahooSymbol((string) $stock->symbol, (string) $stock->exchange);
+    if ($stock->yahoo_symbol && $stock->yahoo_symbol !== $canonical) {
+      return null;
+    }
+
+    foreach ((array) config('provider_symbol_aliases.yahoo', []) as $alias) {
+      if (strtoupper((string) $stock->exchange) !== $alias['exchange']
+        || strtoupper((string) $stock->symbol) !== $alias['symbol']
+        || trim((string) $stock->bse_scrip_code) !== $alias['bse_scrip_code']) {
+        continue;
+      }
+
+      $isin = strtoupper(trim((string) $stock->isin));
+      if ($isin !== '' && $isin !== $alias['isin']) {
+        return null;
+      }
+
+      return $alias['provider_symbol'];
+    }
+
+    return null;
   }
 }

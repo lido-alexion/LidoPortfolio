@@ -57,8 +57,9 @@ class StockValidationServiceTest extends TestCase
     public function test_provider_fallback_accepts_yahoo_when_nse_fails(): void
     {
         Http::fake([
-            'https://www.nseindia.com' => Http::response('<html></html>', 200),
-            'https://www.nseindia.com/api/quote-equity*' => Http::response([], 500),
+            'https://www.nseindia.com/' => Http::response('<html></html>', 200),
+            'https://www.nseindia.com/api/marketStatus' => Http::response([], 200),
+            'https://www.nseindia.com/api/NextApi/apiClient/GetQuoteApi*' => Http::response([], 500),
             'https://query1.finance.yahoo.com/v8/finance/chart/NEWCO.NS*' => Http::response([
                 'chart' => [
                     'result' => [[
@@ -76,6 +77,8 @@ class StockValidationServiceTest extends TestCase
 
         $this->assertTrue($result->valid);
         $this->assertSame('yahoo', $result->source);
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/GetQuoteApi?'));
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/api/quote-equity'));
         $this->assertDatabaseHas('portfolio_stocks', [
             'symbol' => 'NEWCO',
             'exchange' => 'NSE',
@@ -85,8 +88,9 @@ class StockValidationServiceTest extends TestCase
     public function test_all_providers_fail_returns_invalid(): void
     {
         Http::fake([
-            'https://www.nseindia.com' => Http::response('<html></html>', 200),
-            'https://www.nseindia.com/api/quote-equity*' => Http::response([], 500),
+            'https://www.nseindia.com/' => Http::response('<html></html>', 200),
+            'https://www.nseindia.com/api/marketStatus' => Http::response([], 200),
+            'https://www.nseindia.com/api/NextApi/apiClient/GetQuoteApi*' => Http::response([], 500),
             'https://query1.finance.yahoo.com/*' => Http::response([], 404),
             'https://www.alphavantage.co/query*' => Http::response(['Note' => 'rate limit'], 200),
         ]);
@@ -96,6 +100,7 @@ class StockValidationServiceTest extends TestCase
 
         $this->assertFalse($result->valid);
         $this->assertNotEmpty($result->errors);
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/GetQuoteApi?'));
     }
 
     protected function makeService(): StockValidationService

@@ -129,6 +129,33 @@ class ProviderFailureDiagnosticsTest extends TestCase
         (new CreateOrLinkGitHubIssueJob($rows[0]->id))->handle($github);
     }
 
+    public function test_current_nse_quote_protocol_has_one_fixed_safe_operation_without_selection_inputs(): void
+    {
+        Http::fake(fn () => Http::response('private provider response', 403));
+        foreach ([
+            ['functionName' => 'getMetaData', 'symbol' => 'INFY'],
+            ['functionName' => 'getSymbolData', 'marketType' => 'N', 'series' => 'EQ', 'symbol' => 'INFY'],
+            ['functionName' => 'getSymbolData', 'marketType' => 'N', 'series' => 'BE', 'symbol' => 'PRIVATE_SYMBOL'],
+        ] as $query) {
+            Http::get('https://www.nseindia.com/api/NextApi/apiClient/GetQuoteApi', $query);
+        }
+
+        $incident = ApiFailureIncident::query()->sole();
+        $this->assertSame('https://nseindia.com/api/nextapi/apiclient/getquoteapi', $incident->endpoint);
+        $this->assertSame(3, $incident->occurrence_count);
+        $this->assertSame('operation=nse.quote_api; provider_error=http_forbidden', $incident->safe_message);
+        $this->assertSame('NSE quote-api', ProviderFailureEvidence::labelForEndpoint($incident->endpoint));
+        foreach (['INFY', 'PRIVATE_SYMBOL', 'functionName', 'getMetaData', 'getSymbolData', 'marketType', 'series', 'private provider response'] as $private) {
+            $this->assertStringNotContainsString($private, $incident->toJson());
+        }
+        $github = Mockery::mock(GitHubIssueReporter::class);
+        $github->shouldReceive('report')->once()->withArgs(fn ($marker, $title, $body) =>
+            $title === '[Auto][API] NSE quote-api 403' && str_contains($body, 'nse.quote_api')
+            && ! str_contains($body, 'PRIVATE_SYMBOL') && ! str_contains($body, 'getSymbolData')
+        )->andReturn(['status' => 'linked', 'number' => 1002, 'url' => 'https://github.com/example/issues/1002']);
+        (new CreateOrLinkGitHubIssueJob($incident->id))->handle($github);
+    }
+
     public function test_unknown_nse_paths_do_not_gain_a_public_raw_route_or_response_excerpt(): void
     {
         Http::fake(fn () => Http::response(['message' => 'Bearer BODY_SECRET'], 403));

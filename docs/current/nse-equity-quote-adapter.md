@@ -1,0 +1,15 @@
+# Shared current NSE equity quote adapter
+
+Tracked under [#293](https://github.com/lido-alexion/LidoPortfolio/issues/293), the remaining active legacy quote caller found while resolving [#277](https://github.com/lido-alexion/LidoPortfolio/issues/277). Primary current-protocol acquisition and deployment-client evidence remain in [Current NSE classification source](./nse-current-classification-source.md).
+
+`NseEquityQuoteService` is the single current metadata/quote protocol and identity parser for classification and stock validation. It reuses the existing shared NSE HTTP client, returns the original decoded metadata/quote envelope and checks exact symbol, valid ISIN, offered/selected series and market selector agreement. Existing HTTP exception normalization and the fixed safe public operation remain unchanged.
+
+Classification still owns sector/industry requirements, explicit taxonomy mapping, observations, failure backoff and manual overrides. Its direct legacy `recordObservation` contract keeps the old source URL. Its current source constant, raw provenance, first-observed timestamps and historical-membership boundary are unchanged. Classification's source tests remain intact and exercise the extracted adapter through the same real owner.
+
+Stock validation now consumes the same verified current quote `metaData`, rather than obsolete top-level `info`. The provider company name must be a nonempty string when supplied. As in the previous validation contract, an absent/null company name falls back to the exact verified symbol; this does not claim missing-name rejection. Identity validation does not require sector coverage, so missing classification fields cannot incorrectly reject a valid company identity.
+
+For direct revalidation of an existing non-benchmark NSE row, its stored series and any nonempty ISIN are expectations: a conflicting provider identity cannot overwrite the row. New securities use the source's unambiguous offered selection. Only successful source/identity/name validation reaches the existing `upsertFromProvider` method. That method, local-master early return, local-only refusal, result envelope and ordinary NSE retry/Yahoo/Alpha Vantage fallback owners are unchanged.
+
+At the validator boundary, known HTTP failures retain the existing `NSE: HTTP nnn` error vocabulary so the existing 403/503 user-message summaries still apply. Only the shared adapter's fixed status message is translated; arbitrary source/body text is not parsed or exposed as a new status.
+
+No validation call was made against production because successful validation can upsert the master. Hosted isolated tests cover current source success, verified-symbol fallback, source identity without classification fields, stored BE selection, malformed/foreign/403 responses with no stock changes, and unchanged local-only/fallback behavior. No source-access workaround, production data/configuration mutation, history backfill or lifecycle policy change is part of this increment.

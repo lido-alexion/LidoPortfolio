@@ -10,6 +10,7 @@ class ProviderFailureEvidence
     private const NSE = [
         '/api/marketstatus' => ['nse.market_status', 'NSE market-status'],
         '/api/quote-equity' => ['nse.quote_equity', 'NSE quote-equity'],
+        '/api/nextapi/apiclient/getquoteapi' => ['nse.quote_api', 'NSE quote-api'],
         '/api/holiday-master' => ['nse.holiday_master', 'NSE holiday-master'],
         '/api/equity-stockindices' => ['nse.equity_stock_indices', 'NSE equity-stock-indices'],
         '/api/integrated-filing-results' => ['nse.integrated_filings', 'NSE integrated-filings'],
