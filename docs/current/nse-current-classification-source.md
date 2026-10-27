@@ -20,7 +20,7 @@ The metadata identifies INFY / INE009A01021, market N and offered EQ/T0 series. 
 
 ## Owner and safety contract
 
-The existing `StockClassificationService` and shared `NseHttpClient` remain owners. Refresh fetches metadata, resolves an offered series, then requests quote data. A stored series must be offered exactly; without one, EQ is the ordinary offered default, or a single alternative is unambiguous. Other ambiguous choices fail. The returned market selector is bounded and carried through without hardcoding a new market policy.
+The existing `StockClassificationService` remains the classification owner. Its wire/identity adapter is now shared with stock validation through [`NseEquityQuoteService`](./nse-equity-quote-adapter.md), retaining the existing shared `NseHttpClient`. Refresh fetches metadata, resolves an offered series, then requests quote data. A stored series must be offered exactly; without one, EQ is the ordinary offered default, or a single alternative is unambiguous. Other ambiguous choices fail. The returned market selector is bounded and carried through without hardcoding a new market policy.
 
 Metadata must match canonical NSE symbol and any nonempty current master ISIN. The one quote must agree with metadata on symbol, ISIN, selected series and market, and contain nonempty sector/industry strings. Missing, ambiguous, foreign, malformed or legacy-shaped current responses fail closed. These source fields never rewrite Stock identity, series, lifecycle, holdings, prices or historical membership.
 

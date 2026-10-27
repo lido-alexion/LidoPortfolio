@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Jobs\BackfillHistoricalDataJob;
 use App\Models\Stock;
-use App\Support\NseHttpClient;
 use App\Support\ExternalHttp;
 use App\Support\StockValidationResult;
 use Carbon\Carbon;
@@ -117,39 +116,36 @@ class StockValidationService
     }
 
     try {
-      $response = NseHttpClient::create()->get('https://www.nseindia.com/api/quote-equity', [
-        'symbol' => strtoupper($symbol),
-      ]);
-
-      if (! $response->successful()) {
-        $status = $response->status();
-        if ($status === 403) {
-          throw new \RuntimeException('HTTP 403 (NSE blocked automated access — session or anti-bot)');
-        }
-        throw new \RuntimeException('HTTP '.$status);
-      }
-
-      $info = $response->json('info') ?? [];
+      $existing = Stock::query()->where('symbol', strtoupper($symbol))
+        ->where('exchange', $exchange)->where('is_benchmark', false)->first();
+      $source = app(NseEquityQuoteService::class);
+      $payload = $source->fetch(strtoupper($symbol), $existing?->series, $existing?->isin);
+      $info = $source->inspect($payload, strtoupper($symbol), $existing?->series, $existing?->isin)['identity'];
       $companyName = $info['companyName'] ?? $info['symbol'] ?? null;
 
-      if (! $companyName) {
+      if (! is_string($companyName) || trim($companyName) === '') {
         return StockValidationResult::invalid(['NSE returned no company name.']);
       }
 
       return StockValidationResult::valid(
-        $this->upsertFromProvider($symbol, $exchange, (string) $companyName, $info['isin'] ?? null, null, 'nse'),
+        $this->upsertFromProvider($symbol, $exchange, $companyName, $info['isinCode'], null, 'nse'),
         'nse',
         ['company_name' => $companyName],
       );
     } catch (\Throwable $e) {
+      $failureReason = $e->getMessage();
+      // Preserve the validator's existing HTTP status vocabulary for user-facing summaries.
+      if (preg_match('/\ANSE equity quote request failed with HTTP ([1-5][0-9]{2})\z/', $failureReason, $match)) {
+        $failureReason = 'HTTP '.$match[1];
+      }
       $this->portfolioLogger->provider('warning', 'NSE stock validation failed', [
         'provider' => 'nse',
         'symbol' => $symbol,
         'exchange' => $exchange,
-        'failure_reason' => $e->getMessage(),
+        'failure_reason' => $failureReason,
       ]);
 
-      return StockValidationResult::invalid(['NSE: '.$e->getMessage()]);
+      return StockValidationResult::invalid(['NSE: '.$failureReason]);
     }
   }
 

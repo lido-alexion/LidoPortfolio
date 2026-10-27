@@ -7,7 +7,6 @@ use App\Models\StockClassificationObservation;
 use App\Models\StockClassificationOverride;
 use App\Models\StockClassificationOverrideRevision;
 use App\Models\StockClassificationRefreshState;
-use App\Support\NseHttpClient;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -17,7 +16,7 @@ class StockClassificationService
     public const PROVIDER = 'nse_quote_equity_free';
     public const TAXONOMY = 'nse-indices-4-tier-v1';
     public const SOURCE_URL = 'https://www.nseindia.com/api/quote-equity';
-    public const CURRENT_SOURCE_URL = 'https://www.nseindia.com/api/NextApi/apiClient/GetQuoteApi';
+    public const CURRENT_SOURCE_URL = NseEquityQuoteService::SOURCE_URL;
 
     /** @return array{sectors:list<string>,industries:array<string,list<string>>,taxonomy_version:string} */
     public function options(?string $sector = null): array
@@ -63,14 +62,9 @@ class StockClassificationService
         ]);
         $state->forceFill(['last_attempted_at' => now()])->save();
         try {
-            $client = NseHttpClient::create();
-            $metadata = $this->requestPayload($client, [
-                'functionName' => 'getMetaData', 'symbol' => strtoupper((string) $stock->symbol),
-            ]);
-            [$series, $marketType] = $this->validateMetadata($stock, $metadata);
-            $quote = $this->requestPayload($client, $this->quoteQuery($stock, $series, $marketType));
-            // Retain both original decoded responses, not a fabricated legacy payload.
-            $payload = ['quote_metadata' => $metadata, 'equity_quote' => $quote];
+            $payload = app(NseEquityQuoteService::class)->fetch(
+                (string) $stock->symbol, $stock->series, $stock->isin,
+            );
             $result = $this->recordObservation($stock, $payload, $observedAt);
         } catch (\Throwable $error) {
             $attempts = (int) $state->attempts + 1;
@@ -213,95 +207,25 @@ class StockClassificationService
         });
     }
 
-    private function requestPayload(\Illuminate\Http\Client\PendingRequest $client, array $query): array
-    {
-        try {
-            $response = $client->get(self::CURRENT_SOURCE_URL, $query);
-        } catch (\Illuminate\Http\Client\RequestException $error) {
-            throw new \RuntimeException('NSE classification request failed with HTTP '.$error->response->status(), 0, $error);
-        }
-        if (! $response->successful()) {
-            throw new \RuntimeException('NSE classification request failed with HTTP '.$response->status());
-        }
-        $payload = $response->json();
-        if (! is_array($payload) || array_is_list($payload)) {
-            throw new \RuntimeException('NSE classification response was not a JSON object.');
-        }
-
-        return $payload;
-    }
-
-    /** Metadata is source identity/selection evidence, not permission to change lifecycle. */
-    private function validateMetadata(Stock $stock, array $metadata): array
-    {
-        $symbol = strtoupper((string) $stock->symbol);
-        $series = strtoupper(trim((string) $stock->series));
-        $isin = $metadata['isin'] ?? null;
-        $marketType = $metadata['marketType'] ?? null;
-        $activeSeries = $metadata['activeSeries'] ?? null;
-        if (strtoupper((string) $stock->exchange) !== 'NSE'
-            || ($metadata['symbol'] ?? null) !== $symbol
-            || ! is_string($isin) || preg_match('/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/', $isin) !== 1
-            || (trim((string) $stock->isin) !== '' && strtoupper(trim((string) $stock->isin)) !== $isin)
-            || ! is_string($marketType) || preg_match('/^[A-Z0-9]{1,8}$/', $marketType) !== 1
-            || ! is_array($activeSeries) || ! array_is_list($activeSeries) || count($activeSeries) > 20
-            || $activeSeries === []) {
-            throw new \RuntimeException('NSE classification metadata identity or series did not match the requested stock.');
-        }
-        foreach ($activeSeries as $offered) {
-            if (! is_string($offered) || preg_match('/^[A-Z0-9]{1,4}$/', $offered) !== 1) {
-                throw new \RuntimeException('NSE classification offered series was malformed.');
-            }
-        }
-        if ($series === '') {
-            // EQ remains the ordinary default when offered. A single explicit
-            // alternative is unambiguous; never guess among other choices.
-            $choices = array_values(array_unique($activeSeries));
-            $series = in_array('EQ', $choices, true) ? 'EQ' : (count($choices) === 1 ? $choices[0] : '');
-        }
-        if (preg_match('/^[A-Z0-9]{1,4}$/', $series) !== 1 || ! in_array($series, $activeSeries, true)) {
-            throw new \RuntimeException('NSE classification metadata did not offer the requested stock series.');
-        }
-
-        return [$series, $marketType];
-    }
-
-    private function quoteQuery(Stock $stock, string $series, string $marketType): array
-    {
-        return [
-            'functionName' => 'getSymbolData', 'marketType' => $marketType,
-            'series' => $series, 'symbol' => strtoupper((string) $stock->symbol),
-        ];
-    }
-
-    /** Accept one exact current quote; unknown wrappers and partial 200 responses fail closed. */
+    /** Classification policy remains here; the shared adapter owns only quote identity. */
     private function currentIndustryInfo(Stock $stock, array $payload): array
     {
-        $metadata = $payload['quote_metadata'] ?? null;
-        $quote = $payload['equity_quote'] ?? null;
-        if (! is_array($metadata) || ! is_array($quote)) {
-            throw new \RuntimeException('NSE classification evidence envelope was incomplete.');
+        if (strtoupper((string) $stock->exchange) !== 'NSE') {
+            throw new \RuntimeException('Free NSE classification source only supports NSE stocks.');
         }
-        [$series, $marketType] = $this->validateMetadata($stock, $metadata);
-        $responses = $quote['equityResponse'] ?? null;
-        if (! is_array($responses) || ! array_is_list($responses) || count($responses) !== 1
-            || ! is_array($responses[0]['metaData'] ?? null) || ! is_array($responses[0]['secInfo'] ?? null)) {
-            throw new \RuntimeException('NSE classification quote response shape was invalid or ambiguous.');
-        }
-        $identity = $responses[0]['metaData'];
-        $info = $responses[0]['secInfo'];
-        if (($identity['symbol'] ?? null) !== $metadata['symbol']
-            || ($identity['isinCode'] ?? null) !== $metadata['isin']
-            || ($identity['series'] ?? null) !== $series
-            || ($identity['marketType'] ?? null) !== $marketType
+        $source = app(NseEquityQuoteService::class)->inspect(
+            $payload, (string) $stock->symbol, $stock->series, $stock->isin,
+        );
+        $info = $source['security_info'];
+        if (! is_array($info)
             || ! is_string($info['sector'] ?? null) || trim($info['sector']) === ''
             || ! is_string($info['industryInfo'] ?? null) || trim($info['industryInfo']) === '') {
-            throw new \RuntimeException('NSE classification quote identity or industry fields did not match.');
+            throw new \RuntimeException('NSE classification quote industry fields did not match.');
         }
 
         return [
             ['sector' => $info['sector'], 'industry' => $info['industryInfo']],
-            self::CURRENT_SOURCE_URL.'?'.http_build_query($this->quoteQuery($stock, $series, $marketType), '', '&', PHP_QUERY_RFC3986),
+            $source['source_url'],
         ];
     }
 
