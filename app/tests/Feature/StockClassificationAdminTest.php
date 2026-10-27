@@ -111,7 +111,7 @@ class StockClassificationAdminTest extends TestCase
     public function test_provider_403_is_a_bounded_retry_and_does_not_create_an_observation(): void
     {
         $stock = $this->stock('TCS');
-        Http::fake(fn ($request) => str_contains($request->url(), 'quote-equity')
+        Http::fake(fn ($request) => str_contains($request->url(), 'GetQuoteApi')
             ? Http::response('<html>Access Denied</html>', 403)
             : Http::response([], 200));
 
@@ -132,9 +132,22 @@ class StockClassificationAdminTest extends TestCase
         $ipo = $this->stock('IPOONE', ['created_at' => Carbon::parse('2026-10-02 09:00:00')]);
         $old = $this->stock('OLDONE', ['created_at' => Carbon::parse('2026-09-01 09:00:00')]);
         app(StockClassificationService::class)->recordObservation($old, $this->payload('Technology', 'Software'), Carbon::parse('2026-09-01'));
-        Http::fake(fn ($request) => str_contains($request->url(), 'quote-equity')
-            ? Http::response(['industryInfo' => $this->payload('Technology', 'Software')['industryInfo']], 200)
-            : Http::response([], 200));
+        Http::fake(function ($request) {
+            if (! str_contains($request->url(), 'GetQuoteApi')) {
+                return Http::response([], 200);
+            }
+            if ($request['functionName'] === 'getMetaData') {
+                return Http::response([
+                    'symbol' => $request['symbol'], 'isin' => 'INE009A01021',
+                    'activeSeries' => ['EQ'], 'marketType' => 'N',
+                ], 200);
+            }
+
+            return Http::response(['equityResponse' => [[
+                'metaData' => ['symbol' => $request['symbol'], 'isinCode' => 'INE009A01021', 'series' => 'EQ', 'marketType' => 'N'],
+                'secInfo' => ['sector' => 'Information Technology', 'industryInfo' => 'IT - Software'],
+            ]]], 200);
+        });
 
         $this->artisan('stox:refresh-stock-classifications', ['--batch' => 2])->assertExitCode(0);
         $this->assertDatabaseHas('stox_stock_classification_observations', ['stock_id' => $ipo->id, 'provider' => StockClassificationService::PROVIDER]);

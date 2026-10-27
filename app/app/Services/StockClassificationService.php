@@ -17,6 +17,7 @@ class StockClassificationService
     public const PROVIDER = 'nse_quote_equity_free';
     public const TAXONOMY = 'nse-indices-4-tier-v1';
     public const SOURCE_URL = 'https://www.nseindia.com/api/quote-equity';
+    public const CURRENT_SOURCE_URL = 'https://www.nseindia.com/api/NextApi/apiClient/GetQuoteApi';
 
     /** @return array{sectors:list<string>,industries:array<string,list<string>>,taxonomy_version:string} */
     public function options(?string $sector = null): array
@@ -62,14 +63,15 @@ class StockClassificationService
         ]);
         $state->forceFill(['last_attempted_at' => now()])->save();
         try {
-            $response = NseHttpClient::create()->get(self::SOURCE_URL, ['symbol' => strtoupper($stock->symbol)]);
-            if (! $response->successful()) {
-                throw new \RuntimeException('NSE classification request failed with HTTP '.$response->status());
-            }
-            $payload = $response->json();
-            if (! is_array($payload)) {
-                throw new \RuntimeException('NSE classification response was not JSON.');
-            }
+            $client = NseHttpClient::create();
+            $metadata = $this->requestPayload($client, [
+                'functionName' => 'getMetaData', 'symbol' => strtoupper((string) $stock->symbol),
+            ]);
+            [$series, $marketType] = $this->validateMetadata($stock, $metadata);
+            $quote = $this->requestPayload($client, $this->quoteQuery($stock, $series, $marketType));
+            // Retain both original decoded responses, not a fabricated legacy payload.
+            $payload = ['quote_metadata' => $metadata, 'equity_quote' => $quote];
+            $result = $this->recordObservation($stock, $payload, $observedAt);
         } catch (\Throwable $error) {
             $attempts = (int) $state->attempts + 1;
             $state->forceFill([
@@ -80,7 +82,6 @@ class StockClassificationService
             throw $error;
         }
 
-        $result = $this->recordObservation($stock, $payload, $observedAt);
         $state->forceFill([
             'attempts' => 0, 'next_attempt_at' => now()->addDays(7),
             'last_successful_at' => now(), 'last_error' => null,
@@ -91,7 +92,14 @@ class StockClassificationService
     /** @param array<string,mixed> $payload */
     public function recordObservation(Stock $stock, array $payload, ?Carbon $observedAt = null): array
     {
-        $info = is_array($payload['industryInfo'] ?? null) ? $payload['industryInfo'] : [];
+        $current = array_key_exists('quote_metadata', $payload) || array_key_exists('equity_quote', $payload);
+        if ($current) {
+            [$info, $sourceUrl] = $this->currentIndustryInfo($stock, $payload);
+        } else {
+            // Preserve the established import/recording contract and its actual source identity.
+            $info = is_array($payload['industryInfo'] ?? null) ? $payload['industryInfo'] : [];
+            $sourceUrl = self::SOURCE_URL.'?symbol='.rawurlencode(strtoupper((string) $stock->symbol));
+        }
         $sector = $this->label($info['sector'] ?? null);
         $industry = $this->label($info['industry'] ?? null);
         $providerSector = $sector;
@@ -116,7 +124,7 @@ class StockClassificationService
                 'provider_industry' => $providerIndustry,
                 'sector' => $sector,
                 'industry' => $industry,
-                'source_url' => self::SOURCE_URL.'?symbol='.rawurlencode(strtoupper((string) $stock->symbol)),
+                'source_url' => $sourceUrl,
                 'raw_evidence_sha256' => $hash,
                 'raw_evidence' => $payload,
                 'first_observed_at' => $observedAt,
@@ -203,6 +211,98 @@ class StockClassificationService
             }
             return $this->classificationFor($stock);
         });
+    }
+
+    private function requestPayload(\Illuminate\Http\Client\PendingRequest $client, array $query): array
+    {
+        try {
+            $response = $client->get(self::CURRENT_SOURCE_URL, $query);
+        } catch (\Illuminate\Http\Client\RequestException $error) {
+            throw new \RuntimeException('NSE classification request failed with HTTP '.$error->response->status(), 0, $error);
+        }
+        if (! $response->successful()) {
+            throw new \RuntimeException('NSE classification request failed with HTTP '.$response->status());
+        }
+        $payload = $response->json();
+        if (! is_array($payload) || array_is_list($payload)) {
+            throw new \RuntimeException('NSE classification response was not a JSON object.');
+        }
+
+        return $payload;
+    }
+
+    /** Metadata is source identity/selection evidence, not permission to change lifecycle. */
+    private function validateMetadata(Stock $stock, array $metadata): array
+    {
+        $symbol = strtoupper((string) $stock->symbol);
+        $series = strtoupper(trim((string) $stock->series));
+        $isin = $metadata['isin'] ?? null;
+        $marketType = $metadata['marketType'] ?? null;
+        $activeSeries = $metadata['activeSeries'] ?? null;
+        if (strtoupper((string) $stock->exchange) !== 'NSE'
+            || ($metadata['symbol'] ?? null) !== $symbol
+            || ! is_string($isin) || preg_match('/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/', $isin) !== 1
+            || (trim((string) $stock->isin) !== '' && strtoupper(trim((string) $stock->isin)) !== $isin)
+            || ! is_string($marketType) || preg_match('/^[A-Z0-9]{1,8}$/', $marketType) !== 1
+            || ! is_array($activeSeries) || ! array_is_list($activeSeries) || count($activeSeries) > 20
+            || $activeSeries === []) {
+            throw new \RuntimeException('NSE classification metadata identity or series did not match the requested stock.');
+        }
+        foreach ($activeSeries as $offered) {
+            if (! is_string($offered) || preg_match('/^[A-Z0-9]{1,4}$/', $offered) !== 1) {
+                throw new \RuntimeException('NSE classification offered series was malformed.');
+            }
+        }
+        if ($series === '') {
+            // EQ remains the ordinary default when offered. A single explicit
+            // alternative is unambiguous; never guess among other choices.
+            $choices = array_values(array_unique($activeSeries));
+            $series = in_array('EQ', $choices, true) ? 'EQ' : (count($choices) === 1 ? $choices[0] : '');
+        }
+        if (preg_match('/^[A-Z0-9]{1,4}$/', $series) !== 1 || ! in_array($series, $activeSeries, true)) {
+            throw new \RuntimeException('NSE classification metadata did not offer the requested stock series.');
+        }
+
+        return [$series, $marketType];
+    }
+
+    private function quoteQuery(Stock $stock, string $series, string $marketType): array
+    {
+        return [
+            'functionName' => 'getSymbolData', 'marketType' => $marketType,
+            'series' => $series, 'symbol' => strtoupper((string) $stock->symbol),
+        ];
+    }
+
+    /** Accept one exact current quote; unknown wrappers and partial 200 responses fail closed. */
+    private function currentIndustryInfo(Stock $stock, array $payload): array
+    {
+        $metadata = $payload['quote_metadata'] ?? null;
+        $quote = $payload['equity_quote'] ?? null;
+        if (! is_array($metadata) || ! is_array($quote)) {
+            throw new \RuntimeException('NSE classification evidence envelope was incomplete.');
+        }
+        [$series, $marketType] = $this->validateMetadata($stock, $metadata);
+        $responses = $quote['equityResponse'] ?? null;
+        if (! is_array($responses) || ! array_is_list($responses) || count($responses) !== 1
+            || ! is_array($responses[0]['metaData'] ?? null) || ! is_array($responses[0]['secInfo'] ?? null)) {
+            throw new \RuntimeException('NSE classification quote response shape was invalid or ambiguous.');
+        }
+        $identity = $responses[0]['metaData'];
+        $info = $responses[0]['secInfo'];
+        if (($identity['symbol'] ?? null) !== $metadata['symbol']
+            || ($identity['isinCode'] ?? null) !== $metadata['isin']
+            || ($identity['series'] ?? null) !== $series
+            || ($identity['marketType'] ?? null) !== $marketType
+            || ! is_string($info['sector'] ?? null) || trim($info['sector']) === ''
+            || ! is_string($info['industryInfo'] ?? null) || trim($info['industryInfo']) === '') {
+            throw new \RuntimeException('NSE classification quote identity or industry fields did not match.');
+        }
+
+        return [
+            ['sector' => $info['sector'], 'industry' => $info['industryInfo']],
+            self::CURRENT_SOURCE_URL.'?'.http_build_query($this->quoteQuery($stock, $series, $marketType), '', '&', PHP_QUERY_RFC3986),
+        ];
     }
 
     private function label(mixed $value): ?string
