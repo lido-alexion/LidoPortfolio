@@ -170,22 +170,22 @@ class NseXbrlFactsParser
     private function contexts(DOMXPath $xpath): array
     {
         $result = [];
-        foreach ($xpath->query('//*[translate(substring-after(concat(":", local-name()), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="context"]') ?: [] as $context) {
+        foreach ($xpath->query('//*['.$this->localNamePredicate('context').']') ?: [] as $context) {
             if (! $context instanceof DOMElement) {
                 continue;
             }
-            $period = $xpath->query('./*[translate(substring-after(concat(":", local-name()), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="period"]', $context)?->item(0);
+            $period = $xpath->query('./*['.$this->localNamePredicate('period').']', $context)?->item(0);
             if (! $period instanceof DOMElement) {
                 continue;
             }
-            $start = $xpath->query('./*[translate(substring-after(concat(":", local-name()), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="startdate"]', $period)?->item(0)?->textContent;
-            $end = $xpath->query('./*[translate(substring-after(concat(":", local-name()), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="enddate"]', $period)?->item(0)?->textContent;
-            $instant = $xpath->query('./*[translate(substring-after(concat(":", local-name()), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="instant"]', $period)?->item(0)?->textContent;
+            $start = $xpath->query('./*['.$this->localNamePredicate('startdate').']', $period)?->item(0)?->textContent;
+            $end = $xpath->query('./*['.$this->localNamePredicate('enddate').']', $period)?->item(0)?->textContent;
+            $instant = $xpath->query('./*['.$this->localNamePredicate('instant').']', $period)?->item(0)?->textContent;
             $dateEnd = $instant ?: $end;
             if (! is_string($dateEnd) || ! $this->validDate($dateEnd)) {
                 continue;
             }
-            $hasDimensions = $xpath->query('.//*[translate(substring-after(concat(":", local-name()), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="explicitmember" or translate(substring-after(concat(":", local-name()), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="typedmember"]', $context)->length > 0;
+            $hasDimensions = $xpath->query('.//*['.$this->localNamePredicate('explicitmember').' or '.$this->localNamePredicate('typedmember').']', $context)->length > 0;
             $result[$context->getAttribute('id')] = [
                 'start' => is_string($start) && $this->validDate($start) ? $start : null,
                 'end' => $dateEnd,
@@ -201,11 +201,11 @@ class NseXbrlFactsParser
     private function units(DOMXPath $xpath): array
     {
         $result = [];
-        foreach ($xpath->query('//*[translate(substring-after(concat(":", local-name()), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="unit"]') ?: [] as $unit) {
+        foreach ($xpath->query('//*['.$this->localNamePredicate('unit').']') ?: [] as $unit) {
             if (! $unit instanceof DOMElement) {
                 continue;
             }
-            $measure = $xpath->query('.//*[translate(substring-after(concat(":", local-name()), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="measure"]', $unit)?->item(0)?->textContent;
+            $measure = $xpath->query('.//*['.$this->localNamePredicate('measure').']', $unit)?->item(0)?->textContent;
             if (! is_string($measure)) {
                 continue;
             }
@@ -214,6 +214,16 @@ class NseXbrlFactsParser
         }
 
         return $result;
+    }
+
+    private function localNamePredicate(string $name): string
+    {
+        $lowerName = 'translate(local-name(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")';
+        $prefixedName = 'translate(substring-after(local-name(), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")';
+
+        // HTML parsing may preserve a qualified tag name (for example
+        // "xbrli:context") as local-name(). XML parsing returns just "context".
+        return '('.$lowerName.'="'.$name.'" or '.$prefixedName.'="'.$name.'")';
     }
 
     private function attribute(DOMElement $element, string $name): string
