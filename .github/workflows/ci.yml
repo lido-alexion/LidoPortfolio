@@ -99,6 +99,9 @@ jobs:
           DB_USERNAME: root
           DB_PASSWORD: root
         run: ../scripts/verify-ci.sh --backend
+      - name: Diagnose synthetic inline XBRL DOM behavior after backend failure
+        if: failure()
+        run: php ../scripts/diagnose-nse-inline-dom.php
 
   frontend:
     name: Frontend tests and production build (Node 22)
