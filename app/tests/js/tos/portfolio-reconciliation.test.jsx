@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import PortfolioReconciliationCard from '../../../resources/js/src/components/PortfolioReconciliationCard.jsx';
 import { apiMock } from './helpers/mockApi.js';
@@ -65,14 +65,61 @@ describe('Portfolio reconciliation card', () => {
         expect(screen.getByText(/GOLD/)).toBeInTheDocument();
     });
 
-    it('runs a manual reconciliation and refreshes status', async () => {
+    it('runs the main action excluding today and refreshes status', async () => {
         apiMock.post.mockResolvedValue({ data: { data: {} } });
         render(<PortfolioReconciliationCard executionMode="semi_automatic" />);
         await screen.findAllByText('Attention required');
+        expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+        expect(screen.getByText(/Holdings can use transactions through the previous day/)).toBeInTheDocument();
+        const mainButton = screen.getByRole('button', { name: 'Reconcile excluding today' });
+        expect(mainButton).toBeEnabled();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Run now' }));
+        fireEvent.click(mainButton);
 
-        await waitFor(() => expect(apiMock.post).toHaveBeenCalledWith('/reconciliation', {}, { skipErrorToast: true }));
+        await waitFor(() => expect(apiMock.post).toHaveBeenCalledWith('/reconciliation', { ignore_today_transactions: true }, { skipErrorToast: true }));
         expect(apiMock.get).toHaveBeenCalledTimes(2);
+    });
+
+    it('exposes an accessible dropdown action to include today', async () => {
+        apiMock.post.mockResolvedValue({ data: { data: {} } });
+        render(<PortfolioReconciliationCard executionMode="automatic" />);
+        await screen.findAllByText('Attention required');
+        const trigger = screen.getByRole('button', { name: 'Open menu' });
+        expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
+        expect(trigger).toHaveAttribute('aria-expanded', 'false');
+        fireEvent.click(trigger);
+        expect(trigger).toHaveAttribute('aria-expanded', 'true');
+        const menu = screen.getByRole('menu');
+        const includeToday = screen.getByRole('menuitem', { name: 'Reconcile including today' });
+        expect(menu).toContainElement(includeToday);
+        fireEvent.click(includeToday);
+        await waitFor(() => expect(apiMock.post).toHaveBeenCalledWith('/reconciliation', { ignore_today_transactions: false }, { skipErrorToast: true }));
+        expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    });
+
+    it('closes the menu on Escape and outside click', async () => {
+        render(<PortfolioReconciliationCard executionMode="automatic" />);
+        await screen.findAllByText('Attention required');
+        const trigger = screen.getByRole('button', { name: 'Open menu' });
+        fireEvent.click(trigger);
+        expect(screen.getByRole('menu')).toBeInTheDocument();
+        fireEvent.keyDown(document, { key: 'Escape' });
+        expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+        fireEvent.click(trigger);
+        expect(screen.getByRole('menu')).toBeInTheDocument();
+        fireEvent.click(screen.getByText('Broker portfolio reconciliation'));
+        expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    });
+
+    it('disables both actions while reconciliation is busy', async () => {
+        let resolvePost;
+        apiMock.post.mockReturnValue(new Promise((resolve) => { resolvePost = resolve; }));
+        render(<PortfolioReconciliationCard executionMode="automatic" />);
+        await screen.findAllByText('Attention required');
+        fireEvent.click(screen.getByRole('button', { name: 'Reconcile excluding today' }));
+        expect(screen.getByRole('button', { name: 'Reconciling…' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Open menu' })).toBeDisabled();
+        await act(async () => resolvePost({ data: { data: {} } }));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Reconcile excluding today' })).toBeEnabled());
     });
 });
