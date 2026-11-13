@@ -7,11 +7,22 @@ use App\Services\StrategyConfigurationService;
 use App\Models\TradingStrategyVersion;
 use App\Services\StrategyEligibilityService;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\Http;
 use Tests\Concerns\CreatesPortfolioProfiles;
 
 abstract class TestCase extends BaseTestCase
 {
     use CreatesPortfolioProfiles;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Mandatory suites must exercise provider behavior with fixtures and
+        // mocks. A missing Http::fake() must fail locally instead of reaching
+        // NSE, Yahoo, Kite, or another live service from CI.
+        Http::preventStrayRequests();
+    }
 
     /** Return the frozen executable Strategy contract for activation fixtures. */
     protected function executableStrategyConfig(PortfolioProfile $profile): array
