@@ -216,7 +216,7 @@ class V4Spec004CashLedgerSpecialMovementsTest extends TestCase
         app(RecallImmediateSettlementService::class)->apply($profile, $recall, 0, 0, null);
         $this->seedHolding($profile, $borrower, 'PRC', 200, 100.0);
 
-        $soldAt = Carbon::parse('2026-08-01 10:00:00');
+        $soldAt = now()->copy()->startOfDay()->setTime(10, 0);
         $liq = app(RecallLiquidationService::class)->liquidateForObligation(
             $profile,
             $borrower,
@@ -279,7 +279,7 @@ class V4Spec004CashLedgerSpecialMovementsTest extends TestCase
             'lender_available_override' => 100_000.0,
         ]);
 
-        $soldAt = Carbon::parse('2026-08-02 10:00:00');
+        $soldAt = now()->copy()->startOfDay()->setTime(10, 0);
         $liq = app(RecallLiquidationService::class)->liquidateForObligation(
             $profile,
             $borrower,
