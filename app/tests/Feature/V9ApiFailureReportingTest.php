@@ -188,6 +188,62 @@ class V9ApiFailureReportingTest extends TestCase
         $this->assertSame(30, ApiFailureIncident::query()->sole()->occurrence_count);
     }
 
+    public function test_manual_api_incident_reconciliation_is_dry_run_bounded_and_excludes_linked_or_ambiguous_rows(): void
+    {
+        Bus::fake();
+        config([
+            'api_failure_reporting.enabled' => true,
+            'api_failure_reporting.environments' => ['testing'],
+            'api_failure_reporting.queue_connection' => 'database',
+            'api_failure_reporting.queue' => 'log-triage',
+        ]);
+        $reporter = app(ApiFailureReporter::class);
+        $make = function (string $endpoint) use ($reporter): ApiFailureIncident {
+            $incident = $reporter->observe([
+                'direction' => 'frontend_internal',
+                'component' => 'laravel-api',
+                'method' => 'GET',
+                'endpoint' => $endpoint,
+                'http_status' => 502,
+                'safe_message' => 'safe failure',
+            ]);
+            $incident->update(['last_seen_at' => now()->subDays(14), 'updated_at' => now()->subDays(14)]);
+            return $incident->fresh();
+        };
+
+        $eligible = $make('/api/reconcile/eligible');
+        $alsoEligible = $make('/api/reconcile/also-eligible');
+        $linked = $make('/api/reconcile/linked');
+        $linked->update(['sync_status' => 'linked', 'github_issue_number' => 39, 'github_issue_state' => 'open']);
+        $closed = $make('/api/reconcile/closed');
+        $closed->update(['sync_status' => 'cooldown']);
+        DB::table('stox_github_issue_bindings')->insert([
+            'marker' => '<!-- stox-api-failure:'.$closed->fingerprint.' -->', 'state' => 'closed', 'generation' => 1,
+        ]);
+        $ambiguous = $make('/api/reconcile/ambiguous');
+        DB::table('stox_github_issue_bindings')->insert([
+            'marker' => '<!-- stox-api-failure:'.$ambiguous->fingerprint.' -->', 'state' => 'creation_unknown', 'generation' => 1,
+        ]);
+        $recent = $reporter->observe([
+            'direction' => 'frontend_internal',
+            'component' => 'laravel-api',
+            'method' => 'GET',
+            'endpoint' => '/api/reconcile/recent',
+            'http_status' => 502,
+            'safe_message' => 'safe failure',
+        ]);
+
+        Bus::fake();
+        $this->artisan('ops:reconcile-api-failure-incidents', ['--limit' => 1])->assertSuccessful();
+        Bus::assertNotDispatched(CreateOrLinkGitHubIssueJob::class);
+
+        Bus::fake();
+        $this->artisan('ops:reconcile-api-failure-incidents', ['--execute' => true, '--limit' => 1])->assertSuccessful();
+        Bus::assertDispatchedTimes(CreateOrLinkGitHubIssueJob::class, 1);
+        Bus::assertDispatched(CreateOrLinkGitHubIssueJob::class, fn ($job) => $job->incidentId === $eligible->id);
+        Bus::assertNotDispatched(CreateOrLinkGitHubIssueJob::class, fn ($job) => in_array($job->incidentId, [$alsoEligible->id, $linked->id, $closed->id, $ambiguous->id, $recent->id], true));
+    }
+
     public function test_each_supported_browser_fault_type_remains_an_untrusted_observation(): void
     {
         $this->actingAs(User::factory()->create());
