@@ -52,7 +52,10 @@ class Holding extends Model
             if ($holding->owner_key === null || $holding->owner_key === '') {
                 $holding->owner_key = self::ownerKeyFor($holding->strategy_id);
             } elseif ($holding->isDirty('strategy_id') && ! $holding->isDirty('owner_key')) {
-                $holding->owner_key = self::ownerKeyFor($holding->strategy_id);
+                // The owner key is the unique identity. Keep the denormalized
+                // strategy_id aligned to it instead of moving the row to a
+                // different owner during an update/upsert.
+                $holding->strategy_id = self::strategyIdFromOwnerKey($holding->owner_key);
             }
         });
     }
