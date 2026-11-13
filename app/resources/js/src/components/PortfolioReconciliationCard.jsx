@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import api, { getApiErrorMessage } from '../api';
 import { showToast } from '../toast';
+import ComboButton from './ComboButton';
 
 const label = (value) => {
     if (!value) return 'Not yet checked';
@@ -24,7 +25,6 @@ export default function PortfolioReconciliationCard({ executionMode }) {
     const [snapshot, setSnapshot] = useState(null);
     const [selected, setSelected] = useState(null);
     const [busy, setBusy] = useState(false);
-    const [ignoreTodayTransactions, setIgnoreTodayTransactions] = useState(true);
 
     const load = useCallback(async () => {
         if (!eligible) return;
@@ -39,7 +39,7 @@ export default function PortfolioReconciliationCard({ executionMode }) {
 
     if (!eligible) return null;
 
-    const reconcile = async () => {
+    const reconcile = async (ignoreTodayTransactions) => {
         setBusy(true);
         try {
             await api.post('/reconciliation', { ignore_today_transactions: ignoreTodayTransactions }, { skipErrorToast: true });
@@ -68,19 +68,18 @@ export default function PortfolioReconciliationCard({ executionMode }) {
         <div className="card h-100">
             <div className="card-header d-flex justify-content-between align-items-center gap-2">
                 <span>Broker portfolio reconciliation</span>
-                <button type="button" className="btn btn-outline-primary btn-sm" disabled={busy} onClick={reconcile}>
-                    {busy ? 'Reconciling…' : 'Run now'}
-                </button>
+                <ComboButton
+                    label={busy ? 'Reconciling…' : 'Reconcile excluding today'}
+                    onPrimaryClick={() => reconcile(true)}
+                    menuItems={[{ key: 'including-today', label: 'Reconcile including today', onClick: () => reconcile(false) }]}
+                    variant="outline-primary"
+                    disabled={busy}
+                    title="Choose which transactions to include in reconciliation"
+                />
             </div>
             <div className="card-body">
                 {!snapshot ? <p className="small text-muted mb-0">Reconciliation status is unavailable.</p> : <>
-                    <div className="form-check mb-2">
-                        <input className="form-check-input" type="checkbox" id="reconciliation-ignore-today"
-                            checked={ignoreTodayTransactions} disabled={busy}
-                            onChange={(event) => setIgnoreTodayTransactions(event.target.checked)} />
-                        <label className="form-check-label small" htmlFor="reconciliation-ignore-today">Ignore today's transactions</label>
-                        <div className="form-text">When checked, StoX holdings are reconstructed through the previous calendar day in Asia/Kolkata, including sells and open cost basis. Funds still compare current balances because Kite does not provide historical cash snapshots.</div>
-                    </div>
+                    <p className="small text-muted mb-2">Holdings can use transactions through the previous day; cash and overall attention may still reflect today’s activity.</p>
                     <div className="d-flex flex-wrap gap-4 mb-2 small">
                         <span>Overall: <strong className={tone(status.overall)}>{label(status.overall)}</strong></span>
                         <span>Holdings: <strong className={tone(status.holdings)}>{label(status.holdings)}</strong></span>
