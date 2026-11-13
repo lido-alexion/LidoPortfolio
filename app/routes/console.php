@@ -29,6 +29,16 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Schema;
 
+$captureFailedScheduledOutput = static function (string $task): \Closure {
+    return static function (\Illuminate\Support\Stringable $output) use ($task): void {
+        $safeOutput = app(\App\Services\Operations\ApiFailureRedactor::class)->message((string) $output, 1000);
+        app(PortfolioLoggerService::class)->scheduler('error', 'Scheduled command failed.', [
+            'task' => $task,
+            'output' => $safeOutput,
+        ]);
+    };
+};
+
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
@@ -528,12 +538,14 @@ Schedule::command('stox:refresh-stock-classifications --batch=50')
     ->dailyAt('08:45')
     ->withoutOverlapping(30)
     ->onOneServer()
+    ->onFailure($captureFailedScheduledOutput('stox:refresh-stock-classifications'))
     ->name('stox-stock-classifications-refresh');
 
 Schedule::command('stox:check-data-completeness')
     ->hourly()
     ->timezone($timezone)
     ->withoutOverlapping(10)
+    ->onFailure($captureFailedScheduledOutput('stox:check-data-completeness'))
     ->name('stox-data-completeness');
 
 // Independent of campaigns: the planner persists every completed-session
@@ -584,6 +596,7 @@ Schedule::command('portfolio:sync-kite-instruments')
     ->dailyAt('08:00')
     ->timezone('Asia/Kolkata')
     ->withoutOverlapping(10)
+    ->onFailure($captureFailedScheduledOutput('portfolio:sync-kite-instruments'))
     ->name('kite-instrument-registry-refresh');
 
 Schedule::command('portfolio:queue-notification-reminders')
@@ -654,6 +667,7 @@ Schedule::command('portfolio:reconcile')
     ->everyFiveMinutes()
     ->timezone($timezone)
     ->withoutOverlapping(10)
+    ->onFailure($captureFailedScheduledOutput('portfolio:reconcile'))
     ->name('portfolio-reconciliation');
 
 // FEAT-020 Paper work is scheduled before analytical simulation capacity and
