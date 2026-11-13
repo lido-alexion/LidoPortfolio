@@ -31,3 +31,13 @@ test('cash edit preview reverses the original signed amount and locks the operat
     assert.match(source, /const clearMovementForm = \(\) => \{/);
     assert.match(source, /onClick=\{clearMovementForm\}>Cancel edit/);
 });
+
+test('withdrawal editor uses investable capacity and restores only the edited withdrawal', () => {
+    assert.match(source, /const withdrawalCapacity = Math\.max\(0, availableCash\s*\+\s*\(editing && Number\.isFinite\(oldSignedAmount\) && oldSignedAmount < 0 \? -oldSignedAmount : 0\)\)/);
+    assert.match(source, /max=\{op === 'withdraw' \? String\(withdrawalCapacity\) : undefined\}/);
+    assert.match(source, /const availableCash = Number\(summary\?\.available_investable_cash \?\? summary\?\.available_physical_cash \?\? 0\)/);
+    assert.match(source, /const available = withdrawalCapacity/);
+    assert.match(source, /role="status" aria-live="polite"/);
+    assert.match(source, /const entered = amount\.trim\(\) === '' \|\| !\/\^\[-\+\]\?\\d\+\(\\\.\\d\{0,4\}\)\?\$\//);
+    assert.match(source, /step="0\.0001"/);
+});

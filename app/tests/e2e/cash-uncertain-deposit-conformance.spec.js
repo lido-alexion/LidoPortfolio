@@ -37,6 +37,7 @@ const DEPOSIT = {
     remarks: 'E2E22 uncertain deposit evidence',
     transaction_date: '2026-10-10',
 };
+const DEPOSIT_PAYLOAD = { ...DEPOSIT, amount: String(DEPOSIT.amount) };
 const FAILURE_MESSAGE = 'Synthetic deposit response unavailable.';
 const NOTIFICATION_EMPTY_RESPONSE = {
     data: [],
@@ -205,7 +206,7 @@ async function prepare(page, viewport, mode) {
         expect(url.pathname).toBe('/api/cash/deposit');
         expect(url.search).toBe('');
         expect(request.headers()['x-profile-id']).toBe(String(TEST_PORTFOLIO.id));
-        expect(payload).toEqual(DEPOSIT);
+        expect(payload).toEqual(DEPOSIT_PAYLOAD);
 
         if (mode === 'uncertain-commit') {
             if (!committed) {
@@ -215,7 +216,7 @@ async function prepare(page, viewport, mode) {
                     entry_date: payload.transaction_date,
                     entry_type: 'deposit',
                     category: 'external_flow',
-                    amount: payload.amount,
+                    amount: Number(payload.amount),
                     running_balance: 15500,
                     reason: payload.remarks,
                 });
@@ -227,7 +228,7 @@ async function prepare(page, viewport, mode) {
                 entry_date: payload.transaction_date,
                 entry_type: 'deposit',
                 category: 'external_flow',
-                amount: payload.amount,
+                amount: Number(payload.amount),
                 running_balance: 15500,
                 reason: payload.remarks,
             });
@@ -373,7 +374,7 @@ async function expectCapturedApiReceiptsSettled(evidence) {
                 expect(receipt.path).toBe('/api/cash/deposit');
                 expect(receipt.method).toBe('POST');
                 expect(receipt.query).toBe('');
-                expect(receipt.request.postDataJSON()).toEqual(DEPOSIT);
+                expect(receipt.request.postDataJSON()).toEqual(DEPOSIT_PAYLOAD);
             }
         }
     }
@@ -459,7 +460,7 @@ for (const viewport of VIEWPORTS) {
             expect(evidence.rejectedWrites).toEqual([]);
             expect(evidence.attempts).toEqual([{
                 method: 'POST', origin: ORIGIN, path: '/api/cash/deposit', query: '',
-                profileId: String(TEST_PORTFOLIO.id), payload: DEPOSIT,
+                profileId: String(TEST_PORTFOLIO.id), payload: DEPOSIT_PAYLOAD,
             }]);
         });
 
@@ -520,11 +521,11 @@ for (const viewport of VIEWPORTS) {
             expect(evidence.attempts).toEqual([
                 {
                     method: 'POST', origin: ORIGIN, path: '/api/cash/deposit', query: '',
-                    profileId: String(TEST_PORTFOLIO.id), payload: DEPOSIT,
+                    profileId: String(TEST_PORTFOLIO.id), payload: DEPOSIT_PAYLOAD,
                 },
                 {
                     method: 'POST', origin: ORIGIN, path: '/api/cash/deposit', query: '',
-                    profileId: String(TEST_PORTFOLIO.id), payload: DEPOSIT,
+                    profileId: String(TEST_PORTFOLIO.id), payload: DEPOSIT_PAYLOAD,
                 },
             ]);
         });

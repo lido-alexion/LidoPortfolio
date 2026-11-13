@@ -148,8 +148,7 @@ export default function CashManagementPage() {
             return;
         }
         if (op === 'withdraw') {
-            const available = Number(summary?.available_investable_cash ?? 0)
-                + (editing && Number.isFinite(oldSignedAmount) && oldSignedAmount < 0 ? -oldSignedAmount : 0);
+            const available = withdrawalCapacity;
             if (num > available) {
                 showToast(`Withdrawal cannot exceed available cash (${money(available)})`, 'danger');
                 return;
@@ -190,12 +189,14 @@ export default function CashManagementPage() {
 
     const reservations = summary?.reservations || [];
     const selectedOp = OPS.find((o) => o.id === op) || OPS[0];
-    const availableCash = Number(summary?.available_physical_cash ?? summary?.available_investable_cash ?? 0);
+    const availableCash = Number(summary?.available_investable_cash ?? summary?.available_physical_cash ?? 0);
     const allocSum = allocDraft.reduce((sum, row) => sum + (Number(row.allocation_pct) || 0), 0);
     const allocSumIs100 = Math.abs(allocSum - 100) <= 0.01;
     const currentBalance = Number(summary?.cash_balance ?? 0);
-    const entered = amount.trim() === '' || !/^[-+]?\d+(\.\d{1,4})?$/.test(amount) ? null : Number(amount);
     const oldSignedAmount = editing ? Number(ledger.find((entry) => entry.id === editing.id)?.amount) : 0;
+    const withdrawalCapacity = Math.max(0, availableCash
+        + (editing && Number.isFinite(oldSignedAmount) && oldSignedAmount < 0 ? -oldSignedAmount : 0));
+    const entered = amount.trim() === '' || !/^[-+]?\d+(\.\d{0,4})?$/.test(amount) ? null : Number(amount);
     const newSignedAmount = entered == null ? null : (op === 'withdraw' ? -entered : entered);
     const previewBalance = newSignedAmount == null ? null : currentBalance - (Number.isFinite(oldSignedAmount) ? oldSignedAmount : 0) + newSignedAmount;
     const previewTone = previewBalance == null || Math.abs(previewBalance - currentBalance) < 0.00005 ? 'text-body' : previewBalance > currentBalance ? 'text-success' : 'text-danger';
@@ -534,7 +535,7 @@ export default function CashManagementPage() {
                                         id="cash-amount"
                                         step="0.0001"
                                         min={op === 'adjust' ? undefined : '0.0001'}
-                                        max={op === 'withdraw' ? String(Math.max(0, availableCash)) : undefined}
+                                        max={op === 'withdraw' ? String(withdrawalCapacity) : undefined}
                                         allowDecimals
                                         allowNegative={op === 'adjust'}
                                         placeholder={selectedOp.amountPlaceholder}
@@ -542,7 +543,7 @@ export default function CashManagementPage() {
                                         onChange={(e) => setAmount(e.target.value)}
                                         required
                                     />
-                                    <div className="small mt-1" aria-live="polite">
+                                    <div className="small mt-1" role="status" aria-live="polite">
                                         <div>Current balance: {money(summary?.cash_balance)}</div>
                                         <div className={previewTone}>Updated balance: {previewBalance == null ? 'Enter a valid amount' : `${money(previewBalance)}${previewBalance > currentBalance ? ' (higher)' : previewBalance < currentBalance ? ' (lower)' : ' (unchanged)'}`}</div>
                                     </div>

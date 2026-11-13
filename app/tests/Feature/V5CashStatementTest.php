@@ -194,6 +194,21 @@ class V5CashStatementTest extends TestCase
         $this->assertSame('-6.0001', $withdrawal->fresh()->amount);
     }
 
+    public function test_withdrawal_amendment_can_increase_amount_within_restored_cash_capacity(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $service = app(CashManagementService::class);
+        $service->deposit($profile, '100.0000', 'seed', $user);
+        $withdrawal = $service->withdraw($profile, '60.0000', 'original withdrawal', $user);
+
+        $response = $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->putJson('/api/cash/ledger/'.$withdrawal->id, ['amount' => '70.0001']);
+
+        $response->assertCreated()->assertJsonPath('data.amount', '-70.0001');
+        $this->assertSame(29.9999, $service->balance($profile));
+    }
+
     public function test_cash_reversal_preserves_four_decimal_amount_exactly(): void
     {
         $user = User::factory()->create();
