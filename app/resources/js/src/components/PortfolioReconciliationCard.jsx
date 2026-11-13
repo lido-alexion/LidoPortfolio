@@ -24,6 +24,7 @@ export default function PortfolioReconciliationCard({ executionMode }) {
     const [snapshot, setSnapshot] = useState(null);
     const [selected, setSelected] = useState(null);
     const [busy, setBusy] = useState(false);
+    const [ignoreTodayTransactions, setIgnoreTodayTransactions] = useState(true);
 
     const load = useCallback(async () => {
         if (!eligible) return;
@@ -41,7 +42,7 @@ export default function PortfolioReconciliationCard({ executionMode }) {
     const reconcile = async () => {
         setBusy(true);
         try {
-            await api.post('/reconciliation', {}, { skipErrorToast: true });
+            await api.post('/reconciliation', { ignore_today_transactions: ignoreTodayTransactions }, { skipErrorToast: true });
             await load();
             showToast('Portfolio reconciliation completed', 'success');
         } catch (error) {
@@ -73,6 +74,13 @@ export default function PortfolioReconciliationCard({ executionMode }) {
             </div>
             <div className="card-body">
                 {!snapshot ? <p className="small text-muted mb-0">Reconciliation status is unavailable.</p> : <>
+                    <div className="form-check mb-2">
+                        <input className="form-check-input" type="checkbox" id="reconciliation-ignore-today"
+                            checked={ignoreTodayTransactions} disabled={busy}
+                            onChange={(event) => setIgnoreTodayTransactions(event.target.checked)} />
+                        <label className="form-check-label small" htmlFor="reconciliation-ignore-today">Ignore today's transactions</label>
+                        <div className="form-text">When checked, StoX holdings are reconstructed through the previous calendar day in Asia/Kolkata, including sells and open cost basis. Funds still compare current balances because Kite does not provide historical cash snapshots.</div>
+                    </div>
                     <div className="d-flex flex-wrap gap-4 mb-2 small">
                         <span>Overall: <strong className={tone(status.overall)}>{label(status.overall)}</strong></span>
                         <span>Holdings: <strong className={tone(status.holdings)}>{label(status.holdings)}</strong></span>
@@ -94,6 +102,8 @@ export default function PortfolioReconciliationCard({ executionMode }) {
                     {selected ? <div className="border rounded p-3 mt-3 small">
                         <div className="d-flex justify-content-between"><strong>Run #{selected.id} evidence</strong><button type="button" className="btn-close" aria-label="Close evidence" onClick={() => setSelected(null)} /></div>
                         {selected.failure ? <p className="text-warning mb-1">Sync failure: {selected.failure}</p> : null}
+                        {selected.stox_snapshot?.comparison ? <p className="text-muted mb-1">Holdings basis: {selected.stox_snapshot.comparison.holdings_as_of || 'current'} ({selected.stox_snapshot.comparison.timezone}). {selected.stox_snapshot.comparison.funds_comparison}</p> : null}
+                        {selected.stox_snapshot?.comparison?.overall_status_note ? <p className="text-warning mb-1">{selected.stox_snapshot.comparison.overall_status_note}</p> : null}
                         {(discrepancies.holdings || []).length ? <div className="table-responsive mt-3">
                             <table className="table table-sm align-middle mb-0">
                                 <thead><tr><th>Stock</th><th className="text-end">StoX qty</th><th className="text-end">Kite qty</th><th className="text-end">Difference</th><th className="text-end">StoX cost</th><th className="text-end">Kite cost</th><th className="text-end">Difference</th><th className="text-end">Allowed</th></tr></thead>

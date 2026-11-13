@@ -69,10 +69,20 @@ describe('Portfolio reconciliation card', () => {
         apiMock.post.mockResolvedValue({ data: { data: {} } });
         render(<PortfolioReconciliationCard executionMode="semi_automatic" />);
         await screen.findAllByText('Attention required');
+        expect(screen.getByRole('checkbox', { name: "Ignore today's transactions" })).toBeChecked();
 
         fireEvent.click(screen.getByRole('button', { name: 'Run now' }));
 
-        await waitFor(() => expect(apiMock.post).toHaveBeenCalledWith('/reconciliation', {}, { skipErrorToast: true }));
+        await waitFor(() => expect(apiMock.post).toHaveBeenCalledWith('/reconciliation', { ignore_today_transactions: true }, { skipErrorToast: true }));
         expect(apiMock.get).toHaveBeenCalledTimes(2);
+    });
+
+    it('allows strict current holdings comparison for a manual run', async () => {
+        apiMock.post.mockResolvedValue({ data: { data: {} } });
+        render(<PortfolioReconciliationCard executionMode="automatic" />);
+        await screen.findAllByText('Attention required');
+        fireEvent.click(screen.getByRole('checkbox', { name: "Ignore today's transactions" }));
+        fireEvent.click(screen.getByRole('button', { name: 'Run now' }));
+        await waitFor(() => expect(apiMock.post).toHaveBeenCalledWith('/reconciliation', { ignore_today_transactions: false }, { skipErrorToast: true }));
     });
 });
