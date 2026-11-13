@@ -44,6 +44,8 @@ The daily bhavcopy matcher has a separate reviewed NSE price-identity catalogue 
 
 The BSE active-equity adapter reads the exchange's `ISIN_NUMBER` and `Status` fields, retaining unavailable or malformed ISINs as null. This normalization is not authority to deactivate absent securities, ignore gaps, alter holdings, or fabricate unavailable prices.
 
+Daily bhavcopy identity conflicts retain a SHA-256 of the downloaded source file and durable retry state per exchange/session/coverage. An unchanged conflicting revision is deferred with bounded exponential delays (5 minutes, 15 minutes, 1 hour, then 6 hours); a later attempt downloads and validates again, so an upstream correction can recover. A conflict remains unavailable until identity validation succeeds. Explicit force runs bypass the delay. Deferred failures continue to count as unavailable and retain warning evidence; they never create successful receipts or prices.
+
 ## 6. Sync State And Observability
 
 Sync observability includes attempted/successful time, status, counts, failures, partial outcomes, progress/locks, and sync logs/admin surfaces. A partial run must say what succeeded and failed; it must not be promoted to complete dataset readiness merely because the command ran.

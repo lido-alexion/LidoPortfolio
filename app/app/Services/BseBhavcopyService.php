@@ -18,8 +18,11 @@ class BseBhavcopyService
             return ['rows' => [], 'source_rows' => 0, 'invalid_rows' => 0, 'excluded_rows' => 0];
         }
 
+        $body = $this->downloadForDate($date);
+        $sourceRevision = hash('sha256', $body);
+
         return app(\App\Services\Bhavcopy\UdiffBhavcopyParser::class)
-            ->parse($this->downloadForDate($date), $date, 'BSE');
+            ->parse($body, $date, 'BSE') + ['source_revision_sha256' => $sourceRevision];
     }
 
     /**

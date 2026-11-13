@@ -35,6 +35,9 @@ class NseBhavcopyService
         if (strlen($body) > 8 * 1024 * 1024 || ! str_starts_with($body, "PK")) {
             throw new RuntimeException('NSE daily bhavcopy is not a supported ZIP archive.');
         }
+        // Content identity is independent of HTTP cache headers, which NSE does
+        // not consistently provide. It is evidence only; it never accepts rows.
+        $sourceRevision = hash('sha256', $body);
         $path = tempnam(sys_get_temp_dir(), 'nse_daily_bhav_');
         if ($path === false) {
             throw new RuntimeException('Cannot create NSE bhavcopy temporary file.');
@@ -68,7 +71,7 @@ class NseBhavcopyService
                 throw new RuntimeException('NSE daily bhavcopy ZIP must contain exactly one session CSV.');
             }
 
-            return $this->parser->parse($csv, $date, 'NSE');
+            return $this->parser->parse($csv, $date, 'NSE') + ['source_revision_sha256' => $sourceRevision];
         } finally {
             if ($opened) {
                 $zip->close();

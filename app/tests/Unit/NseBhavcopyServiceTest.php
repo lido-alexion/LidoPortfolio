@@ -34,6 +34,7 @@ class NseBhavcopyServiceTest extends TestCase
         Http::assertSentCount(1);
         Http::assertSent(fn ($r) => $r->url() === 'https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_20261026_F_0000.csv.zip');
         $this->assertSame('AAA', $result['rows'][0]['symbol']);
+        $this->assertSame(hash('sha256', $this->bhavcopyZip($this->bhavcopyCsv())), $result['source_revision_sha256']);
     }
 
     public function test_weekends_and_marked_holidays_do_not_download_files(): void
