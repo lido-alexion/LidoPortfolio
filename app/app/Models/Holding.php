@@ -27,10 +27,6 @@ class Holding extends Model
         'updated_at',
     ];
 
-    protected $attributes = [
-        'owner_key' => self::OWNER_UNMANAGED,
-    ];
-
     protected function casts(): array
     {
         return [
