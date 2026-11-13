@@ -305,6 +305,29 @@ class UniverseDailyBhavcopySyncTest extends TestCase
         $this->assertNull(Setting::getValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS));
     }
 
+    public function test_identity_conflicts_are_logged_as_bounded_stock_id_reasons_and_never_assigned(): void
+    {
+        $stock = $this->stock('AAA', ['isin' => 'INE001A01010']);
+        // Symbol/series matches, but the source ISIN identifies a different
+        // security. The matcher must fail closed and report why.
+        $this->source('NSE', [['TckrSymb' => 'AAA', 'ISIN' => 'INE002A01010']]);
+        $day = Carbon::parse('2026-10-26');
+        $runId = app(SyncLogService::class)->beginRun('universe-price-sync');
+
+        $result = app(UniverseDailyBhavcopySyncService::class)->run(
+            collect([$stock]), $day, $day, $runId, 'universe-price-sync', $this->initialStats(),
+        )['stats'];
+
+        $file = $result['bulk']['files'][0];
+        $this->assertSame('identity_conflict', $file['status']);
+        $this->assertSame(1, $file['identity_conflicts']);
+        $this->assertSame([['stock_id' => $stock->id, 'reason' => 'conflicting_identity_or_rows']], $file['identity_conflict_samples']);
+        $this->assertFalse($file['identity_conflict_samples_truncated']);
+        $this->assertSame(0, $file['stored_rows']);
+        $this->assertDatabaseMissing('portfolio_stock_prices', ['stock_id' => $stock->id]);
+        $this->assertNull(Setting::getValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS));
+    }
+
     private function initialStats(): array
     {
         return ['processed' => 0, 'succeeded' => 0, 'failed' => 0, 'skipped' => 0,

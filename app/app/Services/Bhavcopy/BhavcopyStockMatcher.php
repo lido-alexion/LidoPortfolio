@@ -6,7 +6,12 @@ use App\Models\Stock;
 use App\Services\ProviderResolverService;
 use Illuminate\Support\Collection;
 
-/** Resolve only canonical eligible records; conflicting identities fail closed. */
+/** Resolve only canonical eligible records; conflicting identities fail closed.
+ * Conflicts mean source identifiers cannot be safely assigned to exactly one
+ * canonical stock (for example duplicate/ambiguous ISIN candidates, a master
+ * series disagreement, or conflicting source rows). They are not parser-invalid
+ * rows and must never be converted into a ticker-only price assignment.
+ */
 class BhavcopyStockMatcher
 {
     public function __construct(

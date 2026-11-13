@@ -117,6 +117,13 @@ class UniverseDailyBhavcopySyncService
                         'historical_identity_rows' => $historicalAccepted,
                         'historical_adjustment_required' => $historicalBlocked,
                         'identity_conflicts' => count($matched['conflicts']),
+                        // Keep the durable run log actionable without dumping a
+                        // potentially large conflict set or any price payload.
+                        'identity_conflict_samples' => array_slice(array_map(
+                            fn ($id, $reason) => ['stock_id' => (int) $id, 'reason' => $reason],
+                            array_keys($matched['conflicts']), array_values($matched['conflicts']),
+                        ), 0, 50),
+                        'identity_conflict_samples_truncated' => count($matched['conflicts']) > 50,
                     ];
                     $conflicted += $matched['conflicts'];
                     $stats['bulk']['identity_conflicts'] += count($matched['conflicts']);
