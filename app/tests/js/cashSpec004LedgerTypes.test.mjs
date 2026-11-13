@@ -23,3 +23,11 @@ test('V5 cash statement uses effective-date balances and requires adjustment rea
     assert.match(source, /required=\{op === 'adjust'\}/);
     assert.match(source, /downloadPortfolioCsv\('cash_statement'/);
 });
+
+test('cash edit preview reverses the original signed amount and locks the operation type', () => {
+    assert.match(source, /currentBalance - \(Number\.isFinite\(oldSignedAmount\) \? oldSignedAmount : 0\) \+ newSignedAmount/);
+    assert.match(source, /disabled=\{Boolean\(editing\)\}/);
+    assert.match(source, /oldSignedAmount < 0 \? -oldSignedAmount : 0/);
+    assert.match(source, /const clearMovementForm = \(\) => \{/);
+    assert.match(source, /onClick=\{clearMovementForm\}>Cancel edit/);
+});

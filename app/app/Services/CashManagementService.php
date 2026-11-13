@@ -161,12 +161,12 @@ class CashManagementService
 
     public function deposit(
         PortfolioProfile $profile,
-        float $amount,
+        float|string $amount,
         ?string $reason = null,
         ?User $user = null,
         ?string $entryDate = null,
     ): CashLedgerEntry {
-        if ($amount <= 0) {
+        if ($this->decimalUnits((string) $amount) <= 0) {
             throw ValidationException::withMessages(['amount' => ['Deposit amount must be positive.']]);
         }
 
@@ -184,17 +184,17 @@ class CashManagementService
 
     public function withdraw(
         PortfolioProfile $profile,
-        float $amount,
+        float|string $amount,
         ?string $reason = null,
         ?User $user = null,
         ?string $entryDate = null,
     ): CashLedgerEntry {
-        if ($amount <= 0) {
+        if ($this->decimalUnits((string) $amount) <= 0) {
             throw ValidationException::withMessages(['amount' => ['Withdrawal amount must be positive.']]);
         }
 
         $available = $this->availableInvestableCash($profile);
-        if ($amount > $available + 0.0001) {
+        if ($this->decimalUnits((string) $amount) > $this->decimalUnits((string) $available)) {
             throw ValidationException::withMessages([
                 'amount' => ['Withdrawal cannot exceed available cash (₹'.number_format($available, 0, '.', ',').').'],
             ]);
@@ -203,7 +203,7 @@ class CashManagementService
         return $this->post(
             $profile,
             CashLedgerEntry::TYPE_WITHDRAWAL,
-            -abs($amount),
+            '-'.ltrim((string) $amount, '+-'),
             $reason,
             $user,
             null,
@@ -214,12 +214,12 @@ class CashManagementService
 
     public function adjust(
         PortfolioProfile $profile,
-        float $amount,
+        float|string $amount,
         ?string $reason = null,
         ?User $user = null,
         ?string $entryDate = null,
     ): CashLedgerEntry {
-        if ($amount == 0.0) {
+        if ($this->decimalUnits((string) $amount) === 0) {
             throw ValidationException::withMessages(['amount' => ['Adjustment amount cannot be zero.']]);
         }
 
@@ -245,7 +245,7 @@ class CashManagementService
      */
     public function postLoan(
         PortfolioProfile $profile,
-        float $signedAmount,
+        float|string $signedAmount,
         ?string $reason = null,
         ?User $user = null,
         ?string $entryDate = null,
@@ -266,7 +266,7 @@ class CashManagementService
 
     public function postRecall(
         PortfolioProfile $profile,
-        float $signedAmount,
+        float|string $signedAmount,
         ?string $reason = null,
         ?User $user = null,
         ?string $entryDate = null,
@@ -553,6 +553,8 @@ class CashManagementService
                 'entry_date' => optional($entry->entry_date)?->toDateString(),
                 'transaction_id' => $entry->transaction_id,
                 'recommendation_id' => $entry->recommendation_id,
+                'reversal_of_entry_id' => $entry->reversal_of_entry_id,
+                'reversed_by_entry_id' => CashLedgerEntry::query()->where('reversal_of_entry_id', $entry->id)->value('id'),
                 'user_id' => $entry->user_id,
                 'created_at' => optional($entry->created_at)?->toIso8601String(),
             ];
@@ -601,38 +603,124 @@ class CashManagementService
             throw ValidationException::withMessages(['reason' => ['Reversal reason is required.']]);
         }
 
-        $entry = CashLedgerEntry::query()->where('profile_id', $profile->id)->find($entryId);
-        if ($entry === null) {
-            throw ValidationException::withMessages(['entry' => ['Cash ledger entry was not found for this Portfolio.']]);
-        }
-        if (! in_array($entry->entry_type, [
-            CashLedgerEntry::TYPE_DEPOSIT,
-            CashLedgerEntry::TYPE_WITHDRAWAL,
-            CashLedgerEntry::TYPE_ADJUSTMENT,
-        ], true)) {
-            throw ValidationException::withMessages(['entry' => ['Trade and internal cash effects must be corrected through their source workflow.']]);
-        }
-        if (CashLedgerEntry::query()->where('reversal_of_entry_id', $entry->id)->exists()) {
-            throw ValidationException::withMessages(['entry' => ['This cash ledger entry has already been reversed.']]);
-        }
+        return DB::transaction(function () use ($profile, $entryId, $reason, $user, $entryDate) {
+            // Serialize correction attempts on the same account before checking the unique reversal link.
+            $this->ensureAccount($profile);
+            CashAccount::query()->where('profile_id', $profile->id)->lockForUpdate()->firstOrFail();
+            $entry = CashLedgerEntry::query()->where('profile_id', $profile->id)->lockForUpdate()->find($entryId);
+            if ($entry === null) {
+                throw ValidationException::withMessages(['entry' => ['Cash ledger entry was not found for this Portfolio.']]);
+            }
+            if (! in_array($entry->entry_type, [
+                CashLedgerEntry::TYPE_DEPOSIT,
+                CashLedgerEntry::TYPE_WITHDRAWAL,
+                CashLedgerEntry::TYPE_ADJUSTMENT,
+            ], true)) {
+                throw ValidationException::withMessages(['entry' => ['Trade and internal cash effects must be corrected through their source workflow.']]);
+            }
+            if ($entry->reversal_of_entry_id !== null) {
+                throw ValidationException::withMessages(['entry' => ['A reversal or correction entry cannot itself be reversed. Correct the original entry through its current replacement.']]);
+            }
+            if (CashLedgerEntry::query()->where('reversal_of_entry_id', $entry->id)->exists()) {
+                throw ValidationException::withMessages(['entry' => ['This cash ledger entry has already been reversed.']]);
+            }
 
-        return $this->post(
-            $profile,
-            CashLedgerEntry::TYPE_ADJUSTMENT,
-            -1 * (float) $entry->amount,
-            'Reversal of cash entry #'.$entry->id.': '.$reason,
-            $user,
-            null,
-            null,
-            $entryDate,
-            $entry->id,
-        );
+            $effectiveDate = $entryDate ?? optional($entry->entry_date)?->toDateString();
+            return $this->post(
+                $profile,
+                CashLedgerEntry::TYPE_ADJUSTMENT,
+                $this->unitsDecimal(-$this->decimalUnits((string) $entry->amount)),
+                'Reversal of cash entry #'.$entry->id.': '.$reason,
+                $user,
+                null,
+                null,
+                $effectiveDate,
+                $entry->id,
+            );
+        });
+    }
+
+    /** Append-only correction for a user-managed movement. */
+    public function amendCashMovement(PortfolioProfile $profile, int $entryId, string $amount, string $reason, ?User $user = null, ?string $entryDate = null): CashLedgerEntry
+    {
+        return DB::transaction(function () use ($profile, $entryId, $amount, $reason, $user, $entryDate) {
+            $this->ensureAccount($profile);
+            CashAccount::query()->where('profile_id', $profile->id)->lockForUpdate()->firstOrFail();
+            $entry = CashLedgerEntry::query()->where('profile_id', $profile->id)->lockForUpdate()->find($entryId);
+            if (! $entry || ! in_array($entry->entry_type, [CashLedgerEntry::TYPE_DEPOSIT, CashLedgerEntry::TYPE_WITHDRAWAL, CashLedgerEntry::TYPE_ADJUSTMENT], true)) {
+                throw ValidationException::withMessages(['entry' => ['This entry cannot be edited here. Trade and internal movements must be changed through their source workflow.']]);
+            }
+            if (CashLedgerEntry::query()->where('reversal_of_entry_id', $entry->id)->exists()) {
+                throw ValidationException::withMessages(['entry' => ['This entry was already corrected. Refresh the statement and edit the current replacement.']]);
+            }
+            $valueUnits = $this->decimalUnits($amount);
+            if (($entry->entry_type === CashLedgerEntry::TYPE_DEPOSIT && $valueUnits <= 0)
+                || ($entry->entry_type === CashLedgerEntry::TYPE_WITHDRAWAL && $valueUnits <= 0)
+                || ($entry->entry_type === CashLedgerEntry::TYPE_ADJUSTMENT && $valueUnits === 0)) {
+                throw ValidationException::withMessages(['amount' => ['Enter a valid non-zero amount; deposits and withdrawals must be positive.']]);
+            }
+            $effectiveDate = $entryDate ?? optional($entry->entry_date)?->toDateString();
+            $oldUnits = $this->decimalUnits((string) $entry->amount);
+            $replacementUnits = $entry->entry_type === CashLedgerEntry::TYPE_WITHDRAWAL ? -$valueUnits : $valueUnits;
+            $balanceUnits = $this->decimalUnits((string) CashAccount::query()->where('profile_id', $profile->id)->value('balance'));
+            $finalBalanceUnits = $balanceUnits - $oldUnits + $replacementUnits;
+            $reservedUnits = $this->decimalUnits(number_format($this->reservedCash($profile), 4, '.', ''));
+            if ($finalBalanceUnits < 0) {
+                throw ValidationException::withMessages(['amount' => ['Correction would leave a negative cash balance.']]);
+            }
+            if ($finalBalanceUnits < $reservedUnits) {
+                throw ValidationException::withMessages(['amount' => ['Correction would reduce available cash below active reservations.']]);
+            }
+
+            // Any correction can rewrite the historical economic timeline: changing
+            // an amount on its existing date can invalidate later daily closes too.
+            $daily = CashLedgerEntry::query()->where('profile_id', $profile->id)
+                ->where('id', '!=', $entry->id)
+                ->selectRaw('entry_date, SUM(amount) as amount')
+                ->groupBy('entry_date')->orderBy('entry_date')->get();
+            $dailyUnits = [];
+            foreach ($daily as $row) {
+                $dailyUnits[$row->entry_date->toDateString()] = $this->decimalUnits((string) $row->amount);
+            }
+            $replacementDate = Carbon::parse($effectiveDate)->toDateString();
+            $dailyUnits[$replacementDate] = ($dailyUnits[$replacementDate] ?? 0) + $replacementUnits;
+            ksort($dailyUnits);
+            $historicalUnits = 0;
+            foreach ($dailyUnits as $date => $units) {
+                $historicalUnits += $units;
+                if ($historicalUnits < 0) {
+                    throw ValidationException::withMessages(['entry_date' => ['Correction would create a negative historical cash balance on '.$date.'.']]);
+                }
+            }
+
+            $reversalUnits = -$oldUnits;
+            $replacementAmount = $this->unitsDecimal($replacementUnits);
+            $replacementReason = $reason !== '' ? $reason : $entry->reason;
+            $appendReversal = fn () => $this->post($profile, CashLedgerEntry::TYPE_ADJUSTMENT,
+                $this->unitsDecimal($reversalUnits), 'Reversal of cash entry #'.$entry->id.': Edited: '.$reason,
+                $user, null, null, optional($entry->entry_date)?->toDateString(), $entry->id);
+            $appendReplacement = fn () => $this->post($profile, $entry->entry_type, $replacementAmount,
+                $replacementReason, $user, null, null, $effectiveDate);
+
+            // Apply an inflow before an outflow so each immutable row has a valid running balance.
+            if ($replacementUnits > 0 && $reversalUnits < 0) {
+                $replacement = $appendReplacement();
+                $appendReversal();
+                return $replacement;
+            }
+            if ($replacementUnits < 0 && $reversalUnits > 0) {
+                $appendReversal();
+                return $appendReplacement();
+            }
+            $appendReversal();
+            return $appendReplacement();
+        });
     }
 
     protected function post(
         PortfolioProfile $profile,
         string $type,
-        float $signedAmount,
+        float|string $signedAmount,
         ?string $reason = null,
         ?User $user = null,
         ?int $transactionId = null,
@@ -667,14 +755,15 @@ class CashManagementService
                     ->first();
             }
 
-            $newBalance = round((float) $account->balance + $signedAmount, 4);
-            if ($newBalance < -0.0001) {
+            $newBalanceUnits = $this->decimalUnits((string) $account->balance) + $this->decimalUnits((string) $signedAmount);
+            if ($newBalanceUnits < 0) {
                 throw ValidationException::withMessages([
                     'amount' => ['Insufficient cash balance for this operation.'],
                 ]);
             }
 
-            $account->forceFill(['balance' => max(0, $newBalance)])->save();
+            $newBalance = $this->unitsDecimal(max(0, $newBalanceUnits));
+            $account->forceFill(['balance' => $newBalance])->save();
 
             $resolvedDate = $entryDate
                 ? Carbon::parse($entryDate)->toDateString()
@@ -685,8 +774,8 @@ class CashManagementService
             return CashLedgerEntry::query()->create([
                 'profile_id' => $profile->id,
                 'entry_type' => $type,
-                'amount' => $signedAmount,
-                'balance_after' => (float) $account->balance,
+                'amount' => $this->unitsDecimal($this->decimalUnits((string) $signedAmount)),
+                'balance_after' => $account->balance,
                 'reason' => $trimmedReason !== '' ? $trimmedReason : null,
                 'reversal_of_entry_id' => $reversalOfEntryId,
                 'entry_date' => $resolvedDate,
@@ -696,5 +785,19 @@ class CashManagementService
                 'created_at' => now(),
             ]);
         });
+    }
+
+    private function decimalUnits(string $value): int
+    {
+        $negative = str_starts_with($value, '-');
+        $value = ltrim($value, '+-');
+        [$whole, $fraction] = array_pad(explode('.', $value, 2), 2, '');
+        $units = ((int) $whole * 10000) + (int) str_pad(substr($fraction, 0, 4), 4, '0');
+        return $negative ? -$units : $units;
+    }
+
+    private function unitsDecimal(int $units): string
+    {
+        return ($units < 0 ? '-' : '').intdiv(abs($units), 10000).'.'.str_pad((string) (abs($units) % 10000), 4, '0', STR_PAD_LEFT);
     }
 }

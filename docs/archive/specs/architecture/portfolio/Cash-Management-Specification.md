@@ -86,11 +86,12 @@ Sell-side approvals do not reserve cash.
 
 # 6. Deposits, Withdrawals, Adjustments
 
-- **Deposit** — amount &gt; 0 (whole rupees in UI); remarks optional; `transaction_date` /
+- **Deposit** — amount &gt; 0 (up to four decimal places); remarks optional; `transaction_date` /
   `entry_date` optional (defaults to today; not future).
 - **Withdrawal** — amount &gt; 0; **cannot exceed available investable cash**;
   remarks optional; date as above.
-- **Adjustment** — non-zero signed whole-rupee amount; remarks optional; date as above.
+- **Adjustment** — non-zero signed amount (up to four decimal places); it is a delta, not a set-balance operation; remarks optional; date as above.
+- Manual deposit, withdrawal and adjustment records can be edited or deleted from Cash Management by an authorized active-portfolio user. Delete appends a linked reversal on the original effective date. Edit appends a linked reversal on the original effective date and a replacement on the edited effective date (or original date when unchanged), all atomically. A date change is rejected if the resulting daily historical cash balance would be negative; this protects the dated ledger but does not model intraday ordering. Trade and internal entries remain owned by their originating workflows.
 
 # 7. Future Broker Reconciliation
 
@@ -143,6 +144,9 @@ Legacy `/api` (Sanctum; active portfolio):
   POST     /api/cash/deposit       `{ amount, remarks?, reason?, transaction_date? }`
   POST     /api/cash/withdraw      `{ amount, remarks?, reason?, transaction_date? }` (≤ available cash)
   POST     /api/cash/adjust        `{ amount, remarks?, reason?, transaction_date? }`
+  PUT      /api/cash/ledger/{id}  Edit a manual deposit / withdrawal / adjustment by appending reversal + replacement
+  DELETE   /api/cash/ledger/{id}  Delete a manual movement by appending a linked reversal (`reason?`)
+  POST     /api/cash/ledger/{id}/reverse  Explicit append-only reversal (`reason`, `entry_date?`)
 
 Summary shape:
 
@@ -163,7 +167,7 @@ Summary shape:
 
 - **Dashboard** — shows **Available Cash** only (link to Cash management).
 - **Cash** tab (`/cash`) — balance / reserved / available, deposit /
-  withdraw / adjust (whole-rupee `NumberInput`, optional remarks,
+  withdraw / adjust (four-decimal `NumberInput`, optional remarks,
   transaction date via calendar), reservation details, and cash account statement.
 
 # 10. Dependencies
