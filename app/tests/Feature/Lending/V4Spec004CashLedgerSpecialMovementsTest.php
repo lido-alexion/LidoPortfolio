@@ -216,7 +216,8 @@ class V4Spec004CashLedgerSpecialMovementsTest extends TestCase
         app(RecallImmediateSettlementService::class)->apply($profile, $recall, 0, 0, null);
         $this->seedHolding($profile, $borrower, 'PRC', 200, 100.0);
 
-        $soldAt = Carbon::parse('2026-08-01 10:00:00');
+        // seedHolding() provides a current quote; evaluate the sale when that quote exists.
+        $soldAt = Carbon::today();
         $liq = app(RecallLiquidationService::class)->liquidateForObligation(
             $profile,
             $borrower,
@@ -226,6 +227,7 @@ class V4Spec004CashLedgerSpecialMovementsTest extends TestCase
             null,
             $soldAt,
         );
+        $this->assertCount(1, $liq['pending_proceeds']);
         $psp = $liq['pending_proceeds'][0];
         $depositBefore = CashLedgerEntry::query()
             ->where('profile_id', $profile->id)
@@ -279,7 +281,8 @@ class V4Spec004CashLedgerSpecialMovementsTest extends TestCase
             'lender_available_override' => 100_000.0,
         ]);
 
-        $soldAt = Carbon::parse('2026-08-02 10:00:00');
+        // seedHolding() provides a current quote; evaluate the sale when that quote exists.
+        $soldAt = Carbon::today();
         $liq = app(RecallLiquidationService::class)->liquidateForObligation(
             $profile,
             $borrower,
@@ -289,6 +292,7 @@ class V4Spec004CashLedgerSpecialMovementsTest extends TestCase
             $bridge,
             $soldAt,
         );
+        $this->assertCount(1, $liq['pending_proceeds']);
         $psp = $liq['pending_proceeds'][0];
         $cashBefore = app(CashManagementService::class)->balance($profile);
 
