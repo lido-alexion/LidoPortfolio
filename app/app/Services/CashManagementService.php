@@ -626,10 +626,23 @@ class CashManagementService
             }
 
             $effectiveDate = $entryDate ?? optional($entry->entry_date)?->toDateString();
+            $reversalUnits = -$this->decimalUnits((string) $entry->amount);
+            $balanceUnits = $this->decimalUnits((string) CashAccount::query()->where('profile_id', $profile->id)->value('balance'));
+            $finalBalanceUnits = $balanceUnits + $reversalUnits;
+            $reservedUnits = $this->reservedCashUnits($profile);
+            if ($finalBalanceUnits < $reservedUnits) {
+                throw ValidationException::withMessages(['amount' => ['Correction would reduce available cash below active reservations.']]);
+            }
+            $dailyAdjustments = [$effectiveDate => $reversalUnits];
+            // Deleting offsets the original movement on its effective date.
+            // An explicit reversal may instead be dated later, preserving the
+            // original movement's effect on intervening daily balances.
+            $this->assertNonnegativeHistoricalBalances($profile, $dailyAdjustments);
+
             return $this->post(
                 $profile,
                 CashLedgerEntry::TYPE_ADJUSTMENT,
-                $this->unitsDecimal(-$this->decimalUnits((string) $entry->amount)),
+                $this->unitsDecimal($reversalUnits),
                 'Reversal of cash entry #'.$entry->id.': '.$reason,
                 $user,
                 null,
@@ -664,7 +677,7 @@ class CashManagementService
             $replacementUnits = $entry->entry_type === CashLedgerEntry::TYPE_WITHDRAWAL ? -$valueUnits : $valueUnits;
             $balanceUnits = $this->decimalUnits((string) CashAccount::query()->where('profile_id', $profile->id)->value('balance'));
             $finalBalanceUnits = $balanceUnits - $oldUnits + $replacementUnits;
-            $reservedUnits = $this->decimalUnits(number_format($this->reservedCash($profile), 4, '.', ''));
+            $reservedUnits = $this->reservedCashUnits($profile);
             if ($finalBalanceUnits < 0) {
                 throw ValidationException::withMessages(['amount' => ['Correction would leave a negative cash balance.']]);
             }
@@ -672,26 +685,10 @@ class CashManagementService
                 throw ValidationException::withMessages(['amount' => ['Correction would reduce available cash below active reservations.']]);
             }
 
+            $replacementDate = Carbon::parse($effectiveDate)->toDateString();
             // Any correction can rewrite the historical economic timeline: changing
             // an amount on its existing date can invalidate later daily closes too.
-            $daily = CashLedgerEntry::query()->where('profile_id', $profile->id)
-                ->where('id', '!=', $entry->id)
-                ->selectRaw('entry_date, SUM(amount) as amount')
-                ->groupBy('entry_date')->orderBy('entry_date')->get();
-            $dailyUnits = [];
-            foreach ($daily as $row) {
-                $dailyUnits[$row->entry_date->toDateString()] = $this->decimalUnits((string) $row->amount);
-            }
-            $replacementDate = Carbon::parse($effectiveDate)->toDateString();
-            $dailyUnits[$replacementDate] = ($dailyUnits[$replacementDate] ?? 0) + $replacementUnits;
-            ksort($dailyUnits);
-            $historicalUnits = 0;
-            foreach ($dailyUnits as $date => $units) {
-                $historicalUnits += $units;
-                if ($historicalUnits < 0) {
-                    throw ValidationException::withMessages(['entry_date' => ['Correction would create a negative historical cash balance on '.$date.'.']]);
-                }
-            }
+            $this->assertNonnegativeHistoricalBalances($profile, [$replacementDate => $replacementUnits], $entry->id);
 
             $reversalUnits = -$oldUnits;
             $replacementAmount = $this->unitsDecimal($replacementUnits);
@@ -715,6 +712,43 @@ class CashManagementService
             $appendReversal();
             return $appendReplacement();
         });
+    }
+
+    /** Validate the daily ledger after excluding one row and applying exact unit deltas. */
+    private function assertNonnegativeHistoricalBalances(PortfolioProfile $profile, array $dailyAdjustments, ?int $excludedEntryId = null): void
+    {
+        $daily = CashLedgerEntry::query()->where('profile_id', $profile->id)
+            ->when($excludedEntryId !== null, fn ($query) => $query->where('id', '!=', $excludedEntryId))
+            ->selectRaw('entry_date, SUM(amount) as amount')
+            ->groupBy('entry_date')->orderBy('entry_date')->get();
+        $dailyUnits = [];
+        foreach ($daily as $row) {
+            $dailyUnits[$row->entry_date->toDateString()] = $this->decimalUnits((string) $row->amount);
+        }
+        foreach ($dailyAdjustments as $date => $units) {
+            $date = Carbon::parse($date)->toDateString();
+            $dailyUnits[$date] = ($dailyUnits[$date] ?? 0) + $units;
+        }
+        ksort($dailyUnits);
+        $historicalUnits = 0;
+        foreach ($dailyUnits as $date => $units) {
+            $historicalUnits += $units;
+            if ($historicalUnits < 0) {
+                throw ValidationException::withMessages(['entry_date' => ['Correction would create a negative historical cash balance on '.$date.'.']]);
+            }
+        }
+    }
+
+    /** Read reservation totals as decimal text so four-place comparisons stay exact. */
+    private function reservedCashUnits(PortfolioProfile $profile): int
+    {
+        $sum = TradingRecommendation::query()
+            ->forProfile($profile)
+            ->pendingExecution()
+            ->withCashReservation()
+            ->sum('reserved_amount');
+
+        return $this->decimalUnits((string) $sum);
     }
 
     protected function post(
