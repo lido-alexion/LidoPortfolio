@@ -235,6 +235,19 @@ HTML;
         $parser->parse('<html>not a filing</html>', ['seq_Id' => 'x'], 'quarterly');
     }
 
+    public function test_local_name_match_handles_prefixes_preserved_by_html_parsing(): void
+    {
+        $document = new DOMDocument;
+        $document->appendChild($document->createElement('xbrli:context'));
+        $xpath = new DOMXPath($document);
+        $legacyPredicate = 'translate(substring-after(concat(":", local-name()), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="context"';
+        $method = new \ReflectionMethod(NseXbrlFactsParser::class, 'localNamePredicate');
+        $predicate = $method->invoke(new NseXbrlFactsParser, 'context');
+
+        $this->assertSame(0, $xpath->query('//*['.$legacyPredicate.']')->length);
+        $this->assertSame(1, $xpath->query('//*['.$predicate.']')->length);
+    }
+
     public function test_rejects_non_inr_and_oversized_documents_without_guessing(): void
     {
         $xml = str_replace('<xbrli:measure>iso4217:INR</xbrli:measure>', '<xbrli:measure>iso4217:USD</xbrli:measure>', $this->document());
