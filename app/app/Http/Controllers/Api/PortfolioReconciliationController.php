@@ -34,8 +34,15 @@ class PortfolioReconciliationController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'ignore_today_transactions' => ['sometimes', 'boolean'],
+        ]);
         try {
-            $run = $this->reconciliation->run(\activePortfolio(), 'manual');
+            $run = $this->reconciliation->run(
+                \activePortfolio(),
+                'manual',
+                (bool) ($validated['ignore_today_transactions'] ?? false),
+            );
 
             return response()->json(['data' => [
                 'status' => $this->status(\activePortfolio()->fresh()),

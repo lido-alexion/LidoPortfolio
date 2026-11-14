@@ -32,7 +32,6 @@ use App\Services\StrategyConfigurationService;
 use App\Services\TransactionWriteService;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
@@ -216,8 +215,8 @@ class V4Spec004CashLedgerSpecialMovementsTest extends TestCase
         app(RecallImmediateSettlementService::class)->apply($profile, $recall, 0, 0, null);
         $this->seedHolding($profile, $borrower, 'PRC', 200, 100.0);
 
-        // seedHolding() provides a current quote; evaluate the sale when that quote exists.
-        $soldAt = Carbon::today();
+        // Use the current trading date and a time after the seeded quote becomes available.
+        $soldAt = now()->copy()->startOfDay()->setTime(10, 0);
         $liq = app(RecallLiquidationService::class)->liquidateForObligation(
             $profile,
             $borrower,
@@ -281,8 +280,8 @@ class V4Spec004CashLedgerSpecialMovementsTest extends TestCase
             'lender_available_override' => 100_000.0,
         ]);
 
-        // seedHolding() provides a current quote; evaluate the sale when that quote exists.
-        $soldAt = Carbon::today();
+        // Use the current trading date and a time after the seeded quote becomes available.
+        $soldAt = now()->copy()->startOfDay()->setTime(10, 0);
         $liq = app(RecallLiquidationService::class)->liquidateForObligation(
             $profile,
             $borrower,
