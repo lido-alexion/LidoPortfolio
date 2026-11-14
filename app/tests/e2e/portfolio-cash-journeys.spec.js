@@ -146,7 +146,7 @@ for (const viewport of VIEWPORTS) {
         });
 
         test(`cash withdrawal bounds restore the edited amount and preview partial decimals (${viewport.name})`, async ({ page }, testInfo) => {
-            journeyId(testInfo, 'CASH-EDIT-DECIMALS');
+            journeyId(testInfo, 'E2E-22');
             const evidence = await prepare(page, viewport, (method, path) => path === '/api/logs/frontend' || (method === 'PUT' && path === '/api/cash/ledger/2') || (method === 'POST' && path === '/api/cash/withdraw'));
             let entries = [
                 { id: 2, entry_type: 'withdrawal', amount: -60, running_balance: 40, entry_date: '2026-10-10', reason: 'Original withdrawal' },
