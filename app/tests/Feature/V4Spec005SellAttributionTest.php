@@ -118,6 +118,50 @@ class V4Spec005SellAttributionTest extends TestCase
         );
     }
 
+    public function test_sell_recalculation_is_idempotent_and_keeps_realized_profit_with_its_owner(): void
+    {
+        [$user, $profile, $stock, $strategyA] = $this->twoOwnerLots();
+        $ownerA = Holding::ownerKeyFor((int) $strategyA->id);
+
+        $this->actingAs($user)->withProfileHeader($user, $profile);
+        $this->postJson('/api/transactions', $this->sellPayload($stock, 3, 110, [
+            'owner_key' => Holding::OWNER_UNMANAGED,
+        ]))->assertCreated();
+
+        $service = app(HoldingsCalculationService::class);
+        $service->recalculateOwnerLotsForProfileStock($profile, $stock);
+        $service->recalculateOwnerLotsForProfileStock($profile, $stock);
+
+        $unmanaged = $this->holding($profile, $stock, Holding::OWNER_UNMANAGED);
+        $strategy = $this->holding($profile, $stock, $ownerA);
+        $this->assertNotNull($unmanaged);
+        $this->assertNotNull($strategy);
+        $this->assertEqualsWithDelta(7.0, (float) $unmanaged->quantity, 0.0001);
+        $this->assertEqualsWithDelta(30.0, (float) $unmanaged->realized_profit, 0.0001);
+        $this->assertEqualsWithDelta(10.0, (float) $strategy->quantity, 0.0001);
+        $this->assertEqualsWithDelta(0.0, (float) $strategy->realized_profit, 0.0001);
+        $this->assertSame(2, Holding::query()
+            ->where('profile_id', $profile->id)
+            ->where('stock_id', $stock->id)
+            ->count());
+    }
+
+    public function test_holding_save_keeps_an_explicit_owner_key_when_strategy_id_changes(): void
+    {
+        [$user, $profile, $stock, $strategyA] = $this->twoOwnerLots();
+        $unmanaged = $this->holding($profile, $stock, Holding::OWNER_UNMANAGED);
+
+        $unmanaged->strategy_id = $strategyA->id;
+        $unmanaged->save();
+
+        $this->assertSame(Holding::OWNER_UNMANAGED, $unmanaged->fresh()->owner_key);
+        $this->assertNull($unmanaged->fresh()->strategy_id);
+        $this->assertSame(2, Holding::query()
+            ->where('profile_id', $profile->id)
+            ->where('stock_id', $stock->id)
+            ->count());
+    }
+
     public function test_invalid_owner_is_rejected(): void
     {
         [$user, $profile, $stock] = $this->twoOwnerLots();

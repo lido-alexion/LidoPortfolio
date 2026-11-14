@@ -414,6 +414,7 @@ class HoldingsCalculationService
                 ],
                 [
                     'strategy_id' => $strategyId,
+                    'owner_key' => $ownerKey,
                     'quantity' => round($state['quantity'], 4),
                     'avg_buy_price' => round($state['avg_buy_price'], 4),
                     'invested_amount' => $invested,
