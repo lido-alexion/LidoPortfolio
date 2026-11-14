@@ -1,5 +1,9 @@
 # Release Notes
 
+## Unreleased
+
+- Cash Management supports four-decimal deposit, withdrawal and adjustment amounts, live balance previews, and append-only edit/delete corrections for manual ledger entries. Trade and internal movements remain protected for correction through their owning workflows.
+
 ## [Unreleased](https://github.com/laravel/laravel/compare/v13.7.0...13.x)
 
 ## [v13.7.0](https://github.com/laravel/laravel/compare/v13.6.0...v13.7.0) - 2026-05-14

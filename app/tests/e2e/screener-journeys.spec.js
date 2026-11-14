@@ -120,6 +120,9 @@ function assertSafeScreenerJourney(evidence) {
 }
 
 test.describe('V9-UX-001 screener journeys', () => {
+    // Fixture timestamps are UTC; keep their user-facing rendering stable across hosts.
+    test.use({ timezoneId: 'UTC' });
+
     for (const viewport of VIEWPORTS) {
         test(`SCR-01 creates and saves Close > SMA(200) (${viewport.name})`, async ({ page }, testInfo) => {
             journeyId(testInfo, 'SCR-01');
