@@ -221,7 +221,7 @@ class NseXbrlFactsParser
         $lowerName = 'translate(local-name(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")';
         $prefixedName = 'translate(substring-after(local-name(), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")';
 
-        // HTML parsing may preserve a qualified tag name (for example
+        // HTML parsing can preserve a qualified tag name (for example
         // "xbrli:context") as local-name(). XML parsing returns just "context".
         return '('.$lowerName.'="'.$name.'" or '.$prefixedName.'="'.$name.'")';
     }
