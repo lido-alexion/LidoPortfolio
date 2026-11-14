@@ -4,6 +4,7 @@ namespace Tests\Unit\Fundamentals;
 
 use App\Services\Fundamentals\Historical\NseXbrlFactsParser;
 use DOMDocument;
+use DOMElement;
 use DOMXPath;
 use RuntimeException;
 use Tests\TestCase;
@@ -62,6 +63,22 @@ XML;
         );
     }
 
+    private function inlineHtmlDocument(): string
+    {
+        return <<<'HTML'
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:ix="http://www.xbrl.org/2013/inlineXBRL" xmlns:xbrli="http://www.xbrl.org/2003/instance" xmlns:iso4217="http://www.xbrl.org/2003/iso4217" xmlns:ind="http://www.sebi.gov.in/xbrl/2026-01-31/in-capmkt">
+<head><meta charset="utf-8"/></head>
+<body>
+<ix:header><ix:resources>
+<xbrli:context id="q"><xbrli:entity><xbrli:identifier scheme="test">ISSUER</xbrli:identifier></xbrli:entity><xbrli:period><xbrli:startDate>2026-01-01</xbrli:startDate><xbrli:endDate>2026-03-31</xbrli:endDate></xbrli:period></xbrli:context>
+<xbrli:unit id="INR"><xbrli:measure>iso4217:INR</xbrli:measure></xbrli:unit>
+</ix:resources></ix:header>
+<table><tr><td><ix:nonFraction name="ind:RevenueFromOperations" contextRef="q" unitRef="INR" scale="3" decimals="-3">858,634</ix:nonFraction></td></tr>
+<tr><td><ix:nonFraction name="ind:ProfitLossForPeriod" contextRef="q" unitRef="INR" scale="3" sign="-" decimals="-3">214,344</ix:nonFraction></td></tr></table>
+</body></html>
+HTML;
+    }
+
     public function test_parses_only_comparable_quarter_and_instant_facts_without_dimensions(): void
     {
         $rows = (new NseXbrlFactsParser)->parse($this->document(), [
@@ -105,18 +122,10 @@ XML;
 
     public function test_parses_inline_xbrl_html_values_with_scale_and_sign(): void
     {
-        $html = <<<'HTML'
-<html xmlns:ix="http://www.xbrl.org/2013/inlineXBRL" xmlns:xbrli="http://www.xbrl.org/2003/instance" xmlns:iso4217="http://www.xbrl.org/2003/iso4217" xmlns:ind="http://www.sebi.gov.in/xbrl/2026-01-31/in-capmkt">
-<head><meta charset="utf-8"></head>
-<body>
-<ix:header><ix:resources>
-<xbrli:context id="q"><xbrli:entity><xbrli:identifier scheme="test">ISSUER</xbrli:identifier></xbrli:entity><xbrli:period><xbrli:startDate>2026-01-01</xbrli:startDate><xbrli:endDate>2026-03-31</xbrli:endDate></xbrli:period></xbrli:context>
-<xbrli:unit id="INR"><xbrli:measure>iso4217:INR</xbrli:measure></xbrli:unit>
-</ix:resources></ix:header>
-<table><tr><td><ix:nonFraction name="ind:RevenueFromOperations" contextRef="q" unitRef="INR" scale="3" decimals="-3">858,634</ix:nonFraction></td></tr>
-<tr><td><ix:nonFraction name="ind:ProfitLossForPeriod" contextRef="q" unitRef="INR" scale="3" sign="-" decimals="-3">214,344</ix:nonFraction></td></tr></table>
-</body></html>
-HTML;
+        $html = $this->inlineHtmlDocument();
+        $xmlDocument = new DOMDocument;
+        $this->assertTrue($xmlDocument->loadXML($html), 'The fixture must exercise the well-formed XHTML path.');
+
         $rows = (new NseXbrlFactsParser)->parse($html, [
             'seq_Id' => 'inline-1',
             'consolidated' => 'Standalone',
@@ -128,6 +137,40 @@ HTML;
         $this->assertSame('858634000', $byKey['revenue']['value']);
         $this->assertSame('-214344000', $byKey['net_income']['value']);
         $this->assertSame('2026-03-31', $byKey['revenue']['period_end']);
+    }
+
+    public function test_parses_malformed_inline_html_with_prefixed_names_and_lowercase_attributes(): void
+    {
+        $html = str_replace('</html>', '', $this->inlineHtmlDocument());
+        $rows = (new NseXbrlFactsParser)->parse($html, [
+            'seq_Id' => 'inline-html-fallback',
+            'consolidated' => 'Standalone',
+            'broadcast_Date' => '13-May-2026 13:20:09',
+        ], 'quarterly');
+
+        $byKey = collect($rows)->keyBy('fact_key');
+        $this->assertSame('858634000', $byKey['revenue']['value']);
+        $this->assertSame('-214344000', $byKey['net_income']['value']);
+        $this->assertSame('2026-03-31', $byKey['revenue']['period_end']);
+    }
+
+    public function test_html_dom_local_name_and_attribute_match_are_independent_of_libxml_parsing(): void
+    {
+        $document = new DOMDocument;
+        $context = $document->appendChild($document->createElement('xbrli:context'));
+        $context->setAttribute('id', 'q');
+        $xpath = new DOMXPath($document);
+        $parser = new NseXbrlFactsParser;
+        $localNamePredicate = new \ReflectionMethod($parser, 'localNamePredicate');
+        $attribute = new \ReflectionMethod($parser, 'attribute');
+
+        $this->assertInstanceOf(DOMElement::class, $context);
+        $this->assertSame(0, $xpath->query('//*[translate(substring-after(concat(":", local-name()), ":"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")="context"]')->length);
+        $this->assertSame(1, $xpath->query('//*['.$localNamePredicate->invoke($parser, 'context').']')->length);
+
+        $fact = $document->createElement('ix:nonFraction');
+        $fact->setAttribute('contextref', 'q');
+        $this->assertSame('q', $attribute->invoke($parser, $fact, 'contextRef'));
     }
 
     public function test_conflicting_duplicate_values_stay_quarantined_for_the_document(): void
@@ -167,7 +210,7 @@ HTML;
 
         $html = <<<'HTML'
 <html xmlns:ix="http://www.xbrl.org/2013/inlineXBRL" xmlns:xbrli="http://www.xbrl.org/2003/instance" xmlns:iso4217="http://www.xbrl.org/2003/iso4217" xmlns:ind="http://www.sebi.gov.in/xbrl/2026-01-31/in-capmkt">
-<head><meta charset="utf-8"></head><body><ix:header><ix:resources>
+<head><meta charset="utf-8"/></head><body><ix:header><ix:resources>
 <xbrli:context id="q"><xbrli:entity><xbrli:identifier scheme="test">ISSUER</xbrli:identifier></xbrli:entity><xbrli:period><xbrli:startDate>2026-01-01</xbrli:startDate><xbrli:endDate>2026-03-31</xbrli:endDate></xbrli:period></xbrli:context>
 <xbrli:unit id="INR"><xbrli:measure>iso4217:INR</xbrli:measure></xbrli:unit>
 </ix:resources></ix:header><table>

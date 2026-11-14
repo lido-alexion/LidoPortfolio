@@ -99,7 +99,6 @@ jobs:
           DB_USERNAME: root
           DB_PASSWORD: root
         run: ../scripts/verify-ci.sh --backend
-
   frontend:
     name: Frontend tests and production build (Node 22)
     runs-on: ubuntu-latest
