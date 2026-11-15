@@ -224,6 +224,13 @@ class V9ApiFailureReportingTest extends TestCase
         DB::table('stox_github_issue_bindings')->insert([
             'marker' => '<!-- stox-api-failure:'.$ambiguous->fingerprint.' -->', 'state' => 'creation_unknown', 'generation' => 1,
         ]);
+        // A prior GitHub check without a persisted issue reference is still
+        // evidence of an attempted reconciliation, not proof that no issue exists.
+        $checkedWithoutReference = $make('/api/reconcile/checked-without-reference');
+        $checkedWithoutReference->update([
+            'sync_status' => 'circuit_open',
+            'last_github_checked_at' => now()->subDays(8),
+        ]);
         $recent = $reporter->observe([
             'direction' => 'frontend_internal',
             'component' => 'laravel-api',
@@ -241,7 +248,7 @@ class V9ApiFailureReportingTest extends TestCase
         $this->artisan('ops:reconcile-api-failure-incidents', ['--execute' => true, '--limit' => 1])->assertSuccessful();
         Bus::assertDispatchedTimes(CreateOrLinkGitHubIssueJob::class, 1);
         Bus::assertDispatched(CreateOrLinkGitHubIssueJob::class, fn ($job) => $job->incidentId === $eligible->id);
-        Bus::assertNotDispatched(CreateOrLinkGitHubIssueJob::class, fn ($job) => in_array($job->incidentId, [$alsoEligible->id, $linked->id, $closed->id, $ambiguous->id, $recent->id], true));
+        Bus::assertNotDispatched(CreateOrLinkGitHubIssueJob::class, fn ($job) => in_array($job->incidentId, [$alsoEligible->id, $linked->id, $closed->id, $ambiguous->id, $checkedWithoutReference->id, $recent->id], true));
     }
 
     public function test_each_supported_browser_fault_type_remains_an_untrusted_observation(): void
