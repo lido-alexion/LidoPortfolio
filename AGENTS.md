@@ -34,3 +34,11 @@ The backend mode intentionally requires MySQL and the PHP extensions declared by
 2. Before each push: fetch `origin`, inspect `HEAD...origin/master`, reconcile normally, run the relevant verifier mode, and run `git diff --check`.
 3. Never push a change that skips required CI unless the Product Owner explicitly authorizes the exception and the commit records why.
 4. Do not deploy manually to bypass GitHub Actions. Production releases must remain tied to the exact verified commit SHA and pass the post-deploy SHA health check.
+
+## Standing StoX owner authorization: autonomous release lifecycle (2026-11-15)
+
+The StoX product owner grants standing authorization for any code fix to commit scoped local changes, push a feature branch, raise a GitHub pull request, independently self-review (no external reviewer is available), address failed CI checks, merge after all required checks pass, and track the existing GitHub Actions CI/CD deployment through exact-SHA production verification. Do these proactively as the default; do not stop at a local fix or request redundant push/PR/merge/deploy approval. An explicit owner HOLD overrides this authorization. Respect branch protections, required checks, CI integrity, existing deployment procedures, and production rollback/health safeguards.
+
+This is NOT blanket authorization for discretionary production database/config/cache/scheduler/worker edits, incident replays, provider backfills, financial/trading operations, or real-account notification experiments. Obtain specific approval for these. Exception granted November 15, 2026: ONE controlled historical P4 API incident replay canary, only after verifying safeguards, running a dry-run, and establishing release readiness; never treat that as approval for bulk replay or additional canaries.
+
+Incident/supervisor reports MUST contain a highly visible **ACTION REQUIRED FROM YOU** section listing exact owner actions/approvals and why they block closure; state **None** if no owner action is needed. Proactively resolve everything within standing authorization without waiting for the next user message, and continue tracking CI/CD and live acceptance until actual closure.
