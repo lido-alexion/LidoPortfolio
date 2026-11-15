@@ -1,14 +1,14 @@
 # Priority 4 incident reporting closure evidence
 
-**Branch:** `fix/priority4-incidents-20261113`\
-**Reviewed source:** `bdc433324e7ba73574699c216be1a3b996e4f680`\
-**Status:** Source review and isolated local verification complete. Production replay and affected-account acceptance remain gated; P4 is not closed.
+**Branch:** `fix/priority4-protected-20261115`\
+**Reviewed source:** isolated worktree snapshot, 2026-11-15\
+**Status:** Protected historical outcomes reviewed. All ten remain blocked from replay; production issue #39 acceptance remains separately owner-owned.
 
 ## Scope and evidence boundary
 
 This record covers the guarded replay command, API incident report sanitization, reporter deduplication safeguards, queue routing, and the outstanding notification-overlay acceptance for #39. It does not close or absorb #272, #273, #277, or #283.
 
-The supplied operations snapshot reports 56 old pending incidents, 8 `circuit_open`, 2 `cooldown`, 3 linked, and a production worker consuming `log-triage`. Treat those as supplied snapshot facts, not current state rechecked in this pass. No production query, worker inspection, GitHub request, incident dispatch, notification send, or account session was performed here. No incident/GitHub state was mutated.
+The supplied operations snapshot at **2026-11-15 21:26 IST** reports exactly 59 already linked, zero eligible pending, and ten protected outcomes: eight `circuit_open` and two `cooldown`. Six have issue references: open #277, #272, #273 and #291; closed #274 and #270. Four `circuit_open` incidents (IDs **52975, 53229, 53502, 53670**) have prior GitHub checks but no stored issue number or URL. A prior indexed GitHub search found no matches; that is not proof an issue was never created. All ten MUST remain blocked from replay. This is a supplied snapshot, not a newly queried production state. No production query, worker inspection, GitHub request, incident dispatch, notification send, or account session was performed in this pass. No incident/GitHub state was mutated.
 
 ## Source review findings
 
@@ -17,7 +17,15 @@ The supplied operations snapshot reports 56 old pending incidents, 8 `circuit_op
 - `CreateOrLinkGitHubIssueJob` delegates to the existing reporter. The reporter searches the exact marker and uses its shared lock, rate ceiling, circuit, cooldown, binding history, and `creation_unknown` hold. A failed or ambiguous create is not a reason to blindly replay.
 - Both initial observation and manual reconciliation route jobs through the configured reporter connection and queue. The reviewed service unit explicitly consumes `log-triage`. Source wiring is verified; live process/configuration alignment remains an operator check.
 
-No proven in-scope source defect was found. No application code change was made.
+## Protected historical outcomes: decision path
+
+Do not dispatch, replay, or retry any of the ten protected rows. Their `circuit_open` or `cooldown` state and any prior check/binding are evidence that the normal reporter already made or attempted a decision. In particular, a missing issue number/URL after a prior check is an unresolved outcome, not an eligible “never checked” row. The guarded `ops:reconcile-api-failure-incidents` selector requires `sync_status=pending`, `last_github_checked_at IS NULL`, all issue fields null, age threshold satisfied, and no binding of any state. Do not relax those predicates to include these incidents.
+
+For a future owner-led resolution, first use read-only incident and binding evidence to establish the incident fingerprint and exact marker (`stox-api-failure` or `stox-browser-observation`). Read-only lookup may confirm an issue only when the repository and exact marker match; record the real issue number/URL/state from the returned issue. A zero-result indexed search does not establish non-creation, especially after an ambiguous POST or previous check. If exact identity remains unproven, preserve the hold and escalate for owner adjudication. Never synthesize an issue URL, clear a binding/circuit, or convert an unresolved result into a retry. Any production data correction or additional replay requires separate explicit owner authorization.
+
+The production notification acceptance for #39 is independent of P4 incident resolution and remains owner-owned. Resolving any of these incident references does not satisfy that acceptance.
+
+No reporter/reconciler behavior defect was established. A focused regression and operator decision-path documentation were added; runtime behavior and guardrails are unchanged.
 
 ## Local verification
 
@@ -49,6 +57,10 @@ Additional local test evidence from this follow-up:
 | `npx vitest run tests/js/tos/notification-history-detail.test.jsx` | Not run; command stalled attempting package resolution and was stopped | This checkout has no `app/node_modules`; network is restricted. Frontend source coverage was inspected but not freshly executed. |
 
 The repository root is a linked worktree whose shared `.git` metadata is read-only in this environment. `git fetch origin master` could not write `FETCH_HEAD`, so latest-origin reconciliation could not be completed here. No push, merge, PR, deploy, live request, or external mutation was made. The report remains an integration handoff on this branch; it is not CI evidence or a production approval receipt.
+
+### Protected incident follow-up (2026-11-15)
+
+The focused regression now includes a stale `circuit_open` incident with `last_github_checked_at` populated but no issue fields and no binding; the bounded replay selector must not dispatch it. Execution was attempted with `OTEL_SDK_DISABLED=true php artisan test --filter=test_manual_api_incident_reconciliation_is_dry_run_bounded_and_excludes_linked_or_ambiguous_rows` in the app test tree, but could not start because `app/vendor/autoload.php` is absent. This follow-up therefore has no fresh PHPUnit pass. `git diff --check` passed. The source change and documentation change remain uncommitted for independent review; no production or GitHub request was made.
 
 ## Bounded first-production canary approval gate
 
