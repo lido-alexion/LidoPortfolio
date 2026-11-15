@@ -124,9 +124,9 @@ for (const viewport of VIEWPORTS) {
             await page.route('**/api/cash/statement*', route => route.fulfill({ json: { data: { entries, opening_balance: 10000, closing_balance: balance } } }));
             for (const resource of ['recalls', 'bridge-loans', 'pending-sale-proceeds']) await page.route(`**/api/v1/capital/${resource}*`, route => route.fulfill({ json: { data: [] } }));
             for (const operation of ['deposit', 'withdraw', 'adjust']) await page.route(`**/api/cash/${operation}`, route => {
-                const payload = route.request().postDataJSON(); expect(payload).toEqual({ amount: operation === 'deposit' ? 3000 : operation === 'withdraw' ? 1000 : -500, remarks: `Synthetic ${operation}`, transaction_date: '2026-10-10' });
+                const payload = route.request().postDataJSON(); expect({ ...payload, amount: Number(payload.amount) }).toEqual({ amount: operation === 'deposit' ? 3000 : operation === 'withdraw' ? 1000 : -500, remarks: `Synthetic ${operation}`, transaction_date: '2026-10-10' });
                 if (fail[operation]) { fail[operation] = false; return route.fulfill({ status: 503, json: { message: `Synthetic ${operation} unavailable.` } }); }
-                const amount = operation === 'withdraw' ? -payload.amount : payload.amount; balance += amount; entries.push({ id: entries.length + 1, entry_date: payload.transaction_date, entry_type: operation === 'withdraw' ? 'withdrawal' : operation === 'adjust' ? 'adjustment' : 'deposit', amount, running_balance: balance, reason: payload.remarks }); return route.fulfill({ status: 201, json: { data: entries.at(-1) } });
+                const signedAmount = Number(operation === 'withdraw' ? -payload.amount : payload.amount); balance += signedAmount; entries.push({ id: entries.length + 1, entry_date: payload.transaction_date, entry_type: operation === 'withdraw' ? 'withdrawal' : operation === 'adjust' ? 'adjustment' : 'deposit', amount: signedAmount, running_balance: balance, reason: payload.remarks }); return route.fulfill({ status: 201, json: { data: entries.at(-1) } });
             });
             await evidence.seal(); await page.goto('/cash'); await page.getByRole('button', { name: 'See reservation details' }).click(); await expect(page.getByRole('link', { name: '#41', exact: true })).toBeVisible();
             const form = page.locator('form').filter({ has: page.getByLabel('Amount', { exact: true }) });
@@ -143,6 +143,57 @@ for (const viewport of VIEWPORTS) {
             }
             await page.reload(); for (const operation of ['deposit', 'withdraw', 'adjust']) await expect(page.getByRole('cell', { name: `Synthetic ${operation}`, exact: true })).toBeVisible();
             expect(balance).toBe(11500); expect(entries).toHaveLength(3); expect(evidence.writes).toHaveLength(6); expect(evidence.blocked).toEqual([]);
+        });
+
+        test(`cash withdrawal bounds restore the edited amount and preview partial decimals (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'E2E-22');
+            const evidence = await prepare(page, viewport, (method, path) => path === '/api/logs/frontend' || (method === 'PUT' && path === '/api/cash/ledger/2') || (method === 'POST' && path === '/api/cash/withdraw'));
+            let entries = [
+                { id: 2, entry_type: 'withdrawal', amount: -60, running_balance: 40, entry_date: '2026-10-10', reason: 'Original withdrawal' },
+                { id: 1, entry_type: 'deposit', amount: 100, running_balance: 100, entry_date: '2026-10-09', reason: 'Opening deposit' },
+            ];
+            const summary = { cash_balance: 40, reserved_cash: 10, available_physical_cash: 40, available_investable_cash: 30, strategies: [], reservations: [] };
+            await page.route(/\/api\/cash(?:\?.*)?$/, route => route.fulfill({ json: { data: summary } }));
+            await page.route('**/api/cash/statement*', route => route.fulfill({ json: { data: { entries, opening_balance: 0, closing_balance: 40 } } }));
+            for (const resource of ['recalls', 'bridge-loans', 'pending-sale-proceeds']) await page.route(`**/api/v1/capital/${resource}*`, route => route.fulfill({ json: { data: [] } }));
+            await page.route('**/api/cash/withdraw', route => route.fulfill({ status: 201, json: { data: { entry: { id: 3, entry_type: 'withdrawal', amount: -30, balance_after: 10, entry_date: '2026-10-10' } } } }));
+            await page.route('**/api/cash/ledger/2', route => {
+                const payload = route.request().postDataJSON();
+                expect(route.request().headers()['x-profile-id']).toBe(String(TEST_PORTFOLIO.id));
+                return route.fulfill({ status: 201, json: { data: { id: 4, entry_type: 'withdrawal', amount: -Number(payload.amount), balance_after: Number((40 + 60 - Number(payload.amount)).toFixed(4)), entry_date: payload.transaction_date } } });
+            });
+            await evidence.seal(); await page.goto('/cash');
+            const amount = page.getByLabel('Amount', { exact: true });
+            const form = page.locator('form').filter({ has: amount });
+            const operations = page.getByRole('group', { name: 'Cash operation' });
+            const plus = amount.locator('xpath=..').getByRole('button', { name: 'Increase value' });
+            await operations.getByRole('button', { name: 'Withdraw', exact: true }).click();
+            await amount.fill('30');
+            await expect(plus).toBeDisabled();
+            await expect(amount).toHaveValue('30');
+            await amount.fill('40.0001'); await form.getByRole('button', { name: 'Withdraw', exact: true }).click();
+            expect(evidence.writes.filter(write => write.path === '/api/cash/withdraw')).toHaveLength(0);
+            await expect(page.getByText('Withdrawal cannot exceed available cash', { exact: false })).toBeVisible();
+            await page.getByRole('row').filter({ hasText: 'Original withdrawal' }).getByRole('button', { name: 'Edit', exact: true }).click();
+            await expect(page.getByLabel('Transaction date', { exact: true })).toHaveValue('10-Oct-2026');
+            await amount.focus(); await amount.press('Control+A'); await amount.fill('60');
+            await plus.click();
+            await expect(amount).toHaveValue('60.0001');
+            await expect(page.getByRole('status')).toContainText('(lower)');
+            await amount.fill('90');
+            await expect(plus).toBeDisabled();
+            await amount.fill('90.0001'); await form.getByRole('button', { name: 'Save edit', exact: true }).click();
+            expect(evidence.writes.filter(write => write.path === '/api/cash/ledger/2')).toHaveLength(0);
+            await amount.fill('70.0001');
+            await expect(page.getByRole('status')).toContainText(/Updated balance:\s*₹\s*29\.9999 \(lower\)/);
+            const saveResponsePromise = page.waitForResponse(response => new URL(response.url()).pathname === '/api/cash/ledger/2' && response.status() === 201);
+            await form.getByRole('button', { name: 'Save edit', exact: true }).click();
+            const saveResponse = await saveResponsePromise;
+            expect(await saveResponse.json()).toEqual({ data: { id: 4, entry_type: 'withdrawal', amount: -70.0001, balance_after: 29.9999, entry_date: '2026-10-10' } });
+            expect(saveResponse.request().headers()['x-profile-id']).toBe(String(TEST_PORTFOLIO.id));
+            expect(saveResponse.request().postDataJSON()).toEqual({ amount: '70.0001', remarks: 'Original withdrawal', transaction_date: '2026-10-10' });
+            expect(evidence.writes.map(write => `${write.method} ${write.path}`)).toEqual(['PUT /api/cash/ledger/2']);
+            expect(evidence.blocked).toEqual([]);
         });
     });
 }

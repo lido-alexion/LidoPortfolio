@@ -1,5 +1,5 @@
 StoX static documentation
-Generated: 2026-10-22T10:23:50.176Z
+Generated: 2026-11-13T19:31:48.826Z
 Topics: 53
 Catalog fingerprint: a760fc2f5c2460ec2811ad43b3c5e37c41109650c1f0ec6ff6b62efdde9c284e
 Open index.html or any {keyword}.html — no JavaScript required.

@@ -39,10 +39,11 @@ These workflows preserve the accepted [portfolio and cash contract](../current/p
 - Warning: Record cash movement updates the StoX ledger; it does not transfer money at a bank or broker. Available cash and reserved cash differ. A reserve shortfall is a warning, not a second cash account or an independent withdrawal prohibition.
 
 1. Open `/cash`, inspect cash balance, Reserved cash and Available cash. Use See reservation details to inspect recommendation identity and the reserved amount; do not infer a fill from reservation alone.
-2. Choose Deposit, enter a positive whole-rupee Amount, Transaction date and optional Remarks, then submit. A failed write retains the input and unchanged statement; retry only after checking whether the record exists.
+2. Choose Deposit, enter a positive amount (up to four decimal places), Transaction date and optional Remarks, then submit. Current and projected balances update while typing. A failed write retains the input and unchanged statement; retry only after checking whether the record exists.
 3. Confirm the successful entry in Cash account statement with its effective date, running balance and remarks.
 4. Choose Withdraw. An amount above available cash cannot be recorded. Record a valid withdrawal using the same explicit form, then inspect the statement.
-5. Choose Adjust, enter a non-zero signed whole-rupee amount and a required reason. Correct rejected input or retry a failed write while the draft remains visible. Confirm a separate adjustment entry rather than rewriting a prior economic event.
-6. Reload and verify the statement and balances. No order, fill or external transfer should be created by these actions.
+5. Choose Adjust, enter a non-zero signed amount and a required reason. Adjustment is a signed delta to cash, not a replacement balance. Correct rejected input or retry a failed write while the draft remains visible.
+6. Use Edit or Delete for user managed deposits, withdrawals and adjustments. Edit appends a reversal and replacement; Delete appends a reversal. Trade and internal entries are corrected through their owning workflow. Both corrections retain the old effective date and audit history.
+7. Reload and verify the statement and balances. No order, fill or external transfer should be created by these actions.
 
 **Expected result:** Confirmed ledger events and reservations remain distinguishable. Browser automation uses a local deterministic ledger, never production cash mutation.
