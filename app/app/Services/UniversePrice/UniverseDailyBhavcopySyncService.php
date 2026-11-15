@@ -22,6 +22,7 @@ class UniverseDailyBhavcopySyncService
 {
     public const METHOD = 'exchange_bhavcopy';
     public const KEY_RECEIPTS = 'universe_price_sync_bulk_receipts_v1';
+    private const RETRY_BACKOFF_MINUTES = [5, 15, 60, 360];
 
     public function __construct(
         protected NseBhavcopyService $nse,
@@ -72,6 +73,7 @@ class UniverseDailyBhavcopySyncService
             'from_date' => $from->toDateString(), 'to_date' => $to->toDateString(),
             'dry_run' => $dryRun, 'files_downloaded' => 0, 'file_cache_hits' => 0,
             'file_errors' => 0, 'identity_conflicts' => 0, 'projected_rows' => 0,
+            'backoff_skips' => 0,
             'historical_identity_rows' => 0, 'historical_adjustment_required' => 0,
             'files' => [], 'unavailable_stocks' => 0, 'unavailable_samples' => [],
         ];
@@ -87,10 +89,33 @@ class UniverseDailyBhavcopySyncService
                 $coverage = $this->coverage($exchangeStocks->pluck('id')->all(), $day);
                 $coverageHash = $this->coverageHash($coverage);
                 $receipt = $entries[$key] ?? null;
-                if (! $force && is_array($receipt) && ($receipt['coverage_hash'] ?? null) === $coverageHash) {
+                if (! $force && is_array($receipt) && empty($receipt['retry_after']) && ($receipt['coverage_hash'] ?? null) === $coverageHash) {
                     $stats['bulk']['file_cache_hits']++;
                     $stats['bulk']['historical_identity_rows'] += $receipt['historical_identity_rows'] ?? 0;
                     $stats['bulk']['files'][] = array_merge($receipt, ['status' => 'receipt_cached']);
+                    continue;
+                }
+                if (! $force && is_array($receipt) && ($receipt['coverage_hash'] ?? null) === $coverageHash
+                    && ! empty($receipt['retry_after']) && Carbon::parse($receipt['retry_after'])->isFuture()) {
+                    $stats['bulk']['backoff_skips']++;
+                    $stats['bulk']['historical_identity_rows'] += (int) ($receipt['historical_identity_rows'] ?? 0);
+                    $deferred = array_merge($receipt, ['status' => 'retry_deferred']);
+                    $stats['bulk']['identity_conflicts'] += (int) ($receipt['identity_conflicts'] ?? 0);
+                    if (isset($receipt['error'])) {
+                        $stats['bulk']['file_errors']++;
+                        if (count($stats['errors']) < 20) {
+                            $stats['errors'][] = $key.': '.$receipt['error'];
+                        }
+                    }
+                    foreach (($receipt['identity_conflict_samples'] ?? []) as $sample) {
+                        if (isset($sample['stock_id'], $sample['reason'])) {
+                            $conflicted[(int) $sample['stock_id']] = $sample['reason'];
+                        }
+                    }
+                    $stats['bulk']['files'][] = $deferred;
+                    if (! $dryRun) {
+                        $this->logs->log($runId, $jobName, 'warning', 'Universe daily bhavcopy retry deferred', $deferred);
+                    }
                     continue;
                 }
                 $file = ['exchange' => $exchange, 'date' => $day->toDateString(), 'status' => 'failed'];
@@ -113,10 +138,21 @@ class UniverseDailyBhavcopySyncService
                     $stats['bulk']['historical_adjustment_required'] += $historicalBlocked;
                     $file += [
                         'source_rows' => $data['source_rows'], 'invalid_rows' => $data['invalid_rows'],
+                        // A source revision is diagnostic evidence, not an
+                        // identity override. Conflicts remain unavailable until
+                        // a later revision validates against canonical identity.
+                        'source_revision_sha256' => $data['source_revision_sha256'] ?? null,
                         'matched_rows' => count($matched['rows_by_stock_id']),
                         'historical_identity_rows' => $historicalAccepted,
                         'historical_adjustment_required' => $historicalBlocked,
                         'identity_conflicts' => count($matched['conflicts']),
+                        // Keep the durable run log actionable without dumping a
+                        // potentially large conflict set or any price payload.
+                        'identity_conflict_samples' => array_slice(array_map(
+                            fn ($id, $reason) => ['stock_id' => (int) $id, 'reason' => $reason],
+                            array_keys($matched['conflicts']), array_values($matched['conflicts']),
+                        ), 0, 50),
+                        'identity_conflict_samples_truncated' => count($matched['conflicts']) > 50,
                     ];
                     $conflicted += $matched['conflicts'];
                     $stats['bulk']['identity_conflicts'] += count($matched['conflicts']);
@@ -147,6 +183,24 @@ class UniverseDailyBhavcopySyncService
                         Setting::setValue(self::KEY_RECEIPTS, json_encode([
                             'fingerprint' => $fingerprint, 'entries' => $entries,
                         ], JSON_THROW_ON_ERROR));
+                    } elseif (! $dryRun && $matched['conflicts'] !== []) {
+                        $previous = $receipt['source_revision_sha256'] ?? null;
+                        $current = $file['source_revision_sha256'] ?? null;
+                        $previousValid = is_string($previous) && preg_match('/^[a-f0-9]{64}$/', $previous) === 1;
+                        $currentValid = is_string($current) && preg_match('/^[a-f0-9]{64}$/', $current) === 1;
+                        // A known new revision earns an immediate retry window.
+                        // Missing/malformed evidence cannot prove a revision, so
+                        // it must not pin repeated conflicts to the first delay.
+                        $attempt = $currentValid && (! $previousValid || $current !== $previous)
+                            ? 1
+                            : min((int) ($receipt['retry_attempt'] ?? 0) + 1, count(self::RETRY_BACKOFF_MINUTES));
+                        $file['coverage_hash'] = $coverageHash;
+                        $file['retry_attempt'] = $attempt;
+                        $file['retry_after'] = now()->addMinutes(self::RETRY_BACKOFF_MINUTES[$attempt - 1])->toIso8601String();
+                        $entries[$key] = $file;
+                        Setting::setValue(self::KEY_RECEIPTS, json_encode([
+                            'fingerprint' => $fingerprint, 'entries' => $entries,
+                        ], JSON_THROW_ON_ERROR));
                     }
                 } catch (\Throwable $e) {
                     $stats['bulk']['file_errors']++;
@@ -156,6 +210,16 @@ class UniverseDailyBhavcopySyncService
                     }
                     if (count($stats['errors']) < 20) {
                         $stats['errors'][] = $key.': '.$file['error'];
+                    }
+                    if (! $dryRun) {
+                        $attempt = min((int) ($receipt['retry_attempt'] ?? 0) + 1, count(self::RETRY_BACKOFF_MINUTES));
+                        $entries[$key] = $file + [
+                            'coverage_hash' => $coverageHash, 'retry_attempt' => $attempt,
+                            'retry_after' => now()->addMinutes(self::RETRY_BACKOFF_MINUTES[$attempt - 1])->toIso8601String(),
+                        ];
+                        Setting::setValue(self::KEY_RECEIPTS, json_encode([
+                            'fingerprint' => $fingerprint, 'entries' => $entries,
+                        ], JSON_THROW_ON_ERROR));
                     }
                 }
                 $stats['bulk']['files'][] = $file;

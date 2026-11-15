@@ -64,11 +64,30 @@ class NseBhavcopyService
                 }
                 $index = $i;
             }
-            if ($csvCount !== 1 || $index === null || ($csv = $zip->getFromIndex($index)) === false) {
+            if ($csvCount !== 1 || $index === null) {
                 throw new RuntimeException('NSE daily bhavcopy ZIP must contain exactly one session CSV.');
             }
 
-            return $this->parser->parse($csv, $date, 'NSE');
+            $csvStream = $zip->getStream($this->csvName($date));
+            if ($csvStream === false) {
+                throw new RuntimeException('NSE daily bhavcopy ZIP session CSV could not be read.');
+            }
+            try {
+                // Read at most one byte beyond the parser limit so a malicious
+                // archive cannot force unbounded decompression allocation.
+                $csv = stream_get_contents($csvStream, 32 * 1024 * 1024 + 1);
+            } finally {
+                fclose($csvStream);
+            }
+            if ($csv === false || strlen($csv) > 32 * 1024 * 1024) {
+                throw new RuntimeException('NSE daily bhavcopy CSV exceeds the daily file limit.');
+            }
+            $parsed = $this->parser->parse($csv, $date, 'NSE');
+
+            // Fingerprint validated session content, not ZIP envelope metadata
+            // or compression choices. This remains evidence only and cannot
+            // override parser or identity validation.
+            return $parsed + ['source_revision_sha256' => hash('sha256', $csv)];
         } finally {
             if ($opened) {
                 $zip->close();
