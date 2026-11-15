@@ -1,7 +1,7 @@
 # P2 market-data completeness release readiness
 
-Assessment date: 15 November 2026  
-P2 branch: `fix/priority2-coverage-20261113` at `3cda465c50517a6158fa8d4b647f5a0945174ec8`  
+Assessment date: 15 November 2026
+P2 branch: `fix/priority2-coverage-20261113` at `3cda465c50517a6158fa8d4b647f5a0945174ec8`
 Reviewed initially: `origin/master` at `a6c41bfd9ee67c5d03e37fdd49ece947feaf943e`
 
 ## Decision
