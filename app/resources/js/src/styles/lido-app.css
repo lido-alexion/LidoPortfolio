@@ -4707,27 +4707,39 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     gap: 0.5rem;
 }
 
-.lido-notification-menu {
+.dropdown-menu.lido-notification-menu {
     position: fixed;
     top: 4.5rem;
     right: 1rem;
     /* Keep the pane inside the available width when a scrollbar is present. */
     width: min(24rem, calc(100% - 2rem));
     max-width: calc(100% - 2rem);
-    max-height: min(70vh, 32rem);
+    max-height: min(calc(100vh - 5rem), 36rem);
     overflow-y: auto;
     z-index: 1050;
     font-size: 0.7rem;
     font-weight: 400;
 }
 
+.dropdown-menu.lido-notification-menu .dropdown-item {
+    font-size: inherit;
+    font-weight: 400;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
 .lido-notification-item-title {
-    display: inline;
     font-weight: 400;
 }
 
+.lido-notification-item-message {
+    display: block;
+    margin-top: 0.25rem;
+    white-space: pre-line;
+}
+
 @media (max-width: 575.98px) {
-    .lido-notification-menu {
+    .dropdown-menu.lido-notification-menu {
         top: 4rem;
         right: 0.5rem;
         width: calc(100% - 1rem);

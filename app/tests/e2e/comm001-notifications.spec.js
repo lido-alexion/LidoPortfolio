@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 
@@ -87,12 +88,19 @@ test(`notification bell deep link survives read failure and reload, with a retry
     });
 
     await page.goto('/notification-history');
+    // Production emits Bootstrap after the application stylesheet.
+    await page.addStyleTag({ content: readFileSync(new URL('../../node_modules/bootstrap/dist/css/bootstrap.min.css', import.meta.url), 'utf8') });
     await page.getByRole('button', { name: '1 unread notifications', exact: true }).click();
     const pane = page.locator('.lido-notification-menu');
     await expect(pane).toBeVisible();
     const bounds = await pane.boundingBox();
     const viewportWidth = await page.evaluate(() => document.documentElement.clientWidth);
+    expect(bounds.width).toBeGreaterThanOrEqual(width === 390 ? viewportWidth - 32 : 380);
     expect(bounds.x).toBeGreaterThanOrEqual(0);
+    await expect(pane.locator('.lido-notification-item-message')).toHaveText('A product update is ready.');
+    await expect(pane.locator('.lido-notification-item-message')).toHaveAttribute('title', 'A product update is ready.');
+    expect(await pane.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeLessThan(13);
+    await expect(pane.getByRole('link', { name: 'View all notifications' })).toBeVisible();
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewportWidth);
     await pane.getByRole('link', { name: /Recommendation changed/ }).click();
     await expect(page).toHaveURL(/notification-history\?notification=17$/);
