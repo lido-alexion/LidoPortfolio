@@ -57,6 +57,45 @@ return [
                         'Ferrous Metals' => 'Ferrous Metals',
                         'Non-Ferrous Metals' => 'Non-Ferrous Metals',
                     ],
+                    // Evidence-backed whole-pair translations from the current NSE
+                    // labels. Pair mappings take precedence over the legacy
+                    // independent label maps and must target an approved pair.
+                    'pairs' => [
+                        'Capital Goods' => [
+                            'Electrical Equipment' => ['Industrials', 'Electrical Equipment'],
+                            'Industrial Products' => ['Industrials', 'Industrial Products'],
+                            'Agricultural Commercial & Construction Vehicles' => ['Automobile & Auto Components', 'Commercial Vehicles'],
+                        ],
+                        'Information Technology' => [
+                            'IT - Services' => ['Information Technology', 'IT Services'],
+                        ],
+                        'Consumer Services' => [
+                            'Retailing' => ['Consumer Discretionary', 'Retailing'],
+                        ],
+                        'Consumer Durables' => [
+                            'Consumer Durables' => ['Consumer Discretionary', 'Consumer Durables'],
+                        ],
+                        'Construction' => [
+                            'Construction' => ['Industrials', 'Construction'],
+                        ],
+                        'Fast Moving Consumer Goods' => [
+                            'Food Products' => ['Fast Moving Consumer Goods', 'Food Products'],
+                            'Beverages' => ['Fast Moving Consumer Goods', 'Beverages'],
+                        ],
+                        'Metals & Mining' => [
+                            'Minerals & Mining' => ['Metals & Mining', 'Minerals & Mining'],
+                        ],
+                        'Textiles' => [
+                            'Textiles & Apparels' => ['Consumer Discretionary', 'Textiles'],
+                        ],
+                        'Power' => [
+                            'Power' => ['Energy', 'Power'],
+                        ],
+                        'Oil Gas & Consumable Fuels' => [
+                            'Oil' => ['Energy', 'Oil & Gas'],
+                            'Gas' => ['Energy', 'Oil & Gas'],
+                        ],
+                    ],
                 ],
             ],
         ],

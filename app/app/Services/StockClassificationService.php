@@ -249,6 +249,14 @@ class StockClassificationService
         }
 
         $provider = $this->taxonomyDefinition()['providers'][self::PROVIDER] ?? [];
+        $pair = $provider['pairs'][$providerSector][$providerIndustry] ?? null;
+        if (is_array($pair) && count($pair) === 2) {
+            [$pairSector, $pairIndustry] = $pair;
+            $pairAllowed = $this->taxonomyDefinition()['industries'][$pairSector] ?? [];
+            if (in_array($pairIndustry, $pairAllowed, true)) {
+                return [$pairSector, $pairIndustry];
+            }
+        }
         $sector = $provider['sectors'][$providerSector] ?? null;
         $industry = $provider['industries'][$providerIndustry] ?? null;
         $allowed = $this->taxonomyDefinition()['industries'][$sector] ?? [];

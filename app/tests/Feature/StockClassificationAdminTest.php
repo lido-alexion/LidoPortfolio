@@ -108,6 +108,48 @@ class StockClassificationAdminTest extends TestCase
         ])->assertOk()->assertJsonPath('data.source_type', 'manual_override');
     }
 
+    public function test_captured_nse_pairs_map_only_to_approved_canonical_pairs(): void
+    {
+        $pairs = [
+            ['Capital Goods', 'Electrical Equipment', 'Industrials', 'Electrical Equipment'],
+            ['Capital Goods', 'Industrial Products', 'Industrials', 'Industrial Products'],
+            ['Capital Goods', 'Agricultural Commercial & Construction Vehicles', 'Automobile & Auto Components', 'Commercial Vehicles'],
+            ['Information Technology', 'IT - Services', 'Information Technology', 'IT Services'],
+            ['Consumer Services', 'Retailing', 'Consumer Discretionary', 'Retailing'],
+            ['Consumer Durables', 'Consumer Durables', 'Consumer Discretionary', 'Consumer Durables'],
+            ['Construction', 'Construction', 'Industrials', 'Construction'],
+            ['Fast Moving Consumer Goods', 'Food Products', 'Fast Moving Consumer Goods', 'Food Products'],
+            ['Fast Moving Consumer Goods', 'Beverages', 'Fast Moving Consumer Goods', 'Beverages'],
+            ['Metals & Mining', 'Minerals & Mining', 'Metals & Mining', 'Minerals & Mining'],
+            ['Textiles', 'Textiles & Apparels', 'Consumer Discretionary', 'Textiles'],
+            ['Power', 'Power', 'Energy', 'Power'],
+            ['Oil Gas & Consumable Fuels', 'Oil', 'Energy', 'Oil & Gas'],
+            ['Oil Gas & Consumable Fuels', 'Gas', 'Energy', 'Oil & Gas'],
+        ];
+
+        foreach ($pairs as $index => [$sourceSector, $sourceIndustry, $sector, $industry]) {
+            $stock = $this->stock('PAIR'.str_pad((string) $index, 2, '0', STR_PAD_LEFT));
+            app(StockClassificationService::class)->recordObservation($stock, $this->payload($sourceSector, $sourceIndustry));
+            $observation = StockClassificationObservation::query()->where('stock_id', $stock->id)->firstOrFail();
+            $this->assertSame($sourceSector, $observation->provider_sector);
+            $this->assertSame($sourceIndustry, $observation->provider_industry);
+            $this->assertSame($sector, $observation->sector);
+            $this->assertSame($industry, $observation->industry);
+        }
+    }
+
+    public function test_unresolved_captured_taxonomy_pairs_remain_fail_closed(): void
+    {
+        $stock = $this->stock('NEEDSDECISION');
+        try {
+            app(StockClassificationService::class)->recordObservation($stock, $this->payload('Chemicals', 'Chemicals & Petrochemicals'));
+            $this->fail('A source pair with no approved canonical industry must remain unmapped.');
+        } catch (\RuntimeException $error) {
+            $this->assertStringContainsString('"sector":"Chemicals"', $error->getMessage());
+            $this->assertDatabaseCount('stox_stock_classification_observations', 0);
+        }
+    }
+
     public function test_provider_403_is_a_bounded_retry_and_does_not_create_an_observation(): void
     {
         $stock = $this->stock('TCS');
