@@ -85,6 +85,8 @@ Each entry has an effective entry date and may link to a reversal reference. Rev
 
 Current anchors: `CashAccount`, `CashLedgerEntry`, `CashManagementService`, `CashController`, `SpecialCashMovementService`, `V5CashStatementTest`, and cash/financial-integrity tests.
 
+Manual deposit, withdrawal and adjustment entries may be corrected from Cash Management by any user authorized for the active portfolio. Corrections are append-only: delete appends a linked reversal on the original effective date; edit appends a linked reversal on the original effective date and a replacement on the edited effective date (or original date when unchanged), in one database transaction. Thus historical views stop counting the old posting from its original date and begin counting the replacement on its new date. Every correction is rejected if it would make any daily historical balance negative, including same-date amount-only edits. This daily check does not model intraday ordering, and reservations are checked against the resulting current balance. The original event and audit metadata remain intact. The account row lock serializes writes; the unique reversal reference prevents duplicate correction. Trade-linked and internal movements are not editable here and must be corrected by their owning transaction, execution or lending flow. Cash amount inputs accept up to four decimal places, matching the `DECIMAL(18,4)` account and ledger columns. Balance posts use integer ten-thousandths for exact addition. Adjustment is a signed delta, not a set-balance operation.
+
 ## 8. Cash Availability And Reservations
 
 The following values are distinct:

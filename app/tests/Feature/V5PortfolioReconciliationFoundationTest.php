@@ -9,6 +9,7 @@ use App\Models\PortfolioProfile;
 use App\Models\PortfolioReconciliationRun;
 use App\Models\Setting;
 use App\Models\Stock;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\Broker\BrokerGateway;
 use App\Services\Broker\FakeBrokerGateway;
@@ -22,6 +23,84 @@ use Tests\TestCase;
 class V5PortfolioReconciliationFoundationTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_manual_ignore_today_reconstructs_previous_day_holdings_without_mutating_transactions(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $profile->forceFill(['execution_mode' => PortfolioProfile::EXECUTION_MODE_AUTOMATIC])->save();
+        $stock = Stock::query()->create(['symbol' => 'AAA', 'exchange' => 'NSE', 'name' => 'AAA', 'is_active' => true]);
+        Transaction::query()->create([
+            'profile_id' => $profile->id, 'stock_id' => $stock->id, 'type' => 'buy', 'quantity' => 10,
+            'price' => 100, 'fees' => 3, 'transaction_date' => '2026-11-12', 'source' => Transaction::SOURCE_MANUAL,
+        ]);
+        Transaction::query()->create([
+            'profile_id' => $profile->id, 'stock_id' => $stock->id, 'type' => 'sell', 'quantity' => 4,
+            'price' => 110, 'fees' => 2, 'transaction_date' => '2026-11-13', 'source' => Transaction::SOURCE_MANUAL,
+        ]);
+        Transaction::query()->create([
+            'profile_id' => $profile->id, 'stock_id' => $stock->id, 'type' => 'buy', 'quantity' => 2,
+            'price' => 120, 'fees' => 1, 'transaction_date' => '2026-11-13', 'source' => Transaction::SOURCE_MANUAL,
+        ]);
+        $broker = app(FakeBrokerGateway::class);
+        $broker->reconciliationSnapshot = [
+            'provider' => 'kite', 'holdings' => [['symbol' => 'AAA', 'exchange' => 'NSE', 'quantity' => 10, 'cost' => 1000]],
+            'positions' => [], 'current_cash' => 50,
+        ];
+        Carbon::setTestNow(Carbon::parse('2026-11-13 10:00:00', 'Asia/Kolkata'));
+        try {
+            $response = $this->actingAs($user)->withProfileHeader($user, $profile)
+                ->postJson('/api/reconciliation', ['ignore_today_transactions' => true])->assertCreated();
+            $run = PortfolioReconciliationRun::query()->findOrFail($response->json('data.run.id'));
+            $this->assertSame(10.0, (float) $run->stox_snapshot['holdings'][0]['quantity']);
+            $this->assertSame(1000.0, (float) $run->stox_snapshot['holdings'][0]['cost']);
+            $this->assertSame(3.0, (float) $run->stox_snapshot['holdings'][0]['fees']);
+            $this->assertSame('2026-11-12', $run->stox_snapshot['comparison']['holdings_as_of']);
+            $this->assertSame('Asia/Kolkata', $run->stox_snapshot['comparison']['timezone']);
+            $this->assertSame('reconciled', $run->holdings_status);
+            $this->assertSame('attention_required', $run->overall_status);
+            $this->assertSame(3, $profile->transactions()->count());
+            $this->assertSame('Current Kite cash versus current StoX cash; no historical Kite funds snapshot is available.', $run->stox_snapshot['comparison']['funds_comparison']);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_ignore_today_does_not_clear_an_existing_execution_block(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        Stock::query()->create(['symbol' => 'AAA', 'exchange' => 'NSE', 'name' => 'AAA', 'is_active' => true]);
+        $profile->forceFill(['execution_blocked_by_reconciliation' => true])->save();
+        $service = app(PortfolioReconciliationService::class);
+        $broker = ['holdings' => [['symbol' => 'AAA', 'quantity' => 10, 'cost' => 1000]], 'current_cash' => 100];
+        $stox = [
+            'holdings' => [['symbol' => 'AAA', 'quantity' => 10, 'cost' => 1000]],
+            'cash_balance' => 100,
+            'comparison' => ['ignore_today_transactions' => true, 'holdings_as_of' => '2026-11-12'],
+        ];
+        $run = $service->recordSuccessful($profile, 'manual', $broker, $stox, ['holding_cost' => 5, 'funds' => 1]);
+        $this->assertSame('reconciled', $run->holdings_status);
+        $this->assertSame('attention_required', $run->overall_status);
+        $this->assertTrue($profile->fresh()->execution_blocked_by_reconciliation);
+        $strict = $service->recordSuccessful($profile, 'manual', $broker, [
+            'holdings' => $stox['holdings'], 'cash_balance' => 100,
+        ], ['holding_cost' => 5, 'funds' => 1]);
+        $this->assertSame('reconciled', $strict->overall_status);
+        $this->assertFalse($profile->fresh()->execution_blocked_by_reconciliation);
+    }
+
+    public function test_manual_reconciliation_rejects_non_boolean_ignore_today_option(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $profile->forceFill(['execution_mode' => PortfolioProfile::EXECUTION_MODE_AUTOMATIC])->save();
+        $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->postJson('/api/reconciliation', ['ignore_today_transactions' => 'sometimes'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('ignore_today_transactions');
+        $this->assertSame(0, PortfolioReconciliationRun::query()->count());
+    }
 
     public function test_scheduled_reconciliation_runs_once_after_close_delay_and_skips_before_due_time(): void
     {

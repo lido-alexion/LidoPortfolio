@@ -9,6 +9,12 @@ const VIEWPORTS = [
     { name: 'desktop', width: 1440, height: 900 },
 ];
 
+const CASH_DISPLAY = {
+    funded: '₹50,000.00',
+    zero: '₹0.00',
+    postExecution: '₹18,462.60',
+};
+
 function acceptanceWizard(status, blockers) {
     const current = status === 'preflight' ? 2 : 2;
     const blocked = blockers.length > 0;
@@ -647,9 +653,9 @@ test.describe('V9-UX-001 composite journey coverage', () => {
             });
 
             await page.goto('/cash');
-            await expect(page.getByText('Cash balance', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 50,000');
-            await expect(page.getByText('Reserved cash', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 0');
-            await expect(page.getByText('Available cash', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 50,000');
+            await expect(page.getByText('Cash balance', { exact: true }).locator('..').locator('.h5')).toHaveText(CASH_DISPLAY.funded);
+            await expect(page.getByText('Reserved cash', { exact: true }).locator('..').locator('.h5')).toHaveText(CASH_DISPLAY.zero);
+            await expect(page.getByText('Available cash', { exact: true }).locator('..').locator('.h5')).toHaveText(CASH_DISPLAY.funded);
 
             await page.goto('/recommendations');
             const pipelineRun = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/api/v1/pipeline/run'));
@@ -692,9 +698,9 @@ test.describe('V9-UX-001 composite journey coverage', () => {
 
             // A normal loan changes deployable recommendation capital, not the one-pool cash balance.
             await page.goto('/cash');
-            await expect(page.getByText('Cash balance', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 50,000');
-            await expect(page.getByText('Reserved cash', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 0');
-            await expect(page.getByText('Available cash', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 50,000');
+            await expect(page.getByText('Cash balance', { exact: true }).locator('..').locator('.h5')).toHaveText(CASH_DISPLAY.funded);
+            await expect(page.getByText('Reserved cash', { exact: true }).locator('..').locator('.h5')).toHaveText(CASH_DISPLAY.zero);
+            await expect(page.getByText('Available cash', { exact: true }).locator('..').locator('.h5')).toHaveText(CASH_DISPLAY.funded);
 
             await page.goto('/recommendations');
             const committedRow = page.getByRole('row').filter({ hasText: 'Momentum Core' });
@@ -723,13 +729,18 @@ test.describe('V9-UX-001 composite journey coverage', () => {
             await expect.poll(() => savedTransaction).toMatchObject({ recommendation_id: recommendationId, strategy_id: 8, type: 'buy', quantity: 9, price: 3500, fees: 37.4 });
             expect(transactionPayload).toMatchObject({ recommendation_id: recommendationId, source: 'recommendation', type: 'buy', quantity: 9, price: 3500, fees: 37.4 });
             expect(observedRequests.filter(({ method, path }) => method === 'POST' && path === '/api/transactions')).toHaveLength(1);
+            const executedAmount = Number(transactionPayload.quantity) * Number(transactionPayload.price);
+            const chargedFees = Number(transactionPayload.fees || 0);
+            expect(executedAmount).toBe(31500);
+            expect(chargedFees).toBe(37.4);
+            expect(cashBalance).toBe(50000 - executedAmount - chargedFees);
             expect(cashBalance).toBe(18462.6);
             await page.goto('/transactions');
             await expect(page.getByRole('row').filter({ hasText: 'INFY' })).toContainText('9');
             await page.goto('/cash');
-            await expect(page.getByText('Cash balance', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 18,463');
-            await expect(page.getByText('Reserved cash', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 0');
-            await expect(page.getByText('Available cash', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 18,463');
+            await expect(page.getByText('Cash balance', { exact: true }).locator('..').locator('.h5')).toHaveText(CASH_DISPLAY.postExecution);
+            await expect(page.getByText('Reserved cash', { exact: true }).locator('..').locator('.h5')).toHaveText(CASH_DISPLAY.zero);
+            await expect(page.getByText('Available cash', { exact: true }).locator('..').locator('.h5')).toHaveText(CASH_DISPLAY.postExecution);
             await page.goto('/holdings');
             const holding = page.getByRole('row').filter({ hasText: 'INFY' });
             await expect(holding).toContainText('Momentum Core');

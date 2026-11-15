@@ -165,11 +165,37 @@ class CashController extends Controller
         ]], 201);
     }
 
+    public function updateEntry(Request $request, int $entry): JsonResponse
+    {
+        $validated = $request->validate([
+            'amount' => ['required', 'numeric', 'regex:/^-?\d{1,14}(?:\.\d{1,4})?$/'],
+            'reason' => ['nullable', 'string', 'max:500'],
+            'remarks' => ['nullable', 'string', 'max:500'],
+            'entry_date' => ['nullable', 'date', 'before_or_equal:today'],
+            'transaction_date' => ['nullable', 'date', 'before_or_equal:today'],
+        ]);
+        $updated = $this->cash->amendCashMovement(
+            \activePortfolio(), $entry, (string) $validated['amount'],
+            trim((string) ($validated['remarks'] ?? $validated['reason'] ?? '')),
+            $request->user(), $validated['entry_date'] ?? $validated['transaction_date'] ?? null,
+        );
+
+        return response()->json(['data' => ['id' => $updated->id, 'entry_type' => $updated->entry_type, 'amount' => $updated->amount, 'balance_after' => $updated->balance_after]], 201);
+    }
+
+    public function deleteEntry(Request $request, int $entry): JsonResponse
+    {
+        $validated = $request->validate(['reason' => ['nullable', 'string', 'max:500']]);
+        $reversal = $this->cash->reverseCashMovement(\activePortfolio(), $entry,
+            trim((string) ($validated['reason'] ?? 'Deleted from cash management')), $request->user());
+        return response()->json(['data' => ['id' => $reversal->id, 'reversal_of_entry_id' => $reversal->reversal_of_entry_id]], 201);
+    }
+
     protected function mutate(Request $request, string $op): JsonResponse
     {
         $profile = \activePortfolio();
         $validated = $request->validate([
-            'amount' => 'required|numeric',
+            'amount' => ['required', 'numeric', 'regex:/^-?\d{1,14}(?:\.\d{1,4})?$/'],
             'reason' => $op === 'adjust' ? 'required_without:remarks|string|max:500' : 'nullable|string|max:500',
             'remarks' => 'nullable|string|max:500',
             'transaction_date' => 'nullable|date|before_or_equal:today',
@@ -178,20 +204,7 @@ class CashController extends Controller
 
         $remarks = trim((string) ($validated['remarks'] ?? $validated['reason'] ?? ''));
         $entryDate = $validated['transaction_date'] ?? $validated['entry_date'] ?? null;
-        $amount = (float) $validated['amount'];
-
-        // Whole-rupee cash movements from the Cash UI.
-        if ($op !== 'adjust' && abs($amount - round($amount)) > 0.0001) {
-            throw ValidationException::withMessages([
-                'amount' => ['Amount must be a whole number of rupees.'],
-            ]);
-        }
-        if ($op === 'adjust' && abs($amount - round($amount)) > 0.0001) {
-            throw ValidationException::withMessages([
-                'amount' => ['Amount must be a whole number of rupees.'],
-            ]);
-        }
-        $amount = round($amount);
+        $amount = (string) $validated['amount'];
 
         try {
             $entry = match ($op) {
