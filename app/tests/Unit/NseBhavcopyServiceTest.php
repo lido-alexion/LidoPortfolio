@@ -34,7 +34,31 @@ class NseBhavcopyServiceTest extends TestCase
         Http::assertSentCount(1);
         Http::assertSent(fn ($r) => $r->url() === 'https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_20261026_F_0000.csv.zip');
         $this->assertSame('AAA', $result['rows'][0]['symbol']);
-        $this->assertSame(hash('sha256', $this->bhavcopyZip($this->bhavcopyCsv())), $result['source_revision_sha256']);
+        $this->assertSame(hash('sha256', $this->bhavcopyCsv()), $result['source_revision_sha256']);
+    }
+
+    public function test_nse_revision_tracks_validated_csv_content_not_zip_envelope(): void
+    {
+        $csv = $this->bhavcopyCsv();
+        $first = $this->zipWithComment($csv, 'first archive envelope');
+        $repacked = $this->zipWithComment($csv, 'different archive metadata');
+        $changedCsv = $this->bhavcopyCsv(rows: [['ClsPric' => '103']]);
+        $changed = $this->zipWithComment($changedCsv, 'different archive metadata');
+        $this->assertNotSame(hash('sha256', $first), hash('sha256', $repacked));
+
+        Http::fake(['nsearchives.nseindia.com/*' => Http::sequence()
+            ->push($first)->push($repacked)->push($changed)]);
+        $service = app(NseBhavcopyService::class);
+        $date = Carbon::parse('2026-10-26');
+        $firstResult = $service->fetchDailyRows($date);
+        $repackedResult = $service->fetchDailyRows($date);
+        $changedResult = $service->fetchDailyRows($date);
+
+        $this->assertSame(hash('sha256', $csv), $firstResult['source_revision_sha256']);
+        $this->assertSame($firstResult['source_revision_sha256'], $repackedResult['source_revision_sha256']);
+        $this->assertNotSame($firstResult['source_revision_sha256'], $changedResult['source_revision_sha256']);
+        $this->assertSame(103.0, $changedResult['rows'][0]['close_price']);
+        Http::assertSentCount(3);
     }
 
     public function test_weekends_and_marked_holidays_do_not_download_files(): void
@@ -82,5 +106,20 @@ class NseBhavcopyServiceTest extends TestCase
         $wrong->shouldReceive('downloadForDate')->once()->andReturn($this->bhavcopyCsv('NSE'));
         $this->expectException(RuntimeException::class);
         $wrong->fetchDailyRows(Carbon::parse('2026-10-26'));
+    }
+
+    private function zipWithComment(string $csv, string $comment): string
+    {
+        $path = tempnam(sys_get_temp_dir(), 'nse_revision_test_');
+        $zip = new \ZipArchive;
+        $zip->open($path, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+        $zip->addFromString('BhavCopy_NSE_CM_0_0_0_20261026_F_0000.csv', $csv);
+        $zip->setArchiveComment($comment);
+        $zip->close();
+        try {
+            return file_get_contents($path);
+        } finally {
+            unlink($path);
+        }
     }
 }

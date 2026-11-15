@@ -185,8 +185,15 @@ class UniverseDailyBhavcopySyncService
                         ], JSON_THROW_ON_ERROR));
                     } elseif (! $dryRun && $matched['conflicts'] !== []) {
                         $previous = $receipt['source_revision_sha256'] ?? null;
-                        $sameRevision = is_string($previous) && $previous !== '' && $previous === ($file['source_revision_sha256'] ?? null);
-                        $attempt = $sameRevision ? min((int) ($receipt['retry_attempt'] ?? 0) + 1, count(self::RETRY_BACKOFF_MINUTES)) : 1;
+                        $current = $file['source_revision_sha256'] ?? null;
+                        $previousValid = is_string($previous) && preg_match('/^[a-f0-9]{64}$/', $previous) === 1;
+                        $currentValid = is_string($current) && preg_match('/^[a-f0-9]{64}$/', $current) === 1;
+                        // A known new revision earns an immediate retry window.
+                        // Missing/malformed evidence cannot prove a revision, so
+                        // it must not pin repeated conflicts to the first delay.
+                        $attempt = $currentValid && (! $previousValid || $current !== $previous)
+                            ? 1
+                            : min((int) ($receipt['retry_attempt'] ?? 0) + 1, count(self::RETRY_BACKOFF_MINUTES));
                         $file['coverage_hash'] = $coverageHash;
                         $file['retry_attempt'] = $attempt;
                         $file['retry_after'] = now()->addMinutes(self::RETRY_BACKOFF_MINUTES[$attempt - 1])->toIso8601String();

@@ -396,6 +396,35 @@ class UniverseDailyBhavcopySyncTest extends TestCase
         $this->assertDatabaseHas('portfolio_sync_logs', ['run_id' => $runId, 'level' => 'warning', 'message' => 'Universe daily bhavcopy retry deferred']);
     }
 
+    public function test_conflicts_without_valid_revision_evidence_continue_backoff_progression(): void
+    {
+        $stock = $this->stock();
+        $source = Mockery::mock(NseBhavcopyService::class);
+        $source->shouldReceive('fetchDailyRows')->times(4)->andReturnUsing(function (Carbon $day) {
+            $parsed = $this->parsedSource('NSE', $day, [['TckrSymb' => 'AAA', 'ISIN' => 'INE999A01010']]);
+            unset($parsed['source_revision_sha256']);
+            return $parsed;
+        });
+        $this->app->instance(NseBhavcopyService::class, $source);
+        $day = Carbon::parse('2026-10-26');
+        $runId = app(SyncLogService::class)->beginRun('universe-price-sync');
+        $sync = app(UniverseDailyBhavcopySyncService::class);
+        $run = fn () => $sync->run(collect([$stock]), $day, $day, $runId, 'universe-price-sync', $this->initialStats())['stats'];
+
+        foreach ([1, 2, 3, 4] as $attempt) {
+            $result = $run();
+            $this->assertSame(1, $result['bulk']['identity_conflicts']);
+            $saved = json_decode((string) Setting::getValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS), true);
+            $entry = $saved['entries']['NSE:2026-10-26'];
+            $this->assertSame($attempt, $entry['retry_attempt']);
+            if ($attempt < 4) {
+                Carbon::setTestNow(Carbon::parse($entry['retry_after']));
+            }
+        }
+
+        $this->assertDatabaseMissing('portfolio_stock_prices', ['stock_id' => $stock->id]);
+    }
+
     private function initialStats(): array
     {
         return ['processed' => 0, 'succeeded' => 0, 'failed' => 0, 'skipped' => 0,
