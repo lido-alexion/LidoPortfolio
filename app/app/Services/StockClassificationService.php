@@ -253,7 +253,14 @@ class StockClassificationService
         $industry = $provider['industries'][$providerIndustry] ?? null;
         $allowed = $this->taxonomyDefinition()['industries'][$sector] ?? [];
         if ($sector === null || $industry === null || ! in_array($industry, $allowed, true)) {
-            throw new \RuntimeException('NSE classification labels are not mapped to the approved taxonomy.');
+            // Keep the failure closed, but retain the exact public NSE labels so
+            // an operator can make an evidence-based taxonomy decision. Without
+            // these values every unmapped source label looks like the same error.
+            $sourceLabels = json_encode([
+                'sector' => $providerSector === null ? null : mb_substr($providerSector, 0, 120),
+                'industry' => $providerIndustry === null ? null : mb_substr($providerIndustry, 0, 120),
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            throw new \RuntimeException('NSE classification labels are not mapped to the approved taxonomy: '.($sourceLabels ?: '[unavailable]'));
         }
 
         return [$sector, $industry];

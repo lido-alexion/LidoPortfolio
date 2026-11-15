@@ -19,6 +19,13 @@ class KiteInstrumentRegistryTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_instrument_sync_fails_when_no_kite_connection_exists(): void
+    {
+        $this->artisan('portfolio:sync-kite-instruments')
+            ->expectsOutput('No Kite connection is available; instrument refresh was not performed.')
+            ->assertFailed();
+    }
+
     public function test_series_qualified_kite_symbol_is_deterministically_registered(): void
     {
         $user = User::factory()->create();

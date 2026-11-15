@@ -224,6 +224,22 @@ class ScheduleRegistrationTest extends TestCase
         $this->assertSame('*/5 * * * *', $submit->getExpression());
     }
 
+    public function test_scheduler_captures_output_for_actionable_failures(): void
+    {
+        $this->refreshScheduleApp();
+
+        foreach ([
+            'stox:check-data-completeness',
+            'stox:refresh-stock-classifications',
+            'portfolio:sync-kite-instruments',
+            'portfolio:reconcile',
+        ] as $command) {
+            $event = $this->findScheduleEvent($command);
+            $this->assertNotNull($event, $command.' must be scheduled');
+            $this->assertStringStartsWith(storage_path('logs/schedule-'), (string) $event->output);
+        }
+    }
+
     protected function findUniverseMaintenanceEvent(): ?Event
     {
         return $this->findScheduleEvent('portfolio:run-universe-maintenance');
