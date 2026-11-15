@@ -62,9 +62,11 @@ The repository root is a linked worktree whose shared `.git` metadata is read-on
 
 The focused regression now includes a stale `circuit_open` incident with `last_github_checked_at` populated but no issue fields and no binding; the bounded replay selector must not dispatch it. Execution was attempted with `OTEL_SDK_DISABLED=true php artisan test --filter=test_manual_api_incident_reconciliation_is_dry_run_bounded_and_excludes_linked_or_ambiguous_rows` in the app test tree, but could not start because `app/vendor/autoload.php` is absent. This follow-up therefore has no fresh PHPUnit pass. `git diff --check` passed. The source change and documentation change remain uncommitted for independent review; no production or GitHub request was made.
 
-## Bounded first-production canary approval gate
+**Independent operator verification after Codex handoff (2026-11-15):** The operator supplied an isolated test-only dependency tree and successfully ran the changed focused test (**1 passed / 6 assertions**) and the combined V9 API reporting / GitHub reporter suite (**33 passed / 206 assertions**). PHP lint and diff checks passed. The change was committed, pushed, independently commented on PR #365, and hosted PHP 8.4 CI passed. The preceding paragraph describes the Codex sandbox's earlier limitation, not the final operator/test result.
 
-Do not run production replay until every gate below is recorded against the exact deployed SHA:
+## Historical first-production canary safeguards (completed)
+
+The following checklist is preserved as **historical audit guidance**, not as an outstanding approval request or permission to replay. The one-row canary completed on 2026-11-15 and the owner subsequently approved bounded batches (at most five each) with strict rolling rate limits. As of the latest operator snapshot, **59 incidents are linked and zero are eligible pending**; the ten protected cases are ineligible for ordinary replay. Do not execute any of them without separate evidence and narrowly scoped owner authorization. The checklist was applied before the original production canary:
 
 1. The source commit has passed the repository's required CI and normal release workflow; the post-deploy health check reports that exact SHA. No manual deployment is authorized by this record.
 2. The incident owner and production operator approve a **single-row** canary in the change/incident record. This is explicit approval for one historical incident to create or link a GitHub issue; approval is not implied by this report.
