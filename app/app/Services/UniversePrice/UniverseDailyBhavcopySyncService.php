@@ -138,6 +138,8 @@ class UniverseDailyBhavcopySyncService
                     $stats['bulk']['historical_adjustment_required'] += $historicalBlocked;
                     $file += [
                         'source_rows' => $data['source_rows'], 'invalid_rows' => $data['invalid_rows'],
+                        'excluded_rows' => $data['excluded_rows'] ?? 0,
+                        'unmatched_source_rows' => $matched['unmatched_rows'],
                         // A source revision is diagnostic evidence, not an
                         // identity override. Conflicts remain unavailable until
                         // a later revision validates against canonical identity.
