@@ -1346,10 +1346,11 @@ export const JOURNEY_TOPICS = Object.freeze([
     "guide": "/docs/journeys/10-portfolio-cash.html#e2e-22-record-cash-evidence-and-inspect-reservations-without-trading",
     "steps": [
       "Open `/cash`, inspect cash balance, Reserved cash and Available cash. Use See reservation details to inspect recommendation identity and the reserved amount; do not infer a fill from reservation alone.",
-      "Choose Deposit, enter a positive whole-rupee Amount, Transaction date and optional Remarks, then submit. A failed write retains the input and unchanged statement; retry only after checking whether the record exists.",
+      "Choose Deposit, enter a positive amount (up to four decimal places), Transaction date and optional Remarks, then submit. Current and projected balances update while typing. A failed write retains the input and unchanged statement; retry only after checking whether the record exists.",
       "Confirm the successful entry in Cash account statement with its effective date, running balance and remarks.",
       "Choose Withdraw. An amount above available cash cannot be recorded. Record a valid withdrawal using the same explicit form, then inspect the statement.",
-      "Choose Adjust, enter a non-zero signed whole-rupee amount and a required reason. Correct rejected input or retry a failed write while the draft remains visible. Confirm a separate adjustment entry rather than rewriting a prior economic event.",
+      "Choose Adjust, enter a non-zero signed amount and a required reason. Adjustment is a signed delta to cash, not a replacement balance. Correct rejected input or retry a failed write while the draft remains visible.",
+      "Use Edit or Delete for user managed deposits, withdrawals and adjustments. Edit appends a reversal and replacement; Delete appends a reversal. Trade and internal entries are corrected through their owning workflow. Both corrections retain the old effective date and audit history.",
       "Reload and verify the statement and balances. No order, fill or external transfer should be created by these actions."
     ],
     "prerequisites": [
@@ -1782,7 +1783,7 @@ export const JOURNEY_TOPICS = Object.freeze([
       "Inspect the new local Draft and unchanged immutable source. Modification occurs on the fork, not the shared published version.",
       "For a published Bundle, choose Deploy Bundle to obtain its server-validated transactional plan. Inspect failure instead of claiming deployment.",
       "Review the planned member-count confirmation for the active Portfolio. Dismiss to leave deployment unapplied.",
-      "Confirm only the intended validated plan. If application is unconfirmed, inspect existing deployment evidence before retrying; do not assume a transport error proves rollback.",
+      "Confirm only the intended validated plan. If its apply response is unconfirmed, retain that exact deployment UUID and inspect its read-only status/member results before any further mutation; do not assume a transport error proves rollback. A `planned` result remains pending and requires the existing explicit confirmation; `failed` and `completed` results are evidence and are not replayed.",
       "Inspect confirmed deployed member bindings/provenance independently; the Bundle does not become a trading controller."
     ],
     "prerequisites": [
