@@ -138,15 +138,35 @@ class StockClassificationAdminTest extends TestCase
         }
     }
 
-    public function test_unresolved_captured_taxonomy_pairs_remain_fail_closed(): void
+    public function test_all_remaining_captured_taxonomy_pairs_remain_fail_closed(): void
     {
-        $stock = $this->stock('NEEDSDECISION');
-        try {
-            app(StockClassificationService::class)->recordObservation($stock, $this->payload('Chemicals', 'Chemicals & Petrochemicals'));
-            $this->fail('A source pair with no approved canonical industry must remain unmapped.');
-        } catch (\RuntimeException $error) {
-            $this->assertStringContainsString('"sector":"Chemicals"', $error->getMessage());
-            $this->assertDatabaseCount('stox_stock_classification_observations', 0);
+        $pairs = [
+            ['Healthcare', 'Pharmaceuticals & Biotechnology'],
+            ['Chemicals', 'Chemicals & Petrochemicals'],
+            ['Services', 'Commercial Services & Supplies'],
+            ['Construction Materials', 'Cement & Cement Products'],
+            ['Consumer Services', 'Leisure Services'],
+            ['Fast Moving Consumer Goods', 'Agricultural Food & other Products'],
+            ['Diversified', 'Diversified'],
+            ['Capital Goods', 'Industrial Manufacturing'],
+            ['Realty', 'Realty'],
+            ['Services', 'Transport Services'],
+            ['Metals & Mining', 'Metals & Minerals Trading'],
+            ['Services', 'Transport Infrastructure'],
+            ['Capital Goods', 'Aerospace & Defense'],
+            ['Chemicals', 'Fertilizers & Agrochemicals'],
+        ];
+
+        foreach ($pairs as $index => [$sector, $industry]) {
+            $stock = $this->stock('UNMAPPED'.str_pad((string) $index, 2, '0', STR_PAD_LEFT));
+            try {
+                app(StockClassificationService::class)->recordObservation($stock, $this->payload($sector, $industry));
+                $this->fail("Source pair {$sector} / {$industry} must remain unmapped without an approved canonical equivalent.");
+            } catch (\RuntimeException $error) {
+                $this->assertStringContainsString('"sector":"'.$sector.'"', $error->getMessage());
+                $this->assertStringContainsString('"industry":"'.$industry.'"', $error->getMessage());
+                $this->assertDatabaseCount('stox_stock_classification_observations', 0);
+            }
         }
     }
 

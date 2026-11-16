@@ -341,6 +341,30 @@ class UniverseDailyBhavcopySyncTest extends TestCase
         $this->assertSame(1, $saved['entries']['NSE:2026-10-26']['retry_attempt']);
     }
 
+    public function test_file_diagnostics_preserve_parser_and_matcher_row_accounting(): void
+    {
+        $this->stock('AAA');
+        $this->source('NSE', [
+            [],
+            ['FinInstrmId' => '1002', 'TckrSymb' => 'OTHER', 'ISIN' => 'INE002A01010'],
+            ['FinInstrmId' => '1003', 'TckrSymb' => 'INVALID', 'ISIN' => 'INE003A01010', 'OpnPric' => '0'],
+            ['FinInstrmId' => '1004', 'TckrSymb' => 'FUTURE', 'FinInstrmTp' => 'FUT'],
+        ]);
+        $day = Carbon::parse('2026-10-26');
+        $runId = app(SyncLogService::class)->beginRun('universe-price-sync');
+
+        $result = app(UniverseDailyBhavcopySyncService::class)->run(
+            Stock::query()->get(), $day, $day, $runId, 'universe-price-sync', $this->initialStats(),
+        )['stats'];
+
+        $file = $result['bulk']['files'][0];
+        $this->assertSame(4, $file['source_rows']);
+        $this->assertSame(1, $file['invalid_rows']);
+        $this->assertSame(1, $file['excluded_rows']);
+        $this->assertSame(1, $file['unmatched_source_rows']);
+        $this->assertSame(1, $file['matched_rows']);
+    }
+
     public function test_unchanged_conflict_is_deferred_but_revised_source_is_revalidated_and_applied(): void
     {
         $stock = $this->stock();
