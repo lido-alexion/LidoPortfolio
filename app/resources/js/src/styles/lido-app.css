@@ -4713,8 +4713,10 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     right: 1rem;
     /* Keep the pane inside the available width when a scrollbar is present. */
     width: min(24rem, calc(100% - 2rem));
+    min-width: min(22rem, calc(100% - 2rem));
     max-width: calc(100% - 2rem);
-    max-height: min(calc(100vh - 5rem), 36rem);
+    min-height: min(12rem, calc(100dvh - 5rem));
+    max-height: min(70dvh, calc(100dvh - 5rem), 36rem);
     overflow-y: auto;
     z-index: 1050;
     font-size: 0.7rem;
@@ -4741,9 +4743,13 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
 @media (max-width: 575.98px) {
     .dropdown-menu.lido-notification-menu {
         top: 4rem;
-        right: 0.5rem;
-        width: calc(100% - 1rem);
-        max-width: calc(100% - 1rem);
+        left: 0.5rem;
+        right: auto;
+        width: calc(100vw - 1rem);
+        min-width: calc(100vw - 1rem);
+        max-width: calc(100vw - 1rem);
+        min-height: min(12rem, calc(100dvh - 4.5rem));
+        max-height: min(70dvh, calc(100dvh - 4.5rem));
     }
 }
 

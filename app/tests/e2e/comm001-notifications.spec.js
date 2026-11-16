@@ -62,7 +62,7 @@ test('notification history filters and read controls fit mobile screens', async 
     await expectNoHorizontalOverflow(page);
 });
 
-for (const width of [390, 1280]) {
+for (const width of [320, 390, 1280]) {
 test(`notification bell deep link survives read failure and reload, with a retry for detail failure (${width}px)`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
     await installCommMocks(page);
@@ -95,8 +95,16 @@ test(`notification bell deep link survives read failure and reload, with a retry
     await expect(pane).toBeVisible();
     const bounds = await pane.boundingBox();
     const viewportWidth = await page.evaluate(() => document.documentElement.clientWidth);
-    expect(bounds.width).toBeGreaterThanOrEqual(width === 390 ? viewportWidth - 32 : 380);
+    const geometry = await pane.evaluate((el) => ({
+        position: getComputedStyle(el).position,
+        viewportHeight: document.documentElement.clientHeight,
+    }));
+    expect(geometry.position).toBe('fixed');
+    expect(bounds.width).toBeGreaterThanOrEqual(width < 576 ? viewportWidth - 16 : 380);
+    expect(bounds.height).toBeGreaterThanOrEqual(190);
     expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.y).toBeGreaterThanOrEqual(0);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(geometry.viewportHeight);
     await expect(pane.locator('.lido-notification-item-message')).toHaveText('A product update is ready.');
     await expect(pane.locator('.lido-notification-item-message')).toHaveAttribute('title', 'A product update is ready.');
     expect(await pane.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeLessThan(13);
