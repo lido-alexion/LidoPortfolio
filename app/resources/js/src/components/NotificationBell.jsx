@@ -70,6 +70,11 @@ export default function NotificationBell() {
                                 {item.severity.replace('_', ' ')}
                             </span>
                             <span className="lido-notification-item-title">{notificationPreview(item.title)}</span>
+                            {item.message && (
+                                <span className="lido-notification-item-message" title={item.message}>
+                                    {notificationPreview(item.message)}
+                                </span>
+                            )}
                         </Link>
                     ))}
                     <Link to="/notification-history" className="dropdown-item text-center py-2" onClick={() => setOpen(false)}>
