@@ -308,6 +308,24 @@ final class StrategyRegistrySupport
     public function ensureRegistryFields(TradingStrategy $strategy, TradingStrategyVersion $version): void
     {
         $config = is_array($version->config_json) ? $version->config_json : [];
+
+        // Artifact-backed rows are compatibility projections. Their version
+        // hash is pinned to the immutable Library version, while config_json
+        // can be normalized for this Portfolio. A registry read must not
+        // replace the pinned hash with a hash of that projection.
+        if ($strategy->reusable_artifact_id !== null) {
+            if ($strategy->slug === null || $strategy->slug === '') {
+                $strategy->slug = $this->uniqueSlug(
+                    PortfolioProfile::query()->findOrFail($strategy->profile_id),
+                    $this->slugify((string) $strategy->name, $strategy->factory_key, $strategy->id),
+                    $strategy->id
+                );
+                $strategy->save();
+            }
+
+            return;
+        }
+
         $hash = $this->hashDefinition($config);
         $dirty = false;
         if ($strategy->slug === null || $strategy->slug === '') {
