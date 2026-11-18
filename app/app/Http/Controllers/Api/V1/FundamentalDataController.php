@@ -390,6 +390,13 @@ class FundamentalDataController extends Controller
             (int) ($validated['limit'] ?? 25),
         );
 
+        if ($run === null) {
+            return ApiEnvelope::success([
+                'run' => null,
+                'status' => 'no_due_work',
+            ]);
+        }
+
         $data = ['run' => $run->toArray()];
         if ($request->boolean('process_now')) {
             $data['processed'] = $this->updates->process($run, (int) ($validated['limit'] ?? 25));

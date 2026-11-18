@@ -2509,8 +2509,8 @@
                 "tags": [
                     "admin"
                 ],
-                "summary": "Remove Yahoo no-data skip and reset counter",
-                "description": "Removes the Yahoo skip state and resets consecutive no-data observations to zero. Records the admin actor. Requires admin access.",
+                "summary": "DELETE clearYahooNoDataSkip",
+                "description": "Live route: `DELETE /api/v1/admin/fundamentals/yahoo-no-data-skips/{stock}`. Action: `App\\Http\\Controllers\\Api\\V1\\FundamentalDataController@clearYahooNoDataSkip`. Requires admin (`is_admin`).",
                 "operationId": "delete_admin_fundamentals_yahoo-no-data-skips_stock",
                 "parameters": [
                     {
@@ -2521,7 +2521,7 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "integer"
+                            "type": "string"
                         }
                     }
                 ],
@@ -2561,8 +2561,8 @@
                 "tags": [
                     "admin"
                 ],
-                "summary": "Manually fetch a skipped Yahoo issuer",
-                "description": "Runs one admin-initiated fundamentals fetch for a skipped issuer. The skip remains active even when facts are returned; remove the skip explicitly to resume scheduled attempts. Requires admin access.",
+                "summary": "POST fetchSkippedYahooStock",
+                "description": "Live route: `POST /api/v1/admin/fundamentals/yahoo-no-data-skips/{stock}/fetch`. Action: `App\\Http\\Controllers\\Api\\V1\\FundamentalDataController@fetchSkippedYahooStock`. Requires admin (`is_admin`).",
                 "operationId": "post_admin_fundamentals_yahoo-no-data-skips_stock_fetch",
                 "parameters": [
                     {
@@ -2573,12 +2573,12 @@
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "integer"
+                            "type": "string"
                         }
                     }
                 ],
                 "responses": {
-                    "201": {
+                    "200": {
                         "description": "Envelope `{success: true, data, meta}`.",
                         "content": {
                             "application/json": {
@@ -2601,6 +2601,18 @@
                                 "schema": {
                                     "$ref": "#/components/schemas/ErrorOrValidation"
                                 }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
                             }
                         }
                     }

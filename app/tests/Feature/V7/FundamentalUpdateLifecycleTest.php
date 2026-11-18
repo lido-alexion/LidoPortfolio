@@ -60,26 +60,105 @@ class FundamentalUpdateLifecycleTest extends TestCase
         $this->assertSame('completed', $job->fresh()->status);
     }
 
-    public function test_retry_not_due_is_not_processed_or_multiplied(): void
+    public function test_future_retry_does_not_block_another_due_incremental_run(): void
+    {
+        $deferredStock = Stock::query()->create(['symbol' => 'INFY', 'exchange' => 'NSE', 'name' => 'Infosys']);
+        $dueStock = Stock::query()->create(['symbol' => 'TCS', 'exchange' => 'NSE', 'name' => 'TCS']);
+        $oldRun = FundamentalUpdateRun::query()->create(['trigger' => 'scheduled', 'scope' => 'incremental', 'status' => 'running', 'created_at' => now()->subDay()]);
+        $deferredJob = FundamentalUpdateJob::query()->create([
+            'run_id' => $oldRun->id,
+            'stock_id' => $deferredStock->id,
+            'cadence' => 'annual',
+            'status' => 'retry',
+            'attempts' => 1,
+            'last_attempted_at' => now(),
+            'next_attempt_at' => now()->addDay(),
+        ]);
+        FundamentalUpdateJob::query()->create([
+            'run_id' => $oldRun->id,
+            'stock_id' => $deferredStock->id,
+            'cadence' => 'quarterly',
+            'status' => 'retry',
+            'attempts' => 1,
+            'last_attempted_at' => now(),
+            'next_attempt_at' => now()->addDay(),
+        ]);
+        $provider = Mockery::mock(FundamentalDataProvider::class);
+        $provider->shouldReceive('fetch')->once()->andReturn([]);
+        $this->app->instance(FundamentalDataProvider::class, $provider);
+
+        $result = app(FundamentalUpdateService::class)->processScheduledIncremental(1);
+
+        $this->assertNotSame($oldRun->id, $result['id']);
+        $this->assertSame('retry', $deferredJob->fresh()->status);
+        $this->assertSame(1, $deferredJob->fresh()->attempts);
+        $this->assertSame(1, FundamentalUpdateJob::query()->where('stock_id', $dueStock->id)->where('status', 'completed')->count());
+        $this->assertSame(2, FundamentalUpdateJob::query()->where('stock_id', $dueStock->id)->count());
+        $this->assertSame(2, FundamentalUpdateRun::query()->count());
+    }
+
+    public function test_future_retry_is_resumed_when_its_due_time_arrives(): void
     {
         $stock = Stock::query()->create(['symbol' => 'INFY', 'exchange' => 'NSE', 'name' => 'Infosys']);
         $run = FundamentalUpdateRun::query()->create(['trigger' => 'scheduled', 'scope' => 'incremental', 'status' => 'running']);
-        FundamentalUpdateJob::query()->create([
+        $job = FundamentalUpdateJob::query()->create([
             'run_id' => $run->id,
             'stock_id' => $stock->id,
             'cadence' => 'annual',
             'status' => 'retry',
             'attempts' => 1,
-            'next_attempt_at' => now()->addHour(),
+            'last_attempted_at' => now(),
+            'next_attempt_at' => now()->addDay(),
         ]);
+        app(FundamentalDataService::class)->recordSuccessfulProviderCheck($stock, 'quarterly', now());
         $provider = Mockery::mock(FundamentalDataProvider::class);
-        $provider->shouldReceive('fetch')->never();
+        $provider->shouldReceive('fetch')->once()->andReturn([]);
         $this->app->instance(FundamentalDataProvider::class, $provider);
 
-        app(FundamentalUpdateService::class)->processScheduledIncremental(1);
-
+        $early = app(FundamentalUpdateService::class)->processScheduledIncremental(1);
+        $this->assertSame('no_due_work', $early['reason']);
         $this->assertSame(1, FundamentalUpdateRun::query()->count());
-        $this->assertSame('retry', FundamentalUpdateJob::query()->first()->status);
+        $this->assertSame('retry', $job->fresh()->status);
+        $this->assertSame(1, $job->fresh()->attempts);
+        $this->assertSame(1, FundamentalUpdateJob::query()->count());
+
+        Carbon::setTestNow(now()->addDay());
+        try {
+            $due = app(FundamentalUpdateService::class)->processScheduledIncremental(1);
+        } finally {
+            Carbon::setTestNow();
+        }
+
+        $this->assertSame($run->id, $due['id']);
+        $this->assertSame(2, $job->fresh()->attempts);
+        $this->assertSame('completed', $job->fresh()->status);
+        $this->assertSame(1, FundamentalUpdateRun::query()->count());
+    }
+
+    public function test_pending_scheduled_jobs_are_not_duplicated_into_an_empty_run(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'PENDING', 'exchange' => 'NSE', 'name' => 'Pending']);
+        $run = FundamentalUpdateRun::query()->create(['trigger' => 'scheduled', 'scope' => 'incremental', 'status' => 'running']);
+        $quarterly = FundamentalUpdateJob::query()->create([
+            'run_id' => $run->id,
+            'stock_id' => $stock->id,
+            'cadence' => 'quarterly',
+            'status' => 'queued',
+        ]);
+        $annual = FundamentalUpdateJob::query()->create([
+            'run_id' => $run->id,
+            'stock_id' => $stock->id,
+            'cadence' => 'annual',
+            'status' => 'queued',
+        ]);
+
+        $newRun = app(FundamentalUpdateService::class)->createRun('scheduled', 'incremental', null, 10);
+
+        $this->assertNull($newRun);
+        $this->assertSame(1, FundamentalUpdateRun::query()->count());
+        $this->assertSame(2, FundamentalUpdateJob::query()->count());
+        $this->assertSame('queued', $quarterly->fresh()->status);
+        $this->assertSame('queued', $annual->fresh()->status);
     }
 
     public function test_exhausted_retry_is_failed_and_parent_run_finalized(): void
@@ -189,7 +268,8 @@ class FundamentalUpdateLifecycleTest extends TestCase
         $fundamentals->recordSuccessfulProviderCheck($stock, 'annual', now());
 
         $fresh = app(FundamentalUpdateService::class)->createRun('scheduled', 'incremental', null, 10);
-        $this->assertSame(0, FundamentalUpdateJob::query()->where('run_id', $fresh->id)->count());
+        $this->assertNull($fresh);
+        $this->assertSame(0, FundamentalUpdateRun::query()->count());
 
         $fundamentals->recordSuccessfulProviderCheck($stock, 'quarterly', now()->subDays(8));
         $due = app(FundamentalUpdateService::class)->createRun('scheduled', 'incremental', null, 10);
@@ -218,7 +298,8 @@ class FundamentalUpdateLifecycleTest extends TestCase
 
         $run = app(FundamentalUpdateService::class)->createRun('scheduled', 'incremental', null, 10);
 
-        $this->assertFalse(FundamentalUpdateJob::query()->where('run_id', $run->id)->where('stock_id', $stock->id)->exists());
+        $this->assertNull($run);
+        $this->assertSame(0, FundamentalUpdateRun::query()->count());
     }
 
     public function test_provider_failure_retries_without_writing_zero_valued_facts(): void

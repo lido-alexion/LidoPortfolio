@@ -57,7 +57,7 @@ class FundamentalUpdateService
         ];
     }
 
-    public function createRun(string $trigger = 'manual', string $scope = 'incremental', ?int $stockId = null, int $limit = 25): FundamentalUpdateRun
+    public function createRun(string $trigger = 'manual', string $scope = 'incremental', ?int $stockId = null, int $limit = 25): ?FundamentalUpdateRun
     {
         $settings = $this->fundamentals->settings();
         $query = Stock::query()
@@ -78,30 +78,43 @@ class FundamentalUpdateService
                 foreach ([FundamentalDataService::CADENCE_QUARTERLY, FundamentalDataService::CADENCE_ANNUAL] as $cadence) {
                     $cutoff = now()->subHours($this->checkIntervalHours($cadence));
                     $due->orWhere(function ($cadenceDue) use ($cadence, $cutoff): void {
-                        $cadenceDue->whereNotExists(function ($sub) use ($cadence): void {
-                            $sub->selectRaw('1')->from('stox_fundamental_provider_checks as pc')
-                                ->whereColumn('pc.stock_id', 'portfolio_stocks.id')
-                                ->where('pc.cadence', $cadence);
-                        })->orWhereExists(function ($sub) use ($cadence, $cutoff): void {
-                            $sub->selectRaw('1')->from('stox_fundamental_provider_checks as pc')
-                                ->whereColumn('pc.stock_id', 'portfolio_stocks.id')
-                                ->where('pc.cadence', $cadence)
-                                ->where('pc.last_successful_check_at', '<=', $cutoff);
-                        })->orWhereExists(function ($sub) use ($cadence): void {
-                            $periodCutoff = now()->subDays($cadence === FundamentalDataService::CADENCE_ANNUAL ? 210 : 120)->toDateString();
-                            $sub->selectRaw('1')->from('stox_fundamental_facts as ff')
-                                ->whereColumn('ff.stock_id', 'portfolio_stocks.id')
-                                ->where('ff.cadence', $cadence)
-                                ->where('ff.is_current', true)
-                                ->where('ff.period_end', '<=', $periodCutoff)
-                                ->whereRaw('ff.period_end = (SELECT MAX(ff2.period_end) FROM stox_fundamental_facts ff2 WHERE ff2.stock_id = ff.stock_id AND ff2.cadence = ff.cadence AND ff2.is_current = 1)')
-                                // Once the expected next report is overdue, a successful unchanged
-                                // provider check still earns a seven-day polling cooldown.
-                                ->whereNotExists(function ($recentCheck) use ($cadence): void {
-                                    $recentCheck->selectRaw('1')->from('stox_fundamental_provider_checks as recent_pc')
-                                        ->whereColumn('recent_pc.stock_id', 'portfolio_stocks.id')
-                                        ->where('recent_pc.cadence', $cadence)
-                                        ->where('recent_pc.last_successful_check_at', '>', now()->subDays(7));
+                        $cadenceDue->where(function ($dueCheck) use ($cadence, $cutoff): void {
+                            $dueCheck->whereNotExists(function ($sub) use ($cadence): void {
+                                $sub->selectRaw('1')->from('stox_fundamental_provider_checks as pc')
+                                    ->whereColumn('pc.stock_id', 'portfolio_stocks.id')
+                                    ->where('pc.cadence', $cadence);
+                            })->orWhereExists(function ($sub) use ($cadence, $cutoff): void {
+                                $sub->selectRaw('1')->from('stox_fundamental_provider_checks as pc')
+                                    ->whereColumn('pc.stock_id', 'portfolio_stocks.id')
+                                    ->where('pc.cadence', $cadence)
+                                    ->where('pc.last_successful_check_at', '<=', $cutoff);
+                            })->orWhereExists(function ($sub) use ($cadence): void {
+                                $periodCutoff = now()->subDays($cadence === FundamentalDataService::CADENCE_ANNUAL ? 210 : 120)->toDateString();
+                                $sub->selectRaw('1')->from('stox_fundamental_facts as ff')
+                                    ->whereColumn('ff.stock_id', 'portfolio_stocks.id')
+                                    ->where('ff.cadence', $cadence)
+                                    ->where('ff.is_current', true)
+                                    ->where('ff.period_end', '<=', $periodCutoff)
+                                    ->whereRaw('ff.period_end = (SELECT MAX(ff2.period_end) FROM stox_fundamental_facts ff2 WHERE ff2.stock_id = ff.stock_id AND ff2.cadence = ff.cadence AND ff2.is_current = 1)')
+                                    // Once the expected next report is overdue, a successful unchanged
+                                    // provider check still earns a seven-day polling cooldown.
+                                    ->whereNotExists(function ($recentCheck) use ($cadence): void {
+                                        $recentCheck->selectRaw('1')->from('stox_fundamental_provider_checks as recent_pc')
+                                            ->whereColumn('recent_pc.stock_id', 'portfolio_stocks.id')
+                                            ->where('recent_pc.cadence', $cadence)
+                                            ->where('recent_pc.last_successful_check_at', '>', now()->subDays(7));
+                                    });
+                            });
+                        })->whereNotExists(function ($pending) use ($cadence): void {
+                            $pending->selectRaw('1')->from('stox_fundamental_update_jobs as j')
+                                ->whereColumn('j.stock_id', 'portfolio_stocks.id')
+                                ->where('j.cadence', $cadence)
+                                ->whereIn('j.status', ['queued', 'retry', 'running'])
+                                ->whereExists(function ($activeRun) use ($cadence): void {
+                                    $activeRun->selectRaw('1')->from('stox_fundamental_update_runs as r')
+                                        ->whereColumn('r.id', 'j.run_id')
+                                        ->where('r.scope', 'incremental')
+                                        ->whereIn('r.status', ['queued', 'running']);
                                 });
                         });
                     });
@@ -124,7 +137,7 @@ class FundamentalUpdateService
             $query->limit(max(1, min($limit, 200)));
         }
 
-        return DB::transaction(function () use ($trigger, $scope, $query): FundamentalUpdateRun {
+        return DB::transaction(function () use ($trigger, $scope, $query): ?FundamentalUpdateRun {
             $run = FundamentalUpdateRun::query()->create([
                 'trigger' => $trigger,
                 'scope' => $scope,
@@ -134,6 +147,13 @@ class FundamentalUpdateService
             $requested = 0;
             foreach ($query->get(['id']) as $stock) {
                 foreach ([FundamentalDataService::CADENCE_QUARTERLY, FundamentalDataService::CADENCE_ANNUAL] as $cadence) {
+                    // The roster query selects a stock when either cadence is
+                    // due. Keep the job list cadence-specific so a fresh
+                    // cadence is not queued merely because its sibling is due.
+                    if ($scope === 'incremental' && ! $this->needsFetch($stock, $cadence)) {
+                        continue;
+                    }
+
                     if ($scope === 'incremental' && FundamentalUpdateJob::query()
                         ->where('stock_id', $stock->id)
                         ->where('cadence', $cadence)
@@ -158,6 +178,15 @@ class FundamentalUpdateService
             }
 
             $run->forceFill(['requested' => $requested])->save();
+
+            // A stock can still be due while both of its cadence jobs are
+            // already represented by unfinished incremental work. Do not
+            // persist a run that has nothing it can own or process.
+            if ($requested === 0 && $scope === 'incremental') {
+                $run->delete();
+
+                return null;
+            }
 
             return $run->fresh();
         });
@@ -203,13 +232,27 @@ class FundamentalUpdateService
                     ->where('scope', 'incremental')
                     ->whereIn('status', ['queued', 'running'])
                     ->whereHas('jobs', function ($query): void {
-                        $query->whereIn('status', ['queued', 'retry', 'running']);
+                        $query->whereIn('status', ['queued', 'retry'])
+                            ->where(function ($due): void {
+                                $due->whereNull('next_attempt_at')->orWhere('next_attempt_at', '<=', now());
+                            });
                     })
                     ->oldest('id')
                     ->first();
 
                 if ($run === null) {
                     $run = $this->createRun('scheduled', 'incremental', null, $batch);
+                }
+
+                if ($run === null) {
+                    return [
+                        'status' => 'skipped',
+                        'reason' => 'no_due_work',
+                        'processed' => 0,
+                        'succeeded' => 0,
+                        'failed' => 0,
+                        'skipped' => 0,
+                    ];
                 }
 
                 return $this->processLocked($run, $batch);
