@@ -20,7 +20,7 @@ Health is `indeterminate` when observations are absent or all are valid no-data.
 
 ## Refresh windows
 
-The previous fixed 3-day quarterly / 14-day annual success-check intervals are replaced with conservative period-end windows: quarterly data is due 120 days after the latest current period end; annual data is due 210 days after its latest current period end. Missing-period legacy records still use a check-ledger fallback. The due query examines the latest period end as well as the check ledger, so a late fetch does not restart a full window from fetch time. A no-data outcome uses its separate 30-day cooldown.
+The previous fixed 3-day quarterly / 14-day annual success-check intervals are replaced with conservative period-end windows: quarterly data is due 120 days after the latest current period end; annual data is due 390 days after its latest current period end. Missing-period legacy records still use a check-ledger fallback. The due query examines the latest period end as well as the check ledger, so a late fetch does not restart a full window from fetch time. A no-data outcome uses its separate 30-day cooldown.
 
 These generic windows avoid frequent polling but do not model issuer-specific fiscal calendars, exchange filing extensions or company reporting history. A follow-on should add an evidence-backed per-issuer expected-publication estimator with delayed/missing-report safeguards and backtests before changing these constants. Until then, the fixed period-end windows are deliberately conservative and are not claims about a specific issuer's legal deadline.
 

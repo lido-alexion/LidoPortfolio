@@ -89,7 +89,7 @@ class FundamentalUpdateService
                                     ->where('pc.cadence', $cadence)
                                     ->where('pc.last_successful_check_at', '<=', $cutoff);
                             })->orWhereExists(function ($sub) use ($cadence): void {
-                                $periodCutoff = now()->subDays($cadence === FundamentalDataService::CADENCE_ANNUAL ? 210 : 120)->toDateString();
+                                $periodCutoff = now()->subDays($cadence === FundamentalDataService::CADENCE_ANNUAL ? 390 : 120)->toDateString();
                                 $sub->selectRaw('1')->from('stox_fundamental_facts as ff')
                                     ->whereColumn('ff.stock_id', 'portfolio_stocks.id')
                                     ->where('ff.cadence', $cadence)
@@ -752,7 +752,7 @@ class FundamentalUpdateService
             ->where('cadence', $cadence)
             ->max('last_successful_check_at');
         if ($latestPeriod !== null) {
-            $days = $cadence === FundamentalDataService::CADENCE_ANNUAL ? 210 : 120;
+            $days = $cadence === FundamentalDataService::CADENCE_ANNUAL ? 390 : 120;
             if (\Carbon\Carbon::parse($latestPeriod)->addDays($days)->gt(now())) return false;
             // The expected reporting period is overdue, but an unchanged
             // successful response should not cause hourly refetches.
@@ -773,7 +773,7 @@ class FundamentalUpdateService
 
     private function checkIntervalHours(string $cadence): int
     {
-        return $cadence === FundamentalDataService::CADENCE_ANNUAL ? 24 * 210 : 24 * 120;
+        return $cadence === FundamentalDataService::CADENCE_ANNUAL ? 24 * 390 : 24 * 120;
     }
 
     /** @param array<string,mixed> $current @param array<string,int> $stats */

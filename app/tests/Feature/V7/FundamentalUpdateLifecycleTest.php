@@ -277,6 +277,34 @@ class FundamentalUpdateLifecycleTest extends TestCase
             ->where('run_id', $due->id)->where('stock_id', $stock->id)->count());
     }
 
+    public function test_annual_refresh_waits_for_next_reporting_year_instead_of_polling_midyear(): void
+    {
+        $stock = Stock::query()->create([
+            'symbol' => 'ANNUALWINDOW', 'exchange' => 'NSE', 'name' => 'Annual Window', 'is_benchmark' => false,
+        ]);
+        $fundamentals = app(FundamentalDataService::class);
+        $fundamentals->storeFacts($stock, [[
+            'provider' => 'yahoo', 'statement_type' => 'income_statement', 'cadence' => 'annual',
+            'statement_basis' => 'consolidated', 'fact_key' => 'revenue',
+            'period_end' => now()->subDays(300)->toDateString(),
+            'availability_date' => now()->subDays(275)->toDateString(), 'value' => 100,
+        ]], now()->subDays(20));
+        $fundamentals->recordSuccessfulProviderCheck($stock, 'annual', now()->subDays(8));
+        $fundamentals->recordSuccessfulProviderCheck($stock, 'quarterly', now());
+
+        // The next annual result is not due at 300 days after the prior fiscal period end.
+        $this->assertNull(app(FundamentalUpdateService::class)->createRun('scheduled', 'incremental', null, 10));
+
+        DB::table('stox_fundamental_facts')->where('stock_id', $stock->id)->where('cadence', 'annual')
+            ->update(['period_end' => now()->subDays(400)->toDateString()]);
+        $due = app(FundamentalUpdateService::class)->createRun('scheduled', 'incremental', null, 10);
+        $this->assertNotNull($due);
+        $this->assertDatabaseHas('stox_fundamental_update_jobs', [
+            'run_id' => $due->id, 'stock_id' => $stock->id, 'cadence' => 'annual',
+        ]);
+        $this->assertSame(1, FundamentalUpdateJob::query()->where('run_id', $due->id)->count());
+    }
+
     public function test_future_provider_check_is_not_due_from_signed_elapsed_time(): void
     {
         $stock = Stock::query()->create([
