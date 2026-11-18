@@ -520,23 +520,59 @@ class FundamentalUpdateService
             }
             DB::transaction(function () use ($stockId, $run, $cadences, &$newlySkipped): void {
                 $existing = DB::table('stox_yahoo_fundamental_observations')->where('stock_id', $stockId)->where('run_id', $run->id)->first();
-                if ($existing) {
-                    $observedCadences = array_filter(array_merge(explode(',', (string) $existing->cadences), $cadences));
-                    $details = $this->mergeObservationDetails($existing->details, [
-                        'saw_no_data' => true,
-                        'no_data_cadences' => $cadences,
-                        'observed_cadences' => $observedCadences,
-                    ]);
-                    DB::table('stox_yahoo_fundamental_observations')->where('id', $existing->id)->update(['cadences' => implode(',', array_unique($observedCadences)), 'details' => json_encode($details), 'updated_at' => now()]);
-
+                $observedCadences = array_values(array_unique(array_filter(array_merge(
+                    explode(',', (string) ($existing->cadences ?? '')), $cadences,
+                ))));
+                $details = $this->mergeObservationDetails($existing?->details, [
+                    'saw_no_data' => true,
+                    'no_data_cadences' => $cadences,
+                    'observed_cadences' => $observedCadences,
+                ]);
+                // The annual and quarterly jobs for one company may complete in
+                // separate hourly slices. Only count the logical poll once all
+                // jobs are terminal; the other cadence might yet return data.
+                $hasPendingSibling = DB::table('stox_fundamental_update_jobs')
+                    ->where('run_id', $run->id)
+                    ->where('stock_id', $stockId)
+                    ->whereIn('status', ['queued', 'retry', 'running'])
+                    ->exists();
+                if ($existing && $existing->outcome !== 'no_data') {
+                    // A prior cadence already returned actual data or an error.
+                    // Its outcome overrides partial no-data for this run.
+                    DB::table('stox_yahoo_fundamental_observations')->where('id', $existing->id)
+                        ->update(['cadences' => implode(',', $observedCadences), 'details' => json_encode($details), 'updated_at' => now()]);
                     return;
                 }
+
                 $state = DB::table('stox_yahoo_fundamental_symbol_state')->where('stock_id', $stockId)->lockForUpdate()->first();
-                $count = (int) ($state->consecutive_no_data ?? 0) + 1;
-                $skippedAt = $count >= 20 ? ($state->skipped_at ?? now()) : ($state->skipped_at ?? null);
-                DB::table('stox_yahoo_fundamental_symbol_state')->updateOrInsert(['stock_id' => $stockId], ['consecutive_no_data' => $count, 'last_no_data_at' => now(), 'skipped_at' => $skippedAt, 'skip_reason' => $count >= 20 ? '20 consecutive valid Yahoo no-data outcomes' : null, 'created_at' => $state->created_at ?? now(), 'updated_at' => now()]);
-                DB::table('stox_yahoo_fundamental_observations')->insert(['stock_id' => $stockId, 'run_id' => $run->id, 'outcome' => 'no_data', 'cadences' => implode(',', array_unique($cadences)), 'consecutive_count' => $count, 'observed_at' => now(), 'details' => json_encode(['threshold' => 20, 'saw_no_data' => true, 'no_data_cadences' => $cadences]), 'created_at' => now(), 'updated_at' => now()]);
-                if ($count === 20 && $state->skipped_at === null) $newlySkipped[] = $stockId;
+                $priorDetails = $existing ? (json_decode((string) $existing->details, true) ?: []) : [];
+                $alreadyCounted = ! empty($priorDetails['counted']);
+                $count = (int) ($state->consecutive_no_data ?? 0);
+                if (! $hasPendingSibling && ! $alreadyCounted) {
+                    $count++;
+                    $skippedAt = $count >= 20 ? ($state->skipped_at ?? now()) : ($state->skipped_at ?? null);
+                    DB::table('stox_yahoo_fundamental_symbol_state')->updateOrInsert(
+                        ['stock_id' => $stockId],
+                        ['consecutive_no_data' => $count, 'last_no_data_at' => now(), 'skipped_at' => $skippedAt,
+                            'skip_reason' => $count >= 20 ? '20 consecutive valid Yahoo no-data outcomes' : null,
+                            'created_at' => $state->created_at ?? now(), 'updated_at' => now()],
+                    );
+                    if ($count === 20 && $state?->skipped_at === null) $newlySkipped[] = $stockId;
+                }
+                $details['counted'] = $alreadyCounted || ! $hasPendingSibling;
+                $details['pending_sibling'] = $hasPendingSibling;
+                if ($existing) {
+                    DB::table('stox_yahoo_fundamental_observations')->where('id', $existing->id)
+                        ->update(['cadences' => implode(',', $observedCadences), 'consecutive_count' => $count,
+                            'details' => json_encode($details), 'updated_at' => now()]);
+                } else {
+                    DB::table('stox_yahoo_fundamental_observations')->insert([
+                        'stock_id' => $stockId, 'run_id' => $run->id, 'outcome' => 'no_data',
+                        'cadences' => implode(',', $observedCadences), 'consecutive_count' => $count,
+                        'observed_at' => now(), 'details' => json_encode($details),
+                        'created_at' => now(), 'updated_at' => now(),
+                    ]);
+                }
             });
         }
         foreach (array_keys($failedByStock) as $stockId) {

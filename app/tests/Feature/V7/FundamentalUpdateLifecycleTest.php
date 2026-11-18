@@ -345,19 +345,78 @@ class FundamentalUpdateLifecycleTest extends TestCase
         $this->app->instance(AdminOperationalAlertService::class, $alerts);
 
         app(FundamentalUpdateService::class)->process($run, 1);
-        $this->assertSame(1, (int) DB::table('stox_yahoo_fundamental_symbol_state')->where('stock_id', $stock->id)->value('consecutive_no_data'));
+        $this->assertSame(0, (int) DB::table('stox_yahoo_fundamental_symbol_state')->where('stock_id', $stock->id)->value('consecutive_no_data'));
         app(FundamentalUpdateService::class)->process($run, 1);
 
         $state = DB::table('stox_yahoo_fundamental_symbol_state')->where('stock_id', $stock->id)->first();
         $observation = DB::table('stox_yahoo_fundamental_observations')->where('stock_id', $stock->id)->where('run_id', $run->id)->first();
         $details = json_decode($observation->details, true);
-        $this->assertSame(0, (int) $state->consecutive_no_data);
+        $this->assertSame(0, (int) ($state?->consecutive_no_data ?? 0));
         $this->assertSame('provider_error', $observation->outcome);
         $this->assertArrayHasKey('saw_no_data', $details, json_encode($details));
         $this->assertTrue($details['saw_no_data']);
         $this->assertTrue($details['retry_pending']);
         $this->assertSame(['quarterly'], $details['no_data_cadences']);
         $this->assertSame(['quarterly', 'annual'], $details['observed_cadences']);
+    }
+
+    public function test_nineteenth_no_data_count_does_not_skip_second_cadence_before_it_can_return_data(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'PARTIALCOUNT', 'exchange' => 'NSE', 'name' => 'Partial Count']);
+        DB::table('stox_yahoo_fundamental_symbol_state')->insert([
+            'stock_id' => $stock->id, 'consecutive_no_data' => 19, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $run = FundamentalUpdateRun::query()->create(['trigger' => 'scheduled', 'scope' => 'incremental', 'status' => 'queued']);
+        FundamentalUpdateJob::query()->create(['run_id' => $run->id, 'stock_id' => $stock->id, 'cadence' => 'quarterly', 'status' => 'queued']);
+        FundamentalUpdateJob::query()->create(['run_id' => $run->id, 'stock_id' => $stock->id, 'cadence' => 'annual', 'status' => 'queued']);
+        $ingest = Mockery::mock(FundamentalHistoricalIngestService::class);
+        $ingest->shouldReceive('fetch')->once()->andThrow(new YahooNoDataOutcome('valid empty quarterly'))->ordered();
+        $ingest->shouldReceive('fetch')->once()->andReturn([[
+            'provider' => 'yahoo', 'statement_type' => 'income_statement', 'cadence' => 'annual',
+            'statement_basis' => 'consolidated', 'fact_key' => 'revenue', 'period_end' => '2025-12-31',
+            'availability_date' => '2026-01-20', 'value' => 100,
+        ]])->ordered();
+        $ingest->shouldReceive('lastProviderChecked')->andReturn('yahoo');
+        $this->app->instance(FundamentalHistoricalIngestService::class, $ingest);
+
+        $service = app(FundamentalUpdateService::class);
+        $service->process($run, 1);
+        $state = DB::table('stox_yahoo_fundamental_symbol_state')->where('stock_id', $stock->id)->first();
+        $this->assertSame(19, (int) $state->consecutive_no_data);
+        $this->assertNull($state->skipped_at);
+        $this->assertFalse((bool) (json_decode((string) DB::table('stox_yahoo_fundamental_observations')->where('run_id', $run->id)->value('details'), true)['counted'] ?? false));
+
+        $service->process($run, 1);
+        $state = DB::table('stox_yahoo_fundamental_symbol_state')->where('stock_id', $stock->id)->first();
+        $this->assertSame(0, (int) $state->consecutive_no_data);
+        $this->assertNull($state->skipped_at);
+        $this->assertDatabaseHas('stox_yahoo_fundamental_observations', ['run_id' => $run->id, 'stock_id' => $stock->id, 'outcome' => 'data']);
+        $this->assertSame('completed', FundamentalUpdateJob::query()->where('run_id', $run->id)->where('cadence', 'annual')->value('status'));
+    }
+
+    public function test_twentieth_no_data_count_is_applied_once_when_second_cadence_finishes(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'TWOCADENCES', 'exchange' => 'NSE', 'name' => 'Two Cadences']);
+        DB::table('stox_yahoo_fundamental_symbol_state')->insert([
+            'stock_id' => $stock->id, 'consecutive_no_data' => 19, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $run = FundamentalUpdateRun::query()->create(['trigger' => 'scheduled', 'scope' => 'incremental', 'status' => 'queued']);
+        foreach (['quarterly', 'annual'] as $cadence) {
+            FundamentalUpdateJob::query()->create(['run_id' => $run->id, 'stock_id' => $stock->id, 'cadence' => $cadence, 'status' => 'queued']);
+        }
+        $ingest = Mockery::mock(FundamentalHistoricalIngestService::class);
+        $ingest->shouldReceive('fetch')->twice()->andThrow(new YahooNoDataOutcome('valid empty statements'));
+        $this->app->instance(FundamentalHistoricalIngestService::class, $ingest);
+
+        $service = app(FundamentalUpdateService::class);
+        $service->process($run, 1);
+        $this->assertSame(19, (int) DB::table('stox_yahoo_fundamental_symbol_state')->where('stock_id', $stock->id)->value('consecutive_no_data'));
+        $service->process($run, 1);
+        $state = DB::table('stox_yahoo_fundamental_symbol_state')->where('stock_id', $stock->id)->first();
+        $this->assertSame(20, (int) $state->consecutive_no_data);
+        $this->assertNotNull($state->skipped_at);
+        $this->assertSame(1, DB::table('stox_yahoo_fundamental_observations')->where('stock_id', $stock->id)->where('run_id', $run->id)->count());
+        $this->assertSame('completed', $run->fresh()->status);
     }
 
     public function test_unchanged_provider_response_updates_check_time_but_preserves_first_fetch_and_revision(): void

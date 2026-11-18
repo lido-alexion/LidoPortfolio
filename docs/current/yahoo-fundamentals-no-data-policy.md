@@ -27,3 +27,5 @@ These generic windows avoid frequent polling but do not model issuer-specific fi
 ## Durable records
 
 `stox_yahoo_fundamental_symbol_state` stores the current consecutive count and skip state. `stox_yahoo_fundamental_observations` preserves run-level outcomes and explicit admin skip removal events. Existing facts, fact revisions and provider-check records are retained.
+
+A company/run no-data observation remains provisional until all its annual/quarterly jobs are terminal. A later successful or truly failed sibling job overrides the partial no-data result, and the consecutive count increments only once for the completed company poll.
