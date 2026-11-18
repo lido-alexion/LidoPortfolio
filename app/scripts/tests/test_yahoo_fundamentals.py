@@ -52,14 +52,16 @@ class YahooFundamentalsAdapterTest(unittest.TestCase):
         self.assertEqual(payload["cadence"], "annual")
         self.assertEqual(len(payload["statements"]["income_statement"]), 2)
 
-    def test_annual_and_empty_data_fail_explicitly(self):
+    def test_annual_and_empty_data_are_explicit_no_data(self):
         class EmptyTicker:
             financials = balance_sheet = cashflow = None
 
-        errors = io.StringIO()
-        with contextlib.redirect_stderr(errors):
-            self.assertNotEqual(MODULE.main(["TCS.NS", "annual"], lambda _: EmptyTicker()), 0)
-        self.assertIn("no fundamental statements", errors.getvalue())
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertEqual(MODULE.main(["TCS.BO", "annual"], lambda _: EmptyTicker()), 0)
+        payload = __import__("json").loads(output.getvalue())
+        self.assertEqual(payload["outcome"], "no_data")
+        self.assertEqual(payload["statements"]["income_statement"], [])
 
     def test_nse_symbol_falls_back_to_bse_when_nse_has_no_statements(self):
         calls = []
