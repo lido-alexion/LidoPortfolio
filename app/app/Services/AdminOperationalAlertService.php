@@ -35,6 +35,8 @@ class AdminOperationalAlertService
 
     public const KEY_FUNDAMENTALS_UPDATE_FAILED = 'fundamentals_update_failed';
 
+    public const KEY_FUNDAMENTALS_NO_DATA_SKIP = 'fundamentals_no_data_skip';
+
     public const KEY_DATA_COMPLETENESS = 'data_completeness_incomplete';
 
     public const KEY_FORWARD_DATA_CONFIGURATION = 'forward_data_configuration';
@@ -49,6 +51,7 @@ class AdminOperationalAlertService
         self::KEY_BROKER_RECONCILE_FAILED,
         self::KEY_AUTOMATIC_SUBMIT_FAILED,
         self::KEY_FUNDAMENTALS_UPDATE_FAILED,
+        self::KEY_FUNDAMENTALS_NO_DATA_SKIP,
         self::KEY_DATA_COMPLETENESS,
         self::KEY_FORWARD_DATA_CONFIGURATION,
         self::KEY_FORWARD_DATA_INCOMPLETE,
@@ -353,9 +356,13 @@ class AdminOperationalAlertService
         }
 
         $cooldownHours = (int) config('portfolio.operational_alerts.telegram_cooldown_hours', 6);
-        $cooldownCutoff = now()->subHours($cooldownHours);
-
         foreach ($evaluated as $key => $definition) {
+            // Fundamentals issues are reviewed in the admin dashboard; keep
+            // action-needed Telegram repeats to at most once per day.
+            $keyCooldown = in_array($key, [self::KEY_FUNDAMENTALS_UPDATE_FAILED, self::KEY_FUNDAMENTALS_NO_DATA_SKIP], true)
+                ? max(24, $cooldownHours)
+                : $cooldownHours;
+            $keyCooldownCutoff = now()->subHours($keyCooldown);
             $row = OperationalAlert::query()->find($key);
             if ($this->supportsManualClearColumn() && $row?->manually_cleared_at !== null) {
                 continue;
@@ -382,7 +389,7 @@ class AdminOperationalAlertService
             $shouldNotify = $notify && ($isNew
                 || $wasResolved
                 || $row->last_telegram_at === null
-                || $row->last_telegram_at->lt($cooldownCutoff));
+                || $row->last_telegram_at->lt($keyCooldownCutoff));
 
             if ($shouldNotify) {
                 $sent = $this->telegram->sendAdminOperationalAlert($this->formatTelegramMessage($definition));
@@ -529,7 +536,7 @@ class AdminOperationalAlertService
      *
      * @param  array<string, mixed>  $context
      */
-    public function recordUnattendedFailure(string $key, string $title, string $message, array $context = []): void
+    public function recordUnattendedFailure(string $key, string $title, string $message, array $context = [], string $severity = 'critical'): void
     {
         if (! in_array($key, self::UNATTENDED_FAILURE_KEYS, true)) {
             return;
@@ -537,7 +544,7 @@ class AdminOperationalAlertService
 
         $failures = $this->unattendedFailures();
         $failures[$key] = [
-            'severity' => 'critical',
+            'severity' => in_array($severity, ['critical', 'warning', 'info'], true) ? $severity : 'critical',
             'title' => $title,
             'message' => $this->sanitizeOpsMessage($message),
             'context' => $this->sanitizeOpsContext($context),
@@ -637,6 +644,8 @@ class AdminOperationalAlertService
             self::KEY_DECISION_PIPELINE_FAILED,
             self::KEY_BROKER_RECONCILE_FAILED,
             self::KEY_AUTOMATIC_SUBMIT_FAILED => 'Review: Settings → Admin operational alerts',
+            self::KEY_FUNDAMENTALS_UPDATE_FAILED,
+            self::KEY_FUNDAMENTALS_NO_DATA_SKIP => 'Review: Admin → Fundamentals data',
             default => 'Review: Settings → Universe price sync',
         };
 

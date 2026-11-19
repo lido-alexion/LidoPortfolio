@@ -21,6 +21,7 @@ export default function FundamentalDataAdminPage() {
     const [uploadForm, setUploadForm] = useState({ stock_symbol: '', exchange: '', statement_basis: '', confirm_company: false });
     const [uploadFile, setUploadFile] = useState(null);
     const [uploadBusy, setUploadBusy] = useState(false);
+    const [skipSearch, setSkipSearch] = useState('');
     const uploadInputRef = useRef(null);
 
     const load = useCallback(async () => {
@@ -109,6 +110,21 @@ export default function FundamentalDataAdminPage() {
         }
     };
 
+    const clearYahooSkip = async (stockId) => {
+        await api.delete(`/v1/admin/fundamentals/yahoo-no-data-skips/${stockId}`);
+        showToast('Yahoo skip removed; the consecutive counter is zero.', 'success');
+        await load();
+    };
+
+    const fetchSkippedYahoo = async (stockId) => {
+        setBusy(true);
+        try {
+            const { data } = await api.post(`/v1/admin/fundamentals/yahoo-no-data-skips/${stockId}/fetch`);
+            showToast(`Manual Yahoo fetch finished with status ${data?.data?.processed?.status || 'unknown'}. Skip remains until explicitly removed.`, 'success');
+            await load();
+        } finally { setBusy(false); }
+    };
+
     return (
         <div className="container-fluid py-3">
             <div className="d-flex align-items-center justify-content-between mb-3">
@@ -133,7 +149,7 @@ export default function FundamentalDataAdminPage() {
                             <label className="form-label">Request delay ms</label>
                             <input className="form-control mb-3" type="number" min="0" max="60000" value={form.request_delay_ms} onChange={(e) => setForm({ ...form, request_delay_ms: Number(e.target.value) })} />
                             <label className="form-label">Max attempts</label>
-                            <input className="form-control mb-3" type="number" min="1" max="10" value={form.max_attempts} onChange={(e) => setForm({ ...form, max_attempts: Number(e.target.value) })} />
+                            <input className="form-control mb-3" type="number" min="1" max="3" value={form.max_attempts} onChange={(e) => setForm({ ...form, max_attempts: Number(e.target.value) })} />
                             <label className="form-check">
                                 <input className="form-check-input" type="checkbox" checked={form.paused} onChange={(e) => setForm({ ...form, paused: e.target.checked })} />
                                 <span className="form-check-label">Pause updater</span>
@@ -225,6 +241,32 @@ export default function FundamentalDataAdminPage() {
                     </div>
                 </div>
                 <div className="col-lg-8">
+                    <div className="card mb-3">
+                        <div className="card-header">Fundamentals pipeline health</div>
+                        <div className="card-body">
+                            <div className="h5">{(status?.pipeline_health?.status || 'indeterminate').replaceAll('_', ' ')}</div>
+                            <p className="small text-muted mb-2">Health uses observed company outcomes across recent runs. Data, valid no-data, retry-pending and exhausted errors are counted separately. No-data alone is indeterminate. A systemic outage requires at least 8 outcomes across 5 symbols, both quarterly and annual observations, and 2 consecutive sessions with at least 3 outcomes each and 80% genuine errors. First and second failures remain dashboard diagnostics while their next-day retries are pending.</p>
+                            <div className="small">Symbols: {status?.pipeline_health?.distinct_symbols ?? 0} · Sessions: {status?.pipeline_health?.sessions_observed ?? 0} · Sufficient sample: {status?.pipeline_health?.sample_sufficient ? 'yes' : 'no'}</div>
+                            <div className="small mt-1">Cadences: {(status?.pipeline_health?.distinct_cadences || []).join(', ') || 'none observed'}</div>
+                            <pre className="small mb-0 mt-2">{JSON.stringify({ outcomes: status?.pipeline_health?.counts || {}, error_categories: status?.pipeline_health?.error_categories || {} }, null, 2)}</pre>
+                        </div>
+                    </div>
+                    <div className="card mb-3">
+                        <div className="card-header">Yahoo no-data skip list</div>
+                        <div className="card-body">
+                            <p className="small text-muted">20 consecutive empty statement outcomes for a company symbol add it here. A manual fetch bypasses the skip but does not clear it. Removing a skip resets the counter to zero; 20 new observations are required. Use the existing manual workbook import for alternate data; automatic alternate imports are not supported.</p>
+                            <input className="form-control mb-3" aria-label="Search Yahoo skip list" placeholder="Search symbol or exchange" value={skipSearch} onChange={(e) => setSkipSearch(e.target.value)} />
+                            {(status?.yahoo_no_data_skips || []).filter((row) => `${row.symbol} ${row.exchange}`.toLowerCase().includes(skipSearch.toLowerCase())).length === 0 ? <div className="text-muted small">No matching skipped symbols.</div> : null}
+                            {(status?.yahoo_no_data_skips || []).filter((row) => `${row.symbol} ${row.exchange}`.toLowerCase().includes(skipSearch.toLowerCase())).map((row) => <details className="border rounded p-2 mb-2" key={row.stock_id}>
+                                <summary><strong>{row.symbol}</strong> ({row.exchange}) · {row.consecutive_no_data} consecutive no-data · skipped {row.skipped_at}</summary>
+                                <div className="small text-muted mt-2">Reason: {row.skip_reason || '—'} · Last observation: {row.last_no_data_at || '—'}</div>
+                                <div className="table-responsive mt-2"><table className="table table-sm"><thead><tr><th>Observed</th><th>Outcome</th><th>Cadence</th><th>Count</th><th>Details</th></tr></thead><tbody>{(row.history || []).map((event, index) => <tr key={`${event.observed_at}-${index}`}><td>{event.observed_at}</td><td>{event.outcome}</td><td>{event.cadences || '—'}</td><td>{event.consecutive_count}</td><td>{event.details || '—'}</td></tr>)}</tbody></table></div>
+                                <div className="d-flex gap-2"><button className="btn btn-sm btn-outline-primary" type="button" disabled={busy} onClick={() => fetchSkippedYahoo(row.stock_id)}>Fetch Yahoo manually</button><button className="btn btn-sm btn-outline-danger" type="button" disabled={busy} onClick={() => clearYahooSkip(row.stock_id)}>Remove skip and reset</button></div>
+                            </details>)}
+                            <h3 className="h6 mt-4">Recent no-data observations</h3>
+                            <div className="table-responsive"><table className="table table-sm"><thead><tr><th>Observed</th><th>Symbol</th><th>Exchange</th><th>Cadences</th><th>Consecutive</th></tr></thead><tbody>{(status?.yahoo_recent_no_data || []).filter((row) => `${row.symbol} ${row.exchange}`.toLowerCase().includes(skipSearch.toLowerCase())).map((row, index) => <tr key={`${row.symbol}-${row.observed_at}-${index}`}><td>{row.observed_at}</td><td>{row.symbol}</td><td>{row.exchange}</td><td>{row.cadences || '—'}</td><td>{row.consecutive_count}</td></tr>)}</tbody></table></div>
+                        </div>
+                    </div>
                     <div className="card mb-3">
                         <div className="card-header">AI insights providers (FEAT-062)</div>
                         <div className="card-body">

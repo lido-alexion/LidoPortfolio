@@ -32,6 +32,7 @@ class FundamentalUpdateService
     {
         $settings = $this->fundamentals->settings();
         $latest = FundamentalUpdateRun::query()->latest('id')->first();
+        $health = app(FundamentalPipelineHealth::class)->recent();
         $coverage = DB::table('stox_fundamental_facts')
             ->selectRaw('cadence, count(distinct stock_id) as stocks, max(period_end) as latest_period_end, max(availability_date) as latest_availability_date')
             ->groupBy('cadence')
@@ -52,10 +53,11 @@ class FundamentalUpdateService
             ],
             'queued_jobs' => FundamentalUpdateJob::query()->whereIn('status', ['queued', 'retry'])->count(),
             'running' => FundamentalUpdateRun::query()->where('status', 'running')->exists(),
+            'pipeline_health' => $health,
         ];
     }
 
-    public function createRun(string $trigger = 'manual', string $scope = 'incremental', ?int $stockId = null, int $limit = 25): FundamentalUpdateRun
+    public function createRun(string $trigger = 'manual', string $scope = 'incremental', ?int $stockId = null, int $limit = 25): ?FundamentalUpdateRun
     {
         $settings = $this->fundamentals->settings();
         $query = Stock::query()
@@ -64,6 +66,11 @@ class FundamentalUpdateService
                 $stockQuery->where('is_benchmark', false)->orWhereNull('is_benchmark');
             });
         if ($stockId === null) {
+            $query->whereNotExists(function ($sub): void {
+                $sub->selectRaw('1')->from('stox_yahoo_fundamental_symbol_state as ys')->whereColumn('ys.stock_id', 'portfolio_stocks.id')->whereNotNull('ys.skipped_at');
+            })->whereNotExists(function ($sub): void {
+                $sub->selectRaw('1')->from('stox_yahoo_fundamental_symbol_state as ys')->whereColumn('ys.stock_id', 'portfolio_stocks.id')->where('ys.last_no_data_at', '>', now()->subDays(30));
+            });
             // Due-ness is cadence-specific. A quarterly check must never hide a
             // missing annual check (or the reverse), otherwise the tail of the
             // universe permanently disappears from scheduled work.
@@ -71,15 +78,44 @@ class FundamentalUpdateService
                 foreach ([FundamentalDataService::CADENCE_QUARTERLY, FundamentalDataService::CADENCE_ANNUAL] as $cadence) {
                     $cutoff = now()->subHours($this->checkIntervalHours($cadence));
                     $due->orWhere(function ($cadenceDue) use ($cadence, $cutoff): void {
-                        $cadenceDue->whereNotExists(function ($sub) use ($cadence): void {
-                            $sub->selectRaw('1')->from('stox_fundamental_provider_checks as pc')
-                                ->whereColumn('pc.stock_id', 'portfolio_stocks.id')
-                                ->where('pc.cadence', $cadence);
-                        })->orWhereExists(function ($sub) use ($cadence, $cutoff): void {
-                            $sub->selectRaw('1')->from('stox_fundamental_provider_checks as pc')
-                                ->whereColumn('pc.stock_id', 'portfolio_stocks.id')
-                                ->where('pc.cadence', $cadence)
-                                ->where('pc.last_successful_check_at', '<=', $cutoff);
+                        $cadenceDue->where(function ($dueCheck) use ($cadence, $cutoff): void {
+                            $dueCheck->whereNotExists(function ($sub) use ($cadence): void {
+                                $sub->selectRaw('1')->from('stox_fundamental_provider_checks as pc')
+                                    ->whereColumn('pc.stock_id', 'portfolio_stocks.id')
+                                    ->where('pc.cadence', $cadence);
+                            })->orWhereExists(function ($sub) use ($cadence, $cutoff): void {
+                                $sub->selectRaw('1')->from('stox_fundamental_provider_checks as pc')
+                                    ->whereColumn('pc.stock_id', 'portfolio_stocks.id')
+                                    ->where('pc.cadence', $cadence)
+                                    ->where('pc.last_successful_check_at', '<=', $cutoff);
+                            })->orWhereExists(function ($sub) use ($cadence): void {
+                                $periodCutoff = now()->subDays($cadence === FundamentalDataService::CADENCE_ANNUAL ? 390 : 120)->toDateString();
+                                $sub->selectRaw('1')->from('stox_fundamental_facts as ff')
+                                    ->whereColumn('ff.stock_id', 'portfolio_stocks.id')
+                                    ->where('ff.cadence', $cadence)
+                                    ->where('ff.is_current', true)
+                                    ->where('ff.period_end', '<=', $periodCutoff)
+                                    ->whereRaw('ff.period_end = (SELECT MAX(ff2.period_end) FROM stox_fundamental_facts ff2 WHERE ff2.stock_id = ff.stock_id AND ff2.cadence = ff.cadence AND ff2.is_current = 1)')
+                                    // Once the expected next report is overdue, a successful unchanged
+                                    // provider check still earns a seven-day polling cooldown.
+                                    ->whereNotExists(function ($recentCheck) use ($cadence): void {
+                                        $recentCheck->selectRaw('1')->from('stox_fundamental_provider_checks as recent_pc')
+                                            ->whereColumn('recent_pc.stock_id', 'portfolio_stocks.id')
+                                            ->where('recent_pc.cadence', $cadence)
+                                            ->where('recent_pc.last_successful_check_at', '>', now()->subDays(7));
+                                    });
+                            });
+                        })->whereNotExists(function ($pending) use ($cadence): void {
+                            $pending->selectRaw('1')->from('stox_fundamental_update_jobs as j')
+                                ->whereColumn('j.stock_id', 'portfolio_stocks.id')
+                                ->where('j.cadence', $cadence)
+                                ->whereIn('j.status', ['queued', 'retry', 'running'])
+                                ->whereExists(function ($activeRun) use ($cadence): void {
+                                    $activeRun->selectRaw('1')->from('stox_fundamental_update_runs as r')
+                                        ->whereColumn('r.id', 'j.run_id')
+                                        ->where('r.scope', 'incremental')
+                                        ->whereIn('r.status', ['queued', 'running']);
+                                });
                         });
                     });
                 }
@@ -101,7 +137,7 @@ class FundamentalUpdateService
             $query->limit(max(1, min($limit, 200)));
         }
 
-        return DB::transaction(function () use ($trigger, $scope, $query): FundamentalUpdateRun {
+        return DB::transaction(function () use ($trigger, $scope, $query): ?FundamentalUpdateRun {
             $run = FundamentalUpdateRun::query()->create([
                 'trigger' => $trigger,
                 'scope' => $scope,
@@ -111,6 +147,13 @@ class FundamentalUpdateService
             $requested = 0;
             foreach ($query->get(['id']) as $stock) {
                 foreach ([FundamentalDataService::CADENCE_QUARTERLY, FundamentalDataService::CADENCE_ANNUAL] as $cadence) {
+                    // The roster query selects a stock when either cadence is
+                    // due. Keep the job list cadence-specific so a fresh
+                    // cadence is not queued merely because its sibling is due.
+                    if ($scope === 'incremental' && ! $this->needsFetch($stock, $cadence)) {
+                        continue;
+                    }
+
                     if ($scope === 'incremental' && FundamentalUpdateJob::query()
                         ->where('stock_id', $stock->id)
                         ->where('cadence', $cadence)
@@ -135,6 +178,15 @@ class FundamentalUpdateService
             }
 
             $run->forceFill(['requested' => $requested])->save();
+
+            // A stock can still be due while both of its cadence jobs are
+            // already represented by unfinished incremental work. Do not
+            // persist a run that has nothing it can own or process.
+            if ($requested === 0 && $scope === 'incremental') {
+                $run->delete();
+
+                return null;
+            }
 
             return $run->fresh();
         });
@@ -174,19 +226,33 @@ class FundamentalUpdateService
 
             try {
                 $settings = $this->fundamentals->settings();
-                $this->reconcileBacklogLocked((int) $settings->max_attempts);
+                $this->reconcileBacklogLocked(min(3, (int) $settings->max_attempts));
 
                 $run = FundamentalUpdateRun::query()
                     ->where('scope', 'incremental')
                     ->whereIn('status', ['queued', 'running'])
                     ->whereHas('jobs', function ($query): void {
-                        $query->whereIn('status', ['queued', 'retry', 'running']);
+                        $query->whereIn('status', ['queued', 'retry'])
+                            ->where(function ($due): void {
+                                $due->whereNull('next_attempt_at')->orWhere('next_attempt_at', '<=', now());
+                            });
                     })
                     ->oldest('id')
                     ->first();
 
                 if ($run === null) {
                     $run = $this->createRun('scheduled', 'incremental', null, $batch);
+                }
+
+                if ($run === null) {
+                    return [
+                        'status' => 'skipped',
+                        'reason' => 'no_due_work',
+                        'processed' => 0,
+                        'succeeded' => 0,
+                        'failed' => 0,
+                        'skipped' => 0,
+                    ];
                 }
 
                 return $this->processLocked($run, $batch);
@@ -220,6 +286,7 @@ class FundamentalUpdateService
     /** @return array{exhausted:int,recovered:int,superseded:int,finalized:int} */
     private function reconcileBacklogLocked(int $maxAttempts): array
     {
+        $maxAttempts = min(3, max(1, $maxAttempts));
         $exhausted = FundamentalUpdateJob::query()
             ->where('status', 'retry')
             ->where('attempts', '>=', $maxAttempts)
@@ -229,15 +296,19 @@ class FundamentalUpdateService
                 'last_error' => DB::raw("CONCAT(COALESCE(last_error, ''), ' [retry budget exhausted; finalized by backlog reconciliation]')"),
             ]);
 
-        $recovered = FundamentalUpdateJob::query()
+        $staleJobs = FundamentalUpdateJob::query()
             ->where('status', 'running')
             ->whereNotNull('last_attempted_at')
             ->where('last_attempted_at', '<', now()->subMinutes(30))
-            ->update([
+            ->get();
+        foreach ($staleJobs as $staleJob) {
+            $staleJob->forceFill([
                 'status' => 'retry',
-                'next_attempt_at' => now(),
-                'last_error' => DB::raw("CONCAT(COALESCE(last_error, ''), ' [stale running job recovered]')"),
-            ]);
+                'next_attempt_at' => \Carbon\Carbon::parse($staleJob->last_attempted_at)->addDay(),
+                'last_error' => trim(($staleJob->last_error ?? '').' [stale running job recovered]'),
+            ])->save();
+        }
+        $recovered = $staleJobs->count();
 
         $superseded = $this->compactDuplicateIncrementalJobs($maxAttempts);
         $finalized = 0;
@@ -355,6 +426,13 @@ class FundamentalUpdateService
 
         $run->forceFill(['status' => 'running', 'started_at' => $run->started_at ?? now()])->save();
         $sliceError = null;
+        $noDataByStock = [];
+        $validDataByStock = [];
+        $failedByStock = [];
+        $failedDetailsByStock = [];
+        $failedCadencesByStock = [];
+        $dataCadencesByStock = [];
+        $newlySkipped = [];
         $jobs = FundamentalUpdateJob::query()
             ->where('run_id', $run->id)
             ->whereIn('status', ['queued', 'retry'])
@@ -375,6 +453,11 @@ class FundamentalUpdateService
 
             try {
                 $stock = Stock::query()->findOrFail($job->stock_id);
+                $state = DB::table('stox_yahoo_fundamental_symbol_state')->where('stock_id', $stock->id)->first();
+                if ($run->scope !== 'manual_stock' && $state?->skipped_at !== null) {
+                    $job->forceFill(['status' => 'skipped', 'next_attempt_at' => null, 'last_error' => 'Yahoo no-data skip list is active'])->save();
+                    continue;
+                }
                 if ($stock->is_benchmark) {
                     $job->forceFill([
                         'status' => 'skipped',
@@ -383,38 +466,59 @@ class FundamentalUpdateService
                     ])->save();
                     continue;
                 }
-                if ($run->scope !== 'manual_stock' && ! $this->needsFetch($stock, $job->cadence)) {
+                $sameRunObservedNoData = DB::table('stox_yahoo_fundamental_observations')->where('stock_id', $stock->id)->where('run_id', $run->id)->where('outcome', 'no_data')->exists();
+                if ($run->scope !== 'manual_stock' && ! $sameRunObservedNoData && ! $this->needsFetch($stock, $job->cadence)) {
                     $job->forceFill(['status' => 'skipped'])->save();
                     continue;
                 }
 
                 $checkedAt = now();
                 $rows = $this->historicalIngest->fetch($stock, $job->cadence, $run->scope === 'manual_stock');
+                $validDataByStock[$stock->id] = ($validDataByStock[$stock->id] ?? false) || $rows !== [];
+                if ($rows !== []) $dataCadencesByStock[$stock->id][] = $job->cadence;
                 $stats = $this->fundamentals->storeFacts($stock, $rows, $checkedAt);
-                // Empty/unchanged responses are successful checks too. This is
-                // separate from fact first_fetched_at and prevents starvation.
+                // Only confirmed statement rows advance the successful-check
+                // ledger. Yahoo no-data is recorded independently below.
                 $responseHash = null;
                 $checkedProvider = $this->historicalIngest->lastProviderChecked() ?? (string) $settings->provider;
                 $responseMetadata = ['source' => $checkedProvider];
-                $this->fundamentals->recordSuccessfulProviderCheck(
-                    $stock,
-                    $job->cadence,
-                    $checkedAt,
-                    $checkedProvider,
-                    $responseHash,
-                    isset($responseMetadata['provider_symbol']) ? (string) $responseMetadata['provider_symbol'] : null,
-                    $responseMetadata,
-                );
+                if ($rows !== []) {
+                    $this->fundamentals->recordSuccessfulProviderCheck(
+                        $stock,
+                        $job->cadence,
+                        $checkedAt,
+                        $checkedProvider,
+                        $responseHash,
+                        isset($responseMetadata['provider_symbol']) ? (string) $responseMetadata['provider_symbol'] : null,
+                        $responseMetadata,
+                    );
+                }
                 $job->forceFill(['status' => 'completed', 'last_error' => null])->save();
                 $run->forceFill(['stats_json' => $this->mergeStats($run->stats_json ?? [], $stats)])->save();
+            } catch (YahooNoDataOutcome $noData) {
+                $stock = $job->stock()->first();
+                if ($stock) $noDataByStock[$stock->id][] = $job->cadence;
+                $job->forceFill(['status' => 'no_data', 'last_error' => null, 'next_attempt_at' => null])->save();
             } catch (Throwable $error) {
                 $sliceError = $error->getMessage();
+                $failedByStock[$job->stock_id] = true;
                 $deferred = $error instanceof ExchangeRequestDeferred;
-                $willRetry = $run->scope !== 'manual_stock' && ($deferred || $job->attempts < $settings->max_attempts);
+                $willRetry = $run->scope !== 'manual_stock' && $job->attempts < min(3, (int) $settings->max_attempts);
+                $category = $this->classifyProviderError($error);
+                $failedCadencesByStock[$job->stock_id][] = $job->cadence;
+                $priorFailureDetails = $failedDetailsByStock[$job->stock_id] ?? [];
+                $failedDetailsByStock[$job->stock_id] = [
+                    'category' => $category,
+                    'categories' => array_values(array_unique(array_merge($priorFailureDetails['categories'] ?? [], [$category]))),
+                    'error_cadences' => array_values(array_unique(array_merge($priorFailureDetails['error_cadences'] ?? [], [$job->cadence]))),
+                    'retry_pending' => ! empty($priorFailureDetails) ? (! empty($priorFailureDetails['retry_pending']) && $willRetry) : $willRetry,
+                    'attempts' => (int) $job->attempts,
+                    'max_attempts' => min(3, (int) $settings->max_attempts),
+                ];
                 $job->forceFill([
                     'status' => $willRetry ? 'retry' : 'failed',
                     'next_attempt_at' => $willRetry
-                        ? ($deferred ? now()->addSeconds($error->retryAfterSeconds) : now()->addMinutes((int) pow(2, max(0, $job->attempts - 1))))
+                        ? now()->addSeconds($deferred ? max(86400, $error->retryAfterSeconds) : 86400)
                         : null,
                     'last_error' => $error->getMessage(),
                 ])->save();
@@ -423,6 +527,129 @@ class FundamentalUpdateService
 
             if ($settings->request_delay_ms > 0) {
                 usleep($settings->request_delay_ms * 1000);
+            }
+        }
+
+        foreach ($noDataByStock as $stockId => $cadences) {
+            if (! empty($failedByStock[$stockId])) {
+                DB::table('stox_yahoo_fundamental_symbol_state')->where('stock_id', $stockId)->update(['consecutive_no_data' => 0, 'last_no_data_at' => null, 'updated_at' => now()]);
+                $observedCadences = array_values(array_unique(array_merge($cadences, $failedCadencesByStock[$stockId] ?? [], $dataCadencesByStock[$stockId] ?? [])));
+                $existing = DB::table('stox_yahoo_fundamental_observations')->where('stock_id', $stockId)->where('run_id', $run->id)->first();
+                $details = $this->mergeObservationDetails($existing?->details, array_merge([
+                    'consecutive_no_data_reset' => true,
+                    'data_success' => ! empty($validDataByStock[$stockId]),
+                    'saw_no_data' => $existing?->outcome === 'no_data' || ! empty($cadences),
+                    'no_data_cadences' => $cadences,
+                    'observed_cadences' => $observedCadences,
+                ], $failedDetailsByStock[$stockId] ?? []));
+                if ($existing) {
+                    DB::table('stox_yahoo_fundamental_observations')->where('id', $existing->id)->update(['outcome' => 'provider_error', 'cadences' => implode(',', $observedCadences), 'consecutive_count' => 0, 'details' => json_encode($details), 'updated_at' => now()]);
+                } else {
+                    DB::table('stox_yahoo_fundamental_observations')->insert(['stock_id' => $stockId, 'run_id' => $run->id, 'outcome' => 'provider_error', 'cadences' => implode(',', $observedCadences), 'consecutive_count' => 0, 'observed_at' => now(), 'details' => json_encode($details), 'created_at' => now(), 'updated_at' => now()]);
+                }
+                continue;
+            }
+            if (! empty($validDataByStock[$stockId])) {
+                DB::table('stox_yahoo_fundamental_symbol_state')->where('stock_id', $stockId)->update(['consecutive_no_data' => 0, 'last_no_data_at' => null, 'updated_at' => now()]);
+                $observedCadences = array_values(array_unique(array_merge($cadences, $dataCadencesByStock[$stockId] ?? [])));
+                $existing = DB::table('stox_yahoo_fundamental_observations')->where('stock_id', $stockId)->where('run_id', $run->id)->first();
+                $details = $this->mergeObservationDetails($existing?->details, ['reset' => true, 'data_success' => true, 'saw_no_data' => $existing?->outcome === 'no_data', 'no_data_cadences' => $existing?->outcome === 'no_data' ? array_filter(explode(',', (string) $existing->cadences)) : [], 'observed_cadences' => $observedCadences]);
+                if ($existing) {
+                    DB::table('stox_yahoo_fundamental_observations')->where('id', $existing->id)->update(['outcome' => $existing->outcome === 'provider_error' ? 'provider_error' : 'data', 'cadences' => implode(',', $observedCadences), 'consecutive_count' => 0, 'details' => json_encode($details), 'updated_at' => now()]);
+                } else {
+                    DB::table('stox_yahoo_fundamental_observations')->insert(['stock_id' => $stockId, 'run_id' => $run->id, 'outcome' => 'data', 'cadences' => implode(',', $observedCadences), 'consecutive_count' => 0, 'observed_at' => now(), 'details' => json_encode($details), 'created_at' => now(), 'updated_at' => now()]);
+                }
+                continue;
+            }
+            DB::transaction(function () use ($stockId, $run, $cadences, &$newlySkipped): void {
+                $existing = DB::table('stox_yahoo_fundamental_observations')->where('stock_id', $stockId)->where('run_id', $run->id)->first();
+                $observedCadences = array_values(array_unique(array_filter(array_merge(
+                    explode(',', (string) ($existing->cadences ?? '')), $cadences,
+                ))));
+                $details = $this->mergeObservationDetails($existing?->details, [
+                    'saw_no_data' => true,
+                    'no_data_cadences' => $cadences,
+                    'observed_cadences' => $observedCadences,
+                ]);
+                // The annual and quarterly jobs for one company may complete in
+                // separate hourly slices. Only count the logical poll once all
+                // jobs are terminal; the other cadence might yet return data.
+                $hasPendingSibling = DB::table('stox_fundamental_update_jobs')
+                    ->where('run_id', $run->id)
+                    ->where('stock_id', $stockId)
+                    ->whereIn('status', ['queued', 'retry', 'running'])
+                    ->exists();
+                if ($existing && $existing->outcome !== 'no_data') {
+                    // A prior cadence already returned actual data or an error.
+                    // Its outcome overrides partial no-data for this run.
+                    DB::table('stox_yahoo_fundamental_observations')->where('id', $existing->id)
+                        ->update(['cadences' => implode(',', $observedCadences), 'details' => json_encode($details), 'updated_at' => now()]);
+                    return;
+                }
+
+                $state = DB::table('stox_yahoo_fundamental_symbol_state')->where('stock_id', $stockId)->lockForUpdate()->first();
+                $priorDetails = $existing ? (json_decode((string) $existing->details, true) ?: []) : [];
+                $alreadyCounted = ! empty($priorDetails['counted']);
+                $count = (int) ($state->consecutive_no_data ?? 0);
+                if (! $hasPendingSibling && ! $alreadyCounted) {
+                    $count++;
+                    $skippedAt = $count >= 20 ? ($state->skipped_at ?? now()) : ($state->skipped_at ?? null);
+                    DB::table('stox_yahoo_fundamental_symbol_state')->updateOrInsert(
+                        ['stock_id' => $stockId],
+                        ['consecutive_no_data' => $count, 'last_no_data_at' => now(), 'skipped_at' => $skippedAt,
+                            'skip_reason' => $count >= 20 ? '20 consecutive valid Yahoo no-data outcomes' : null,
+                            'created_at' => $state->created_at ?? now(), 'updated_at' => now()],
+                    );
+                    if ($count === 20 && $state?->skipped_at === null) $newlySkipped[] = $stockId;
+                }
+                $details['counted'] = $alreadyCounted || ! $hasPendingSibling;
+                $details['pending_sibling'] = $hasPendingSibling;
+                if ($existing) {
+                    DB::table('stox_yahoo_fundamental_observations')->where('id', $existing->id)
+                        ->update(['cadences' => implode(',', $observedCadences), 'consecutive_count' => $count,
+                            'details' => json_encode($details), 'updated_at' => now()]);
+                } else {
+                    DB::table('stox_yahoo_fundamental_observations')->insert([
+                        'stock_id' => $stockId, 'run_id' => $run->id, 'outcome' => 'no_data',
+                        'cadences' => implode(',', $observedCadences), 'consecutive_count' => $count,
+                        'observed_at' => now(), 'details' => json_encode($details),
+                        'created_at' => now(), 'updated_at' => now(),
+                    ]);
+                }
+            });
+        }
+        foreach (array_keys($failedByStock) as $stockId) {
+            if (array_key_exists($stockId, $noDataByStock)) continue;
+            DB::table('stox_yahoo_fundamental_symbol_state')->where('stock_id', $stockId)->update(['consecutive_no_data' => 0, 'last_no_data_at' => null, 'updated_at' => now()]);
+            $existing = DB::table('stox_yahoo_fundamental_observations')->where('stock_id', $stockId)->where('run_id', $run->id)->first();
+            $observedCadences = array_values(array_unique(array_merge(
+                array_filter(explode(',', (string) ($existing->cadences ?? ''))),
+                $failedCadencesByStock[$stockId] ?? [],
+                $dataCadencesByStock[$stockId] ?? [],
+            )));
+            $details = $this->mergeObservationDetails($existing?->details, array_merge([
+                'consecutive_no_data_reset' => true,
+                'data_success' => ! empty($validDataByStock[$stockId]),
+                'saw_no_data' => $existing?->outcome === 'no_data',
+                'no_data_cadences' => $existing?->outcome === 'no_data' ? array_filter(explode(',', (string) $existing->cadences)) : [],
+                'observed_cadences' => $observedCadences,
+            ], $failedDetailsByStock[$stockId] ?? []));
+            if ($existing) {
+                DB::table('stox_yahoo_fundamental_observations')->where('id', $existing->id)->update(['outcome' => 'provider_error', 'cadences' => implode(',', $observedCadences), 'consecutive_count' => 0, 'details' => json_encode($details), 'updated_at' => now()]);
+            } else {
+                DB::table('stox_yahoo_fundamental_observations')->insert(['stock_id' => $stockId, 'run_id' => $run->id, 'outcome' => 'provider_error', 'cadences' => implode(',', $observedCadences), 'consecutive_count' => 0, 'observed_at' => now(), 'details' => json_encode($details), 'created_at' => now(), 'updated_at' => now()]);
+            }
+        }
+        foreach (array_keys($validDataByStock) as $stockId) {
+            if (array_key_exists($stockId, $noDataByStock) || array_key_exists($stockId, $failedByStock)) continue;
+            DB::table('stox_yahoo_fundamental_symbol_state')->where('stock_id', $stockId)->update(['consecutive_no_data' => 0, 'last_no_data_at' => null, 'updated_at' => now()]);
+            $existing = DB::table('stox_yahoo_fundamental_observations')->where('stock_id', $stockId)->where('run_id', $run->id)->first();
+            $observedCadences = array_values(array_unique(array_merge(array_filter(explode(',', (string) ($existing->cadences ?? ''))), $dataCadencesByStock[$stockId] ?? [])));
+            $details = $this->mergeObservationDetails($existing?->details, ['reset' => true, 'data_success' => true, 'saw_no_data' => $existing?->outcome === 'no_data', 'no_data_cadences' => $existing?->outcome === 'no_data' ? array_filter(explode(',', (string) $existing->cadences)) : [], 'observed_cadences' => $observedCadences]);
+            if ($existing) {
+                DB::table('stox_yahoo_fundamental_observations')->where('id', $existing->id)->update(['outcome' => $existing->outcome === 'provider_error' ? 'provider_error' : 'data', 'cadences' => implode(',', $observedCadences), 'consecutive_count' => 0, 'details' => json_encode($details), 'updated_at' => now()]);
+            } else {
+                DB::table('stox_yahoo_fundamental_observations')->insert(['stock_id' => $stockId, 'run_id' => $run->id, 'outcome' => 'data', 'cadences' => implode(',', $observedCadences), 'consecutive_count' => 0, 'observed_at' => now(), 'details' => json_encode($details), 'created_at' => now(), 'updated_at' => now()]);
             }
         }
 
@@ -438,15 +665,30 @@ class FundamentalUpdateService
             ])->save();
         }
 
-        if ($sliceError !== null) {
+        foreach ($newlySkipped as $stockId) {
+            $stock = Stock::query()->find($stockId);
+            $this->opsAlerts->recordUnattendedFailure(
+                AdminOperationalAlertService::KEY_FUNDAMENTALS_NO_DATA_SKIP,
+                'Yahoo fundamentals symbol needs review',
+                sprintf('%s (%s) reached 20 consecutive valid Yahoo no-data observations and was added to the automatic skip list.', $stock?->symbol ?? 'Unknown symbol', $stock?->exchange ?? 'unknown exchange'),
+                ['stock_id' => $stockId, 'run_id' => $run->id],
+                'info',
+            );
+        }
+        if ($newlySkipped !== []) $this->opsAlerts->syncAndNotify();
+
+        $health = app(FundamentalPipelineHealth::class)->recent();
+        if (! empty($health['action_required'])) {
             $this->opsAlerts->recordUnattendedFailure(
                 AdminOperationalAlertService::KEY_FUNDAMENTALS_UPDATE_FAILED,
-                'Fundamentals update failed',
-                sprintf('V7 fundamentals run #%d encountered a provider/update failure: %s', $run->id, $sliceError),
-                ['run_id' => $run->id, 'status' => $run->status],
+                'Fundamentals provider requires review',
+                sprintf('V7 fundamentals run #%d reached an actionable provider health condition: %s.', $run->id, $health['status']),
+                ['run_id' => $run->id, 'status' => $run->status, 'pipeline_health' => $health],
             );
             $this->opsAlerts->syncAndNotify();
-        } elseif ($run->fresh()->status === 'completed' && (int) $run->succeeded > 0) {
+        } elseif ($run->fresh()->status === 'completed'
+            && DB::table('stox_yahoo_fundamental_observations')->where('run_id', $run->id)->where('outcome', 'data')->exists()
+            && (int) ($health['consecutive_recovery_sessions'] ?? 0) >= 2) {
             if ($this->opsAlerts->clearUnattendedFailure(AdminOperationalAlertService::KEY_FUNDAMENTALS_UPDATE_FAILED)) {
                 $this->opsAlerts->syncAndNotify();
             }
@@ -455,10 +697,40 @@ class FundamentalUpdateService
         return $run->fresh()->toArray();
     }
 
+    private function classifyProviderError(Throwable $error): string
+    {
+        if ($error instanceof \Error || $error instanceof \LogicException) return 'pipeline_crash';
+        if ($error instanceof ExchangeRequestDeferred || preg_match('/rate.?limit|too many requests|quota|\b429\b/i', $error->getMessage())) return 'rate_limit';
+        if (preg_match('/unauthori[sz]ed|forbidden|\b401\b|\b403\b|authentication|credential/i', $error->getMessage())) return 'auth';
+        if (preg_match('/timeout|timed out|connection|dns|network|socket|curl|transport/i', $error->getMessage())) return 'connectivity';
+        if (preg_match('/parse|malformed|invalid json|schema|normaliz/i', $error->getMessage())) return 'parsing';
+        return 'upstream';
+    }
+
+    /** @return array<string,mixed> */
+    private function mergeObservationDetails(?string $existingJson, array $updates): array
+    {
+        $details = is_string($existingJson) ? (json_decode($existingJson, true) ?: []) : [];
+        foreach ($updates as $key => $value) {
+            if (in_array($key, ['observed_cadences', 'no_data_cadences', 'categories', 'error_cadences'], true)) {
+                $prior = is_array($details[$key] ?? null) ? $details[$key] : [];
+                $next = is_array($value) ? $value : [$value];
+                $details[$key] = array_values(array_unique(array_merge($prior, $next)));
+            } elseif (in_array($key, ['data_success', 'saw_no_data', 'consecutive_no_data_reset', 'reset'], true)) {
+                $details[$key] = ! empty($details[$key]) || (bool) $value;
+            } elseif ($key === 'retry_pending' && array_key_exists($key, $details)) {
+                $details[$key] = ! empty($details[$key]) && (bool) $value;
+            } else {
+                $details[$key] = $value;
+            }
+        }
+        return $details;
+    }
+
     private function refreshRunCounters(FundamentalUpdateRun $run): void
     {
         $counts = $run->jobs()
-            ->selectRaw("COUNT(*) as requested, SUM(status IN ('completed', 'failed', 'skipped', 'superseded')) as processed, SUM(status = 'completed') as succeeded, SUM(status = 'failed') as failed, SUM(status IN ('skipped', 'superseded')) as skipped")
+            ->selectRaw("COUNT(*) as requested, SUM(status IN ('completed', 'no_data', 'failed', 'skipped', 'superseded')) as processed, SUM(status = 'completed') as succeeded, SUM(status = 'failed') as failed, SUM(status IN ('skipped', 'superseded', 'no_data')) as skipped")
             ->first();
 
         $run->forceFill([
@@ -472,10 +744,20 @@ class FundamentalUpdateService
 
     private function needsFetch(Stock $stock, string $cadence): bool
     {
+        $state = DB::table('stox_yahoo_fundamental_symbol_state')->where('stock_id', $stock->id)->first();
+        if ($state?->skipped_at !== null || ($state?->last_no_data_at !== null && \Carbon\Carbon::parse($state->last_no_data_at)->addDays(30)->gt(now()))) return false;
+        $latestPeriod = DB::table('stox_fundamental_facts')->where('stock_id', $stock->id)->where('cadence', $cadence)->where('is_current', true)->max('period_end');
         $latest = DB::table('stox_fundamental_provider_checks')
             ->where('stock_id', $stock->id)
             ->where('cadence', $cadence)
             ->max('last_successful_check_at');
+        if ($latestPeriod !== null) {
+            $days = $cadence === FundamentalDataService::CADENCE_ANNUAL ? 390 : 120;
+            if (\Carbon\Carbon::parse($latestPeriod)->addDays($days)->gt(now())) return false;
+            // The expected reporting period is overdue, but an unchanged
+            // successful response should not cause hourly refetches.
+            return $latest === null || \Carbon\Carbon::parse($latest)->addDays(7)->lte(now());
+        }
 
         // Facts alone do not prove that this cadence has received a successful
         // provider check. Preserve the durable ledger as the source of truth so
@@ -491,7 +773,7 @@ class FundamentalUpdateService
 
     private function checkIntervalHours(string $cadence): int
     {
-        return $cadence === FundamentalDataService::CADENCE_ANNUAL ? 24 * 14 : 24 * 3;
+        return $cadence === FundamentalDataService::CADENCE_ANNUAL ? 24 * 390 : 24 * 120;
     }
 
     /** @param array<string,mixed> $current @param array<string,int> $stats */

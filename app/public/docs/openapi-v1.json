@@ -2504,6 +2504,110 @@
                 "x-stox-admin": true
             }
         },
+        "/api/v1/admin/fundamentals/yahoo-no-data-skips/{stock}": {
+            "delete": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Remove Yahoo no-data skip and reset counter",
+                "description": "Removes the Yahoo skip state and resets consecutive no-data observations to zero. Records the admin actor. Requires admin access.",
+                "operationId": "delete_admin_fundamentals_yahoo-no-data-skips_stock",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "stock",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
+        "/api/v1/admin/fundamentals/yahoo-no-data-skips/{stock}/fetch": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Manually fetch a skipped Yahoo issuer",
+                "description": "Runs one admin-initiated fundamentals fetch for a skipped issuer. The skip remains active even when facts are returned; remove the skip explicitly to resume scheduled attempts. Requires admin access.",
+                "operationId": "post_admin_fundamentals_yahoo-no-data-skips_stock_fetch",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    },
+                    {
+                        "name": "stock",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "403": {
+                        "description": "Authenticated but not an admin (`admin` middleware)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-stox-admin": true
+            }
+        },
         "/api/v1/admin/ml": {
             "get": {
                 "tags": [
