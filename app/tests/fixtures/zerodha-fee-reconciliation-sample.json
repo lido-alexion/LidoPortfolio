@@ -10,7 +10,7 @@
     { "transaction_date": "2026-01-05", "type": "buy", "exchange": "NSE", "quantity": 50, "price": 1000 }
   ],
   "invoice_days": [
-    { "date": "2026-01-05", "components": { "stt": 150, "txn_nse": 5.31, "stamp": 22.5 } }
+    { "date": "2026-01-05", "components": { "stt": 150, "txn_nse": 5.31, "stamp": 23 } }
   ],
   "cash_event_pairs": [
     { "date": "2026-01-05", "event_type": "bank_transfer", "stox_amount": 12500.3456, "source_amount": 12500.345678 }

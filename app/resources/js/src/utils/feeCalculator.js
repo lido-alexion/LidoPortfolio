@@ -15,7 +15,7 @@ export const FEE_EXCHANGES = {
     BSE: 'BSE',
 };
 
-/** Zerodha equity delivery defaults (Jun 2026). SEBI: ₹10/crore = 0.0001%. */
+/** Zerodha equity delivery defaults (current). NSE cash rate is date-resolved below. */
 export const DEFAULT_FEE_COMPONENTS = [
     {
         id: 'brokerage',
@@ -137,6 +137,7 @@ export function calculateTransactionFees({
     type,
     exchange = 'NSE',
     feeComponents = DEFAULT_FEE_COMPONENTS,
+    transactionDate = null,
 }) {
     const qty = Number(quantity);
     const px = Number(price);
@@ -157,11 +158,11 @@ export function calculateTransactionFees({
             continue;
         }
 
-        const rate = Number(component.value) || 0;
+        const rate = rateForDate(component, transactionDate);
         const base = component.mode === FEE_MODES.FIXED
             ? rate
             : turnover * (rate / 100);
-        const roundedBase = component.id === 'stt' ? Math.floor(base + 0.5) : base;
+        const roundedBase = ['stt', 'stamp'].includes(component.id) ? Math.floor(base + 0.5) : base;
         const gstRate = Number(component.gst_percent) || 0;
         const gst = roundedBase * (gstRate / 100);
         const lineTotal = roundedBase + gst;
@@ -182,16 +183,80 @@ export function calculateTransactionFees({
     };
 }
 
+function rateForDate(component, transactionDate) {
+    if (component.id === 'txn_nse' && transactionDate && component.value === '0.00307') {
+        return transactionDate >= '2024-10-01' ? 0.00307 : 0.00322;
+    }
+    return Number(component.value) || 0;
+}
+
+function allocateCents(amount, weights) {
+    const cents = Math.round(amount * 100);
+    const total = weights.reduce((sum, weight) => sum + weight, 0);
+    if (!total || !weights.length) return weights.map(() => 0);
+    const exact = weights.map((weight) => cents * weight / total);
+    const result = exact.map(Math.floor);
+    const order = exact.map((value, index) => ({ index, remainder: value - Math.floor(value) }))
+        .sort((a, b) => b.remainder - a.remainder || a.index - b.index);
+    for (let i = 0, left = cents - result.reduce((sum, value) => sum + value, 0); left > 0; i += 1, left -= 1) {
+        result[order[i % order.length].index] += 1;
+    }
+    return result.map((value) => value / 100);
+}
+
+/** Calculate a complete same-day batch and allocate invoice totals deterministically. */
+export function calculateGroupedTradeDateFees(rows, feeComponents = DEFAULT_FEE_COMPONENTS) {
+    const normalized = normalizeFeeComponents(feeComponents);
+    const results = rows.map(() => ({ total: 0, breakdown: [] }));
+    const groups = new Map();
+    rows.forEach((row, index) => {
+        const type = String(row.type || '').toLowerCase();
+        const quantity = Number(row.quantity);
+        const price = Number(row.price);
+        if (!['buy', 'sell'].includes(type) || !(quantity > 0) || !(price > 0)) return;
+        const exchange = row.execution_exchange || 'NSE';
+        const date = row.transaction_date || 'undated';
+        const turnover = quantity * price;
+        normalized.forEach((component) => {
+            if (!componentApplies(component, type) || !componentMatchesExchange(component, exchange)) return;
+            if (component.aggregation === 'isin_day_sell') return;
+            if (component.mode === FEE_MODES.FIXED) {
+                const one = calculateTransactionFees({ quantity, price, type, exchange, transactionDate: date, feeComponents: [component] });
+                results[index].breakdown.push(...one.breakdown);
+                results[index].total += one.total;
+                return;
+            }
+            const aggregationSide = component.id === 'stt' || component.id === 'sebi' ? 'delivery' : type;
+            const aggregationExchange = ['stt', 'stamp', 'sebi'].includes(component.id) ? 'all' : exchange;
+            const key = [date, aggregationSide, aggregationExchange, component.id].join('|');
+            if (!groups.has(key)) groups.set(key, { component, date, indices: [], turnovers: [] });
+            groups.get(key).indices.push(index);
+            groups.get(key).turnovers.push(turnover);
+        });
+    });
+    groups.forEach(({ component, date, indices, turnovers }) => {
+        const baseRaw = turnovers.reduce((sum, value) => sum + value, 0) * rateForDate(component, date) / 100;
+        const baseInvoice = ['stt', 'stamp'].includes(component.id)
+            ? Math.floor(baseRaw + 0.5) : roundMoney(baseRaw);
+        const gstInvoice = roundMoney(baseInvoice * (Number(component.gst_percent || 0) / 100));
+        const bases = allocateCents(baseInvoice, turnovers);
+        const gstParts = allocateCents(gstInvoice, turnovers);
+        indices.forEach((index, position) => {
+            const line = { id: component.id, label: component.label, base: bases[position], gst: gstParts[position], total: roundMoney(bases[position] + gstParts[position]) };
+            results[index].breakdown.push(line);
+            results[index].total += line.total;
+        });
+    });
+    return results.map((result) => ({ ...result, total: roundMoney(result.total) }));
+}
+
 /** Allocate ISIN/day DP charges once across a complete, ordered transaction set.
  * Rows without an ISIN are intentionally left without an estimated DP charge. */
 export function calculateGroupedTransactionFees(rows, feeComponents = DEFAULT_FEE_COMPONENTS) {
     const normalized = normalizeFeeComponents(feeComponents);
     const dp = normalized.filter((component) => component.aggregation === 'isin_day_sell');
     const ordinary = normalized.filter((component) => component.aggregation !== 'isin_day_sell');
-    const results = rows.map((row) => calculateTransactionFees({
-        quantity: row.quantity, price: row.price, type: row.type,
-        exchange: row.execution_exchange || 'NSE', feeComponents: ordinary,
-    }));
+    const results = calculateGroupedTradeDateFees(rows, ordinary);
     const charged = new Set();
     rows.forEach((row, index) => {
         const isin = String(row.isin || '').trim().toUpperCase();

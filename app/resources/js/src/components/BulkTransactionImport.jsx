@@ -42,6 +42,7 @@ function rowFees(row, feeComponents) {
         price: row.price,
         type: row.type,
         exchange: row.exchange,
+        transactionDate: row.transaction_date,
         feeComponents,
     });
 }

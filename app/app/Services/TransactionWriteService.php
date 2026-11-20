@@ -642,7 +642,7 @@ class TransactionWriteService
         $components = array_values(array_filter($components, fn (array $component) => ($component['aggregation'] ?? null) !== 'isin_day_sell'));
         return app(FeeCalculatorService::class)->calculate(
             (float) $input['quantity'], (float) $input['price'], (string) $input['type'],
-            (string) ($input['execution_exchange'] ?? 'NSE'), $components,
+            (string) ($input['execution_exchange'] ?? 'NSE'), $components, (string) ($input['transaction_date'] ?? date('Y-m-d')),
         )['total'];
     }
 
