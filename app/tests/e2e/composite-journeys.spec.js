@@ -12,7 +12,7 @@ const VIEWPORTS = [
 const CASH_DISPLAY = {
     funded: '₹50,000.00',
     zero: '₹0.00',
-    postExecution: '₹18,462.60',
+    postExecution: '₹18,462.10',
 };
 
 function acceptanceWizard(status, blockers) {
