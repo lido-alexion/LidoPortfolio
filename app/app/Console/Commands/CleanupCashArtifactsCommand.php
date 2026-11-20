@@ -53,7 +53,10 @@ class CleanupCashArtifactsCommand extends Command
             $this->assertBaseline($snapshot, $hash);
             $plan = ['mode' => $this->option('apply') ? 'apply_preflight' : 'dry_run', 'profile_id' => 1,
                 'source_evidence_sha256' => hash_file('sha256', $evidencePath), 'source_counts' => ['trades' => 89, 'bank_flows' => 97, 'account_charges' => 11, 'dp_information_only' => 11],
-                'baseline_sha256' => $hash, 'opening_old' => self::OLD_OPENING, 'opening_new_derived_residual' => self::NEW_OPENING,
+                'baseline_sha256' => $hash,
+                'snapshot_hash_recipe' => 'profile_id=1 rows ordered by id; hash each Eloquent getAttributes() row after removing entry_classification, JSON_UNESCAPED_SLASHES, SHA-256; hash the JSON list of those rows with the same flags',
+                'baseline_row_sha256' => $this->snapshotRowHashes($snapshot['rows']->all()),
+                'opening_old' => self::OLD_OPENING, 'opening_new_derived_residual' => self::NEW_OPENING,
                 'artifact_ids_to_delete' => array_keys(self::ARTIFACTS), 'expected_ledger_count_after' => 198,
                 'expected_balance_after' => self::EXPECTED_ACCOUNT, 'writes_performed' => false];
             if (! $this->option('apply')) { $this->line(json_encode($plan, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)); return self::SUCCESS; }
@@ -214,12 +217,27 @@ class CleanupCashArtifactsCommand extends Command
 
     private function snapshotHash(array $rows): string
     {
-        $data = array_map(function ($row) {
+        $data = $this->snapshotHashRows($rows);
+        return hash('sha256', json_encode($data, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+    }
+
+    private function snapshotHashRows(array $rows): array
+    {
+        return array_map(function ($row) {
             $attributes = $row->getAttributes();
             unset($attributes['entry_classification']);
             return $attributes;
         }, $rows);
-        return hash('sha256', json_encode($data, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+    }
+
+    /** @return array<string, string> Per-row diagnostic hashes, keyed by ledger ID. */
+    private function snapshotRowHashes(array $rows): array
+    {
+        $hashes = [];
+        foreach ($this->snapshotHashRows($rows) as $attributes) {
+            $hashes[(string) $attributes['id']] = hash('sha256', json_encode($attributes, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+        }
+        return $hashes;
     }
 
     private function rollback(string $sha, string $backupDir): int
