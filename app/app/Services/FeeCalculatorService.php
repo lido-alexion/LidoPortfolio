@@ -209,6 +209,8 @@ class FeeCalculatorService
                     continue;
                 }
                 $componentId = (string) ($component['id'] ?? '');
+                // Keep broker-note aggregation boundaries: STT/stamp/SEBI are day-wide,
+                // while trading charges are side and venue scoped.
                 $aggregationSide = $componentId === 'stt' ? 'delivery' : ($componentId === 'sebi' ? 'all' : $type);
                 $aggregationExchange = in_array($componentId, ['stt', 'stamp', 'sebi'], true) ? 'all' : $exchange;
                 $key = implode('|', [$date, $aggregationSide, $aggregationExchange, $componentId]);

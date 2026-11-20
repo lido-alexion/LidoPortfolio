@@ -648,7 +648,7 @@ export default function CashManagementPage() {
                                                 <tr key={entry.id}>
                                                     <td className="small">{fmtEntryDate(entry)}</td>
                                                     <td className="small text-muted">{fmtWhen(entry.created_at)}</td>
-                                                    <td>{entryTypeLabel(entry.entry_type)}</td>
+                                                    <td>{entry.entry_classification === 'derived_opening_assumption' ? 'Derived opening assumption' : entryTypeLabel(entry.entry_type)}</td>
                                                     <td className="small text-capitalize">{String(entry.category || 'internal').replace('_', ' ')}</td>
                                                     <td className={`text-end ${Number(entry.amount) < 0 ? 'text-danger' : Number(entry.amount) > 0 ? 'text-success' : ''}`}>
                                                         {money(entry.amount)}
@@ -662,7 +662,7 @@ export default function CashManagementPage() {
                                                         {!entry.transaction_id && !entry.recommendation_id ? '—' : ''}
                                                     </td>
                                                     <td className="text-nowrap">
-                                                        {['deposit', 'withdrawal', 'adjustment'].includes(entry.entry_type) && !entry.reversal_of_entry_id && !entry.reversed_by_entry_id ? <>
+                                                        {['deposit', 'withdrawal', 'adjustment'].includes(entry.entry_type) && entry.entry_classification !== 'derived_opening_assumption' && !entry.reversal_of_entry_id && !entry.reversed_by_entry_id ? <>
                                                             <button type="button" className="btn btn-link btn-sm px-1" onClick={() => {
                                                                 setEditing({ id: entry.id });
                                                                 setOp(entry.entry_type === 'withdrawal' ? 'withdraw' : entry.entry_type === 'adjustment' ? 'adjust' : 'deposit');

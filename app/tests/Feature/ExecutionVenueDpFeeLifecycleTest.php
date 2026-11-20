@@ -131,13 +131,44 @@ class ExecutionVenueDpFeeLifecycleTest extends TestCase
         $this->assertCashLedgerMatchesAccount($profileB);
     }
 
+    public function test_new_cash_trades_join_grouped_fee_policy_but_legacy_rows_stay_untouched(): void
+    {
+        [$user, $profile] = $this->account('GroupedFees');
+        $stock = $this->stock('GROUPED');
+        $legacy = Transaction::query()->create([
+            'profile_id' => $profile->id, 'stock_id' => $stock->id, 'type' => 'buy', 'quantity' => 1,
+            'price' => 500, 'fees' => 7.25, 'transaction_date' => '2026-11-18', 'source' => 'manual',
+            'execution_exchange' => 'NSE', 'dp_policy_enrolled' => false, 'grouped_fee_policy_enrolled' => false,
+        ]);
+
+        $first = $this->trade($profile, $stock, 'buy', 1, '2026-11-18', ['price' => 82500]);
+        $legacy->refresh();
+        $legacyFee = (float) $legacy->fees;
+        $this->assertFalse((bool) $legacy->grouped_fee_policy_enrolled);
+        $this->assertTrue((bool) $first->fresh()->grouped_fee_policy_enrolled);
+
+        $second = $this->trade($profile, $stock, 'buy', 1, '2026-11-18', ['price' => 83700]);
+        $this->assertEqualsWithDelta($legacyFee, (float) $legacy->fresh()->fees, 0.0001);
+        $this->assertTrue((bool) $second->fresh()->grouped_fee_policy_enrolled);
+        $this->assertCashLedgerMatchesAccount($profile);
+
+        app(TransactionWriteService::class)->update($profile, $first->fresh(), $stock, [
+            'type' => 'buy', 'quantity' => 1, 'price' => 82500, 'fees' => 0, 'transaction_date' => '2026-11-19',
+        ], user: $user);
+        $this->assertCashLedgerMatchesAccount($profile);
+
+        app(TransactionWriteService::class)->delete($profile, $second->fresh(), $user);
+        $this->assertCashLedgerMatchesAccount($profile);
+        $this->assertEqualsWithDelta($legacyFee, (float) $legacy->fresh()->fees, 0.0001);
+    }
+
     public function test_legacy_fees_remain_unchanged_when_a_new_sell_joins_the_group(): void
     {
         [, $profile] = $this->account('LegacyFee');
         $stock = $this->stock('LEGACYDP');
         $this->trade($profile, $stock, 'buy', 5, '2026-11-17');
         $legacy = $this->trade($profile, $stock, 'sell', 1, '2026-11-17');
-        $legacy->forceFill(['fees' => 7.25, 'dp_fee_amount' => 0, 'dp_policy_enrolled' => false, 'created_at' => now()])->save();
+        $legacy->forceFill(['fees' => 7.25, 'dp_fee_amount' => 0, 'dp_policy_enrolled' => false, 'grouped_fee_policy_enrolled' => false, 'created_at' => now()])->save();
 
         $newSell = $this->trade($profile, $stock, 'sell', 1, '2026-11-17');
 

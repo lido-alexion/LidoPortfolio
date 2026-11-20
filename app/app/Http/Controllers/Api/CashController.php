@@ -66,6 +66,7 @@ class CashController extends Controller
             return [
                 'id' => $e->id,
                 'entry_type' => $e->entry_type,
+                'entry_classification' => $e->entry_classification,
                 'amount' => (float) $e->amount,
                 'balance_after' => (float) $e->balance_after,
                 'reason' => $reason,

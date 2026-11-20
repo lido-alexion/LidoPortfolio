@@ -29,6 +29,8 @@ class SourceCashReconciliationServiceTest extends TestCase
         $result = (new SourceCashReconciliationService)->reconcile($source);
 
         $this->assertSame(-790.68, $result['transaction_cash']['total']);
+        $this->assertSame(-1015.34, $result['transaction_cash']['rows'][0]['cash_delta']);
+        $this->assertSame(224.66, $result['transaction_cash']['rows'][1]['cash_delta']);
         $this->assertSame(1000.0, $result['bank_cash']['total']);
         $this->assertSame(15.34, $result['broker_dp_evidence']['rows'][0]['amount']);
         $this->assertSame(290.68, $result['opening_balance']['amount']);

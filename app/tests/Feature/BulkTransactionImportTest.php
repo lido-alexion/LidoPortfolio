@@ -107,6 +107,29 @@ class BulkTransactionImportTest extends TestCase
             'profile_id' => $profile->id,
             'status' => 'committed',
         ]);
+        $this->assertSame(2, Transaction::query()->where('profile_id', $profile->id)->where('grouped_fee_policy_enrolled', true)->count());
+    }
+
+    public function test_same_day_bulk_fills_persist_group_allocations_and_cash_independently(): void
+    {
+        [$user, $profile] = $this->makeUserWithCash();
+        $batchId = (string) Str::uuid();
+        $date = now()->subDay()->toDateString();
+        $this->actingAs($user)->postJson('/api/transactions/bulk', [
+            'batch_id' => $batchId,
+            'rows' => [
+                $this->row((string) Str::uuid(), 'BULKGROUP', 'buy', 1, 82500, $date),
+                $this->row((string) Str::uuid(), 'BULKGROUP', 'buy', 1, 83700, $date),
+            ],
+        ])->assertCreated();
+
+        $trades = Transaction::query()->where('profile_id', $profile->id)->orderBy('id')->get();
+        $this->assertCount(2, $trades);
+        $this->assertTrue($trades->every(fn (Transaction $trade) => (bool) $trade->grouped_fee_policy_enrolled));
+        $cashDelta = (float) \App\Models\CashLedgerEntry::query()->where('profile_id', $profile->id)->sum('amount');
+        $tradeDelta = $trades->sum(fn (Transaction $trade) => -round((float) $trade->quantity * (float) $trade->price + (float) $trade->fees, 4));
+        $this->assertEqualsWithDelta($cashDelta, $tradeDelta + 1_000_000, 0.0001);
+        $this->assertEqualsWithDelta($cashDelta, app(CashManagementService::class)->balance($profile), 0.0001);
     }
 
     public function test_validation_failure_commits_nothing(): void
