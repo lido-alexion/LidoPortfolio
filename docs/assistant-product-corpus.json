@@ -5252,7 +5252,7 @@
     "title": "Universe price sync",
     "path": "app/resources/js/src/data/appDocumentation.js",
     "section": "Overview",
-    "snippet": "Admin control of NSE/BSE daily bhavcopy collection, gaps, and historical backfill. Daily universe sync reads NSE bulk bhavcopy and BSE bhavcopy for the full eligible NSE + BSE-only universe used by Explorer, Screeners, and Market Analysis. One file per exchange and session serves every matching stock; the stock batch-size setting applies to historical backfill only. A bounded recent-session recovery window excludes weekends and active StoX trading holidays. Existing cached and repaired bars are preserved. Missing files, invalid identities, and unavailable stock coverage stay explicit; daily maintenance does not fall back to per-stock Yahoo calls or automatically launch legacy gap-fill retries. Related pages cover gap-fill failures and ignored gaps. Evening maintenance runs 19:00–23:45 on weekdays; weekends are skipped unless the prior session’s last maintenance batch ended failed/partial",
+    "snippet": "Admin control of NSE/BSE daily bhavcopy collection, gaps, and historical backfill. Daily universe sync reads NSE bulk bhavcopy and BSE bhavcopy for the full eligible NSE + BSE-only universe used by Explorer, Screeners, and Market Analysis. One file per exchange and session serves every matching stock; the stock batch-size setting applies to historical backfill only. A bounded recent-session recovery window excludes weekends and active StoX trading holidays. Existing cached and repaired bars are preserved. Missing stock rows remain visible as partial coverage. Stock-row-only gaps avoid actionable alerts only when the enabled daily collector has a complete validated exchange/session receipt set, a matching finished run, and at least some rows in the current required NSE session. Missing required-session rows, absent or invalid source evidence, missing files, invalid archive/schema, identit",
     "url": "/docs/universe-price-sync.html"
   },
   {
@@ -5260,7 +5260,7 @@
     "title": "Universe price sync",
     "path": "app/resources/js/src/data/appDocumentation.js",
     "section": "Daily exchange files",
-    "snippet": "NSE UDiFF ZIP and the existing BSE bhavcopy downloader provide daily OHLCV. Strict date, exchange, schema, price, and identity checks precede insertion. Successful file receipts avoid repeated downloads; changed membership or deleted coverage triggers a fresh check.",
+    "snippet": "NSE UDiFF ZIP and the existing BSE bhavcopy downloader provide daily OHLCV. Strict date, exchange, schema, price, and identity checks precede insertion. Successful file receipts avoid repeated downloads; changed membership or deleted coverage triggers a fresh check. File health and stock-row coverage are reported separately: incomplete rows are diagnostic only after complete current receipt and run proof, with at least some rows in the required NSE session.",
     "url": "/docs/universe-price-sync.html"
   },
   {
