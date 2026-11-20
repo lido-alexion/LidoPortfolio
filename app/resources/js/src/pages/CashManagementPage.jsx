@@ -71,6 +71,9 @@ export default function CashManagementPage() {
     const [summary, setSummary] = useState(null);
     const [ledger, setLedger] = useState([]);
     const [statement, setStatement] = useState(null);
+    const [statementCursor, setStatementCursor] = useState({ profileId: null, page: 1, perPage: 25 });
+    const statementPage = statementCursor.profileId === profileId ? statementCursor.page : 1;
+    const statementPerPage = statementCursor.profileId === profileId ? statementCursor.perPage : 25;
     const [showReservations, setShowReservations] = useState(false);
     const [op, setOp] = useState('deposit');
     const [amount, setAmount] = useState('');
@@ -94,14 +97,14 @@ export default function CashManagementPage() {
     }, [profileId]);
 
     const { loading, error, reload: load } = useApiGet({
-        deps: [profileId],
+        deps: [profileId, statementPage, statementPerPage],
         enabled: Boolean(profileId),
         errorFallback: 'Failed to load cash',
         onError: () => {},
         request: async () => {
             const [summaryRes, ledgerRes] = await Promise.all([
                 api.get('/cash', { params: { include_reservations: true }, skipErrorToast: true }),
-                api.get('/cash/statement', { params: { per_page: 100 }, skipErrorToast: true }),
+                api.get('/cash/statement', { params: { page: statementPage, per_page: statementPerPage, order: 'desc' }, skipErrorToast: true }),
             ]);
             const nextSummary = summaryRes.data?.data || null;
             const nextStatement = ledgerRes.data?.data || null;
@@ -109,6 +112,8 @@ export default function CashManagementPage() {
             setSummary(nextSummary);
             setStatement(nextStatement);
             setLedger(nextLedger);
+            const lastPage = Math.max(1, Number(nextStatement?.pagination?.last_page) || 1);
+            if (statementPage > lastPage) setStatementCursor((cursor) => ({ ...cursor, profileId, page: lastPage }));
             const strategies = Array.isArray(nextSummary?.strategies) ? nextSummary.strategies : [];
             setAllocDraft(strategies.map((row) => ({
                 strategy_id: row.strategy_id,
@@ -200,6 +205,30 @@ export default function CashManagementPage() {
     const newSignedAmount = entered == null ? null : (op === 'withdraw' ? -entered : entered);
     const previewBalance = newSignedAmount == null ? null : currentBalance - (Number.isFinite(oldSignedAmount) ? oldSignedAmount : 0) + newSignedAmount;
     const previewTone = previewBalance == null || Math.abs(previewBalance - currentBalance) < 0.00005 ? 'text-body' : previewBalance > currentBalance ? 'text-success' : 'text-danger';
+    const pagination = statement?.pagination;
+    const statementPagination = (position) => pagination && pagination.total > 0 ? (
+        <div className={`d-flex flex-wrap align-items-center justify-content-between gap-2 p-2 ${position === 'top' ? 'border-bottom' : 'border-top'}`}>
+            <div className="small text-muted" aria-live="polite">
+                {pagination.total === 0 ? 'No entries' : `Showing ${((pagination.page - 1) * pagination.per_page) + 1}–${Math.min(pagination.page * pagination.per_page, pagination.total)} of ${pagination.total}`}
+            </div>
+            <div className="d-flex align-items-center gap-2">
+                <label className="small" htmlFor={`cash-statement-page-size-${position}`}>Rows per page</label>
+                <select
+                    id={`cash-statement-page-size-${position}`}
+                    className="form-select form-select-sm"
+                    style={{ width: 'auto' }}
+                    value={statementPerPage}
+                    onChange={(event) => setStatementCursor({ profileId, page: 1, perPage: Number(event.target.value) })}
+                    aria-label="Cash statement rows per page"
+                >
+                    {[25, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
+                </select>
+                <button type="button" className="btn btn-sm btn-outline-secondary" aria-label="Previous cash statement page" disabled={pagination.page <= 1 || loading} onClick={() => setStatementCursor({ profileId, page: Math.max(1, statementPage - 1), perPage: statementPerPage })}>Previous</button>
+                <span className="small" aria-label={`Page ${pagination.page} of ${pagination.last_page}`}>Page {pagination.page} of {pagination.last_page}</span>
+                <button type="button" className="btn btn-sm btn-outline-secondary" aria-label="Next cash statement page" disabled={pagination.page >= pagination.last_page || loading} onClick={() => setStatementCursor({ profileId, page: Math.min(pagination.last_page, statementPage + 1), perPage: statementPerPage })}>Next</button>
+            </div>
+        </div>
+    ) : null;
 
     const saveAllocations = async () => {
         if (!allocDraft.length) {
@@ -595,6 +624,7 @@ export default function CashManagementPage() {
                             ) : null}
                         </div>
                         <div className="card-body p-0">
+                            {statementPagination('top')}
                             {ledger.length === 0 ? (
                                 <p className="text-muted mb-0 p-3">No cash ledger entries yet. Deposit cash to start.</p>
                             ) : (
@@ -618,7 +648,7 @@ export default function CashManagementPage() {
                                                 <tr key={entry.id}>
                                                     <td className="small">{fmtEntryDate(entry)}</td>
                                                     <td className="small text-muted">{fmtWhen(entry.created_at)}</td>
-                                                    <td>{entryTypeLabel(entry.entry_type)}</td>
+                                                    <td>{entry.entry_classification === 'derived_opening_assumption' ? 'Derived opening assumption' : entryTypeLabel(entry.entry_type)}</td>
                                                     <td className="small text-capitalize">{String(entry.category || 'internal').replace('_', ' ')}</td>
                                                     <td className={`text-end ${Number(entry.amount) < 0 ? 'text-danger' : Number(entry.amount) > 0 ? 'text-success' : ''}`}>
                                                         {money(entry.amount)}
@@ -632,7 +662,7 @@ export default function CashManagementPage() {
                                                         {!entry.transaction_id && !entry.recommendation_id ? '—' : ''}
                                                     </td>
                                                     <td className="text-nowrap">
-                                                        {['deposit', 'withdrawal', 'adjustment'].includes(entry.entry_type) && !entry.reversal_of_entry_id && !entry.reversed_by_entry_id ? <>
+                                                        {['deposit', 'withdrawal', 'adjustment'].includes(entry.entry_type) && entry.entry_classification !== 'derived_opening_assumption' && !entry.reversal_of_entry_id && !entry.reversed_by_entry_id ? <>
                                                             <button type="button" className="btn btn-link btn-sm px-1" onClick={() => {
                                                                 setEditing({ id: entry.id });
                                                                 setOp(entry.entry_type === 'withdrawal' ? 'withdraw' : entry.entry_type === 'adjustment' ? 'adjust' : 'deposit');
@@ -655,6 +685,7 @@ export default function CashManagementPage() {
                                     </table>
                                 </div>
                             )}
+                            {statementPagination('bottom')}
                         </div>
                     </div>
                 </>

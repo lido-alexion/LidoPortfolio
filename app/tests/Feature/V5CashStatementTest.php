@@ -44,6 +44,41 @@ class V5CashStatementTest extends TestCase
         $this->assertNotNull($response->json('data.entries.0.created_at'));
     }
 
+    public function test_statement_order_is_opt_in_and_descending_pages_keep_chronological_running_balances(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $cash = app(CashManagementService::class);
+        $today = now()->startOfDay();
+
+        for ($index = 0; $index < 203; $index++) {
+            $date = $today->copy()->subDays(202 - $index)->toDateString();
+            $cash->deposit($profile, 1, 'Synthetic pagination fixture', $user, $date);
+        }
+
+        $response = $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->getJson('/api/cash/statement?per_page=100&page=1&order=desc');
+
+        $response->assertOk()
+            ->assertJsonPath('data.pagination.page', 1)
+            ->assertJsonPath('data.pagination.per_page', 100)
+            ->assertJsonPath('data.pagination.total', 203)
+            ->assertJsonPath('data.pagination.last_page', 3)
+            ->assertJsonPath('data.entries.0.entry_date', $today->toDateString())
+            ->assertJsonPath('data.entries.0.running_balance', 203);
+
+        $lastPage = $this->getJson('/api/cash/statement?per_page=100&page=3&order=desc');
+        $lastPage->assertOk()
+            ->assertJsonPath('data.entries.0.entry_date', $today->copy()->subDays(200)->toDateString())
+            ->assertJsonPath('data.entries.0.running_balance', 3)
+            ->assertJsonPath('data.entries.2.entry_date', $today->copy()->subDays(202)->toDateString())
+            ->assertJsonPath('data.entries.2.running_balance', 1);
+
+        $defaultOrder = $this->getJson('/api/cash/statement?per_page=1');
+        $defaultOrder->assertOk()
+            ->assertJsonPath('data.entries.0.entry_date', $today->copy()->subDays(202)->toDateString());
+    }
+
     public function test_adjustment_requires_an_immutable_reason_and_future_as_of_is_rejected(): void
     {
         $user = User::factory()->create();

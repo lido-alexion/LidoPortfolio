@@ -184,8 +184,13 @@ class TransactionWriteService
         // Only post-deployment, cash-backed, non-simulation writes join grouped DP.
         // Migration defaults all existing trades to unenrolled without repricing history.
         if ($applyCash && $transaction->simulation_origin === null) {
-            $transaction->forceFill(['dp_policy_enrolled' => true])->save();
+            $transaction->forceFill([
+                'dp_policy_enrolled' => true,
+                'grouped_fee_policy_enrolled' => true,
+            ])->save();
+            $this->reconcileGroupedFees($profile, [$transaction->transaction_date?->toDateString()], $user, $transaction->id);
         }
+        $transaction->refresh();
         $this->reconcileDpGroup($profile, $transaction, $user, $applyCash);
         $transaction->refresh();
         $this->applyLedgerDerivedState($profile, $stock);
@@ -218,6 +223,7 @@ class TransactionWriteService
         $normalized = $this->normalizeInput($profile, $stock, $input, $transaction);
         PortfolioProfile::query()->whereKey($profile->id)->lockForUpdate()->firstOrFail();
         $oldGroup = $this->dpGroupKey($transaction);
+        $oldGroupedFeeDate = (string) ($transaction->transaction_date?->toDateString() ?? $transaction->getRawOriginal('transaction_date'));
         $isLegacy = ! (bool) ($transaction->dp_policy_enrolled ?? false);
         if ($isLegacy) {
             // A normal edit must not silently run historical fee recalculation.
@@ -261,10 +267,15 @@ class TransactionWriteService
             $fill['simulation_processed_at'] = $normalized['simulation_processed_at'];
             $fill['simulation_evidence'] = $normalized['simulation_evidence'];
         }
+        $fill['grouped_fee_policy_enrolled'] = (bool) ($transaction->grouped_fee_policy_enrolled ?? false);
 
         $transaction->forceFill($fill)->save();
 
         $transaction = $transaction->fresh();
+        if ($applyCash) {
+            $this->reconcileGroupedFees($profile, [$oldGroupedFeeDate, $transaction->transaction_date?->toDateString()], $user, $transaction->id);
+        }
+        $transaction->refresh();
         $this->reconcileDpGroups($profile, [$oldGroup, $this->dpGroupKey($transaction)], $user, $applyCash, $transaction->id);
         $transaction->refresh();
 
@@ -358,7 +369,11 @@ class TransactionWriteService
         }
 
         $group = $this->dpGroupKey($transaction);
+        $groupedFeeDate = (string) ($transaction->transaction_date?->toDateString() ?? $transaction->getRawOriginal('transaction_date'));
         $transaction->delete();
+        if ($applyCash) {
+            $this->reconcileGroupedFees($profile, [$groupedFeeDate], $user);
+        }
         $this->reconcileDpGroups($profile, [$group], $user, $applyCash);
         $this->applyLedgerDerivedState($profile, $stock);
 
@@ -642,7 +657,7 @@ class TransactionWriteService
         $components = array_values(array_filter($components, fn (array $component) => ($component['aggregation'] ?? null) !== 'isin_day_sell'));
         return app(FeeCalculatorService::class)->calculate(
             (float) $input['quantity'], (float) $input['price'], (string) $input['type'],
-            (string) ($input['execution_exchange'] ?? 'NSE'), $components,
+            (string) ($input['execution_exchange'] ?? 'NSE'), $components, (string) ($input['transaction_date'] ?? date('Y-m-d')),
         )['total'];
     }
 
@@ -670,6 +685,33 @@ class TransactionWriteService
             ->where('transaction_id', $transaction->id)
             ->whereIn('entry_type', [CashLedgerEntry::TYPE_BUY, CashLedgerEntry::TYPE_SELL])
             ->exists();
+    }
+
+    /** Reallocate invoice-rounded percentage fees only across explicitly enrolled new cash trades. */
+    private function reconcileGroupedFees(PortfolioProfile $profile, array $dates, ?User $user, ?int $reversedTransactionId = null): void
+    {
+        $calculator = app(FeeCalculatorService::class);
+        foreach (array_unique(array_filter($dates)) as $date) {
+            $rows = Transaction::query()->with('stock')->where('profile_id', $profile->id)
+                ->where('grouped_fee_policy_enrolled', true)->whereNull('simulation_origin')
+                ->whereDate('transaction_date', $date)->orderBy('id')->lockForUpdate()->get();
+            if ($rows->isEmpty()) continue;
+            $allocations = $calculator->calculateGrouped($rows->map(fn (Transaction $row) => [
+                'id' => $row->id, 'quantity' => (float) $row->quantity, 'price' => (float) $row->price,
+                'type' => (string) $row->type, 'execution_exchange' => (string) ($row->execution_exchange ?? 'NSE'),
+                'transaction_date' => $date,
+            ])->all());
+            foreach ($rows as $index => $row) {
+                $next = round((float) $allocations[$index]['total'] + (float) ($row->dp_fee_amount ?? 0), 4);
+                $prior = round((float) $row->fees, 4);
+                $delta = round($next - $prior, 4);
+                if (abs($delta) < 0.00005) continue;
+                $row->forceFill(['fees' => $next])->save();
+                if ($row->id !== $reversedTransactionId && $this->hasTradeCashEntry($profile, $row)) {
+                    $this->cash->postTransactionFeeAdjustment($profile, $row, $delta, $user, 'Grouped fee allocation adjustment');
+                }
+            }
+        }
     }
 
     /** Keep one persisted DP owner per profile/ISIN/day; corrections are signed ledger entries. */

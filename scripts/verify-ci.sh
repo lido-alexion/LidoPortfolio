@@ -18,8 +18,12 @@ verify_php_platform() {
   require_command composer
   local extensions=(curl dom fileinfo mbstring opentelemetry pdo_mysql pdo_sqlite tokenizer xml zip zlib)
   local missing=()
+  # Query PHP modules once: grep -q in a pipefail pipeline can SIGPIPE `tr`
+  # after matching an early module, incorrectly reporting a built-in extension missing.
+  local installed_modules
+  installed_modules="$(php -m | tr '[:upper:]' '[:lower:]')"
   for extension in "${extensions[@]}"; do
-    php -m | tr '[:upper:]' '[:lower:]' | grep -qx "$extension" || missing+=("$extension")
+    grep -Fx "$extension" <<< "$installed_modules" >/dev/null || missing+=("$extension")
   done
   if ((${#missing[@]})); then
     echo "Missing PHP extension(s) required by CI: ${missing[*]}" >&2

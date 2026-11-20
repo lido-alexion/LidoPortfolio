@@ -643,8 +643,9 @@ export default function TransactionsPage() {
         price: form.price,
         type: form.type,
         exchange: executionVenue,
+        transactionDate: form.transaction_date,
         feeComponents,
-    }), [form.quantity, form.price, form.type, executionVenue, feeComponents]);
+    }), [form.quantity, form.price, form.type, form.transaction_date, executionVenue, feeComponents]);
 
     const buildPayload = () => {
 

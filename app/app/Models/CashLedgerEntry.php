@@ -48,6 +48,7 @@ class CashLedgerEntry extends Model
     protected $fillable = [
         'profile_id',
         'entry_type',
+        'entry_classification',
         'amount',
         'balance_after',
         'reason',

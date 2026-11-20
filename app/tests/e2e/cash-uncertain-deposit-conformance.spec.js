@@ -51,7 +51,9 @@ const NOTIFICATION_EMPTY_RESPONSE = {
     },
 };
 
-function statement(entries, closingBalance) {
+function statement(entries, closingBalance, page = 1, perPage = 25) {
+    const ordered = [...entries].sort((left, right) => right.entry_date.localeCompare(left.entry_date) || right.id - left.id);
+    const start = (page - 1) * perPage;
     return {
         opening_balance: 10000,
         closing_balance: closingBalance,
@@ -59,8 +61,8 @@ function statement(entries, closingBalance) {
         incomplete_reason: null,
         from: null,
         to: '2026-10-20',
-        entries,
-        pagination: { page: 1, per_page: 100, total: entries.length, last_page: 1 },
+        entries: ordered.slice(start, start + perPage),
+        pagination: { page, per_page: perPage, total: entries.length, last_page: Math.max(1, Math.ceil(entries.length / perPage)) },
     };
 }
 
@@ -182,7 +184,13 @@ async function prepare(page, viewport, mode) {
         return route.fulfill({ json: body });
     });
     await page.route('**/api/cash/statement*', route => {
-        const body = JSON.parse(JSON.stringify({ data: statement(entries, committed ? 15500 : 12500) }));
+        const url = new URL(route.request().url());
+        const body = JSON.parse(JSON.stringify({ data: statement(
+            entries,
+            committed ? 15500 : 12500,
+            Number(url.searchParams.get('page') || 1),
+            Number(url.searchParams.get('per_page') || 25),
+        ) }));
         cashReceipts.push(cashReceipt(route.request(), new URL(route.request().url()).pathname, 200, body));
         return route.fulfill({ json: body });
     });
@@ -369,7 +377,7 @@ async function expectCapturedApiReceiptsSettled(evidence) {
                 expect(receipt.query).toBe('?include_reservations=true');
             } else if (receipt.path === '/api/cash/statement') {
                 expect(receipt.method).toBe('GET');
-                expect(receipt.query).toBe('?per_page=100');
+                expect(receipt.query).toBe('?page=1&per_page=25&order=desc');
             } else {
                 expect(receipt.path).toBe('/api/cash/deposit');
                 expect(receipt.method).toBe('POST');
@@ -405,6 +413,38 @@ test.afterEach(({ page }, testInfo) => {
         rejectedWrites: bounded(evidence.rejectedWrites),
         malformedDiagnostics: bounded(evidence.malformedDiagnostics),
     })}`);
+});
+
+test('Cash statement paginates 203 rows newest-first and reaches the oldest page', async ({ page }) => {
+    const evidence = await prepare(page, VIEWPORTS[1], 'known-no-commit');
+    evidence.entries.splice(0, evidence.entries.length);
+    const start = new Date('2026-04-01T00:00:00Z');
+    for (let index = 0; index < 203; index++) {
+        const date = new Date(start.getTime() + index * 86400000).toISOString().slice(0, 10);
+        evidence.entries.push({
+            id: 5000 + index,
+            entry_date: date,
+            entry_type: 'deposit',
+            category: 'external_flow',
+            amount: 1,
+            running_balance: 10001 + index,
+            reason: `Pagination fixture ${index}`,
+        });
+    }
+    await page.goto('/cash');
+
+    await expect(page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Pagination fixture 202', exact: true }) })).toHaveCount(1, { timeout: 15000 });
+    await expect(page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Pagination fixture 0', exact: true }) })).toHaveCount(0);
+    await expect(page.getByText('Page 1 of 9', { exact: true }).first()).toBeVisible();
+
+    await page.getByLabel('Cash statement rows per page').first().selectOption('100');
+    await expect(page.getByText('Page 1 of 3', { exact: true }).first()).toBeVisible();
+    await page.getByRole('button', { name: 'Next cash statement page' }).first().click();
+    await expect(page.getByText('Page 2 of 3', { exact: true }).first()).toBeVisible();
+    await page.getByRole('button', { name: 'Next cash statement page' }).first().click();
+    await expect(page.getByText('Page 3 of 3', { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Pagination fixture 0', exact: true }) })).toHaveCount(1);
+    await expect(page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Pagination fixture 202', exact: true }) })).toHaveCount(0);
 });
 
 for (const viewport of VIEWPORTS) {
@@ -444,8 +484,8 @@ for (const viewport of VIEWPORTS) {
             const refreshResponse = await refreshResponsePromise;
             const refreshed = await refreshResponse.json();
             expect(refreshed.data.entries.map(entry => ({ id: entry.id, date: entry.entry_date, type: entry.entry_type, amount: entry.amount, balance: entry.running_balance, remarks: entry.reason }))).toEqual([
-                { id: BASELINE_ENTRY.id, date: BASELINE_ENTRY.entry_date, type: 'deposit', amount: 2500, balance: 12500, remarks: BASELINE_ENTRY.reason },
                 { id: 4102, date: DEPOSIT.transaction_date, type: 'deposit', amount: DEPOSIT.amount, balance: 15500, remarks: DEPOSIT.remarks },
+                { id: BASELINE_ENTRY.id, date: BASELINE_ENTRY.entry_date, type: 'deposit', amount: 2500, balance: 12500, remarks: BASELINE_ENTRY.reason },
             ]);
             expect(refreshResponse.request().headers()['x-profile-id']).toBe(String(TEST_PORTFOLIO.id));
             expect(refreshResponse.request().postData()).toBeNull();

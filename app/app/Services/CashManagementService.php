@@ -420,15 +420,15 @@ class CashManagementService
     }
 
     /** Post a signed, traceable correction when grouped fees move between surviving trades. */
-    public function postTransactionFeeAdjustment(PortfolioProfile $profile, Transaction $transaction, float $feeDelta, ?User $user = null): ?CashLedgerEntry
+    public function postTransactionFeeAdjustment(PortfolioProfile $profile, Transaction $transaction, float $feeDelta, ?User $user = null, string $label = 'DP fee allocation adjustment'): ?CashLedgerEntry
     {
         if (abs($feeDelta) < 0.00005) {
             return null;
         }
-        $type = strtolower((string) $transaction->type);
-        $cashDelta = $type === 'sell' ? -$feeDelta : $feeDelta;
+        // Any fee increase reduces cash regardless of whether the trade was a buy or sell.
+        $cashDelta = -$feeDelta;
         return $this->post($profile, CashLedgerEntry::TYPE_ADJUSTMENT, round($cashDelta, 4),
-            'DP fee allocation adjustment for transaction #'.$transaction->id,
+            $label.' for transaction #'.$transaction->id,
             $user, $transaction->id, $transaction->recommendation_id, now()->toDateString());
     }
 
@@ -506,6 +506,7 @@ class CashManagementService
         int $perPage = 50,
         ?string $type = null,
         ?string $cutoff = null,
+        string $order = 'asc',
     ): array {
         $fromDate = $from ? CarbonImmutable::parse($from)->toDateString() : null;
         $toDate = $to ? CarbonImmutable::parse($to)->toDateString() : now()->toDateString();
@@ -521,15 +522,16 @@ class CashManagementService
                 ->sum('amount'), 4)
             : ($cashState['complete'] ? 0.0 : null);
 
+        $direction = $order === 'desc' ? 'desc' : 'asc';
         $query = CashLedgerEntry::query()
             ->where('profile_id', $profile->id)
             ->when($cutoff, fn ($query) => $query->where('created_at', '<=', $cutoff))
             ->when($fromDate, fn ($q) => $q->whereDate('entry_date', '>=', $fromDate))
             ->whereDate('entry_date', '<=', $toDate)
             ->when($type, fn ($q) => $q->where('entry_type', $type))
-            ->orderBy('entry_date')
-            ->orderBy('created_at')
-            ->orderBy('id');
+            ->orderBy('entry_date', $direction)
+            ->orderBy('created_at', $direction)
+            ->orderBy('id', $direction);
 
         $total = (clone $query)->count();
         $entries = $query->forPage($page, $perPage)->get()->map(function (CashLedgerEntry $entry) use ($profile, $cashState, $cutoff) {
@@ -624,6 +626,9 @@ class CashManagementService
             if ($entry === null) {
                 throw ValidationException::withMessages(['entry' => ['Cash ledger entry was not found for this Portfolio.']]);
             }
+            if ($entry->entry_classification === 'derived_opening_assumption') {
+                throw ValidationException::withMessages(['entry' => ['A derived opening assumption can only be changed through its guarded cleanup or rollback workflow.']]);
+            }
             if (! in_array($entry->entry_type, [
                 CashLedgerEntry::TYPE_DEPOSIT,
                 CashLedgerEntry::TYPE_WITHDRAWAL,
@@ -675,6 +680,9 @@ class CashManagementService
             $entry = CashLedgerEntry::query()->where('profile_id', $profile->id)->lockForUpdate()->find($entryId);
             if (! $entry || ! in_array($entry->entry_type, [CashLedgerEntry::TYPE_DEPOSIT, CashLedgerEntry::TYPE_WITHDRAWAL, CashLedgerEntry::TYPE_ADJUSTMENT], true)) {
                 throw ValidationException::withMessages(['entry' => ['This entry cannot be edited here. Trade and internal movements must be changed through their source workflow.']]);
+            }
+            if ($entry->entry_classification === 'derived_opening_assumption') {
+                throw ValidationException::withMessages(['entry' => ['A derived opening assumption can only be changed through its guarded cleanup or rollback workflow.']]);
             }
             if (CashLedgerEntry::query()->where('reversal_of_entry_id', $entry->id)->exists()) {
                 throw ValidationException::withMessages(['entry' => ['This entry was already corrected. Refresh the statement and edit the current replacement.']]);
