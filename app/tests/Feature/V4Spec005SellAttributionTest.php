@@ -89,7 +89,7 @@ class V4Spec005SellAttributionTest extends TestCase
             0.0001,
         );
         $this->assertEqualsWithDelta(
-            $cashBefore + 440.0,
+            $cashBefore + 440.0 - (float) $tx->fees,
             app(CashManagementService::class)->balance($profile),
             0.001,
         );

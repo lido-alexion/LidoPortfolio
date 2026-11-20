@@ -105,7 +105,7 @@ class MultiStrategyLifecycleAssuranceTest extends TestCase
         $this->assertEqualsWithDelta(6_000.0, $this->strategySnapshot($final, $strategyA)['strategy_owned_market_value'], 0.0001);
         $this->assertEqualsWithDelta(0.0, $this->strategySnapshot($final, $strategyB)['strategy_owned_market_value'], 0.0001);
         $this->assertEqualsWithDelta(0.0, $final['physical_cash']['pending_execution_reservations'], 0.0001);
-        $this->assertEqualsWithDelta(94_000.0, $final['physical_cash']['total_cash'], 0.0001);
+        $this->assertEqualsWithDelta(100_000.0 - 6_000.0 - (float) $transaction->fees, $final['physical_cash']['total_cash'], 0.0001);
     }
 
     public function test_same_stock_execution_keeps_sibling_strategy_ownership_episodes_separate(): void

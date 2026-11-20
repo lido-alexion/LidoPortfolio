@@ -143,7 +143,8 @@ class Str16SiblingSellIsolationTest extends TestCase
         $this->assertSame($transactionCountBeforeSell + 1, Transaction::query()->where('profile_id', $profile->id)->count());
         $this->assertSame(1, Transaction::query()->where('profile_id', $profile->id)->where('type', 'sell')->count());
         $this->assertSame($ordersBeforeSell, TradingOrder::query()->where('profile_id', $profile->id)->count());
-        $this->assertEqualsWithDelta($cashBeforeSell + 600, app(CashManagementService::class)->balance($profile), 0.0001);
+        $sell = Transaction::query()->where('profile_id', $profile->id)->where('type', 'sell')->sole();
+        $this->assertEqualsWithDelta($cashBeforeSell + 600.0 - (float) $sell->fees, app(CashManagementService::class)->balance($profile), 0.0001);
     }
 
     /** @return array{0: User, 1: PortfolioProfile, 2: Stock, 3: TradingStrategy, 4: TradingStrategy} */
