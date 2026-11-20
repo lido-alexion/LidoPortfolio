@@ -14,6 +14,21 @@ class ForwardDataAdminHealthTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_daily_price_coverage_is_actionable_without_source_proof_and_other_gaps_always_are(): void
+    {
+        $service = new DataCompletenessService($this->mock(\App\Services\ML\MlHistoricalUniverseMembershipService::class));
+        $report = ['datasets' => [
+            'daily_prices' => ['freshness' => 'incomplete'],
+            'nse_membership' => ['freshness' => 'complete'],
+            'fundamentals' => ['freshness' => 'complete'],
+        ]];
+        $this->assertFalse($service->isComplete($report));
+        $this->assertTrue($service->hasActionableDatasetFailures($report));
+        $this->assertFalse($service->hasActionableDatasetFailures($report, true));
+        $report['datasets']['fundamentals']['freshness'] = 'incomplete';
+        $this->assertTrue($service->hasActionableDatasetFailures($report, true));
+    }
+
     public function test_unconfigured_required_sources_are_blocked_even_without_work_rows(): void
     {
         config([
@@ -142,8 +157,9 @@ class ForwardDataAdminHealthTest extends TestCase
         $alerts = $this->mock(AdminOperationalAlertService::class);
 
         $completeness->shouldReceive('report')->once()->andReturn(['datasets' => []]);
-        $completeness->shouldReceive('isComplete')->once()->andReturn(false);
+        $completeness->shouldReceive('hasActionableDatasetFailures')->once()->with(['datasets' => [], 'forward_data' => ['alerts' => [['key' => 'forward_data_incomplete']]]], false)->andReturn(true);
         $health->shouldReceive('report')->once()->andReturn(['alerts' => [['key' => 'forward_data_incomplete']]]);
+        $alerts->shouldReceive('hasValidatedDailyPriceRowsOnly')->once()->andReturn(false);
         $alerts->shouldReceive('recordUnattendedFailure')->once();
         $alerts->shouldReceive('syncAndNotify')->once();
 
@@ -153,11 +169,72 @@ class ForwardDataAdminHealthTest extends TestCase
         $health = $this->mock(ForwardDataHealthService::class);
         $alerts = $this->mock(AdminOperationalAlertService::class);
         $completeness->shouldReceive('report')->once()->andReturn(['datasets' => ['daily_prices' => ['freshness' => 'complete']]]);
-        $completeness->shouldReceive('isComplete')->once()->andReturn(true);
+        $completeness->shouldReceive('hasActionableDatasetFailures')->once()->with(['datasets' => ['daily_prices' => ['freshness' => 'complete']], 'forward_data' => ['alerts' => []]], false)->andReturn(false);
         $health->shouldReceive('report')->once()->andReturn(['alerts' => []]);
+        $alerts->shouldReceive('hasValidatedDailyPriceRowsOnly')->once()->andReturn(false);
         $alerts->shouldReceive('clearUnattendedFailure')->once()->with(AdminOperationalAlertService::KEY_DATA_COMPLETENESS)->andReturn(true);
         $alerts->shouldReceive('syncAndNotify')->once();
 
         $this->artisan('stox:check-data-completeness')->assertExitCode(0);
+    }
+
+    public function test_partial_daily_price_coverage_clears_composite_alert_without_telegram(): void
+    {
+        $completeness = $this->mock(DataCompletenessService::class);
+        $health = $this->mock(ForwardDataHealthService::class);
+        $alerts = $this->mock(AdminOperationalAlertService::class);
+        $report = ['as_of' => '2026-07-06T20:30:00+05:30', 'datasets' => ['daily_prices' => [
+            'freshness' => 'incomplete', 'coverage' => 80.0, 'last_successful_ingestion' => '2026-07-03',
+        ]]];
+        $completeness->shouldReceive('report')->once()->andReturn($report);
+        $expectedReport = $report;
+        $expectedReport['forward_data'] = ['alerts' => []];
+        $completeness->shouldReceive('hasActionableDatasetFailures')->once()->with($expectedReport, true)->andReturn(false);
+        $health->shouldReceive('report')->once()->andReturn(['alerts' => []]);
+        $alerts->shouldReceive('hasValidatedDailyPriceRowsOnly')->once()->andReturn(true);
+        $alerts->shouldReceive('clearUnattendedFailure')->once()->with(AdminOperationalAlertService::KEY_DATA_COMPLETENESS)->andReturn(true);
+        $alerts->shouldReceive('syncAndNotify')->once();
+        $alerts->shouldNotReceive('recordUnattendedFailure');
+
+        $this->artisan('stox:check-data-completeness')->assertExitCode(0);
+    }
+
+    public function test_non_universe_dataset_failure_still_records_and_notifies(): void
+    {
+        $completeness = $this->mock(DataCompletenessService::class);
+        $health = $this->mock(ForwardDataHealthService::class);
+        $alerts = $this->mock(AdminOperationalAlertService::class);
+        $completeness->shouldReceive('report')->once()->andReturn(['datasets' => ['fundamentals' => ['freshness' => 'incomplete']]]);
+        $completeness->shouldReceive('hasActionableDatasetFailures')->once()->with(['datasets' => ['fundamentals' => ['freshness' => 'incomplete']], 'forward_data' => ['alerts' => []]], false)->andReturn(true);
+        $health->shouldReceive('report')->once()->andReturn(['alerts' => []]);
+        $alerts->shouldReceive('hasValidatedDailyPriceRowsOnly')->once()->andReturn(false);
+        $alerts->shouldReceive('recordUnattendedFailure')->once();
+        $alerts->shouldReceive('syncAndNotify')->once();
+
+        $this->artisan('stox:check-data-completeness')->assertExitCode(1);
+    }
+
+    public function test_daily_price_gap_without_current_source_proof_records_composite_alert(): void
+    {
+        $report = ['datasets' => ['daily_prices' => ['freshness' => 'incomplete', 'coverage' => 0.0]]];
+        $expected = $report;
+        $expected['forward_data'] = ['alerts' => []];
+        $completeness = $this->mock(DataCompletenessService::class);
+        $health = $this->mock(ForwardDataHealthService::class);
+        $alerts = $this->mock(AdminOperationalAlertService::class);
+        $completeness->shouldReceive('report')->once()->andReturn($report);
+        $completeness->shouldReceive('hasActionableDatasetFailures')->once()->with($expected, false)->andReturn(true);
+        $health->shouldReceive('report')->once()->andReturn(['alerts' => []]);
+        $alerts->shouldReceive('hasValidatedDailyPriceRowsOnly')->once()->andReturn(false);
+        $alerts->shouldReceive('recordUnattendedFailure')->once()->with(
+            AdminOperationalAlertService::KEY_DATA_COMPLETENESS,
+            'StoX data completeness incomplete',
+            'One or more actionable ML readiness datasets has a missing session or incomplete coverage.',
+            $expected,
+        );
+        $alerts->shouldReceive('syncAndNotify')->once();
+        $alerts->shouldNotReceive('clearUnattendedFailure');
+
+        $this->artisan('stox:check-data-completeness')->assertExitCode(1);
     }
 }

@@ -77,6 +77,23 @@ class UniverseDailyBhavcopySyncService
             'historical_identity_rows' => 0, 'historical_adjustment_required' => 0,
             'files' => [], 'unavailable_stocks' => 0, 'unavailable_samples' => [],
         ];
+        // Preserve the exact source workset chosen for this bounded run. Alert
+        // evaluation must not reconstruct exchange scope from a later universe.
+        $expectedFiles = [];
+        $exchanges = array_keys($stocks->groupBy('exchange')->all());
+        foreach ($exchanges as $exchange) {
+            if (! in_array($exchange, ['NSE', 'BSE'], true)) {
+                throw new InvalidArgumentException('Unsupported daily bhavcopy exchange.');
+            }
+        }
+        $stats['bulk']['expected_exchanges'] = array_values($exchanges);
+        for ($expectedDay = $from->copy(); $expectedDay->lte($to); $expectedDay->addDay()) {
+            if (! TradingCalendar::isEquitySessionDate($expectedDay)) continue;
+            foreach ($exchanges as $exchange) {
+                $expectedFiles[] = ['exchange' => $exchange, 'date' => $expectedDay->toDateString()];
+            }
+        }
+        $stats['bulk']['expected_files'] = $expectedFiles;
         for ($day = $from->copy(); $day->lte($to); $day->addDay()) {
             if (! TradingCalendar::isEquitySessionDate($day)) {
                 continue;
@@ -119,9 +136,11 @@ class UniverseDailyBhavcopySyncService
                     continue;
                 }
                 $file = ['exchange' => $exchange, 'date' => $day->toDateString(), 'status' => 'failed'];
+                $failureStage = 'exchange_fetch';
                 try {
                     $stats['bulk']['files_downloaded']++;
                     $data = ($exchange === 'NSE' ? $this->nse : $this->bse)->fetchDailyRows($day);
+                    $failureStage = 'identity_validation';
                     $matched = $this->matcher->match($exchangeStocks, $data['rows'], $exchange);
                     $historicalBlocked = 0;
                     foreach ($matched['historical_stock_ids'] as $id) {
@@ -159,6 +178,7 @@ class UniverseDailyBhavcopySyncService
                     $conflicted += $matched['conflicts'];
                     $stats['bulk']['identity_conflicts'] += count($matched['conflicts']);
                     $fileStored = 0;
+                    $failureStage = 'price_persistence';
                     foreach ($exchangeStocks as $stock) {
                         $id = (int) $stock->id;
                         if (isset($coverage[$id]) || ! isset($matched['rows_by_stock_id'][$id])
@@ -207,6 +227,7 @@ class UniverseDailyBhavcopySyncService
                 } catch (\Throwable $e) {
                     $stats['bulk']['file_errors']++;
                     $file['error'] = $this->redactor->message($e->getMessage());
+                    $file['failure_stage'] = $failureStage;
                     if (preg_match('/\bHTTP\s+429\b/i', (string) $file['error']) === 1) {
                         $stats['rate_limit_hits']++;
                     }
@@ -215,9 +236,10 @@ class UniverseDailyBhavcopySyncService
                     }
                     if (! $dryRun) {
                         $attempt = min((int) ($receipt['retry_attempt'] ?? 0) + 1, count(self::RETRY_BACKOFF_MINUTES));
+                        $file['retry_attempt'] = $attempt;
+                        $file['retry_after'] = now()->addMinutes(self::RETRY_BACKOFF_MINUTES[$attempt - 1])->toIso8601String();
                         $entries[$key] = $file + [
-                            'coverage_hash' => $coverageHash, 'retry_attempt' => $attempt,
-                            'retry_after' => now()->addMinutes(self::RETRY_BACKOFF_MINUTES[$attempt - 1])->toIso8601String(),
+                            'coverage_hash' => $coverageHash,
                         ];
                         Setting::setValue(self::KEY_RECEIPTS, json_encode([
                             'fingerprint' => $fingerprint, 'entries' => $entries,

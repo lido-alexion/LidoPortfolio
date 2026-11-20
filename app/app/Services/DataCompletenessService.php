@@ -62,4 +62,14 @@ class DataCompletenessService
     {
         return collect($report['datasets'] ?? [])->except(['corporate_actions'])->every(fn ($dataset) => ($dataset['freshness'] ?? null) === 'complete');
     }
+
+    /** Price-row gaps are diagnostic only when the caller proves a healthy source run. */
+    public function hasActionableDatasetFailures(array $report, bool $dailyPriceRowsProvenSourceOnly = false): bool
+    {
+        $datasets = collect($report['datasets'] ?? [])->except(['corporate_actions']);
+        if ($dailyPriceRowsProvenSourceOnly) $datasets = $datasets->except(['daily_prices']);
+
+        return $datasets
+            ->contains(fn ($dataset) => ($dataset['freshness'] ?? null) !== 'complete');
+    }
 }
