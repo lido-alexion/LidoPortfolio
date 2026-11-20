@@ -1,0 +1,18 @@
+{
+  "fixture_type": "synthetic",
+  "fee_components": [
+    { "id": "stt", "label": "STT", "value": "0.1", "mode": "percentage", "applies_buy": true, "applies_sell": true, "exchange": "both", "gst_percent": "0" },
+    { "id": "txn_nse", "label": "Exchange charges", "value": "0.003", "mode": "percentage", "applies_buy": true, "applies_sell": true, "exchange": "NSE", "gst_percent": "18" },
+    { "id": "stamp", "label": "Stamp", "value": "0.015", "mode": "percentage", "applies_buy": true, "applies_sell": false, "exchange": "both", "gst_percent": "0" }
+  ],
+  "fills": [
+    { "transaction_date": "2026-01-05", "type": "buy", "exchange": "NSE", "quantity": 100, "price": 1000 },
+    { "transaction_date": "2026-01-05", "type": "buy", "exchange": "NSE", "quantity": 50, "price": 1000 }
+  ],
+  "invoice_days": [
+    { "date": "2026-01-05", "components": { "stt": 150, "txn_nse": 5.31, "stamp": 22.5 } }
+  ],
+  "cash_event_pairs": [
+    { "date": "2026-01-05", "event_type": "bank_transfer", "stox_amount": 12500.3456, "source_amount": 12500.345678 }
+  ]
+}

@@ -506,6 +506,7 @@ class CashManagementService
         int $perPage = 50,
         ?string $type = null,
         ?string $cutoff = null,
+        string $order = 'asc',
     ): array {
         $fromDate = $from ? CarbonImmutable::parse($from)->toDateString() : null;
         $toDate = $to ? CarbonImmutable::parse($to)->toDateString() : now()->toDateString();
@@ -521,15 +522,16 @@ class CashManagementService
                 ->sum('amount'), 4)
             : ($cashState['complete'] ? 0.0 : null);
 
+        $direction = $order === 'desc' ? 'desc' : 'asc';
         $query = CashLedgerEntry::query()
             ->where('profile_id', $profile->id)
             ->when($cutoff, fn ($query) => $query->where('created_at', '<=', $cutoff))
             ->when($fromDate, fn ($q) => $q->whereDate('entry_date', '>=', $fromDate))
             ->whereDate('entry_date', '<=', $toDate)
             ->when($type, fn ($q) => $q->where('entry_type', $type))
-            ->orderBy('entry_date')
-            ->orderBy('created_at')
-            ->orderBy('id');
+            ->orderBy('entry_date', $direction)
+            ->orderBy('created_at', $direction)
+            ->orderBy('id', $direction);
 
         $total = (clone $query)->count();
         $entries = $query->forPage($page, $perPage)->get()->map(function (CashLedgerEntry $entry) use ($profile, $cashState, $cutoff) {

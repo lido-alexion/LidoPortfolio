@@ -95,6 +95,7 @@ class CashController extends Controller
             'to' => 'nullable|date|before_or_equal:today|after_or_equal:from',
             'page' => 'nullable|integer|min:1',
             'per_page' => 'nullable|integer|min:1|max:100',
+            'order' => 'nullable|string|in:asc,desc',
             'entry_type' => 'nullable|string|in:'.implode(',', CashLedgerEntry::TYPES),
         ]);
 
@@ -106,6 +107,8 @@ class CashController extends Controller
                 (int) ($validated['page'] ?? 1),
                 (int) ($validated['per_page'] ?? 50),
                 $validated['entry_type'] ?? null,
+                null,
+                $validated['order'] ?? 'asc',
             ),
         ]);
     }
