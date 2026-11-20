@@ -451,7 +451,7 @@ it('preserves same-scope recommendation create payload, success feedback, and re
         quantity: 2, price: 10, type: 'buy', exchange: 'NSE', feeComponents: DEFAULT_FEE_COMPONENTS,
     }).total;
     await waitFor(() => expect(api.post).toHaveBeenCalledWith('/transactions', {
-        type: 'buy', quantity: 2, price: 10, fees: expectedFees, transaction_date: getLocalTodayDateString(),
+        type: 'buy', quantity: 2, price: 10, fees: expectedFees, execution_exchange: 'NSE', transaction_date: getLocalTodayDateString(),
         notes: '', recommendation_id: 77, source: 'recommendation', stock_id: 42,
     }));
     await waitFor(() => expect(api.get.mock.calls.filter(([path]) => path === '/transactions')).toHaveLength(2));
