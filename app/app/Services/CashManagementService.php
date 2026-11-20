@@ -419,6 +419,19 @@ class CashManagementService
         );
     }
 
+    /** Post a signed, traceable correction when grouped fees move between surviving trades. */
+    public function postTransactionFeeAdjustment(PortfolioProfile $profile, Transaction $transaction, float $feeDelta, ?User $user = null): ?CashLedgerEntry
+    {
+        if (abs($feeDelta) < 0.00005) {
+            return null;
+        }
+        $type = strtolower((string) $transaction->type);
+        $cashDelta = $type === 'sell' ? -$feeDelta : $feeDelta;
+        return $this->post($profile, CashLedgerEntry::TYPE_ADJUSTMENT, round($cashDelta, 4),
+            'DP fee allocation adjustment for transaction #'.$transaction->id,
+            $user, $transaction->id, $transaction->recommendation_id, now()->toDateString());
+    }
+
     /**
      * @return list<CashLedgerEntry>
      */

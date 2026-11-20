@@ -308,13 +308,15 @@ class CapitalPriorityCloseAtActualTest extends TestCase
             ->assertJsonPath('tos.recommendation_status', TradingRecommendation::STATUS_EXECUTED);
 
         $rec->refresh();
-        $this->assertEqualsWithDelta(31_500.0, (float) $rec->executed_amount, 0.0001);
+        $fill = \App\Models\Transaction::query()->where('recommendation_id', $rec->id)->sole();
+        $actualOutflow = 31_500.0 + (float) $fill->fees;
+        $this->assertEqualsWithDelta($actualOutflow, (float) $rec->executed_amount, 0.0001);
         $this->actingAs($user)->withProfileHeader($user, $profile)
             ->getJson('/api/v1/recommendations/'.$rec->id.'/capital-resolution')
             ->assertOk()
             ->assertJsonPath('data.total_immediately_available', 50000)
-            ->assertJsonPath('data.actual_execution_amount', 31500)
-            ->assertJsonPath('data.unresolved_amount', 18500)
+            ->assertJsonPath('data.actual_execution_amount', $actualOutflow)
+            ->assertJsonPath('data.unresolved_amount', 50_000.0 - $actualOutflow)
             ->assertJsonPath('data.bridge_capital_used', 0);
     }
 

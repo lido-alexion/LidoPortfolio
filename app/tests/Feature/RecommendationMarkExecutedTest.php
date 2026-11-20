@@ -49,7 +49,8 @@ class RecommendationMarkExecutedTest extends TestCase
         $this->assertSame((int) $fill->id, (int) $result->executed_transaction_id);
         $this->assertNotNull($result->executed_at);
         $this->assertSame(TradingRecommendation::RESERVATION_CONVERTED, $result->reservation_status);
-        $this->assertEqualsWithDelta(201.0, (float) $result->executed_amount, 0.0001);
+        $this->assertEqualsWithDelta(0.04, (float) $fill->fees, 0.0001);
+        $this->assertEqualsWithDelta(200.0 + (float) $fill->fees, (float) $result->executed_amount, 0.0001);
         $this->assertEqualsWithDelta(0.0, (float) $result->reserved_amount, 0.0001);
     }
 

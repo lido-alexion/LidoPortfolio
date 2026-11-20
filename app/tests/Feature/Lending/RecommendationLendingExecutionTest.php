@@ -93,7 +93,9 @@ class RecommendationLendingExecutionTest extends TestCase
         $rec->refresh();
 
         $this->assertSame(TradingRecommendation::STATUS_EXECUTED, $rec->status);
-        $this->assertEqualsWithDelta(18000.0, (float) $rec->executed_amount, 0.0001);
+        $fill = \App\Models\Transaction::query()->where('recommendation_id', $rec->id)->sole();
+        $actualOutflow = 18_000.0 + (float) $fill->fees;
+        $this->assertEqualsWithDelta($actualOutflow, (float) $rec->executed_amount, 0.0001);
         $this->assertEqualsWithDelta(18000.0, (float) $rec->capitalTargetAmount(), 0.0001);
         $this->assertEqualsWithDelta(10000.0, (float) $rec->ownAllocatedAmount(), 0.0001);
         $this->assertEqualsWithDelta(18000.0, (float) $rec->capitalAllocationMeta()['intended_execution_amount'], 0.0001);
@@ -119,7 +121,7 @@ class RecommendationLendingExecutionTest extends TestCase
         $this->assertSame((int) $loan->id, (int) $rec->capitalAllocationMeta()['capital_loan_id']);
         $this->assertSame(0, CapitalLoanReturn::query()->count());
 
-        $this->assertEqualsWithDelta($cashBefore - 18000.0, app(CashManagementService::class)->balance($profile), 0.0001);
+        $this->assertEqualsWithDelta($cashBefore - $actualOutflow, app(CashManagementService::class)->balance($profile), 0.0001);
         $this->assertSame(
             $buyEntriesBefore + 1,
             CashLedgerEntry::query()->where('profile_id', $profile->id)->where('entry_type', CashLedgerEntry::TYPE_BUY)->count()
@@ -173,7 +175,8 @@ class RecommendationLendingExecutionTest extends TestCase
         );
         // Execute at actual funded ₹10k (not original ₹18k target).
         $this->postFill($user, $profile, $rec, 100, 100)->assertCreated();
-        $this->assertEqualsWithDelta(10000.0, (float) $rec->fresh()->executed_amount, 0.0001);
+        $fill = \App\Models\Transaction::query()->where('recommendation_id', $rec->id)->sole();
+        $this->assertEqualsWithDelta(10_000.0 + (float) $fill->fees, (float) $rec->fresh()->executed_amount, 0.0001);
     }
 
     public function test_same_recommendation_and_loan_cannot_execute_twice(): void

@@ -8,6 +8,7 @@ use App\Models\Stock;
 use App\Models\TradingRecommendation;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Models\CashLedgerEntry;
 use App\Services\Ownership\SellAttributionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -21,6 +22,7 @@ use Illuminate\Validation\ValidationException;
  */
 class TransactionWriteService
 {
+    /** Rows predating this feature are deliberately excluded from DP allocation. */
     public function __construct(
         protected HoldingsCalculationService $holdings,
         protected TransactionRealizationService $realizations,
@@ -176,8 +178,16 @@ class TransactionWriteService
         ?User $user = null,
         bool $applyCash = true,
     ): Transaction {
+        PortfolioProfile::query()->whereKey($profile->id)->lockForUpdate()->firstOrFail();
         $this->lockLifecycleOwner($profile, $input);
         $transaction = $this->insert($profile, $stock, $input);
+        // Only post-deployment, cash-backed, non-simulation writes join grouped DP.
+        // Migration defaults all existing trades to unenrolled without repricing history.
+        if ($applyCash && $transaction->simulation_origin === null) {
+            $transaction->forceFill(['dp_policy_enrolled' => true])->save();
+        }
+        $this->reconcileDpGroup($profile, $transaction, $user, $applyCash);
+        $transaction->refresh();
         $this->applyLedgerDerivedState($profile, $stock);
         if ($applyCash) {
             $this->cash->applyTradeTransaction($profile, $transaction, $user);
@@ -206,6 +216,20 @@ class TransactionWriteService
         }
 
         $normalized = $this->normalizeInput($profile, $stock, $input, $transaction);
+        PortfolioProfile::query()->whereKey($profile->id)->lockForUpdate()->firstOrFail();
+        $oldGroup = $this->dpGroupKey($transaction);
+        $isLegacy = ! (bool) ($transaction->dp_policy_enrolled ?? false);
+        if ($isLegacy) {
+            // A normal edit must not silently run historical fee recalculation.
+            $normalized['fees'] = (float) $transaction->fees;
+        } else {
+            $normalized['fees'] = $this->authoritativeFees($profile, $stock, $normalized, $transaction->id);
+        }
+        if (! $applyCash && ((float) ($transaction->dp_fee_amount ?? 0) > 0 || $this->hasTradeCashEntry($profile, $transaction))) {
+            throw ValidationException::withMessages([
+                'transaction' => ['Cashless writes cannot alter a transaction already represented in the cash ledger.'],
+            ]);
+        }
         $this->lockLifecycleOwner($profile, ['owner_key' => $normalized['owner_key']]);
         $oldStockId = (int) $transaction->stock_id;
 
@@ -219,9 +243,11 @@ class TransactionWriteService
             'quantity' => $normalized['quantity'],
             'price' => $normalized['price'],
             'fees' => $normalized['fees'],
+            'dp_fee_amount' => $isLegacy ? (float) ($transaction->dp_fee_amount ?? 0) : 0,
             'transaction_date' => $normalized['transaction_date'],
             'notes' => array_key_exists('notes', $input) ? $normalized['notes'] : $transaction->notes,
             'owner_key' => $normalized['owner_key'],
+            'execution_exchange' => $normalized['execution_exchange'],
         ];
         if (array_key_exists('source', $input) || array_key_exists('recommendation_id', $input)) {
             $fill['source'] = $normalized['source'];
@@ -239,6 +265,8 @@ class TransactionWriteService
         $transaction->forceFill($fill)->save();
 
         $transaction = $transaction->fresh();
+        $this->reconcileDpGroups($profile, [$oldGroup, $this->dpGroupKey($transaction)], $user, $applyCash, $transaction->id);
+        $transaction->refresh();
 
         if ($oldStockId !== (int) $stock->id) {
             $oldStock = Stock::query()->find($oldStockId);
@@ -294,10 +322,19 @@ class TransactionWriteService
             ]);
         }
 
+        if (! $applyCash && ((float) ($transaction->dp_fee_amount ?? 0) > 0 || $this->hasTradeCashEntry($profile, $transaction))) {
+            throw ValidationException::withMessages([
+                'transaction' => ['Cashless writes cannot delete a transaction already represented in the cash ledger.'],
+            ]);
+        }
+
         $stock = $transaction->stock;
         if (! $stock) {
             $stock = Stock::query()->findOrFail((int) $transaction->stock_id);
         }
+
+        // Serialize all group reallocations for this profile before reversing cash.
+        PortfolioProfile::query()->whereKey($profile->id)->lockForUpdate()->firstOrFail();
 
         if (strtolower((string) $transaction->type) === 'buy') {
             try {
@@ -320,7 +357,9 @@ class TransactionWriteService
             $beforeDeleteResult = $beforeDelete($transaction);
         }
 
+        $group = $this->dpGroupKey($transaction);
         $transaction->delete();
+        $this->reconcileDpGroups($profile, [$group], $user, $applyCash);
         $this->applyLedgerDerivedState($profile, $stock);
 
         return [
@@ -335,6 +374,7 @@ class TransactionWriteService
     public function insert(PortfolioProfile $profile, Stock $stock, array $input): Transaction
     {
         $normalized = $this->normalizeInput($profile, $stock, $input);
+        $normalized['fees'] = $this->authoritativeFees($profile, $stock, $normalized);
 
         $exitReason = $normalized['exit_reason'] ?? null;
         if ($exitReason === null && ! empty($normalized['recommendation_id'])) {
@@ -347,10 +387,12 @@ class TransactionWriteService
         return Transaction::query()->create([
             'profile_id' => $profile->id,
             'stock_id' => $stock->id,
+            'execution_exchange' => $normalized['execution_exchange'],
             'type' => $normalized['type'],
             'quantity' => $normalized['quantity'],
             'price' => $normalized['price'],
             'fees' => $normalized['fees'],
+            'dp_fee_amount' => 0,
             'transaction_date' => $normalized['transaction_date'],
             'notes' => $normalized['notes'],
             'source' => $normalized['source'],
@@ -429,7 +471,23 @@ class TransactionWriteService
         array $input,
         ?Transaction $existing = null,
     ): array {
-        $normalized = $this->normalizeCore($input);
+        $normalized = $this->normalizeCore($input, $existing);
+        if ($normalized['simulation_origin'] !== null && ! $profile->isPaper()) {
+            throw ValidationException::withMessages([
+                'simulation_origin' => ['Simulation transactions may only be written to a Paper portfolio.'],
+            ]);
+        }
+        $stockExchange = strtoupper((string) ($stock->exchange ?? 'NSE'));
+        if ($stockExchange === 'BSE' && empty($stock->is_dual_listed)) {
+            if (($normalized['execution_exchange'] ?? 'NSE') !== 'BSE') {
+                // Legacy API clients omit venue; infer BSE for genuinely BSE-only listings.
+                if (! array_key_exists('execution_exchange', $input)) {
+                    $normalized['execution_exchange'] = 'BSE';
+                } else {
+                    throw ValidationException::withMessages(['execution_exchange' => ['BSE-only stocks must use BSE execution.']]);
+                }
+            }
+        }
 
         if ($normalized['type'] === 'sell') {
             $resolved = $this->attribution->resolveForSell(
@@ -453,7 +511,7 @@ class TransactionWriteService
      * @param  array<string, mixed>  $input
      * @return array{type: string, quantity: float, price: float, fees: float, transaction_date: string, notes: ?string, source: string, recommendation_id: ?int, corporate_action_id: ?int}
      */
-    public function normalizeCore(array $input): array
+    public function normalizeCore(array $input, ?Transaction $existing = null): array
     {
         $type = strtolower((string) ($input['type'] ?? ''));
         if (! in_array($type, ['buy', 'sell'], true)) {
@@ -513,6 +571,14 @@ class TransactionWriteService
         }
 
         $fees = (float) ($input['fees'] ?? 0);
+        $executionExchange = strtoupper((string) ($input['execution_exchange'] ?? $existing?->execution_exchange ?? 'NSE'));
+        if (! in_array($executionExchange, ['NSE', 'BSE'], true)) {
+            throw ValidationException::withMessages(['execution_exchange' => ['Execution exchange must be NSE or BSE.']]);
+        }
+        if (strtoupper((string) ($input['exchange'] ?? '')) === 'BSE'
+            && strtoupper((string) ($input['execution_exchange'] ?? $existing?->execution_exchange ?? 'BSE')) !== 'BSE') {
+            throw ValidationException::withMessages(['execution_exchange' => ['BSE-only stocks must use BSE execution.']]);
+        }
         if ($fees < 0) {
             throw ValidationException::withMessages([
                 'fees' => ['Fees must be zero or positive.'],
@@ -550,6 +616,7 @@ class TransactionWriteService
             'quantity' => $quantity,
             'price' => $price,
             'fees' => $fees,
+            'execution_exchange' => $executionExchange,
             'transaction_date' => $dateOnly,
             'notes' => is_string($notes) || $notes === null ? $notes : null,
             'source' => $source,
@@ -566,6 +633,91 @@ class TransactionWriteService
                 ? $input['exit_reason']
                 : null,
         ];
+    }
+
+    /** Compute non-DP fees. Grouped DP is allocated to a persisted row by reconcileDpGroups. */
+    public function authoritativeFees(PortfolioProfile $profile, Stock $stock, array $input, ?int $excludeTransactionId = null, bool $dpAlreadyChargedInBatch = false): float
+    {
+        $components = app(FeeCalculatorService::class)->componentsFromSettings();
+        $components = array_values(array_filter($components, fn (array $component) => ($component['aggregation'] ?? null) !== 'isin_day_sell'));
+        return app(FeeCalculatorService::class)->calculate(
+            (float) $input['quantity'], (float) $input['price'], (string) $input['type'],
+            (string) ($input['execution_exchange'] ?? 'NSE'), $components,
+        )['total'];
+    }
+
+    private function dpGroupKey(Transaction $transaction): ?string
+    {
+        if (strtolower((string) $transaction->type) !== 'sell'
+            || $transaction->simulation_origin !== null
+            || ! $transaction->exists) {
+            return null;
+        }
+        $isin = strtoupper(trim((string) $transaction->stock?->isin));
+        if ($isin === '') return null;
+        return $transaction->profile_id.'|'.$isin.'|'.($transaction->transaction_date?->toDateString() ?? $transaction->getRawOriginal('transaction_date'));
+    }
+
+    private function reconcileDpGroup(PortfolioProfile $profile, Transaction $transaction, ?User $user, bool $applyCash): void
+    {
+        $this->reconcileDpGroups($profile, [$this->dpGroupKey($transaction)], $user, $applyCash, $transaction->id);
+    }
+
+    private function hasTradeCashEntry(PortfolioProfile $profile, Transaction $transaction): bool
+    {
+        return CashLedgerEntry::query()
+            ->where('profile_id', $profile->id)
+            ->where('transaction_id', $transaction->id)
+            ->whereIn('entry_type', [CashLedgerEntry::TYPE_BUY, CashLedgerEntry::TYPE_SELL])
+            ->exists();
+    }
+
+    /** Keep one persisted DP owner per profile/ISIN/day; corrections are signed ledger entries. */
+    private function reconcileDpGroups(PortfolioProfile $profile, array $keys, ?User $user, bool $applyCash, ?int $reversedTransactionId = null): void
+    {
+        // Cashless fills (internal transfer valuations), paper simulations and replays must
+        // never create a DP liability or alter the live cash ledger.
+        if (! $applyCash) {
+            return;
+        }
+
+        $settings = app(FeeCalculatorService::class)->componentsFromSettings();
+        $dpComponents = array_values(array_filter($settings, fn (array $c) => ($c['aggregation'] ?? null) === 'isin_day_sell'));
+        foreach (array_unique(array_filter($keys)) as $key) {
+            [$profileId, $isin, $date] = explode('|', $key, 3);
+            if ((int) $profileId !== (int) $profile->id) continue;
+            $rows = Transaction::query()->with('stock')->where('profile_id', $profile->id)->where('type', 'sell')
+                ->whereNull('simulation_origin')
+                ->where('dp_policy_enrolled', true)
+                ->whereDate('transaction_date', $date)->whereHas('stock', fn ($q) => $q->whereRaw('UPPER(isin) = ?', [$isin]))
+                ->where(function ($query) use ($reversedTransactionId) {
+                    $ledgerSells = CashLedgerEntry::query()
+                        ->where('entry_type', CashLedgerEntry::TYPE_SELL)
+                        ->select('transaction_id');
+                    if ($reversedTransactionId !== null) {
+                        $query->whereKey($reversedTransactionId)->orWhereIn('id', $ledgerSells);
+                    } else {
+                        $query->whereIn('id', $ledgerSells);
+                    }
+                })
+                ->orderByDesc('id')->lockForUpdate()->get();
+            // Newest eligible row owns the single group charge. Historic rows remain untouched.
+            $ownerId = $rows->first()?->id;
+            $desired = 0.0;
+            if ($ownerId !== null && $dpComponents !== []) {
+                $desired = app(FeeCalculatorService::class)->calculate(1, 1, 'sell', 'NSE', $dpComponents)['total'];
+            }
+            foreach ($rows as $row) {
+                $next = $row->id === $ownerId ? $desired : 0.0;
+                $prior = (float) ($row->dp_fee_amount ?? 0);
+                $delta = round($next - $prior, 4);
+                if (abs($delta) < 0.00005) continue;
+                $row->forceFill(['dp_fee_amount' => $next, 'fees' => round((float) $row->fees + $delta, 4)])->save();
+                if ($row->id !== $reversedTransactionId) {
+                    $this->cash->postTransactionFeeAdjustment($profile, $row, $delta, $user);
+                }
+            }
+        }
     }
 
     public function tradeCashDelta(string $type, float $quantity, float $price, float $fees): float

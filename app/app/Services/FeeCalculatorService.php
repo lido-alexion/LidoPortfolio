@@ -4,7 +4,7 @@ namespace App\Services;
 
 /**
  * Mirrors resources/js/src/utils/feeCalculator.js for one-time DB recalculations.
- * Runtime saves trust the FE-calculated fees value.
+ * Runtime saves calculate fees authoritatively on the backend.
  */
 class FeeCalculatorService
 {
@@ -75,6 +75,11 @@ class FeeCalculatorService
                 'exchange' => 'both',
                 'gst_percent' => '0',
             ],
+            [
+                'id' => 'dp_zerodha', 'label' => 'Depository participant (DP)', 'value' => '13',
+                'mode' => self::MODE_FIXED, 'applies_buy' => false, 'applies_sell' => true,
+                'exchange' => 'both', 'gst_percent' => '18', 'aggregation' => 'isin_day_sell',
+            ],
         ];
     }
 
@@ -112,6 +117,7 @@ class FeeCalculatorService
                 'applies_sell' => ($item['applies_sell'] ?? true) !== false,
                 'exchange' => $exchange,
                 'gst_percent' => (string) ($item['gst_percent'] ?? '0'),
+                'aggregation' => ($item['aggregation'] ?? null) === 'isin_day_sell' ? 'isin_day_sell' : null,
             ];
         }
 
@@ -144,6 +150,9 @@ class FeeCalculatorService
             $base = ($component['mode'] ?? '') === self::MODE_FIXED
                 ? $rate
                 : $turnover * ($rate / 100);
+            if (($component['id'] ?? null) === 'stt') {
+                $base = floor($base + 0.5);
+            }
             $gstRate = (float) ($component['gst_percent'] ?? 0);
             $gst = $base * ($gstRate / 100);
             $lineTotal = $base + $gst;

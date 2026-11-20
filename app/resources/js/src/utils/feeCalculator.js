@@ -77,6 +77,11 @@ export const DEFAULT_FEE_COMPONENTS = [
         exchange: FEE_EXCHANGES.BOTH,
         gst_percent: '0',
     },
+    {
+        id: 'dp_zerodha', label: 'Depository participant (DP)', value: '13',
+        mode: FEE_MODES.FIXED, applies_buy: false, applies_sell: true,
+        exchange: FEE_EXCHANGES.BOTH, gst_percent: '18', aggregation: 'isin_day_sell',
+    },
 ];
 
 function roundMoney(value) {
@@ -119,6 +124,7 @@ export function normalizeFeeComponents(raw) {
             ? item.exchange
             : FEE_EXCHANGES.BOTH,
         gst_percent: String(item.gst_percent ?? '0'),
+        aggregation: item.aggregation === 'isin_day_sell' ? 'isin_day_sell' : undefined,
     }));
 }
 
@@ -155,14 +161,15 @@ export function calculateTransactionFees({
         const base = component.mode === FEE_MODES.FIXED
             ? rate
             : turnover * (rate / 100);
+        const roundedBase = component.id === 'stt' ? Math.floor(base + 0.5) : base;
         const gstRate = Number(component.gst_percent) || 0;
-        const gst = base * (gstRate / 100);
-        const lineTotal = base + gst;
+        const gst = roundedBase * (gstRate / 100);
+        const lineTotal = roundedBase + gst;
 
         breakdown.push({
             id: component.id,
             label: component.label,
-            base: roundMoney(base),
+            base: roundMoney(roundedBase),
             gst: roundMoney(gst),
             total: roundMoney(lineTotal),
         });
@@ -173,6 +180,36 @@ export function calculateTransactionFees({
         total: roundMoney(total),
         breakdown,
     };
+}
+
+/** Allocate ISIN/day DP charges once across a complete, ordered transaction set.
+ * Rows without an ISIN are intentionally left without an estimated DP charge. */
+export function calculateGroupedTransactionFees(rows, feeComponents = DEFAULT_FEE_COMPONENTS) {
+    const normalized = normalizeFeeComponents(feeComponents);
+    const dp = normalized.filter((component) => component.aggregation === 'isin_day_sell');
+    const ordinary = normalized.filter((component) => component.aggregation !== 'isin_day_sell');
+    const results = rows.map((row) => calculateTransactionFees({
+        quantity: row.quantity, price: row.price, type: row.type,
+        exchange: row.execution_exchange || 'NSE', feeComponents: ordinary,
+    }));
+    const charged = new Set();
+    rows.forEach((row, index) => {
+        const isin = String(row.isin || '').trim().toUpperCase();
+        if (String(row.type).toLowerCase() !== 'sell' || !isin) return;
+        const key = `${row.profile_id || row.account_id || 'default'}:${row.transaction_date}:${isin}`;
+        if (charged.has(key)) return;
+        charged.add(key);
+        for (const component of dp) {
+            if (component.exchange !== 'both' && component.exchange !== (row.execution_exchange || 'NSE')) continue;
+            const base = component.mode === FEE_MODES.FIXED
+                ? Number(component.value) : Number(row.quantity) * Number(row.price) * Number(component.value) / 100;
+            const gst = base * Number(component.gst_percent || 0) / 100;
+            const line = { id: component.id, label: component.label, base: roundMoney(base), gst: roundMoney(gst), total: roundMoney(base + gst) };
+            results[index].breakdown.push(line);
+            results[index].total = roundMoney(results[index].total + line.total);
+        }
+    });
+    return results;
 }
 
 function formatMoneyAmount(value) {
