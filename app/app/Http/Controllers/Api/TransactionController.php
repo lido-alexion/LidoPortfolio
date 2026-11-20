@@ -116,6 +116,7 @@ class TransactionController extends Controller
 
         $input = [
             'type' => $validated['type'],
+            'execution_exchange' => $validated['execution_exchange'] ?? (strtoupper((string) $stock->exchange) === 'BSE' && ! $stock->is_dual_listed ? 'BSE' : 'NSE'),
             'quantity' => $validated['quantity'],
             'price' => $validated['price'],
             'fees' => $validated['fees'] ?? 0,
@@ -211,6 +212,7 @@ class TransactionController extends Controller
 
         $input = [
             'type' => $validated['type'] ?? $transaction->type,
+            'execution_exchange' => $validated['execution_exchange'] ?? $transaction->execution_exchange ?? 'NSE',
             'quantity' => $validated['quantity'],
             'price' => $validated['price'],
             'fees' => $validated['fees'] ?? 0,
@@ -306,6 +308,7 @@ class TransactionController extends Controller
             'symbol' => ['nullable', 'string', 'max:20'],
             'name' => ['nullable', 'string', 'max:255'],
             'exchange' => ['nullable', 'string', 'max:10'],
+            'execution_exchange' => ['nullable', 'in:NSE,BSE'],
             'sector' => ['nullable', 'string', 'max:100'],
             'type' => [$transaction ? 'sometimes' : 'required', 'in:buy,sell'],
             'quantity' => ['required', 'numeric', 'gt:0'],

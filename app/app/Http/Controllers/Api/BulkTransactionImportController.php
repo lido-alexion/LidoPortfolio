@@ -24,6 +24,7 @@ class BulkTransactionImportController extends Controller
             'rows.*.symbol' => ['nullable', 'string', 'max:20'],
             'rows.*.stock_id' => ['nullable', 'integer'],
             'rows.*.exchange' => ['nullable', 'string', 'in:NSE,BSE'],
+            'rows.*.execution_exchange' => ['nullable', 'in:NSE,BSE'],
             'rows.*.name' => ['nullable', 'string', 'max:255'],
             'rows.*.type' => ['required', 'in:buy,sell'],
             'rows.*.quantity' => ['required', 'numeric', 'gt:0'],

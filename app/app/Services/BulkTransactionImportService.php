@@ -57,9 +57,10 @@ class BulkTransactionImportService
             return $this->alreadyCommittedResponse($profile, $existing);
         }
 
-        $prepared = $this->validateAndPrepare($profile, $rows);
-
-        $committed = DB::transaction(function () use ($profile, $batchKey, $prepared, $user) {
+        $committed = DB::transaction(function () use ($profile, $batchKey, $rows, $user) {
+            // Keep preview economics and persisted group ownership under the same profile lock.
+            PortfolioProfile::query()->whereKey($profile->id)->lockForUpdate()->firstOrFail();
+            $prepared = $this->validateAndPrepare($profile, $rows);
             $owners = [];
             foreach ($prepared as $item) {
                 if (preg_match('/^strategy:(\\d+)$/', (string) ($item['input']['owner_key'] ?? ''), $matches) === 1) {
@@ -156,6 +157,13 @@ class BulkTransactionImportService
         $virtualQty = [];
         $virtualOwner = [];
         $cashBalance = $this->cash->balance($profile);
+        $batchDpGroups = [];
+        $dpFee = app(\App\Services\FeeCalculatorService::class)->calculate(
+            1, 1, 'sell', 'NSE', array_values(array_filter(
+                app(\App\Services\FeeCalculatorService::class)->componentsFromSettings(),
+                fn (array $component) => ($component['aggregation'] ?? null) === 'isin_day_sell',
+            )),
+        )['total'];
 
         foreach ($rows as $index => $row) {
             $rowId = strtolower(trim((string) ($row['row_id'] ?? '')));
@@ -172,6 +180,7 @@ class BulkTransactionImportService
                     'stock_id' => $row['stock_id'] ?? null,
                     'symbol' => $row['symbol'] ?? null,
                     'exchange' => $row['exchange'] ?? 'NSE',
+                    'execution_exchange' => $row['execution_exchange'] ?? 'NSE',
                     'name' => $row['name'] ?? null,
                 ], allowCreate: true);
             } catch (ValidationException $e) {
@@ -184,6 +193,7 @@ class BulkTransactionImportService
                     'quantity' => $row['quantity'] ?? null,
                     'price' => $row['price'] ?? null,
                     'fees' => $row['fees'] ?? 0,
+                    'execution_exchange' => $row['execution_exchange'] ?? (strtoupper((string) $stock->exchange) === 'BSE' && ! $stock->is_dual_listed ? 'BSE' : 'NSE'),
                     'transaction_date' => $row['transaction_date'] ?? null,
                     'notes' => $row['notes'] ?? null,
                     'source' => Transaction::SOURCE_MANUAL,
@@ -200,6 +210,29 @@ class BulkTransactionImportService
             }
 
             $stockId = (int) $stock->id;
+            $isin = strtoupper(trim((string) $stock->isin));
+            $dpGroup = $isin !== '' && $normalized['type'] === 'sell'
+                ? $profile->id.':'.$normalized['transaction_date'].':'.$isin : null;
+            $groupAlreadyCharged = false;
+            if ($dpGroup !== null && ! isset($batchDpGroups[$dpGroup])) {
+                $groupAlreadyCharged = Transaction::query()
+                    ->where('profile_id', $profile->id)
+                    ->where('type', 'sell')
+                    ->whereNull('simulation_origin')
+                    ->whereDate('transaction_date', $normalized['transaction_date'])
+                    ->where('dp_fee_amount', '>', 0)
+                    ->whereHas('stock', fn ($query) => $query->whereRaw('UPPER(isin) = ?', [$isin]))
+                    ->exists();
+            }
+            $normalized['fees'] = $this->writes->authoritativeFees(
+                $profile, $stock, $normalized,
+            );
+            if ($dpGroup !== null) {
+                if (! $groupAlreadyCharged && ! isset($batchDpGroups[$dpGroup])) {
+                    $normalized['fees'] = round($normalized['fees'] + $dpFee, 4);
+                }
+                $batchDpGroups[$dpGroup] = true;
+            }
             if (! array_key_exists($stockId, $virtualQty)) {
                 $open = $this->attribution->openOwnerQuantities($profile, $stock);
                 $virtualOwner[$stockId] = $open;

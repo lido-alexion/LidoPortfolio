@@ -57,6 +57,7 @@ const emptyForm = () => ({
     symbol: '',
     name: '',
     exchange: 'NSE',
+    execution_exchange: 'NSE',
     type: 'buy',
     quantity: '',
     price: '',
@@ -634,15 +635,16 @@ export default function TransactionsPage() {
 
 
 
-    const resolvedExchange = form.exchange || selectedStock?.exchange || 'NSE';
+    const executionVenue = ((selectedStock?.exchange || form.exchange) === 'BSE' && !selectedStock?.is_dual_listed)
+        ? 'BSE' : (form.execution_exchange || 'NSE');
 
     const feeCalculation = useMemo(() => calculateTransactionFees({
         quantity: form.quantity,
         price: form.price,
         type: form.type,
-        exchange: resolvedExchange,
+        exchange: executionVenue,
         feeComponents,
-    }), [form.quantity, form.price, form.type, resolvedExchange, feeComponents]);
+    }), [form.quantity, form.price, form.type, executionVenue, feeComponents]);
 
     const buildPayload = () => {
 
@@ -651,6 +653,7 @@ export default function TransactionsPage() {
             quantity: Number(form.quantity),
             price: Number(form.price),
             fees: feeCalculation.total,
+            execution_exchange: executionVenue,
             transaction_date: form.transaction_date,
             notes: form.notes,
         };
@@ -709,6 +712,7 @@ export default function TransactionsPage() {
             name: tx.stock?.name || '',
 
             exchange: tx.stock?.exchange || 'NSE',
+            execution_exchange: tx.execution_exchange || 'NSE',
 
             type: tx.type,
 
@@ -896,6 +900,7 @@ export default function TransactionsPage() {
             ...prev,
 
             exchange,
+            execution_exchange: exchange === 'BSE' ? 'BSE' : (prev.execution_exchange || 'NSE'),
 
         }));
 
@@ -1278,6 +1283,15 @@ export default function TransactionsPage() {
 
                                     />
 
+                                    {((selectedStock?.exchange || form.exchange || 'NSE') === 'NSE' || Boolean(selectedStock?.is_dual_listed)) && (
+                                        <div className="mt-2">
+                                            <SegmentToggle label="Execution venue" ariaLabel="Execution venue"
+                                                value={form.execution_exchange || 'NSE'}
+                                                onChange={(execution_exchange) => setForm({ ...form, execution_exchange })}
+                                                options={[{ value: 'NSE', label: 'NSE' }, { value: 'BSE', label: 'BSE' }]} />
+                                        </div>
+                                    )}
+
                                 </div>
 
                             ) : (
@@ -1295,6 +1309,15 @@ export default function TransactionsPage() {
                                                 { value: 'BSE', label: 'BSE' },
                                             ]}
                                         />
+                                        {((selectedStock?.exchange || form.exchange || 'NSE') === 'NSE' || Boolean(selectedStock?.is_dual_listed)) && (
+                                            <SegmentToggle
+                                                label="Execution venue"
+                                                ariaLabel="Execution venue"
+                                                value={form.execution_exchange || 'NSE'}
+                                                onChange={(execution_exchange) => setForm({ ...form, execution_exchange })}
+                                                options={[{ value: 'NSE', label: 'NSE' }, { value: 'BSE', label: 'BSE' }]}
+                                            />
+                                        )}
                                         <SegmentToggle
                                             label="Type"
                                             ariaLabel="Transaction type"
@@ -1541,7 +1564,7 @@ export default function TransactionsPage() {
                                     />
                                 </div>
                                 <div id="tx-fees-help" className="form-text">
-                                    Auto-calculated from Settings → fee components using the NSE+/BSE toggle above.
+                                    Estimated from Settings and the execution platform. The server applies grouped DP charges once per stock/day; legacy fees remain unchanged until historical recalculation.
                                 </div>
 
                             </div>

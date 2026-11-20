@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
     calculateTransactionFees,
+    calculateGroupedTransactionFees,
     DEFAULT_FEE_COMPONENTS,
     FEE_MODES,
     formatFeeBreakdownHtml,
@@ -97,6 +98,19 @@ test('per-component GST is applied', () => {
     assert.equal(result.breakdown[0].base, 10);
     assert.equal(result.breakdown[0].gst, 1.8);
     assert.equal(result.total, 11.8);
+});
+
+test('DP is charged once per account, ISIN and day across sell rows, never on buys', () => {
+    const rows = [
+        { profile_id: 1, isin: 'INE000A01010', transaction_date: '2026-11-16', type: 'buy', quantity: 5, price: 10, execution_exchange: 'NSE' },
+        { profile_id: 1, isin: 'INE000A01010', transaction_date: '2026-11-16', type: 'sell', quantity: 2, price: 10, execution_exchange: 'BSE' },
+        { profile_id: 1, isin: 'INE000A01010', transaction_date: '2026-11-16', type: 'sell', quantity: 3, price: 10, execution_exchange: 'BSE' },
+        { profile_id: 2, isin: 'INE000A01010', transaction_date: '2026-11-16', type: 'sell', quantity: 1, price: 10, execution_exchange: 'BSE' },
+    ];
+    const fees = calculateGroupedTransactionFees(rows);
+    const dpCharges = fees.flatMap((row) => row.breakdown).filter((line) => line.id === 'dp_zerodha');
+    assert.equal(dpCharges.length, 2);
+    assert.equal(dpCharges.reduce((sum, row) => sum + row.total, 0), 30.68);
 });
 
 test('formatFeeBreakdownText omits redundant totals and groups GST', () => {
