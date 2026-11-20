@@ -18,8 +18,9 @@ class CheckDataCompletenessCommand extends Command
         $forward = $forwardHealth->report();
         $report['forward_data'] = $forward;
         $this->line(json_encode($report, JSON_THROW_ON_ERROR));
-        if (! $completeness->isComplete($report) || $forward['alerts'] !== []) {
-            $alerts->recordUnattendedFailure(AdminOperationalAlertService::KEY_DATA_COMPLETENESS, 'StoX data completeness incomplete', 'One or more daily ML readiness datasets has a missing session or incomplete eligible-universe coverage.', $report);
+        $dailyPriceRowsProvenSourceOnly = $alerts->hasValidatedDailyPriceRowsOnly($report);
+        if ($completeness->hasActionableDatasetFailures($report, $dailyPriceRowsProvenSourceOnly) || $forward['alerts'] !== []) {
+            $alerts->recordUnattendedFailure(AdminOperationalAlertService::KEY_DATA_COMPLETENESS, 'StoX data completeness incomplete', 'One or more actionable ML readiness datasets has a missing session or incomplete coverage.', $report);
             $alerts->syncAndNotify();
             return self::FAILURE;
         }
