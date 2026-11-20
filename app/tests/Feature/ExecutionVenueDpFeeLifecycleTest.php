@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\CashLedgerEntry;
+use App\Models\Holding;
 use App\Models\PortfolioProfile;
 use App\Models\Setting;
 use App\Models\Stock;
@@ -160,6 +161,57 @@ class ExecutionVenueDpFeeLifecycleTest extends TestCase
         app(TransactionWriteService::class)->delete($profile, $second->fresh(), $user);
         $this->assertCashLedgerMatchesAccount($profile);
         $this->assertEqualsWithDelta($legacyFee, (float) $legacy->fresh()->fees, 0.0001);
+    }
+
+    public function test_grouped_fee_edits_and_sell_delete_reconcile_cash_without_corrupting_holdings(): void
+    {
+        [$user, $profile] = $this->account('GroupedEditCash');
+        $stock = $this->stock('GROUPEdit');
+        $date = '2026-11-18';
+        $firstBuy = $this->trade($profile, $stock, 'buy', 10, $date);
+        $secondBuy = $this->trade($profile, $stock, 'buy', 10, $date);
+        $this->assertCashMatchesPersistedTrades($profile, 1_000_000);
+        $this->assertHoldingQuantity($profile, $stock, 20);
+
+        $updatedBuy = app(TransactionWriteService::class)->update($profile, $secondBuy->fresh(), $stock, [
+            'type' => 'buy', 'quantity' => 10, 'price' => 200, 'transaction_date' => $date,
+        ], user: $user);
+        $this->assertGreaterThan((float) $secondBuy->fees, (float) $updatedBuy->fees);
+        $this->assertCashMatchesPersistedTrades($profile, 1_000_000);
+        $this->assertHoldingQuantity($profile, $stock, 20);
+
+        $sell = $this->trade($profile, $stock, 'sell', 2, $date, ['price' => 250]);
+        $this->assertCashMatchesPersistedTrades($profile, 1_000_000);
+        $this->assertHoldingQuantity($profile, $stock, 18);
+
+        $updatedSell = app(TransactionWriteService::class)->update($profile, $sell->fresh(), $stock, [
+            'type' => 'sell', 'quantity' => 3, 'price' => 240, 'transaction_date' => $date,
+        ], user: $user);
+        $this->assertCashMatchesPersistedTrades($profile, 1_000_000);
+        $this->assertHoldingQuantity($profile, $stock, 17);
+
+        app(TransactionWriteService::class)->delete($profile, $updatedSell, $user);
+        $this->assertCashMatchesPersistedTrades($profile, 1_000_000);
+        $this->assertHoldingQuantity($profile, $stock, 20);
+        $this->assertCashLedgerMatchesAccount($profile);
+        $this->assertNotNull($firstBuy->fresh());
+    }
+
+    private function assertCashMatchesPersistedTrades(PortfolioProfile $profile, float $opening): void
+    {
+        $expected = Transaction::query()->where('profile_id', $profile->id)->get()->reduce(
+            fn (float $balance, Transaction $transaction): float => $balance + (strtolower($transaction->type) === 'buy' ? -1 : 1)
+                * (float) $transaction->quantity * (float) $transaction->price - (float) $transaction->fees,
+            $opening,
+        );
+        $this->assertEqualsWithDelta($expected, app(CashManagementService::class)->balance($profile), 0.0001);
+    }
+
+    private function assertHoldingQuantity(PortfolioProfile $profile, Stock $stock, float $expected): void
+    {
+        $holding = Holding::query()->where('profile_id', $profile->id)->where('stock_id', $stock->id)->first();
+        $this->assertNotNull($holding);
+        $this->assertEqualsWithDelta($expected, (float) $holding->quantity, 0.0001);
     }
 
     public function test_legacy_fees_remain_unchanged_when_a_new_sell_joins_the_group(): void
