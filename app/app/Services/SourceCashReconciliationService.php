@@ -17,6 +17,7 @@ class SourceCashReconciliationService
         $transactions = $this->uniqueRows($source['transactions'] ?? [], 'transactions');
         $bankFlows = $this->uniqueRows($source['bank_flows'] ?? [], 'bank_flows');
         $brokerFlows = $this->uniqueRows($source['broker_flows'] ?? [], 'broker_flows');
+        $accountCharges = $this->uniqueRows($source['account_charges'] ?? [], 'account_charges');
 
         $tradeFlows = [];
         $tradeIds = [];
@@ -44,6 +45,17 @@ class SourceCashReconciliationService
             $bank[] = ['id' => (string) $row['id'], 'date' => $this->date($row['date'] ?? null), 'type' => $type, 'cash_delta' => round($type === 'deposit' ? $amount : -$amount, 4)];
         }
 
+        $charges = [];
+        foreach ($accountCharges as $row) {
+            $this->assertProfile($row, $profileId, 'account charge');
+            $kind = strtolower((string) ($row['kind'] ?? ''));
+            if (! in_array($kind, ['amc', 'ddpi', 'service_fee'], true)) {
+                throw new InvalidArgumentException('Account charge kind must be amc, ddpi or service_fee.');
+            }
+            $amount = $this->positive($row['amount'] ?? null, 'account charge amount');
+            $charges[] = ['id' => (string) $row['id'], 'date' => $this->date($row['date'] ?? null), 'kind' => $kind, 'cash_delta' => round(-$amount, 4)];
+        }
+
         $linkedTrades = [];
         $dp = [];
         foreach ($brokerFlows as $row) {
@@ -63,7 +75,7 @@ class SourceCashReconciliationService
             if (! is_finite($reported) || abs(round($reported, 4) - $expected) > 0.0001) throw new InvalidArgumentException("Broker trade link {$row['id']} cash does not match transaction {$transactionId} quantity, price, and stored fees.");
         }
 
-        $events = [...$tradeFlows, ...$bank];
+        $events = [...$tradeFlows, ...$bank, ...$charges];
         $snapshot = $source['closing_balance_snapshot'] ?? null;
         $opening = null;
         $closing = round(array_sum(array_column($events, 'cash_delta')), 4);
@@ -82,6 +94,7 @@ class SourceCashReconciliationService
             'mode' => 'read_only_source_reconciliation',
             'transaction_cash' => ['count' => count($tradeFlows), 'total' => round(array_sum(array_column($tradeFlows, 'cash_delta')), 4), 'rows' => $tradeFlows],
             'bank_cash' => ['count' => count($bank), 'total' => round(array_sum(array_column($bank, 'cash_delta')), 4), 'rows' => $bank],
+            'account_charges' => ['count' => count($charges), 'total' => round(array_sum(array_column($charges, 'cash_delta')), 4), 'rows' => $charges],
             'broker_dp_evidence' => ['count' => count($dp), 'rows' => $dp],
             'opening_balance' => $openingEvidence,
             'closing_balance' => $closing,

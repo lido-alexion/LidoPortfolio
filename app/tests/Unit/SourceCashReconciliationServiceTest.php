@@ -37,6 +37,27 @@ class SourceCashReconciliationServiceTest extends TestCase
         $this->assertFalse($result['writes_performed']);
     }
 
+    public function test_genuine_amc_and_ddpi_charges_reduce_cash_once_without_double_charging_dp(): void
+    {
+        $source = [
+            'profile_id' => 3,
+            'transactions' => [['id' => 9, 'profile_id' => 3, 'date' => '2026-11-16', 'type' => 'sell', 'quantity' => 1, 'price' => 100, 'fees' => 15.34]],
+            'account_charges' => [
+                ['id' => 'amc-1', 'profile_id' => 3, 'date' => '2026-10-01', 'kind' => 'amc', 'amount' => 88.50],
+                ['id' => 'ddpi-1', 'profile_id' => 3, 'date' => '2026-10-01', 'kind' => 'ddpi', 'amount' => 118],
+            ],
+            'broker_flows' => [['id' => 'dp-9', 'profile_id' => 3, 'date' => '2026-11-16', 'kind' => 'dp_charge', 'amount' => 15.34]],
+            'closing_balance_snapshot' => ['id' => 'balance-1', 'date' => '2026-11-16', 'balance' => 500],
+        ];
+        $result = (new SourceCashReconciliationService)->reconcile($source);
+        $this->assertSame(84.66, $result['transaction_cash']['total']);
+        $this->assertSame(-206.50, $result['account_charges']['total']);
+        $this->assertSame(2, $result['account_charges']['count']);
+        $this->assertSame(621.84, $result['opening_balance']['amount']);
+        $this->assertSame(15.34, $result['broker_dp_evidence']['rows'][0]['amount']);
+        $this->assertSame(3, $result['cash_event_count']);
+    }
+
     public function test_rejects_cross_profile_data_and_duplicate_trade_links(): void
     {
         $service = new SourceCashReconciliationService;
