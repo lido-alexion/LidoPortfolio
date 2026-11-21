@@ -6,6 +6,7 @@ import ProfileMenu from './ProfileMenu';
 import PortfolioSwitcher from './PortfolioSwitcher';
 import NotificationBell from './NotificationBell';
 import ExecutionSafetyControls from './ExecutionSafetyControls';
+import KiteHeaderControl from './KiteHeaderControl';
 import GlobalSearch from './GlobalSearch';
 import { useSidebar } from '../context/SidebarContext';
 
@@ -72,6 +73,7 @@ export default function AppHeader({ user, showSidebarToggle = false }) {
                 {user && <GlobalSearch user={user} />}
                 <div className="lido-header-actions">
                     {user && !user.is_admin && <PortfolioSwitcher />}
+                    {user && !user.is_admin && <KiteHeaderControl user={user} />}
                     <ExecutionSafetyControls user={user} />
                     {user && <NotificationBell />}
                     {user && <AssistantDrawer key={user.id} />}

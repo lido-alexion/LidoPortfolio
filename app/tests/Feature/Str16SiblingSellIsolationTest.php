@@ -143,7 +143,8 @@ class Str16SiblingSellIsolationTest extends TestCase
         $this->assertSame($transactionCountBeforeSell + 1, Transaction::query()->where('profile_id', $profile->id)->count());
         $this->assertSame(1, Transaction::query()->where('profile_id', $profile->id)->where('type', 'sell')->count());
         $this->assertSame($ordersBeforeSell, TradingOrder::query()->where('profile_id', $profile->id)->count());
-        $this->assertEqualsWithDelta($cashBeforeSell + 600, app(CashManagementService::class)->balance($profile), 0.0001);
+        $sell = Transaction::query()->where('profile_id', $profile->id)->where('type', 'sell')->sole();
+        $this->assertCashMatchesPersistedTrades($profile, 10_000.0);
     }
 
     /** @return array{0: User, 1: PortfolioProfile, 2: Stock, 3: TradingStrategy, 4: TradingStrategy} */
@@ -300,5 +301,15 @@ class Str16SiblingSellIsolationTest extends TestCase
         $this->assertEqualsWithDelta($quantity, (float) $holding->quantity, 0.0001);
         $this->assertEqualsWithDelta($averagePrice, (float) $holding->avg_buy_price, 0.0001);
         $this->assertEqualsWithDelta($investedAmount, (float) $holding->invested_amount, 0.0001);
+    }
+
+    private function assertCashMatchesPersistedTrades(PortfolioProfile $profile, float $opening): void
+    {
+        $expected = Transaction::query()->where('profile_id', $profile->id)->get()->reduce(
+            fn (float $balance, Transaction $tx): float => $balance + (strtolower($tx->type) === 'buy' ? -1 : 1)
+                * (float) $tx->quantity * (float) $tx->price - (float) $tx->fees,
+            $opening,
+        );
+        $this->assertEqualsWithDelta($expected, app(CashManagementService::class)->balance($profile), 0.0001);
     }
 }

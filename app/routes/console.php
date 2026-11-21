@@ -29,6 +29,78 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Schema;
 
+$captureFailedScheduledOutput = static function (string $task): \Closure {
+    return static function (\Illuminate\Support\Stringable $output) use ($task): void {
+        $safeOutput = app(\App\Services\Operations\ApiFailureRedactor::class)->message((string) $output, 1000);
+        app(PortfolioLoggerService::class)->scheduler('error', 'Scheduled command failed.', [
+            'task' => $task,
+            'output' => $safeOutput,
+        ]);
+    };
+};
+
+Artisan::command('portfolio:recalculate-transaction-fees {--output=}', function () {
+    $calculator = app(\App\Services\FeeCalculatorService::class);
+    $components = $calculator->componentsFromSettings();
+    $transactions = \App\Models\Transaction::query()->with(['stock', 'profile'])
+        ->orderBy('profile_id')->orderBy('transaction_date')->orderBy('id')->get();
+    $charged = [];
+    $rows = [];
+    $blockers = [];
+    $snapshotImpact = [];
+    $totals = ['old_fees' => 0.0, 'new_fees' => 0.0, 'net_cash_delta' => 0.0, 'realized_pl_delta_estimate' => 0.0];
+    foreach ($transactions as $tx) {
+        $isin = strtoupper(trim((string) ($tx->stock?->isin ?? '')));
+        $result = $calculator->calculate((float) $tx->quantity, (float) $tx->price, $tx->type,
+            (string) ($tx->execution_exchange ?: 'NSE'), $components);
+        $fee = $result['total'];
+        $dpLine = collect($result['breakdown'])->firstWhere('id', 'dp_zerodha');
+        if ($tx->type === 'sell' && $dpLine) {
+            if ($tx->simulation_origin !== null) {
+                $fee -= $dpLine['total'];
+            } elseif ($isin === '') {
+                $blockers[] = ['transaction_id' => $tx->id, 'reason' => 'missing ISIN; DP grouping cannot be determined'];
+                $fee -= $dpLine['total'];
+            } else {
+                $key = $tx->profile_id.':'.$tx->transaction_date->toDateString().':'.$isin;
+                if (isset($charged[$key])) $fee -= $dpLine['total']; else $charged[$key] = true;
+            }
+        }
+        if ($tx->simulation_origin === 'strategy_simulation') {
+            $blockers[] = ['transaction_id' => $tx->id, 'reason' => 'immutable Strategy simulation evidence'];
+        }
+        $cashRows = \App\Models\CashLedgerEntry::query()->where('transaction_id', $tx->id)->whereIn('entry_type', ['buy', 'sell'])->get();
+        if ($cashRows->count() !== 1 || $cashRows->first()?->reversal_of_entry_id !== null) {
+            $blockers[] = ['transaction_id' => $tx->id, 'reason' => 'cash ledger is missing, duplicated, or reversed; cannot safely reconcile automatically'];
+        }
+        $old = (float) $tx->fees;
+        $delta = round($fee - $old, 4);
+        $totals['old_fees'] += $old;
+        $totals['new_fees'] += $fee;
+        $cashDelta = $tx->type === 'buy' ? -$delta : $delta;
+        $totals['net_cash_delta'] += $cashDelta;
+        $totals['realized_pl_delta_estimate'] -= $delta;
+        $snapshotKey = $tx->profile_id.':'.$tx->transaction_date->toDateString();
+        $snapshotImpact[$snapshotKey] = ($snapshotImpact[$snapshotKey] ?? 0.0) + $cashDelta;
+        $rows[] = ['transaction_id' => $tx->id, 'profile_id' => $tx->profile_id, 'symbol' => $tx->stock?->symbol,
+            'isin' => $isin ?: null, 'date' => $tx->transaction_date->toDateString(), 'type' => $tx->type,
+            'execution_exchange' => $tx->execution_exchange ?: 'NSE',
+            'fees_old' => $old, 'fees_new' => round($fee, 4), 'fee_delta' => $delta,
+            'cash_ledger_delta' => $cashDelta, 'realized_pl_delta_estimate' => -$delta,
+            'dp_group' => $tx->type === 'sell' && $isin !== '' ? ($tx->profile_id.':'.$tx->transaction_date->toDateString().':'.$isin) : null];
+    }
+    $report = ['generated_at' => now()->toIso8601String(), 'mode' => 'dry_run_only',
+        'transaction_count' => count($rows), 'totals' => array_map(fn ($n) => round($n, 4), $totals),
+        'groups_with_dp' => count($charged), 'snapshot_cash_impact_by_profile_date' => array_map(fn ($n) => round($n, 4), $snapshotImpact), 'blockers' => $blockers,
+        'notes' => ['DP is grouped by profile (account), ISIN and transaction date; separate settlement types are not captured by current transaction schema and require manual reconciliation.',
+            'Historic reconciliation audit records must be retained; fee changes will alter the cash movement expected for prior periods.',
+            'Net asset and realized profit deltas are fee-only estimates; market valuation snapshots are not rewritten by dry-run.'], 'transactions' => $rows];
+    $json = json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+    if ($this->option('output')) file_put_contents($this->option('output'), $json);
+    $this->line($json);
+    return 0; // Historical application is deferred to a separate owner-guided phase.
+})->purpose('DRY-RUN ONLY historical fee report; application is deferred to owner-guided reconciliation');
+
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
@@ -528,12 +600,14 @@ Schedule::command('stox:refresh-stock-classifications --batch=50')
     ->dailyAt('08:45')
     ->withoutOverlapping(30)
     ->onOneServer()
+    ->onFailure($captureFailedScheduledOutput('stox:refresh-stock-classifications'))
     ->name('stox-stock-classifications-refresh');
 
 Schedule::command('stox:check-data-completeness')
     ->hourly()
     ->timezone($timezone)
     ->withoutOverlapping(10)
+    ->onFailure($captureFailedScheduledOutput('stox:check-data-completeness'))
     ->name('stox-data-completeness');
 
 // Independent of campaigns: the planner persists every completed-session
@@ -584,6 +658,7 @@ Schedule::command('portfolio:sync-kite-instruments')
     ->dailyAt('08:00')
     ->timezone('Asia/Kolkata')
     ->withoutOverlapping(10)
+    ->onFailure($captureFailedScheduledOutput('portfolio:sync-kite-instruments'))
     ->name('kite-instrument-registry-refresh');
 
 Schedule::command('portfolio:queue-notification-reminders')
@@ -654,6 +729,7 @@ Schedule::command('portfolio:reconcile')
     ->everyFiveMinutes()
     ->timezone($timezone)
     ->withoutOverlapping(10)
+    ->onFailure($captureFailedScheduledOutput('portfolio:reconcile'))
     ->name('portfolio-reconciliation');
 
 // FEAT-020 Paper work is scheduled before analytical simulation capacity and

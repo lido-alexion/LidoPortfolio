@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
 import { installInvestorWorkflowApiMocks } from './investorWorkflowApiMocks.js';
 
@@ -61,7 +62,7 @@ test('notification history filters and read controls fit mobile screens', async 
     await expectNoHorizontalOverflow(page);
 });
 
-for (const width of [390, 1280]) {
+for (const width of [320, 390, 1280]) {
 test(`notification bell deep link survives read failure and reload, with a retry for detail failure (${width}px)`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
     await installCommMocks(page);
@@ -87,12 +88,27 @@ test(`notification bell deep link survives read failure and reload, with a retry
     });
 
     await page.goto('/notification-history');
+    // Production emits Bootstrap after the application stylesheet.
+    await page.addStyleTag({ content: readFileSync(new URL('../../node_modules/bootstrap/dist/css/bootstrap.min.css', import.meta.url), 'utf8') });
     await page.getByRole('button', { name: '1 unread notifications', exact: true }).click();
     const pane = page.locator('.lido-notification-menu');
     await expect(pane).toBeVisible();
     const bounds = await pane.boundingBox();
     const viewportWidth = await page.evaluate(() => document.documentElement.clientWidth);
+    const geometry = await pane.evaluate((el) => ({
+        position: getComputedStyle(el).position,
+        viewportHeight: document.documentElement.clientHeight,
+    }));
+    expect(geometry.position).toBe('fixed');
+    expect(bounds.width).toBeGreaterThanOrEqual(width < 576 ? viewportWidth - 16 : 380);
+    expect(bounds.height).toBeGreaterThanOrEqual(190);
     expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.y).toBeGreaterThanOrEqual(0);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(geometry.viewportHeight);
+    await expect(pane.locator('.lido-notification-item-message')).toHaveText('A product update is ready.');
+    await expect(pane.locator('.lido-notification-item-message')).toHaveAttribute('title', 'A product update is ready.');
+    expect(await pane.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeLessThan(13);
+    await expect(pane.getByRole('link', { name: 'View all notifications' })).toBeVisible();
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewportWidth);
     await pane.getByRole('link', { name: /Recommendation changed/ }).click();
     await expect(page).toHaveURL(/notification-history\?notification=17$/);

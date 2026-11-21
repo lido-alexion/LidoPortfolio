@@ -65,6 +65,14 @@ export async function installTosApiMocks(page, {
         if (path.endsWith('/api/v1/protections') && method === 'GET') {
             return json(route, apiEnvelope([]));
         }
+        if (path.endsWith('/api/v1/broker/status') && method === 'GET') {
+            return json(route, apiEnvelope({
+                configured: true,
+                connected: false,
+                usable: false,
+                expires_at: null,
+            }));
+        }
         if (['/api/v1/capital/recalls', '/api/v1/capital/bridge-loans', '/api/v1/capital/pending-sale-proceeds'].includes(path) && method === 'GET') {
             return json(route, apiEnvelope([]));
         }

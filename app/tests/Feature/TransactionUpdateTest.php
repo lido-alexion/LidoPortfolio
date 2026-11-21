@@ -67,8 +67,10 @@ class TransactionUpdateTest extends TestCase
             'id' => $transaction->id,
             'price' => 110,
         ]);
+        $updatedFees = app(\App\Services\FeeCalculatorService::class)
+            ->calculate(5, 110, 'buy', 'NSE')['total'];
         $this->assertEqualsWithDelta(
-            9_450.0,
+            9_450.0 - $updatedFees,
             app(CashManagementService::class)->balance($profile),
             0.001,
         );
@@ -207,5 +209,4 @@ class TransactionUpdateTest extends TestCase
         $this->assertDatabaseHas('portfolio_transactions', ['id' => $transaction->id]);
     }
 }
-
 

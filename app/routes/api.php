@@ -281,6 +281,8 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/cash/withdraw', [CashController::class, 'withdraw']);
     Route::post('/cash/adjust', [CashController::class, 'adjust']);
     Route::post('/cash/ledger/{entry}/reverse', [CashController::class, 'reverse'])->whereNumber('entry');
+    Route::put('/cash/ledger/{entry}', [CashController::class, 'updateEntry'])->whereNumber('entry');
+    Route::delete('/cash/ledger/{entry}', [CashController::class, 'deleteEntry'])->whereNumber('entry');
 
     Route::get('/corporate-actions', [CorporateActionController::class, 'index']);
     Route::post('/corporate-actions/preview', [CorporateActionController::class, 'preview']);
@@ -648,6 +650,8 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
         Route::post('/admin/fundamentals/manual-import', [FundamentalDataController::class, 'importManualWorkbook'])->middleware('throttle:5,60');
         Route::post('/admin/fundamentals/runs', [FundamentalDataController::class, 'startRun']);
         Route::post('/admin/fundamentals/runs/{run}/process', [FundamentalDataController::class, 'processRun'])->whereNumber('run');
+        Route::delete('/admin/fundamentals/yahoo-no-data-skips/{stock}', [FundamentalDataController::class, 'clearYahooNoDataSkip'])->whereNumber('stock');
+        Route::post('/admin/fundamentals/yahoo-no-data-skips/{stock}/fetch', [FundamentalDataController::class, 'fetchSkippedYahooStock'])->whereNumber('stock')->middleware('throttle:5,60');
         Route::get('/admin/fundamentals/bootstrap', [FundamentalDataController::class, 'bootstrapStatus']);
         Route::post('/admin/fundamentals/ai-insights/test', [FundamentalDataController::class, 'testAiInsights']);
         Route::get('/admin/fundamentals/metric-catalog', [FundamentalDataController::class, 'metricCatalog']);

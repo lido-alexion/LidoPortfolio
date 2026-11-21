@@ -62,13 +62,12 @@ def fetch_statements(symbol: str, cadence: str, ticker_factory: Callable[[str], 
         "cash_flow": getattr(ticker, f"{prefix}cashflow", None),
     }
     statements = {name: frame_rows(frame) for name, frame in frames.items()}
-    if not any(statements.values()):
-        raise RuntimeError("yfinance returned no fundamental statements")
     return {
         "schema_version": 1,
         "symbol": symbol,
         "cadence": cadence,
         "statements": statements,
+        "outcome": "no_data" if not any(statements.values()) else "data",
     }
 
 
@@ -118,6 +117,7 @@ def main(argv: list[str] | None = None, ticker_factory: Callable[[str], Any] | N
         requested_symbol = args[0]
         expected_name = args[2] if len(args) == 3 else ""
         last_error: Exception | None = None
+        empty_payload: dict[str, Any] | None = None
         for provider_symbol in candidate_symbols(requested_symbol):
             try:
                 ticker = ticker_factory(provider_symbol)
@@ -132,12 +132,20 @@ def main(argv: list[str] | None = None, ticker_factory: Callable[[str], Any] | N
                 payload["symbol"] = requested_symbol
                 payload["provider_symbol"] = provider_symbol
                 payload["identity"] = identity
+                if payload["outcome"] == "no_data":
+                    empty_payload = payload
+                    continue
                 print(json.dumps(payload, ensure_ascii=True, allow_nan=False, separators=(",", ":")))
                 return 0
             except RuntimeError as error:
+                if "identity did not match" in str(error):
+                    raise
                 last_error = error
         if last_error is not None:
             raise last_error
+        if empty_payload is not None:
+            print(json.dumps(empty_payload, ensure_ascii=True, allow_nan=False, separators=(",", ":")))
+            return 0
         raise RuntimeError("no Yahoo symbols were available")
     except Exception as error:
         print(f"yahoo fundamentals adapter failed: {error}", file=sys.stderr)

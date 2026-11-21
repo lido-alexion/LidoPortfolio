@@ -64,4 +64,24 @@ class YahooFundamentalDataProviderTest extends TestCase
 
         (new YahooFundamentalDataProvider(PHP_BINARY, $this->stub, 0.1))->fetch($stock, 'quarterly');
     }
+
+    public function test_valid_empty_statements_are_a_distinct_no_data_outcome(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'EMPTY', 'exchange' => 'NSE', 'name' => 'Empty issuer']);
+        try {
+            (new YahooFundamentalDataProvider(PHP_BINARY, $this->stub))->fetch($stock, 'quarterly');
+            $this->fail('Expected a no-data outcome.');
+        } catch (\App\Services\Fundamentals\YahooNoDataOutcome $outcome) {
+            $this->assertStringContainsString('valid empty statements', $outcome->getMessage());
+        }
+    }
+
+    public function test_empty_data_outcome_is_a_parsing_error_not_no_data(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'UNPARSEABLE', 'exchange' => 'NSE', 'name' => 'Unparseable issuer']);
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('no parseable supported facts');
+
+        (new YahooFundamentalDataProvider(PHP_BINARY, $this->stub))->fetch($stock, 'quarterly');
+    }
 }

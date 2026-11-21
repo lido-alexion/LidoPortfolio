@@ -8,6 +8,10 @@
 
 <p>A broker submission, broker acknowledgement, fill and StoX accounting transaction are distinct events. When broker state is uncertain, reconcile before retrying.</p>
 
+<p>The dashboard header shows the daily Kite session state beside the execution safety controls. A green plug means the session is currently usable; amber means Kite needs a login; grey means StoX cannot confirm status or Kite is not configured. Select the Kite control to connect or refresh status. Its menu contains normal Kite disconnect and Account settings. This control is separate from the emergency execution stop.</p>
+
+<p>Portfolio reconciliation requires a confirmed usable Kite session. Both reconciliation choices remain disabled while the session is missing, expired, loading, or unavailable. Reconciliation checks the session again immediately before sending the request.</p>
+
 <p>---</p>
 
 <h2 id="exe-01-execute-an-approved-recommendation-manually">EXE-01 — Execute an approved recommendation manually</h2>

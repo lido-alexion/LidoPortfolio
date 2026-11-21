@@ -35,6 +35,8 @@ class AdminOperationalAlertService
 
     public const KEY_FUNDAMENTALS_UPDATE_FAILED = 'fundamentals_update_failed';
 
+    public const KEY_FUNDAMENTALS_NO_DATA_SKIP = 'fundamentals_no_data_skip';
+
     public const KEY_DATA_COMPLETENESS = 'data_completeness_incomplete';
 
     public const KEY_FORWARD_DATA_CONFIGURATION = 'forward_data_configuration';
@@ -49,6 +51,7 @@ class AdminOperationalAlertService
         self::KEY_BROKER_RECONCILE_FAILED,
         self::KEY_AUTOMATIC_SUBMIT_FAILED,
         self::KEY_FUNDAMENTALS_UPDATE_FAILED,
+        self::KEY_FUNDAMENTALS_NO_DATA_SKIP,
         self::KEY_DATA_COMPLETENESS,
         self::KEY_FORWARD_DATA_CONFIGURATION,
         self::KEY_FORWARD_DATA_INCOMPLETE,
@@ -105,7 +108,29 @@ class AdminOperationalAlertService
             }
 
             $universeRun = $this->syncLog->latestFinishedRun(SyncLogService::JOB_UNIVERSE_PRICE_SYNC);
-            if ($universeRun && $universeRun->status === 'failed') {
+            $validatedDailyFiles = $this->hasValidatedDailyFileEvidence($lastRun);
+            $identityConflict = $bulkDaily && (int) ($lastRun['bulk']['identity_conflicts'] ?? 0) > 0;
+            $persistentDailyFileFailure = $bulkDaily && $this->hasPersistentDailyFileFailure($lastRun);
+            $dailyFailureNeedsAlert = $bulkDaily && $this->dailyFailureNeedsAlert($lastRun, $universeRun, $validatedDailyFiles);
+            if ($identityConflict || $persistentDailyFileFailure || $dailyFailureNeedsAlert) {
+                $alerts[] = $this->alert(
+                    self::KEY_UNIVERSE_SYNC_FAILED,
+                    'critical',
+                    $failureTitle,
+                    $identityConflict
+                        ? sprintf('Universe daily bhavcopy identity validation rejected %d source row(s); review the exchange evidence and canonical symbol mapping.', (int) ($lastRun['bulk']['identity_conflicts'] ?? 0))
+                        : ($universeRun ? $this->formatRunFailureMessage('Universe price sync', $universeRun) : 'Latest universe daily bhavcopy run has no validated source evidence.'),
+                    array_merge($universeRun ? $this->runContext($universeRun) : [], [
+                        'completed_at' => $lastRun['completed_at'] ?? null,
+                        'identity_conflicts' => (int) ($lastRun['bulk']['identity_conflicts'] ?? 0),
+                        'file_errors' => (int) ($lastRun['bulk']['file_errors'] ?? 0),
+                        'validated_daily_file_evidence' => $validatedDailyFiles,
+                        'files' => $lastRun['bulk']['files'] ?? [],
+                    ]),
+                );
+            } elseif ($universeRun && in_array($universeRun->status, ['failed', 'partial'], true)
+                && ! $this->dailyCoverageOnly($lastRun, $validatedDailyFiles, $universeRun)
+                && ! ($bulkDaily && $this->dailyTransientFailureOnly($lastRun, $universeRun))) {
                 $alerts[] = $this->alert(
                     self::KEY_UNIVERSE_SYNC_FAILED,
                     'critical',
@@ -113,7 +138,9 @@ class AdminOperationalAlertService
                     $this->formatRunFailureMessage('Universe price sync', $universeRun),
                     $this->runContext($universeRun),
                 );
-            } elseif ($lastRun && ($lastRun['failed'] ?? 0) > 0 && ($lastRun['succeeded'] ?? 0) === 0) {
+            } elseif ($lastRun && ($lastRun['failed'] ?? 0) > 0 && ($lastRun['succeeded'] ?? 0) === 0
+                && ! ($bulkDaily && $this->dailyCoverageOnly($lastRun, $validatedDailyFiles, $universeRun))
+                && ! ($bulkDaily && $this->dailyTransientFailureOnly($lastRun, $universeRun))) {
                 $alerts[] = $this->alert(
                     self::KEY_UNIVERSE_SYNC_FAILED,
                     'critical',
@@ -281,6 +308,280 @@ class AdminOperationalAlertService
     }
 
     /**
+     * The completeness command may treat daily price row gaps as diagnostic only
+     * when the current required NSE session has some rows and a matching,
+     * complete exchange receipt set proves the remaining gaps are stock-level.
+     */
+    public function hasValidatedDailyPriceRowsOnly(array $report): bool
+    {
+        if (! $this->universeSync->isEnabled()) return false;
+        $daily = $report['datasets']['daily_prices'] ?? null;
+        if (! is_array($daily) || ($daily['freshness'] ?? null) !== 'incomplete'
+            || (! is_float($daily['coverage'] ?? null) && ! is_int($daily['coverage'] ?? null))
+            || (float) $daily['coverage'] <= 0 || (float) $daily['coverage'] >= 100
+            || ! is_string($daily['last_successful_ingestion'] ?? null)
+            || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $daily['last_successful_ingestion'])
+            || ! checkdate((int) substr($daily['last_successful_ingestion'], 5, 2), (int) substr($daily['last_successful_ingestion'], 8, 2), (int) substr($daily['last_successful_ingestion'], 0, 4))
+            || ! $this->isIsoTimestamp($report['as_of'] ?? null)) return false;
+
+        try {
+            $asOf = Carbon::parse($report['as_of'] ?? '');
+            $requiredSession = TradingCalendar::lastRequiredPriceSession($asOf)->toDateString();
+            $latestPriceDate = Carbon::parse($daily['last_successful_ingestion'])->toDateString();
+            if ($latestPriceDate < $requiredSession) return false;
+        } catch (\Throwable) {
+            return false;
+        }
+
+        $lastRun = $this->universeSync->status()['last_run'] ?? null;
+        if (($lastRun['collection_method'] ?? null) !== \App\Services\UniversePrice\UniverseDailyBhavcopySyncService::METHOD) return false;
+        $run = $this->syncLog->latestFinishedRun(SyncLogService::JOB_UNIVERSE_PRICE_SYNC);
+        if (! $run || ! in_array($run->status, ['failed', 'partial'], true)
+            || ! $this->dailyCoverageOnly($lastRun, $this->hasValidatedDailyFileEvidence($lastRun), $run)) return false;
+
+        $expectedKeys = $this->dailyExpectedFileKeys($lastRun['bulk'] ?? []);
+        return $expectedKeys !== null && isset($expectedKeys['NSE:'.$requiredSession]);
+    }
+
+    /** A validated receipt or download establishes source health; stock-row coverage does not. */
+    protected function hasValidatedDailyFileEvidence(?array $lastRun): bool
+    {
+        if (($lastRun['collection_method'] ?? null) !== \App\Services\UniversePrice\UniverseDailyBhavcopySyncService::METHOD) {
+            return false;
+        }
+        $bulk = $lastRun['bulk'] ?? null;
+        $files = $bulk['files'] ?? null;
+        $expected = $bulk['expected_files'] ?? null;
+        if (! is_array($bulk) || ! is_array($files)
+            || ! is_array($expected)
+            || ! is_int($bulk['file_errors'] ?? null) || $bulk['file_errors'] !== 0
+            || ! is_int($bulk['identity_conflicts'] ?? null) || $bulk['identity_conflicts'] !== 0) {
+            return false;
+        }
+        $expectedKeys = $this->dailyExpectedFileKeys($bulk);
+        if ($expectedKeys === null) return false;
+        $declaredKeys = [];
+        foreach ($expected as $item) {
+            if (! is_array($item) || ! in_array($item['exchange'] ?? null, ['NSE', 'BSE'], true)
+                || ! is_string($item['date'] ?? null)
+                || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $item['date'])
+                || ! checkdate((int) substr($item['date'], 5, 2), (int) substr($item['date'], 8, 2), (int) substr($item['date'], 0, 4))) return false;
+            $key = $item['exchange'].':'.$item['date'];
+            if (isset($declaredKeys[$key])) return false;
+            $declaredKeys[$key] = true;
+        }
+        if (count($declaredKeys) !== count($expectedKeys) || array_diff_key($declaredKeys, $expectedKeys) !== []) return false;
+        $observedKeys = [];
+        foreach ($files as $file) {
+            if (! is_array($file) || ! in_array($file['status'] ?? null, ['applied', 'receipt_cached'], true)
+                || ! in_array($file['exchange'] ?? null, ['NSE', 'BSE'], true)
+                || ! is_string($file['date'] ?? null)
+                || ! $this->isIsoTimestamp($file['checked_at'] ?? null)
+                || ! is_string($file['coverage_hash'] ?? null)
+                || preg_match('/^[a-f0-9]{64}$/', $file['coverage_hash']) !== 1
+                || ! is_string($file['source_revision_sha256'] ?? null)
+                || preg_match('/^[a-f0-9]{64}$/', $file['source_revision_sha256']) !== 1) return false;
+            try {
+                $checkedAt = Carbon::parse($file['checked_at']);
+                $sessionStart = Carbon::parse($file['date'], 'Asia/Kolkata')->startOfDay();
+                $completedAt = Carbon::parse($lastRun['completed_at'] ?? '');
+                if ($checkedAt->lt($sessionStart) || $checkedAt->gt($completedAt->copy()->addMinutes(5))) return false;
+            } catch (\Throwable) { return false; }
+            $key = $file['exchange'].':'.$file['date'];
+            if (! isset($expectedKeys[$key]) || isset($observedKeys[$key])) return false;
+            $observedKeys[$key] = true;
+        }
+        return count($observedKeys) === count($expectedKeys);
+    }
+
+    protected function failuresAreCoverageOnly(array $lastRun): bool
+    {
+        $bulk = $lastRun['bulk'] ?? null;
+        return is_array($bulk)
+            && is_int($bulk['unavailable_stocks'] ?? null) && $bulk['unavailable_stocks'] > 0
+            && is_int($bulk['file_errors'] ?? null) && $bulk['file_errors'] === 0
+            && is_int($bulk['identity_conflicts'] ?? null) && $bulk['identity_conflicts'] === 0;
+    }
+
+    protected function dailyCoverageOnly(?array $lastRun, bool $validated, ?SyncRun $run): bool
+    {
+        return $validated && $lastRun !== null && $this->failuresAreCoverageOnly($lastRun)
+            && $this->dailyStatsMatchRun($lastRun, $run);
+    }
+
+    /** Daily source errors are quiet only on their first recorded attempt; absent proof and identity conflicts fail closed. */
+    protected function dailyFailureNeedsAlert(?array $lastRun, ?SyncRun $run, bool $validated): bool
+    {
+        if (! $lastRun) return false;
+        if ((int) ($lastRun['bulk']['identity_conflicts'] ?? 0) > 0) return true;
+        if (! $validated) {
+            return ! $this->dailyTransientFailureOnly($lastRun, $run);
+        }
+        if ($this->hasDailyFileErrors($lastRun)) {
+            return ! $this->dailyTransientFailureOnly($lastRun, $run);
+        }
+        return false;
+    }
+
+    /** A single retryable source failure is quiet only when the full run workset and its SyncRun agree. */
+    protected function dailyTransientFailureOnly(?array $lastRun, ?SyncRun $run): bool
+    {
+        if (! $lastRun || ! $run || ! in_array($run->status, ['failed', 'partial'], true)
+            || ! $this->dailyStatsMatchRun($lastRun, $run)
+            || (int) ($lastRun['bulk']['identity_conflicts'] ?? 0) !== 0
+            || (int) ($lastRun['bulk']['file_errors'] ?? -1) !== 1) return false;
+        $expected = $lastRun['bulk']['expected_files'] ?? null;
+        $files = $lastRun['bulk']['files'] ?? null;
+        if (! is_array($expected) || ! is_array($files) || $files === []) return false;
+        $expectedKeys = $this->dailyExpectedFileKeys($lastRun['bulk']);
+        if ($expectedKeys === null) return false;
+        $declaredKeys = [];
+        foreach ($expected as $item) {
+            if (! is_array($item) || ! in_array($item['exchange'] ?? null, ['NSE', 'BSE'], true)
+                || ! is_string($item['date'] ?? null)
+                || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $item['date'])
+                || ! checkdate((int) substr($item['date'], 5, 2), (int) substr($item['date'], 8, 2), (int) substr($item['date'], 0, 4))) return false;
+            $key = $item['exchange'].':'.$item['date'];
+            if (isset($declaredKeys[$key])) return false;
+            $declaredKeys[$key] = true;
+        }
+        if (count($declaredKeys) !== count($expectedKeys) || array_diff_key($declaredKeys, $expectedKeys) !== []) return false;
+        $observedKeys = [];
+        $transientFailures = 0;
+        $transientFailureKey = null;
+        $transientFailureError = null;
+        foreach ($files as $file) {
+            if (! is_array($file) || ! in_array($file['exchange'] ?? null, ['NSE', 'BSE'], true)
+                || ! is_string($file['date'] ?? null)) return false;
+            $key = $file['exchange'].':'.$file['date'];
+            if (! isset($expectedKeys[$key]) || isset($observedKeys[$key])) return false;
+            $observedKeys[$key] = true;
+            if (in_array($file['status'] ?? null, ['failed', 'retry_deferred'], true)) {
+                if (($file['failure_stage'] ?? null) !== 'exchange_fetch'
+                    || (int) ($file['retry_attempt'] ?? 0) !== 1
+                    || ! is_string($file['error'] ?? null) || trim($file['error']) === '') return false;
+                $transientFailures++;
+                $transientFailureKey = $key;
+                $transientFailureError = $file['error'];
+                continue;
+            }
+            if (! in_array($file['status'] ?? null, ['applied', 'receipt_cached'], true)
+                || ! $this->isIsoTimestamp($file['checked_at'] ?? null)
+                || ! is_string($file['coverage_hash'] ?? null)
+                || preg_match('/^[a-f0-9]{64}$/', $file['coverage_hash']) !== 1
+                || ! is_string($file['source_revision_sha256'] ?? null)
+                || preg_match('/^[a-f0-9]{64}$/', $file['source_revision_sha256']) !== 1) return false;
+            try {
+                $checkedAt = Carbon::parse($file['checked_at']);
+                $sessionStart = Carbon::parse($file['date'], 'Asia/Kolkata')->startOfDay();
+                $completedAt = Carbon::parse($lastRun['completed_at'] ?? '');
+                if ($checkedAt->lt($sessionStart) || $checkedAt->gt($completedAt->copy()->addMinutes(5))) return false;
+            } catch (\Throwable) { return false; }
+        }
+        if ($transientFailures !== 1 || count($observedKeys) !== count($expectedKeys)) return false;
+        $errors = $lastRun['errors'] ?? null;
+        if (! is_array($errors) || $errors === [] || count($errors) > 20 || ! is_string($errors[0] ?? null)
+            || $errors[0] !== $transientFailureKey.': '.$transientFailureError) return false;
+
+        // The collector appends bounded row-coverage diagnostics after file errors.
+        // Accept only exact generated messages backed by its per-stock samples.
+        $samples = $lastRun['bulk']['unavailable_samples'] ?? null;
+        $from = $lastRun['bulk']['from_date'];
+        $to = $lastRun['bulk']['to_date'];
+        $exchanges = $lastRun['bulk']['expected_exchanges'];
+        if (! is_array($samples) || ! is_array($exchanges)
+            || (int) ($lastRun['bulk']['unavailable_stocks'] ?? -1) < count($samples)) return false;
+        $diagnostics = [];
+        $symbols = [];
+        foreach ($samples as $sample) {
+            if (! is_array($sample) || ! is_string($sample['symbol'] ?? null) || trim($sample['symbol']) === ''
+                || ! in_array($sample['exchange'] ?? null, $exchanges, true)
+                || ($sample['reason'] ?? null) !== 'required_history_unavailable'
+                || ! is_array($sample['ranges'] ?? null) || $sample['ranges'] === []) return false;
+            $symbol = $sample['symbol'];
+            if (isset($symbols[$symbol])) return false;
+            $symbols[$symbol] = true;
+            foreach ($sample['ranges'] as $range) {
+                if (! is_array($range) || ! is_string($range['from'] ?? null) || ! is_string($range['to'] ?? null)
+                    || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $range['from'])
+                    || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $range['to'])
+                    || ! checkdate((int) substr($range['from'], 5, 2), (int) substr($range['from'], 8, 2), (int) substr($range['from'], 0, 4))
+                    || ! checkdate((int) substr($range['to'], 5, 2), (int) substr($range['to'], 8, 2), (int) substr($range['to'], 0, 4))
+                    || $range['from'] < $from || $range['to'] > $to || $range['from'] > $range['to']) return false;
+            }
+            $diagnostics[$symbol.': required sessions remain unavailable after exchange bhavcopy collection'] = true;
+        }
+        foreach (array_slice($errors, 1) as $error) {
+            if (! is_string($error) || ! isset($diagnostics[$error])) return false;
+            unset($diagnostics[$error]);
+        }
+        return true;
+    }
+
+    /** Expected work is reconstructed from the run's bounded dates and selected exchanges. */
+    protected function dailyExpectedFileKeys(array $bulk): ?array
+    {
+        $from = $bulk['from_date'] ?? null;
+        $to = $bulk['to_date'] ?? null;
+        $exchanges = $bulk['expected_exchanges'] ?? null;
+        if (! is_string($from) || ! is_string($to) || ! is_array($exchanges)
+            || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)
+            || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)
+            || ! checkdate((int) substr($from, 5, 2), (int) substr($from, 8, 2), (int) substr($from, 0, 4))
+            || ! checkdate((int) substr($to, 5, 2), (int) substr($to, 8, 2), (int) substr($to, 0, 4))) return null;
+        $start = Carbon::parse($from, 'Asia/Kolkata')->startOfDay();
+        $end = Carbon::parse($to, 'Asia/Kolkata')->startOfDay();
+        if ($end->lt($start) || $start->diffInDays($end, true) > 31) return null;
+        $selectedExchanges = [];
+        foreach ($exchanges as $exchange) {
+            if (! in_array($exchange, ['NSE', 'BSE'], true) || isset($selectedExchanges[$exchange])) return null;
+            $selectedExchanges[$exchange] = true;
+        }
+        $keys = [];
+        for ($day = $start->copy(); $day->lte($end); $day->addDay()) {
+            if (! TradingCalendar::isEquitySessionDate($day)) continue;
+            foreach (array_keys($selectedExchanges) as $exchange) {
+                $keys[$exchange.':'.$day->toDateString()] = true;
+            }
+        }
+        return $keys;
+    }
+
+    protected function hasDailyFileErrors(?array $lastRun): bool
+    {
+        return (int) ($lastRun['bulk']['file_errors'] ?? 0) > 0;
+    }
+
+    protected function hasPersistentDailyFileFailure(?array $lastRun): bool
+    {
+        if (! $lastRun) return false;
+        foreach (($lastRun['bulk']['files'] ?? []) as $file) {
+            if (! is_array($file)) continue;
+            if (($file['status'] ?? null) === 'failed' && (int) ($file['retry_attempt'] ?? 0) >= 2) return true;
+            if (($file['status'] ?? null) === 'retry_deferred' && (int) ($file['retry_attempt'] ?? 0) >= 2) return true;
+        }
+        return false;
+    }
+
+    protected function dailyStatsMatchRun(?array $lastRun, ?SyncRun $run): bool
+    {
+        if (! $lastRun || ! $run || ! $this->isIsoTimestamp($lastRun['completed_at'] ?? null) || ! $run->finished_at) return false;
+        try {
+            return abs(Carbon::parse($lastRun['completed_at'])->getTimestamp() - Carbon::parse($run->finished_at)->getTimestamp()) <= 300;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    protected function isIsoTimestamp(mixed $value): bool
+    {
+        if (! is_string($value) || preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/', $value) !== 1) {
+            return false;
+        }
+        try { Carbon::parse($value); return true; } catch (\Throwable) { return false; }
+    }
+
+    /**
      * @return array{
      *   active: list<array<string, mixed>>,
      *   notified: list<string>,
@@ -353,9 +654,13 @@ class AdminOperationalAlertService
         }
 
         $cooldownHours = (int) config('portfolio.operational_alerts.telegram_cooldown_hours', 6);
-        $cooldownCutoff = now()->subHours($cooldownHours);
-
         foreach ($evaluated as $key => $definition) {
+            // Fundamentals issues are reviewed in the admin dashboard; keep
+            // action-needed Telegram repeats to at most once per day.
+            $keyCooldown = in_array($key, [self::KEY_FUNDAMENTALS_UPDATE_FAILED, self::KEY_FUNDAMENTALS_NO_DATA_SKIP], true)
+                ? max(24, $cooldownHours)
+                : $cooldownHours;
+            $keyCooldownCutoff = now()->subHours($keyCooldown);
             $row = OperationalAlert::query()->find($key);
             if ($this->supportsManualClearColumn() && $row?->manually_cleared_at !== null) {
                 continue;
@@ -382,7 +687,7 @@ class AdminOperationalAlertService
             $shouldNotify = $notify && ($isNew
                 || $wasResolved
                 || $row->last_telegram_at === null
-                || $row->last_telegram_at->lt($cooldownCutoff));
+                || $row->last_telegram_at->lt($keyCooldownCutoff));
 
             if ($shouldNotify) {
                 $sent = $this->telegram->sendAdminOperationalAlert($this->formatTelegramMessage($definition));
@@ -529,7 +834,7 @@ class AdminOperationalAlertService
      *
      * @param  array<string, mixed>  $context
      */
-    public function recordUnattendedFailure(string $key, string $title, string $message, array $context = []): void
+    public function recordUnattendedFailure(string $key, string $title, string $message, array $context = [], string $severity = 'critical'): void
     {
         if (! in_array($key, self::UNATTENDED_FAILURE_KEYS, true)) {
             return;
@@ -537,7 +842,7 @@ class AdminOperationalAlertService
 
         $failures = $this->unattendedFailures();
         $failures[$key] = [
-            'severity' => 'critical',
+            'severity' => in_array($severity, ['critical', 'warning', 'info'], true) ? $severity : 'critical',
             'title' => $title,
             'message' => $this->sanitizeOpsMessage($message),
             'context' => $this->sanitizeOpsContext($context),
@@ -637,6 +942,8 @@ class AdminOperationalAlertService
             self::KEY_DECISION_PIPELINE_FAILED,
             self::KEY_BROKER_RECONCILE_FAILED,
             self::KEY_AUTOMATIC_SUBMIT_FAILED => 'Review: Settings → Admin operational alerts',
+            self::KEY_FUNDAMENTALS_UPDATE_FAILED,
+            self::KEY_FUNDAMENTALS_NO_DATA_SKIP => 'Review: Admin → Fundamentals data',
             default => 'Review: Settings → Universe price sync',
         };
 

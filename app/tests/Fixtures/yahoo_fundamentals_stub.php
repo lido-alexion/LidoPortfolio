@@ -18,6 +18,16 @@ if ($symbol === 'TIMEOUT.NS') {
     exit(0);
 }
 
+if ($symbol === 'EMPTY.NS') {
+    echo json_encode(['schema_version' => 1, 'symbol' => $symbol, 'cadence' => $cadence, 'outcome' => 'no_data', 'statements' => ['income_statement' => [], 'balance_sheet' => [], 'cash_flow' => []]], JSON_THROW_ON_ERROR);
+    exit(0);
+}
+
+if ($symbol === 'UNPARSEABLE.NS') {
+    echo json_encode(['schema_version' => 1, 'symbol' => $symbol, 'cadence' => $cadence, 'outcome' => 'data', 'statements' => ['income_statement' => [], 'balance_sheet' => [], 'cash_flow' => []]], JSON_THROW_ON_ERROR);
+    exit(0);
+}
+
 echo json_encode([
     'schema_version' => 1,
     'symbol' => $symbol,

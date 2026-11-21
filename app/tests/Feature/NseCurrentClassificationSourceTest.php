@@ -214,6 +214,9 @@ class NseCurrentClassificationSourceTest extends TestCase
             $this->fail('Invalid source must not become a successful classification.');
         } catch (\RuntimeException $error) {
             $this->assertNotSame('', $error->getMessage());
+            if ($case === 'unknown industry') {
+                $this->assertStringContainsString('"industry":"Unreviewed industry"', $error->getMessage());
+            }
         }
 
         $this->assertDatabaseCount('stox_stock_classification_observations', 0);
@@ -222,6 +225,9 @@ class NseCurrentClassificationSourceTest extends TestCase
         $this->assertNull($state->last_successful_at);
         $this->assertTrue($state->next_attempt_at->equalTo(now()->addMinutes(15)));
         $this->assertNotNull($state->last_error);
+        if ($case === 'unknown industry') {
+            $this->assertStringContainsString('"industry":"Unreviewed industry"', $state->last_error);
+        }
         $this->assertSame($before, $stock->fresh()->getAttributes());
         $this->assertDatabaseCount('portfolio_stock_prices', 0);
         if (in_array($case, ['metadata symbol mismatch', 'metadata ISIN malformed', 'conflicting current master ISIN',

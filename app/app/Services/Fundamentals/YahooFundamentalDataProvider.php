@@ -74,6 +74,22 @@ class YahooFundamentalDataProvider implements FundamentalDataProvider
             throw new RuntimeException('Yahoo fundamentals adapter returned an invalid response schema.');
         }
 
+        $statementNames = ['balance_sheet', 'cash_flow', 'income_statement'];
+        $actualStatementNames = array_keys($payload['statements']);
+        sort($actualStatementNames);
+        if ($actualStatementNames !== $statementNames) {
+            throw new RuntimeException('Yahoo fundamentals adapter returned an invalid statement schema.');
+        }
+        foreach ($statementNames as $statementName) {
+            if (! is_array($payload['statements'][$statementName])) {
+                throw new RuntimeException('Yahoo fundamentals adapter returned an invalid statement schema.');
+            }
+        }
+        $statementsAreEmpty = collect($payload['statements'])->every(fn ($rows) => $rows === []);
+        if (($payload['outcome'] ?? 'data') === 'no_data' && ! $statementsAreEmpty) {
+            throw new RuntimeException('Yahoo fundamentals adapter outcome does not match its statement data.');
+        }
+
         $this->lastResponseHash = hash('sha256', $stdout);
         $this->lastResponseMetadata = [
             'transport' => 'yfinance',
@@ -82,7 +98,20 @@ class YahooFundamentalDataProvider implements FundamentalDataProvider
             'identity' => is_array($payload['identity'] ?? null) ? $payload['identity'] : null,
         ];
 
-        return (new YahooFundamentalNormalizer)->normalizeYfinance($payload, $cadence);
+        if (($payload['outcome'] ?? 'data') === 'no_data'
+            && collect($payload['statements'])->every(fn ($rows) => is_array($rows) && $rows === [])) {
+            throw new YahooNoDataOutcome('Yahoo returned valid empty statements for '.$symbol.'.');
+        }
+        if (! in_array($payload['outcome'] ?? 'data', ['data', 'no_data'], true)) {
+            throw new RuntimeException('Yahoo fundamentals adapter returned an invalid outcome.');
+        }
+
+        $rows = (new YahooFundamentalNormalizer)->normalizeYfinance($payload, $cadence);
+        if ($rows === []) {
+            throw new RuntimeException('Yahoo fundamentals adapter returned statements with no parseable supported facts.');
+        }
+
+        return $rows;
     }
 
     public function lastResponseHash(): ?string

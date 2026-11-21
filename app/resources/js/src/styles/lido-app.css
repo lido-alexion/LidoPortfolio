@@ -251,6 +251,40 @@ body {
     flex-shrink: 0;
 }
 
+.lido-kite-header-control .btn {
+    min-width: 2rem;
+    min-height: 2rem;
+    padding: 0.2rem 0.35rem;
+}
+
+.lido-kite-header-control .dropdown-toggle-split {
+    min-width: 1.35rem;
+    padding-right: 0.25rem;
+    padding-left: 0.25rem;
+}
+
+[data-theme='light'] .lido-kite-header-control .btn-outline-warning {
+    --bs-btn-color: #805600;
+    --bs-btn-border-color: #805600;
+    --bs-btn-hover-color: #111827;
+    --bs-btn-hover-bg: #ffc107;
+    --bs-btn-hover-border-color: #805600;
+    --bs-btn-active-color: #111827;
+    --bs-btn-active-bg: #ffc107;
+    --bs-btn-active-border-color: #805600;
+}
+
+[data-theme='dark'] .lido-kite-header-control .btn-outline-warning {
+    --bs-btn-color: #f0c14a;
+    --bs-btn-border-color: #f0c14a;
+    --bs-btn-hover-color: #111827;
+    --bs-btn-hover-bg: #f0c14a;
+    --bs-btn-hover-border-color: #f0c14a;
+    --bs-btn-active-color: #111827;
+    --bs-btn-active-bg: #f0c14a;
+    --bs-btn-active-border-color: #f0c14a;
+}
+
 .lido-global-search {
     position: relative;
     flex: 0 0 auto;
@@ -1714,9 +1748,22 @@ body {
         order: 3;
         flex: 1 1 100%;
         justify-content: flex-start;
+        gap: 0.25rem;
         overflow-x: auto;
         padding-bottom: 0.1rem;
         scrollbar-width: thin;
+    }
+
+    .lido-execution-safety-state-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
     }
 
     .lido-profile-name {
@@ -4707,31 +4754,49 @@ td:has(.lido-invested-cell):focus-within .lido-invested-tx-link {
     gap: 0.5rem;
 }
 
-.lido-notification-menu {
+.dropdown-menu.lido-notification-menu {
     position: fixed;
     top: 4.5rem;
     right: 1rem;
     /* Keep the pane inside the available width when a scrollbar is present. */
     width: min(24rem, calc(100% - 2rem));
+    min-width: min(22rem, calc(100% - 2rem));
     max-width: calc(100% - 2rem);
-    max-height: min(70vh, 32rem);
+    min-height: min(12rem, calc(100dvh - 5rem));
+    max-height: min(70dvh, calc(100dvh - 5rem), 36rem);
     overflow-y: auto;
     z-index: 1050;
     font-size: 0.7rem;
     font-weight: 400;
 }
 
+.dropdown-menu.lido-notification-menu .dropdown-item {
+    font-size: inherit;
+    font-weight: 400;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
 .lido-notification-item-title {
-    display: inline;
     font-weight: 400;
 }
 
+.lido-notification-item-message {
+    display: block;
+    margin-top: 0.25rem;
+    white-space: pre-line;
+}
+
 @media (max-width: 575.98px) {
-    .lido-notification-menu {
+    .dropdown-menu.lido-notification-menu {
         top: 4rem;
-        right: 0.5rem;
-        width: calc(100% - 1rem);
-        max-width: calc(100% - 1rem);
+        left: 0.5rem;
+        right: auto;
+        width: calc(100vw - 1rem);
+        min-width: calc(100vw - 1rem);
+        max-width: calc(100vw - 1rem);
+        min-height: min(12rem, calc(100dvh - 4.5rem));
+        max-height: min(70dvh, calc(100dvh - 4.5rem));
     }
 }
 

@@ -1,0 +1,102 @@
+# Priority 4 incident reporting closure evidence
+
+**Branch:** `fix/priority4-protected-20261115`\
+**Reviewed source:** isolated worktree snapshot, 2026-11-15\
+**Status:** Protected historical outcomes reviewed. All ten remain blocked from replay; production issue #39 acceptance remains separately owner-owned.
+
+## Scope and evidence boundary
+
+This record covers the guarded replay command, API incident report sanitization, reporter deduplication safeguards, queue routing, and the outstanding notification-overlay acceptance for #39. It does not close or absorb #272, #273, #277, or #283.
+
+The supplied operations snapshot at **2026-11-15 21:26 IST** reports exactly 59 already linked, zero eligible pending, and ten protected outcomes: eight `circuit_open` and two `cooldown`. Six have issue references: open #277, #272, #273 and #291; closed #274 and #270. Four `circuit_open` incidents (IDs **52975, 53229, 53502, 53670**) have prior GitHub checks but no stored issue number or URL. A prior indexed GitHub search found no matches; that is not proof an issue was never created. All ten MUST remain blocked from replay. This is a supplied snapshot, not a newly queried production state. No production query, worker inspection, GitHub request, incident dispatch, notification send, or account session was performed in this pass. No incident/GitHub state was mutated.
+
+## Source review findings
+
+- `ops:reconcile-api-failure-incidents` is read-only by default. Dispatch requires `--execute`, reporting enabled for the active environment, and a configured durable queue driver. Positive limits are capped at 10; candidates must be pending, older than the requested age, and have no prior GitHub check, issue fields, or matching GitHub binding. Ordering is deterministic by last-seen time and ID.
+- API incidents are normalized before persistence. The redactor removes common credential forms, URLs, email addresses, and account/user identifiers from summaries; structured data is not published as a raw payload. Endpoint normalization strips query strings and volatile identifiers. GitHub issue bodies are assembled from the normalized incident fields and exact fingerprint marker.
+- `CreateOrLinkGitHubIssueJob` delegates to the existing reporter. The reporter searches the exact marker and uses its shared lock, rate ceiling, circuit, cooldown, binding history, and `creation_unknown` hold. A failed or ambiguous create is not a reason to blindly replay.
+- Both initial observation and manual reconciliation route jobs through the configured reporter connection and queue. The reviewed service unit explicitly consumes `log-triage`. Source wiring is verified; live process/configuration alignment remains an operator check.
+
+## Protected historical outcomes: decision path
+
+Do not dispatch, replay, or retry any of the ten protected rows. Their `circuit_open` or `cooldown` state and any prior check/binding are evidence that the normal reporter already made or attempted a decision. In particular, a missing issue number/URL after a prior check is an unresolved outcome, not an eligible “never checked” row. The guarded `ops:reconcile-api-failure-incidents` selector requires `sync_status=pending`, `last_github_checked_at IS NULL`, all issue fields null, age threshold satisfied, and no binding of any state. Do not relax those predicates to include these incidents.
+
+For a future owner-led resolution, first use read-only incident and binding evidence to establish the incident fingerprint and exact marker (`stox-api-failure` or `stox-browser-observation`). Read-only lookup may confirm an issue only when the repository and exact marker match; record the real issue number/URL/state from the returned issue. A zero-result indexed search does not establish non-creation, especially after an ambiguous POST or previous check. If exact identity remains unproven, preserve the hold and escalate for owner adjudication. Never synthesize an issue URL, clear a binding/circuit, or convert an unresolved result into a retry. Any production data correction or additional replay requires separate explicit owner authorization.
+
+The production notification acceptance for #39 is independent of P4 incident resolution and remains owner-owned. Resolving any of these incident references does not satisfy that acceptance.
+
+No reporter/reconciler behavior defect was established. A focused regression and operator decision-path documentation were added; runtime behavior and guardrails are unchanged.
+
+## Local verification
+
+Commands were run from `app/` under the repository PHPUnit `testing` configuration (`sqlite :memory:`, array cache, test environment). Queue dispatch was faked in the reconciliation test, and GitHub HTTP was faked in the reporter suite. These tests did not contact production or GitHub.
+
+| Command | Result | Evidence |
+|---|---|---|
+| `php artisan test --filter=test_manual_api_incident_reconciliation_is_dry_run_bounded_and_excludes_linked_or_ambiguous_rows` | Passed, 1 test / 6 assertions | Dry run dispatches no job; execute path with limit 1 dispatches only the eligible row and excludes linked, closed-bound, ambiguous-bound, and recent rows. |
+| `OTEL_SDK_DISABLED=true php artisan test --filter=V9ApiFailureReportingTest` | Passed, 21 tests / 151 assertions | Includes summary sanitization, safe endpoint handling, reporting behavior, queue failure fail-open behavior, and replay selection. |
+| `OTEL_SDK_DISABLED=true php artisan test --filter=V9GitHubIssueReporterTest` | Passed, 12 tests / 55 assertions | Exact marker matching, existing binding, cooldown, rate ceiling, shared circuit, global lock, and ambiguous-create hold. |
+
+The first test was executed once separately as a dry-run-specific check. The test itself also uses a fake bus to verify the bounded execute branch; no queued job was sent to a real worker.
+
+### Independent follow-up review (2026-11-14)
+
+The source was re-read independently at `bdc433324e7ba73574699c216be1a3b996e4f680`. No provably unsafe implementation defect was found, so this review makes no application-code or test changes. In particular:
+
+- Duplicate creation is guarded by exact hidden-marker search, a shared database lock, an existing binding/direct-issue fallback, and a durable `creation_unknown` hold after ambiguous creation. The reporter tests cover exact-marker mismatch, search-index lag with a known open binding, and repeated ambiguous reconciliation.
+- Admission checks the shared open circuit before contacting GitHub, counts ambiguous POST attempts against the rolling-hour limit, and applies closed-issue cooldown before recurrence creation. Tests cover the circuit and recurrence cooldown; the reporter configuration sets the maximum new issues per hour to 10.
+- Persisted/published API error text is redacted before storage. The regression suite checks credential and identity redaction and prevents reporter traffic from being observed recursively. This review found no raw provider response body passed into issue construction.
+- #39 has both unit coverage for selected-detail request ownership/failure handling (`app/tests/js/tos/notification-history-detail.test.jsx`) and browser coverage for bell-pane viewport bounds, selecting an item, detail persistence on reload, horizontal overflow, and detail retry (`app/tests/e2e/comm001-notifications.spec.js`). Those browser fixtures are synthetic; they do not constitute affected-account acceptance.
+
+Additional local test evidence from this follow-up:
+
+| Command | Result | Boundary |
+|---|---|---|
+| `OTEL_SDK_DISABLED=true php artisan test --filter='V9ApiFailureReportingTest|V9GitHubIssueReporterTest'` | Passed, 33 tests / 206 assertions | Local PHPUnit test configuration; GitHub calls faked. |
+| `php artisan test --filter=test_manual_api_incident_reconciliation_is_dry_run_bounded_and_excludes_linked_or_ambiguous_rows` | Passed, 1 test / 6 assertions | Local test DB and fake queue. OpenTelemetry emitted local exporter connection warnings after the passing result. |
+| `npx vitest run tests/js/tos/notification-history-detail.test.jsx` | Not run; command stalled attempting package resolution and was stopped | This checkout has no `app/node_modules`; network is restricted. Frontend source coverage was inspected but not freshly executed. |
+
+The repository root is a linked worktree whose shared `.git` metadata is read-only in this environment. `git fetch origin master` could not write `FETCH_HEAD`, so latest-origin reconciliation could not be completed here. No push, merge, PR, deploy, live request, or external mutation was made. The report remains an integration handoff on this branch; it is not CI evidence or a production approval receipt.
+
+### Protected incident follow-up (2026-11-15)
+
+The focused regression now includes a stale `circuit_open` incident with `last_github_checked_at` populated but no issue fields and no binding; the bounded replay selector must not dispatch it. Execution was attempted with `OTEL_SDK_DISABLED=true php artisan test --filter=test_manual_api_incident_reconciliation_is_dry_run_bounded_and_excludes_linked_or_ambiguous_rows` in the app test tree, but could not start because `app/vendor/autoload.php` is absent. This follow-up therefore has no fresh PHPUnit pass. `git diff --check` passed. The source change and documentation change remain uncommitted for independent review; no production or GitHub request was made.
+
+**Independent operator verification after Codex handoff (2026-11-15):** The operator supplied an isolated test-only dependency tree and successfully ran the changed focused test (**1 passed / 6 assertions**) and the combined V9 API reporting / GitHub reporter suite (**33 passed / 206 assertions**). PHP lint and diff checks passed. The change was committed, pushed, independently commented on PR #365, and hosted PHP 8.4 CI passed. The preceding paragraph describes the Codex sandbox's earlier limitation, not the final operator/test result.
+
+## Historical first-production canary safeguards (completed)
+
+The following checklist is preserved as **historical audit guidance**, not as an outstanding approval request or permission to replay. The one-row canary completed on 2026-11-15 and the owner subsequently approved bounded batches (at most five each) with strict rolling rate limits. As of the latest operator snapshot, **59 incidents are linked and zero are eligible pending**; the ten protected cases are ineligible for ordinary replay. Do not execute any of them without separate evidence and narrowly scoped owner authorization. The checklist was applied before the original production canary:
+
+1. The source commit has passed the repository's required CI and normal release workflow; the post-deploy health check reports that exact SHA. No manual deployment is authorized by this record.
+2. The incident owner and production operator approve a **single-row** canary in the change/incident record. This is explicit approval for one historical incident to create or link a GitHub issue; approval is not implied by this report.
+3. Read-only production checks confirm reporting is intentionally enabled, the token is present without exposing it, the configured queue is durable, and a healthy worker consumes that exact connection/queue. Record queue health and worker command without credentials or incident payloads.
+4. Review one candidate's sanitized fingerprint, direction, component, endpoint, status/category, age, and occurrence count. Verify no issue number/URL/state, no previous GitHub check, and no binding of any state. Exclude any row that is ambiguous, bound, or otherwise requires owner triage.
+5. Run the command in dry-run mode with `--limit=1` and the approved age threshold. Proceed only if it selects exactly one reviewed row. The execute query re-evaluates the eligibility predicates; run it once with `--execute --limit=1` and the same threshold. Do not schedule or loop it.
+6. Observe only that row through the configured queue and reporter. Within the operator's declared observation window (maximum 10 minutes), verify one terminal result: linked to one exact-marker issue, or safely held as cooldown/ambiguous/failure without duplicate creation. Capture sanitized status/count evidence and the resulting issue number only if one was created. Do not treat queue drain alone as success.
+7. Stop the canary immediately if more than one row is selected/dispatched, the candidate changes, the worker route is wrong, duplicate markers/issues appear, status remains pending beyond the window, or the reporter circuit opens. Do not continue to a second row until the cause is understood and the incident owner approves a new bounded step.
+
+### Rollback and containment
+
+The replay is an additive queue dispatch and has no safe bulk rollback. If it misbehaves, stop further manual replay invocations, preserve incident rows and binding history, and let the existing bounded job retry/ambiguity safeguards stand. Do not delete an issue or binding, clear the circuit, manually retry an ambiguous create, or disable unrelated notification/default workers. If a source regression is demonstrated, revert through the normal reviewed release process and verify the deployed SHA; do not hot-edit production. Reconcile any already-created issue by exact marker and owner review before taking an issue action.
+
+## #39 affected-account acceptance
+
+The remaining acceptance is the notification bell pane and selected notification detail/reload path on the deployed release. It must be completed by the affected account owner or an operator already authorized for that account, in that person's existing session. No impersonation or credential sharing.
+
+1. Record date/time, deployed release SHA, browser, and viewport dimensions. Use the owner's existing authenticated session.
+2. From the header bell, open an already-present notification. Do not send, generate, retry, mark all read, or otherwise create notification activity for this check. Prefer an already-read item. If opening the only suitable unread item would change its state, obtain the owner's consent to that normal read action first; otherwise stop and request an appropriate existing case.
+3. Verify the bell pane remains within the viewport at the affected viewport width, text wraps/readably displays, and there is no horizontal overflow. Select the existing notification and confirm the detail corresponds to that same item, with no blank or error pane.
+4. Reload the same notification-history URL while staying in the authorized session. Confirm the selected detail loads again and remains tied to the same item. Close the detail and verify the page/list remains usable.
+5. Record pass/fail for pane bounds, detail selection, reload persistence, and page usability. On failure, capture only sanitized error class/request correlation and viewport/SHA; exclude notification text, account identifiers, cookies, and tokens.
+
+Close #39 only after the authorized tester records a pass against the deployed SHA, or leave it open with a reproducible sanitized failure. Local source/test coverage is not affected-account acceptance.
+
+## Separate issue tracks
+
+- **#272:** unresolved historical Yahoo 404; do not infer cause without validated symbol/lifecycle or reproducible request evidence.
+- **#273:** unresolved historical Yahoo 400; retain as a separate provider evidence track.
+- **#277:** partially addressed warm-up reporting behavior; keep separate until remaining observations are attributed to a known route or confirmed as warm-up only.
+- **#283:** unresolved BSE-only history/listing/lifecycle reconciliation; missing history does not prove delisting or justify fabricated bars or retirement.
+
+Do not close these issues based on incident replay, notification acceptance, adjacent fixes, or a linked issue marker alone.

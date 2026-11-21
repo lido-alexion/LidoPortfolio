@@ -9,6 +9,12 @@ const VIEWPORTS = [
     { name: 'desktop', width: 1440, height: 900 },
 ];
 
+const CASH_DISPLAY = {
+    funded: '₹50,000.00',
+    zero: '₹0.00',
+    postExecution: '₹18,461.82',
+};
+
 function acceptanceWizard(status, blockers) {
     const current = status === 'preflight' ? 2 : 2;
     const blocked = blockers.length > 0;
@@ -329,6 +335,12 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                 await expect(page.getByText(`Recording actual broker fill for recommendation #${generated.id}.`)).toBeVisible();
                 await page.getByRole('button', { name: 'Validate symbol' }).click();
                 await expect(page.getByText(/Validated via test fixture/)).toBeVisible();
+                const executionVenue = page.getByRole('group', { name: 'Execution venue' });
+                await expect(executionVenue.getByRole('button', { name: 'NSE', exact: true })).toHaveAttribute('aria-pressed', 'true');
+                await executionVenue.getByRole('button', { name: 'BSE', exact: true }).click();
+                await expect(page.getByRole('status', { name: 'Fees (₹)' })).toHaveText('41.59');
+                await executionVenue.getByRole('button', { name: 'NSE', exact: true }).click();
+                await expect(page.getByRole('status', { name: 'Fees (₹)' })).toHaveText('41.31');
                 await page.getByLabel('Transaction date').fill('09-Oct-2026');
                 await page.getByLabel('Transaction date').blur();
                 await page.addStyleTag({ content: '.lido-mobile-utility-actions { visibility: hidden !important; }' });
@@ -349,7 +361,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
                 await expect(page.getByRole('row').filter({ hasText: 'INFY' })).toContainText('10');
 
                 await page.goto('/cash');
-                await expect(page.getByText(Math.round(cashBalance).toLocaleString('en-IN')).first()).toBeVisible();
+                await expect(page.getByText('Cash balance', { exact: true }).locator('..').locator('.h5')).toHaveText(`₹${cashBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
                 expect(observedRequests.some(({ method, path }) => method === 'POST' && /\/orders(?:\/|$)/.test(path))).toBe(false);
                 expect(observedRequests.some(({ method, path }) => method === 'POST' && /\/execution\/(?:submit|submit-selected)/.test(path))).toBe(false);
@@ -558,6 +570,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
 
     for (const viewport of VIEWPORTS) {
         test(`E2E-06 resolves a capital shortfall before separately approving and recording a BUY (${viewport.name})`, async ({ page }, testInfo) => {
+            test.setTimeout(90_000); // Multi-page capital and execution journey, matching E2E-01.
             journeyId(testInfo, 'E2E-06');
             await seedDeterministicJourney(page, `e2e06-capital-to-fill-${viewport.name}`);
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -647,9 +660,9 @@ test.describe('V9-UX-001 composite journey coverage', () => {
             });
 
             await page.goto('/cash');
-            await expect(page.getByText('Cash balance', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 50,000');
-            await expect(page.getByText('Reserved cash', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 0');
-            await expect(page.getByText('Available cash', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 50,000');
+            await expect(page.getByText('Cash balance', { exact: true }).locator('..').locator('.h5')).toHaveText(CASH_DISPLAY.funded);
+            await expect(page.getByText('Reserved cash', { exact: true }).locator('..').locator('.h5')).toHaveText(CASH_DISPLAY.zero);
+            await expect(page.getByText('Available cash', { exact: true }).locator('..').locator('.h5')).toHaveText(CASH_DISPLAY.funded);
 
             await page.goto('/recommendations');
             const pipelineRun = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/api/v1/pipeline/run'));
@@ -692,9 +705,9 @@ test.describe('V9-UX-001 composite journey coverage', () => {
 
             // A normal loan changes deployable recommendation capital, not the one-pool cash balance.
             await page.goto('/cash');
-            await expect(page.getByText('Cash balance', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 50,000');
-            await expect(page.getByText('Reserved cash', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 0');
-            await expect(page.getByText('Available cash', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 50,000');
+            await expect(page.getByText('Cash balance', { exact: true }).locator('..').locator('.h5')).toHaveText(CASH_DISPLAY.funded);
+            await expect(page.getByText('Reserved cash', { exact: true }).locator('..').locator('.h5')).toHaveText(CASH_DISPLAY.zero);
+            await expect(page.getByText('Available cash', { exact: true }).locator('..').locator('.h5')).toHaveText(CASH_DISPLAY.funded);
 
             await page.goto('/recommendations');
             const committedRow = page.getByRole('row').filter({ hasText: 'Momentum Core' });
@@ -718,18 +731,23 @@ test.describe('V9-UX-001 composite journey coverage', () => {
             await page.getByLabel('Quantity').fill('9');
             await page.getByRole('button', { name: 'Validate symbol' }).click();
             await expect(page.getByText(/Validated via test fixture/)).toBeVisible();
-            await expect(page.getByRole('status', { name: 'Fees (₹)' })).toHaveText('37.40');
+            await expect(page.getByRole('status', { name: 'Fees (₹)' })).toHaveText('38.18');
             await page.getByRole('button', { name: 'Save Transaction' }).click();
-            await expect.poll(() => savedTransaction).toMatchObject({ recommendation_id: recommendationId, strategy_id: 8, type: 'buy', quantity: 9, price: 3500, fees: 37.4 });
-            expect(transactionPayload).toMatchObject({ recommendation_id: recommendationId, source: 'recommendation', type: 'buy', quantity: 9, price: 3500, fees: 37.4 });
+            await expect.poll(() => savedTransaction).toMatchObject({ recommendation_id: recommendationId, strategy_id: 8, type: 'buy', quantity: 9, price: 3500, fees: 38.18 });
+            expect(transactionPayload).toMatchObject({ recommendation_id: recommendationId, source: 'recommendation', type: 'buy', quantity: 9, price: 3500, fees: 38.18 });
             expect(observedRequests.filter(({ method, path }) => method === 'POST' && path === '/api/transactions')).toHaveLength(1);
-            expect(cashBalance).toBe(18462.6);
+            const executedAmount = Number(transactionPayload.quantity) * Number(transactionPayload.price);
+            const chargedFees = Number(transactionPayload.fees || 0);
+            expect(executedAmount).toBe(31500);
+            expect(chargedFees).toBe(38.18);
+            expect(cashBalance).toBe(50000 - executedAmount - chargedFees);
+            expect(cashBalance).toBe(18461.82);
             await page.goto('/transactions');
             await expect(page.getByRole('row').filter({ hasText: 'INFY' })).toContainText('9');
             await page.goto('/cash');
-            await expect(page.getByText('Cash balance', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 18,463');
-            await expect(page.getByText('Reserved cash', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 0');
-            await expect(page.getByText('Available cash', { exact: true }).locator('..').locator('.h5')).toHaveText('₹ 18,463');
+            await expect(page.getByText('Cash balance', { exact: true }).locator('..').locator('.h5')).toHaveText(CASH_DISPLAY.postExecution);
+            await expect(page.getByText('Reserved cash', { exact: true }).locator('..').locator('.h5')).toHaveText(CASH_DISPLAY.zero);
+            await expect(page.getByText('Available cash', { exact: true }).locator('..').locator('.h5')).toHaveText(CASH_DISPLAY.postExecution);
             await page.goto('/holdings');
             const holding = page.getByRole('row').filter({ hasText: 'INFY' });
             await expect(holding).toContainText('Momentum Core');

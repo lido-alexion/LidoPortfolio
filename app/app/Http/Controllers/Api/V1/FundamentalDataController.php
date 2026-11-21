@@ -209,11 +209,70 @@ class FundamentalDataController extends Controller
 
     public function adminStatus(): JsonResponse
     {
+        $skips = DB::table('stox_yahoo_fundamental_symbol_state as ys')
+            ->join('portfolio_stocks as s', 's.id', '=', 'ys.stock_id')
+            ->whereNotNull('ys.skipped_at')
+            ->orderBy('s.symbol')
+            ->get(['s.id as stock_id', 's.symbol', 's.exchange', 'ys.consecutive_no_data', 'ys.skipped_at', 'ys.skip_reason', 'ys.last_no_data_at'])
+            ->map(function ($row) {
+                $row->history = DB::table('stox_yahoo_fundamental_observations')
+                    ->where('stock_id', $row->stock_id)
+                    ->orderByDesc('id')
+                    ->limit(40)
+                    ->get(['outcome', 'cadences', 'consecutive_count', 'observed_at', 'details']);
+
+                return $row;
+            });
+        $recentNoData = DB::table('stox_yahoo_fundamental_observations as o')
+            ->join('portfolio_stocks as s', 's.id', '=', 'o.stock_id')
+            ->where('o.outcome', 'no_data')
+            ->orderByDesc('o.id')
+            ->limit(40)
+            ->get(['s.symbol', 's.exchange', 'o.cadences', 'o.consecutive_count', 'o.observed_at']);
         return ApiEnvelope::success(array_merge($this->updates->status(), [
             'bootstrap' => $this->bootstrap->status(),
             'ai_insights' => $this->aiInsights->adminDiagnostics(),
             'exchange_fallbacks' => $this->fundamentals->exchangeFallbackStatus(),
+            'yahoo_no_data_skips' => $skips,
+            'yahoo_recent_no_data' => $recentNoData,
         ]));
+    }
+
+    public function clearYahooNoDataSkip(Request $request, Stock $stock): JsonResponse
+    {
+        $state = DB::table('stox_yahoo_fundamental_symbol_state')->where('stock_id', $stock->id)->first();
+        abort_if($state === null, 404);
+        DB::transaction(function () use ($request, $stock, $state): void {
+            DB::table('stox_yahoo_fundamental_observations')->insert(['stock_id' => $stock->id, 'run_id' => null, 'outcome' => 'admin_removed_skip', 'cadences' => null, 'consecutive_count' => 0, 'observed_at' => now(), 'details' => json_encode(['actor_id' => $request->user()->id, 'previous_count' => (int) $state->consecutive_no_data]), 'created_at' => now(), 'updated_at' => now()]);
+            DB::table('stox_yahoo_fundamental_symbol_state')->where('stock_id', $stock->id)->update(['consecutive_no_data' => 0, 'last_no_data_at' => null, 'skipped_at' => null, 'skip_reason' => null, 'updated_at' => now()]);
+        });
+        if (DB::table('stox_yahoo_fundamental_symbol_state')->whereNotNull('skipped_at')->doesntExist()) {
+            $alerts = app(\App\Services\AdminOperationalAlertService::class);
+            if ($alerts->clearUnattendedFailure(\App\Services\AdminOperationalAlertService::KEY_FUNDAMENTALS_NO_DATA_SKIP)) $alerts->syncAndNotify();
+        }
+        return ApiEnvelope::success(['stock_id' => $stock->id, 'consecutive_no_data' => 0, 'skipped_at' => null]);
+    }
+
+    public function fetchSkippedYahooStock(Request $request, Stock $stock): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($user !== null, 401);
+        abort_unless($stock->isEffectivelyActive() && ! $stock->is_benchmark, 422);
+        $userLimitKey = 'fundamentals-admin-yahoo-fetch:user:'.$user->id;
+        if (RateLimiter::tooManyAttempts($userLimitKey, 3)) {
+            return ApiEnvelope::error('manual_fetch_rate_limited', 'Please wait before requesting another stock.', 429);
+        }
+        $stockLock = Cache::lock('fundamentals-admin-yahoo-fetch:stock:'.$stock->id, 300);
+        if (! $stockLock->get()) {
+            return ApiEnvelope::error('manual_fetch_in_progress', 'A Yahoo fetch for this stock is already in progress.', 409);
+        }
+        RateLimiter::hit($userLimitKey, 3600);
+        try {
+            $run = $this->updates->createRun('admin_manual_yahoo', 'manual_stock', (int) $stock->id, 1);
+            return ApiEnvelope::success(['processed' => $this->updates->process($run, 2)], [], 201);
+        } finally {
+            $stockLock->release();
+        }
     }
 
     public function bootstrapStatus(): JsonResponse
@@ -248,7 +307,7 @@ class FundamentalDataController extends Controller
             'quarterly_freshness_months' => ['required', 'integer', 'min:1', 'max:36'],
             'annual_freshness_months' => ['required', 'integer', 'min:1', 'max:60'],
             'request_delay_ms' => ['nullable', 'integer', 'min:0', 'max:60000'],
-            'max_attempts' => ['nullable', 'integer', 'min:1', 'max:10'],
+            'max_attempts' => ['nullable', 'integer', 'min:1', 'max:3'],
             'paused' => ['nullable', 'boolean'],
             'ai_insights_primary_provider' => ['nullable', 'in:gemini,codex'],
             'nse_official_fallback_enabled' => ['nullable', 'boolean'],
@@ -330,6 +389,13 @@ class FundamentalDataController extends Controller
             isset($validated['stock_id']) ? (int) $validated['stock_id'] : null,
             (int) ($validated['limit'] ?? 25),
         );
+
+        if ($run === null) {
+            return ApiEnvelope::success([
+                'run' => null,
+                'status' => 'no_due_work',
+            ]);
+        }
 
         $data = ['run' => $run->toArray()];
         if ($request->boolean('process_now')) {

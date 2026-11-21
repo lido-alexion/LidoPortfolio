@@ -108,6 +108,68 @@ class StockClassificationAdminTest extends TestCase
         ])->assertOk()->assertJsonPath('data.source_type', 'manual_override');
     }
 
+    public function test_captured_nse_pairs_map_only_to_approved_canonical_pairs(): void
+    {
+        $pairs = [
+            ['Capital Goods', 'Electrical Equipment', 'Industrials', 'Electrical Equipment'],
+            ['Capital Goods', 'Industrial Products', 'Industrials', 'Industrial Products'],
+            ['Capital Goods', 'Agricultural Commercial & Construction Vehicles', 'Automobile & Auto Components', 'Commercial Vehicles'],
+            ['Information Technology', 'IT - Services', 'Information Technology', 'IT Services'],
+            ['Consumer Services', 'Retailing', 'Consumer Discretionary', 'Retailing'],
+            ['Consumer Durables', 'Consumer Durables', 'Consumer Discretionary', 'Consumer Durables'],
+            ['Construction', 'Construction', 'Industrials', 'Construction'],
+            ['Fast Moving Consumer Goods', 'Food Products', 'Fast Moving Consumer Goods', 'Food Products'],
+            ['Fast Moving Consumer Goods', 'Beverages', 'Fast Moving Consumer Goods', 'Beverages'],
+            ['Metals & Mining', 'Minerals & Mining', 'Metals & Mining', 'Minerals & Mining'],
+            ['Textiles', 'Textiles & Apparels', 'Consumer Discretionary', 'Textiles'],
+            ['Power', 'Power', 'Energy', 'Power'],
+            ['Oil Gas & Consumable Fuels', 'Oil', 'Energy', 'Oil & Gas'],
+            ['Oil Gas & Consumable Fuels', 'Gas', 'Energy', 'Oil & Gas'],
+        ];
+
+        foreach ($pairs as $index => [$sourceSector, $sourceIndustry, $sector, $industry]) {
+            $stock = $this->stock('PAIR'.str_pad((string) $index, 2, '0', STR_PAD_LEFT));
+            app(StockClassificationService::class)->recordObservation($stock, $this->payload($sourceSector, $sourceIndustry));
+            $observation = StockClassificationObservation::query()->where('stock_id', $stock->id)->firstOrFail();
+            $this->assertSame($sourceSector, $observation->provider_sector);
+            $this->assertSame($sourceIndustry, $observation->provider_industry);
+            $this->assertSame($sector, $observation->sector);
+            $this->assertSame($industry, $observation->industry);
+        }
+    }
+
+    public function test_all_remaining_captured_taxonomy_pairs_remain_fail_closed(): void
+    {
+        $pairs = [
+            ['Healthcare', 'Pharmaceuticals & Biotechnology'],
+            ['Chemicals', 'Chemicals & Petrochemicals'],
+            ['Services', 'Commercial Services & Supplies'],
+            ['Construction Materials', 'Cement & Cement Products'],
+            ['Consumer Services', 'Leisure Services'],
+            ['Fast Moving Consumer Goods', 'Agricultural Food & other Products'],
+            ['Diversified', 'Diversified'],
+            ['Capital Goods', 'Industrial Manufacturing'],
+            ['Realty', 'Realty'],
+            ['Services', 'Transport Services'],
+            ['Metals & Mining', 'Metals & Minerals Trading'],
+            ['Services', 'Transport Infrastructure'],
+            ['Capital Goods', 'Aerospace & Defense'],
+            ['Chemicals', 'Fertilizers & Agrochemicals'],
+        ];
+
+        foreach ($pairs as $index => [$sector, $industry]) {
+            $stock = $this->stock('UNMAPPED'.str_pad((string) $index, 2, '0', STR_PAD_LEFT));
+            try {
+                app(StockClassificationService::class)->recordObservation($stock, $this->payload($sector, $industry));
+                $this->fail("Source pair {$sector} / {$industry} must remain unmapped without an approved canonical equivalent.");
+            } catch (\RuntimeException $error) {
+                $this->assertStringContainsString('"sector":"'.$sector.'"', $error->getMessage());
+                $this->assertStringContainsString('"industry":"'.$industry.'"', $error->getMessage());
+                $this->assertDatabaseCount('stox_stock_classification_observations', 0);
+            }
+        }
+    }
+
     public function test_provider_403_is_a_bounded_retry_and_does_not_create_an_observation(): void
     {
         $stock = $this->stock('TCS');

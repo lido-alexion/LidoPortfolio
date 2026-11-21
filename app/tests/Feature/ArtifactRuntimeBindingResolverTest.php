@@ -80,6 +80,44 @@ class ArtifactRuntimeBindingResolverTest extends TestCase
         $this->assertNull($resolver->forStrategyVersion($otherProfile, $legacyVersion));
     }
 
+    public function test_registry_read_preserves_artifact_hash_on_legacy_projection(): void
+    {
+        $owner = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($owner);
+        $version = app(ReusableArtifactLifecycleService::class)->publish(
+            app(ReusableArtifactLifecycleService::class)->createDraft(
+                $owner,
+                ArtifactType::STRATEGY,
+                'registry-hash',
+                'Registry Hash',
+                $this->envelope(61),
+            ),
+            $owner,
+        );
+
+        $binding = app(ArtifactBindingService::class)->bind($profile, $version, $owner, [], true);
+        $strategy = TradingStrategy::query()
+            ->where('profile_id', $profile->id)
+            ->where('reusable_artifact_id', $version->artifact_id)
+            ->firstOrFail();
+        $legacyVersion = $strategy->activeVersion()->firstOrFail();
+
+        // Construction must pin the compatibility version to the immutable
+        // artifact hash before testing registry-read behavior.
+        $this->assertSame($version->definition_hash, $legacyVersion->definition_hash);
+
+        $this->actingAs($owner)->getJson('/api/v1/strategy-registry')->assertOk();
+
+        $legacyVersion->refresh();
+        $this->assertSame($version->definition_hash, $legacyVersion->definition_hash);
+        $this->assertNotSame(
+            $version->definition_hash,
+            app(\App\Services\Strategy\StrategyRegistrySupport::class)->hashDefinition($legacyVersion->config_json),
+        );
+        $this->assertNotNull(app(ArtifactRuntimeBindingResolver::class)->forStrategyVersion($profile, $legacyVersion));
+        $this->assertSame($binding->active_revision_id, $binding->fresh()->active_revision_id);
+    }
+
     /** @return array{0:TradingStrategy,1:TradingStrategyVersion} */
     private function legacyStrategy(int $profileId): array
     {

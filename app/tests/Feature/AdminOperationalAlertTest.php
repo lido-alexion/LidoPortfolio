@@ -32,6 +32,55 @@ class AdminOperationalAlertTest extends TestCase
         parent::tearDown();
     }
 
+    /** Mirrors the collector's persisted source evidence for a one-session run. */
+    protected function validatedDailyFiles(array $exchanges, string $date = '2026-07-06'): array
+    {
+        $files = [];
+        foreach ($exchanges as $exchange => $status) {
+            $files[] = [
+                'exchange' => $exchange, 'date' => $date, 'status' => $status,
+                'checked_at' => now()->toIso8601String(), 'coverage_hash' => str_repeat('a', 64),
+                'source_revision_sha256' => str_repeat('b', 64),
+            ];
+        }
+        return [
+            'from_date' => $date, 'to_date' => $date, 'expected_exchanges' => array_keys($exchanges),
+            'expected_files' => array_map(fn ($exchange) => ['exchange' => $exchange, 'date' => $date], array_keys($exchanges)),
+            'files' => $files,
+        ];
+    }
+
+    protected function setValidatedDailyWindowRun(array $exchanges = ['NSE', 'BSE']): void
+    {
+        $expected = $files = [];
+        foreach (['2026-07-03', '2026-07-06'] as $date) {
+            foreach ($exchanges as $exchange) {
+                $expected[] = ['exchange' => $exchange, 'date' => $date];
+                $files[] = ['exchange' => $exchange, 'date' => $date, 'status' => 'applied',
+                    'checked_at' => now()->toIso8601String(), 'coverage_hash' => str_repeat('a', 64),
+                    'source_revision_sha256' => str_repeat('b', 64)];
+            }
+        }
+        Setting::setValue('universe_price_sync_last_run_json', json_encode([
+            'collection_method' => 'exchange_bhavcopy', 'completed_at' => now()->toIso8601String(),
+            'processed' => 574, 'succeeded' => 500, 'failed' => 74,
+            'bulk' => ['from_date' => '2026-07-03', 'to_date' => '2026-07-06',
+                'expected_exchanges' => $exchanges, 'expected_files' => $expected, 'files' => $files,
+                'file_errors' => 0, 'identity_conflicts' => 0, 'unavailable_stocks' => 74],
+        ]));
+        SyncRun::query()->create(['id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'partial', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
+            'stocks_processed' => 574, 'failures' => 74, 'summary' => 'bounded daily receipt run']);
+    }
+
+    protected function incompleteDailyPriceReport(float $coverage = 80.0, ?string $latest = '2026-07-03'): array
+    {
+        return ['as_of' => now()->toIso8601String(), 'datasets' => ['daily_prices' => [
+            'freshness' => 'incomplete', 'coverage' => $coverage, 'backlog' => 115,
+            'last_successful_ingestion' => $latest,
+        ]]];
+    }
+
     public function test_scheduler_inactive_alert_is_created(): void
     {
         $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())
@@ -39,6 +88,56 @@ class AdminOperationalAlertTest extends TestCase
             ->all();
 
         $this->assertContains(AdminOperationalAlertService::KEY_SCHEDULER_INACTIVE, $keys);
+    }
+
+    public function test_daily_price_row_gaps_are_ignored_only_with_current_complete_source_proof(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => true]);
+        $this->setValidatedDailyWindowRun();
+        $this->assertTrue(app(AdminOperationalAlertService::class)->hasValidatedDailyPriceRowsOnly($this->incompleteDailyPriceReport()));
+    }
+
+    public function test_daily_price_suppression_fails_closed_for_disabled_missing_or_unmatched_source(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => false]);
+        $this->assertFalse(app(AdminOperationalAlertService::class)->hasValidatedDailyPriceRowsOnly($this->incompleteDailyPriceReport()));
+
+        config(['portfolio.universe_price_sync.enabled' => true]);
+        Setting::setValue('universe_price_sync_last_run_json', json_encode(['collection_method' => 'exchange_bhavcopy']));
+        $this->assertFalse(app(AdminOperationalAlertService::class)->hasValidatedDailyPriceRowsOnly($this->incompleteDailyPriceReport()));
+
+        $this->setValidatedDailyWindowRun();
+        SyncRun::query()->where('job_name', SyncLogService::JOB_UNIVERSE_PRICE_SYNC)->update(['finished_at' => now()->subHour()]);
+        $this->assertFalse(app(AdminOperationalAlertService::class)->hasValidatedDailyPriceRowsOnly($this->incompleteDailyPriceReport()));
+    }
+
+    public function test_daily_price_suppression_requires_rows_in_required_session_and_nse_receipt(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => true]);
+        $this->setValidatedDailyWindowRun(['BSE']);
+        $this->assertFalse(app(AdminOperationalAlertService::class)->hasValidatedDailyPriceRowsOnly($this->incompleteDailyPriceReport()));
+
+        SyncRun::query()->delete();
+        $this->setValidatedDailyWindowRun();
+        $this->assertFalse(app(AdminOperationalAlertService::class)->hasValidatedDailyPriceRowsOnly($this->incompleteDailyPriceReport(0.0, '2026-07-02')));
+    }
+
+    public function test_daily_price_suppression_rejects_absent_or_malformed_report_provenance(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => true]);
+        $this->setValidatedDailyWindowRun();
+        $report = $this->incompleteDailyPriceReport();
+        unset($report['as_of']);
+        $this->assertFalse(app(AdminOperationalAlertService::class)->hasValidatedDailyPriceRowsOnly($report));
+
+        $report = $this->incompleteDailyPriceReport();
+        $report['datasets']['daily_prices']['last_successful_ingestion'] = 'recently';
+        $this->assertFalse(app(AdminOperationalAlertService::class)->hasValidatedDailyPriceRowsOnly($report));
+
+        $payload = json_decode((string) Setting::getValue('universe_price_sync_last_run_json'), true);
+        unset($payload['bulk']['identity_conflicts']);
+        Setting::setValue('universe_price_sync_last_run_json', json_encode($payload));
+        $this->assertFalse(app(AdminOperationalAlertService::class)->hasValidatedDailyPriceRowsOnly($this->incompleteDailyPriceReport()));
     }
 
     public function test_stock_master_failure_creates_alert_and_notifies_admin_telegram(): void
@@ -445,6 +544,363 @@ class AdminOperationalAlertTest extends TestCase
 
         $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
         $this->assertNotContains(AdminOperationalAlertService::KEY_PROVIDER_RATE_LIMIT, $keys);
+    }
+
+    public function test_validated_bhavcopy_with_partial_coverage_does_not_raise_universe_failure(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => true]);
+        Setting::setValue('universe_price_sync_last_run_json', json_encode([
+            'collection_method' => 'exchange_bhavcopy', 'processed' => 574, 'succeeded' => 0, 'failed' => 574,
+            'completed_at' => now()->toIso8601String(), 'rate_limit_hits' => 0,
+            'bulk' => ['file_errors' => 0, 'identity_conflicts' => 0, 'unavailable_stocks' => 574,
+                'files_downloaded' => 2] + $this->validatedDailyFiles(['NSE' => 'applied', 'BSE' => 'applied']),
+        ]));
+        SyncRun::query()->create([
+            'id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'failed', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
+            'stocks_processed' => 574, 'failures' => 574, 'summary' => 'source=exchange_bhavcopy',
+        ]);
+
+        $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
+        $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
+    }
+
+    public function test_source_evidence_must_match_complete_expected_exchange_session_set(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => true]);
+        $first = $this->validatedDailyFiles(['NSE' => 'applied', 'BSE' => 'receipt_cached'], '2026-07-03');
+        $second = $this->validatedDailyFiles(['NSE' => 'applied', 'BSE' => 'applied'], '2026-07-06');
+        $valid = [
+            'from_date' => '2026-07-03', 'to_date' => '2026-07-06', 'expected_exchanges' => ['NSE', 'BSE'],
+            'expected_files' => array_merge($first['expected_files'], $second['expected_files']),
+            'files' => array_merge($first['files'], $second['files']),
+        ];
+        $cases = [
+            array_slice($valid['files'], 1), // missing exchange
+            array_slice($valid['files'], 0, 2), // missing session
+            array_merge($valid['files'], [$valid['files'][0]]), // duplicate receipt
+            array_merge(array_slice($valid['files'], 0, 3), [array_replace($valid['files'][3], ['date' => '2026-07-02'])]),
+            [array_replace($valid['files'][0], ['checked_at' => '2026-06-01T00:00:00+00:00']), ...array_slice($valid['files'], 1)], // stale receipt
+            [array_replace($valid['files'][0], ['checked_at' => now()->addHour()->toIso8601String()]), ...array_slice($valid['files'], 1)], // forged future check
+            [array_replace($valid['files'][0], ['checked_at' => 'now']), ...array_slice($valid['files'], 1)], // non-ISO timestamp
+        ];
+        foreach ($cases as $files) {
+            $payload = ['collection_method' => 'exchange_bhavcopy', 'processed' => 2, 'succeeded' => 0,
+                'failed' => 2, 'completed_at' => now()->toIso8601String(), 'bulk' => [
+                    'file_errors' => 0, 'identity_conflicts' => 0, 'unavailable_stocks' => 2,
+                    'from_date' => $valid['from_date'], 'to_date' => $valid['to_date'],
+                    'expected_exchanges' => $valid['expected_exchanges'],
+                    'expected_files' => $valid['expected_files'], 'files' => $files,
+                ]];
+            Setting::setValue('universe_price_sync_last_run_json', json_encode($payload));
+            SyncRun::query()->create(['id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+                'status' => 'partial', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
+                'stocks_processed' => 2, 'failures' => 2, 'summary' => 'bounded daily run']);
+            $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
+            $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
+            SyncRun::query()->where('job_name', SyncLogService::JOB_UNIVERSE_PRICE_SYNC)->delete();
+        }
+        $payload['bulk']['files'] = $valid['files'];
+        $payload['bulk']['expected_files'] = array_slice($valid['expected_files'], 0, 2);
+        Setting::setValue('universe_price_sync_last_run_json', json_encode($payload));
+        SyncRun::query()->create(['id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'partial', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
+            'stocks_processed' => 2, 'failures' => 2, 'summary' => 'truncated expected workset']);
+        $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
+        $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
+        SyncRun::query()->where('job_name', SyncLogService::JOB_UNIVERSE_PRICE_SYNC)->delete();
+
+        $payload['bulk']['expected_files'] = $valid['expected_files'];
+        Setting::setValue('universe_price_sync_last_run_json', json_encode($payload));
+        SyncRun::query()->create(['id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'partial', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
+            'stocks_processed' => 2, 'failures' => 2, 'summary' => 'complete receipts']);
+        $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
+        $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
+    }
+
+    public function test_old_or_future_completion_timestamp_cannot_suppress_coverage_alert(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => true]);
+        foreach ([now()->subHour(), now()->addHour()] as $completion) {
+            $evidence = $this->validatedDailyFiles(['NSE' => 'applied', 'BSE' => 'applied']);
+            Setting::setValue('universe_price_sync_last_run_json', json_encode([
+                'collection_method' => 'exchange_bhavcopy', 'processed' => 2, 'succeeded' => 0, 'failed' => 2,
+                'completed_at' => $completion->toIso8601String(), 'bulk' => array_merge([
+                    'file_errors' => 0, 'identity_conflicts' => 0, 'unavailable_stocks' => 2,
+                ], $evidence),
+            ]));
+            SyncRun::query()->create(['id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+                'status' => 'failed', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
+                'stocks_processed' => 2, 'failures' => 2, 'summary' => 'timestamp mismatch']);
+            $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
+            $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
+            SyncRun::query()->where('job_name', SyncLogService::JOB_UNIVERSE_PRICE_SYNC)->delete();
+        }
+    }
+
+    public function test_persistent_retry_deferred_is_actionable_when_aggregate_file_errors_is_zero(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => true]);
+        Setting::setValue('universe_price_sync_last_run_json', json_encode([
+            'collection_method' => 'exchange_bhavcopy', 'processed' => 2, 'succeeded' => 1, 'failed' => 1,
+            'completed_at' => now()->toIso8601String(), 'bulk' => [
+                'file_errors' => 0, 'identity_conflicts' => 0, 'unavailable_stocks' => 1,
+                'files' => [['exchange' => 'NSE', 'date' => '2026-07-06', 'status' => 'retry_deferred', 'retry_attempt' => 2]],
+            ],
+        ]));
+        SyncRun::query()->create(['id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'success', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
+            'stocks_processed' => 2, 'failures' => 0, 'summary' => 'retry deferred']);
+        $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
+        $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
+    }
+
+    public function test_first_attempt_is_not_quiet_without_complete_provenance_or_retry_stage(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => true]);
+        $evidence = $this->validatedDailyFiles(['NSE' => 'applied']);
+        $evidence['expected_exchanges'][] = 'BSE';
+        $evidence['expected_files'][] = ['exchange' => 'BSE', 'date' => '2026-07-06'];
+        $evidence['files'][] = ['exchange' => 'BSE', 'date' => '2026-07-06', 'status' => 'failed',
+            'failure_stage' => 'exchange_fetch', 'error' => 'temporary source transport failure'];
+        Setting::setValue('universe_price_sync_last_run_json', json_encode([
+            'collection_method' => 'exchange_bhavcopy', 'completed_at' => now()->toIso8601String(),
+            'failed' => 1, 'succeeded' => 1, 'errors' => ['BSE:2026-07-06: temporary source transport failure'], 'bulk' => array_merge([
+                'file_errors' => 1, 'identity_conflicts' => 0, 'unavailable_stocks' => 1,
+            ], $evidence),
+        ]));
+        SyncRun::query()->create(['id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'partial', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
+            'stocks_processed' => 2, 'failures' => 1, 'summary' => 'retry attempt missing']);
+        $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
+        $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
+    }
+
+    public function test_empty_expected_workset_is_healthy_for_a_proven_nontrading_window(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => true]);
+        Setting::setValue('universe_price_sync_last_run_json', json_encode([
+            'collection_method' => 'exchange_bhavcopy', 'completed_at' => now()->toIso8601String(),
+            'failed' => 2, 'succeeded' => 0, 'bulk' => [
+                'from_date' => '2026-07-04', 'to_date' => '2026-07-05', 'expected_exchanges' => ['NSE', 'BSE'],
+                'file_errors' => 0, 'identity_conflicts' => 0, 'unavailable_stocks' => 2,
+                'expected_files' => [], 'files' => [],
+            ],
+        ]));
+        SyncRun::query()->create(['id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'failed', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
+            'stocks_processed' => 2, 'failures' => 2, 'summary' => 'no expected exchange sessions']);
+        $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
+        $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
+    }
+
+    public function test_cached_validated_receipts_are_healthy_but_missing_exchange_file_is_not(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => true]);
+        $base = ['collection_method' => 'exchange_bhavcopy', 'processed' => 2, 'succeeded' => 0, 'failed' => 2,
+            'completed_at' => now()->toIso8601String(), 'rate_limit_hits' => 0,
+            'bulk' => ['file_errors' => 0, 'identity_conflicts' => 0, 'unavailable_stocks' => 2,
+                'files_downloaded' => 0] + $this->validatedDailyFiles(['NSE' => 'receipt_cached', 'BSE' => 'receipt_cached'])];
+        Setting::setValue('universe_price_sync_last_run_json', json_encode($base));
+        SyncRun::query()->create([
+            'id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'failed', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
+            'stocks_processed' => 2, 'failures' => 2, 'summary' => 'cached receipt coverage partial',
+        ]);
+        $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
+        $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
+
+        Setting::setValue('universe_price_sync_last_run_json', json_encode(array_replace_recursive($base, [
+            'bulk' => ['file_errors' => 1, 'files' => [['exchange' => 'BSE', 'status' => 'failed', 'retry_attempt' => 2]]],
+        ])));
+        $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
+        $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
+    }
+
+    public function test_schema_failure_in_one_exchange_keeps_mixed_source_run_actionable(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => true]);
+        Setting::setValue('universe_price_sync_last_run_json', json_encode([
+            'collection_method' => 'exchange_bhavcopy', 'processed' => 574, 'succeeded' => 0, 'failed' => 574,
+            'completed_at' => now()->toIso8601String(), 'rate_limit_hits' => 0,
+            'bulk' => ['file_errors' => 1, 'identity_conflicts' => 0, 'unavailable_stocks' => 574,
+                'files_downloaded' => 2, 'files' => [
+                    ['exchange' => 'NSE', 'status' => 'applied'],
+                    ['exchange' => 'BSE', 'status' => 'failed', 'error' => 'invalid schema', 'retry_attempt' => 2],
+                ]],
+        ]));
+        SyncRun::query()->create([
+            'id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'failed', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
+            'stocks_processed' => 574, 'failures' => 574, 'summary' => 'NSE okay, BSE schema invalid',
+        ]);
+
+        $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
+        $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
+    }
+
+    public function test_partial_run_identity_conflict_alerts_even_with_zero_file_errors(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => true]);
+        Setting::setValue('universe_price_sync_last_run_json', json_encode([
+            'collection_method' => 'exchange_bhavcopy', 'processed' => 574, 'succeeded' => 0, 'failed' => 574,
+            'completed_at' => now()->toIso8601String(),
+            'bulk' => ['file_errors' => 0, 'identity_conflicts' => 1, 'unavailable_stocks' => 574,
+                'files' => [['exchange' => 'NSE', 'status' => 'identity_conflict'], ['exchange' => 'BSE', 'status' => 'applied']]],
+        ]));
+        SyncRun::query()->create([
+            'id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'partial', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
+            'stocks_processed' => 574, 'failures' => 1, 'summary' => 'identity conflict',
+        ]);
+
+        $alerts = collect(app(AdminOperationalAlertService::class)->evaluateConditions())
+            ->where('key', AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED);
+        $this->assertCount(1, $alerts);
+        $this->assertSame(1, $alerts->first()['context']['identity_conflicts']);
+    }
+
+    public function test_partial_daily_run_without_validated_file_evidence_stays_visible(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => true]);
+        Setting::setValue('universe_price_sync_last_run_json', json_encode([
+            'collection_method' => 'exchange_bhavcopy', 'processed' => 574, 'succeeded' => 0, 'failed' => 574,
+            'completed_at' => now()->toIso8601String(),
+            'bulk' => ['file_errors' => 0, 'identity_conflicts' => 0, 'unavailable_stocks' => 574, 'files' => []],
+        ]));
+        SyncRun::query()->create([
+            'id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'partial', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
+            'stocks_processed' => 574, 'failures' => 574, 'summary' => 'no file evidence',
+        ]);
+
+        $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
+        $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
+    }
+
+    public function test_retry_deferred_after_multiple_attempts_stays_visible_on_partial_run(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => true]);
+        Setting::setValue('universe_price_sync_last_run_json', json_encode([
+            'collection_method' => 'exchange_bhavcopy', 'processed' => 574, 'succeeded' => 0, 'failed' => 574,
+            'completed_at' => now()->toIso8601String(),
+            'bulk' => ['file_errors' => 1, 'identity_conflicts' => 0, 'unavailable_stocks' => 574,
+                'files' => [['exchange' => 'NSE', 'status' => 'retry_deferred', 'retry_attempt' => 2]]],
+        ]));
+        SyncRun::query()->create([
+            'id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'partial', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
+            'stocks_processed' => 574, 'failures' => 574, 'summary' => 'retry deferred',
+        ]);
+
+        $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
+        $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
+    }
+
+    public function test_newer_failed_run_is_not_muted_by_an_older_healthy_receipt(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => true]);
+        Setting::setValue('universe_price_sync_last_run_json', json_encode([
+            'collection_method' => 'exchange_bhavcopy', 'processed' => 574, 'succeeded' => 0, 'failed' => 574,
+            'completed_at' => now()->subHour()->toIso8601String(), 'rate_limit_hits' => 0,
+            'bulk' => ['file_errors' => 0, 'identity_conflicts' => 0, 'unavailable_stocks' => 574,
+                'files' => [['status' => 'applied'], ['status' => 'receipt_cached']],
+            ],
+        ]));
+        SyncRun::query()->create([
+            'id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'failed', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
+            'stocks_processed' => 574, 'failures' => 574, 'summary' => 'code malfunction after last receipt',
+        ]);
+
+        $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
+        $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
+    }
+
+    public function test_coverage_only_transition_resolves_old_universe_alert_without_telegram(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => true]);
+        Setting::setValue('universe_price_sync_last_run_json', json_encode([
+            'collection_method' => 'exchange_bhavcopy', 'processed' => 574, 'succeeded' => 0, 'failed' => 574,
+            'completed_at' => now()->toIso8601String(), 'rate_limit_hits' => 0,
+            'bulk' => ['file_errors' => 0, 'identity_conflicts' => 0, 'unavailable_stocks' => 574]
+                + $this->validatedDailyFiles(['NSE' => 'receipt_cached', 'BSE' => 'applied']),
+        ]));
+        SyncRun::query()->create([
+            'id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'failed', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
+            'stocks_processed' => 574, 'failures' => 574, 'summary' => 'validated source with row coverage gaps',
+        ]);
+        foreach ([SyncLogService::JOB_DAILY_MARKET_DATA, SyncLogService::JOB_STOCK_MASTER] as $jobName) {
+            SyncRun::query()->create([
+                'id' => (string) Str::uuid(), 'job_name' => $jobName, 'status' => 'success',
+                'started_at' => now(), 'finished_at' => now()->timezone('Asia/Kolkata'),
+            ]);
+        }
+        OperationalAlert::query()->create([
+            'alert_key' => AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED,
+            'severity' => 'critical', 'title' => 'Old partial coverage alert', 'message' => 'old',
+            'context' => null, 'first_triggered_at' => now()->subDay(), 'last_triggered_at' => now()->subHour(),
+        ]);
+        $telegram = $this->createMock(TelegramNotificationService::class);
+        $telegram->expects($this->never())->method('sendAdminOperationalAlert');
+        $this->app->instance(TelegramNotificationService::class, $telegram);
+
+        $result = app(AdminOperationalAlertService::class)->syncAndNotify();
+        $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $result['resolved']);
+        $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, collect($result['active'])->pluck('key')->all());
+    }
+
+    public function test_persistent_exchange_file_failure_notifies_admin_telegram(): void
+    {
+        config(['portfolio.universe_price_sync.enabled' => true]);
+        $nse = $this->validatedDailyFiles(['NSE' => 'applied']);
+        $date = '2026-07-06';
+        $nse['expected_exchanges'][] = 'BSE';
+        $nse['expected_files'][] = ['exchange' => 'BSE', 'date' => $date];
+        $nse['files'][] = ['exchange' => 'BSE', 'date' => $date, 'status' => 'failed', 'retry_attempt' => 1,
+            'retry_after' => now()->addMinutes(5)->toIso8601String(),
+            'failure_stage' => 'exchange_fetch', 'error' => 'temporary source transport failure'];
+        $samples = [];
+        $errors = ['BSE:2026-07-06: temporary source transport failure'];
+        foreach (range(1, 5) as $index) {
+            $symbol = 'BSETEST'.$index;
+            $samples[] = ['symbol' => $symbol, 'exchange' => 'BSE', 'reason' => 'required_history_unavailable',
+                'ranges' => [['from' => $date, 'to' => $date]]];
+            $errors[] = $symbol.': required sessions remain unavailable after exchange bhavcopy collection';
+        }
+        Setting::setValue('universe_price_sync_last_run_json', json_encode([
+            'collection_method' => 'exchange_bhavcopy', 'processed' => 10, 'succeeded' => 5, 'failed' => 5,
+            'completed_at' => now()->toIso8601String(), 'rate_limit_hits' => 0,
+            'errors' => $errors,
+            'bulk' => ['file_errors' => 1, 'identity_conflicts' => 0, 'unavailable_stocks' => 5,
+                'unavailable_samples' => $samples] + $nse,
+        ]));
+        SyncRun::query()->create([
+            'id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'partial', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
+            'stocks_processed' => 10, 'failures' => 5, 'summary' => 'BSE exchange file persistently failed',
+        ]);
+        $messages = [];
+        $telegram = $this->createStub(TelegramNotificationService::class);
+        $telegram->method('sendAdminOperationalAlert')
+            ->willReturnCallback(function (string $message) use (&$messages): array {
+                $messages[] = $message;
+                return ['sent' => true, 'recipients' => 1];
+            });
+        $this->app->instance(TelegramNotificationService::class, $telegram);
+        $firstResult = app(AdminOperationalAlertService::class)->syncAndNotify();
+        $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, collect($firstResult['active'])->pluck('key')->all());
+        $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $firstResult['notified']);
+        $this->assertFalse(collect($messages)->contains(fn (string $message) => str_contains($message, 'Universe daily bhavcopy sync failed')));
+
+        $retryPayload = json_decode((string) Setting::getValue('universe_price_sync_last_run_json'), true);
+        $retryPayload['bulk']['files'][1]['retry_attempt'] = 2;
+        Setting::setValue('universe_price_sync_last_run_json', json_encode($retryPayload));
+        $result = app(AdminOperationalAlertService::class)->syncAndNotify();
+        $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $result['notified']);
+        $this->assertTrue(collect($messages)->contains(fn (string $message) => str_contains($message, 'Universe daily bhavcopy sync failed')));
     }
 
     public function test_weekend_does_not_use_maintenance_overdue_threshold_when_skipped(): void

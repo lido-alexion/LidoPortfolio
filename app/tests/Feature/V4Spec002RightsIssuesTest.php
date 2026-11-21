@@ -127,7 +127,7 @@ class V4Spec002RightsIssuesTest extends TestCase
         $this->assertEqualsWithDelta(150.0, (float) $holding->quantity, 0.0001);
         $this->assertEqualsWithDelta(14_000.0, (float) $holding->invested_amount, 0.0001);
         $this->assertEqualsWithDelta(14_000.0 / 150.0, (float) $holding->avg_buy_price, 0.0001);
-        $this->assertEqualsWithDelta($cashBefore - 4000.0, app(CashManagementService::class)->balance($profile), 0.0001);
+        $this->assertEqualsWithDelta($cashBefore - 4_000.0 - (float) $tx->fees, app(CashManagementService::class)->balance($profile), 0.0001);
         $this->assertSame(0, CorporateAction::query()->count());
     }
 

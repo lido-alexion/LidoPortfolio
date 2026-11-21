@@ -187,6 +187,17 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
             }
             return json(route, { user: options.user ?? TEST_USER });
         }
+        // The authenticated app shell reads broker status independently of the
+        // page under test. Keep this as an explicit safe fixture so unrelated
+        // strict journey guards do not mistake that read for an unmocked route.
+        if (path.endsWith('/api/v1/broker/status') && method === 'GET') {
+            return json(route, apiEnvelope(options.brokerStatus ?? {
+                configured: true,
+                connected: false,
+                usable: false,
+                expires_at: null,
+            }));
+        }
         if (path.endsWith('/api/auth/login') && method === 'POST') {
             if (remainingLoginFailures > 0) {
                 remainingLoginFailures -= 1;

@@ -6,7 +6,6 @@ import TransactionDateInput from '../components/TransactionDateInput';
 import useApiGet from '../hooks/useApiGet';
 import { runApiMutation } from '../hooks/useApiMutation';
 import { showToast } from '../toast';
-import { formatInrWhole } from '../utils/tableFormat';
 import { notifyPortfolioDashboardRefresh } from '../utils/portfolioEvents';
 import { usePortfolio } from '../context/PortfolioContext';
 import {
@@ -26,7 +25,7 @@ const OPS = [
 
 function money(v) {
     if (v == null || Number.isNaN(Number(v))) return '—';
-    return formatInrWhole(v);
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 4 }).format(Number(v));
 }
 
 function entryTypeLabel(type) {
@@ -72,6 +71,9 @@ export default function CashManagementPage() {
     const [summary, setSummary] = useState(null);
     const [ledger, setLedger] = useState([]);
     const [statement, setStatement] = useState(null);
+    const [statementCursor, setStatementCursor] = useState({ profileId: null, page: 1, perPage: 25 });
+    const statementPage = statementCursor.profileId === profileId ? statementCursor.page : 1;
+    const statementPerPage = statementCursor.profileId === profileId ? statementCursor.perPage : 25;
     const [showReservations, setShowReservations] = useState(false);
     const [op, setOp] = useState('deposit');
     const [amount, setAmount] = useState('');
@@ -84,6 +86,7 @@ export default function CashManagementPage() {
     const [allocDraft, setAllocDraft] = useState([]);
     const [allocBusy, setAllocBusy] = useState(false);
     const [exporting, setExporting] = useState(false);
+    const [editing, setEditing] = useState(null);
 
     useEffect(() => {
         if (!profileId) {
@@ -94,14 +97,14 @@ export default function CashManagementPage() {
     }, [profileId]);
 
     const { loading, error, reload: load } = useApiGet({
-        deps: [profileId],
+        deps: [profileId, statementPage, statementPerPage],
         enabled: Boolean(profileId),
         errorFallback: 'Failed to load cash',
         onError: () => {},
         request: async () => {
             const [summaryRes, ledgerRes] = await Promise.all([
                 api.get('/cash', { params: { include_reservations: true }, skipErrorToast: true }),
-                api.get('/cash/statement', { params: { per_page: 100 }, skipErrorToast: true }),
+                api.get('/cash/statement', { params: { page: statementPage, per_page: statementPerPage, order: 'desc' }, skipErrorToast: true }),
             ]);
             const nextSummary = summaryRes.data?.data || null;
             const nextStatement = ledgerRes.data?.data || null;
@@ -109,6 +112,8 @@ export default function CashManagementPage() {
             setSummary(nextSummary);
             setStatement(nextStatement);
             setLedger(nextLedger);
+            const lastPage = Math.max(1, Number(nextStatement?.pagination?.last_page) || 1);
+            if (statementPage > lastPage) setStatementCursor((cursor) => ({ ...cursor, profileId, page: lastPage }));
             const strategies = Array.isArray(nextSummary?.strategies) ? nextSummary.strategies : [];
             setAllocDraft(strategies.map((row) => ({
                 strategy_id: row.strategy_id,
@@ -125,6 +130,14 @@ export default function CashManagementPage() {
         setTransactionDateInput(formatTransactionDateDisplay(today));
     };
 
+    const clearMovementForm = () => {
+        setEditing(null);
+        setOp('deposit');
+        setAmount('');
+        setRemarks('');
+        resetFormDates();
+    };
+
     const submitMutation = async (e) => {
         e.preventDefault();
         const selected = OPS.find((o) => o.id === op) || OPS[0];
@@ -132,15 +145,15 @@ export default function CashManagementPage() {
         if (amount === '' || amount === '-' || Number.isNaN(num)
             || (op !== 'adjust' && !(num > 0))
             || (op === 'adjust' && num === 0)) {
-            showToast(op === 'adjust' ? 'Enter a non-zero whole-rupee amount' : 'Enter a positive whole-rupee amount', 'danger');
+            showToast(op === 'adjust' ? 'Enter a non-zero amount' : 'Enter a positive amount', 'danger');
             return;
         }
-        if (!Number.isInteger(num)) {
-            showToast('Amount must be a whole number of rupees', 'danger');
+        if (!/^[-+]?\d+(\.\d{1,4})?$/.test(amount)) {
+            showToast('Enter an amount with up to four decimal places', 'danger');
             return;
         }
         if (op === 'withdraw') {
-            const available = Number(summary?.available_investable_cash ?? 0);
+            const available = withdrawalCapacity;
             if (num > available) {
                 showToast(`Withdrawal cannot exceed available cash (${money(available)})`, 'danger');
                 return;
@@ -157,11 +170,14 @@ export default function CashManagementPage() {
         setBusy(true);
         try {
             await runApiMutation(async () => {
-                await api.post(selected.endpoint, {
-                    amount: num,
+                const payload = {
+                    amount,
                     remarks: remarks.trim() || undefined,
                     transaction_date: transactionDate,
-                }, { skipErrorToast: true });
+                };
+                if (editing) await api.put(`/cash/ledger/${editing.id}`, payload, { skipErrorToast: true });
+                else await api.post(selected.endpoint, payload, { skipErrorToast: true });
+                setEditing(null);
                 setAmount('');
                 setRemarks('');
                 resetFormDates();
@@ -178,9 +194,41 @@ export default function CashManagementPage() {
 
     const reservations = summary?.reservations || [];
     const selectedOp = OPS.find((o) => o.id === op) || OPS[0];
-    const availableCash = Number(summary?.available_physical_cash ?? summary?.available_investable_cash ?? 0);
+    const availableCash = Number(summary?.available_investable_cash ?? summary?.available_physical_cash ?? 0);
     const allocSum = allocDraft.reduce((sum, row) => sum + (Number(row.allocation_pct) || 0), 0);
     const allocSumIs100 = Math.abs(allocSum - 100) <= 0.01;
+    const currentBalance = Number(summary?.cash_balance ?? 0);
+    const oldSignedAmount = editing ? Number(ledger.find((entry) => entry.id === editing.id)?.amount) : 0;
+    const withdrawalCapacity = Math.max(0, availableCash
+        + (editing && Number.isFinite(oldSignedAmount) && oldSignedAmount < 0 ? -oldSignedAmount : 0));
+    const entered = amount.trim() === '' || !/^[-+]?\d+(\.\d{0,4})?$/.test(amount) ? null : Number(amount);
+    const newSignedAmount = entered == null ? null : (op === 'withdraw' ? -entered : entered);
+    const previewBalance = newSignedAmount == null ? null : currentBalance - (Number.isFinite(oldSignedAmount) ? oldSignedAmount : 0) + newSignedAmount;
+    const previewTone = previewBalance == null || Math.abs(previewBalance - currentBalance) < 0.00005 ? 'text-body' : previewBalance > currentBalance ? 'text-success' : 'text-danger';
+    const pagination = statement?.pagination;
+    const statementPagination = (position) => pagination && pagination.total > 0 ? (
+        <div className={`d-flex flex-wrap align-items-center justify-content-between gap-2 p-2 ${position === 'top' ? 'border-bottom' : 'border-top'}`}>
+            <div className="small text-muted" aria-live="polite">
+                {pagination.total === 0 ? 'No entries' : `Showing ${((pagination.page - 1) * pagination.per_page) + 1}–${Math.min(pagination.page * pagination.per_page, pagination.total)} of ${pagination.total}`}
+            </div>
+            <div className="d-flex align-items-center gap-2">
+                <label className="small" htmlFor={`cash-statement-page-size-${position}`}>Rows per page</label>
+                <select
+                    id={`cash-statement-page-size-${position}`}
+                    className="form-select form-select-sm"
+                    style={{ width: 'auto' }}
+                    value={statementPerPage}
+                    onChange={(event) => setStatementCursor({ profileId, page: 1, perPage: Number(event.target.value) })}
+                    aria-label="Cash statement rows per page"
+                >
+                    {[25, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
+                </select>
+                <button type="button" className="btn btn-sm btn-outline-secondary" aria-label="Previous cash statement page" disabled={pagination.page <= 1 || loading} onClick={() => setStatementCursor({ profileId, page: Math.max(1, statementPage - 1), perPage: statementPerPage })}>Previous</button>
+                <span className="small" aria-label={`Page ${pagination.page} of ${pagination.last_page}`}>Page {pagination.page} of {pagination.last_page}</span>
+                <button type="button" className="btn btn-sm btn-outline-secondary" aria-label="Next cash statement page" disabled={pagination.page >= pagination.last_page || loading} onClick={() => setStatementCursor({ profileId, page: Math.min(pagination.last_page, statementPage + 1), perPage: statementPerPage })}>Next</button>
+            </div>
+        </div>
+    ) : null;
 
     const saveAllocations = async () => {
         if (!allocDraft.length) {
@@ -491,7 +539,7 @@ export default function CashManagementPage() {
                     <CapitalRecallPanel profileId={profileId} />
 
                     <div className="card mb-3">
-                        <div className="card-header">Record cash movement</div>
+                        <div className="card-header">{editing ? 'Edit cash movement' : 'Record cash movement'}</div>
                         <div className="card-body">
                             <div className="btn-group mb-3" role="group" aria-label="Cash operation">
                                 {OPS.map((o) => (
@@ -499,6 +547,7 @@ export default function CashManagementPage() {
                                         key={o.id}
                                         type="button"
                                         className={`btn btn-sm ${op === o.id ? 'btn-primary' : 'btn-outline-primary'}`}
+                                        disabled={Boolean(editing)}
                                         onClick={() => {
                                             setOp(o.id);
                                             setAmount('');
@@ -513,16 +562,20 @@ export default function CashManagementPage() {
                                     <label className="form-label small mb-0" htmlFor="cash-amount">Amount</label>
                                     <NumberInput
                                         id="cash-amount"
-                                        step="1"
-                                        min={op === 'adjust' ? undefined : '1'}
-                                        max={op === 'withdraw' ? String(Math.max(0, Math.floor(availableCash))) : undefined}
-                                        allowDecimals={false}
+                                        step="0.0001"
+                                        min={op === 'adjust' ? undefined : '0.0001'}
+                                        max={op === 'withdraw' ? String(withdrawalCapacity) : undefined}
+                                        allowDecimals
                                         allowNegative={op === 'adjust'}
                                         placeholder={selectedOp.amountPlaceholder}
                                         value={amount}
                                         onChange={(e) => setAmount(e.target.value)}
                                         required
                                     />
+                                    <div className="small mt-1" role="status" aria-live="polite">
+                                        <div>Current balance: {money(summary?.cash_balance)}</div>
+                                        <div className={previewTone}>Updated balance: {previewBalance == null ? 'Enter a valid amount' : `${money(previewBalance)}${previewBalance > currentBalance ? ' (higher)' : previewBalance < currentBalance ? ' (lower)' : ' (unchanged)'}`}</div>
+                                    </div>
                                 </div>
                                 <div className="col-12 col-md-3">
                                     <label className="form-label small mb-0" htmlFor="cash-date">Transaction date</label>
@@ -553,8 +606,9 @@ export default function CashManagementPage() {
                                 </div>
                                 <div className="col-auto">
                                     <button type="submit" className="btn btn-sm btn-primary" disabled={busy || !profileId}>
-                                        {busy ? 'Saving…' : selectedOp.label}
+                                        {busy ? 'Saving…' : editing ? 'Save edit' : selectedOp.label}
                                     </button>
+                                    {editing ? <button type="button" className="btn btn-sm btn-outline-secondary ms-2" onClick={clearMovementForm}>Cancel edit</button> : null}
                                 </div>
                             </form>
                         </div>
@@ -570,6 +624,7 @@ export default function CashManagementPage() {
                             ) : null}
                         </div>
                         <div className="card-body p-0">
+                            {statementPagination('top')}
                             {ledger.length === 0 ? (
                                 <p className="text-muted mb-0 p-3">No cash ledger entries yet. Deposit cash to start.</p>
                             ) : (
@@ -585,6 +640,7 @@ export default function CashManagementPage() {
                                                 <th className="text-end">Running balance</th>
                                                 <th>Remarks</th>
                                                 <th>Links</th>
+                                                <th>Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -592,7 +648,7 @@ export default function CashManagementPage() {
                                                 <tr key={entry.id}>
                                                     <td className="small">{fmtEntryDate(entry)}</td>
                                                     <td className="small text-muted">{fmtWhen(entry.created_at)}</td>
-                                                    <td>{entryTypeLabel(entry.entry_type)}</td>
+                                                    <td>{entry.entry_classification === 'derived_opening_assumption' ? 'Derived opening assumption' : entryTypeLabel(entry.entry_type)}</td>
                                                     <td className="small text-capitalize">{String(entry.category || 'internal').replace('_', ' ')}</td>
                                                     <td className={`text-end ${Number(entry.amount) < 0 ? 'text-danger' : Number(entry.amount) > 0 ? 'text-success' : ''}`}>
                                                         {money(entry.amount)}
@@ -605,12 +661,31 @@ export default function CashManagementPage() {
                                                         {entry.recommendation_id ? `Rec #${entry.recommendation_id}` : ''}
                                                         {!entry.transaction_id && !entry.recommendation_id ? '—' : ''}
                                                     </td>
+                                                    <td className="text-nowrap">
+                                                        {['deposit', 'withdrawal', 'adjustment'].includes(entry.entry_type) && entry.entry_classification !== 'derived_opening_assumption' && !entry.reversal_of_entry_id && !entry.reversed_by_entry_id ? <>
+                                                            <button type="button" className="btn btn-link btn-sm px-1" onClick={() => {
+                                                                setEditing({ id: entry.id });
+                                                                setOp(entry.entry_type === 'withdrawal' ? 'withdraw' : entry.entry_type === 'adjustment' ? 'adjust' : 'deposit');
+                                                                setAmount(entry.entry_type === 'adjustment' ? String(entry.amount) : String(Math.abs(Number(entry.amount))));
+                                                                setRemarks(entry.reason || '');
+                                                                const entryDate = entry.entry_date || getLocalTodayDateString();
+                                                                setTransactionDate(entryDate);
+                                                                setTransactionDateInput(formatTransactionDateDisplay(entryDate));
+                                                            }}>Edit</button>
+                                                            <button type="button" className="btn btn-link btn-sm text-danger px-1" onClick={async () => {
+                                                                if (!window.confirm('Delete this cash entry? A reversal will be recorded in the ledger.')) return;
+                                                                await runApiMutation(() => api.delete(`/cash/ledger/${entry.id}`, { data: { reason: 'Deleted from cash management' }, skipErrorToast: true }), { successMessage: 'Cash entry reversed', errorFallback: 'Could not delete cash entry' });
+                                                                notifyPortfolioDashboardRefresh(); await load();
+                                                            }}>Delete</button>
+                                                        </> : '—'}
+                                                    </td>
                                                 </tr>
                                             ))}
                                         </tbody>
                                     </table>
                                 </div>
                             )}
+                            {statementPagination('bottom')}
                         </div>
                     </div>
                 </>

@@ -20,9 +20,9 @@ class SyncKiteInstrumentsCommand extends Command
             ->orderBy('id')
             ->first();
         if (! $connection) {
-            $this->warn('No Kite connection is available; instrument refresh skipped.');
+            $this->error('No Kite connection is available; instrument refresh was not performed.');
 
-            return self::SUCCESS;
+            return self::FAILURE;
         }
 
         $stock = $this->option('stock') ? \App\Models\Stock::query()->find((int) $this->option('stock')) : null;

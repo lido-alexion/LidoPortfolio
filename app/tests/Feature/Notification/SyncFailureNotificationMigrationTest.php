@@ -71,6 +71,30 @@ class SyncFailureNotificationMigrationTest extends TestCase
         $this->assertSame(1, app(TelegramNotificationService::class)->countAdminTelegramRecipients());
     }
 
+    public function test_admin_operational_info_is_not_mislabeled_as_all_clear(): void
+    {
+        Queue::fake();
+        $admin = User::factory()->create(['is_admin' => true]);
+        NotificationChannelSetting::query()->create([
+            'user_id' => $admin->id,
+            'channel' => 'telegram',
+            'enabled' => true,
+            'configuration' => ['bot_token' => 'account-token', 'chat_id' => 'account-chat'],
+            'health_status' => 'healthy',
+            'verified_at' => now(),
+        ]);
+
+        $result = app(TelegramNotificationService::class)->sendAdminOperationalAlert(
+            "Lido Portfolio — ops alert\n[INFO] Yahoo symbol added to review list\nReview the fundamentals skip list.",
+        );
+
+        $this->assertSame(['sent' => true, 'recipients' => 1], $result);
+        $source = NotificationSource::query()->sole();
+        $this->assertSame('operations.alert', $source->notification_type);
+        $this->assertSame('info', $source->severity);
+        $this->assertSame('Yahoo symbol added to review list', $source->title);
+    }
+
     public function test_admin_operational_alert_without_an_external_channel_reports_not_sent(): void
     {
         User::factory()->create(['is_admin' => true]);

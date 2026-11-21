@@ -1,8 +1,12 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import PortfolioReconciliationCard from '../../../resources/js/src/components/PortfolioReconciliationCard.jsx';
 import { apiMock } from './helpers/mockApi.js';
+import { renderWithKiteConnection } from './helpers/renderWithKiteConnection.jsx';
+
+const usableBroker = { configured: true, connected: true, usable: true, expires_at: '2099-01-01T00:00:00Z' };
+let brokerStatus;
 
 const snapshot = {
     data: {
@@ -24,16 +28,21 @@ const snapshot = {
 };
 
 describe('Portfolio reconciliation card', () => {
-    beforeEach(() => apiMock.get.mockResolvedValue(snapshot));
+    beforeEach(() => {
+        brokerStatus = usableBroker;
+        apiMock.get.mockImplementation((url) => Promise.resolve(url === '/v1/broker/status'
+            ? { data: { data: brokerStatus } } : snapshot));
+    });
 
     it('is limited to live automated execution modes', () => {
-        render(<PortfolioReconciliationCard executionMode="manual" />);
+        renderWithKiteConnection(<PortfolioReconciliationCard executionMode="manual" />);
         expect(screen.queryByText('Broker portfolio reconciliation')).not.toBeInTheDocument();
-        expect(apiMock.get).not.toHaveBeenCalled();
+        expect(apiMock.get.mock.calls.some(([url]) => url === '/reconciliation')).toBe(false);
     });
 
     it('shows independent statuses, execution block, history and immutable evidence', async () => {
-        apiMock.get.mockImplementation((url) => Promise.resolve(url === '/reconciliation/7' ? {
+        apiMock.get.mockImplementation((url) => Promise.resolve(url === '/v1/broker/status'
+            ? { data: { data: brokerStatus } } : url === '/reconciliation/7' ? {
             data: { data: {
                 id: 7,
                 funds_status: 'mismatch',
@@ -46,7 +55,7 @@ describe('Portfolio reconciliation card', () => {
             } },
         } : snapshot));
 
-        render(<PortfolioReconciliationCard executionMode="automatic" />);
+        renderWithKiteConnection(<PortfolioReconciliationCard executionMode="automatic" />);
 
         expect(await screen.findAllByText('Attention required')).toHaveLength(2);
         expect(screen.getAllByText('Reconciled')).toHaveLength(2);
@@ -67,24 +76,57 @@ describe('Portfolio reconciliation card', () => {
 
     it('runs the main action excluding today and refreshes status', async () => {
         apiMock.post.mockResolvedValue({ data: { data: {} } });
-        render(<PortfolioReconciliationCard executionMode="semi_automatic" />);
+        renderWithKiteConnection(<PortfolioReconciliationCard executionMode="semi_automatic" />);
         await screen.findAllByText('Attention required');
         expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
         expect(screen.getByText(/Holdings can use transactions through the previous day/)).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Reconcile excluding today' })).toBeEnabled());
         const mainButton = screen.getByRole('button', { name: 'Reconcile excluding today' });
         expect(mainButton).toBeEnabled();
 
         fireEvent.click(mainButton);
 
         await waitFor(() => expect(apiMock.post).toHaveBeenCalledWith('/reconciliation', { ignore_today_transactions: true }, { skipErrorToast: true }));
-        expect(apiMock.get).toHaveBeenCalledTimes(2);
+        expect(apiMock.get.mock.calls.filter(([url]) => url === '/reconciliation')).toHaveLength(2);
+    });
+
+    it.each([
+        ['broker missing', { configured: false, connected: false, usable: false, expires_at: null }],
+        ['session expired', { configured: true, connected: true, usable: false, expires_at: '2020-01-01T00:00:00Z' }],
+    ])('keeps reconciliation gated when %s', async (_state, status) => {
+        brokerStatus = status;
+        renderWithKiteConnection(<PortfolioReconciliationCard executionMode="automatic" />);
+        expect(await screen.findByRole('button', { name: 'Reconcile excluding today' })).toBeDisabled();
+        expect(apiMock.post).not.toHaveBeenCalled();
+    });
+
+    it('fails closed when broker status is unavailable', async () => {
+        apiMock.get.mockImplementation((url) => url === '/v1/broker/status'
+            ? Promise.reject(new Error('status unavailable')) : Promise.resolve(snapshot));
+        renderWithKiteConnection(<PortfolioReconciliationCard executionMode="automatic" />);
+        expect(await screen.findByRole('button', { name: 'Reconcile excluding today' })).toBeDisabled();
+        expect(await screen.findByText(/Kite status is unavailable/)).toBeInTheDocument();
+        expect(apiMock.post).not.toHaveBeenCalled();
+    });
+
+    it('checks fresh broker status immediately before posting reconciliation', async () => {
+        renderWithKiteConnection(<PortfolioReconciliationCard executionMode="automatic" />);
+        const button = await screen.findByRole('button', { name: 'Reconcile excluding today' });
+        await waitFor(() => expect(button).toBeEnabled());
+        const statusReadsBeforeClick = apiMock.get.mock.calls.filter(([url]) => url === '/v1/broker/status').length;
+        brokerStatus = { configured: true, connected: true, usable: false, expires_at: null };
+        fireEvent.click(button);
+        await waitFor(() => expect(apiMock.get.mock.calls.filter(([url]) => url === '/v1/broker/status')).toHaveLength(statusReadsBeforeClick + 1));
+        await waitFor(() => expect(button).toBeDisabled());
+        expect(apiMock.post).not.toHaveBeenCalled();
     });
 
     it('exposes an accessible dropdown action to include today', async () => {
         apiMock.post.mockResolvedValue({ data: { data: {} } });
-        render(<PortfolioReconciliationCard executionMode="automatic" />);
+        renderWithKiteConnection(<PortfolioReconciliationCard executionMode="automatic" />);
         await screen.findAllByText('Attention required');
-        const trigger = screen.getByRole('button', { name: 'Open menu' });
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Reconcile excluding today' })).toBeEnabled());
+        const trigger = screen.getByRole('button', { name: 'Reconcile excluding today menu' });
         expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
         expect(trigger).toHaveAttribute('aria-expanded', 'false');
         fireEvent.click(trigger);
@@ -98,9 +140,10 @@ describe('Portfolio reconciliation card', () => {
     });
 
     it('closes the menu on Escape and outside click', async () => {
-        render(<PortfolioReconciliationCard executionMode="automatic" />);
+        renderWithKiteConnection(<PortfolioReconciliationCard executionMode="automatic" />);
         await screen.findAllByText('Attention required');
-        const trigger = screen.getByRole('button', { name: 'Open menu' });
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Reconcile excluding today' })).toBeEnabled());
+        const trigger = screen.getByRole('button', { name: 'Reconcile excluding today menu' });
         fireEvent.click(trigger);
         expect(screen.getByRole('menu')).toBeInTheDocument();
         fireEvent.keyDown(document, { key: 'Escape' });
@@ -114,11 +157,12 @@ describe('Portfolio reconciliation card', () => {
     it('disables both actions while reconciliation is busy', async () => {
         let resolvePost;
         apiMock.post.mockReturnValue(new Promise((resolve) => { resolvePost = resolve; }));
-        render(<PortfolioReconciliationCard executionMode="automatic" />);
+        renderWithKiteConnection(<PortfolioReconciliationCard executionMode="automatic" />);
         await screen.findAllByText('Attention required');
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Reconcile excluding today' })).toBeEnabled());
         fireEvent.click(screen.getByRole('button', { name: 'Reconcile excluding today' }));
-        expect(screen.getByRole('button', { name: 'Reconciling…' })).toBeDisabled();
-        expect(screen.getByRole('button', { name: 'Open menu' })).toBeDisabled();
+        expect(await screen.findByRole('button', { name: 'Reconciling…' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Reconciling… menu' })).toBeDisabled();
         await act(async () => resolvePost({ data: { data: {} } }));
         await waitFor(() => expect(screen.getByRole('button', { name: 'Reconcile excluding today' })).toBeEnabled());
     });

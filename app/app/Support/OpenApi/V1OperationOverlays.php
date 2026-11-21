@@ -51,6 +51,19 @@ final class V1OperationOverlays
         ];
 
         return V1AcceptanceOverlays::all() + V1BootstrapOperationsOverlays::all() + V1BootstrapCoverageOverlays::all() + V1BootstrapScheduleOverlays::all() + V1BootstrapOperationalOutcomeOverlays::all() + V1BootstrapIntegrationOverlays::all() + [
+            'DELETE /api/v1/admin/fundamentals/yahoo-no-data-skips/{stock}' => [
+                'summary' => 'Remove Yahoo no-data skip and reset counter',
+                'description' => 'Removes the Yahoo skip state and resets consecutive no-data observations to zero. Records the admin actor. Requires admin access.',
+                'pathParameterSchemas' => ['stock' => ['type' => 'integer']],
+                'noBody' => true,
+            ],
+            'POST /api/v1/admin/fundamentals/yahoo-no-data-skips/{stock}/fetch' => [
+                'summary' => 'Manually fetch a skipped Yahoo issuer',
+                'description' => 'Runs one admin-initiated fundamentals fetch for a skipped issuer. The skip remains active even when facts are returned; remove the skip explicitly to resume scheduled attempts. Requires admin access.',
+                'pathParameterSchemas' => ['stock' => ['type' => 'integer']],
+                'successStatus' => '201',
+                'noBody' => true,
+            ],
             'GET /api/v1/artifact-library/bundle-deployments/{uuid}' => [
                 'summary' => 'Read Bundle deployment evidence',
                 'description' => 'Reads the exact Bundle deployment for the authenticated requester and active Portfolio. Returns allowlisted status and member revision evidence; performs no mutation.',

@@ -26,7 +26,30 @@ Metadata must match canonical NSE symbol and any nonempty current master ISIN. T
 
 Observations retain a full decoded-response envelope (`quote_metadata` plus `equity_quote`), its canonical JSON SHA-256 and the actual quote operation URL. Legacy direct `recordObservation` payloads retain their original legacy URL. Existing rows and first-observed timestamps are not rewritten. Manual overrides keep precedence, and observation time does not become an official historical effective date.
 
-The existing canonical taxonomy and provider identifier remain unchanged. The sole added compatibility translation is the observed INDUSTRY label `IT - Software` to existing canonical `IT Services`, following the already approved `Software` to `IT Services` convention. This is an application mapping; it is not a claim that NSE itself uses the canonical label `IT Services`. The separate `Software Products` mapping is unchanged. No policy derives from `basicIndustry`, and other unknown labels remain explicit failures.
+The existing canonical taxonomy and provider identifier remain unchanged. The initial compatibility translation mapped the observed INDUSTRY label `IT - Software` to approved `IT Services` following the existing `Software` convention. PR #306 subsequently added 14 exact NSE source-pair translations into already-approved canonical sector/industry pairs. These are application mappings, not claims that NSE itself uses our canonical labels. The separate `Software Products` mapping is unchanged. No policy derives from `basicIndustry`; unresolved labels remain explicit failures.
+
+## Remaining source-pair coverage (15 November 2026)
+
+The supplied read-only source-label snapshot contained 49 failing stocks across 28 pairs. The mappings already present after PR #306 cover 14 pairs and 24 stocks. The other 25 stocks span the 14 exact pairs below. None has a defensible one-to-one destination in `nse-indices-4-tier-v1`; the current pair mapping deliberately leaves each unresolved, and the service must continue to reject it without creating an observation.
+
+| NSE source sector | NSE source industry | Stocks | Coverage gap |
+| --- | --- | ---: | --- |
+| Healthcare | Pharmaceuticals & Biotechnology | 5 | The canonical taxonomy has Pharmaceuticals but no Biotechnology industry. The combined source label cannot safely be reduced to only Pharmaceuticals. |
+| Chemicals | Chemicals & Petrochemicals | 4 | No Chemicals or Petrochemicals canonical sector or industry exists. |
+| Services | Commercial Services & Supplies | 3 | No approved Services sector or corresponding industry exists. |
+| Construction Materials | Cement & Cement Products | 2 | No approved construction-materials or cement industry exists. |
+| Consumer Services | Leisure Services | 2 | The canonical Other Consumer Services industry is broader and does not establish an exact leisure mapping. |
+| Fast Moving Consumer Goods | Agricultural Food & other Products | 1 | The combined source label includes “other products”; mapping all of it to Food Products would overstate equivalence. |
+| Diversified | Diversified | 1 | No Diversified canonical sector or industry exists. |
+| Capital Goods | Industrial Manufacturing | 1 | Industrial Products is not an evidenced synonym for all industrial manufacturing. |
+| Realty | Realty | 1 | No Realty or Real Estate canonical sector or industry exists. |
+| Services | Transport Services | 1 | No approved Services or transport-services canonical pair exists. |
+| Metals & Mining | Metals & Minerals Trading | 1 | Trading is not equivalent to the canonical Minerals & Mining extraction industry. |
+| Services | Transport Infrastructure | 1 | No approved Services or transport-infrastructure canonical pair exists. |
+| Capital Goods | Aerospace & Defense | 1 | No Aerospace or Defense industry exists; mapping to Industrial Products or Electrical Equipment would be speculative. |
+| Chemicals | Fertilizers & Agrochemicals | 1 | No Chemicals, Fertilizers or Agrochemicals canonical industry exists. |
+
+These gaps do not justify changing the approved four-tier taxonomy or creating generic fallback labels. To cover them, the owner would need to approve a versioned taxonomy policy grounded in the official classification structure and explicit treatment of mixed/broader labels. Until then, the supported choices are to keep these observations unknown or use a separately reviewed canonical manual override where appropriate. Any taxonomy extension must preserve sector/industry relationships and add evidence plus regression coverage before mappings are enabled. `StockClassificationAdminTest` now exercises every pair above and verifies that rejection retains the exact source labels and writes no observation.
 
 HTTP, JSON, identity, shape and taxonomy failures all stay inside the refresh attempt's bounded retry/backoff path; they cannot advance successful-check state or create an observation. Existing approved provider observation and request behavior remain enabled. The new route has fixed public operation `nse.quote_api`; function, symbol, series, market and body values never enter public incident identity or titles.
 

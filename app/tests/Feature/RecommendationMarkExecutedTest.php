@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Engines\Execution\ExecutionEngine;
 use App\Engines\Recommendation\RecommendationEngine;
+use App\Models\Holding;
 use App\Models\Stock;
 use App\Models\TradingRecommendation;
 use App\Models\Transaction;
@@ -42,6 +43,8 @@ class RecommendationMarkExecutedTest extends TestCase
 
         $fill = $this->createBuy($profile, $stock, $user, 2, 100, 1);
         $fill->forceFill(['recommendation_id' => $rec->id])->save();
+        $holdingBefore = Holding::query()->where('profile_id', $profile->id)->where('stock_id', $stock->id)->firstOrFail();
+        $cashBefore = app(CashManagementService::class)->balance($profile);
 
         $result = app(RecommendationEngine::class)->markExecuted($rec->fresh(), $fill);
 
@@ -49,8 +52,13 @@ class RecommendationMarkExecutedTest extends TestCase
         $this->assertSame((int) $fill->id, (int) $result->executed_transaction_id);
         $this->assertNotNull($result->executed_at);
         $this->assertSame(TradingRecommendation::RESERVATION_CONVERTED, $result->reservation_status);
-        $this->assertEqualsWithDelta(201.0, (float) $result->executed_amount, 0.0001);
+        $this->assertEqualsWithDelta(0.01, (float) $fill->fees, 0.0001);
+        $this->assertEqualsWithDelta(200.0 + (float) $fill->fees, (float) $result->executed_amount, 0.0001);
         $this->assertEqualsWithDelta(0.0, (float) $result->reserved_amount, 0.0001);
+        $holdingAfter = $holdingBefore->fresh();
+        $this->assertEqualsWithDelta((float) $holdingBefore->quantity, (float) $holdingAfter->quantity, 0.0001);
+        $this->assertEqualsWithDelta((float) $holdingBefore->invested_amount, (float) $holdingAfter->invested_amount, 0.0001);
+        $this->assertEqualsWithDelta($cashBefore, app(CashManagementService::class)->balance($profile), 0.0001);
     }
 
     public function test_execution_engine_delegates_mark_executed_to_recommendation_engine(): void

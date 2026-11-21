@@ -1,41 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import api from '../api';
 import { runApiMutation } from '../hooks/useApiMutation';
+import { useKiteConnection } from '../context/KiteConnectionContext';
 import { tosData } from '../utils/tosEnvelope';
 
-function isBrokerStatus(value) {
-    return value && typeof value === 'object'
-        && typeof value.configured === 'boolean'
-        && typeof value.connected === 'boolean'
-        && typeof value.usable === 'boolean';
-}
-
 export default function BrokerConnectionPanel() {
-    const [status, setStatus] = useState(null);
-    const [statusState, setStatusState] = useState('loading');
+    const { status, state: statusState, refresh: load } = useKiteConnection();
     const [busy, setBusy] = useState(false);
-
-    const load = async () => {
-        setStatusState('loading');
-        try {
-            const res = await api.get('/v1/broker/status', { skipErrorToast: true });
-            const nextStatus = tosData(res);
-            if (!isBrokerStatus(nextStatus)) {
-                setStatus(null);
-                setStatusState('unavailable');
-                return;
-            }
-            setStatus(nextStatus);
-            setStatusState('confirmed');
-        } catch {
-            setStatus(null);
-            setStatusState('unavailable');
-        }
-    };
-
-    useEffect(() => {
-        void load();
-    }, []);
 
     const connect = async () => {
         setBusy(true);
@@ -59,7 +30,6 @@ export default function BrokerConnectionPanel() {
                 await api.post('/v1/broker/kite/disconnect', {}, { skipErrorToast: true });
             }, { successMessage: 'Kite disconnected', errorFallback: 'Could not disconnect Kite' });
             if (ok) {
-                setStatus(null);
                 await load();
             }
         } finally {

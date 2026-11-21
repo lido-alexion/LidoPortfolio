@@ -104,14 +104,15 @@ class TelegramNotificationService
 
         $severity = str_contains($message, '[CRITICAL]') ? 'critical'
             : (str_contains($message, '[WARNING]') ? 'action_required' : 'info');
+        $allClear = ! str_contains($message, '[INFO]') && str_contains($message, 'No active operational alerts');
         $title = collect(preg_split('/\R/', $message) ?: [])
-            ->first(fn (string $line) => preg_match('/^\[(CRITICAL|WARNING)\]\s+/', $line) === 1);
+            ->first(fn (string $line) => preg_match('/^\[(CRITICAL|WARNING|INFO)\]\s+/', $line) === 1);
         $title = $title
-            ? (preg_replace('/^\[(CRITICAL|WARNING)\]\s+/', '', $title) ?? 'Operational status')
+            ? (preg_replace('/^\[(CRITICAL|WARNING|INFO)\]\s+/', '', $title) ?? 'Operational status')
             : 'Operational status';
 
         $source = $this->publisher->publishEvent($admins, [
-            'notification_type' => $severity === 'info' ? 'operations.all_clear' : 'operations.alert',
+            'notification_type' => $allClear ? 'operations.all_clear' : 'operations.alert',
             'audience' => 'admin',
             'severity' => $severity,
             'title' => $title,

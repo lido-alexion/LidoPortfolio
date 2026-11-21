@@ -69,8 +69,6 @@ class V4Spec005SellAttributionTest extends TestCase
     {
         [$user, $profile, $stock, $strategyA] = $this->twoOwnerLots();
         $ownerA = Holding::ownerKeyFor((int) $strategyA->id);
-        $cashBefore = app(CashManagementService::class)->balance($profile);
-
         $this->actingAs($user)->withProfileHeader($user, $profile);
         $res = $this->postJson('/api/transactions', $this->sellPayload($stock, 4, 110, [
             'owner_key' => $ownerA,
@@ -88,11 +86,7 @@ class V4Spec005SellAttributionTest extends TestCase
             (float) $this->holding($profile, $stock, Holding::OWNER_UNMANAGED)->quantity,
             0.0001,
         );
-        $this->assertEqualsWithDelta(
-            $cashBefore + 440.0,
-            app(CashManagementService::class)->balance($profile),
-            0.001,
-        );
+        $this->assertCashMatchesPersistedTrades($profile, 100_000.0);
         $this->assertSame(1, Transaction::query()->where('type', 'sell')->count());
         $this->assertSame(2, Transaction::query()->where('type', 'buy')->count());
     }
@@ -465,6 +459,16 @@ class V4Spec005SellAttributionTest extends TestCase
             ->where('owner_key', $ownerKey)
             ->where('quantity', '>', 0)
             ->first();
+    }
+
+    private function assertCashMatchesPersistedTrades($profile, float $opening): void
+    {
+        $expected = Transaction::query()->where('profile_id', $profile->id)->get()->reduce(
+            fn (float $balance, Transaction $transaction): float => $balance + (strtolower($transaction->type) === 'buy' ? -1 : 1)
+                * (float) $transaction->quantity * (float) $transaction->price - (float) $transaction->fees,
+            $opening,
+        );
+        $this->assertEqualsWithDelta($expected, app(CashManagementService::class)->balance($profile), 0.001);
     }
 
     protected function makeStrategy($profile, string $name): TradingStrategy

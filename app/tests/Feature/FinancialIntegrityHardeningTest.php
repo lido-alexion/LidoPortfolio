@@ -80,9 +80,9 @@ class FinancialIntegrityHardeningTest extends TestCase
     public function test_wsb_d1_buy_update_syncs_cash_and_holdings(): void
     {
         [$user, $profile, $stock] = $this->seedUserStock(10_000);
-        $tx = $this->createBuy($profile, $stock, $user, 10, 100); // cost 1000
+        $tx = $this->createBuy($profile, $stock, $user, 10, 100); // notional 1000 plus authoritative fees
         $cash = app(CashManagementService::class);
-        $this->assertEqualsWithDelta(9_000.0, $cash->balance($profile), 0.001);
+        $this->assertEqualsWithDelta(10_000.0 - 1_000.0 - (float) $tx->fees, $cash->balance($profile), 0.001);
 
         $this->actingAs($user)->withProfileHeader($user, $profile);
 
@@ -96,7 +96,8 @@ class FinancialIntegrityHardeningTest extends TestCase
         ]);
 
         $response->assertOk();
-        $this->assertEqualsWithDelta(8_800.0, $cash->balance($profile), 0.001); // 10000 - 1200
+        $updated = $tx->fresh();
+        $this->assertEqualsWithDelta(10_000.0 - 1_200.0 - (float) $updated->fees, $cash->balance($profile), 0.001);
         $holding = Holding::query()->where('profile_id', $profile->id)->where('stock_id', $stock->id)->first();
         $this->assertNotNull($holding);
         $this->assertEqualsWithDelta(10.0, (float) $holding->quantity, 0.001);
@@ -120,9 +121,9 @@ class FinancialIntegrityHardeningTest extends TestCase
             user: $user,
             applyCash: true,
         );
-        // 10000 - 1000 + 600 = 9600
+        // Creating the sell can reallocate the enrolled buy's daily fee cents.
         $cash = app(CashManagementService::class);
-        $this->assertEqualsWithDelta(9_600.0, $cash->balance($profile), 0.001);
+        $this->assertCashMatchesPersistedTrades($profile, 10_000.0, $cash);
 
         $this->actingAs($user)->withProfileHeader($user, $profile);
         $this->putJson('/api/transactions/'.$sell->id, [
@@ -134,8 +135,8 @@ class FinancialIntegrityHardeningTest extends TestCase
             'transaction_date' => now()->toDateString(),
         ])->assertOk();
 
-        // reverse +800 sell, apply +800 → net +200 vs prior sell: 9600 - 600 + 800 = 9800
-        $this->assertEqualsWithDelta(9_800.0, $cash->balance($profile), 0.001);
+        // Grouped daily rounding may reallocate cents to the buy when the sell changes.
+        $this->assertCashMatchesPersistedTrades($profile, 10_000.0, $cash);
     }
 
     public function test_wsb_d1_buy_to_sell_type_change_keeps_economics_consistent(): void
@@ -156,19 +157,30 @@ class FinancialIntegrityHardeningTest extends TestCase
         ])->assertOk();
 
         $cash = app(CashManagementService::class);
-        // reverse second buy (+500) then sell (+550) → 8500 + 500 + 550 = 9550
+        // Reallocation can change the first buy's daily fee when this row changes side.
         // holdings: buy 10 + sell 5 → qty 5
-        $this->assertEqualsWithDelta(9_550.0, $cash->balance($profile), 0.001);
+        $this->assertCashMatchesPersistedTrades($profile, 10_000.0, $cash);
         $holding = Holding::query()->where('profile_id', $profile->id)->where('stock_id', $stock->id)->first();
         $this->assertEqualsWithDelta(5.0, (float) $holding->quantity, 0.001);
+    }
+
+    private function assertCashMatchesPersistedTrades(\App\Models\PortfolioProfile $profile, float $opening, CashManagementService $cash): void
+    {
+        $expected = Transaction::query()->where('profile_id', $profile->id)->get()->reduce(
+            fn (float $balance, Transaction $tx): float => $balance + (strtolower($tx->type) === 'buy' ? -1 : 1)
+                * (float) $tx->quantity * (float) $tx->price - (float) $tx->fees,
+            $opening,
+        );
+        $this->assertEqualsWithDelta($expected, $cash->balance($profile), 0.001);
     }
 
     public function test_wsb_d1_insufficient_cash_on_update_rolls_back(): void
     {
         [$user, $profile, $stock] = $this->seedUserStock(1_000);
-        $tx = $this->createBuy($profile, $stock, $user, 5, 100); // cost 500, balance 500
+        $tx = $this->createBuy($profile, $stock, $user, 5, 100); // notional 500 plus authoritative fees
         $cash = app(CashManagementService::class);
-        $this->assertEqualsWithDelta(500.0, $cash->balance($profile), 0.001);
+        $balanceBeforeUpdate = $cash->balance($profile);
+        $this->assertEqualsWithDelta(1_000.0 - 500.0 - (float) $tx->fees, $balanceBeforeUpdate, 0.001);
 
         $this->actingAs($user)->withProfileHeader($user, $profile);
         $response = $this->putJson('/api/transactions/'.$tx->id, [
@@ -181,7 +193,7 @@ class FinancialIntegrityHardeningTest extends TestCase
         ]);
         $response->assertStatus(422);
 
-        $this->assertEqualsWithDelta(500.0, $cash->balance($profile), 0.001);
+        $this->assertEqualsWithDelta($balanceBeforeUpdate, $cash->balance($profile), 0.001);
         $this->assertDatabaseHas('portfolio_transactions', [
             'id' => $tx->id,
             'quantity' => 5,
@@ -217,7 +229,7 @@ class FinancialIntegrityHardeningTest extends TestCase
         [$user, $profile, $stock] = $this->seedUserStock(5_000);
         $tx = $this->createBuy($profile, $stock, $user, 3, 100);
         $cash = app(CashManagementService::class);
-        $this->assertEqualsWithDelta(4_700.0, $cash->balance($profile), 0.001);
+        $this->assertEqualsWithDelta(5_000.0 - 300.0 - (float) $tx->fees, $cash->balance($profile), 0.001);
 
         $this->actingAs($user)->withProfileHeader($user, $profile);
         $this->deleteJson('/api/transactions/'.$tx->id)->assertOk();
@@ -328,9 +340,9 @@ class FinancialIntegrityHardeningTest extends TestCase
         $this->assertEqualsWithDelta(1_000.0, $cash->balance($profile), 0.001);
 
         // Soft reservation: manual buy may consume balance even while reserved > remaining available.
-        $buy = $this->createBuy($profile, $stock, $user, 5, 100); // 500
+        $buy = $this->createBuy($profile, $stock, $user, 5, 100); // notional 500 plus authoritative fees
         $this->assertNotNull($buy->id);
-        $this->assertEqualsWithDelta(500.0, $cash->balance($profile), 0.001);
+        $this->assertEqualsWithDelta(1_000.0 - 500.0 - (float) $buy->fees, $cash->balance($profile), 0.001);
         $this->assertEqualsWithDelta(800.0, $cash->reservedCash($profile), 0.001);
 
         // Withdraw still respects available (= balance - reserved) under soft model.
@@ -372,7 +384,8 @@ class FinancialIntegrityHardeningTest extends TestCase
         $response->assertCreated()->assertJsonPath('status', 'committed');
 
         $cash = app(CashManagementService::class);
-        $this->assertEqualsWithDelta(1_000.0, $cash->balance($profile), 0.001);
+        $buy = Transaction::query()->where('profile_id', $profile->id)->where('type', 'buy')->latest('id')->firstOrFail();
+        $this->assertEqualsWithDelta(2_000.0 - 1_000.0 - (float) $buy->fees, $cash->balance($profile), 0.001);
         $this->assertEqualsWithDelta(1_500.0, $cash->reservedCash($profile), 0.001);
     }
 

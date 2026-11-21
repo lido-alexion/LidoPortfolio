@@ -83,6 +83,7 @@ import ArtifactLibraryPage from './pages/ArtifactLibraryPage';
 import ArtifactLibraryDetailPage from './pages/ArtifactLibraryDetailPage';
 import DeveloperOptions from './components/DeveloperOptions';
 import { GuidedTourProvider } from './guidedTour/GuidedTourProvider';
+import { KiteConnectionProvider } from './context/KiteConnectionContext';
 
 function AppRoutes() {
     return (
@@ -279,6 +280,7 @@ function AdminAppRoutes() {
 
 function AuthenticatedShell({ user, isDocumentationRoute }) {
     return (
+        <KiteConnectionProvider user={user}>
         <NotificationProvider>
             <SidebarProvider>
                 <GuidedTourProvider user={user}>
@@ -298,6 +300,7 @@ function AuthenticatedShell({ user, isDocumentationRoute }) {
                 </GuidedTourProvider>
             </SidebarProvider>
         </NotificationProvider>
+        </KiteConnectionProvider>
     );
 }
 

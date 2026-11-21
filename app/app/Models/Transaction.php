@@ -40,10 +40,14 @@ class Transaction extends Model
     protected $fillable = [
         'profile_id',
         'stock_id',
+        'execution_exchange',
         'type',
         'quantity',
         'price',
         'fees',
+        'dp_fee_amount',
+        'dp_policy_enrolled',
+        'grouped_fee_policy_enrolled',
         'realized_pl',
         'squared_off_fees',
         'transaction_date',
@@ -67,6 +71,9 @@ class Transaction extends Model
             'quantity' => 'decimal:4',
             'price' => 'decimal:4',
             'fees' => 'decimal:4',
+            'dp_fee_amount' => 'decimal:4',
+            'dp_policy_enrolled' => 'boolean',
+            'grouped_fee_policy_enrolled' => 'boolean',
             'realized_pl' => 'decimal:4',
             'squared_off_fees' => 'decimal:4',
             'transaction_date' => 'date',
@@ -75,6 +82,7 @@ class Transaction extends Model
             'simulation_evidence' => 'array',
             'corporate_action_id' => 'integer',
             'recommendation_id' => 'integer',
+            'execution_exchange' => 'string',
         ];
     }
 

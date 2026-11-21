@@ -66,6 +66,7 @@ class TransactionStockResolverTest extends TestCase
         $this->assertDatabaseHas('portfolio_transactions', [
             'profile_id' => $profile->id,
             'type' => 'buy',
+            'grouped_fee_policy_enrolled' => true,
         ]);
     }
 

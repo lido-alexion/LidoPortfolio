@@ -36,6 +36,7 @@ class FundamentalHistoricalIngestService
         $this->lastProviderChecked = null;
         $rejectedRows = [];
         $lastSourceError = null;
+        $yahooNoData = null;
         foreach ($this->sources as $source) {
             if (! $source->supports($stock)) {
                 continue;
@@ -58,6 +59,9 @@ class FundamentalHistoricalIngestService
                 $sourceRows = $source->fetch($stock, $cadence);
             } catch (ExchangeRequestDeferred $deferred) {
                 throw $deferred;
+            } catch (YahooNoDataOutcome $noData) {
+                $yahooNoData = $noData;
+                continue;
             } catch (Throwable $error) {
                 // Continue only through the already-authorized source order. If
                 // every source fails, surface an error so the job cannot record success.
@@ -91,6 +95,9 @@ class FundamentalHistoricalIngestService
 
         if ($lastSourceError !== null) {
             throw $lastSourceError;
+        }
+        if ($yahooNoData !== null && $rejectedRows === []) {
+            throw $yahooNoData;
         }
 
         // Preserve malformed numeric candidates when providers returned rows,
