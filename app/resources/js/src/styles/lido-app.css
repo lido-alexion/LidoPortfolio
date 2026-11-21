@@ -263,6 +263,28 @@ body {
     padding-left: 0.25rem;
 }
 
+[data-theme='light'] .lido-kite-header-control .btn-outline-warning {
+    --bs-btn-color: #805600;
+    --bs-btn-border-color: #805600;
+    --bs-btn-hover-color: #111827;
+    --bs-btn-hover-bg: #ffc107;
+    --bs-btn-hover-border-color: #805600;
+    --bs-btn-active-color: #111827;
+    --bs-btn-active-bg: #ffc107;
+    --bs-btn-active-border-color: #805600;
+}
+
+[data-theme='dark'] .lido-kite-header-control .btn-outline-warning {
+    --bs-btn-color: #f0c14a;
+    --bs-btn-border-color: #f0c14a;
+    --bs-btn-hover-color: #111827;
+    --bs-btn-hover-bg: #f0c14a;
+    --bs-btn-hover-border-color: #f0c14a;
+    --bs-btn-active-color: #111827;
+    --bs-btn-active-bg: #f0c14a;
+    --bs-btn-active-border-color: #f0c14a;
+}
+
 .lido-global-search {
     position: relative;
     flex: 0 0 auto;
