@@ -274,8 +274,9 @@ try {
         });
         if (!headerOrder) throw new Error();
         stage = 'dashboard_kite_accessible_label';
-        const kitePrimaryButton = kiteControl.getByRole('button', { name: /^(Kite (connected|session expired|status unknown|is not configured)|Connect Kite)/ });
-        if (await kitePrimaryButton.count() !== 1) throw new Error();
+        const kitePrimaryButton = kiteControl.getByRole('button').first();
+        const kitePrimaryLabel = await kitePrimaryButton.getAttribute('aria-label');
+        if (!kitePrimaryLabel || !/^(?:Connect Kite|Kite connected(?: · expires .+)?|Kite session expired · Connect Kite|Kite status unknown · Refresh to check|Kite is not configured on this server)$/.test(kitePrimaryLabel)) throw new Error();
         const safetyControls = header.locator('.lido-execution-safety');
         stage = 'dashboard_kite_safety_controls';
         await safetyControls.waitFor({ state: 'visible' });
