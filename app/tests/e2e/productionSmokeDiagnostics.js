@@ -32,6 +32,16 @@ const AUTHENTICATED_SMOKE_STAGES = new Set([
     'combo_legend_verify_restore',
     'combo_selection_restore',
     'dashboard_kite_feature',
+    'dashboard_document_navigation',
+    'dashboard_identity_response',
+    'dashboard_header_visible',
+    'dashboard_kite_admin_ineligible',
+    'dashboard_kite_status_response',
+    'dashboard_kite_status_shape',
+    'dashboard_kite_control_visible',
+    'dashboard_kite_header_order',
+    'dashboard_kite_accessible_label',
+    'dashboard_kite_safety_controls',
     'dashboard_kite_menu',
     'dashboard_reconciliation_gate',
     'request_safety',
@@ -40,6 +50,23 @@ const AUTHENTICATED_SMOKE_STAGES = new Set([
 // Only fixed labels may cross the production-smoke logging boundary.
 export function safeAuthenticatedSmokeStage(stage) {
     return AUTHENTICATED_SMOKE_STAGES.has(stage) ? stage : 'unknown';
+}
+
+/** Parse only complete, fixed smoke outcome enums; never return child output. */
+export function readSafeAuthenticatedSmokeMarkers(stdout) {
+    const lines = String(stdout).split(/\r?\n/);
+    const one = (pattern, values) => {
+        const matches = lines.map(line => line.match(pattern)).filter(Boolean);
+        return matches.length === 1 && values.includes(matches[0][1]) ? matches[0][1] : null;
+    };
+    const identity = one(/^AUTHENTICATED_SMOKE_IDENTITY:(admin|investor)$/, ['admin', 'investor']);
+    const kiteCoverage = one(/^AUTHENTICATED_SMOKE_KITE_COVERAGE:(verified|not_eligible_admin)$/, ['verified', 'not_eligible_admin']);
+    const kiteStatus = one(/^AUTHENTICATED_SMOKE_KITE_STATUS:(usable|connected_not_usable|configured_disconnected|unconfigured|unavailable)$/, ['usable', 'connected_not_usable', 'configured_disconnected', 'unconfigured', 'unavailable']);
+    const reconciliation = one(/^AUTHENTICATED_SMOKE_RECONCILIATION:(eligible_card_verified|not_eligible_card_absent)$/, ['eligible_card_verified', 'not_eligible_card_absent']);
+    if (!identity || !kiteCoverage || !kiteStatus || !reconciliation) return null;
+    if (identity === 'admin' && (kiteCoverage !== 'not_eligible_admin' || kiteStatus !== 'unavailable')) return null;
+    if (identity === 'investor' && kiteCoverage !== 'verified') return null;
+    return { identity, kiteCoverage, kiteStatus, reconciliation };
 }
 
 // Return only fixed categories; never propagate browser error text or response data.

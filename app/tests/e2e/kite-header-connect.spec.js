@@ -2,14 +2,16 @@ import { test, expect } from '@playwright/test';
 import { installTosApiMocks } from './tosApiMocks.js';
 import { TEST_PORTFOLIO, TEST_USER } from '../js/tos/fixtures/tosApi.js';
 
-async function openDashboard(page, initialStatus) {
-    await installTosApiMocks(page, { user: TEST_USER });
+async function openDashboard(page, initialStatus, user = TEST_USER) {
+    await installTosApiMocks(page, { user });
     let status = initialStatus;
     const actions = [];
+    let statusReads = 0;
     await page.route(/\/api\//, async (route) => {
         const request = route.request();
         const url = new URL(request.url());
         if (url.pathname.endsWith('/api/v1/broker/status')) {
+            statusReads += 1;
             if (status === 'error') return route.fulfill({ status: 503, json: { message: 'unavailable' } });
             return route.fulfill({ json: { success: true, data: status } });
         }
@@ -33,9 +35,17 @@ async function openDashboard(page, initialStatus) {
     });
     await page.goto('/');
     const control = page.locator('.lido-kite-header-control');
-    await expect(control.getByRole('button', { name: /Kite/ }).first()).toBeVisible();
-    return { control, actions, setStatus: (next) => { status = next; } };
+    if (!user.is_admin) await expect(control.getByRole('button', { name: /Kite/ }).first()).toBeVisible();
+    return { control, actions, statusReads: () => statusReads, setStatus: (next) => { status = next; } };
 }
+
+test('administrator shell has no investor Kite header control or broker status read', async ({ page }) => {
+    const admin = { ...TEST_USER, is_admin: true };
+    const { statusReads } = await openDashboard(page, { configured: true, connected: false, usable: false, expires_at: null }, admin);
+    await expect(page.locator('.lido-header')).toBeVisible();
+    await expect(page.locator('.lido-kite-header-control')).toHaveCount(0);
+    expect(statusReads()).toBe(0);
+});
 
 test('disconnected primary starts the dashboard return login flow', async ({ page }) => {
     const { control, actions } = await openDashboard(page, { configured: true, connected: false, usable: false, expires_at: null });
