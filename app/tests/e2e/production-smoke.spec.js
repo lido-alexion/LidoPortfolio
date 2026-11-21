@@ -33,7 +33,10 @@ test('dedicated smoke identity can open a read-only investor page', async () => 
         const { stdout } = await run(process.execPath,
             [fileURLToPath(new URL('./authenticatedProductionSmoke.mjs', import.meta.url))],
             { env: process.env, timeout: 60_000 });
-        expect(stdout.trim()).toBe('AUTHENTICATED_SMOKE_PASSED');
+        const lines = stdout.trim().split(/\r?\n/);
+        expect(lines).toContain('AUTHENTICATED_SMOKE_PASSED');
+        expect(lines.filter(line => /^AUTHENTICATED_SMOKE_KITE_STATUS:(usable|connected_not_usable|configured_disconnected|unconfigured|unavailable)$/.test(line))).toHaveLength(1);
+        expect(lines.filter(line => /^AUTHENTICATED_SMOKE_RECONCILIATION:(eligible_card_verified|not_eligible_card_absent)$/.test(line))).toHaveLength(1);
     } catch (error) {
         const stage = String(error.stdout || '').match(/AUTHENTICATED_SMOKE_FAILED:([a-z_]+)/)?.[1] || 'child_execution';
         const blocked = summarizeProductionSmokeBlocks(error.stdout);

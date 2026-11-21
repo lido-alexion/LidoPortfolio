@@ -31,6 +31,9 @@ const AUTHENTICATED_SMOKE_STAGES = new Set([
     'combo_legend_toggle_restore',
     'combo_legend_verify_restore',
     'combo_selection_restore',
+    'dashboard_kite_feature',
+    'dashboard_kite_menu',
+    'dashboard_reconciliation_gate',
     'request_safety',
 ]);
 

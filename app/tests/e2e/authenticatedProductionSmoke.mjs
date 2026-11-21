@@ -187,8 +187,73 @@ try {
     if (await legend.isChecked() !== checked) throw new Error();
     stage = 'combo_selection_restore';
     await preset.selectOption(openingPreset);
+    stage = 'dashboard_kite_feature';
+    let brokerStatusPayload = null;
+    const brokerStatusResponse = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/v1/broker/status');
+    await page.goto('/');
+    const physicalBrokerStatusResponse = await brokerStatusResponse;
+    if (physicalBrokerStatusResponse.ok()) {
+        const payload = await physicalBrokerStatusResponse.json();
+        const data = payload?.data;
+        if (typeof data?.configured === 'boolean' && typeof data?.connected === 'boolean' && typeof data?.usable === 'boolean') brokerStatusPayload = data;
+    }
+    const header = page.locator('.lido-header');
+    await header.waitFor({ state: 'visible' });
+    const kiteControl = header.locator('.lido-kite-header-control');
+    await kiteControl.waitFor({ state: 'visible' });
+    const headerOrder = await header.locator('.lido-header-actions').evaluate(actions => {
+        const kite = actions.querySelector('.lido-kite-header-control');
+        const safety = actions.querySelector('.lido-execution-safety');
+        return Boolean(kite && safety && (kite.compareDocumentPosition(safety) & Node.DOCUMENT_POSITION_FOLLOWING));
+    });
+    if (!headerOrder) throw new Error();
+    const kiteLabel = await kiteControl.getAttribute('aria-label');
+    if (!kiteLabel || !/^(Kite (connected|session expired|status unknown|is not configured)|Connect Kite)/.test(kiteLabel)) throw new Error();
+    const safetyControls = header.locator('.lido-execution-safety');
+    await safetyControls.waitFor({ state: 'visible' });
+    const emergencyControlsBefore = await safetyControls.locator('button').evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')));
+    if (!emergencyControlsBefore.includes('Emergency Kite disconnect')
+        || !emergencyControlsBefore.includes('Cancel eligible open orders and disconnect Kite')) throw new Error();
+    stage = 'dashboard_kite_menu';
+    const kiteMenuButton = kiteControl.getByRole('button', { name: / menu$/ });
+    if (brokerStatusPayload?.configured === false) {
+        if (!(await kiteMenuButton.isDisabled())) throw new Error();
+    } else {
+        await kiteMenuButton.click();
+        await page.getByRole('menuitem', { name: 'Kite settings', exact: true }).waitFor({ state: 'visible' });
+        const disconnectItem = page.getByRole('menuitem', { name: 'Disconnect Kite…', exact: true });
+        if (brokerStatusPayload?.connected) await disconnectItem.waitFor({ state: 'visible' });
+        else if (await disconnectItem.count()) throw new Error();
+        await kiteMenuButton.click();
+    }
+    if (JSON.stringify(await safetyControls.locator('button').evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')))) !== JSON.stringify(emergencyControlsBefore)) throw new Error();
+    stage = 'dashboard_reconciliation_gate';
+    const reconciliationCard = page.locator('.card').filter({ hasText: 'Broker portfolio reconciliation' });
+    if (await reconciliationCard.count()) {
+        await reconciliationCard.waitFor({ state: 'visible' });
+        const reconcile = reconciliationCard.getByRole('button', { name: 'Reconcile excluding today', exact: true });
+        await reconcile.waitFor({ state: 'visible' });
+        if (await reconciliationCard.getByRole('button', { name: 'Reconcile including today', exact: true }).count()) throw new Error();
+        const brokerUsable = brokerStatusPayload?.usable === true
+            && (!brokerStatusPayload.expires_at || Date.parse(brokerStatusPayload.expires_at) > Date.now());
+        if (brokerUsable ? await reconcile.isDisabled() : !(await reconcile.isDisabled())) throw new Error();
+        if (brokerUsable) {
+            await reconciliationCard.getByRole('button', { name: 'Reconcile excluding today menu', exact: true }).click();
+            await page.getByRole('menuitem', { name: 'Reconcile including today', exact: true }).waitFor({ state: 'visible' });
+            await page.keyboard.press('Escape');
+        }
+    } else if (await page.getByText('Broker portfolio reconciliation', { exact: true }).count()) {
+        throw new Error();
+    }
+    for (const width of [390, 1280]) {
+        await page.setViewportSize({ width, height: 844 });
+        if (!(await kiteControl.isVisible())) throw new Error();
+        if (await reconciliationCard.count() && !(await reconciliationCard.isVisible())) throw new Error();
+    }
     stage = 'request_safety';
     if (blocked) throw new Error();
+    console.log(`AUTHENTICATED_SMOKE_KITE_STATUS:${brokerStatusPayload ? brokerStatusPayload.usable ? 'usable' : brokerStatusPayload.connected ? 'connected_not_usable' : brokerStatusPayload.configured ? 'configured_disconnected' : 'unconfigured' : 'unavailable'}`);
+    console.log(`AUTHENTICATED_SMOKE_RECONCILIATION:${await reconciliationCard.count() ? 'eligible_card_verified' : 'not_eligible_card_absent'}`);
     console.log('AUTHENTICATED_SMOKE_PASSED');
 } catch {
     // Never print Playwright errors: fill arguments or network bodies may contain secrets.
