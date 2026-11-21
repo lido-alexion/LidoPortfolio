@@ -284,16 +284,25 @@ try {
         if (!emergencyControlsBefore.includes('Emergency Kite disconnect')
             || !emergencyControlsBefore.includes('Cancel eligible open orders and disconnect Kite')) throw new Error();
         stage = 'dashboard_kite_menu';
-        const kiteMenuButton = kiteControl.getByRole('button', { name: / menu$/ });
+        const kiteMenuButton = kiteControl.getByRole('button', { name: `${kitePrimaryLabel} menu`, exact: true });
+        if (await kiteMenuButton.count() !== 1) throw new Error();
         if (brokerStatusPayload?.configured === false) {
             if (!(await kiteMenuButton.isDisabled())) throw new Error();
         } else {
+            stage = 'dashboard_kite_menu_open';
             await kiteMenuButton.click();
-            await page.getByRole('menuitem', { name: 'Kite settings', exact: true }).waitFor({ state: 'visible' });
+            await kiteMenuButton.waitFor({ state: 'visible' });
+            await page.waitForFunction(button => button?.getAttribute('aria-expanded') === 'true', await kiteMenuButton.elementHandle());
+            stage = 'dashboard_kite_menu_items';
+            const kiteMenu = page.getByRole('menu');
+            await kiteMenu.waitFor({ state: 'visible' });
+            await kiteMenu.getByRole('menuitem', { name: 'Kite settings', exact: true }).waitFor({ state: 'visible' });
             const disconnectItem = page.getByRole('menuitem', { name: 'Disconnect Kite…', exact: true });
             if (brokerStatusPayload?.connected) await disconnectItem.waitFor({ state: 'visible' });
             else if (await disconnectItem.count()) throw new Error();
+            stage = 'dashboard_kite_menu_close';
             await kiteMenuButton.click();
+            await page.waitForFunction(button => button?.getAttribute('aria-expanded') === 'false', await kiteMenuButton.elementHandle());
         }
         if (JSON.stringify(await safetyControls.locator('button').evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')))) !== JSON.stringify(emergencyControlsBefore)) throw new Error();
         kiteCoverage = 'verified';
