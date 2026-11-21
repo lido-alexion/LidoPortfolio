@@ -208,17 +208,24 @@ try {
     });
     if (!headerOrder) throw new Error();
     const kiteLabel = await kiteControl.getAttribute('aria-label');
-    if (!kiteLabel || !/^Kite (connected|session expired|status unknown|is not configured|Connect Kite)/.test(kiteLabel)) throw new Error();
+    if (!kiteLabel || !/^(Kite (connected|session expired|status unknown|is not configured)|Connect Kite)/.test(kiteLabel)) throw new Error();
     const safetyControls = header.locator('.lido-execution-safety');
+    await safetyControls.waitFor({ state: 'visible' });
     const emergencyControlsBefore = await safetyControls.locator('button').evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')));
+    if (!emergencyControlsBefore.includes('Emergency Kite disconnect')
+        || !emergencyControlsBefore.includes('Cancel eligible open orders and disconnect Kite')) throw new Error();
     stage = 'dashboard_kite_menu';
     const kiteMenuButton = kiteControl.getByRole('button', { name: / menu$/ });
-    await kiteMenuButton.click();
-    await page.getByRole('menuitem', { name: 'Kite settings', exact: true }).waitFor({ state: 'visible' });
-    const disconnectItem = page.getByRole('menuitem', { name: 'Disconnect Kite…', exact: true });
-    if (brokerStatusPayload?.connected) await disconnectItem.waitFor({ state: 'visible' });
-    else if (await disconnectItem.count()) throw new Error();
-    await kiteMenuButton.click();
+    if (brokerStatusPayload?.configured === false) {
+        if (!(await kiteMenuButton.isDisabled())) throw new Error();
+    } else {
+        await kiteMenuButton.click();
+        await page.getByRole('menuitem', { name: 'Kite settings', exact: true }).waitFor({ state: 'visible' });
+        const disconnectItem = page.getByRole('menuitem', { name: 'Disconnect Kite…', exact: true });
+        if (brokerStatusPayload?.connected) await disconnectItem.waitFor({ state: 'visible' });
+        else if (await disconnectItem.count()) throw new Error();
+        await kiteMenuButton.click();
+    }
     if (JSON.stringify(await safetyControls.locator('button').evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')))) !== JSON.stringify(emergencyControlsBefore)) throw new Error();
     stage = 'dashboard_reconciliation_gate';
     const reconciliationCard = page.locator('.card').filter({ hasText: 'Broker portfolio reconciliation' });
