@@ -64,7 +64,7 @@ class CleanupCashArtifactsCommand extends Command
             $operatorId = $this->assertAdminConfirmation('This updates only profile 1 StoX cash rows. Continue?');
             if ($backupDir === '' || ! is_dir($backupDir) || ! is_writable($backupDir)) throw new RuntimeException('Apply requires an existing writable private --backup-dir outside the repository.');
             $backup = ['format' => 'stox-cash-cleanup-backup-v1', 'profile_id' => 1, 'captured_at' => now()->toISOString(), 'operator_user_id' => $operatorId,
-                'account' => $snapshot['account']->getAttributes(), 'rows' => array_map(fn ($row) => $row->getAttributes(), $snapshot['rows'])];
+                'account' => $snapshot['account']->getAttributes(), 'rows' => array_map(fn ($row) => $row->getAttributes(), $snapshot['rows']->all())];
             $backupJson = json_encode($backup, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR).PHP_EOL;
             $backupSha = hash('sha256', $backupJson);
             $backupPath = rtrim($backupDir, '/').'/cash-cleanup-profile1-'.$backupSha.'.json';
