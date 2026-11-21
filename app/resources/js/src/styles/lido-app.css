@@ -1726,9 +1726,22 @@ body {
         order: 3;
         flex: 1 1 100%;
         justify-content: flex-start;
+        gap: 0.25rem;
         overflow-x: auto;
         padding-bottom: 0.1rem;
         scrollbar-width: thin;
+    }
+
+    .lido-execution-safety-state-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
     }
 
     .lido-profile-name {

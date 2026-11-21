@@ -80,7 +80,8 @@ for (const viewport of VIEWPORTS) {
             await expect(page.getByText('ACTIVE_B', { exact: true }).first()).toBeVisible();
             await expect.poll(() => responses.filter(response => new URL(response.url()).pathname === '/api/v1/execution/mode' && response.request().headers()['x-profile-id'] === '2').length).toBeGreaterThan(0);
             await expect.poll(() => responses.filter(response => new URL(response.url()).pathname === '/api/v1/protections' && response.request().headers()['x-profile-id'] === '2').length).toBeGreaterThan(0);
-            await page.getByRole('button', { name: 'Open menu', exact: true }).click();
+            const activeRow = page.getByRole('row').filter({ hasText: 'ACTIVE_B' });
+            await activeRow.getByRole('button', { name: / menu$/ }).click();
             await expect(page.getByRole('menuitem', { name: 'Cancel protection', exact: true })).toBeVisible();
             const priorAResponses = responses.filter(response => new URL(response.url()).pathname === '/api/v1/protections' && response.request().headers()['x-profile-id'] === '1').length;
             releaseA();

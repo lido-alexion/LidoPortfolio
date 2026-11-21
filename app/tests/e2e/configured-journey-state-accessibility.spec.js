@@ -50,6 +50,7 @@ const COMMON_READS = new Set([
     '/api/dashboard',
     '/api/patterns/scan',
     '/api/v1/protections',
+    '/api/v1/broker/status',
     '/api/indexes',
     '/api/v1/execution/state',
     '/api/notification-center',
@@ -252,6 +253,16 @@ test.describe('V9-UX-001 configured journey state accessibility', () => {
                 expect(item.status).toBe(200);
                 expect(item.body).toEqual(NOTIFICATION_CENTER_RESPONSE);
             }
+            const brokerStatusReads = responses.filter((item) => item.path === '/api/v1/broker/status');
+            expect(brokerStatusReads.length).toBeGreaterThan(0);
+            for (const item of brokerStatusReads) {
+                expect(item.status).toBe(200);
+                expect(item.body).toEqual({
+                    success: true,
+                    data: { configured: true, connected: false, usable: false, expires_at: null },
+                    meta: {},
+                });
+            }
         });
 
         test(`REC-02 opened recommendation review dialog has no WCAG 2A/2AA violations (${viewport.name})`, async ({ page }, testInfo) => {
@@ -294,6 +305,16 @@ test.describe('V9-UX-001 configured journey state accessibility', () => {
             await page.keyboard.press('Enter');
             await expect(dialog).toBeHidden();
             const responses = await finishBoundary();
+            const brokerStatusReads = responses.filter((item) => item.path === '/api/v1/broker/status');
+            expect(brokerStatusReads.length).toBeGreaterThan(0);
+            for (const item of brokerStatusReads) {
+                expect(item.status).toBe(200);
+                expect(item.body).toEqual({
+                    success: true,
+                    data: { configured: true, connected: false, usable: false, expires_at: null },
+                    meta: {},
+                });
+            }
             const listReads = responses.filter((item) => item.path === '/api/v1/recommendations');
             const detailReads = responses.filter((item) => item.path === `/api/v1/recommendations/${REVIEW_RECOMMENDATION.id}`);
             expect(listReads.length).toBeGreaterThan(0);

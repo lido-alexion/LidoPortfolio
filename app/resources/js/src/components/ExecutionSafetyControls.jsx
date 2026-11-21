@@ -78,9 +78,12 @@ export default function ExecutionSafetyControls({ user }) {
 
     return (
         <div className={`lido-execution-safety ${halted ? 'is-halted' : 'is-normal'}`} aria-live="polite">
-            <span className="lido-execution-safety-state" title={halted ? 'Emergency Halt is active' : 'Execution state is normal'}>
-                {halted ? <AlertTriangle size={16} /> : <ShieldCheck size={16} />}
-                <span>{halted ? 'Emergency Halt' : 'Normal'}</span>
+            <span
+                className="lido-execution-safety-state"
+                title={halted ? 'Emergency Halt is active' : 'Execution state is normal'}
+            >
+                {halted ? <AlertTriangle size={16} aria-hidden="true" /> : <ShieldCheck size={16} aria-hidden="true" />}
+                <span className="lido-execution-safety-state-label">{halted ? 'Emergency Halt' : 'Normal'}</span>
             </span>
             {halted && (
                 <>
