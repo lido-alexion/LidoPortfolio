@@ -10,7 +10,7 @@ test('authenticated smoke reports only fixed, stage-level diagnostics', () => {
         'guided_tour_response_wait', 'guided_tour_response_status', 'guided_tour_payload_parse', 'guided_tour_payload_shape',
         'guided_tour_payload_invalid_json', 'guided_tour_payload_read_failed',
         'welcome_skip_payload', 'welcome_modal_render', 'welcome_modal_visibility', 'resume_modal_visibility', 'combo_navigation',
-        'combo_preference_response', 'combo_preference_scope', 'combo_chart_attached', 'combo_chart_visible',
+        'combo_preference_response_wait', 'combo_preference_response_status', 'combo_preference_scope', 'combo_chart_attached', 'combo_chart_visible',
         'combo_default_selection', 'combo_default_options', 'combo_default_resolution', 'combo_default_precedence', 'combo_chart_data_rendered', 'combo_keyboard_navigation',
         'combo_legend_control', 'combo_legend_read', 'combo_legend_toggle_off',
         'account_onboarding_prompt', 'combo_legend_toggle_restore', 'combo_legend_verify_restore',

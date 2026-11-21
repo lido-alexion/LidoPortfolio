@@ -97,10 +97,21 @@ try {
     stage = 'resume_modal_visibility';
     if (await resume.count()) throw new Error();
     stage = 'combo_navigation';
-    const preferenceResponsePromise = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/v1/stock-details/combo-chart-preference');
+    const baseOrigin = new URL(baseURL).origin;
+    const preferenceResponsePromise = page.waitForResponse(response => {
+        try {
+            const target = new URL(response.url());
+            return response.request().method() === 'GET'
+                && target.origin === baseOrigin
+                && target.pathname === '/api/v1/stock-details/combo-chart-preference';
+        } catch {
+            return false;
+        }
+    });
     await page.goto('/watchlist/TCS');
-    stage = 'combo_preference_response';
+    stage = 'combo_preference_response_wait';
     const preferenceResponse = await preferenceResponsePromise;
+    stage = 'combo_preference_response_status';
     if (!preferenceResponse.ok()) throw new Error();
     stage = 'combo_preference_scope';
     const preferencePayload = await preferenceResponse.json();
@@ -263,8 +274,9 @@ try {
         });
         if (!headerOrder) throw new Error();
         stage = 'dashboard_kite_accessible_label';
-        const kiteLabel = await kiteControl.getAttribute('aria-label');
-        if (!kiteLabel || !/^(Kite (connected|session expired|status unknown|is not configured)|Connect Kite)/.test(kiteLabel)) throw new Error();
+        const kitePrimaryButton = kiteControl.getByRole('button').first();
+        const kitePrimaryLabel = await kitePrimaryButton.getAttribute('aria-label');
+        if (!kitePrimaryLabel || !/^(?:Connect Kite|Kite connected(?: · expires .+)?|Kite session expired · Connect Kite|Kite status unknown · Refresh to check|Kite is not configured on this server)$/.test(kitePrimaryLabel)) throw new Error();
         const safetyControls = header.locator('.lido-execution-safety');
         stage = 'dashboard_kite_safety_controls';
         await safetyControls.waitFor({ state: 'visible' });
