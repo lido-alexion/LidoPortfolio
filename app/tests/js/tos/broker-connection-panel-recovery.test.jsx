@@ -1,10 +1,11 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import BrokerConnectionPanel from '../../../resources/js/src/components/BrokerConnectionPanel.jsx';
 import { apiMock } from './helpers/mockApi.js';
 import { showToast } from '../../../resources/js/src/toast';
+import { renderWithKiteConnection } from './helpers/renderWithKiteConnection.jsx';
 
 vi.mock('../../../resources/js/src/toast', () => ({ showToast: vi.fn() }));
 
@@ -19,7 +20,7 @@ describe('Kite connection status read recovery', () => {
     it('keeps initial status unknown and controls disabled until the first read is confirmed', async () => {
         let resolveStatus;
         apiMock.get.mockReturnValueOnce(new Promise((resolve) => { resolveStatus = resolve; }));
-        render(<BrokerConnectionPanel />);
+        renderWithKiteConnection(<BrokerConnectionPanel />);
 
         expect(screen.getByRole('status')).toHaveTextContent('Checking Kite connection status');
         expect(screen.queryByText('Not connected')).not.toBeInTheDocument();
@@ -38,7 +39,7 @@ describe('Kite connection status read recovery', () => {
         const user = userEvent.setup();
         apiMock.get.mockRejectedValueOnce(new Error('Synthetic private server detail'))
             .mockResolvedValueOnce(statusResponse(disconnected));
-        render(<BrokerConnectionPanel />);
+        renderWithKiteConnection(<BrokerConnectionPanel />);
 
         const alert = await screen.findByRole('alert');
         expect(alert).toHaveTextContent('Kite connection status is unavailable. Retry to check the current connection.');
@@ -66,7 +67,7 @@ describe('Kite connection status read recovery', () => {
         ['connected', connectedUsable, 'Connected', false, false],
     ])('retains the confirmed %s presentation', async (_name, data, expected, connectDisabled, disconnectDisabled) => {
         apiMock.get.mockResolvedValueOnce(statusResponse(data));
-        render(<BrokerConnectionPanel />);
+        renderWithKiteConnection(<BrokerConnectionPanel />);
 
         expect(await screen.findByText(expected)).toBeVisible();
         expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -78,7 +79,7 @@ describe('Kite connection status read recovery', () => {
         const user = userEvent.setup();
         apiMock.get.mockResolvedValueOnce(statusResponse({ configured: true, connected: 'false', usable: false }))
             .mockResolvedValueOnce(statusResponse(disconnected));
-        render(<BrokerConnectionPanel />);
+        renderWithKiteConnection(<BrokerConnectionPanel />);
 
         expect(await screen.findByRole('alert')).toHaveTextContent('Kite connection status is unavailable');
         expect(screen.queryByText('Not connected')).not.toBeInTheDocument();
@@ -94,7 +95,7 @@ describe('Kite connection status read recovery', () => {
             .mockRejectedValueOnce(new Error('Synthetic private status detail'))
             .mockResolvedValueOnce(statusResponse(disconnected));
         apiMock.post.mockResolvedValueOnce({ data: { data: { disconnected: true } } });
-        render(<BrokerConnectionPanel />);
+        renderWithKiteConnection(<BrokerConnectionPanel />);
 
         expect(await screen.findByText('Connected')).toBeVisible();
         await user.click(screen.getByRole('button', { name: 'Disconnect' }));
@@ -133,7 +134,7 @@ describe('Kite connection status read recovery', () => {
         const user = userEvent.setup();
         apiMock.get.mockResolvedValueOnce(statusResponse(connectedUsable));
         apiMock.post.mockRejectedValueOnce(new Error('Synthetic disconnect failure'));
-        render(<BrokerConnectionPanel />);
+        renderWithKiteConnection(<BrokerConnectionPanel />);
 
         expect(await screen.findByText('Connected')).toBeVisible();
         await user.click(screen.getByRole('button', { name: 'Disconnect' }));

@@ -251,6 +251,40 @@ body {
     flex-shrink: 0;
 }
 
+.lido-kite-header-control .btn {
+    min-width: 2rem;
+    min-height: 2rem;
+    padding: 0.2rem 0.35rem;
+}
+
+.lido-kite-header-control .dropdown-toggle-split {
+    min-width: 1.35rem;
+    padding-right: 0.25rem;
+    padding-left: 0.25rem;
+}
+
+[data-theme='light'] .lido-kite-header-control .btn-outline-warning {
+    --bs-btn-color: #805600;
+    --bs-btn-border-color: #805600;
+    --bs-btn-hover-color: #111827;
+    --bs-btn-hover-bg: #ffc107;
+    --bs-btn-hover-border-color: #805600;
+    --bs-btn-active-color: #111827;
+    --bs-btn-active-bg: #ffc107;
+    --bs-btn-active-border-color: #805600;
+}
+
+[data-theme='dark'] .lido-kite-header-control .btn-outline-warning {
+    --bs-btn-color: #f0c14a;
+    --bs-btn-border-color: #f0c14a;
+    --bs-btn-hover-color: #111827;
+    --bs-btn-hover-bg: #f0c14a;
+    --bs-btn-hover-border-color: #f0c14a;
+    --bs-btn-active-color: #111827;
+    --bs-btn-active-bg: #f0c14a;
+    --bs-btn-active-border-color: #f0c14a;
+}
+
 .lido-global-search {
     position: relative;
     flex: 0 0 auto;
@@ -1714,9 +1748,22 @@ body {
         order: 3;
         flex: 1 1 100%;
         justify-content: flex-start;
+        gap: 0.25rem;
         overflow-x: auto;
         padding-bottom: 0.1rem;
         scrollbar-width: thin;
+    }
+
+    .lido-execution-safety-state-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
     }
 
     .lido-profile-name {

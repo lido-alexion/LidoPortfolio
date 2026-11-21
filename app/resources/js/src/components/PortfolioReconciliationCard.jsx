@@ -1,7 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api, { getApiErrorMessage } from '../api';
 import { showToast } from '../toast';
 import ComboButton from './ComboButton';
+import { useKiteConnection } from '../context/KiteConnectionContext';
+import { tosData } from '../utils/tosEnvelope';
 
 const label = (value) => {
     if (!value) return 'Not yet checked';
@@ -21,6 +24,7 @@ function ComparisonValue({ value, mismatch, money = false }) {
 }
 
 export default function PortfolioReconciliationCard({ executionMode }) {
+    const { status: brokerStatus, state: brokerState, refresh: refreshBroker } = useKiteConnection();
     const eligible = executionMode === 'semi_automatic' || executionMode === 'automatic';
     const [snapshot, setSnapshot] = useState(null);
     const [selected, setSelected] = useState(null);
@@ -40,6 +44,12 @@ export default function PortfolioReconciliationCard({ executionMode }) {
     if (!eligible) return null;
 
     const reconcile = async (ignoreTodayTransactions) => {
+        const latestBrokerStatus = await refreshBroker();
+        const latestExpiry = latestBrokerStatus?.expires_at ? Date.parse(latestBrokerStatus.expires_at) : null;
+        if (latestBrokerStatus?.usable !== true
+            || (latestExpiry !== null && (!Number.isFinite(latestExpiry) || latestExpiry <= Date.now()))) {
+            return;
+        }
         setBusy(true);
         try {
             await api.post('/reconciliation', { ignore_today_transactions: ignoreTodayTransactions }, { skipErrorToast: true });
@@ -62,6 +72,8 @@ export default function PortfolioReconciliationCard({ executionMode }) {
     };
 
     const status = snapshot?.status || {};
+    const brokerUsable = brokerState === 'confirmed' && brokerStatus?.usable === true
+        && (!brokerStatus.expires_at || Date.parse(brokerStatus.expires_at) > Date.now());
     const discrepancies = selected?.discrepancies || {};
 
     return (
@@ -73,11 +85,25 @@ export default function PortfolioReconciliationCard({ executionMode }) {
                     onPrimaryClick={() => reconcile(true)}
                     menuItems={[{ key: 'including-today', label: 'Reconcile including today', onClick: () => reconcile(false) }]}
                     variant="outline-primary"
-                    disabled={busy}
-                    title="Choose which transactions to include in reconciliation"
+                    disabled={busy || !brokerUsable}
+                    title={brokerUsable ? 'Choose which transactions to include in reconciliation' : 'Connect Kite to enable reconciliation'}
                 />
             </div>
             <div className="card-body">
+                {!brokerUsable ? <div className="alert alert-warning py-2 small d-flex flex-wrap align-items-center justify-content-between gap-2" role="status">
+                    <span>{brokerState === 'loading' ? 'Checking Kite session. Reconciliation is paused.' : brokerState === 'unavailable' ? 'Kite status is unavailable. Reconciliation is paused until status can be confirmed.' : brokerStatus?.connected ? 'Kite session expired. Reconnect to run reconciliation.' : brokerStatus?.configured === false ? 'Kite is not configured on this server.' : 'Connect Kite to run portfolio reconciliation.'}</span>
+                    {brokerState === 'confirmed' && brokerStatus?.configured === true && <button type="button" className="btn btn-outline-primary btn-sm" onClick={async () => {
+                        try {
+                            const response = await api.get('/v1/broker/kite/login-url', { params: { return_to: 'dashboard' }, skipErrorToast: true });
+                            const data = tosData(response);
+                            if (data?.url) window.location.assign(data.url);
+                        } catch {
+                            showToast('Could not start Kite login', 'danger');
+                            await refreshBroker();
+                        }
+                    }}>Connect Kite</button>}
+                    {brokerState === 'confirmed' && brokerStatus?.configured === false && <Link className="btn btn-outline-secondary btn-sm" to="/settings/account">Kite settings</Link>}
+                </div> : null}
                 {!snapshot ? <p className="small text-muted mb-0">Reconciliation status is unavailable.</p> : <>
                     <p className="small text-muted mb-2">Holdings can use transactions through the previous day; cash and overall attention may still reflect today’s activity.</p>
                     <div className="d-flex flex-wrap gap-4 mb-2 small">

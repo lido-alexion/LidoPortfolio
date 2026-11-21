@@ -24,7 +24,7 @@ const unmanaged = () => holding(501, 2, 100, { is_unmanaged: true, owner_key: 'u
 async function holdingReads(page, rows) {
     await page.route('**/api/holdings', route => route.fulfill({ json: { data: rows() } })); await page.route('**/api/v1/execution/mode', route => route.fulfill({ json: { data: { execution_mode: 'manual' } } })); await page.route('**/api/v1/protections', route => route.fulfill({ json: { data: [] } }));
 }
-async function menu(page, row, name, viewport) { if (viewport.name === 'desktop') await row.hover(); await row.getByRole('button', { name: 'Open menu', exact: true }).click(); await page.getByRole('menuitem', { name, exact: true }).click(); }
+async function menu(page, row, name, viewport) { if (viewport.name === 'desktop') await row.hover(); await row.getByRole('button', { name: / menu$/ }).click(); await page.getByRole('menuitem', { name, exact: true }).click(); }
 for (const viewport of VIEWPORTS) {
     test.describe(`Financial source lifecycle ${viewport.name}`, () => {
         test.use({ hasTouch: viewport.name === 'mobile' });

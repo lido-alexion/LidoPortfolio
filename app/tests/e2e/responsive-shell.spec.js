@@ -250,8 +250,8 @@ test('header theme keeps shell, text and controls readable across theme changes'
                 await expect.poll(() => contrastRatio(control)).toBeGreaterThanOrEqual(3);
             }
         }
-        for (const selector of ['.lido-profile-toggle', '.lido-header-help', '.lido-sidebar-toggle', '.lido-portfolio-switcher']) {
-            const control = header.locator(selector);
+        for (const selector of ['.lido-profile-toggle', '.lido-header-help', '.lido-sidebar-toggle', '.lido-portfolio-switcher', '.lido-kite-header-control > button']) {
+            const control = header.locator(selector).first();
             if (!await control.count()) continue;
             if (!isMobile) {
                 await control.hover();
