@@ -24,6 +24,11 @@ test('production dashboard smoke inspects only status UI and never activates fin
     assert.match(source, /Reconcile excluding today/);
     assert.match(source, /Reconcile including today/);
     assert.match(source, /not_eligible_card_absent/);
+    assert.match(source, /kiteControl\.getByRole\('button', \{ name: \/\^\(Kite/);
+    assert.doesNotMatch(source, /kiteControl\.getAttribute\('aria-label'\)/);
+    assert.match(source, /stage = 'combo_preference_response_wait'/);
+    assert.match(source, /stage = 'combo_preference_response_status'/);
+    assert.match(source, /target\.origin === baseOrigin/);
     assert.doesNotMatch(source, /(?:\.click\(\)|\.check\(|\.fill\()[^\n]*(?:Reconcile|Disconnect|Emergency|Recover|Cancel)/i);
 });
 
