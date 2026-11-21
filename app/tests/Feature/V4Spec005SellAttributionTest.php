@@ -124,14 +124,27 @@ class V4Spec005SellAttributionTest extends TestCase
 
         $service = app(HoldingsCalculationService::class);
         $service->recalculateOwnerLotsForProfileStock($profile, $stock);
+        $firstUnmanaged = $this->holding($profile, $stock, Holding::OWNER_UNMANAGED);
+        $this->assertNotNull($firstUnmanaged);
+        $firstCalculation = (float) $firstUnmanaged->realized_profit;
         $service->recalculateOwnerLotsForProfileStock($profile, $stock);
 
         $unmanaged = $this->holding($profile, $stock, Holding::OWNER_UNMANAGED);
         $strategy = $this->holding($profile, $stock, $ownerA);
+        $sell = Transaction::query()->where('type', 'sell')->sole();
+        $grossRealizedProfit = ((float) $sell->price - 100.0) * (float) $sell->quantity;
         $this->assertNotNull($unmanaged);
         $this->assertNotNull($strategy);
+        $this->assertSame(Holding::OWNER_UNMANAGED, $sell->owner_key);
+        $this->assertGreaterThan(0.0, (float) $sell->fees);
+        $this->assertEqualsWithDelta($grossRealizedProfit, (float) $sell->realized_pl, 0.0001);
+        $this->assertEqualsWithDelta(
+            $grossRealizedProfit - (float) $sell->fees,
+            (float) $unmanaged->realized_profit,
+            0.0001,
+        );
+        $this->assertEqualsWithDelta($firstCalculation, (float) $unmanaged->realized_profit, 0.0001);
         $this->assertEqualsWithDelta(7.0, (float) $unmanaged->quantity, 0.0001);
-        $this->assertEqualsWithDelta(30.0, (float) $unmanaged->realized_profit, 0.0001);
         $this->assertEqualsWithDelta(10.0, (float) $strategy->quantity, 0.0001);
         $this->assertEqualsWithDelta(0.0, (float) $strategy->realized_profit, 0.0001);
         $this->assertSame(2, Holding::query()
