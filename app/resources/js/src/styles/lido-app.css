@@ -251,6 +251,18 @@ body {
     flex-shrink: 0;
 }
 
+.lido-kite-header-control .btn {
+    min-width: 2rem;
+    min-height: 2rem;
+    padding: 0.2rem 0.35rem;
+}
+
+.lido-kite-header-control .dropdown-toggle-split {
+    min-width: 1.35rem;
+    padding-right: 0.25rem;
+    padding-left: 0.25rem;
+}
+
 .lido-global-search {
     position: relative;
     flex: 0 0 auto;

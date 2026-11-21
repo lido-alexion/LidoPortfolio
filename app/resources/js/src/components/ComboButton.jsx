@@ -17,6 +17,7 @@ export default function ComboButton({
     className = '',
     disabled = false,
     title,
+    ariaLabel,
 }) {
     const menuId = useId();
     const [open, setOpen] = useState(false);
@@ -126,6 +127,7 @@ export default function ComboButton({
                     type="button"
                     className={buttonClass}
                     disabled={disabled}
+                    aria-label={ariaLabel}
                     onClick={onPrimaryClick}
                 >
                     {label}
@@ -138,6 +140,7 @@ export default function ComboButton({
                         aria-expanded={open}
                         aria-haspopup="menu"
                         aria-controls={menuId}
+                        aria-label={`${ariaLabel || label} menu`}
                         onClick={toggleMenu}
                     >
                         <span className="visually-hidden">Open menu</span>
