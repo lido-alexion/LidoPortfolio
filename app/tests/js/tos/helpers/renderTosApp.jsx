@@ -9,6 +9,7 @@ import Sidebar from '../../../../resources/js/src/components/sidebar/Sidebar.jsx
 import AuthContext from '../../../../resources/js/src/context/AuthContext.jsx';
 import { NotificationProvider } from '../../../../resources/js/src/context/NotificationContext.jsx';
 import { PortfolioProvider } from '../../../../resources/js/src/context/PortfolioContext.jsx';
+import { KiteConnectionProvider } from '../../../../resources/js/src/context/KiteConnectionContext.jsx';
 import { SidebarProvider } from '../../../../resources/js/src/context/SidebarContext.jsx';
 import { ThemeProvider } from '../../../../resources/js/src/context/ThemeContext.jsx';
 import CandidatesPage from '../../../../resources/js/src/pages/CandidatesPage.jsx';
@@ -106,9 +107,11 @@ export function renderTosApp({ route = '/recommendations' } = {}) {
             <ThemeProvider>
                 <TosAuthStub>
                     <PortfolioProvider>
+                      <KiteConnectionProvider user={TEST_USER}>
                         <NotificationProvider>
                             <TosAuthenticatedShell user={TEST_USER} />
                         </NotificationProvider>
+                      </KiteConnectionProvider>
                     </PortfolioProvider>
                 </TosAuthStub>
             </ThemeProvider>
