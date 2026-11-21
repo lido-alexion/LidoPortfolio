@@ -60,7 +60,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.backend == 'true' && (github.event_name == 'pull_request' || ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/master'))
-    timeout-minutes: 30
+    # Canonical backend MySQL/PHPUnit suite exceeds 30 minutes on hosted runners.
+    # Keep the complete required suite; allow sufficient time for it to finish.
+    timeout-minutes: 90
     services:
       mysql:
         image: mysql:8.4
