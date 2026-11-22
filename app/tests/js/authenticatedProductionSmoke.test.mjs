@@ -52,3 +52,21 @@ test('production smoke request policy blocks all financial and Kite mutation end
     assert.equal(allowProductionSmokeRequest('POST', 'https://other.example.test/api/reconciliation', base), false);
     assert.equal(allowProductionSmokeRequest('GET', `${base}/api/v1/broker/status`, base), true);
 });
+
+test('Kite production smoke waits for hydrated state and verifies a read-only menu using stable DOM selectors', async () => {
+    const source = await (await import('node:fs/promises')).readFile(script, 'utf8');
+    assert.match(source, /kiteControl\.locator\('button\[aria-haspopup="menu"\]'\)/);
+    assert.match(source, /stage = 'dashboard_kite_menu_ready'/);
+    assert.match(source, /stage = 'dashboard_kite_menu_expanded'/);
+    assert.match(source, /stage = 'dashboard_kite_menu_collapsed'/);
+    assert.match(source, /menu\.getAttribute\('aria-label'\) ===/);
+    assert.match(source, /await kiteMenuButton\.click\(\)/);
+    assert.match(source, /Kite settings/);
+    assert.match(source, /Disconnect Kite…/);
+    assert.doesNotMatch(source, /await kiteMenuButton\.elementHandle\(\)/);
+    const ready = source.indexOf("stage = 'dashboard_kite_menu_ready';");
+    const open = source.indexOf("stage = 'dashboard_kite_menu_open';");
+    const expanded = source.indexOf("stage = 'dashboard_kite_menu_expanded';");
+    const items = source.indexOf("stage = 'dashboard_kite_menu_items';");
+    assert.ok(ready >= 0 && ready < open && open < expanded && expanded < items);
+});
