@@ -8,7 +8,7 @@ export default function KiteHoldingsOnboardingPage() {
     const run = async (fn, success) => { setBusy(true); setMessage(''); try { await fn(); await load(); if (success) setMessage(success); } catch (e) { setMessage(getApiErrorMessage(e)); } finally { setBusy(false); } };
     const entries = row => edits[row.id] ?? row.entries;
     const save = row => run(() => api.put(`/kite/holdings-onboarding/stocks/${row.id}`, { entries: entries(row) }), 'Staging saved.');
-    const setEntry = (row, i, key, value) => setEdits(old => ({ ...old, [row.id]: entries(row).map((entry, n) => n === i ? { ...entry, [key]: value } : entry) }));
+    const setEntry = (row, i, key, value) => setEdits(old => ({ ...old, [row.id]: entries(row).map((entry, n) => n === i ? { ...entry, [key]: value, ...(key === 'date' ? { date_placeholder: false } : {}) } : entry) }));
     const commitIds = draft?.stocks?.filter(s => s.status === 'verified').map(s => s.id) ?? [];
     const importTradebook = file => { if (!file) return; const body = new FormData(); body.append('tradebook', file); run(() => api.post('/kite/holdings-onboarding/tradebook', body, { headers: { 'Content-Type': 'multipart/form-data' } }), 'Tradebook rows merged. Review every affected stock.'); };
     return <main className="container py-4" aria-label="Kite holdings onboarding">
@@ -18,7 +18,7 @@ export default function KiteHoldingsOnboardingPage() {
         {message && <div role="status" className="alert alert-info">{message}</div>}
         {!draft ? <button className="btn btn-primary" disabled={busy} onClick={() => run(() => api.post('/kite/holdings-onboarding'), 'Kite holdings staged.')}>Fetch current Kite holdings</button> : <>
             <p>Snapshot captured {new Date(draft.snapshot_at).toLocaleString()}</p>
-            <label className="d-block mb-3">Optional Zerodha Console tradebook CSV (upload multiple periods one at a time)<input className="form-control" type="file" accept=".csv,.txt,text/csv" onChange={e=>importTradebook(e.target.files?.[0])}/></label>
+            <label className="d-block mb-3">Optional Zerodha Console tradebook CSV, TXT, XLS or XLSX (upload multiple periods one at a time)<input className="form-control" type="file" accept=".csv,.txt,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={e=>importTradebook(e.target.files?.[0])}/></label>
             {draft.stocks.map(row => <section className="card mb-3 p-3" key={row.id}>
                 <div className="d-flex justify-content-between"><h2>{row.symbol} ({row.exchange})</h2><span>{row.status}</span></div>
                 <p>Kite: {row.kite_quantity} shares; average cost ₹{row.kite_average_price}; reported cost ₹{(row.kite_quantity * row.kite_average_price).toFixed(2)}. Staged net: {entries(row).reduce((n,e)=>n+(e.type==='buy'?1:-1)*Number(e.quantity),0)} shares; staged buy value ₹{entries(row).filter(e=>e.type==='buy').reduce((n,e)=>n+Number(e.quantity)*Number(e.price),0).toFixed(2)}. Buy value is not a FIFO cost basis when sells exist.</p>

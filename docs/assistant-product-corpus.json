@@ -4560,6 +4560,94 @@
     "url": "/docs/portfolios.html"
   },
   {
+    "source_id": "product:kite-holdings-onboarding:overview:overview",
+    "title": "Kite Holdings Onboarding",
+    "path": "app/resources/js/src/data/appDocumentation.js",
+    "section": "Overview",
+    "snippet": "Stage current Kite holdings, refine them with Console tradebooks, verify each stock, and commit selected stocks. Kite holdings onboarding creates an editable, profile-scoped staging draft. It does not affect portfolio accounting until selected stocks are individually verified and committed. Kite opening dates are placeholders; replace them with evidence-based dates before verification. Review unresolved sells, cost-basis differences, corporate actions, transfers, and incomplete tradebook periods.\n\nPractical tip: treat this page as one step in a larger workflow, not an isolated screen. Make one change at a time, verify the downstream effect, and use linked pages to complete the loop (for example: discovery → evaluation → recommendation → pending execution → review).",
+    "url": "/docs/kite-holdings-onboarding.html"
+  },
+  {
+    "source_id": "product:kite-holdings-onboarding:concept:placeholder-dates",
+    "title": "Kite Holdings Onboarding",
+    "path": "app/resources/js/src/data/appDocumentation.js",
+    "section": "Placeholder dates",
+    "snippet": "A Kite opening date is not historical evidence. Replace it with a verified date before verification so it cannot distort historical performance.",
+    "url": "/docs/kite-holdings-onboarding.html"
+  },
+  {
+    "source_id": "product:kite-holdings-onboarding:concept:partial-commit",
+    "title": "Kite Holdings Onboarding",
+    "path": "app/resources/js/src/data/appDocumentation.js",
+    "section": "Partial commit",
+    "snippet": "Commit only the stocks that are ready. Other stocks remain in staging for later review.",
+    "url": "/docs/kite-holdings-onboarding.html"
+  },
+  {
+    "source_id": "product:kite-holdings-onboarding:concept:active-portfolio-context",
+    "title": "Kite Holdings Onboarding",
+    "path": "app/resources/js/src/data/appDocumentation.js",
+    "section": "Active portfolio context",
+    "snippet": "Most data on this page is scoped by the selected portfolio profile; switching profile can completely change visible rows and metrics.",
+    "url": "/docs/kite-holdings-onboarding.html"
+  },
+  {
+    "source_id": "product:kite-holdings-onboarding:concept:data-freshness",
+    "title": "Kite Holdings Onboarding",
+    "path": "app/resources/js/src/data/appDocumentation.js",
+    "section": "Data freshness",
+    "snippet": "Many analytics depend on cached daily OHLCV and scheduled sync jobs. If numbers look stale, refresh this page and verify sync status in admin tools.",
+    "url": "/docs/kite-holdings-onboarding.html"
+  },
+  {
+    "source_id": "product:kite-holdings-onboarding:control:fetch-current-kite-holdings",
+    "title": "Kite Holdings Onboarding",
+    "path": "app/resources/js/src/data/appDocumentation.js",
+    "section": "Fetch current Kite holdings",
+    "snippet": "Capture the connected account holdings as the reference quantity and average cost for the draft.",
+    "url": "/docs/kite-holdings-onboarding.html"
+  },
+  {
+    "source_id": "product:kite-holdings-onboarding:control:console-tradebook-upload",
+    "title": "Kite Holdings Onboarding",
+    "path": "app/resources/js/src/data/appDocumentation.js",
+    "section": "Console tradebook upload",
+    "snippet": "Upload CSV, TXT, XLSX, or supported Excel 2003 XML XLS files from Zerodha Console. Upload one period at a time; formula and macro content is not executed.",
+    "url": "/docs/kite-holdings-onboarding.html"
+  },
+  {
+    "source_id": "product:kite-holdings-onboarding:control:verify-stock",
+    "title": "Kite Holdings Onboarding",
+    "path": "app/resources/js/src/data/appDocumentation.js",
+    "section": "Verify stock",
+    "snippet": "Verify quantity, covered sells, and staged remaining cost for one stock. Verification does not commit it.",
+    "url": "/docs/kite-holdings-onboarding.html"
+  },
+  {
+    "source_id": "product:kite-holdings-onboarding:control:commit-verified-stocks",
+    "title": "Kite Holdings Onboarding",
+    "path": "app/resources/js/src/data/appDocumentation.js",
+    "section": "Commit verified stocks",
+    "snippet": "Commit selected stocks after a fresh Kite recheck. Existing StoX transaction history blocks onboarding until it is reconciled.",
+    "url": "/docs/kite-holdings-onboarding.html"
+  },
+  {
+    "source_id": "product:kite-holdings-onboarding:control:typical-flow",
+    "title": "Kite Holdings Onboarding",
+    "path": "app/resources/js/src/data/appDocumentation.js",
+    "section": "Typical flow",
+    "snippet": "Open this page, verify active portfolio context in the header, perform one meaningful action, then confirm the reflected change in list/cards/history before leaving.",
+    "url": "/docs/kite-holdings-onboarding.html"
+  },
+  {
+    "source_id": "product:kite-holdings-onboarding:control:validation-and-errors",
+    "title": "Kite Holdings Onboarding",
+    "path": "app/resources/js/src/data/appDocumentation.js",
+    "section": "Validation and errors",
+    "snippet": "Form and API validations are shown as inline errors or toast messages. Fix the first reported issue, retry, and re-check dependent sections that consume the same data.",
+    "url": "/docs/kite-holdings-onboarding.html"
+  },
+  {
     "source_id": "product:artifact-library:overview:overview",
     "title": "Artifact Library",
     "path": "app/resources/js/src/data/appDocumentation.js",
