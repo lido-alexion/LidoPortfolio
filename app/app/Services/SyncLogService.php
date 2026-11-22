@@ -90,7 +90,9 @@ class SyncLogService
             'run_id' => $runId,
             'job_name' => $jobName,
             'level' => strtolower($level),
-            'message' => $message,
+            // Keep operational messages small enough for deployed MySQL variants
+            // and preserve the useful prefix when provider exceptions are verbose.
+            'message' => Str::limit($message, 999, '…'),
             'context' => $context ?: null,
             'logged_at' => now(),
         ]);
@@ -117,7 +119,7 @@ class SyncLogService
             'stocks_processed' => $stats['stocks_processed'] ?? $stats['processed'] ?? null,
             'failures' => $stats['failures'] ?? $stats['failed'] ?? null,
             'skipped' => $stats['skipped'] ?? null,
-            'summary' => $summary,
+            'summary' => $summary === null ? null : Str::limit($summary, 3999, '…'),
         ]);
     }
 

@@ -222,7 +222,7 @@ class UniverseDailyBhavcopySyncService
                             : $this->nextRetrySchedule($receipt, $day);
                         $file['coverage_hash'] = $coverageHash;
                         $file['retry_attempt'] = $attempt;
-                        $file['retry_after'] = $retryAfter->toIso8601String();
+                        $file['retry_after'] = $this->retryTimestamp($retryAfter);
                         $entries[$key] = $file;
                         Setting::setValue(self::KEY_RECEIPTS, json_encode([
                             'fingerprint' => $fingerprint, 'entries' => $entries,
@@ -241,7 +241,7 @@ class UniverseDailyBhavcopySyncService
                     if (! $dryRun) {
                         [$attempt, $retryAfter] = $this->nextRetrySchedule($receipt, $day);
                         $file['retry_attempt'] = $attempt;
-                        $file['retry_after'] = $retryAfter->toIso8601String();
+                        $file['retry_after'] = $this->retryTimestamp($retryAfter);
                         $entries[$key] = $file + [
                             'coverage_hash' => $coverageHash,
                         ];
@@ -334,6 +334,12 @@ class UniverseDailyBhavcopySyncService
         }
 
         return [$attempt, $retryAfter];
+    }
+
+    /** Store retry instants as UTC SQL timestamps; session arithmetic remains IST based. */
+    private function retryTimestamp(Carbon $retryAfter): string
+    {
+        return $retryAfter->copy()->utc()->format('Y-m-d H:i:s');
     }
 
     private function failureStage(\Throwable $error, string $stage): string
