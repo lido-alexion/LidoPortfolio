@@ -32,6 +32,7 @@ use App\Http\Controllers\Api\GuidedTourController;
 use App\Http\Controllers\Api\DeveloperOptionsController;
 use App\Http\Controllers\Api\HelpFeedbackController;
 use App\Http\Controllers\Api\HistoricalHoldingsController;
+use App\Http\Controllers\Api\KiteHoldingsOnboardingController;
 use App\Http\Controllers\Api\HoldingController;
 use App\Http\Controllers\Api\IndexController;
 use App\Http\Controllers\Api\InviteAcceptController;
@@ -238,6 +239,12 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/portfolios/{portfolio}/simulation/pause', [PaperSimulationController::class, 'pause']);
     Route::post('/portfolios/{portfolio}/simulation/resume', [PaperSimulationController::class, 'resume']);
     Route::get('/reconciliation', [PortfolioReconciliationController::class, 'index']);
+    Route::get('/kite/holdings-onboarding', [KiteHoldingsOnboardingController::class, 'show']);
+    Route::post('/kite/holdings-onboarding', [KiteHoldingsOnboardingController::class, 'start']);
+    Route::post('/kite/holdings-onboarding/tradebook', [KiteHoldingsOnboardingController::class, 'importTradebook']);
+    Route::put('/kite/holdings-onboarding/stocks/{item}', [KiteHoldingsOnboardingController::class, 'update'])->whereNumber('item');
+    Route::post('/kite/holdings-onboarding/stocks/{item}/verify', [KiteHoldingsOnboardingController::class, 'verify'])->whereNumber('item');
+    Route::post('/kite/holdings-onboarding/commit', [KiteHoldingsOnboardingController::class, 'commit']);
     Route::post('/reconciliation', [PortfolioReconciliationController::class, 'store']);
     Route::get('/reconciliation/{run}', [PortfolioReconciliationController::class, 'show'])->whereNumber('run');
     Route::get('/replays', [PortfolioReplayController::class, 'index']);
@@ -464,6 +471,8 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         Route::post('/operational-alerts/run-check', [OperationalAlertController::class, 'runCheck']);
 
         Route::get('/universe-price-sync/status', [UniversePriceSyncController::class, 'status']);
+        Route::post('/universe-price-sync/outcomes/{stock}/reprobe', [UniversePriceSyncController::class, 'reprobeStock'])
+            ->whereNumber('stock')->middleware('throttle:universe-price-sync');
         Route::post('/universe-price-sync/operational-alerts/acknowledge', [UniversePriceSyncController::class, 'acknowledgeOperationalAlert']);
         Route::post('/universe-price-sync/run', [UniversePriceSyncController::class, 'run'])
             ->middleware('throttle:universe-price-sync');

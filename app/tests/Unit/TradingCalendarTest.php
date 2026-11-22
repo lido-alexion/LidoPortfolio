@@ -28,6 +28,16 @@ class TradingCalendarTest extends TestCase
         $this->assertSame('2026-07-09', $session->toDateString());
     }
 
+    public function test_default_last_required_session_uses_market_date_after_utc_midnight_boundary(): void
+    {
+        TradingCalendar::clearHolidayCache();
+        Carbon::setTestNow(Carbon::parse('2026-10-27 20:00:00', 'UTC'));
+
+        $session = TradingCalendar::lastRequiredPriceSession();
+
+        $this->assertSame('2026-10-27', $session->toDateString());
+    }
+
     public function test_last_required_price_session_on_weekend_uses_latest_weekday(): void
     {
         Carbon::setTestNow('2026-07-11 10:00:00');

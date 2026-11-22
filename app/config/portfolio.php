@@ -61,6 +61,8 @@ return [
         'scope' => env('UNIVERSE_PRICE_SYNC_SCOPE', 'all_equities'),
         'history_days' => max(30, (int) env('UNIVERSE_PRICE_SYNC_HISTORY_DAYS', 365)),
         'daily_lookback_days' => max(3, (int) env('UNIVERSE_PRICE_SYNC_DAILY_LOOKBACK_DAYS', 10)),
+        'no_data_skip_after_sessions' => max(1, (int) env('UNIVERSE_PRICE_NO_DATA_SKIP_AFTER_SESSIONS', 5)),
+        'no_data_reprobe_after_sessions' => max(1, (int) env('UNIVERSE_PRICE_NO_DATA_REPROBE_AFTER_SESSIONS', 5)),
         'delay_ms_between_stocks' => max(0, (int) env('UNIVERSE_PRICE_SYNC_DELAY_MS', 400)),
         'batch_size' => max(1, (int) env('UNIVERSE_PRICE_SYNC_BATCH_SIZE', 125)),
         'maintenance_interval_minutes' => max(1, min(60, (int) env('UNIVERSE_MAINTENANCE_INTERVAL_MINUTES', 5))),
