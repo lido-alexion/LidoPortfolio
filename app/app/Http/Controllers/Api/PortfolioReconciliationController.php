@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\PortfolioReconciliationRun;
 use App\Services\Reconciliation\PortfolioReconciliationService;
+use App\Services\Reconciliation\KiteCncTradeSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
@@ -12,18 +13,35 @@ use RuntimeException;
 
 class PortfolioReconciliationController extends Controller
 {
-    public function __construct(private PortfolioReconciliationService $reconciliation) {}
+    public function __construct(private PortfolioReconciliationService $reconciliation, private KiteCncTradeSyncService $tradeSync) {}
 
     public function index(): JsonResponse
     {
         $profile = \activePortfolio();
         $runs = PortfolioReconciliationRun::query()->where('profile_id', $profile->id)
             ->orderByDesc('id')->limit(100)->get();
+        $tradeRuns = \App\Models\KiteCncTradeSyncRun::query()->where('profile_id', $profile->id)->latest('id')->limit(30)->get();
 
         return response()->json(['data' => [
             'status' => $this->status($profile),
             'runs' => $this->compactRuns($runs),
+            'trade_sync_runs' => $tradeRuns,
         ]]);
+    }
+
+    public function syncTrades(): JsonResponse
+    {
+        try {
+            $result = $this->tradeSync->sync(\activePortfolio(), 'manual');
+            return response()->json(['data' => $result]);
+        } catch (InvalidArgumentException $error) {
+            return response()->json(['message' => $error->getMessage()], 422);
+        } catch (RuntimeException $error) {
+            if (str_contains($error->getMessage(), 'already in progress')) return response()->json(['message' => $error->getMessage()], 409);
+            throw $error;
+        } catch (\Illuminate\Contracts\Cache\LockTimeoutException $error) {
+            return response()->json(['message' => 'Kite CNC trade sync is already in progress for this portfolio.'], 409);
+        }
     }
 
     public function show(int $run): JsonResponse
