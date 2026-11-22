@@ -467,6 +467,8 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         Route::post('/operational-alerts/run-check', [OperationalAlertController::class, 'runCheck']);
 
         Route::get('/universe-price-sync/status', [UniversePriceSyncController::class, 'status']);
+        Route::post('/universe-price-sync/outcomes/{stock}/reprobe', [UniversePriceSyncController::class, 'reprobeStock'])
+            ->whereNumber('stock')->middleware('throttle:universe-price-sync');
         Route::post('/universe-price-sync/operational-alerts/acknowledge', [UniversePriceSyncController::class, 'acknowledgeOperationalAlert']);
         Route::post('/universe-price-sync/run', [UniversePriceSyncController::class, 'run'])
             ->middleware('throttle:universe-price-sync');

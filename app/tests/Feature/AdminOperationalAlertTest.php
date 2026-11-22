@@ -639,7 +639,7 @@ class AdminOperationalAlertTest extends TestCase
         }
     }
 
-    public function test_persistent_retry_deferred_is_actionable_when_aggregate_file_errors_is_zero(): void
+    public function test_retry_pending_exchange_file_is_not_actionable_when_provenance_is_complete(): void
     {
         config(['portfolio.universe_price_sync.enabled' => true]);
         Setting::setValue('universe_price_sync_last_run_json', json_encode([
@@ -652,6 +652,12 @@ class AdminOperationalAlertTest extends TestCase
         SyncRun::query()->create(['id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
             'status' => 'success', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
             'stocks_processed' => 2, 'failures' => 0, 'summary' => 'retry deferred']);
+        $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
+        $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
+
+        $payload = json_decode((string) Setting::getValue('universe_price_sync_last_run_json'), true);
+        $payload['bulk']['files'][0]['retry_attempt'] = 4;
+        Setting::setValue('universe_price_sync_last_run_json', json_encode($payload));
         $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
         $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
     }
@@ -900,6 +906,15 @@ class AdminOperationalAlertTest extends TestCase
         Setting::setValue('universe_price_sync_last_run_json', json_encode($retryPayload));
         $result = app(AdminOperationalAlertService::class)->syncAndNotify();
         $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $result['notified']);
+        $this->assertTrue(collect($messages)->contains(fn (string $message) => str_contains($message, 'Universe daily bhavcopy sync failed')));
+
+        $retryPayload['bulk']['files'][1]['retry_attempt'] = 4;
+        Setting::setValue('universe_price_sync_last_run_json', json_encode($retryPayload));
+        $result = app(AdminOperationalAlertService::class)->syncAndNotify();
+        // The alert remains active, while the existing alert lifecycle avoids
+        // sending a duplicate Telegram notification for the same incident.
+        $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, collect($result['active'])->pluck('key')->all());
+        $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $result['notified']);
         $this->assertTrue(collect($messages)->contains(fn (string $message) => str_contains($message, 'Universe daily bhavcopy sync failed')));
     }
 

@@ -28,7 +28,7 @@ class SyncUniversePricesCommandTest extends TestCase
 
     public function test_daily_command_collects_both_exchange_files_for_the_full_scope_despite_a_batch_limit(): void
     {
-        Carbon::setTestNow('2026-10-26 20:00:00');
+        Carbon::setTestNow(Carbon::parse('2026-10-26 20:00:00', 'Asia/Kolkata'));
         TradingCalendar::clearHolidayCache();
         config([
             'portfolio.universe_price_sync.enabled' => true,
