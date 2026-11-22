@@ -911,7 +911,10 @@ class AdminOperationalAlertTest extends TestCase
         $retryPayload['bulk']['files'][1]['retry_attempt'] = 4;
         Setting::setValue('universe_price_sync_last_run_json', json_encode($retryPayload));
         $result = app(AdminOperationalAlertService::class)->syncAndNotify();
-        $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $result['notified']);
+        // The alert remains active, while the existing alert lifecycle avoids
+        // sending a duplicate Telegram notification for the same incident.
+        $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, collect($result['active'])->pluck('key')->all());
+        $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $result['notified']);
         $this->assertTrue(collect($messages)->contains(fn (string $message) => str_contains($message, 'Universe daily bhavcopy sync failed')));
     }
 

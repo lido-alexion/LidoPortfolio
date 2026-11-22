@@ -37,10 +37,15 @@ class UniversePriceOutcomeService
             $ignoredGaps = $ignoredGaps->concat(IgnoredPriceGap::query()->whereIn('stock_id', $idChunk)
                 ->whereDate('gap_from', '<=', end($dates))->whereDate('gap_to', '>=', reset($dates))
                 ->get(['stock_id', 'gap_from', 'gap_to']));
-            foreach (StockPrice::query()->whereIn('stock_id', $idChunk)
-                ->whereBetween('price_date', [reset($dates), end($dates)])->get(['stock_id', 'price_date', 'provider_source', 'data_source']) as $price) {
-                $covered[(int) $price->stock_id][$price->price_date->toDateString()] = true;
-                $coveredSource[(int) $price->stock_id][$price->price_date->toDateString()] = $price->provider_source ?: $price->data_source;
+            $priceQuery = StockPrice::query()->whereIn('stock_id', $idChunk)
+                ->whereDate('price_date', '>=', reset($dates))
+                ->whereDate('price_date', '<=', end($dates));
+            foreach ($priceQuery->get(['stock_id', 'price_date', 'provider_source', 'data_source']) as $price) {
+                // Preserve the DATE column's stored session date. Converting
+                // midnight UTC through the app timezone can shift it to tomorrow.
+                $sessionDate = substr((string) $price->getRawOriginal('price_date'), 0, 10);
+                $covered[(int) $price->stock_id][$sessionDate] = true;
+                $coveredSource[(int) $price->stock_id][$sessionDate] = $price->provider_source ?: $price->data_source;
             }
             foreach (DB::table('portfolio_universe_price_session_outcomes')->whereIn('stock_id', $idChunk)
                 ->whereBetween('session_date', [reset($dates), end($dates)])->get() as $row) {
@@ -82,7 +87,12 @@ class UniversePriceOutcomeService
                 $isIgnored = $ignoredGaps->get($stock->id, collect())->contains(fn ($gap) =>
                     Carbon::parse($gap->gap_from)->toDateString() <= $date
                     && Carbon::parse($gap->gap_to)->toDateString() >= $date);
-                $stockKnownFrom = $stock->created_at ? Carbon::parse($stock->created_at)->timezone('Asia/Kolkata')->toDateString() : null;
+                // Stock.created_at is the date this row entered our master, not
+                // an exchange listing date. Compare its stored calendar date
+                // directly; converting the timestamp to IST can move a same-day
+                // row into tomorrow and incorrectly classify today's session as
+                // pre-master history.
+                $stockKnownFrom = $stock->created_at ? Carbon::parse($stock->created_at)->toDateString() : null;
                 if (! $hasPrice && $stockKnownFrom !== null && $date < $stockKnownFrom) {
                     $outcome = 'not_expected';
                     $reason = 'before_stock_master_record';

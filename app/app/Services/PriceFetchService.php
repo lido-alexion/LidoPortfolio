@@ -285,11 +285,10 @@ class PriceFetchService
 
             $key = [
                 'stock_id' => $stock->id,
-                // Match the model's date serialization exactly. Providers may
-                // return the same session as Y-m-d, ISO-8601, or a timestamp;
-                // mixing the raw value with Eloquent's stored midnight value
-                // can miss the row and violate the unique session key.
-                'price_date' => $priceDate,
+                // Store the exchange session as a DATE value, not a midnight
+                // timestamp. SQLite otherwise persists a datetime string which
+                // does not match exact session-date lookups in the outcome ledger.
+                'price_date' => $priceDate->toDateString(),
             ];
             $attributes = [
                 'open_price' => $row['open_price'],
