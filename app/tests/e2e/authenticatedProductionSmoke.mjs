@@ -266,6 +266,11 @@ try {
     if (isAdmin) {
         kiteCoverage = 'not_eligible_admin';
     } else {
+        // The emergency controls are hydrated from a separate read-only execution-state
+        // response. Wait for them before asserting their order relative to Kite.
+        const safetyControls = header.locator('.lido-execution-safety');
+        stage = 'dashboard_kite_safety_controls';
+        await safetyControls.waitFor({ state: 'visible' });
         stage = 'dashboard_kite_header_order';
         const headerOrder = await header.locator('.lido-header-actions').evaluate(actions => {
             const kite = actions.querySelector('.lido-kite-header-control');
@@ -277,9 +282,6 @@ try {
         const kitePrimaryButton = kiteControl.getByRole('button').first();
         const kitePrimaryLabel = await kitePrimaryButton.getAttribute('aria-label');
         if (!kitePrimaryLabel || !/^(?:Connect Kite|Kite connected(?: · expires .+)?|Kite session expired · Connect Kite|Kite status unknown · Refresh to check|Kite is not configured on this server)$/.test(kitePrimaryLabel)) throw new Error();
-        const safetyControls = header.locator('.lido-execution-safety');
-        stage = 'dashboard_kite_safety_controls';
-        await safetyControls.waitFor({ state: 'visible' });
         const emergencyControlsBefore = await safetyControls.locator('button').evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')));
         if (!emergencyControlsBefore.includes('Emergency Kite disconnect')
             || !emergencyControlsBefore.includes('Cancel eligible open orders and disconnect Kite')) throw new Error();
