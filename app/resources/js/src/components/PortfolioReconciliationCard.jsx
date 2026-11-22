@@ -62,6 +62,20 @@ export default function PortfolioReconciliationCard({ executionMode }) {
         }
     };
 
+    const syncTrades = async () => {
+        setBusy(true);
+        try {
+            const response = await api.post('/reconciliation/trades/sync', {}, { skipErrorToast: true });
+            await load();
+            const result = response.data?.data || {};
+            showToast(`Kite trades synced: ${result.imported || 0} added, ${result.matched || 0} matched, ${result.review || 0} for review`, result.review ? 'warning' : 'success');
+        } catch (error) {
+            showToast(getApiErrorMessage(error, 'Could not sync Kite trades'), 'danger');
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const openRun = async (id) => {
         try {
             const response = await api.get(`/reconciliation/${id}`, { skipErrorToast: true });
@@ -80,6 +94,7 @@ export default function PortfolioReconciliationCard({ executionMode }) {
         <div className="card h-100">
             <div className="card-header d-flex justify-content-between align-items-center gap-2">
                 <span>Broker portfolio reconciliation</span>
+                <button type="button" className="btn btn-outline-secondary btn-sm" onClick={syncTrades} disabled={busy || !brokerUsable}>Sync today’s CNC trades</button>
                 <ComboButton
                     label={busy ? 'Reconciling…' : 'Reconcile excluding today'}
                     onPrimaryClick={() => reconcile(true)}
