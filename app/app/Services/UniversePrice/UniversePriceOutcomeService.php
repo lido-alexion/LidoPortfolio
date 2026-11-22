@@ -101,13 +101,22 @@ class UniversePriceOutcomeService
                     $outcome = $failureStage === 'exchange_fetch' ? 'provider_error' : 'systemic_error';
                     $reason = $failureStage;
                     $attempt = max($attempt, (int) ($file['retry_attempt'] ?? 0));
-                    $retryAfter = $file['retry_after'] ?? null;
+                    [$retryAfter, $validRetryAfter] = $this->sqlRetryTimestamp($file['retry_after'] ?? null);
+                    if (! $validRetryAfter) {
+                        $outcome = 'systemic_error';
+                        $failureStage = 'receipt_validation';
+                        $reason = 'invalid_retry_after';
+                    }
                 } elseif (is_array($file) && ($file['status'] ?? null) === 'identity_conflict' && ! $hasPrice) {
                     $outcome = 'systemic_error';
                     $failureStage = 'identity_validation';
                     $reason = 'identity_conflict';
                     $attempt = max($attempt, (int) ($file['retry_attempt'] ?? 1));
-                    $retryAfter = $file['retry_after'] ?? null;
+                    [$retryAfter, $validRetryAfter] = $this->sqlRetryTimestamp($file['retry_after'] ?? null);
+                    if (! $validRetryAfter) {
+                        $failureStage = 'receipt_validation';
+                        $reason = 'invalid_retry_after';
+                    }
                 } elseif ($hasPrice) {
                     $outcome = 'covered';
                     $reason = null;
@@ -248,6 +257,22 @@ class UniversePriceOutcomeService
             'skip_after_sessions' => max(1, (int) config('portfolio.universe_price_sync.no_data_skip_after_sessions', self::DEFAULT_SKIP_AFTER)),
             'reprobe_after_sessions' => max(1, (int) config('portfolio.universe_price_sync.no_data_reprobe_after_sessions', self::DEFAULT_REPROBE_AFTER)),
         ];
+    }
+
+    /** Normalize legacy ISO offsets to the actual UTC instant before SQL DATETIME persistence. */
+    private function sqlRetryTimestamp(mixed $value): array
+    {
+        if ($value === null || $value === '') return [null, true];
+        if (! is_string($value) || preg_match(
+            '/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/',
+            $value,
+        ) !== 1) return [null, false];
+
+        try {
+            return [Carbon::parse($value)->utc()->format('Y-m-d H:i:s'), true];
+        } catch (\Throwable) {
+            return [null, false];
+        }
     }
 
     /** An actionable collapse requires two consecutive sessions after a stable baseline. */
