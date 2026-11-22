@@ -3,8 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\CashLedgerEntry;
+use App\Models\BrokerConnection;
 use App\Models\CashAccount;
+use App\Models\CashLedgerEntry;
 use App\Services\CashManagementService;
 use App\Models\KiteFundsReconciliation;
 use App\Models\KiteFundsSnapshot;
@@ -66,6 +67,11 @@ class CashController extends Controller
         return response()->json(['data' => [
             'automatic_adjustments_enabled' => (bool) config('broker.kite_funds.auto_adjustments_enabled', false),
             'payout_semantics_verified' => (bool) config('broker.kite_funds.payout_semantics_verified', false),
+            'broker_accounts' => BrokerConnection::query()->where('user_id', request()->user()->id)
+                ->where('provider', BrokerConnection::PROVIDER_KITE)->whereNotNull('broker_user_id')->get(['broker_user_id'])
+                ->unique('broker_user_id')->values()->map(fn ($connection) => [
+                    'id' => $connection->broker_user_id, 'label' => 'Kite account '.$connection->broker_user_id,
+                ]),
             'snapshots' => $snapshots->map(fn ($row) => [
                 'id' => $row->id, 'account' => $row->broker_account_id, 'trading_date' => $row->trading_date->toDateString(),
                 'captured_at' => $row->captured_at->toIso8601String(), 'available_balance' => $row->available_balance,
@@ -120,6 +126,7 @@ class CashController extends Controller
             }
             $manual = DB::table('portfolio_cash_ledger_entries')->where('profile_id', $profile->id)->whereDate('entry_date', $row->trading_date)
                 ->whereIn('entry_type', ['deposit', 'withdrawal'])->whereNull('reversal_of_entry_id')
+                ->where(fn ($query) => $query->whereNull('broker_account_id')->orWhere('broker_account_id', $row->broker_account_id))
                 ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('portfolio_cash_ledger_entries as reversal')->whereColumn('reversal.reversal_of_entry_id', 'portfolio_cash_ledger_entries.id'))
                 ->exists();
             if ($manual || $row->snapshot_net_flow === null || abs((float) $row->snapshot_net_flow) < 0.0001) {
@@ -158,6 +165,7 @@ class CashController extends Controller
 
             return [
                 'id' => $e->id,
+                'broker_account_id' => $e->broker_account_id,
                 'entry_type' => $e->entry_type,
                 'entry_classification' => $e->entry_classification,
                 'amount' => (float) $e->amount,
@@ -272,12 +280,31 @@ class CashController extends Controller
             'remarks' => ['nullable', 'string', 'max:500'],
             'entry_date' => ['nullable', 'date', 'before_or_equal:today'],
             'transaction_date' => ['nullable', 'date', 'before_or_equal:today'],
+            'broker_account_id' => ['sometimes', 'nullable', 'string', 'max:64'],
         ]);
-        $updated = $this->cash->amendCashMovement(
-            \activePortfolio(), $entry, (string) $validated['amount'],
-            trim((string) ($validated['remarks'] ?? $validated['reason'] ?? '')),
-            $request->user(), $validated['entry_date'] ?? $validated['transaction_date'] ?? null,
-        );
+        $existingEntry = CashLedgerEntry::query()->where('profile_id', \activePortfolio()->id)->find($entry);
+        if (array_key_exists('broker_account_id', $validated)) {
+            if ($existingEntry && ! in_array($existingEntry->entry_type, [CashLedgerEntry::TYPE_DEPOSIT, CashLedgerEntry::TYPE_WITHDRAWAL], true)) {
+                throw ValidationException::withMessages(['broker_account_id' => ['Broker provenance applies only to deposits and withdrawals.']]);
+            }
+        }
+        $brokerAccountId = array_key_exists('broker_account_id', $validated)
+            ? $validated['broker_account_id']
+            : $existingEntry?->broker_account_id;
+        // Existing provenance remains editable after an account disconnect. Only
+        // a newly selected or changed account must still be owned and connected.
+        if ($brokerAccountId !== $existingEntry?->broker_account_id) {
+            $this->validateManualBrokerAccount($request, $brokerAccountId);
+        }
+        $updated = DB::transaction(function () use ($entry, $validated, $request, $brokerAccountId) {
+            $updated = $this->cash->amendCashMovement(
+                \activePortfolio(), $entry, (string) $validated['amount'],
+                trim((string) ($validated['remarks'] ?? $validated['reason'] ?? '')),
+                $request->user(), $validated['entry_date'] ?? $validated['transaction_date'] ?? null,
+            );
+            $updated->forceFill(['broker_account_id' => $brokerAccountId])->save();
+            return $updated;
+        });
 
         return response()->json(['data' => ['id' => $updated->id, 'entry_type' => $updated->entry_type, 'amount' => $updated->amount, 'balance_after' => $updated->balance_after]], 201);
     }
@@ -299,18 +326,29 @@ class CashController extends Controller
             'remarks' => 'nullable|string|max:500',
             'transaction_date' => 'nullable|date|before_or_equal:today',
             'entry_date' => 'nullable|date|before_or_equal:today',
+            'broker_account_id' => $op === 'adjust'
+                ? ['prohibited']
+                : ['sometimes', 'nullable', 'string', 'max:64'],
         ]);
 
         $remarks = trim((string) ($validated['remarks'] ?? $validated['reason'] ?? ''));
         $entryDate = $validated['transaction_date'] ?? $validated['entry_date'] ?? null;
+        $brokerAccountId = $validated['broker_account_id'] ?? null;
+        $this->validateManualBrokerAccount($request, $brokerAccountId);
         $amount = (string) $validated['amount'];
 
         try {
-            $entry = match ($op) {
-                'deposit' => $this->cash->deposit($profile, $amount, $remarks !== '' ? $remarks : null, $request->user(), $entryDate),
-                'withdraw' => $this->cash->withdraw($profile, $amount, $remarks !== '' ? $remarks : null, $request->user(), $entryDate),
-                default => $this->cash->adjust($profile, $amount, $remarks !== '' ? $remarks : null, $request->user(), $entryDate),
-            };
+            $entry = DB::transaction(function () use ($op, $profile, $amount, $remarks, $request, $entryDate, $brokerAccountId) {
+                $entry = match ($op) {
+                    'deposit' => $this->cash->deposit($profile, $amount, $remarks !== '' ? $remarks : null, $request->user(), $entryDate),
+                    'withdraw' => $this->cash->withdraw($profile, $amount, $remarks !== '' ? $remarks : null, $request->user(), $entryDate),
+                    default => $this->cash->adjust($profile, $amount, $remarks !== '' ? $remarks : null, $request->user(), $entryDate),
+                };
+                if (in_array($op, ['deposit', 'withdraw'], true)) {
+                    $entry->forceFill(['broker_account_id' => $brokerAccountId])->save();
+                }
+                return $entry;
+            });
         } catch (ValidationException $e) {
             throw $e;
         }
@@ -337,5 +375,13 @@ class CashController extends Controller
         [$whole, $fraction] = array_pad(explode('.', $value, 2), 2, '');
         $units = ((int) $whole * 10000) + (int) str_pad(substr($fraction, 0, 4), 4, '0');
         return $negative ? -$units : $units;
+    }
+
+    private function validateManualBrokerAccount(Request $request, ?string $accountId): void
+    {
+        if ($accountId === null) return;
+        $known = BrokerConnection::query()->where('user_id', $request->user()->id)
+            ->where('provider', BrokerConnection::PROVIDER_KITE)->where('broker_user_id', $accountId)->exists();
+        if (! $known) throw ValidationException::withMessages(['broker_account_id' => ['Select a Kite account connected to this user.']]);
     }
 }

@@ -90,13 +90,14 @@ final class KiteFundsSnapshotService
                 $snapshot = (clone $snapshots)->where('freshness', 'complete')->where('capture_source', 'late_day')
                     ->orderByDesc('captured_at')->first()
                     ?? (clone $snapshots)->orderByDesc('captured_at')->first();
-                $manual = DB::table('portfolio_cash_ledger_entries as movement')->where('movement.profile_id', $profile->id)->whereDate('movement.entry_date', $date)
+                $activeRows = fn () => DB::table('portfolio_cash_ledger_entries as movement')->where('movement.profile_id', $profile->id)->whereDate('movement.entry_date', $date)
                     ->whereIn('movement.entry_type', ['deposit', 'withdrawal'])->whereNull('movement.reversal_of_entry_id')
-                    ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('portfolio_cash_ledger_entries as reversal')->whereColumn('reversal.reversal_of_entry_id', 'movement.id'))
-                    ->get(['movement.entry_type', 'movement.amount']);
+                    ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('portfolio_cash_ledger_entries as reversal')->whereColumn('reversal.reversal_of_entry_id', 'movement.id'));
+                $unattributed = (clone $activeRows())->whereNull('movement.broker_account_id')->exists();
+                $manual = (clone $activeRows())->where('movement.broker_account_id', $connection->broker_user_id)->get(['movement.entry_type', 'movement.amount']);
                 // Ledger amounts already carry their sign (withdrawals are negative).
                 // Let MySQL sum DECIMAL values to retain the ledger's 4-place precision.
-                $manualNetRaw = DB::table('portfolio_cash_ledger_entries as movement')->where('movement.profile_id', $profile->id)->whereDate('movement.entry_date', $date)
+                $manualNetRaw = DB::table('portfolio_cash_ledger_entries as movement')->where('movement.profile_id', $profile->id)->where('movement.broker_account_id', $connection->broker_user_id)->whereDate('movement.entry_date', $date)
                     ->whereIn('movement.entry_type', ['deposit', 'withdrawal'])->whereNull('movement.reversal_of_entry_id')
                     ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('portfolio_cash_ledger_entries as reversal')->whereColumn('reversal.reversal_of_entry_id', 'movement.id'))
                     ->sum('movement.amount');
@@ -123,16 +124,17 @@ final class KiteFundsSnapshotService
                     ! $final => 'stale_snapshot',
                     ! $hasPayoutEvidence => 'review_required',
                     $zeroNetMixedActivity => 'zero_net_review',
-                    // Manual cash rows have profile/date scope only. They cannot be
-                    // attributed to this broker account after an account switch.
-                    // Do not claim a match or mismatch for account-scoped evidence.
-                    $manual->isNotEmpty() => 'manual_activity_unattributed',
+                    // Legacy rows remain unattributed; only explicit same-account
+                    // rows can establish a match or mismatch.
+                    $unattributed => 'manual_activity_unattributed',
+                    $manual->isNotEmpty() && $manualNetUnits === $netUnits => 'reconciled',
+                    $manual->isNotEmpty() => 'manual_mismatch',
                     $suppressionReason !== null => 'adjustment_suppressed',
                     $netUnits === 0 => 'zero_net_review',
                     ! config('broker.kite_funds.auto_adjustments_enabled', false) => 'adjustment_disabled',
                     default => 'adjustment_proposed',
                 };
-                DB::transaction(function () use ($key, $user, $snapshot, $status, $net, $manual, $manualNet, $suppressionReason, $netUnits) {
+                DB::transaction(function () use ($key, $user, $snapshot, $status, $net, $suppressionReason, $netUnits) {
                     // Serialize with ordinary cash mutations before deciding whether to post.
                     $account = CashAccount::query()->firstOrCreate(['profile_id' => $key['profile_id']], ['balance' => 0]);
                     CashAccount::query()->whereKey($account->id)->lockForUpdate()->firstOrFail();
@@ -141,19 +143,38 @@ final class KiteFundsSnapshotService
                         ->lockForUpdate()->first();
                     $terminal = ['adjustment_applied', 'adjustment_confirmed', 'adjustment_suppressed'];
                     $effectiveStatus = $current && in_array($current->status, $terminal, true) ? $current->status : $status;
-                    $effectiveSuppression = $current?->status === 'adjustment_proposed' && $manual->isNotEmpty()
-                        ? 'manual_override' : ($current?->suppression_reason ?? $suppressionReason);
                     $ledgerEntryId = $current?->cash_ledger_entry_id;
+
+                    $lockedManual = DB::table('portfolio_cash_ledger_entries as movement')
+                        ->where('movement.profile_id', $key['profile_id'])->whereDate('movement.entry_date', $key['trading_date'])
+                        ->whereIn('movement.entry_type', ['deposit', 'withdrawal'])->whereNull('movement.reversal_of_entry_id')
+                        ->where(fn ($query) => $query->whereNull('movement.broker_account_id')->orWhere('movement.broker_account_id', $key['broker_account_id']))
+                        ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('portfolio_cash_ledger_entries as reversal')->whereColumn('reversal.reversal_of_entry_id', 'movement.id'));
+                    $lockedUnattributed = (clone $lockedManual)->whereNull('movement.broker_account_id')->exists();
+                    $lockedTagged = (clone $lockedManual)->where('movement.broker_account_id', $key['broker_account_id']);
+                    $lockedTaggedCount = (clone $lockedTagged)->count();
+                    $lockedManualNetUnits = $this->decimalUnits((string) ((clone $lockedTagged)->sum('movement.amount') ?? '0'));
+                    $lockedManualNet = $lockedTaggedCount > 0 ? $this->decimalFromUnits($lockedManualNetUnits) : null;
+                    $effectiveSuppression = $current?->status === 'adjustment_proposed' && ($lockedUnattributed || $lockedTaggedCount > 0)
+                        ? 'manual_override' : ($current?->suppression_reason ?? $suppressionReason);
+
+                    if (! ($current && in_array($current->status, $terminal, true))
+                        && ! in_array($status, ['missing_snapshot', 'incomplete_snapshot', 'stale_snapshot', 'review_required', 'zero_net_review'], true)) {
+                        $effectiveStatus = match (true) {
+                            $lockedUnattributed => 'manual_activity_unattributed',
+                            $lockedTaggedCount > 0 && $lockedManualNetUnits === $netUnits => 'reconciled',
+                            $lockedTaggedCount > 0 => 'manual_mismatch',
+                            $suppressionReason !== null => 'adjustment_suppressed',
+                            $netUnits === 0 => 'zero_net_review',
+                            ! config('broker.kite_funds.auto_adjustments_enabled', false) => 'adjustment_disabled',
+                            default => 'adjustment_proposed',
+                        };
+                    }
                     if ($effectiveStatus === 'adjustment_proposed') {
-                        // A manual flow entered after the initial read must win over automation.
-                        $lockedManual = DB::table('portfolio_cash_ledger_entries as movement')
-                            ->where('movement.profile_id', $key['profile_id'])->whereDate('movement.entry_date', $key['trading_date'])
-                            ->whereIn('movement.entry_type', ['deposit', 'withdrawal'])->whereNull('movement.reversal_of_entry_id')
-                            ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('portfolio_cash_ledger_entries as reversal')->whereColumn('reversal.reversal_of_entry_id', 'movement.id'));
-                        if ($lockedManual->exists()) {
-                            // These rows have no broker-account identity. A matching
-                            // amount is not proof they belong to this Kite account.
-                            $effectiveStatus = 'manual_activity_unattributed';
+                        if ($lockedUnattributed || $lockedTaggedCount > 0) {
+                            // The ledger may have changed between the initial read and
+                            // acquiring the cash account lock. Keep manual flows authoritative.
+                            $effectiveStatus = $lockedUnattributed ? 'manual_activity_unattributed' : 'manual_mismatch';
                         } else {
                             $entry = app(\App\Services\CashManagementService::class)->adjust(
                                 \App\Models\PortfolioProfile::query()->findOrFail($key['profile_id']),
@@ -171,7 +192,7 @@ final class KiteFundsSnapshotService
                         'user_id' => $user->id, 'snapshot_id' => $snapshot?->id,
                         'status' => $effectiveStatus,
                         'cash_ledger_entry_id' => $ledgerEntryId,
-                        'snapshot_net_flow' => $net, 'manual_net_flow' => $manual->isNotEmpty() ? $manualNet : null,
+                        'snapshot_net_flow' => $net, 'manual_net_flow' => $lockedManualNet,
                         'suppression_reason' => $effectiveSuppression,
                         'evaluated_at' => now(),
                     ];

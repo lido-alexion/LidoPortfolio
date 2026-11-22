@@ -82,6 +82,7 @@ export default function CashManagementPage() {
     const [op, setOp] = useState('deposit');
     const [amount, setAmount] = useState('');
     const [remarks, setRemarks] = useState('');
+    const [brokerAccountId, setBrokerAccountId] = useState('');
     const [transactionDate, setTransactionDate] = useState(() => getLocalTodayDateString());
     const [transactionDateInput, setTransactionDateInput] = useState(() => (
         formatTransactionDateDisplay(getLocalTodayDateString())
@@ -93,6 +94,10 @@ export default function CashManagementPage() {
     const [editing, setEditing] = useState(null);
 
     useEffect(() => {
+        // Provenance is an explicit per movement choice. Do not carry a prior
+        // profile's account selection into a different cash profile.
+        setBrokerAccountId('');
+        setEditing(null);
         if (!profileId) {
             setSummary(null);
             setLedger([]);
@@ -149,6 +154,7 @@ export default function CashManagementPage() {
         setOp('deposit');
         setAmount('');
         setRemarks('');
+        setBrokerAccountId('');
         resetFormDates();
     };
 
@@ -188,6 +194,7 @@ export default function CashManagementPage() {
                     amount,
                     remarks: remarks.trim() || undefined,
                     transaction_date: transactionDate,
+                    ...(op !== 'adjust' ? { broker_account_id: brokerAccountId || null } : {}),
                 };
                 if (editing) await api.put(`/cash/ledger/${editing.id}`, payload, { skipErrorToast: true });
                 else await api.post(selected.endpoint, payload, { skipErrorToast: true });
@@ -662,6 +669,14 @@ export default function CashManagementPage() {
                                         required={op === 'adjust'}
                                     />
                                 </div>
+                                {op !== 'adjust' ? <div className="col-12 col-md-3">
+                                    <label className="form-label small mb-0" htmlFor="cash-broker-account">Kite broker account</label>
+                                    <select id="cash-broker-account" className="form-select form-select-sm" value={brokerAccountId} onChange={(e) => setBrokerAccountId(e.target.value)}>
+                                        <option value="">Unattributed / needs review</option>
+                                        {(kiteFunds?.broker_accounts || []).map((account) => <option key={account.id} value={account.id}>{account.label}</option>)}
+                                    </select>
+                                    <div className="form-text">Choose only when this transfer belongs to that Kite account.</div>
+                                </div> : null}
                                 <div className="col-auto">
                                     <button type="submit" className="btn btn-sm btn-primary" disabled={busy || !profileId}>
                                         {busy ? 'Saving…' : editing ? 'Save edit' : selectedOp.label}
@@ -746,6 +761,7 @@ export default function CashManagementPage() {
                                                                 setOp(entry.entry_type === 'withdrawal' ? 'withdraw' : entry.entry_type === 'adjustment' ? 'adjust' : 'deposit');
                                                                 setAmount(entry.entry_type === 'adjustment' ? String(entry.amount) : String(Math.abs(Number(entry.amount))));
                                                                 setRemarks(entry.reason || '');
+                                                                setBrokerAccountId(entry.broker_account_id || '');
                                                                 const entryDate = entry.entry_date || getLocalTodayDateString();
                                                                 setTransactionDate(entryDate);
                                                                 setTransactionDateInput(formatTransactionDateDisplay(entryDate));
