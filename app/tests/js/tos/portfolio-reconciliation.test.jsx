@@ -23,6 +23,12 @@ const snapshot = {
                 { id: 8, trigger: 'manual', status: 'completed', overall_status: 'reconciled', completed_at: '2026-09-11T12:00:00Z' },
                 { id: 7, trigger: 'post_trade', status: 'completed', overall_status: 'attention_required', completed_at: '2026-09-11T12:00:00Z' },
             ],
+            trade_sync_runs: [
+                { id: 21, profile_id: 4, trading_date: '2026-11-20', trigger: 'scheduled', status: 'completed', imported_count: 3, matched_count: 1, review_count: 0 },
+                { id: 20, profile_id: 4, trading_date: '2026-11-19', trigger: 'gap_detection', status: 'gap_unavailable', imported_count: 0, matched_count: 0, review_count: 0, failure_summary: 'Kite does not provide arbitrary past trading days.' },
+                { id: 19, profile_id: 4, trading_date: '2026-11-18', trigger: 'reconnect', status: 'sync_failed', imported_count: 0, matched_count: 0, review_count: 0, failure_summary: 'Sync did not complete.' },
+                { id: 18, profile_id: 4, trading_date: '2026-11-17', trigger: 'scheduled', status: 'needs_review', imported_count: 0, matched_count: 0, review_count: 2 },
+            ],
         },
     },
 };
@@ -72,6 +78,19 @@ describe('Portfolio reconciliation card', () => {
         expect(screen.getByText('Cash balance')).toBeInTheDocument();
         expect(screen.getByText('₹-100.00')).toBeInTheDocument();
         expect(screen.getByText(/GOLD/)).toBeInTheDocument();
+    });
+
+    it('shows per-portfolio daily trade sync counts and exceptions', async () => {
+        renderWithKiteConnection(<PortfolioReconciliationCard executionMode="automatic" />);
+        expect(await screen.findByRole('heading', { name: 'Kite CNC trade sync activity' })).toBeInTheDocument();
+        expect(screen.getAllByText('Scheduled')).toHaveLength(2);
+        expect(screen.getByText('Reconnect')).toBeInTheDocument();
+        expect(screen.getByText('Historical trades unavailable')).toBeInTheDocument();
+        expect(screen.getByText('Sync failed')).toBeInTheDocument();
+        expect(screen.getByText('Sync did not complete.')).toBeInTheDocument();
+        expect(screen.getByText('3')).toBeInTheDocument();
+        expect(screen.getByText('2 fills require review.')).toBeInTheDocument();
+        expect(screen.getAllByText('#4')).toHaveLength(4);
     });
 
     it('runs the main action excluding today and refreshes status', async () => {
