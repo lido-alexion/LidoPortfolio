@@ -1,0 +1,112 @@
+<?php
+
+namespace Tests\Feature\Execution;
+
+use App\Models\BrokerConnection;
+use App\Models\BrokerInstrument;
+use App\Models\Stock;
+use App\Models\User;
+use App\Services\PriceProviders\KiteAuthenticatedPriceData;
+use App\Support\KiteTradingSession;
+use Carbon\Carbon;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+use Tests\TestCase;
+
+class KiteAuthenticatedPriceDataTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Cache::flush();
+        config(['broker.kite.api_key' => 'test-key']);
+        Carbon::setTestNow(Carbon::parse('2026-11-23 10:00:00', 'Asia/Kolkata'));
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
+    }
+
+    public function test_authenticated_quote_uses_registered_exchange_symbol_and_user_scoped_short_cache(): void
+    {
+        [$user, $stock] = $this->connectedStock('NSE', 'ABC-BE');
+        Http::fake(['https://api.kite.trade/quote*' => Http::response([
+            'status' => 'success', 'data' => ['NSE:ABC-BE' => ['last_price' => 123.45, 'last_trade_time' => '2026-11-23 09:59:45']],
+        ])]);
+
+        $service = app(KiteAuthenticatedPriceData::class);
+        $one = $service->latestQuote($user->id, $stock);
+        $two = $service->latestQuote($user->id, $stock);
+
+        $this->assertSame(123.45, $one['last_price']);
+        $this->assertSame($one, $two);
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request): bool => str_contains($request->url(), '/quote?')
+            && ($request['i'] ?? null) === 'NSE:ABC-BE'
+            && $request->hasHeader('Authorization', 'token test-key:test-token'));
+    }
+
+    public function test_historical_daily_returns_exchange_dates_and_raw_ohlcv(): void
+    {
+        [$user, $stock] = $this->connectedStock('NSE', 'ABC');
+        Http::fake(['https://api.kite.trade/instruments/historical/998/day*' => Http::response([
+            'status' => 'success', 'data' => ['candles' => [
+                ['2026-11-20T09:15:00+0530', 100, 104, 99, 103, 500],
+            ]],
+        ])]);
+
+        $rows = app(KiteAuthenticatedPriceData::class)->historicalDaily(
+            $user->id, $stock, now()->parse('2026-11-20'), now()->parse('2026-11-20'),
+        );
+
+        $this->assertSame('2026-11-20', $rows[0]['price_date']);
+        $this->assertSame(103.0, $rows[0]['close_price']);
+        $this->assertArrayNotHasKey('adjusted_close_price', $rows[0]);
+        Http::assertSent(fn ($request): bool => str_contains($request->url(), '/instruments/historical/998/day')
+            && $request->hasHeader('Authorization', 'token test-key:test-token'));
+    }
+
+    public function test_missing_user_session_falls_back_without_a_kite_request(): void
+    {
+        $stock = Stock::query()->create(['symbol' => 'ABC', 'exchange' => 'NSE', 'name' => 'ABC LTD']);
+        BrokerInstrument::query()->create([
+            'provider' => 'kite', 'stock_id' => $stock->id, 'exchange' => 'NSE',
+            'trading_symbol' => 'ABC', 'instrument_token' => '998', 'is_active' => true,
+        ]);
+        Http::preventStrayRequests();
+
+        $this->assertNull(app(KiteAuthenticatedPriceData::class)->latestQuote(98765, $stock));
+        Http::assertNothingSent();
+    }
+
+    public function test_live_quote_is_not_requested_outside_the_local_equity_session(): void
+    {
+        [$user, $stock] = $this->connectedStock('NSE', 'ABC');
+        Carbon::setTestNow(Carbon::parse('2026-11-23 16:00:00', 'Asia/Kolkata'));
+        Http::preventStrayRequests();
+
+        $this->assertFalse(KiteTradingSession::isEquityMarketOpen());
+        $this->assertNull(app(KiteAuthenticatedPriceData::class)->latestQuote($user->id, $stock));
+        Http::assertNothingSent();
+    }
+
+    /** @return array{User,Stock} */
+    private function connectedStock(string $exchange, string $symbol): array
+    {
+        $user = User::factory()->create();
+        BrokerConnection::query()->create([
+            'user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => null,
+        ])->forceFill(['access_token' => 'test-token'])->save();
+        $stock = Stock::query()->create(['symbol' => 'ABC', 'exchange' => $exchange, 'name' => 'ABC LTD']);
+        BrokerInstrument::query()->create([
+            'provider' => 'kite', 'stock_id' => $stock->id, 'exchange' => $exchange,
+            'trading_symbol' => $symbol, 'instrument_token' => '998', 'is_active' => true,
+        ]);
+        return [$user, $stock];
+    }
+}
