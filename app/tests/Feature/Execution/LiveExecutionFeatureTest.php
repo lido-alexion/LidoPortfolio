@@ -144,6 +144,37 @@ class LiveExecutionFeatureTest extends TestCase
         $this->assertDatabaseHas('portfolio_reconciliation_runs', ['profile_id' => $profile->id, 'overall_status' => 'reconciled']);
     }
 
+    public function test_direct_submit_one_establishes_and_requires_the_session_baseline(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $rec = $this->pendingBuy($profile, amount: 1_000);
+        $fake = app(FakeBrokerGateway::class);
+
+        $result = app(LiveBrokerExecutionService::class)->submitOne(
+            $user, $profile, $rec->id, ExecutionGate::TRIGGER_SEMI,
+        );
+
+        $this->assertSame(ExecutionDecision::OUTCOME_SUBMITTED, $result['outcome']);
+        $this->assertSame(1, PortfolioReconciliationRun::query()->where('profile_id', $profile->id)
+            ->where('trigger', 'session_baseline')->count());
+
+        [$otherUser, $otherProfile] = $this->actingReadyUser();
+        $this->setMode($otherUser, $otherProfile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $blockedRec = $this->pendingBuy($otherProfile, amount: 1_000);
+        $fake->tradeRowsUnavailable = true;
+
+        $blocked = app(LiveBrokerExecutionService::class)->submitOne(
+            $otherUser, $otherProfile, $blockedRec->id, ExecutionGate::TRIGGER_SEMI,
+        );
+
+        $this->assertSame(ExecutionDecision::OUTCOME_BLOCKED, $blocked['outcome']);
+        $this->assertSame(1, $fake->placeCalls);
+        $this->assertDatabaseHas('portfolio_reconciliation_runs', [
+            'profile_id' => $otherProfile->id, 'trigger' => 'session_baseline', 'status' => 'sync_failed',
+        ]);
+    }
+
     public function test_automatic_does_not_require_per_order_approval_or_totp_code(): void
     {
         [$user, $profile] = $this->actingReadyUser();

@@ -27,6 +27,7 @@ use App\Services\Protection\PositionProtectionService;
 use App\Services\Reconciliation\PortfolioReconciliationService;
 use App\Services\StockQuoteService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use App\Support\TradingCalendar;
 use Throwable;
 
@@ -296,6 +297,22 @@ class LiveBrokerExecutionService
         ?float $quantityOverride = null,
         int $insufficientFundsRetry = 0,
     ): array {
+        // Serialize check-and-submit across recommendations in this profile so
+        // concurrent workers cannot both spend the same broker buying power.
+        return Cache::lock('broker-risk-submit:'.$profile->id, 60)->block(10, fn () => $this->submitOneLocked(
+            $user, $profile, $recommendationId, $trigger, $quantityOverride, $insufficientFundsRetry,
+        ));
+    }
+
+    /** @return array<string,mixed> */
+    private function submitOneLocked(
+        User $user,
+        PortfolioProfile $profile,
+        int $recommendationId,
+        string $trigger,
+        ?float $quantityOverride = null,
+        int $insufficientFundsRetry = 0,
+    ): array {
         $recommendation = TradingRecommendation::query()
             ->forProfile($profile)
             ->where('id', $recommendationId)
@@ -324,6 +341,21 @@ class LiveBrokerExecutionService
                 $trigger,
                 ExecutionDecision::OUTCOME_SKIPPED,
                 'outside_execution_opportunity',
+            );
+        }
+
+        // submitOne is also called directly by retry paths, commands and tests; do
+        // not rely on the outer batch methods to establish the session baseline.
+        try {
+            $this->ensureSessionBaseline($profile);
+        } catch (DomainException $e) {
+            return $this->decisionRow(
+                $profile,
+                $user,
+                $recommendationId,
+                $trigger,
+                ExecutionDecision::OUTCOME_BLOCKED,
+                $e->errorCode(),
             );
         }
 
@@ -621,7 +653,7 @@ class LiveBrokerExecutionService
                 && $insufficientFundsRetry < 2) {
                 $reduced = (float) floor($qty * 0.95);
                 if ($reduced >= 1 && $reduced < $qty) {
-                    $retryResult = $this->submitOne(
+                    $retryResult = $this->submitOneLocked(
                         $user,
                         $profile,
                         $recommendationId,

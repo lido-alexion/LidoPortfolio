@@ -74,6 +74,26 @@ class KiteCncTradeSyncTest extends TestCase
         $this->assertSame(1, (int) KiteCncTradeImport::query()->first()->matched_transaction_id);
     }
 
+    public function test_duplicate_manual_transactions_are_reviewed_without_double_importing(): void
+    {
+        [$profile, $stock] = $this->portfolioAndStock();
+        foreach ([1, 2] as $_) {
+            Transaction::query()->create(['profile_id' => $profile->id, 'stock_id' => $stock->id, 'type' => 'buy',
+                'quantity' => 5, 'price' => 100, 'fees' => 2, 'transaction_date' => '2026-11-20',
+                'source' => Transaction::SOURCE_MANUAL]);
+        }
+        app(FakeBrokerGateway::class)->tradeRows = [$this->fill(98713, 'B-19', 'BUY', 5, 100)];
+
+        $result = app(KiteCncTradeSyncService::class)->sync($profile);
+
+        $this->assertSame(0, $result['imported']);
+        $this->assertSame(1, $result['review']);
+        $this->assertSame(2, $profile->transactions()->count());
+        $this->assertDatabaseHas('kite_cnc_trade_imports', [
+            'broker_trade_id' => '98713', 'status' => 'manual_match_review', 'matched_transaction_id' => null,
+        ]);
+    }
+
     public function test_settlement_reconciliation_adds_only_execution_proven_t1_delta_and_uses_trading_days(): void
     {
         [$profile, $stock] = $this->portfolioAndStock();
@@ -91,6 +111,46 @@ class KiteCncTradeSyncTest extends TestCase
         $this->assertSame(5.0, (float) $adjustments[0]['quantity_delta']);
         $this->assertSame('2026-11-23', $adjustments[0]['settles_by']);
         $this->assertSame((float) $localHolding->quantity, (float) $run->broker_snapshot['comparison_holdings'][0]['quantity']);
+        $this->assertSame('reconciled', $run->holdings_status);
+    }
+
+    public function test_partial_broker_reflection_is_left_as_a_holdings_discrepancy(): void
+    {
+        [$profile, $stock] = $this->portfolioAndStock();
+        $fake = app(FakeBrokerGateway::class);
+        $fake->tradeRows = [$this->fill(98722, 'B-21', 'BUY', 5, 100)];
+        app(KiteCncTradeSyncService::class)->sync($profile);
+        $fake->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [[
+            'symbol' => 'AAA', 'exchange' => 'NSE', 'isin' => null, 'quantity' => 2, 't1_quantity' => 0,
+            'used_quantity' => 0, 'cost' => null,
+        ]], 'positions' => ['net' => [], 'day' => [], 'complete' => true], 'current_cash' => 0];
+
+        $run = app(PortfolioReconciliationService::class)->run($profile, 'manual');
+
+        $this->assertSame([], $run->broker_snapshot['settlement_adjustments']);
+        $this->assertSame('mismatch', $run->holdings_status);
+        $this->assertSame(5.0, (float) $run->discrepancies['holdings'][0]['stoxQty']);
+        $this->assertSame(2.0, (float) $run->discrepancies['holdings'][0]['brokerQty']);
+    }
+
+    public function test_unsettled_sale_is_adjusted_only_when_it_exactly_explains_broker_gap(): void
+    {
+        [$profile, $stock] = $this->portfolioAndStock();
+        app(\App\Services\TransactionWriteService::class)->create($profile, $stock, [
+            'type' => 'buy', 'quantity' => 10, 'price' => 100, 'transaction_date' => '2026-11-19',
+            'source' => Transaction::SOURCE_MANUAL,
+        ]);
+        $fake = app(FakeBrokerGateway::class);
+        $fake->tradeRows = [$this->fill(98723, 'S-22', 'SELL', 4, 110)];
+        $fake->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [[
+            'symbol' => 'AAA', 'exchange' => 'NSE', 'isin' => null, 'quantity' => 10, 't1_quantity' => 0,
+            'used_quantity' => 0, 'cost' => null,
+        ]], 'positions' => ['net' => [], 'day' => [], 'complete' => true], 'current_cash' => 0];
+
+        $run = app(PortfolioReconciliationService::class)->run($profile, 'manual');
+
+        $this->assertSame(-4.0, (float) $run->broker_snapshot['settlement_adjustments'][0]['quantity_delta']);
+        $this->assertSame(6.0, (float) $run->broker_snapshot['comparison_holdings'][0]['quantity']);
         $this->assertSame('reconciled', $run->holdings_status);
     }
 

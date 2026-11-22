@@ -186,6 +186,10 @@ class KiteBrokerGateway implements BrokerGateway
             ])->values()->all(),
             'positions' => ['net' => $positions, 'day' => $positionData['day'], 'complete' => true],
             'current_cash' => $cash,
+            // /user/margins/equity exposes available buying power, not a
+            // settlement cash ledger suitable for declaring StoX cash exact.
+            'cash_comparable' => false,
+            'cash_basis' => 'available_equity_buying_power',
         ];
     }
 

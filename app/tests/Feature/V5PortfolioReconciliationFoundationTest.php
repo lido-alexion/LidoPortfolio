@@ -88,15 +88,35 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
         $this->assertFalse($profile->fresh()->execution_blocked_by_reconciliation);
     }
 
-    public function test_removed_calendar_day_selector_is_ignored(): void
+    public function test_available_buying_power_is_not_accepted_as_exact_cash_reconciliation(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $broker = [
+            'holdings' => [], 'current_cash' => 100,
+            'cash_comparable' => false, 'cash_basis' => 'available_equity_buying_power',
+        ];
+        $stox = ['holdings' => [], 'cash_balance' => 100];
+
+        $run = app(PortfolioReconciliationService::class)->recordSuccessful(
+            $profile, 'session_baseline', $broker, $stox, ['holding_cost' => 5, 'funds' => 1],
+        );
+
+        $this->assertSame('unknown', $run->funds_status);
+        $this->assertSame('attention_required', $run->overall_status);
+        $this->assertTrue($profile->fresh()->execution_blocked_by_reconciliation);
+        $this->assertFalse($run->discrepancies['funds']['cash_comparable']);
+    }
+
+    public function test_reconciliation_today_selector_remains_boolean_validated(): void
     {
         $user = User::factory()->create();
         $profile = $this->defaultPortfolioFor($user);
         $profile->forceFill(['execution_mode' => PortfolioProfile::EXECUTION_MODE_AUTOMATIC])->save();
         $this->actingAs($user)->withProfileHeader($user, $profile)
             ->postJson('/api/reconciliation', ['ignore_today_transactions' => 'sometimes'])
-            ->assertCreated();
-        $this->assertSame(1, PortfolioReconciliationRun::query()->count());
+            ->assertUnprocessable();
+        $this->assertSame(0, PortfolioReconciliationRun::query()->count());
     }
 
     public function test_scheduled_reconciliation_runs_once_after_close_delay_and_skips_before_due_time(): void

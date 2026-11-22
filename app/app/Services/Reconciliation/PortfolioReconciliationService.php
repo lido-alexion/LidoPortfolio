@@ -30,7 +30,7 @@ final class PortfolioReconciliationService
     public function run(PortfolioProfile $profile, string $trigger, bool $ignoreTodayTransactions = false): PortfolioReconciliationRun
     {
         $result = Cache::lock('portfolio-reconciliation:'.$profile->id, 60)->get(
-            fn () => $this->runLocked($profile, $trigger, false)
+            fn () => $this->runLocked($profile, $trigger, $trigger === 'manual' && $ignoreTodayTransactions)
         );
         if (! $result instanceof PortfolioReconciliationRun) {
             throw new \RuntimeException('Reconciliation is already in progress for this portfolio.');
@@ -50,7 +50,9 @@ final class PortfolioReconciliationService
             if ($broker === null) {
                 throw new \RuntimeException('Kite holdings or current cash could not be retrieved.');
             }
-            $holdings = $profile->holdings()->with('stock')->get()->groupBy('stock_id')->map(function ($rows): array {
+            $asOfDate = $ignoreTodayTransactions ? now('Asia/Kolkata')->subDay()->toDateString() : null;
+            $holdings = $ignoreTodayTransactions ? $this->holdingsAsOf($profile, $asOfDate)
+                : $profile->holdings()->with('stock')->get()->groupBy('stock_id')->map(function ($rows): array {
                     $first = $rows->first();
                     return [
                         'symbol' => (string) $first->stock->symbol,
@@ -60,7 +62,9 @@ final class PortfolioReconciliationService
                         'cost' => round((float) $rows->sum('invested_amount'), 4),
                     ];
                 })->values()->all();
-            $settlement = $this->settlementAwareBrokerHoldings($profile, $broker, $holdings);
+            $settlement = $ignoreTodayTransactions
+                ? ['holdings' => $broker['holdings'] ?? [], 'adjustments' => []]
+                : $this->settlementAwareBrokerHoldings($profile, $broker, $holdings);
             $broker['raw_holdings'] = $broker['holdings'] ?? [];
             $broker['comparison_holdings'] = $settlement['holdings'];
             $broker['settlement_adjustments'] = $settlement['adjustments'];
@@ -68,12 +72,18 @@ final class PortfolioReconciliationService
             return $this->recordSuccessful($profile, $trigger, $broker, [
                 'captured_at' => now()->toISOString(), 'holdings' => $holdings,
                 'comparison' => [
-                    'comparison_method' => 'current StoX ledger versus Kite settled/T1 holdings with execution-proven settlement adjustments',
+                    'comparison_method' => $ignoreTodayTransactions
+                        ? 'legacy previous-calendar-day StoX ledger comparison; current-day cash remains incomparable'
+                        : 'current StoX ledger versus Kite settled/T1 holdings with execution-proven settlement adjustments',
+                    'ignore_today_transactions' => $ignoreTodayTransactions,
+                    'holdings_as_of' => $asOfDate,
                     'settlement_adjustments' => $settlement['adjustments'],
                     'timezone' => 'Asia/Kolkata',
                     'cost_basis' => 'StoX fee-exclusive weighted-average open cost; transaction fees retained as evidence and not added to cost basis.',
                     'funds_comparison' => 'Current Kite cash versus current StoX cash; no historical Kite funds snapshot is available.',
-                    'overall_status_note' => null,
+                    'overall_status_note' => $ignoreTodayTransactions
+                        ? 'Overall reconciliation remains attention_required because funds are current-day values and cannot be verified as of the previous day.'
+                        : null,
                 ],
                 'cash_balance' => $this->cash->balance($profile),
             ], [
@@ -207,7 +217,9 @@ final class PortfolioReconciliationService
             $stoxCash = (float) ($stox['cash_balance'] ?? 0);
             $cashDifference = round($brokerCash - $stoxCash, 4);
             $holdingsStatus = $holdingDiscrepancies === [] ? 'reconciled' : 'mismatch';
-            $fundsStatus = abs($cashDifference) <= (float) ($tolerances['funds'] ?? 0) ? 'reconciled' : 'mismatch';
+            $cashComparable = ($broker['cash_comparable'] ?? true) === true;
+            $fundsStatus = ! $cashComparable ? 'unknown'
+                : (abs($cashDifference) <= (float) ($tolerances['funds'] ?? 0) ? 'reconciled' : 'mismatch');
             $historicalComparisonIncomplete = (bool) ($stox['comparison']['ignore_today_transactions'] ?? false);
             $overallStatus = $holdingsStatus === 'reconciled' && $fundsStatus === 'reconciled' && ! $historicalComparisonIncomplete
                 ? 'reconciled'
@@ -219,6 +231,8 @@ final class PortfolioReconciliationService
                 'tolerances' => $tolerances,
                 'discrepancies' => ['holdings' => $holdingDiscrepancies, 'funds' => [
                     'broker_cash' => $brokerCash, 'stox_cash' => $stoxCash, 'difference' => $cashDifference,
+                    'cash_comparable' => $cashComparable,
+                    'broker_cash_basis' => $broker['cash_basis'] ?? 'current_cash',
                 ]],
                 'unsupported_instruments' => $unsupported, 'started_at' => now(), 'completed_at' => now(),
             ]);
@@ -242,6 +256,8 @@ final class PortfolioReconciliationService
                 }
                 if ($fundsStatus === 'mismatch') {
                     $parts[] = 'cash differs by ₹'.number_format(abs($cashDifference), 2).'; new live execution is blocked';
+                } elseif ($fundsStatus === 'unknown') {
+                    $parts[] = 'Kite supplied available buying power rather than a comparable cash ledger; cash reconciliation is unverified and new live execution is blocked';
                 }
                 $this->notifications->publishCondition($conditionKey, [$profile->user], [
                     'notification_type' => 'portfolio.reconciliation_discrepancy',
