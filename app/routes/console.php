@@ -139,6 +139,17 @@ Artisan::command('portfolio:daily-sync', function () {
     $this->info('Daily portfolio sync completed.');
 })->purpose('Run daily market data sync manually');
 
+Artisan::command('portfolio:kite-funds-snapshot {--source=periodic} {--reconcile}', function () {
+    $service = app(\App\Services\Broker\KiteFundsSnapshotService::class);
+    $captured = 0;
+    foreach (\App\Models\BrokerConnection::query()->where('provider', 'kite')->get() as $connection) {
+        if ($service->capture($connection, (string) $this->option('source'))) $captured++;
+    }
+    $reconciled = $this->option('reconcile') ? $service->reconcilePreviousSession() : 0;
+    $this->info("Captured {$captured} Kite funds snapshot(s); evaluated {$reconciled} previous-session reconciliation(s).");
+    return 0;
+})->purpose('Capture account-scoped Kite funds snapshots and optionally evaluate previous-session net transfer reconciliation');
+
 Artisan::command('portfolio:dispatch-export-notification-outbox', function () {
     $dispatched = 0;
     $retryWindow = now()->subMinutes(5);
@@ -480,6 +491,13 @@ Schedule::command('portfolio:daily-sync')
     ->timezone($timezone)
     ->when($marketDataSyncDue)
     ->name('daily-market-data');
+
+Schedule::command('portfolio:kite-funds-snapshot --source=periodic')
+    ->everyTwoHours()->timezone($timezone)->withoutOverlapping()->name('kite-funds-periodic-snapshot');
+Schedule::command('portfolio:kite-funds-snapshot --source=late_day')
+    ->dailyAt('23:55')->timezone('Asia/Kolkata')->withoutOverlapping()->name('kite-funds-late-snapshot');
+Schedule::command('portfolio:kite-funds-snapshot --source=morning --reconcile')
+    ->dailyAt('09:20')->timezone('Asia/Kolkata')->withoutOverlapping()->name('kite-funds-morning-reconciliation');
 
 Schedule::command('portfolio:sync-benchmark-prices')
     ->dailyAt($cronTime)

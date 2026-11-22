@@ -198,6 +198,17 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
                 expires_at: null,
             }));
         }
+        // Cash management now reads the funds reconciliation panel alongside
+        // the ordinary cash summary. Keep the feature off in generic journeys
+        // unless a test supplies a more specific Kite funds fixture.
+        if (path.endsWith('/api/cash/kite-funds') && method === 'GET') {
+            return json(route, { data: {
+                automatic_adjustments_enabled: false,
+                payout_semantics_verified: false,
+                snapshots: [],
+                reconciliations: [],
+            } });
+        }
         if (path.endsWith('/api/auth/login') && method === 'POST') {
             if (remainingLoginFailures > 0) {
                 remainingLoginFailures -= 1;

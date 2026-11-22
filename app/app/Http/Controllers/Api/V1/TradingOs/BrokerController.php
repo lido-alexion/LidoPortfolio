@@ -6,6 +6,7 @@ use App\Engines\Support\ApiEnvelope;
 use App\Http\Controllers\Controller;
 use App\Services\Broker\BrokerConnectionService;
 use App\Models\PortfolioProfile;
+use App\Services\Execution\KiteSessionEvidenceService;
 use App\Services\Reconciliation\KiteCncTradeSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -15,12 +16,18 @@ class BrokerController extends Controller
 {
     public function __construct(
         protected BrokerConnectionService $connections,
+        protected KiteSessionEvidenceService $sessionEvidence,
         protected KiteCncTradeSyncService $tradeSync,
     ) {}
 
     public function status(Request $request): JsonResponse
     {
-        return ApiEnvelope::success($this->connections->status($request->user()));
+        return ApiEnvelope::success([...$this->connections->status($request->user()), 'session_evidence' => $this->sessionEvidence->latest($request->user())]);
+    }
+
+    public function refreshEvidence(Request $request): JsonResponse
+    {
+        return ApiEnvelope::success($this->sessionEvidence->capture($request->user()));
     }
 
     public function kiteLoginUrl(Request $request): JsonResponse
@@ -37,7 +44,9 @@ class BrokerController extends Controller
         ]);
 
         $this->connections->completeLogin($request->user(), $validated['request_token']);
-        $this->catchUpCurrentDayTrades($request->user()->fresh());
+        $user = $request->user()->fresh();
+        $this->captureEvidenceSafely($user);
+        $this->catchUpCurrentDayTrades($user);
 
         return ApiEnvelope::success($this->connections->status($request->user()->fresh()));
     }
@@ -59,7 +68,9 @@ class BrokerController extends Controller
         }
 
         $this->connections->completeLogin($user, $token);
-        $this->catchUpCurrentDayTrades($user->fresh());
+        $user = $user->fresh();
+        $this->captureEvidenceSafely($user);
+        $this->catchUpCurrentDayTrades($user);
 
         return redirect($frontend.'?kite=connected');
     }
@@ -69,6 +80,18 @@ class BrokerController extends Controller
         $this->connections->disconnect($request->user());
 
         return ApiEnvelope::success($this->connections->status($request->user()->fresh()));
+    }
+
+    private function captureEvidenceSafely($user): void
+    {
+        try {
+            $this->sessionEvidence->capture($user);
+        } catch (\Throwable $error) {
+            logger()->warning('Kite session evidence capture after reconnect failed', [
+                'user_id' => $user->id,
+                'exception_type' => get_class($error),
+            ]);
+        }
     }
 
     private function catchUpCurrentDayTrades($user): void
