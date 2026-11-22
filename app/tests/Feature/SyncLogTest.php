@@ -86,6 +86,17 @@ class SyncLogTest extends TestCase
         $this->assertDatabaseCount('portfolio_sync_logs', 0);
     }
 
+    public function test_oversized_exception_messages_are_bounded_before_database_persistence(): void
+    {
+        $service = app(SyncLogService::class);
+        $runId = $service->beginRun(SyncLogService::JOB_UNIVERSE_PRICE_SYNC);
+        $service->log($runId, SyncLogService::JOB_UNIVERSE_PRICE_SYNC, 'error', str_repeat('database exception detail ', 5000));
+
+        $log = SyncLog::query()->where('run_id', $runId)->firstOrFail();
+        $this->assertLessThanOrEqual(1000, mb_strlen($log->message));
+        $this->assertStringContainsString('database exception detail', $log->message);
+    }
+
     public function test_begin_run_requires_logs_table(): void
     {
         Setting::setValue('sync_log_retention_days', '7');
