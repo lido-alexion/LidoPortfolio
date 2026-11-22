@@ -181,7 +181,7 @@ class UniversePriceSyncServiceTest extends TestCase
 
     public function test_daily_sync_uses_fixed_daily_lookback_config(): void
     {
-        Carbon::setTestNow('2026-10-23 16:00:00');
+        Carbon::setTestNow(Carbon::parse('2026-10-26 20:00:00', 'UTC'));
         config([
             'portfolio.universe_price_sync.enabled' => true,
             'portfolio.universe_price_sync.batch_size' => 1,
@@ -201,9 +201,8 @@ class UniversePriceSyncServiceTest extends TestCase
         $priceFetch->shouldNotReceive('syncStock');
         $this->fakeBulk(function ($stocks, Carbon $from, Carbon $to) use ($stock): void {
             $this->assertSame([$stock->id], $stocks->pluck('id')->all());
-            $this->assertTrue($from->lte(now()->subDays(10)));
-            $this->assertTrue($from->gte(now()->subDays(11)));
-            $this->assertTrue($to->isToday());
+            $this->assertSame('2026-10-17', $from->toDateString());
+            $this->assertSame('2026-10-27', $to->toDateString());
         }, stored: 1);
 
         $benchmarkSync = Mockery::mock(BenchmarkPriceSyncService::class);

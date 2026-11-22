@@ -9,6 +9,8 @@ use App\Services\IndexPriceSyncService;
 use App\Services\PriceHistoryGapService;
 use App\Services\StockMasterSyncService;
 use App\Services\UniversePriceSyncService;
+use App\Services\UniversePrice\UniversePriceOutcomeService;
+use App\Models\Stock;
 use App\Services\UniverseStockResolverService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,9 +36,11 @@ class UniversePriceSyncController extends Controller
         $alerts->syncActiveAlerts(false);
         $activeAlerts = $alerts->getActiveAlertsForApi();
         $unacknowledged = $alerts->getActiveAlertsForApi(false);
+        $syncStatus = $sync->status($scope);
+        if (! $request->user()?->is_admin) unset($syncStatus['daily_outcomes']);
 
         return response()->json([
-            'data' => array_merge($sync->status($scope), [
+            'data' => array_merge($syncStatus, [
                 'operational_alerts' => [
                     'active' => $activeAlerts,
                     'unacknowledged_count' => count($unacknowledged),
@@ -66,6 +70,16 @@ class UniversePriceSyncController extends Controller
                 ],
             ],
         ]);
+    }
+
+    public function reprobeStock(Request $request, Stock $stock, UniversePriceOutcomeService $outcomes): JsonResponse
+    {
+        abort_unless($request->user()?->is_admin, 403);
+        if (! $outcomes->resetForReprobe($stock, (int) $request->user()->id)) {
+            return response()->json(['message' => 'Daily price sync is running. Retry the reprobe after the current run finishes.'], 409);
+        }
+
+        return response()->json(['data' => $outcomes->summary()]);
     }
 
     public function run(Request $request, UniversePriceSyncService $sync): JsonResponse

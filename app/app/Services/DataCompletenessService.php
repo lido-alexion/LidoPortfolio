@@ -19,7 +19,7 @@ class DataCompletenessService
     /** @return array<string,mixed> */
     public function report(?Carbon $asOf = null): array
     {
-        $asOf ??= now();
+        $asOf = ($asOf ?? now())->copy()->timezone('Asia/Kolkata');
         $lastSession = TradingCalendar::lastRequiredPriceSession($asOf);
         $dates = [];
         for ($date = $lastSession->copy()->subDays(29); $date->lte($lastSession); $date->addDay()) {
@@ -33,7 +33,11 @@ class DataCompletenessService
             ->whereHas('stock', $eligibleStock)
             ->distinct('stock_id')
             ->count('stock_id');
+        // Keep the indexed MAX(price_date) query efficient on the full price
+        // table; SQLite can return a midnight timestamp while MySQL returns
+        // a DATE string, so normalize its display value after querying.
         $latestPriceDate = StockPrice::query()->whereHas('stock', $eligibleStock)->max('price_date');
+        $latestPriceDate = $latestPriceDate === null ? null : substr((string) $latestPriceDate, 0, 10);
         $fundamentalScope = DB::table('stox_fundamental_provider_checks')
             ->join('portfolio_stocks', 'portfolio_stocks.id', '=', 'stox_fundamental_provider_checks.stock_id')
             ->where('portfolio_stocks.is_active', true)

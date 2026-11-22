@@ -285,10 +285,8 @@ class PriceFetchService
 
             $key = [
                 'stock_id' => $stock->id,
-                // Match the model's date serialization exactly. Providers may
-                // return the same session as Y-m-d, ISO-8601, or a timestamp;
-                // mixing the raw value with Eloquent's stored midnight value
-                // can miss the row and violate the unique session key.
+                // Keep the model's normalized midnight value for the unique
+                // session lookup; SQLite stores DATE casts with a time suffix.
                 'price_date' => $priceDate,
             ];
             $attributes = [
@@ -312,6 +310,11 @@ class PriceFetchService
             StockPrice::query()->updateOrCreate($key, $attributes);
             $stored++;
         }
+
+        // Daily no-data observations remain gaps until a validated historical
+        // repair actually persists the missing session row.
+        app(\App\Services\UniversePrice\UniversePriceOutcomeService::class)
+            ->markRecoveredByHistory($stock, array_column($rows, 'price_date'));
 
         return $stored;
     }

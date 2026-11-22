@@ -54,6 +54,7 @@ export default function UniversePriceSyncPage() {
     const [indexStatus, setIndexStatus] = useState(null);
     const [indexRunning, setIndexRunning] = useState(false);
     const [indexBatchSize, setIndexBatchSize] = useState('');
+    const [reprobingStockId, setReprobingStockId] = useState(null);
 
     const loadStatus = useCallback(async (activeScope) => {
         setLoadError('');
@@ -237,6 +238,19 @@ export default function UniversePriceSyncPage() {
             );
         } finally {
             setRunning(false);
+        }
+    };
+
+    const reprobeNoDataStock = async (stock) => {
+        setReprobingStockId(stock.stock_id);
+        try {
+            await api.post(`/universe-price-sync/outcomes/${stock.stock_id}/reprobe`);
+            showToast(`${stock.exchange}:${stock.symbol} queued for the next daily source check.`, 'success');
+            await loadStatus(scope);
+        } catch (error) {
+            showToast(error?.response?.data?.message || 'Could not reset the no-data reprobe window.', 'danger');
+        } finally {
+            setReprobingStockId(null);
         }
     };
 
@@ -900,6 +914,89 @@ export default function UniversePriceSyncPage() {
                             </dl>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <div className="card mb-3">
+                <div className="card-header">Daily source outcomes</div>
+                <div className="card-body">
+                    <p className="text-muted small">
+                        Outcomes are persisted per stock and expected exchange session for {status?.daily_outcomes?.window_days ?? 120} days. A validated-file no-data miss is informational; missing bars remain in history gaps and do not satisfy downstream price readiness. Daily source work is bulk exchange-file based, so a manual reprobe takes effect on the next scheduled or manual daily run.
+                    </p>
+                    <div className="d-flex flex-wrap gap-3 small mb-3" aria-label="Daily source outcome counts">
+                        {Object.entries(status?.daily_outcomes?.outcomes ?? {}).map(([name, count]) => (
+                            <span key={name}><strong>{name.replaceAll('_', ' ')}:</strong> {count}</span>
+                        ))}
+                    </div>
+                    {(status?.daily_outcomes?.recent_sessions ?? []).length > 0 ? (
+                        <div className="table-responsive mb-3">
+                            <table className="table table-sm align-middle mb-0">
+                                <thead><tr><th>Session</th><th>Exchange</th><th>Outcome</th><th>Stocks</th></tr></thead>
+                                <tbody>{status.daily_outcomes.recent_sessions.slice(0, 24).map((item, index) => (
+                                    <tr key={`${item.session_date}-${item.exchange}-${item.outcome}-${index}`}>
+                                        <td>{item.session_date}</td><td>{item.exchange}</td>
+                                        <td>{item.outcome.replaceAll('_', ' ')}</td><td>{item.total}</td>
+                                    </tr>
+                                ))}</tbody>
+                            </table>
+                        </div>
+                    ) : null}
+                    {(status?.daily_outcomes?.temporary_skips ?? []).length > 0 ? (
+                        <div className="table-responsive">
+                            <table className="table table-sm align-middle mb-0">
+                                <thead><tr><th>Symbol</th><th>Exchange</th><th>No-data sessions</th><th>Reprobe after</th><th>Action</th></tr></thead>
+                                <tbody>
+                                    {status.daily_outcomes.temporary_skips.map((stock) => (
+                                        <tr key={stock.stock_id}>
+                                            <td>{stock.symbol}</td>
+                                            <td>{stock.exchange}</td>
+                                            <td>{stock.consecutive_no_data_sessions}</td>
+                                            <td>{stock.skipped_until_session}</td>
+                                            <td>
+                                                <button type="button" className="btn btn-outline-primary btn-sm"
+                                                    disabled={reprobingStockId === stock.stock_id}
+                                                    onClick={() => reprobeNoDataStock(stock)}>
+                                                    {reprobingStockId === stock.stock_id ? 'Resetting…' : 'Reprobe next run'}
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : <p className="text-muted small mb-0">No temporary no-data skips are active.</p>}
+                    {(status?.daily_outcomes?.recent_errors ?? []).length > 0 ? (
+                        <div className="mt-3">
+                            <h3 className="h6">Recent provider and systemic errors</h3>
+                            <div className="table-responsive">
+                                <table className="table table-sm align-middle mb-0">
+                                    <thead><tr><th>Session</th><th>Symbol</th><th>Class</th><th>Stage</th><th>Attempt</th><th>Next retry</th></tr></thead>
+                                    <tbody>{status.daily_outcomes.recent_errors.map((item, index) => (
+                                        <React.Fragment key={`${item.exchange}-${item.symbol}-${item.session_date}-${index}`}>
+                                            <tr>
+                                                <td>{item.session_date}</td><td>{item.exchange}:{item.symbol}</td>
+                                                <td>{item.outcome.replaceAll('_', ' ')}</td><td>{item.failure_stage || item.reason || '—'}</td>
+                                                <td>{item.attempt_count}</td><td>{item.retry_after || '—'}</td>
+                                            </tr>
+                                            {item.error_summary ? <tr><td colSpan="6" className="text-muted">{item.error_summary}</td></tr> : null}
+                                        </React.Fragment>
+                                    ))}</tbody>
+                                </table>
+                            </div>
+                        </div>
+                    ) : null}
+                    {(status?.daily_outcomes?.recent_admin_events ?? []).length > 0 ? (
+                        <details className="mt-3">
+                            <summary className="small fw-semibold">Recent reprobe audit events</summary>
+                            <ul className="small mt-2 mb-0">
+                                {status.daily_outcomes.recent_admin_events.map((event, index) => (
+                                    <li key={`${event.action}-${event.session_date}-${index}`}>
+                                        {event.session_date}: {event.exchange}:{event.symbol} {event.action.replaceAll('_', ' ')} by admin #{event.actor_id ?? 'system'}
+                                    </li>
+                                ))}
+                            </ul>
+                        </details>
+                    ) : null}
                 </div>
             </div>
 

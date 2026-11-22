@@ -601,7 +601,7 @@ class PriceHistoryGapServiceTest extends TestCase
 
     public function test_gaps_for_stock_reports_short_suffix_gap_at_latest_session(): void
     {
-        Carbon::setTestNow('2026-07-10 13:39:00');
+        Carbon::setTestNow(Carbon::parse('2026-07-10 13:39:00', 'Asia/Kolkata'));
         config([
             'portfolio.universe_price_sync.history_days' => 30,
             'portfolio.history.analytics_buffer_days.6m' => 30,

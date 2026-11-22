@@ -148,7 +148,9 @@ class TradingCalendar
      */
     public static function lastRequiredPriceSession(?Carbon $asOf = null): Carbon
     {
-        $asOf = ($asOf ?? now())->copy()->startOfDay();
+        // The default is an instant; resolve its calendar date in the NSE/BSE
+        // market timezone even when the application runs in UTC.
+        $asOf = ($asOf ?? now('Asia/Kolkata'))->copy()->startOfDay();
         $session = self::normalizeToSessionDate($asOf);
 
         if ($session->equalTo($asOf)) {
