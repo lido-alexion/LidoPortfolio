@@ -115,6 +115,21 @@ class UniverseDailyBhavcopySyncService
                     continue;
                 }
                 if (! $force && is_array($receipt) && ($receipt['coverage_hash'] ?? null) === $coverageHash
+                    && ! empty($receipt['retry_after']) && ! $this->isValidRetryInstant($receipt['retry_after'])) {
+                    $failedReceipt = array_merge($receipt, [
+                        'status' => 'failed',
+                        'failure_stage' => 'receipt_validation',
+                        'error' => 'Cached receipt retry_after is not a valid instant.',
+                    ]);
+                    $stats['bulk']['file_errors']++;
+                    if (count($stats['errors']) < 20) $stats['errors'][] = $key.': '.$failedReceipt['error'];
+                    $stats['bulk']['files'][] = $failedReceipt;
+                    if (! $dryRun) {
+                        $this->logs->log($runId, $jobName, 'warning', 'Universe daily bhavcopy file checked', $failedReceipt);
+                    }
+                    continue;
+                }
+                if (! $force && is_array($receipt) && ($receipt['coverage_hash'] ?? null) === $coverageHash
                     && ! empty($receipt['retry_after']) && Carbon::parse($receipt['retry_after'])->isFuture()) {
                     $stats['bulk']['backoff_skips']++;
                     $stats['bulk']['historical_identity_rows'] += (int) ($receipt['historical_identity_rows'] ?? 0);
@@ -340,6 +355,21 @@ class UniverseDailyBhavcopySyncService
     private function retryTimestamp(Carbon $retryAfter): string
     {
         return $retryAfter->copy()->utc()->format('Y-m-d H:i:s');
+    }
+
+    private function isValidRetryInstant(mixed $value): bool
+    {
+        if (! is_string($value) || preg_match(
+            '/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/',
+            $value,
+        ) !== 1) return false;
+
+        try {
+            Carbon::parse($value);
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function failureStage(\Throwable $error, string $stage): string
