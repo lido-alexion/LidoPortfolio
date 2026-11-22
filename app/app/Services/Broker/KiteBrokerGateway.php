@@ -172,6 +172,8 @@ class KiteBrokerGateway implements BrokerGateway
                 'exchange' => (string) ($row['exchange'] ?? ''),
                 'isin' => ($isin = strtoupper(trim((string) ($row['isin'] ?? '')))) !== '' ? $isin : null,
                 'quantity' => (float) ($row['quantity'] ?? 0),
+                't1_quantity' => (float) ($row['t1_quantity'] ?? 0),
+                'used_quantity' => (float) ($row['used_quantity'] ?? 0),
                 'average_price' => isset($row['average_price']) ? (float) $row['average_price'] : null,
                 'cost' => isset($row['average_price']) ? round((float) ($row['quantity'] ?? 0) * (float) $row['average_price'], 4) : null,
                 'instrument_token' => $row['instrument_token'] ?? null,
@@ -179,7 +181,22 @@ class KiteBrokerGateway implements BrokerGateway
             ])->values()->all(),
             'positions' => $positions,
             'current_cash' => $cash,
+            'cash_comparable' => false,
+            'cash_basis' => 'available_equity_buying_power',
         ];
+    }
+
+    public function trades(int $userId): ?array
+    {
+        $token = $this->accessToken($userId);
+        try {
+            $response = Http::timeout(20)->withHeaders($this->headers($token))
+                ->get(rtrim((string) config('broker.kite.api_base'), '/').'/trades');
+        } catch (ConnectionException) {
+            return null;
+        }
+        $rows = data_get($response->json(), 'data');
+        return $response->successful() && is_array($rows) && array_is_list($rows) ? $rows : null;
     }
 
     public function fetchOrder(int $userId, string $brokerOrderId): ?BrokerOrderSnapshot

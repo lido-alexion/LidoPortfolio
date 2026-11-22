@@ -284,6 +284,21 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
         $this->assertSame([], $run->unsupported_instruments);
     }
 
+    public function test_buying_power_cannot_be_reported_as_matched_accounting_cash(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $run = app(PortfolioReconciliationService::class)->recordSuccessful($profile, 'manual', [
+            'holdings' => [], 'current_cash' => 1000, 'cash_comparable' => false,
+            'cash_basis' => 'available_equity_buying_power',
+        ], ['holdings' => [], 'cash_balance' => 1000], ['holding_cost' => 5, 'funds' => 1]);
+
+        $this->assertSame('unknown', $run->funds_status);
+        $this->assertSame('attention_required', $run->overall_status);
+        $this->assertFalse($profile->fresh()->execution_blocked_by_reconciliation);
+        $this->assertFalse($run->discrepancies['funds']['cash_comparable']);
+    }
+
     public function test_cash_only_mismatch_requires_attention_without_execution_block_and_runs_are_immutable(): void
     {
         $user = User::factory()->create();
