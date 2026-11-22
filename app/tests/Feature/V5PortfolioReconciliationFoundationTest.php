@@ -45,7 +45,7 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
         $broker = app(FakeBrokerGateway::class);
         $broker->reconciliationSnapshot = [
             'provider' => 'kite', 'holdings' => [['symbol' => 'AAA', 'exchange' => 'NSE', 'quantity' => 10, 'cost' => 1000]],
-            'positions' => [], 'current_cash' => 50,
+            'positions' => [], 'current_cash' => 50, 'cash_comparable' => false,
         ];
         Carbon::setTestNow(Carbon::parse('2026-11-13 10:00:00', 'Asia/Kolkata'));
         try {
@@ -60,7 +60,7 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
             $this->assertSame('reconciled', $run->holdings_status);
             $this->assertSame('attention_required', $run->overall_status);
             $this->assertSame(3, $profile->transactions()->count());
-            $this->assertSame('Current Kite cash versus current StoX cash; no historical Kite funds snapshot is available.', $run->stox_snapshot['comparison']['funds_comparison']);
+            $this->assertSame('Cash comparison is unknown: Kite exposes available equity buying power here, not a comparable accounting cash ledger.', $run->stox_snapshot['comparison']['funds_comparison']);
         } finally {
             Carbon::setTestNow();
         }
@@ -282,6 +282,21 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
         $this->assertSame('reconciled', $run->holdings_status);
         $this->assertSame([], $run->discrepancies['holdings']);
         $this->assertSame([], $run->unsupported_instruments);
+    }
+
+    public function test_buying_power_cannot_be_reported_as_matched_accounting_cash(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $run = app(PortfolioReconciliationService::class)->recordSuccessful($profile, 'manual', [
+            'holdings' => [], 'current_cash' => 1000, 'cash_comparable' => false,
+            'cash_basis' => 'available_equity_buying_power',
+        ], ['holdings' => [], 'cash_balance' => 1000], ['holding_cost' => 5, 'funds' => 1]);
+
+        $this->assertSame('unknown', $run->funds_status);
+        $this->assertSame('attention_required', $run->overall_status);
+        $this->assertFalse($profile->fresh()->execution_blocked_by_reconciliation);
+        $this->assertFalse($run->discrepancies['funds']['cash_comparable']);
     }
 
     public function test_cash_only_mismatch_requires_attention_without_execution_block_and_runs_are_immutable(): void

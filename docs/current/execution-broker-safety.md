@@ -265,7 +265,7 @@ The additive Trading OS API is under `/api/v1`; legacy portfolio APIs remain whe
 | Broker/Kite | `/api/v1/broker/status`, `/kite/login-url`, guest-safe `/kite/callback`, `/kite/session`, `/kite/disconnect`, emergency disconnect and primary-open-order cancellation routes |
 | Protections | `GET/POST /api/v1/protections`, `GET /{id}`, `POST /{id}/cancel`, `/reconcile` |
 | StoX execution code and entitlement | `/api/v1/totp/*`; admin `PUT /api/v1/admin/users/{user}/automated-execution-entitlement` |
-| Reconciliation | `GET /api/reconciliation`, `GET /api/reconciliation/{run}`; reconciliation controller exposes recorded runs |
+| Reconciliation | `GET /api/reconciliation`, `GET /api/reconciliation/{run}`, `POST /api/reconciliation/trades/sync`; sync is scoped to the active portfolio and only imports eligible CNC executions |
 | Paper execution | `/api/portfolios/{portfolio}/simulation` and pause/resume paths; simulation controller owns simulated workflow |
 
 Sensitive API-token routes use explicit execution read/submit scopes. Controller route presence does not bypass portfolio access, role, StoX execution-code, entitlement, safety or execution gate checks.
@@ -284,6 +284,7 @@ Stable service ownership:
 - `RecommendationExecutionLifetime` / `RecommendationExecutionNotificationService` — session window, expiry and approaching-expiry notification behavior.
 - `PositionProtectionService` / `ProtectionTriggerPriceResolver` — protective order lifecycle and target/stop price resolution.
 - `PortfolioReconciliationService` — broker/StoX evidence comparison and run persistence.
+- `KiteCncTradeSyncService` — idempotent import/review of current-day CNC trade executions and unavailable-session evidence.
 - `PaperSimulationProcessor` / `PaperTradeExecutor` — durable simulated execution progression.
 - `KiteReadinessReminderService` — Automatic-mode broker-readiness reminders.
 
@@ -296,6 +297,7 @@ Current Laravel scheduler behavior uses the application scheduler timezone and n
 - `tos:submit-automatic-orders` — every five minutes; coordinates eligible Automatic portfolios by user/account.
 - `tos:reconcile-broker-orders` — every five minutes; reconciles in-flight primary orders and open protections.
 - `portfolio:reconcile` — every five minutes; runs portfolio/broker reconciliation evidence checks.
+- `portfolio:sync-kite-cnc` — every five minutes; runs only after configured market close plus reconciliation delay and syncs current-day CNC tradebook rows.
 - `tos:expire-execution-windows` — every minute; refreshes future windows, sends bounded expiry notices and expires due gaps.
 - `tos:finalize-internal-transfer-valuations` — every five minutes; finalizes eligible provisional transfer valuations.
 - `portfolio:send-kite-readiness-reminders` — scheduled readiness reminder path for unusable Automatic portfolios.

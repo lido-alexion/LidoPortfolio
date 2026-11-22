@@ -750,6 +750,12 @@ Schedule::command('portfolio:reconcile')
     ->onFailure($captureFailedScheduledOutput('portfolio:reconcile'))
     ->name('portfolio-reconciliation');
 
+Schedule::command('portfolio:sync-kite-cnc')
+    ->everyFiveMinutes()
+    ->timezone($timezone)
+    ->withoutOverlapping(10)
+    ->name('portfolio-kite-cnc-sync');
+
 // FEAT-020 Paper work is scheduled before analytical simulation capacity and
 // processes bounded durable checkpoints without requiring a resident worker.
 Schedule::command('portfolio:process-paper-simulations')
