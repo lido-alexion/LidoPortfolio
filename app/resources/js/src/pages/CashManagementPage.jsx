@@ -72,6 +72,7 @@ export default function CashManagementPage() {
     const [ledger, setLedger] = useState([]);
     const [statement, setStatement] = useState(null);
     const [kiteFunds, setKiteFunds] = useState(null);
+    const [kiteFundsUnavailable, setKiteFundsUnavailable] = useState(false);
     const [statementType, setStatementType] = useState('');
     const [statementClassification, setStatementClassification] = useState('');
     const [statementCursor, setStatementCursor] = useState({ profileId: null, page: 1, perPage: 25 });
@@ -105,10 +106,9 @@ export default function CashManagementPage() {
         errorFallback: 'Failed to load cash',
         onError: () => {},
         request: async () => {
-            const [summaryRes, ledgerRes, fundsRes] = await Promise.all([
+            const [summaryRes, ledgerRes] = await Promise.all([
                 api.get('/cash', { params: { include_reservations: true }, skipErrorToast: true }),
                 api.get('/cash/statement', { params: { page: statementPage, per_page: statementPerPage, order: 'desc', entry_type: statementType || undefined, classification: statementClassification || undefined }, skipErrorToast: true }),
-                api.get('/cash/kite-funds', { skipErrorToast: true }),
             ]);
             const nextSummary = summaryRes.data?.data || null;
             const nextStatement = ledgerRes.data?.data || null;
@@ -116,7 +116,16 @@ export default function CashManagementPage() {
             setSummary(nextSummary);
             setStatement(nextStatement);
             setLedger(nextLedger);
-            setKiteFunds(fundsRes.data?.data || null);
+            // Kite snapshots are supplementary evidence; their endpoint must not
+            // prevent the authoritative ledger cash summary from rendering.
+            try {
+                const fundsRes = await api.get('/cash/kite-funds', { skipErrorToast: true });
+                setKiteFunds(fundsRes.data?.data || null);
+                setKiteFundsUnavailable(!fundsRes.data?.data);
+            } catch {
+                setKiteFunds(null);
+                setKiteFundsUnavailable(true);
+            }
             const lastPage = Math.max(1, Number(nextStatement?.pagination?.last_page) || 1);
             if (statementPage > lastPage) setStatementCursor((cursor) => ({ ...cursor, profileId, page: lastPage }));
             const strategies = Array.isArray(nextSummary?.strategies) ? nextSummary.strategies : [];
@@ -546,11 +555,12 @@ export default function CashManagementPage() {
                     <div className="card mb-3">
                         <div className="card-header d-flex justify-content-between align-items-center gap-2">
                             <span>Kite funds snapshots and bank transfer review</span>
-                            <span className={`badge ${kiteFunds?.automatic_adjustments_enabled && kiteFunds?.payout_semantics_verified ? 'text-bg-warning' : 'text-bg-secondary'}`}>{kiteFunds?.automatic_adjustments_enabled && kiteFunds?.payout_semantics_verified ? 'Adjustment review enabled' : 'Automatic adjustments off'}</span>
+                            <span className={`badge ${kiteFunds?.automatic_adjustments_enabled && kiteFunds?.payout_semantics_verified ? 'text-bg-warning' : 'text-bg-secondary'}`}>{kiteFundsUnavailable ? 'Kite evidence unavailable' : kiteFunds?.automatic_adjustments_enabled && kiteFunds?.payout_semantics_verified ? 'Adjustment review enabled' : 'Automatic adjustments off'}</span>
                         </div>
                         <div className="card-body">
+                            {kiteFundsUnavailable ? <p className="small text-warning" role="status">Kite funds evidence could not be loaded. StoX cash remains available; no adjustment was applied.</p> : null}
                             <p className="small text-muted mb-3">Kite available funds are broker buying power and remain separate from StoX ledger cash. Pay-in and payout are stored independently; payout meaning {kiteFunds?.payout_semantics_verified ? 'is marked operator-verified against Console evidence' : 'has not been validated against Console'}, so no cash adjustment is applied automatically without review.</p>
-                            {kiteFunds?.reconciliations?.length ? <div className="table-responsive mb-3">
+                            {kiteFundsUnavailable ? null : kiteFunds?.reconciliations?.length ? <div className="table-responsive mb-3">
                                 <table className="table table-sm align-middle mb-0">
                                     <thead><tr><th>Trading date</th><th>Status</th><th className="text-end">Kite net</th><th className="text-end">Manual net</th><th>Checked</th><th>Review</th></tr></thead>
                                     <tbody>{kiteFunds.reconciliations.map((row) => <tr key={row.id}>
@@ -570,7 +580,7 @@ export default function CashManagementPage() {
                                     </tr>)}</tbody>
                                 </table>
                             </div> : <p className="small text-muted mb-3">No next-day reconciliation has been recorded yet.</p>}
-                            {kiteFunds?.snapshots?.length ? <div className="table-responsive">
+                            {kiteFundsUnavailable ? null : kiteFunds?.snapshots?.length ? <div className="table-responsive">
                                 <table className="table table-sm align-middle mb-0">
                                     <thead><tr><th>Captured</th><th>Date</th><th>Source</th><th>Freshness</th><th className="text-end">Available</th><th className="text-end">Opening</th><th className="text-end">Pay-in</th><th className="text-end">Payout</th></tr></thead>
                                     <tbody>{kiteFunds.snapshots.slice(0, 8).map((row) => <tr key={row.id}>
