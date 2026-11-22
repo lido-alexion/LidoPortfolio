@@ -123,8 +123,10 @@ final class KiteFundsSnapshotService
                     ! $final => 'stale_snapshot',
                     ! $hasPayoutEvidence => 'review_required',
                     $zeroNetMixedActivity => 'zero_net_review',
-                    $manual->isNotEmpty() && $manualNetUnits === $netUnits => 'reconciled',
-                    $manual->isNotEmpty() => 'mismatch_warning',
+                    // Manual cash rows have profile/date scope only. They cannot be
+                    // attributed to this broker account after an account switch.
+                    // Do not claim a match or mismatch for account-scoped evidence.
+                    $manual->isNotEmpty() => 'manual_activity_unattributed',
                     $suppressionReason !== null => 'adjustment_suppressed',
                     $netUnits === 0 => 'zero_net_review',
                     ! config('broker.kite_funds.auto_adjustments_enabled', false) => 'adjustment_disabled',
@@ -149,8 +151,9 @@ final class KiteFundsSnapshotService
                             ->whereIn('movement.entry_type', ['deposit', 'withdrawal'])->whereNull('movement.reversal_of_entry_id')
                             ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('portfolio_cash_ledger_entries as reversal')->whereColumn('reversal.reversal_of_entry_id', 'movement.id'));
                         if ($lockedManual->exists()) {
-                            $lockedNet = $this->decimalUnits((string) $lockedManual->sum('movement.amount'));
-                            $effectiveStatus = $lockedNet === $netUnits ? 'reconciled' : 'mismatch_warning';
+                            // These rows have no broker-account identity. A matching
+                            // amount is not proof they belong to this Kite account.
+                            $effectiveStatus = 'manual_activity_unattributed';
                         } else {
                             $entry = app(\App\Services\CashManagementService::class)->adjust(
                                 \App\Models\PortfolioProfile::query()->findOrFail($key['profile_id']),

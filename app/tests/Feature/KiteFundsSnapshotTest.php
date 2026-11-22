@@ -97,13 +97,15 @@ class KiteFundsSnapshotTest extends TestCase
         Date::setTestNow();
     }
 
-    public function test_manual_match_reconciles_and_manual_mismatch_only_warns(): void
+    public function test_profile_scoped_manual_activity_is_not_attributed_to_account_scoped_snapshot(): void
     {
-        [$user, $profile] = $this->connectedUser();
+        [$user, $profile, $connection] = $this->connectedUser();
         Date::setTestNow('2026-11-23 09:20:00 Asia/Kolkata');
         config(['broker.kite_funds.auto_adjustments_enabled' => true, 'broker.kite_funds.payout_semantics_verified' => true]);
+        // The cash entry predates a switch from the former account to this one.
+        $connection->forceFill(['broker_user_id' => 'NEW5678'])->save();
         $snapshot = KiteFundsSnapshot::query()->create([
-            'profile_id' => $profile->id, 'user_id' => $user->id, 'broker_account_id' => 'AB1234',
+            'profile_id' => $profile->id, 'user_id' => $user->id, 'broker_account_id' => 'NEW5678',
             'trading_date' => '2026-11-20', 'captured_at' => '2026-11-20 23:55:00',
             'available_balance' => 100, 'opening_balance' => 100, 'intraday_payin' => 5000, 'utilised_payout' => 1000,
             'payout_semantics_verified' => true, 'capture_source' => 'late_day', 'freshness' => 'complete',
@@ -112,12 +114,15 @@ class KiteFundsSnapshotTest extends TestCase
         app(CashManagementService::class)->deposit($profile, '4000.0000', 'Manual matching transfer', $user, '2026-11-20');
         app(KiteFundsSnapshotService::class)->reconcilePreviousSession();
         $row = KiteFundsReconciliation::query()->firstOrFail();
-        $this->assertSame('reconciled', $row->status);
+        // Even a matching number cannot establish which broker account the
+        // profile-scoped manual row belongs to after an account transition.
+        $this->assertSame('manual_activity_unattributed', $row->status);
         $this->assertNull($row->cash_ledger_entry_id);
+        $this->assertSame(1, \App\Models\CashLedgerEntry::query()->where('profile_id', $profile->id)->count());
 
         \App\Models\CashLedgerEntry::query()->where('profile_id', $profile->id)->update(['amount' => '4500.0000']);
         app(KiteFundsSnapshotService::class)->reconcilePreviousSession();
-        $this->assertSame('mismatch_warning', $row->fresh()->status);
+        $this->assertSame('manual_activity_unattributed', $row->fresh()->status);
         $this->assertSame(1, \App\Models\CashLedgerEntry::query()->where('profile_id', $profile->id)->count());
         $this->assertSame($snapshot->id, $row->fresh()->snapshot_id);
         Date::setTestNow();
