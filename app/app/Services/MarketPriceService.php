@@ -61,7 +61,7 @@ class MarketPriceService
         }
 
         if ($cached['data']->isNotEmpty()) {
-            return $this->historyPayload($stock, $cached['data'], 'stored', 'corporate_action_adjusted_when_available', $quote);
+            return $this->historyPayload($stock, $this->chartRows($cached['data']), 'stored', 'corporate_action_adjusted_when_available', $quote);
         }
 
         // An empty local history can occur for a newly listed stock. Use the
@@ -88,7 +88,25 @@ class MarketPriceService
             // Keep the established empty-history response contract.
         }
 
-        return $this->historyPayload($stock, $cached['data'], 'stored', 'corporate_action_adjusted_when_available', $quote);
+        return $this->historyPayload($stock, $this->chartRows($cached['data']), 'stored', 'corporate_action_adjusted_when_available', $quote);
+    }
+
+    /**
+     * Eloquent's decimal:4 cast correctly preserves database precision as a
+     * string. The chart JSON contract represents OHLC values as numbers, so
+     * normalize only this read payload (without changing model/storage casts).
+     */
+    protected function chartRows($prices)
+    {
+        return $prices->map(function ($row): array {
+            $data = $row->toArray();
+            foreach (['open_price', 'high_price', 'low_price', 'close_price', 'adjusted_close_price'] as $field) {
+                if (array_key_exists($field, $data) && $data[$field] !== null) {
+                    $data[$field] = (float) $data[$field];
+                }
+            }
+            return $data;
+        });
     }
 
     protected function historyPayload(Stock $stock, $prices, string $provider, string $adjustmentBasis, ?array $quote): array

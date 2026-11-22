@@ -151,7 +151,7 @@ class KiteAuthenticatedPriceDataTest extends TestCase
         $afterExpiry = $service->accountHistoryForStock($stock, $user->id);
 
         $this->assertSame('stored', $afterExpiry['provider']);
-        $this->assertSame(91.0, $afterExpiry['data'][0]->close_price);
+        $this->assertSame(91.0, $afterExpiry['data'][0]['close_price']);
         $this->assertSame('corporate_action_adjusted_when_available', $afterExpiry['adjustment_basis']);
         Http::assertSentCount(2); // Initial history and its independent optional quote attempt.
     }
