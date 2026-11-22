@@ -97,3 +97,19 @@ test('expired and unknown broker status remain neutral or fail closed', async ({
     const unavailableCard = page.getByText('Broker portfolio reconciliation').locator('..').locator('..');
     await expect(unavailableCard.getByRole('button', { name: 'Reconcile excluding today', exact: true })).toBeDisabled();
 });
+
+test('connected Kite read-only split menu opens and closes without broker mutations', async ({ page }) => {
+    const { control, actions } = await openDashboard(page, { configured: true, connected: true, usable: true, expires_at: activeSessionExpiry() });
+    const primary = control.getByRole('button').first();
+    const menu = control.locator('button[aria-haspopup="menu"]');
+    await expect(menu).toHaveCount(1);
+    await expect(menu).toBeEnabled();
+    await expect(menu).toHaveAttribute('aria-label', `${await primary.getAttribute('aria-label')} menu`);
+    await menu.click();
+    await expect(menu).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('menuitem', { name: 'Kite settings', exact: true })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Disconnect Kite…', exact: true })).toBeVisible();
+    await menu.click();
+    await expect(menu).toHaveAttribute('aria-expanded', 'false');
+    expect(actions).toEqual([]);
+});

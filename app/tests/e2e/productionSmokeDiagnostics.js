@@ -44,9 +44,12 @@ const AUTHENTICATED_SMOKE_STAGES = new Set([
     'dashboard_kite_accessible_label',
     'dashboard_kite_safety_controls',
     'dashboard_kite_menu',
+    'dashboard_kite_menu_ready',
     'dashboard_kite_menu_open',
+    'dashboard_kite_menu_expanded',
     'dashboard_kite_menu_items',
     'dashboard_kite_menu_close',
+    'dashboard_kite_menu_collapsed',
     'dashboard_reconciliation_gate',
     'request_safety',
 ]);

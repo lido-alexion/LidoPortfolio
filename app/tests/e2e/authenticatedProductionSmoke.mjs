@@ -286,15 +286,35 @@ try {
         if (!emergencyControlsBefore.includes('Emergency Kite disconnect')
             || !emergencyControlsBefore.includes('Cancel eligible open orders and disconnect Kite')) throw new Error();
         stage = 'dashboard_kite_menu';
-        const kiteMenuButton = kiteControl.getByRole('button', { name: `${kitePrimaryLabel} menu`, exact: true });
+        // The accessible name changes when the status GET hydrates. Keep the
+        // menu target stable across that render instead of using a stale label
+        // or ElementHandle; still verify the current accessible label exactly.
+        const kiteMenuButton = kiteControl.locator('button[aria-haspopup="menu"]');
         if (await kiteMenuButton.count() !== 1) throw new Error();
         if (brokerStatusPayload?.configured === false) {
             if (!(await kiteMenuButton.isDisabled())) throw new Error();
         } else {
+            stage = 'dashboard_kite_menu_ready';
+            await page.waitForFunction(requireConfirmed => {
+                const control = document.querySelector('.lido-header .lido-kite-header-control');
+                const primary = control?.querySelector('button:not([aria-haspopup="menu"])');
+                const menu = control?.querySelector('button[aria-haspopup="menu"]');
+                const label = primary?.getAttribute('aria-label');
+                return Boolean(menu && !menu.disabled && label
+                    && menu.getAttribute('aria-label') === `${label} menu`
+                    && (!requireConfirmed || (
+                        label !== 'Kite status unknown · Refresh to check'
+                        && label !== 'Kite is not configured on this server'
+                    )));
+            }, brokerStatusPayload?.configured === true);
+            const livePrimaryLabel = await kitePrimaryButton.getAttribute('aria-label');
+            if (!livePrimaryLabel || await kiteMenuButton.getAttribute('aria-label') !== `${livePrimaryLabel} menu`) throw new Error();
             stage = 'dashboard_kite_menu_open';
             await kiteMenuButton.click();
-            await kiteMenuButton.waitFor({ state: 'visible' });
-            await page.waitForFunction(button => button?.getAttribute('aria-expanded') === 'true', await kiteMenuButton.elementHandle());
+            stage = 'dashboard_kite_menu_expanded';
+            await page.waitForFunction(() => document.querySelector(
+                '.lido-header .lido-kite-header-control button[aria-haspopup="menu"]'
+            )?.getAttribute('aria-expanded') === 'true');
             stage = 'dashboard_kite_menu_items';
             const kiteMenu = page.getByRole('menu');
             await kiteMenu.waitFor({ state: 'visible' });
@@ -304,7 +324,10 @@ try {
             else if (await disconnectItem.count()) throw new Error();
             stage = 'dashboard_kite_menu_close';
             await kiteMenuButton.click();
-            await page.waitForFunction(button => button?.getAttribute('aria-expanded') === 'false', await kiteMenuButton.elementHandle());
+            stage = 'dashboard_kite_menu_collapsed';
+            await page.waitForFunction(() => document.querySelector(
+                '.lido-header .lido-kite-header-control button[aria-haspopup="menu"]'
+            )?.getAttribute('aria-expanded') === 'false');
         }
         if (JSON.stringify(await safetyControls.locator('button').evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')))) !== JSON.stringify(emergencyControlsBefore)) throw new Error();
         kiteCoverage = 'verified';
