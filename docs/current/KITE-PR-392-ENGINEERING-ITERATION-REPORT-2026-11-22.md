@@ -25,15 +25,18 @@
 
 Kite documents the quote and historical limits as 1 request/second and 3 requests/second, and documents historical candles as timestamp/OHLC/volume values (optionally OI). See [Kite API rate limits and errors](https://kite.trade/docs/connect/v3/exceptions/) and [historical candle data](https://www.kite.trade/docs/connect/v3/historical/).
 
-## Consumer integration after #383/#387 merges
+## Consumer integration — issue #386, 2026-11-22
 
-1. Rebase/reconcile normally after #383 merges and review its final provider-chain, cache, backoff, and circuit contracts before touching a consumer.
-2. Add a user-scoped read orchestration layer for authenticated chart and portfolio-price requests. Pass the authenticated user's ID explicitly; attempt Kite only for that same user's usable session and supported NSE/BSE equity mapping.
-3. Request a complete Kite daily series for the requested chart range (and a live quote only during the current equity session). On no session, missing mapping, empty/incomplete candles, HTTP 403/429, timeout, or provider error, call the existing public provider chain and preserve its result/provenance.
-4. Keep Kite candles account-scoped and out of globally persisted price rows or responses to other users. Kite returns raw/unadjusted candles; do not splice them into adjusted public-provider history. Either serve one coherent source series or apply a separately verified corporate-action adjustment contract before combining sources.
-5. Leave unauthenticated/public and scheduled/background reads on existing providers. Add endpoint tests for same-user isolation, fallback paths, provider provenance, adjustment-basis handling, and no Kite request without that user's session.
+The consumer seam is `GET /api/stocks/{stock}/market-prices` in `StockPriceController::market` and `MarketPriceService::accountHistoryForStock`. It passes the authenticated user ID directly to `KiteAuthenticatedPriceData`; the adapter still does not implement the generic provider interface.
 
-The existing chart read entry point is `GET /api/stocks/{stock}/market-prices` in `StockPriceController::market`; portfolio chart reads also pass through `HoldingPresentationService`. Select the final integration seam after checking #387's merged diff so it does not overlap its changed consumer or provider files.
+- For a usable session and deterministic NSE/BSE equity mapping, request daily Kite candles for the stored chart range (or the most recent year if no shared rows exist), capped to Kite's latest ten-year window. Account-scoped history responses are cached for 15 minutes to limit repeat chunk requests. A live quote is attempted independently and is returned only when current, fresh and in-session.
+- Return a Kite series only when the adapter produces valid rows. Keep it as a single-source response marked `provider: kite` and `adjustment_basis: unadjusted`; sparse responses are allowed for new listings and legitimate gaps, while malformed and duplicate returned candles fail the response over to fallback.
+- On disconnected/expired sessions, unsupported or missing mapping, no candles, partial/malformed candles, Kite 403/429/timeouts, or other adapter failures, retain the existing shared history response. Its source is marked `provider: stored` and its existing corporate-action adjustment behavior is preserved. When no shared rows exist, invoke the existing provider fallback chain without persisting its result; report that provider in `provider`.
+- Never splice Kite raw bars into shared adjusted bars. This endpoint does not write to `portfolio_stock_prices`; Kite candles and quote caches are user-scoped. Cached private history is served only while the same user still has a usable Kite session. Private credentials and adapter errors are not returned to clients.
+- `/stocks/{stock}/prices` portfolio presentation, global/background provider sync, official #383 exchange pricing, price integrity/invalidation, and Strategy/ML/trading fail-closed paths are unchanged. In particular, #383 official exchange pricing remains authoritative for global daily universe sync.
+- The endpoint is under the authenticated API middleware. No user-supplied account ID is accepted, preventing cross-account session selection.
+
+Focused feature coverage exercises Kite-first chart reads, sparse/new-listing history, expired-session shared-history fallback, Kite 403 fallback without token disclosure, malformed-candle fallback, no-session behavior, account-scoped quote caching, timezone normalization, and out-of-session live quote suppression.
 
 ## Focused verification
 
@@ -45,9 +48,8 @@ The existing chart read entry point is `GET /api/stocks/{stock}/market-prices` i
 
 ## Remaining blockers
 
-- Consumer-level Kite-first fallback behavior is not yet active; the required safe seam depends on #383/#387 merging and final compatibility review.
-- No owner action is required for this local iteration.
+- No owner action is required. The feature suite could not run in this checkout because `app/vendor/autoload.php` is absent. PHP lint and diff checks passed; full backend CI verification remains required in an environment with the project dependencies and MySQL service. Global #383 sync behavior was not changed.
 
 ## ACTION REQUIRED FROM YOU
 
-**None.** Consumer integration is blocked by the explicitly requested #383/#387 merge boundary, not by an approval or account action.
+**None.**
