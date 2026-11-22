@@ -152,6 +152,10 @@ class UniverseDailyBhavcopySyncTest extends TestCase
         $this->assertSame(1, $result['failed']);
         $this->assertSame(1, $result['bulk']['unavailable_stocks']);
         $this->assertSame('MISSING', $result['bulk']['unavailable_samples'][0]['symbol']);
+        $this->assertDatabaseHas('portfolio_universe_price_session_outcomes', [
+            'stock_id' => Stock::query()->where('symbol', 'MISSING')->value('id'),
+            'session_date' => '2026-10-26', 'outcome' => 'no_data', 'price_present' => false,
+        ]);
         $this->assertSame('partial', SyncRun::query()->latest('finished_at')->value('status'));
         Http::assertNothingSent();
     }
@@ -174,6 +178,10 @@ class UniverseDailyBhavcopySyncTest extends TestCase
         $this->assertSame('partial', SyncRun::query()->latest('finished_at')->value('status'));
         $saved = json_decode((string) Setting::getValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS), true);
         $this->assertSame(1, $saved['entries']['NSE:2026-10-26']['retry_attempt']);
+        $this->assertDatabaseHas('portfolio_universe_price_session_outcomes', [
+            'stock_id' => $stock->id, 'session_date' => '2026-10-26', 'outcome' => 'provider_error',
+            'price_present' => true, 'failure_stage' => 'exchange_fetch',
+        ]);
         $this->assertSame('manual', StockPrice::query()->value('provider_source'));
     }
 
@@ -447,6 +455,22 @@ class UniverseDailyBhavcopySyncTest extends TestCase
         }
 
         $this->assertDatabaseMissing('portfolio_stock_prices', ['stock_id' => $stock->id]);
+    }
+
+    public function test_old_session_failures_schedule_reprobe_from_today_after_short_retries(): void
+    {
+        $service = app(UniverseDailyBhavcopySyncService::class);
+        $method = new \ReflectionMethod($service, 'nextRetrySchedule');
+        $method->setAccessible(true);
+
+        [$attempt, $retryAfter] = $method->invoke($service, [
+            'retry_attempt' => 3,
+            'retry_after' => '2026-10-26T19:00:00+05:30',
+        ], Carbon::parse('2026-10-15'));
+
+        $this->assertSame(4, $attempt);
+        $this->assertTrue($retryAfter->isFuture());
+        $this->assertSame('2026-11-02 20:00:00', $retryAfter->timezone('Asia/Kolkata')->toDateTimeString());
     }
 
     private function initialStats(): array

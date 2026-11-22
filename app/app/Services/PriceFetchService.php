@@ -313,6 +313,11 @@ class PriceFetchService
             $stored++;
         }
 
+        // Daily no-data observations remain gaps until a validated historical
+        // repair actually persists the missing session row.
+        app(\App\Services\UniversePrice\UniversePriceOutcomeService::class)
+            ->markRecoveredByHistory($stock, array_column($rows, 'price_date'), $provider);
+
         return $stored;
     }
 

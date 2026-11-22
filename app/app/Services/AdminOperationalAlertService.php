@@ -21,6 +21,8 @@ class AdminOperationalAlertService
 
     public const KEY_UNIVERSE_SYNC_FAILED = 'universe_sync_failed';
 
+    public const KEY_UNIVERSE_PRICE_COVERAGE_COLLAPSE = 'universe_price_coverage_collapse';
+
     public const KEY_STOCK_MASTER_OVERDUE = 'stock_master_overdue';
 
     public const KEY_STOCK_MASTER_FAILED = 'stock_master_failed';
@@ -112,6 +114,16 @@ class AdminOperationalAlertService
             $identityConflict = $bulkDaily && (int) ($lastRun['bulk']['identity_conflicts'] ?? 0) > 0;
             $persistentDailyFileFailure = $bulkDaily && $this->hasPersistentDailyFileFailure($lastRun);
             $dailyFailureNeedsAlert = $bulkDaily && $this->dailyFailureNeedsAlert($lastRun, $universeRun, $validatedDailyFiles);
+            $coverageCollapse = app(\App\Services\UniversePrice\UniversePriceOutcomeService::class)->systemicCoverageCollapse();
+            if ($coverageCollapse !== null) {
+                $alerts[] = $this->alert(
+                    self::KEY_UNIVERSE_PRICE_COVERAGE_COLLAPSE,
+                    'critical',
+                    'Daily universe price coverage collapsed',
+                    sprintf('Daily %s price coverage fell to %d%% no-data for two sessions after a %d%% baseline. Check the exchange file and source identity evidence; missing prices remain unavailable until a verified backfill repairs them.', $coverageCollapse['exchange'], $coverageCollapse['no_data_share_percent'], $coverageCollapse['baseline_no_data_share_percent']),
+                    ['coverage_collapse' => $coverageCollapse],
+                );
+            }
             if ($identityConflict || $persistentDailyFileFailure || $dailyFailureNeedsAlert) {
                 $alerts[] = $this->alert(
                     self::KEY_UNIVERSE_SYNC_FAILED,
@@ -409,7 +421,7 @@ class AdminOperationalAlertService
             && $this->dailyStatsMatchRun($lastRun, $run);
     }
 
-    /** Daily source errors are quiet only on their first recorded attempt; absent proof and identity conflicts fail closed. */
+    /** Only a retry-pending exchange fetch may remain quiet; absent proof and identity conflicts fail closed. */
     protected function dailyFailureNeedsAlert(?array $lastRun, ?SyncRun $run, bool $validated): bool
     {
         if (! $lastRun) return false;
@@ -423,7 +435,7 @@ class AdminOperationalAlertService
         return false;
     }
 
-    /** A single retryable source failure is quiet only when the full run workset and its SyncRun agree. */
+    /** A single exchange-fetch failure is quiet only before its second attempt and with full run proof. */
     protected function dailyTransientFailureOnly(?array $lastRun, ?SyncRun $run): bool
     {
         if (! $lastRun || ! $run || ! in_array($run->status, ['failed', 'partial'], true)
@@ -458,7 +470,8 @@ class AdminOperationalAlertService
             $observedKeys[$key] = true;
             if (in_array($file['status'] ?? null, ['failed', 'retry_deferred'], true)) {
                 if (($file['failure_stage'] ?? null) !== 'exchange_fetch'
-                    || (int) ($file['retry_attempt'] ?? 0) !== 1
+                    || (int) ($file['retry_attempt'] ?? 0) < 1
+                    || (int) ($file['retry_attempt'] ?? 0) >= 2
                     || ! is_string($file['error'] ?? null) || trim($file['error']) === '') return false;
                 $transientFailures++;
                 $transientFailureKey = $key;

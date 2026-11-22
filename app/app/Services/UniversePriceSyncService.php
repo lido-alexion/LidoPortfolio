@@ -379,6 +379,7 @@ class UniversePriceSyncService
             'remaining_in_cycle' => max(0, $universeCount - $processedThrough),
             'last_cycle_completed_at' => $lastCycleCompletedAt,
             'last_run' => $lastRun,
+            'daily_outcomes' => app(\App\Services\UniversePrice\UniversePriceOutcomeService::class)->summary(),
             'latest_sync_run' => $latestSyncRun,
             'rate_limits' => [
                 'last_run_hits' => (int) ($lastRun['rate_limit_hits'] ?? 0),

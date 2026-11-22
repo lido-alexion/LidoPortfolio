@@ -22,7 +22,9 @@ class UniverseDailyBhavcopySyncService
 {
     public const METHOD = 'exchange_bhavcopy';
     public const KEY_RECEIPTS = 'universe_price_sync_bulk_receipts_v1';
-    private const RETRY_BACKOFF_MINUTES = [5, 15, 60, 360];
+    private const RETRY_BACKOFF_MINUTES = [5, 15, 60];
+    private const MAX_ATTEMPTS_PER_RECOVERY_WINDOW = 4;
+    private const RETRY_REPROBE_SESSIONS = 5;
 
     public function __construct(
         protected NseBhavcopyService $nse,
@@ -167,6 +169,7 @@ class UniverseDailyBhavcopySyncService
                         'historical_identity_rows' => $historicalAccepted,
                         'historical_adjustment_required' => $historicalBlocked,
                         'identity_conflicts' => count($matched['conflicts']),
+                        'failure_stage' => $matched['conflicts'] === [] ? null : 'identity_validation',
                         // Keep the durable run log actionable without dumping a
                         // potentially large conflict set or any price payload.
                         'identity_conflict_samples' => array_slice(array_map(
@@ -213,12 +216,13 @@ class UniverseDailyBhavcopySyncService
                         // A known new revision earns an immediate retry window.
                         // Missing/malformed evidence cannot prove a revision, so
                         // it must not pin repeated conflicts to the first delay.
-                        $attempt = $currentValid && (! $previousValid || $current !== $previous)
-                            ? 1
-                            : min((int) ($receipt['retry_attempt'] ?? 0) + 1, count(self::RETRY_BACKOFF_MINUTES));
+                        $knownRevisionChanged = $currentValid && (! $previousValid || $current !== $previous);
+                        [$attempt, $retryAfter] = $knownRevisionChanged
+                            ? [1, now()->addMinutes(self::RETRY_BACKOFF_MINUTES[0])]
+                            : $this->nextRetrySchedule($receipt, $day);
                         $file['coverage_hash'] = $coverageHash;
                         $file['retry_attempt'] = $attempt;
-                        $file['retry_after'] = now()->addMinutes(self::RETRY_BACKOFF_MINUTES[$attempt - 1])->toIso8601String();
+                        $file['retry_after'] = $retryAfter->toIso8601String();
                         $entries[$key] = $file;
                         Setting::setValue(self::KEY_RECEIPTS, json_encode([
                             'fingerprint' => $fingerprint, 'entries' => $entries,
@@ -227,7 +231,7 @@ class UniverseDailyBhavcopySyncService
                 } catch (\Throwable $e) {
                     $stats['bulk']['file_errors']++;
                     $file['error'] = $this->redactor->message($e->getMessage());
-                    $file['failure_stage'] = $failureStage;
+                    $file['failure_stage'] = $this->failureStage($e, $failureStage);
                     if (preg_match('/\bHTTP\s+429\b/i', (string) $file['error']) === 1) {
                         $stats['rate_limit_hits']++;
                     }
@@ -235,9 +239,9 @@ class UniverseDailyBhavcopySyncService
                         $stats['errors'][] = $key.': '.$file['error'];
                     }
                     if (! $dryRun) {
-                        $attempt = min((int) ($receipt['retry_attempt'] ?? 0) + 1, count(self::RETRY_BACKOFF_MINUTES));
+                        [$attempt, $retryAfter] = $this->nextRetrySchedule($receipt, $day);
                         $file['retry_attempt'] = $attempt;
-                        $file['retry_after'] = now()->addMinutes(self::RETRY_BACKOFF_MINUTES[$attempt - 1])->toIso8601String();
+                        $file['retry_after'] = $retryAfter->toIso8601String();
                         $entries[$key] = $file + [
                             'coverage_hash' => $coverageHash,
                         ];
@@ -278,6 +282,11 @@ class UniverseDailyBhavcopySyncService
             }
         }
 
+        if (! $dryRun) {
+            $outcomes = app(UniversePriceOutcomeService::class)->recordRun($stats, $stocks, $runId);
+            $stats['bulk']['outcomes'] = $outcomes['last_run'] ?? [];
+        }
+
         return ['stats' => $stats, 'last_stock_id' => 0];
     }
 
@@ -300,6 +309,41 @@ class UniverseDailyBhavcopySyncService
         }
 
         return $present;
+    }
+
+    /** Four short retries per recovery window, then one calendar-aware reprobe every five sessions. */
+    private function nextRetrySchedule(?array $receipt, Carbon $session): array
+    {
+        $previousAttempt = (int) ($receipt['retry_attempt'] ?? 0);
+        $previousRetryAt = isset($receipt['retry_after']) ? Carbon::parse($receipt['retry_after']) : null;
+        $windowExpired = $previousAttempt >= self::MAX_ATTEMPTS_PER_RECOVERY_WINDOW
+            && $previousRetryAt !== null && $previousRetryAt->lte(now());
+        $attempt = $windowExpired ? 1 : min($previousAttempt + 1, self::MAX_ATTEMPTS_PER_RECOVERY_WINDOW);
+        if ($attempt >= self::MAX_ATTEMPTS_PER_RECOVERY_WINDOW) {
+            // A bounded historical recovery may be processing an old session.
+            // Anchor the cooldown to today in that case, or it would already be
+            // expired and the same old source failure would be retried every run.
+            $today = now()->timezone('Asia/Kolkata')->startOfDay();
+            $cooldownBase = $session->copy()->startOfDay()->gt($today) ? $session->copy()->startOfDay() : $today;
+            $retryAfter = TradingCalendar::addSessions($cooldownBase, self::RETRY_REPROBE_SESSIONS)->setTime(20, 0);
+        } else {
+            $retryAfter = now()->addMinutes(self::RETRY_BACKOFF_MINUTES[$attempt - 1]);
+        }
+
+        return [$attempt, $retryAfter];
+    }
+
+    private function failureStage(\Throwable $error, string $stage): string
+    {
+        if ($stage !== 'exchange_fetch') return $stage;
+        $message = strtolower($error->getMessage());
+        if (preg_match('/\bhttp\s+\d{3}\b|connection|timed?\s*out|download failed|not published yet|rate limit/', $message) === 1) {
+            return 'exchange_fetch';
+        }
+
+        // Archive, parser, schema and session-identity rejection must not look
+        // like an ordinary provider transport error.
+        return 'source_validation';
     }
 
     private function coverageHash(array $coverage): string
