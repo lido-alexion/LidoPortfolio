@@ -15,7 +15,7 @@ final class KitePerOrderBuyingPowerPolicy
     {
         if (strtoupper($side) !== 'BUY') return ['allowed' => true, 'reason' => null];
         if (strtoupper($orderType) !== 'LIMIT') return $this->blocked('unsupported_order_type');
-        if ($quantity <= 0 || $limitPrice === null || ! is_finite($limitPrice) || $limitPrice <= 0) return $this->blocked('invalid_order_limits');
+        if (! is_finite($quantity) || $quantity <= 0 || $limitPrice === null || ! is_finite($limitPrice) || $limitPrice <= 0) return $this->blocked('invalid_order_limits');
         // A local connection record is not proof that a particular provider
         // response belongs to that account, nor that the response is fresh.
         // Require explicit evidence provenance before any affordability math.

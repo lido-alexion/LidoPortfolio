@@ -50,10 +50,12 @@ final class KitePerOrderBuyingPowerPolicyTest extends TestCase
     public function test_unverified_account_timestamp_or_order_margin_never_authorizes_a_buy(): void
     {
         foreach ([
-            ['account_identity_verified' => false, 'broker_account_identity_unverified'],
-            ['provider_timestamp_verified' => false, 'broker_funds_timestamp_unverified'],
-            ['order_margin_verified' => false, 'broker_order_margin_unverified'],
-        ] as [$override, $reason]) {
+            ['override' => ['account_identity_verified' => false], 'reason' => 'broker_account_identity_unverified'],
+            ['override' => ['provider_timestamp_verified' => false], 'reason' => 'broker_funds_timestamp_unverified'],
+            ['override' => ['order_margin_verified' => false], 'reason' => 'broker_order_margin_unverified'],
+        ] as $case) {
+            $override = $case['override'];
+            $reason = $case['reason'];
             self::assertSame($reason, $this->assess($this->evidence($override))['reason']);
         }
     }
@@ -74,6 +76,9 @@ final class KitePerOrderBuyingPowerPolicyTest extends TestCase
         $now = CarbonImmutable::parse('2026-11-22T10:00:05+05:30');
         foreach ([NAN, INF, -1.0] as $quantity) {
             self::assertSame('invalid_order_limits', $policy->assess($this->evidence(), 'KITE123', 'BUY', 'LIMIT', $quantity, 100, $now, 15, 5)['reason']);
+        }
+        foreach ([NAN, INF, 0.0, -1.0] as $price) {
+            self::assertSame('invalid_order_limits', $policy->assess($this->evidence(), 'KITE123', 'BUY', 'LIMIT', 1, $price, $now, 15, 5)['reason']);
         }
         self::assertSame('charge_buffer_invalid', $policy->assess($this->evidence(), 'KITE123', 'BUY', 'LIMIT', 1, 100, $now, 15, -1)['reason']);
         self::assertSame('broker_funds_unavailable', $this->assess($this->evidence(['available_equity' => NAN]))['reason']);
