@@ -22,11 +22,19 @@ test('V5 cash statement uses effective-date balances and requires adjustment rea
     assert.match(source, /Adjustment reason is required/);
     assert.match(source, /required=\{op === 'adjust'\}/);
     assert.match(source, /downloadPortfolioCsv\('cash_statement'/);
-    assert.match(source, /params: \{ page: statementPage, per_page: statementPerPage, order: 'desc' \}/);
+    assert.match(source, /params: \{ page: statementPage, per_page: statementPerPage, order: 'desc', entry_type: statementType \|\| undefined, classification: statementClassification \|\| undefined \}/);
     assert.match(source, /Previous cash statement page/);
     assert.match(source, /Next cash statement page/);
     assert.match(source, /\[25, 50, 100\]/);
     assert.match(source, /Showing \$\{\(\(pagination\.page - 1\) \* pagination\.per_page\) \+ 1\}/);
+});
+
+test('Kite net adjustments stay visibly classified and filterable in the cash statement', () => {
+    assert.match(source, /const \[statementClassification, setStatementClassification\] = useState\(''\)/);
+    assert.match(source, /classification: statementClassification \|\| undefined/);
+    assert.match(source, /aria-label="Filter cash statement by classification"/);
+    assert.match(source, /<option value="kite_net_adjustment">Kite net adjustments<\/option>/);
+    assert.match(source, /entry\.entry_classification === 'kite_net_adjustment' \? 'Kite net cash adjustment'/);
 });
 
 test('cash edit preview reverses the original signed amount and locks the operation type', () => {
