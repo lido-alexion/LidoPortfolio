@@ -195,5 +195,36 @@ for (const viewport of VIEWPORTS) {
             expect(evidence.writes.map(write => `${write.method} ${write.path}`)).toEqual(['PUT /api/cash/ledger/2']);
             expect(evidence.blocked).toEqual([]);
         });
+
+        test(`Kite adjustment classification remains visible and filterable in the cash statement (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'E2E-22');
+            const evidence = await prepare(page, viewport, (method, path) => path === '/api/logs/frontend');
+            const entries = [
+                { id: 91, entry_type: 'adjustment', entry_classification: 'kite_net_adjustment', amount: 4000, running_balance: 4000, entry_date: '2026-11-20', reason: 'Kite net bank-transfer adjustment' },
+                { id: 90, entry_type: 'deposit', amount: 1500, running_balance: 1500, entry_date: '2026-11-19', reason: 'Manual deposit' },
+            ];
+            const seenClassification = [];
+            await page.route(/\/api\/cash(?:\?.*)?$/, route => route.fulfill({ json: { data: { cash_balance: 4000, reserved_cash: 0, available_physical_cash: 4000, available_investable_cash: 4000, strategies: [], reservations: [] } } }));
+            await page.route('**/api/cash/statement*', route => {
+                const url = new URL(route.request().url());
+                seenClassification.push(url.searchParams.get('classification'));
+                const selected = url.searchParams.get('classification') === 'kite_net_adjustment'
+                    ? entries.filter(row => row.entry_classification === 'kite_net_adjustment') : entries;
+                return route.fulfill({ json: { data: { entries: selected, opening_balance: 0, closing_balance: 4000, pagination: { current_page: 1, last_page: 1 } } } });
+            });
+            await page.route('**/api/cash/kite-funds', route => route.fulfill({ json: { data: {
+                automatic_adjustments_enabled: false, payout_semantics_verified: false, snapshots: [],
+                reconciliations: [{ id: 1, trading_date: '2026-11-20', status: 'adjustment_disabled', snapshot_net_flow: '4000.0000', manual_net_flow: null, evaluated_at: '2026-11-23T03:50:00Z' }],
+            } } }));
+            for (const resource of ['recalls', 'bridge-loans', 'pending-sale-proceeds']) await page.route(`**/api/v1/capital/${resource}*`, route => route.fulfill({ json: { data: [] } }));
+            await evidence.seal(); await page.goto('/cash');
+            await expect(page.getByRole('cell', { name: 'Kite net cash adjustment', exact: true })).toBeVisible();
+            await expect(page.getByText('adjustment disabled', { exact: true })).toBeVisible();
+            await page.getByLabel('Filter cash statement by classification', { exact: true }).selectOption('kite_net_adjustment');
+            await expect(page.getByRole('cell', { name: 'Kite net cash adjustment', exact: true })).toBeVisible();
+            await expect(page.getByRole('cell', { name: 'Manual deposit', exact: true })).toHaveCount(0);
+            expect(seenClassification).toContain('kite_net_adjustment');
+            expect(evidence.writes).toEqual([]); expect(evidence.blocked).toEqual([]);
+        });
     });
 }

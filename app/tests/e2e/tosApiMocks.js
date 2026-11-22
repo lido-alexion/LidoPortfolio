@@ -73,6 +73,16 @@ export async function installTosApiMocks(page, {
                 expires_at: null,
             }));
         }
+        // Cash management reads Kite evidence separately from ledger cash.
+        // Keep generic journeys deterministic and preserve both rollout gates.
+        if (path.endsWith('/api/cash/kite-funds') && method === 'GET') {
+            return json(route, { data: {
+                automatic_adjustments_enabled: false,
+                payout_semantics_verified: false,
+                snapshots: [],
+                reconciliations: [],
+            } });
+        }
         if (['/api/v1/capital/recalls', '/api/v1/capital/bridge-loans', '/api/v1/capital/pending-sale-proceeds'].includes(path) && method === 'GET') {
             return json(route, apiEnvelope([]));
         }

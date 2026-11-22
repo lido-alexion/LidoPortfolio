@@ -601,6 +601,10 @@ test.describe('V9-UX-001 composite journey coverage', () => {
             const externalRequests = [];
             page.on('request', (request) => observedRequests.push({ method: request.method(), path: new URL(request.url()).pathname }));
             await installTosApiMocks(page, { recommendations: [recommendation], pipelineRecommendations: [recommendation], retainApprovedRecommendations: true });
+            // Kite evidence is supplementary to the ledger cash balance. Exercise
+            // recovery when that read is unavailable, as it was in hosted CI's
+            // previously unmocked shared API route.
+            await page.route('**/api/cash/kite-funds', (route) => route.fulfill({ status: 503, json: { message: 'Kite evidence temporarily unavailable' } }));
             await page.route('**/api/stocks/search**', (route) => route.fulfill({ json: { data: [] } }));
             await page.route('**/api/stocks/validate', (route) => route.fulfill({ json: { source: 'test fixture', data: { id: 42, symbol: 'INFY', name: 'Infosys Limited', exchange: 'NSE' }, meta: { cached: false } } }));
             await page.route('**/api/v1/recommendations/pending-execution', (route) => {
@@ -660,6 +664,7 @@ test.describe('V9-UX-001 composite journey coverage', () => {
             });
 
             await page.goto('/cash');
+            await expect(page.getByText('Kite funds evidence could not be loaded. StoX cash remains available; no adjustment was applied.')).toBeVisible();
             await expect(page.getByText('Cash balance', { exact: true }).locator('..').locator('.h5')).toHaveText(CASH_DISPLAY.funded);
             await expect(page.getByText('Reserved cash', { exact: true }).locator('..').locator('.h5')).toHaveText(CASH_DISPLAY.zero);
             await expect(page.getByText('Available cash', { exact: true }).locator('..').locator('.h5')).toHaveText(CASH_DISPLAY.funded);
