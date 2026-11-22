@@ -2,6 +2,9 @@ import { test, expect } from '@playwright/test';
 import { installTosApiMocks } from './tosApiMocks.js';
 import { TEST_PORTFOLIO, TEST_USER } from '../js/tos/fixtures/tosApi.js';
 
+// Keep usable-session fixtures valid regardless of when CI executes.
+const activeSessionExpiry = () => new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
 async function openDashboard(page, initialStatus, user = TEST_USER) {
     await installTosApiMocks(page, { user });
     let status = initialStatus;
@@ -54,7 +57,7 @@ test('disconnected primary starts the dashboard return login flow', async ({ pag
 });
 
 test('connected Kite menu confirms normal disconnect and refreshes status', async ({ page }) => {
-    const { control, actions } = await openDashboard(page, { configured: true, connected: true, usable: true, expires_at: '2026-11-22T00:30:00Z' });
+    const { control, actions } = await openDashboard(page, { configured: true, connected: true, usable: true, expires_at: activeSessionExpiry() });
     page.on('dialog', (dialog) => dialog.accept());
     await control.getByRole('button', { name: /menu/i }).click();
     await page.getByRole('menuitem', { name: /Disconnect Kite/ }).click();
@@ -73,7 +76,7 @@ test('reconciliation stays disabled without usable Kite and runs when connected'
 });
 
 test('usable Kite enables reconciliation and preserves exclude-today as the primary choice', async ({ page }) => {
-    const { actions } = await openDashboard(page, { configured: true, connected: true, usable: true, expires_at: '2026-11-22T00:30:00Z' });
+    const { actions } = await openDashboard(page, { configured: true, connected: true, usable: true, expires_at: activeSessionExpiry() });
     const card = page.getByText('Broker portfolio reconciliation').locator('..').locator('..');
     const primary = card.getByRole('button', { name: 'Reconcile excluding today', exact: true });
     await primary.scrollIntoViewIfNeeded();

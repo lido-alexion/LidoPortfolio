@@ -78,6 +78,7 @@ class ScopeTests(unittest.TestCase):
             "app/tests/e2e/productionSmokePolicy.js",
             "app/tests/e2e/productionSmokeSelectors.js",
             "app/tests/e2e/production-smoke.spec.js",
+            "app/tests/e2e/kite-header-connect.spec.js",
         ):
             with self.subTest(path=path):
                 scope = classify([path])
