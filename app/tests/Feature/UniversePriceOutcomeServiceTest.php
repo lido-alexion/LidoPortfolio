@@ -147,6 +147,30 @@ class UniversePriceOutcomeServiceTest extends TestCase
         ]);
     }
 
+    public function test_legacy_iso_retry_instant_is_persisted_as_utc_and_malformed_value_fails_closed(): void
+    {
+        $stock = $this->stock();
+        $date = '2026-10-26';
+        $base = ['expected_files' => [['exchange' => 'NSE', 'date' => $date]]];
+        $file = ['exchange' => 'NSE', 'date' => $date, 'status' => 'retry_deferred',
+            'failure_stage' => 'exchange_fetch', 'retry_attempt' => 2,
+            'retry_after' => '2026-10-26T20:00:00+05:30'];
+
+        app(UniversePriceOutcomeService::class)->recordRun(['bulk' => $base + ['files' => [$file]]], collect([$stock]), 'legacy-retry');
+        $this->assertDatabaseHas('portfolio_universe_price_session_outcomes', [
+            'stock_id' => $stock->id, 'session_date' => $date,
+            'outcome' => 'provider_error', 'retry_after' => '2026-10-26 14:30:00',
+        ]);
+
+        $file['retry_after'] = 'not-a-time';
+        app(UniversePriceOutcomeService::class)->recordRun(['bulk' => $base + ['files' => [$file]]], collect([$stock]), 'malformed-retry');
+        $this->assertDatabaseHas('portfolio_universe_price_session_outcomes', [
+            'stock_id' => $stock->id, 'session_date' => $date,
+            'outcome' => 'systemic_error', 'failure_stage' => 'receipt_validation',
+            'reason' => 'invalid_retry_after', 'retry_after' => null,
+        ]);
+    }
+
     public function test_sessions_before_security_entered_stock_master_are_not_counted_as_no_data(): void
     {
         $stock = Stock::query()->create([
