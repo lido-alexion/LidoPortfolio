@@ -507,6 +507,7 @@ class CashManagementService
         ?string $type = null,
         ?string $cutoff = null,
         string $order = 'asc',
+        ?string $classification = null,
     ): array {
         $fromDate = $from ? CarbonImmutable::parse($from)->toDateString() : null;
         $toDate = $to ? CarbonImmutable::parse($to)->toDateString() : now()->toDateString();
@@ -528,6 +529,7 @@ class CashManagementService
             ->when($cutoff, fn ($query) => $query->where('created_at', '<=', $cutoff))
             ->when($fromDate, fn ($q) => $q->whereDate('entry_date', '>=', $fromDate))
             ->whereDate('entry_date', '<=', $toDate)
+            ->when($classification, fn ($query) => $query->where('entry_classification', $classification))
             ->when($type, fn ($q) => $q->where('entry_type', $type))
             ->orderBy('entry_date', $direction)
             ->orderBy('created_at', $direction)

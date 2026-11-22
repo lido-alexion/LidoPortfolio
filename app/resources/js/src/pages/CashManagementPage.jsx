@@ -73,6 +73,7 @@ export default function CashManagementPage() {
     const [statement, setStatement] = useState(null);
     const [kiteFunds, setKiteFunds] = useState(null);
     const [statementType, setStatementType] = useState('');
+    const [statementClassification, setStatementClassification] = useState('');
     const [statementCursor, setStatementCursor] = useState({ profileId: null, page: 1, perPage: 25 });
     const statementPage = statementCursor.profileId === profileId ? statementCursor.page : 1;
     const statementPerPage = statementCursor.profileId === profileId ? statementCursor.perPage : 25;
@@ -99,14 +100,14 @@ export default function CashManagementPage() {
     }, [profileId]);
 
     const { loading, error, reload: load } = useApiGet({
-        deps: [profileId, statementPage, statementPerPage, statementType],
+        deps: [profileId, statementPage, statementPerPage, statementType, statementClassification],
         enabled: Boolean(profileId),
         errorFallback: 'Failed to load cash',
         onError: () => {},
         request: async () => {
             const [summaryRes, ledgerRes, fundsRes] = await Promise.all([
                 api.get('/cash', { params: { include_reservations: true }, skipErrorToast: true }),
-                api.get('/cash/statement', { params: { page: statementPage, per_page: statementPerPage, order: 'desc', entry_type: statementType || undefined }, skipErrorToast: true }),
+                api.get('/cash/statement', { params: { page: statementPage, per_page: statementPerPage, order: 'desc', entry_type: statementType || undefined, classification: statementClassification || undefined }, skipErrorToast: true }),
                 api.get('/cash/kite-funds', { skipErrorToast: true }),
             ]);
             const nextSummary = summaryRes.data?.data || null;
@@ -671,6 +672,13 @@ export default function CashManagementPage() {
                                     <option value="adjustment">Adjustments, including Kite net adjustment</option>
                                     <option value="buy">Buys</option>
                                     <option value="sell">Sells</option>
+                                </select>
+                                <select className="form-select form-select-sm" aria-label="Filter cash statement by classification" value={statementClassification} onChange={(event) => {
+                                    setStatementClassification(event.target.value);
+                                    setStatementCursor((cursor) => ({ ...cursor, profileId, page: 1 }));
+                                }}>
+                                    <option value="">All classifications</option>
+                                    <option value="kite_net_adjustment">Kite net adjustments</option>
                                 </select>
                             </div>
                             {statement ? (

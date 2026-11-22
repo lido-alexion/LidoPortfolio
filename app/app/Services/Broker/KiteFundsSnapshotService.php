@@ -79,10 +79,13 @@ final class KiteFundsSnapshotService
                 ->where('broker_account_id', $connection->broker_user_id)
                 ->whereDate('trading_date', '>=', now('Asia/Kolkata')->subDays(30)->toDateString())
                 ->whereNotIn('status', ['adjustment_confirmed', 'adjustment_suppressed'])
-                ->pluck('trading_date')->map(fn ($value) => (string) $value)->all();
+                ->pluck('trading_date')->map(fn ($value) => \Illuminate\Support\Carbon::parse($value)->toDateString())->all();
             $dates = collect([$previousSession, ...$openDates])->unique()->values();
             foreach ($dates as $date) {
-                $snapshots = KiteFundsSnapshot::query()->where('profile_id', $profile->id)->where('trading_date', $date);
+                // A profile may have snapshots from a previously connected Kite account.
+                // Never reconcile one account using another account's evidence.
+                $snapshots = KiteFundsSnapshot::query()->where('profile_id', $profile->id)
+                    ->where('broker_account_id', $connection->broker_user_id)->whereDate('trading_date', $date);
                 $snapshot = (clone $snapshots)->where('freshness', 'complete')->where('capture_source', 'late_day')
                     ->orderByDesc('captured_at')->first()
                     ?? (clone $snapshots)->orderByDesc('captured_at')->first();
@@ -90,46 +93,94 @@ final class KiteFundsSnapshotService
                     ->whereIn('movement.entry_type', ['deposit', 'withdrawal'])->whereNull('movement.reversal_of_entry_id')
                     ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('portfolio_cash_ledger_entries as reversal')->whereColumn('reversal.reversal_of_entry_id', 'movement.id'))
                     ->get(['movement.entry_type', 'movement.amount']);
-                $manualNet = round((float) $manual->sum(fn ($row) => (float) $row->amount), 4);
+                // Ledger amounts already carry their sign (withdrawals are negative).
+                // Let MySQL sum DECIMAL values to retain the ledger's 4-place precision.
+                $manualNetRaw = DB::table('portfolio_cash_ledger_entries as movement')->where('movement.profile_id', $profile->id)->whereDate('movement.entry_date', $date)
+                    ->whereIn('movement.entry_type', ['deposit', 'withdrawal'])->whereNull('movement.reversal_of_entry_id')
+                    ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('portfolio_cash_ledger_entries as reversal')->whereColumn('reversal.reversal_of_entry_id', 'movement.id'))
+                    ->sum('movement.amount');
+                $manualNetUnits = $this->decimalUnits((string) ($manualNetRaw ?? '0'));
+                $manualNet = $this->decimalFromUnits($manualNetUnits);
                 $key = ['profile_id' => $profile->id, 'broker_account_id' => $connection->broker_user_id, 'trading_date' => $date];
-                $existing = KiteFundsReconciliation::query()->where($key)->first();
+                $existing = KiteFundsReconciliation::query()->where('profile_id', $profile->id)
+                    ->where('broker_account_id', $connection->broker_user_id)->whereDate('trading_date', $date)->first();
                 $suppressionReason = $existing?->suppression_reason;
                 if ($existing?->status === 'adjustment_proposed' && $manual->isNotEmpty()) $suppressionReason = 'manual_override';
                 $complete = $snapshot && $snapshot->freshness === 'complete';
                 $lateCapture = $snapshot?->captured_at?->timezone('Asia/Kolkata');
                 $final = $complete && $snapshot->capture_source === 'late_day'
                     && $lateCapture?->hour === 23 && $lateCapture?->minute >= 30;
-                $net = $complete ? round((float) $snapshot->intraday_payin - (float) $snapshot->utilised_payout, 4) : null;
+                $netUnits = $complete ? $this->decimalUnits((string) $snapshot->intraday_payin)
+                    - $this->decimalUnits((string) $snapshot->utilised_payout) : null;
+                $net = $netUnits !== null ? $this->decimalFromUnits($netUnits) : null;
                 $hasPayoutEvidence = $final && $snapshot->payout_semantics_verified;
+                $zeroNetMixedActivity = $complete && $netUnits === 0
+                    && (float) $snapshot->intraday_payin > 0 && (float) $snapshot->utilised_payout > 0;
                 $status = match (true) {
                     ! $snapshot => 'missing_snapshot',
                     ! $complete => 'incomplete_snapshot',
                     ! $final => 'stale_snapshot',
                     ! $hasPayoutEvidence => 'review_required',
-                    $manual->isNotEmpty() && abs($manualNet - $net) < 0.0001 => 'reconciled',
+                    $zeroNetMixedActivity => 'zero_net_review',
+                    $manual->isNotEmpty() && $manualNetUnits === $netUnits => 'reconciled',
                     $manual->isNotEmpty() => 'mismatch_warning',
                     $suppressionReason !== null => 'adjustment_suppressed',
-                    abs($net) < 0.0001 => 'zero_net_review',
+                    $netUnits === 0 => 'zero_net_review',
                     ! config('broker.kite_funds.auto_adjustments_enabled', false) => 'adjustment_disabled',
                     default => 'adjustment_proposed',
                 };
                 DB::transaction(function () use ($key, $user, $snapshot, $status, $net, $manual, $manualNet, $suppressionReason) {
-                    $current = KiteFundsReconciliation::query()->where($key)->lockForUpdate()->first();
+                    $current = KiteFundsReconciliation::query()->where('profile_id', $key['profile_id'])
+                        ->where('broker_account_id', $key['broker_account_id'])->whereDate('trading_date', $key['trading_date'])
+                        ->lockForUpdate()->first();
                     $terminal = ['adjustment_confirmed', 'adjustment_suppressed'];
                     $effectiveStatus = $current && in_array($current->status, $terminal, true) ? $current->status : $status;
                     $effectiveSuppression = $current?->status === 'adjustment_proposed' && $manual->isNotEmpty()
                         ? 'manual_override' : ($current?->suppression_reason ?? $suppressionReason);
-                    KiteFundsReconciliation::query()->updateOrCreate($key, [
+                    $values = [
                         'user_id' => $user->id, 'snapshot_id' => $snapshot?->id,
                         'status' => $effectiveStatus,
                         'snapshot_net_flow' => $net, 'manual_net_flow' => $manual->isNotEmpty() ? $manualNet : null,
                         'suppression_reason' => $effectiveSuppression,
                         'evaluated_at' => now(),
-                    ]);
+                    ];
+                    if ($current) {
+                        $current->forceFill($values)->save();
+                    } else {
+                        try {
+                            KiteFundsReconciliation::query()->create([...$key, ...$values]);
+                        } catch (QueryException $error) {
+                            // The unique account/date constraint arbitrates concurrent first reviews.
+                            // Adopt the winner and retain any terminal decision it recorded.
+                            $winner = KiteFundsReconciliation::query()->where('profile_id', $key['profile_id'])
+                                ->where('broker_account_id', $key['broker_account_id'])->whereDate('trading_date', $key['trading_date'])
+                                ->lockForUpdate()->first();
+                            if (! $winner) throw $error;
+                            if (in_array($winner->status, $terminal, true)) {
+                                $values['status'] = $winner->status;
+                                $values['cash_ledger_entry_id'] = $winner->cash_ledger_entry_id;
+                            }
+                            $winner->forceFill($values)->save();
+                        }
+                    }
                 });
                 $count++;
             }
         }
         return $count;
+    }
+
+    private function decimalUnits(string $value): int
+    {
+        $negative = str_starts_with($value, '-');
+        $value = ltrim($value, '+-');
+        [$whole, $fraction] = array_pad(explode('.', $value, 2), 2, '');
+        $units = ((int) $whole * 10000) + (int) str_pad(substr($fraction, 0, 4), 4, '0');
+        return $negative ? -$units : $units;
+    }
+
+    private function decimalFromUnits(int $units): string
+    {
+        return ($units < 0 ? '-' : '').intdiv(abs($units), 10000).'.'.str_pad((string) (abs($units) % 10000), 4, '0', STR_PAD_LEFT);
     }
 }
