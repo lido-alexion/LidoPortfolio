@@ -42,10 +42,6 @@ final class KiteCandleNormalizer
         } catch (\Throwable) {
             return null;
         }
-        if ($date->isWeekend()) {
-            return null;
-        }
-
         return [
             'price_date' => $date->toDateString(),
             'open_price' => $open,
