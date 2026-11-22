@@ -32,6 +32,14 @@ DEPLOYABLE = (
     "app/tests/js/*", "app/tests/js/**/*", "app/package.json",
     "app/package-lock.json", "app/scripts/write-build-info.mjs",
     "app/tsconfig.json", "app/vite.config.js", "app/vitest.config.js",
+    # These files are the mandatory post-deploy authenticated production smoke
+    # and its direct policy/selector/diagnostic dependencies. Keep generic e2e
+    # changes frontend-tested without making them release-triggering.
+    "app/tests/e2e/production-smoke.spec.js",
+    "app/tests/e2e/authenticatedProductionSmoke.mjs",
+    "app/tests/e2e/productionSmokeDiagnostics.js",
+    "app/tests/e2e/productionSmokePolicy.js",
+    "app/tests/e2e/productionSmokeSelectors.js",
     "scripts/ci_release_contract.py",
     ".github/workflows/*.yml", ".github/workflows/*.yaml",
 )
