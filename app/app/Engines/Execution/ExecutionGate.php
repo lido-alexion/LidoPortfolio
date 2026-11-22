@@ -83,7 +83,7 @@ class ExecutionGate
         }
         if ($profile->execution_blocked_by_reconciliation) {
             throw new DomainException(
-                'Broker submission is blocked because the latest successful holdings reconciliation found a mismatch. Correct StoX transactions and run reconciliation again.',
+                'Broker submission is blocked because holdings/cash reconciliation or broker order state needs attention. Resolve it and reconcile again.',
                 'RECONCILIATION_HOLDINGS_MISMATCH',
                 403,
             );

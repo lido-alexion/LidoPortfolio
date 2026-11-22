@@ -239,6 +239,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/portfolios/{portfolio}/simulation/resume', [PaperSimulationController::class, 'resume']);
     Route::get('/reconciliation', [PortfolioReconciliationController::class, 'index']);
     Route::post('/reconciliation', [PortfolioReconciliationController::class, 'store']);
+    Route::post('/reconciliation/trades/sync', [PortfolioReconciliationController::class, 'syncTrades']);
     Route::get('/reconciliation/{run}', [PortfolioReconciliationController::class, 'show'])->whereNumber('run');
     Route::get('/replays', [PortfolioReplayController::class, 'index']);
     Route::post('/replays/readiness', [PortfolioReplayController::class, 'readiness']);

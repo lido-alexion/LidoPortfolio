@@ -1,0 +1,171 @@
+<?php
+
+namespace App\Services\Reconciliation;
+
+use App\Models\KiteCncTradeImport;
+use App\Models\KiteCncTradeSyncRun;
+use App\Models\BrokerConnection;
+use App\Models\PortfolioProfile;
+use App\Models\Stock;
+use App\Models\Transaction;
+use App\Services\Broker\BrokerGateway;
+use App\Services\TransactionWriteService;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Throwable;
+
+final class KiteCncTradeSyncService
+{
+    public function __construct(private BrokerGateway $broker, private TransactionWriteService $writes) {}
+
+    /** @return array{run:KiteCncTradeSyncRun,imported:int,matched:int,review:int} */
+    public function sync(PortfolioProfile $profile, string $trigger = 'manual'): array
+    {
+        if ($profile->portfolio_type !== PortfolioProfile::TYPE_LIVE
+            || ! in_array($profile->execution_mode, [PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC, PortfolioProfile::EXECUTION_MODE_AUTOMATIC], true)
+            || $this->broker->provider() !== BrokerConnection::PROVIDER_KITE) {
+            throw new \InvalidArgumentException('Kite CNC trade sync is available only for connected live Semi-Automatic or Automatic portfolios.');
+        }
+        $lock = Cache::lock('kite-cnc-sync:'.$profile->id, 90);
+        return $lock->block(2, fn () => $this->syncLocked($profile, $trigger));
+    }
+
+    private function syncLocked(PortfolioProfile $profile, string $trigger): array
+    {
+        $started = now();
+        $run = KiteCncTradeSyncRun::query()->create([
+            'profile_id' => $profile->id, 'user_id' => $profile->user_id,
+            'trading_date' => $started->copy()->timezone('Asia/Kolkata')->toDateString(),
+            'trigger' => $trigger, 'status' => 'running', 'started_at' => $started,
+        ]);
+        try {
+            $rows = $this->broker->trades((int) $profile->user_id);
+            if ($rows === null) throw new \RuntimeException('Kite current-day trades are unavailable; sync remains incomplete.');
+            $eligible = collect($rows)->filter(fn ($row) => is_array($row)
+                && strtoupper((string) ($row['product'] ?? '')) === 'CNC'
+                && in_array(strtoupper((string) ($row['exchange'] ?? '')), ['NSE', 'BSE'], true)
+                && in_array(strtoupper((string) ($row['transaction_type'] ?? '')), ['BUY', 'SELL'], true)
+                && is_numeric($row['trade_id'] ?? null)
+                && is_numeric($row['quantity'] ?? null) && (float) $row['quantity'] > 0
+                && is_numeric($row['price'] ?? null) && (float) $row['price'] > 0)
+                ->values();
+            $cncCandidates = collect($rows)->filter(fn ($row) => is_array($row)
+                && strtoupper((string) ($row['product'] ?? '')) === 'CNC'
+                && in_array(strtoupper((string) ($row['exchange'] ?? '')), ['NSE', 'BSE'], true))->count();
+            $prepared = $eligible->map(function (array $row): ?array {
+                $symbol = strtoupper(trim((string) ($row['tradingsymbol'] ?? '')));
+                $exchange = strtoupper((string) $row['exchange']);
+                $stock = Stock::query()->where('symbol', $symbol)->where(function ($q) use ($exchange) {
+                    $q->where('exchange', $exchange)->orWhere('is_dual_listed', true);
+                })->first();
+                if (! $stock) return null;
+                $when = $row['fill_timestamp'] ?? $row['exchange_timestamp'] ?? $row['order_timestamp'] ?? null;
+                return ['raw' => $row, 'stock' => $stock, 'symbol' => $symbol, 'exchange' => $exchange,
+                    'date' => $when ? \Illuminate\Support\Carbon::parse($when, 'Asia/Kolkata')->toDateString() : $started->copy()->timezone('Asia/Kolkata')->toDateString(),
+                    'side' => strtolower((string) $row['transaction_type']), 'trade_id' => (string) $row['trade_id'],
+                    'quantity' => (float) $row['quantity'], 'price' => (float) $row['price'], 'executed_at' => $when];
+            })->filter(fn (?array $trade) => $trade !== null && $trade['date'] === $started->copy()->timezone('Asia/Kolkata')->toDateString())->values();
+
+            $manualMatches = $this->manualMatches($profile, $prepared);
+            $imported = $matched = 0;
+            $review = max(0, $cncCandidates - $prepared->count());
+            foreach ($prepared as $trade) {
+                DB::transaction(function () use ($profile, $run, $trade, $manualMatches, &$imported, &$matched, &$review): void {
+                    $prior = KiteCncTradeImport::query()->where('profile_id', $profile->id)->where('broker_trade_id', $trade['trade_id'])->first();
+                    if ($prior) return;
+                    $groupKey = $trade['stock']->id.'|'.$trade['date'].'|'.$trade['side'];
+                    $manual = $manualMatches[$groupKey] ?? null;
+                    $status = 'imported';
+                    $transaction = null;
+                    $matchedTransaction = null;
+                    if (is_array($manual) && ($manual['kind'] ?? '') === 'match') {
+                        $status = $manual['transaction']->source === Transaction::SOURCE_MANUAL ? 'matched_manual' : 'matched_existing';
+                        $matchedTransaction = $manual['transaction'];
+                        $matched++;
+                    } elseif (is_array($manual)) {
+                        $status = 'manual_match_review';
+                        $review++;
+                    } else {
+                        try {
+                            $transaction = $this->writes->create($profile, $trade['stock'], [
+                                'type' => $trade['side'], 'quantity' => $trade['quantity'], 'price' => $trade['price'],
+                                'execution_exchange' => $trade['exchange'], 'transaction_date' => $trade['date'],
+                                'source' => Transaction::SOURCE_OTHER,
+                                'notes' => 'Kite CNC execution '.$trade['trade_id'].' (order '.($trade['raw']['order_id'] ?? 'unknown').')',
+                            ], user: null);
+                            $imported++;
+                        } catch (Throwable $error) {
+                            // Ambiguous owner attribution or stale local holdings must be reviewed, never guessed.
+                            $status = 'manual_match_review';
+                            $review++;
+                        }
+                    }
+                    KiteCncTradeImport::query()->create([
+                        'profile_id' => $profile->id, 'sync_run_id' => $run->id,
+                        'stock_id' => $trade['stock']->id,
+                        'broker_trade_id' => $trade['trade_id'], 'broker_order_id' => isset($trade['raw']['order_id']) ? (string) $trade['raw']['order_id'] : null,
+                        'transaction_id' => $transaction?->id, 'matched_transaction_id' => $matchedTransaction?->id,
+                        'symbol' => $trade['symbol'], 'exchange' => $trade['exchange'], 'side' => $trade['side'],
+                        'quantity' => $trade['quantity'], 'price' => $trade['price'], 'executed_at' => $trade['executed_at'],
+                        'product' => 'CNC', 'status' => $status, 'broker_evidence' => $trade['raw'],
+                    ]);
+                });
+            }
+            $run->forceFill(['status' => $review > 0 ? 'needs_review' : 'completed', 'received_count' => count($rows),
+                'eligible_count' => $eligible->count(), 'imported_count' => $imported, 'matched_count' => $matched,
+                'review_count' => $review, 'completed_at' => now()])->save();
+            $this->recordUnavailableTradingDayGaps($profile, $run->trading_date->toDateString());
+            return compact('run', 'imported', 'matched', 'review');
+        } catch (Throwable $error) {
+            $run->forceFill(['status' => 'sync_failed', 'failure' => mb_substr($error->getMessage(), 0, 1000), 'completed_at' => now()])->save();
+            throw $error;
+        }
+    }
+
+    private function recordUnavailableTradingDayGaps(PortfolioProfile $profile, string $today): void
+    {
+        $last = KiteCncTradeSyncRun::query()->where('profile_id', $profile->id)
+            ->whereDate('trading_date', '<', $today)->whereIn('status', ['completed', 'needs_review'])
+            ->orderByDesc('trading_date')->first();
+        if (! $last) return; // First connection has no known missing interval to report.
+        $cursor = \Illuminate\Support\Carbon::parse($last->trading_date->toDateString(), 'Asia/Kolkata')->addDay();
+        $end = \Illuminate\Support\Carbon::parse($today, 'Asia/Kolkata')->subDay();
+        while ($cursor->lte($end)) {
+            if (\App\Support\TradingCalendar::isEquitySessionDate($cursor)
+                && ! KiteCncTradeSyncRun::query()->where('profile_id', $profile->id)->whereDate('trading_date', $cursor->toDateString())
+                    ->whereIn('status', ['completed', 'needs_review', 'gap_unavailable'])->exists()) {
+                KiteCncTradeSyncRun::query()->create([
+                    'profile_id' => $profile->id, 'user_id' => $profile->user_id, 'trading_date' => $cursor->toDateString(),
+                    'trigger' => 'gap_detection', 'status' => 'gap_unavailable',
+                    'failure' => 'Kite Trades API exposes only the current trading day; this missed session cannot be retrieved here.',
+                    'started_at' => now(), 'completed_at' => now(),
+                ]);
+            }
+            $cursor->addDay();
+        }
+    }
+
+    /** @param \Illuminate\Support\Collection<int,array<string,mixed>> $trades @return array<string,array<string,mixed>> */
+    private function manualMatches(PortfolioProfile $profile, $trades): array
+    {
+        $keys = $trades->map(fn ($t) => $t['stock']->id.'|'.$t['date'].'|'.$t['side'])->unique();
+        $result = [];
+        foreach ($keys as $key) {
+            [$stockId, $date, $side] = explode('|', $key);
+            $rows = $trades->filter(fn ($t) => $t['stock']->id === (int) $stockId && $t['date'] === $date && $t['side'] === $side);
+            $quantity = (float) $rows->sum('quantity');
+            $turnover = (float) $rows->sum(fn ($t) => $t['quantity'] * $t['price']);
+            $existing = Transaction::query()->where('profile_id', $profile->id)->where('stock_id', (int) $stockId)
+                ->where('type', $side)->whereDate('transaction_date', $date)->get();
+            if ($existing->isEmpty()) continue;
+            $matches = $existing->filter(fn ($tx) => abs((float) $tx->quantity - $quantity) < 0.0001
+                && abs((float) $tx->price - $turnover / max($quantity, 0.0001)) < 0.02);
+            if ($matches->count() === 1) {
+                $result[$key] = ['kind' => 'match', 'transaction' => $matches->first()];
+            } else {
+                $result[$key] = ['kind' => 'review'];
+            }
+        }
+        return $result;
+    }
+}

@@ -123,6 +123,27 @@ class LiveExecutionFeatureTest extends TestCase
         $this->assertCount(6, $user->fresh()->totp_recovery_codes);
     }
 
+    public function test_two_session_orders_share_one_baseline_and_each_buy_checks_fresh_funds(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $first = $this->pendingBuy($profile, amount: 1_000);
+        $second = $this->pendingBuy($profile, amount: 1_000);
+        $fake = app(FakeBrokerGateway::class);
+        $readsBefore = $fake->fundsReads;
+
+        $result = $this->postJson('/api/v1/execution/submit-selected', [
+            'recommendation_ids' => [$first->id, $second->id], 'recovery_code' => $this->totpCode($user),
+        ])->assertOk();
+
+        $this->assertSame(2, $result->json('data.submitted'));
+        $this->assertSame(2, $fake->placeCalls);
+        $this->assertGreaterThanOrEqual($readsBefore + 4, $fake->fundsReads);
+        $this->assertSame(1, PortfolioReconciliationRun::query()->where('profile_id', $profile->id)->where('trigger', 'session_baseline')->count());
+        $this->assertSame(1, PortfolioReconciliationRun::query()->where('profile_id', $profile->id)->count());
+        $this->assertDatabaseHas('portfolio_reconciliation_runs', ['profile_id' => $profile->id, 'overall_status' => 'reconciled']);
+    }
+
     public function test_automatic_does_not_require_per_order_approval_or_totp_code(): void
     {
         [$user, $profile] = $this->actingReadyUser();
@@ -245,7 +266,8 @@ class LiveExecutionFeatureTest extends TestCase
         $fake->seedSnapshot(new BrokerOrderSnapshot($buyOrder->broker_order_id, 'partial', 2, 3, 100, 'OPEN'));
         $live->reconcileOrder($profile, $buyOrder->fresh());
         $this->assertSame(TradingRecommendation::STATUS_PENDING_EXECUTION, $buy->fresh()->status);
-        $this->assertSame(0, Transaction::query()->where('recommendation_id', $buy->id)->count());
+        $this->assertSame(1, Transaction::query()->where('recommendation_id', $buy->id)->count());
+        $this->assertSame(2.0, (float) Transaction::query()->where('recommendation_id', $buy->id)->sum('quantity'));
 
         $fake->reconciliationSnapshot = [
             'provider' => 'kite', 'captured_at' => now()->toISOString(),
@@ -257,11 +279,12 @@ class LiveExecutionFeatureTest extends TestCase
         $fake->seedSnapshot(new BrokerOrderSnapshot($buyOrder->broker_order_id, 'filled', 5, 0, 101, 'COMPLETE'));
         $live->reconcileOrder($profile, $buyOrder->fresh());
         $this->assertSame(TradingRecommendation::STATUS_EXECUTED, $buy->fresh()->status);
-        $this->assertSame(1, Transaction::query()->where('recommendation_id', $buy->id)->count());
-        $this->assertSame(1, PortfolioReconciliationRun::query()->where('profile_id', $profile->id)->where('trigger', 'post_trade')->count());
+        $this->assertSame(2, Transaction::query()->where('recommendation_id', $buy->id)->count());
+        $this->assertSame(5.0, (float) Transaction::query()->where('recommendation_id', $buy->id)->sum('quantity'));
+        $this->assertSame(0, PortfolioReconciliationRun::query()->where('profile_id', $profile->id)->where('trigger', 'post_trade')->count());
         $live->reconcileOrder($profile, $buyOrder->fresh());
-        $this->assertSame(1, Transaction::query()->where('recommendation_id', $buy->id)->count());
-        $this->assertSame(1, PortfolioReconciliationRun::query()->where('profile_id', $profile->id)->where('trigger', 'post_trade')->count());
+        $this->assertSame(2, Transaction::query()->where('recommendation_id', $buy->id)->count());
+        $this->assertSame(0, PortfolioReconciliationRun::query()->where('profile_id', $profile->id)->where('trigger', 'post_trade')->count());
 
         $sell = $this->pendingSell($profile);
         $this->postJson('/api/v1/execution/submit-selected', [
@@ -1059,6 +1082,9 @@ class LiveExecutionFeatureTest extends TestCase
         $profile = $this->defaultPortfolioFor($user);
         $this->assertSame(PortfolioProfile::EXECUTION_MODE_MANUAL, $profile->fresh()->executionMode());
         app(CashManagementService::class)->deposit($profile, 100_000, 'seed', $user);
+        $fake = app(FakeBrokerGateway::class);
+        $fake->availableFunds = 100_000;
+        $fake->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [], 'positions' => [], 'current_cash' => 100_000];
         $this->connectKite($user);
         $this->actingAs($user)->withProfileHeader($user, $profile);
         $this->postJson('/api/v1/totp/begin')->assertOk();

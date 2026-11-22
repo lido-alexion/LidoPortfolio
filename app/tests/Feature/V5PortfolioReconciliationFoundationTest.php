@@ -24,7 +24,7 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_manual_ignore_today_reconstructs_previous_day_holdings_without_mutating_transactions(): void
+    public function test_manual_reconciliation_uses_current_ledger_instead_of_previous_calendar_day(): void
     {
         $user = User::factory()->create();
         $profile = $this->defaultPortfolioFor($user);
@@ -52,12 +52,10 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
             $response = $this->actingAs($user)->withProfileHeader($user, $profile)
                 ->postJson('/api/reconciliation', ['ignore_today_transactions' => true])->assertCreated();
             $run = PortfolioReconciliationRun::query()->findOrFail($response->json('data.run.id'));
-            $this->assertSame(10.0, (float) $run->stox_snapshot['holdings'][0]['quantity']);
-            $this->assertSame(1000.0, (float) $run->stox_snapshot['holdings'][0]['cost']);
-            $this->assertSame(3.0, (float) $run->stox_snapshot['holdings'][0]['fees']);
-            $this->assertSame('2026-11-12', $run->stox_snapshot['comparison']['holdings_as_of']);
+            $this->assertSame(8.0, (float) $run->stox_snapshot['holdings'][0]['quantity']);
+            $this->assertSame('current StoX ledger versus Kite settled/T1 holdings with execution-proven settlement adjustments', $run->stox_snapshot['comparison']['comparison_method']);
             $this->assertSame('Asia/Kolkata', $run->stox_snapshot['comparison']['timezone']);
-            $this->assertSame('reconciled', $run->holdings_status);
+            $this->assertSame('mismatch', $run->holdings_status);
             $this->assertSame('attention_required', $run->overall_status);
             $this->assertSame(3, $profile->transactions()->count());
             $this->assertSame('Current Kite cash versus current StoX cash; no historical Kite funds snapshot is available.', $run->stox_snapshot['comparison']['funds_comparison']);
@@ -90,16 +88,15 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
         $this->assertFalse($profile->fresh()->execution_blocked_by_reconciliation);
     }
 
-    public function test_manual_reconciliation_rejects_non_boolean_ignore_today_option(): void
+    public function test_removed_calendar_day_selector_is_ignored(): void
     {
         $user = User::factory()->create();
         $profile = $this->defaultPortfolioFor($user);
         $profile->forceFill(['execution_mode' => PortfolioProfile::EXECUTION_MODE_AUTOMATIC])->save();
         $this->actingAs($user)->withProfileHeader($user, $profile)
             ->postJson('/api/reconciliation', ['ignore_today_transactions' => 'sometimes'])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors('ignore_today_transactions');
-        $this->assertSame(0, PortfolioReconciliationRun::query()->count());
+            ->assertCreated();
+        $this->assertSame(1, PortfolioReconciliationRun::query()->count());
     }
 
     public function test_scheduled_reconciliation_runs_once_after_close_delay_and_skips_before_due_time(): void

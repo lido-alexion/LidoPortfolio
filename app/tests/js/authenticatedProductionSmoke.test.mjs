@@ -28,8 +28,8 @@ test('production dashboard smoke inspects only status UI and never activates fin
     assert.ok(safetyReadyIndex >= 0 && headerOrderIndex > safetyReadyIndex);
     assert.match(source, /Emergency Kite disconnect/);
     assert.match(source, /Cancel eligible open orders and disconnect Kite/);
-    assert.match(source, /Reconcile excluding today/);
-    assert.match(source, /Reconcile including today/);
+    assert.match(source, /name: 'Reconcile'/);
+    assert.match(source, /Sync CNC trades/);
     assert.match(source, /not_eligible_card_absent/);
     assert.match(source, /kiteControl\.getByRole\('button'\)\.first\(\)/);
     assert.match(source, /kitePrimaryButton\.getAttribute\('aria-label'\)/);
