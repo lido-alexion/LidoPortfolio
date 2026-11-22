@@ -248,6 +248,7 @@ Request body:
 - `POST /sync/daily` (auth, **admin**) — body/query `force` (boolean)
 - `POST /sync/backfill/{stock}` (auth, **admin**) — force fetch from user's buy date
 - `GET /universe-price-sync/status` (auth, **admin**) — query `scope` (`all_equities`|`all_nse` deprecated|`nifty500`); progress, coverage, cursor, `rate_limits.likely_rate_limited`, `rate_limits.recent_issues`
+- `POST /universe-price-sync/outcomes/{stock}/reprobe` (auth, **admin**, throttle 12/min) — clear a temporary no-data cooldown, audit the manual reprobe, and check it on the next daily bulk run
 - `POST /universe-price-sync/run` (auth, **admin**, throttle 12/min) — body: `mode` (`daily`|`backfill`), `scope`, `batch` (1–200), `reset_cursor`, `process_all` (avoid on cPanel — may timeout)
 - `POST /universe-price-sync/stock-master` (auth, **admin**, throttle 12/min) — NSE equity master CSV import
 - `GET /sync-logs`, `GET /sync-logs/runs`, `GET /sync-logs/export` (auth, **admin**)
