@@ -34,6 +34,8 @@ class KiteCandleNormalizerTest extends TestCase
         $this->assertNull($normalizer->normalize(['2026-11-20T09:15:00+0530', 100, 105, 95, 102, -1]));
         $this->assertNull($normalizer->normalize(['2026-11-20 09:15:00', 100, 105, 95, 102, 10]));
         $this->assertNull($normalizer->normalize(['2026-11-21T09:15:00+0530', 100, 105, 95, 102, 10]));
+        $specialSaturday = $normalizer->normalize(['2023-02-25T09:15:00+0530', 100, 105, 95, 102, 10]);
+        $this->assertSame('2023-02-25', $specialSaturday['price_date']);
     }
 
     public function test_converts_offset_timestamp_to_exchange_local_session_date(): void

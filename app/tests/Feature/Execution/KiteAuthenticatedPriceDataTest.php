@@ -6,6 +6,7 @@ use App\Models\BrokerConnection;
 use App\Models\BrokerInstrument;
 use App\Models\Stock;
 use App\Models\User;
+use App\Models\StockPrice;
 use App\Services\PriceProviders\KiteAuthenticatedPriceData;
 use App\Support\KiteTradingSession;
 use Carbon\Carbon;
@@ -131,7 +132,7 @@ class KiteAuthenticatedPriceDataTest extends TestCase
         );
     }
 
-    public function test_missing_internal_session_candle_fails_the_partial_history_for_fallback(): void
+    public function test_sparse_session_history_is_accepted_without_inventing_missing_candles(): void
     {
         [$user, $stock] = $this->connectedStock('NSE', 'ABC');
         Http::fake(['https://api.kite.trade/instruments/historical/998/day*' => Http::response([
@@ -141,14 +142,14 @@ class KiteAuthenticatedPriceDataTest extends TestCase
             ]],
         ])]);
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('missing an internal equity-session candle');
-        app(KiteAuthenticatedPriceData::class)->historicalDaily(
+        $rows = app(KiteAuthenticatedPriceData::class)->historicalDaily(
             $user->id,
             $stock,
             Carbon::parse('2026-11-16', 'Asia/Kolkata'),
             Carbon::parse('2026-11-18', 'Asia/Kolkata'),
         );
+
+        $this->assertSame(['2026-11-16', '2026-11-18'], array_column($rows, 'price_date'));
     }
 
     public function test_missing_user_session_falls_back_without_a_kite_request(): void
@@ -190,6 +191,101 @@ class KiteAuthenticatedPriceDataTest extends TestCase
         $this->assertFalse(KiteTradingSession::isEquityMarketOpen());
         $this->assertNull(app(KiteAuthenticatedPriceData::class)->latestQuote($user->id, $stock));
         Http::assertNothingSent();
+    }
+
+    public function test_market_price_endpoint_routes_authenticated_user_to_kite_first(): void
+    {
+        [$user, $stock] = $this->connectedStock('NSE', 'ABC');
+        StockPrice::query()->create([
+            'stock_id' => $stock->id, 'price_date' => '2026-11-23', 'open_price' => 90,
+            'high_price' => 95, 'low_price' => 89, 'close_price' => 91, 'volume' => 10,
+            'data_source' => 'official', 'provider_source' => 'nse',
+        ]);
+        Http::fake([
+            'https://api.kite.trade/instruments/historical/998/day*' => Http::response([
+                'status' => 'success', 'data' => ['candles' => [['2026-11-23T09:15:00+0530', 100, 105, 99, 104, 500]]],
+            ]),
+            'https://api.kite.trade/quote*' => Http::response([
+                'status' => 'success', 'data' => ['NSE:ABC' => ['last_price' => 104.5, 'last_trade_time' => '2026-11-23 09:59:45']],
+            ]),
+        ]);
+
+        $response = $this->actingAs($user)->getJson("/api/stocks/{$stock->id}/market-prices");
+
+        $response->assertOk()->assertJsonPath('provider', 'kite')->assertJsonPath('adjustment_basis', 'unadjusted')
+            ->assertJsonPath('data.0.close_price', 104)->assertJsonPath('live_quote.last_price', 104.5);
+        Http::assertSentCount(2);
+        $this->assertDatabaseHas('portfolio_stock_prices', ['stock_id' => $stock->id, 'close_price' => 91]);
+    }
+
+    public function test_expired_or_unauthorized_kite_read_falls_back_to_shared_history(): void
+    {
+        [$user, $stock] = $this->connectedStock('NSE', 'ABC');
+        StockPrice::query()->create([
+            'stock_id' => $stock->id, 'price_date' => '2026-11-20', 'open_price' => 90,
+            'high_price' => 95, 'low_price' => 89, 'close_price' => 91, 'volume' => 10,
+            'data_source' => 'official', 'provider_source' => 'nse',
+        ]);
+        BrokerConnection::query()->where('user_id', $user->id)->update(['expires_at' => now()->subMinute()]);
+        Http::preventStrayRequests();
+
+        $response = $this->actingAs($user)->getJson("/api/stocks/{$stock->id}/market-prices");
+        $response->assertOk()->assertJsonPath('provider', 'stored')
+            ->assertJsonPath('adjustment_basis', 'corporate_action_adjusted_when_available')
+            ->assertJsonPath('latest_close', 91);
+        Http::assertNothingSent();
+    }
+
+    public function test_kite_403_falls_back_without_exposing_session_details(): void
+    {
+        [$user, $stock] = $this->connectedStock('NSE', 'ABC');
+        StockPrice::query()->create([
+            'stock_id' => $stock->id, 'price_date' => '2026-11-20', 'open_price' => 90,
+            'high_price' => 95, 'low_price' => 89, 'close_price' => 91, 'volume' => 10,
+            'data_source' => 'official', 'provider_source' => 'nse',
+        ]);
+        Http::fake(['https://api.kite.trade/instruments/historical/998/day*' => Http::response([], 403)]);
+
+        $response = $this->actingAs($user)->getJson("/api/stocks/{$stock->id}/market-prices");
+        $response->assertOk()->assertJsonPath('provider', 'stored')->assertJsonPath('latest_close', 91);
+        $this->assertStringNotContainsString('test-token', $response->getContent());
+        Http::assertSentCount(2); // Historical failure plus the independent optional live-quote attempt.
+    }
+
+    public function test_malformed_partial_kite_series_falls_back_as_a_whole(): void
+    {
+        [$user, $stock] = $this->connectedStock('NSE', 'ABC');
+        StockPrice::query()->create([
+            'stock_id' => $stock->id, 'price_date' => '2026-11-23', 'open_price' => 90,
+            'high_price' => 95, 'low_price' => 89, 'close_price' => 91, 'volume' => 10,
+            'data_source' => 'official', 'provider_source' => 'nse',
+        ]);
+        Http::fake(['https://api.kite.trade/instruments/historical/998/day*' => Http::response([
+            'status' => 'success', 'data' => ['candles' => [['2026-11-23T09:15:00+0530', 100, 95, 99, 104, 500]]],
+        ])]);
+
+        $response = $this->actingAs($user)->getJson("/api/stocks/{$stock->id}/market-prices");
+        $response->assertOk()->assertJsonPath('provider', 'stored')->assertJsonPath('data.0.close_price', 91);
+        Http::assertSentCount(2);
+    }
+
+    public function test_sparse_new_listing_history_is_accepted_as_a_single_kite_series(): void
+    {
+        [$user, $stock] = $this->connectedStock('NSE', 'NEWCO');
+        Http::fake([
+            'https://api.kite.trade/instruments/historical/998/day*' => Http::response([
+                'status' => 'success', 'data' => ['candles' => [['2026-11-23T09:15:00+0530', 100, 105, 99, 104, 500]]],
+            ]),
+            'https://api.kite.trade/quote*' => Http::response([
+                'status' => 'success', 'data' => ['NSE:NEWCO' => ['last_price' => 104.5, 'last_trade_time' => '2026-11-23 09:59:45']],
+            ]),
+        ]);
+
+        $response = $this->actingAs($user)->getJson("/api/stocks/{$stock->id}/market-prices");
+
+        $response->assertOk()->assertJsonPath('provider', 'kite')->assertJsonPath('price_count', 1)
+            ->assertJsonPath('data.0.price_date', '2026-11-23')->assertJsonPath('live_quote.last_price', 104.5);
+        Http::assertSentCount(6); // Five 90-day history chunks plus one quote; no row-by-row gap fetches.
     }
 
     /** @return array{User,Stock} */

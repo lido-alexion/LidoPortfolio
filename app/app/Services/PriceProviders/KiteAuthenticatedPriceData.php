@@ -6,7 +6,6 @@ use App\Models\BrokerConnection;
 use App\Models\Stock;
 use App\Services\Broker\KiteInstrumentRegistryService;
 use App\Support\KiteTradingSession;
-use App\Support\TradingCalendar;
 use Carbon\Carbon;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
@@ -84,6 +83,13 @@ final class KiteAuthenticatedPriceData
         }
     }
 
+    /** Whether this user currently has a usable Kite session for private reads. */
+    public function hasUsableSession(int $userId): bool
+    {
+        return $this->usableConnection($userId) !== null
+            && trim((string) config('broker.kite.api_key')) !== '';
+    }
+
     /** @return array<int, array{price_date:string,open_price:?float,high_price:?float,low_price:?float,close_price:float,volume:?int}> */
     public function historicalDaily(int $userId, Stock $stock, Carbon $from, Carbon $to): array
     {
@@ -130,18 +136,10 @@ final class KiteAuthenticatedPriceData
             }
             $cursor = $chunkEnd->copy()->addDay()->startOfDay();
         }
+        // A valid provider series can be sparse (new listings, suspensions,
+        // source gaps). Validate every returned candle, but do not infer that
+        // every weekday in a long request must have a bar.
         ksort($rows);
-        if ($rows !== []) {
-            $first = Carbon::parse(array_key_first($rows), 'Asia/Kolkata')->addDay()->startOfDay();
-            $last = Carbon::parse(array_key_last($rows), 'Asia/Kolkata')->subDay()->startOfDay();
-            while ($first->lte($last)) {
-                if (TradingCalendar::isEquitySessionDate($first) && ! isset($rows[$first->toDateString()])) {
-                    $this->gate->failed('historical', $userId);
-                    throw new RuntimeException('Kite historical response is missing an internal equity-session candle.');
-                }
-                $first->addDay();
-            }
-        }
         return array_values($rows);
     }
 

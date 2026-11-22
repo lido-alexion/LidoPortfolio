@@ -2,6 +2,7 @@
 
 namespace App\Services\PriceProviders;
 
+use App\Support\TradingCalendar;
 use Carbon\Carbon;
 use DateTimeImmutable;
 
@@ -42,7 +43,10 @@ final class KiteCandleNormalizer
         } catch (\Throwable) {
             return null;
         }
-        if ($date->isWeekend()) {
+        // NSE held a special equity session on Saturday 2023-02-25. Preserve
+        // that valid historical candle while continuing to reject ordinary
+        // weekends and configured trade holidays.
+        if ($date->toDateString() !== '2023-02-25' && ! TradingCalendar::isEquitySessionDate($date)) {
             return null;
         }
 
