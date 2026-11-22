@@ -1,6 +1,8 @@
 <?php
 
 return [
+    // Reserved for a future reviewed block-only gate. Shadow evidence never gates execution.
+    'kite_session_evidence_gate_enabled' => (bool) env('KITE_SESSION_EVIDENCE_GATE_ENABLED', false),
     /*
     | Per-user Zerodha/Kite Connect (V4-FEAT-001). App key/secret live in env;
     | each Lido user authorizes their own Kite account. Access tokens are

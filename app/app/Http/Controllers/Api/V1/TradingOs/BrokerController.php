@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\TradingOs;
 use App\Engines\Support\ApiEnvelope;
 use App\Http\Controllers\Controller;
 use App\Services\Broker\BrokerConnectionService;
+use App\Services\Execution\KiteSessionEvidenceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,11 +14,17 @@ class BrokerController extends Controller
 {
     public function __construct(
         protected BrokerConnectionService $connections,
+        protected KiteSessionEvidenceService $sessionEvidence,
     ) {}
 
     public function status(Request $request): JsonResponse
     {
-        return ApiEnvelope::success($this->connections->status($request->user()));
+        return ApiEnvelope::success([...$this->connections->status($request->user()), 'session_evidence' => $this->sessionEvidence->latest($request->user())]);
+    }
+
+    public function refreshEvidence(Request $request): JsonResponse
+    {
+        return ApiEnvelope::success($this->sessionEvidence->capture($request->user()));
     }
 
     public function kiteLoginUrl(Request $request): JsonResponse
@@ -34,6 +41,7 @@ class BrokerController extends Controller
         ]);
 
         $this->connections->completeLogin($request->user(), $validated['request_token']);
+        $this->sessionEvidence->capture($request->user());
 
         return ApiEnvelope::success($this->connections->status($request->user()->fresh()));
     }
@@ -55,6 +63,7 @@ class BrokerController extends Controller
         }
 
         $this->connections->completeLogin($user, $token);
+        $this->sessionEvidence->capture($user);
 
         return redirect($frontend.'?kite=connected');
     }

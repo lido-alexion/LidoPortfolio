@@ -614,6 +614,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::post('/totp/disable', [TradingOsTotpController::class, 'disable']);
 
     Route::get('/broker/status', [TradingOsBrokerController::class, 'status'])->middleware('token.scope:execution:read');
+    Route::post('/broker/session-evidence/refresh', [TradingOsBrokerController::class, 'refreshEvidence'])->middleware('token.scope:execution:read');
     Route::get('/broker/kite/login-url', [TradingOsBrokerController::class, 'kiteLoginUrl']);
     Route::post('/broker/kite/session', [TradingOsBrokerController::class, 'kiteSession']);
     Route::post('/broker/kite/disconnect', [TradingOsBrokerController::class, 'disconnect']);
