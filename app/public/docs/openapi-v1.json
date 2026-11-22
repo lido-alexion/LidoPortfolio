@@ -8062,6 +8062,58 @@
                 }
             }
         },
+        "/api/v1/broker/session-evidence/refresh": {
+            "post": {
+                "tags": [
+                    "broker"
+                ],
+                "summary": "POST refreshEvidence",
+                "description": "Live route: `POST /api/v1/broker/session-evidence/refresh`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\BrokerController@refreshEvidence`.",
+                "operationId": "post_broker_session-evidence_refresh",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XProfileId"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Envelope `{success: true, data, meta}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EnvelopeSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated (Sanctum session missing or expired)."
+                    },
+                    "422": {
+                        "description": "Validation or domain precondition. May be ApiEnvelope (`error.code`) or Laravel `{message, errors}`.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorOrValidation"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "JSON body as accepted by the current controller. Omitted properties are not implied."
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/broker/status": {
             "get": {
                 "tags": [
