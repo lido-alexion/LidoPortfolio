@@ -86,6 +86,16 @@ class StockPriceHistoryService
 
         $available = $this->getAvailableHistoryRange($stock);
 
+        if ($available !== null) {
+            // price_date is a market-session DATE, not a UTC instant. Rebuild
+            // these boundaries in the same timezone as TradingCalendar's
+            // required window before comparing or stepping between sessions.
+            $available = [
+                'from' => Carbon::parse($available['from']->toDateString(), 'Asia/Kolkata')->startOfDay(),
+                'to' => Carbon::parse($available['to']->toDateString(), 'Asia/Kolkata')->startOfDay(),
+            ];
+        }
+
         if ($available === null) {
             return $this->filterMissingSessionRanges((int) $stock->id, [
                 ['from' => $requiredFrom, 'to' => $requiredTo],
