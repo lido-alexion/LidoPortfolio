@@ -246,6 +246,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/kite/holdings-onboarding/stocks/{item}/verify', [KiteHoldingsOnboardingController::class, 'verify'])->whereNumber('item');
     Route::post('/kite/holdings-onboarding/commit', [KiteHoldingsOnboardingController::class, 'commit']);
     Route::post('/reconciliation', [PortfolioReconciliationController::class, 'store']);
+    Route::post('/reconciliation/trades/sync', [PortfolioReconciliationController::class, 'syncTrades']);
     Route::get('/reconciliation/{run}', [PortfolioReconciliationController::class, 'show'])->whereNumber('run');
     Route::get('/replays', [PortfolioReplayController::class, 'index']);
     Route::post('/replays/readiness', [PortfolioReplayController::class, 'readiness']);
@@ -617,6 +618,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::post('/totp/disable', [TradingOsTotpController::class, 'disable']);
 
     Route::get('/broker/status', [TradingOsBrokerController::class, 'status'])->middleware('token.scope:execution:read');
+    Route::post('/broker/session-evidence/refresh', [TradingOsBrokerController::class, 'refreshEvidence'])->middleware('token.scope:execution:read');
     Route::get('/broker/kite/login-url', [TradingOsBrokerController::class, 'kiteLoginUrl']);
     Route::post('/broker/kite/session', [TradingOsBrokerController::class, 'kiteSession']);
     Route::post('/broker/kite/disconnect', [TradingOsBrokerController::class, 'disconnect']);

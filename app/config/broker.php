@@ -1,6 +1,13 @@
 <?php
 
 return [
+    // Staged safety gate. Keep disabled until bounded order types, charge model,
+    // and provider semantics receive an independent safety review.
+    'kite_per_order_buying_power_gate_enabled' => (bool) env('KITE_PER_ORDER_BUYING_POWER_GATE_ENABLED', false),
+    'kite_per_order_buying_power_max_age_seconds' => max(1, (int) env('KITE_PER_ORDER_BUYING_POWER_MAX_AGE_SECONDS', 15)),
+    'kite_per_order_buying_power_charge_buffer_pct' => max(0.0, (float) env('KITE_PER_ORDER_BUYING_POWER_CHARGE_BUFFER_PCT', 5.0)),
+    // Reserved for a future reviewed block-only gate. Shadow evidence never gates execution.
+    'kite_session_evidence_gate_enabled' => (bool) env('KITE_SESSION_EVIDENCE_GATE_ENABLED', false),
     /*
     | Per-user Zerodha/Kite Connect (V4-FEAT-001). App key/secret live in env;
     | each Lido user authorizes their own Kite account. Access tokens are
