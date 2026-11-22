@@ -422,6 +422,12 @@ class UniverseDailyBhavcopySyncTest extends TestCase
         $second = $run();
         $this->assertSame(2, $first['failed']);
         $this->assertSame('identity_conflict', $first['bulk']['files'][0]['status']);
+        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $first['bulk']['files'][0]['retry_after']);
+        $this->assertDatabaseHas('portfolio_universe_price_session_outcomes', [
+            'stock_id' => $stock->id,
+            'session_date' => '2026-10-26',
+            'retry_after' => $first['bulk']['files'][0]['retry_after'],
+        ]);
         $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $first['bulk']['files'][0]['source_revision_sha256']);
         $this->assertSame(1, $second['bulk']['backoff_skips']);
         $this->assertDatabaseMissing('portfolio_stock_prices', ['stock_id' => $stock->id]);

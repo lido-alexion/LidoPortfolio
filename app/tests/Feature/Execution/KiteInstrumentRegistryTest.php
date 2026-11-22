@@ -50,6 +50,26 @@ class KiteInstrumentRegistryTest extends TestCase
         ]);
     }
 
+    public function test_targeted_bse_instrument_sync_uses_the_bse_exchange_and_mapping_key(): void
+    {
+        $user = User::factory()->create();
+        BrokerConnection::query()->create([
+            'user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => null,
+        ])->forceFill(['access_token' => 'token'])->save();
+        $stock = Stock::query()->create(['symbol' => 'ABC', 'exchange' => 'BSE', 'name' => 'ABC LTD']);
+        Http::fake(['https://api.kite.trade/instruments/BSE' => Http::response($this->csv([
+            ['12345', '998', 'ABC', 'ABC LTD', 'BSE'],
+        ]))]);
+
+        $result = app(KiteInstrumentRegistryService::class)->resolve($stock, $user->id, refresh: true);
+
+        $this->assertSame('ABC', $result['trading_symbol']);
+        $this->assertDatabaseHas('stox_broker_instruments', [
+            'stock_id' => $stock->id, 'exchange' => 'BSE', 'instrument_token' => '12345',
+        ]);
+        Http::assertSent(fn ($request): bool => str_ends_with($request->url(), '/instruments/BSE'));
+    }
+
     public function test_cancel_connection_failure_fetches_open_state_without_claiming_terminal_cancellation(): void
     {
         $user = User::factory()->create();

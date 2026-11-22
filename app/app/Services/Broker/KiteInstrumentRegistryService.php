@@ -16,6 +16,10 @@ final class KiteInstrumentRegistryService
     /** @return array{matched:int,ambiguous:int,unmatched:int} */
     public function syncForUser(int $userId, ?Stock $target = null): array
     {
+        $exchange = strtoupper(trim((string) ($target?->exchange ?: 'NSE')));
+        if (! in_array($exchange, ['NSE', 'BSE'], true)) {
+            throw new DomainException('Kite instrument sync supports NSE and BSE equities only.', 'BROKER_INSTRUMENT_MAPPING_NOT_FOUND', 422);
+        }
         $connection = BrokerConnection::query()
             ->where('user_id', $userId)
             ->where('provider', BrokerConnection::PROVIDER_KITE)
@@ -30,7 +34,7 @@ final class KiteInstrumentRegistryService
                     'X-Kite-Version' => '3',
                     'Authorization' => 'token '.(string) config('broker.kite.api_key').':'.$connection->access_token,
                 ])
-                ->get(rtrim((string) config('broker.kite.api_base'), '/').'/instruments/NSE');
+                ->get(rtrim((string) config('broker.kite.api_base'), '/').'/instruments/'.$exchange);
         } catch (ConnectionException $e) {
             throw new DomainException('Kite instrument master is unavailable.', 'BROKER_INSTRUMENT_SYNC_UNAVAILABLE', 422, $e);
         }
@@ -38,8 +42,8 @@ final class KiteInstrumentRegistryService
             throw new DomainException('Kite instrument master returned HTTP '.$response->status().'.', 'BROKER_INSTRUMENT_SYNC_UNAVAILABLE', 422);
         }
 
-        $rows = $this->parseCsv((string) $response->body());
-        $stocks = $target ? collect([$target]) : Stock::query()->where('exchange', 'NSE')->get();
+        $rows = $this->parseCsv((string) $response->body(), $exchange);
+        $stocks = $target ? collect([$target]) : Stock::query()->where('exchange', $exchange)->get();
         if ($target) {
             BrokerInstrument::query()
                 ->where('provider', BrokerConnection::PROVIDER_KITE)
@@ -98,7 +102,7 @@ final class KiteInstrumentRegistryService
     }
 
     /** @return list<array<string,string|null>> */
-    protected function parseCsv(string $csv): array
+    protected function parseCsv(string $csv, string $exchange): array
     {
         $lines = preg_split('/\R/', trim($csv)) ?: [];
         $header = str_getcsv((string) array_shift($lines));
@@ -109,7 +113,7 @@ final class KiteInstrumentRegistryService
             if (count($values) !== count($header)) continue;
             $rows[] = array_combine($header, $values) ?: [];
         }
-        return array_values(array_filter($rows, fn (array $row): bool => strtoupper((string) ($row['exchange'] ?? '')) === 'NSE'));
+        return array_values(array_filter($rows, fn (array $row): bool => strtoupper((string) ($row['exchange'] ?? '')) === $exchange));
     }
 
     /** @return array<string,string|null>|false|null */
@@ -132,8 +136,9 @@ final class KiteInstrumentRegistryService
 
     protected function save(Stock $stock, array $row): void
     {
+        $exchange = strtoupper(trim((string) ($row['exchange'] ?? $stock->exchange ?? 'NSE')));
         BrokerInstrument::query()->updateOrCreate(
-            ['provider' => BrokerConnection::PROVIDER_KITE, 'stock_id' => $stock->id, 'exchange' => 'NSE'],
+            ['provider' => BrokerConnection::PROVIDER_KITE, 'stock_id' => $stock->id, 'exchange' => $exchange],
             [
                 'trading_symbol' => (string) ($row['tradingsymbol'] ?? $stock->symbol),
                 'instrument_token' => $row['instrument_token'] ?? null,
