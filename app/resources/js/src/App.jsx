@@ -67,6 +67,7 @@ import RecommendationsPage from './pages/RecommendationsPage';
 import CandidatesPage from './pages/CandidatesPage';
 import PortfolioSnapshotsPage from './pages/PortfolioSnapshotsPage';
 import HistoricalHoldingsPage from './pages/HistoricalHoldingsPage';
+import KiteHoldingsOnboardingPage from './pages/KiteHoldingsOnboardingPage';
 import PortfolioComparePage from './pages/PortfolioComparePage';
 import PerformanceTaxPage from './pages/PerformanceTaxPage';
 import ReviewDashboardPage from './pages/ReviewDashboardPage';
@@ -116,6 +117,7 @@ function AppRoutes() {
             <Route path="/backtests" element={<BacktestHistoryPage />} />
             <Route path="/backtests/:id" element={<BacktestDetailPage />} />
             <Route path="/portfolio/historical-holdings" element={<HistoricalHoldingsPage />} />
+            <Route path="/portfolio/kite-onboarding" element={<KiteHoldingsOnboardingPage />} />
             <Route path="/portfolio/compare" element={<PortfolioComparePage />} />
             <Route path="/portfolio/performance-tax" element={<PerformanceTaxPage />} />
             <Route path="/portfolio/snapshots" element={<PortfolioSnapshotsPage />} />
