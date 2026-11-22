@@ -3,6 +3,7 @@
 namespace App\Services\Broker;
 
 use App\Models\BrokerConnection;
+use App\Models\CashAccount;
 use App\Models\KiteFundsReconciliation;
 use App\Models\KiteFundsSnapshot;
 use App\Models\PortfolioProfile;
@@ -78,7 +79,7 @@ final class KiteFundsSnapshotService
             $openDates = KiteFundsReconciliation::query()->where('profile_id', $profile->id)
                 ->where('broker_account_id', $connection->broker_user_id)
                 ->whereDate('trading_date', '>=', now('Asia/Kolkata')->subDays(30)->toDateString())
-                ->whereNotIn('status', ['adjustment_confirmed', 'adjustment_suppressed'])
+                ->whereNotIn('status', ['adjustment_applied', 'adjustment_confirmed', 'adjustment_suppressed'])
                 ->pluck('trading_date')->map(fn ($value) => \Illuminate\Support\Carbon::parse($value)->toDateString())->all();
             $dates = collect([$previousSession, ...$openDates])->unique()->values();
             foreach ($dates as $date) {
@@ -129,17 +130,44 @@ final class KiteFundsSnapshotService
                     ! config('broker.kite_funds.auto_adjustments_enabled', false) => 'adjustment_disabled',
                     default => 'adjustment_proposed',
                 };
-                DB::transaction(function () use ($key, $user, $snapshot, $status, $net, $manual, $manualNet, $suppressionReason) {
+                DB::transaction(function () use ($key, $user, $snapshot, $status, $net, $manual, $manualNet, $suppressionReason, $netUnits) {
+                    // Serialize with ordinary cash mutations before deciding whether to post.
+                    $account = CashAccount::query()->firstOrCreate(['profile_id' => $key['profile_id']], ['balance' => 0]);
+                    CashAccount::query()->whereKey($account->id)->lockForUpdate()->firstOrFail();
                     $current = KiteFundsReconciliation::query()->where('profile_id', $key['profile_id'])
                         ->where('broker_account_id', $key['broker_account_id'])->whereDate('trading_date', $key['trading_date'])
                         ->lockForUpdate()->first();
-                    $terminal = ['adjustment_confirmed', 'adjustment_suppressed'];
+                    $terminal = ['adjustment_applied', 'adjustment_confirmed', 'adjustment_suppressed'];
                     $effectiveStatus = $current && in_array($current->status, $terminal, true) ? $current->status : $status;
                     $effectiveSuppression = $current?->status === 'adjustment_proposed' && $manual->isNotEmpty()
                         ? 'manual_override' : ($current?->suppression_reason ?? $suppressionReason);
+                    $ledgerEntryId = $current?->cash_ledger_entry_id;
+                    if ($effectiveStatus === 'adjustment_proposed') {
+                        // A manual flow entered after the initial read must win over automation.
+                        $lockedManual = DB::table('portfolio_cash_ledger_entries as movement')
+                            ->where('movement.profile_id', $key['profile_id'])->whereDate('movement.entry_date', $key['trading_date'])
+                            ->whereIn('movement.entry_type', ['deposit', 'withdrawal'])->whereNull('movement.reversal_of_entry_id')
+                            ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('portfolio_cash_ledger_entries as reversal')->whereColumn('reversal.reversal_of_entry_id', 'movement.id'));
+                        if ($lockedManual->exists()) {
+                            $lockedNet = $this->decimalUnits((string) $lockedManual->sum('movement.amount'));
+                            $effectiveStatus = $lockedNet === $netUnits ? 'reconciled' : 'mismatch_warning';
+                        } else {
+                            $entry = app(\App\Services\CashManagementService::class)->adjust(
+                                \App\Models\PortfolioProfile::query()->findOrFail($key['profile_id']),
+                                (string) $net,
+                                'Automatic Kite net cash adjustment for '.$key['trading_date'].' (pay-in less payout); aggregate broker evidence, not an individual bank transfer.',
+                                null,
+                                $key['trading_date'],
+                            );
+                            $entry->forceFill(['entry_classification' => 'kite_net_adjustment'])->save();
+                            $ledgerEntryId = $entry->id;
+                            $effectiveStatus = 'adjustment_applied';
+                        }
+                    }
                     $values = [
                         'user_id' => $user->id, 'snapshot_id' => $snapshot?->id,
                         'status' => $effectiveStatus,
+                        'cash_ledger_entry_id' => $ledgerEntryId,
                         'snapshot_net_flow' => $net, 'manual_net_flow' => $manual->isNotEmpty() ? $manualNet : null,
                         'suppression_reason' => $effectiveSuppression,
                         'evaluated_at' => now(),

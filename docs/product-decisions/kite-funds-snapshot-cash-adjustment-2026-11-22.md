@@ -1,7 +1,7 @@
 # StoX — Kite Funds Snapshots and Net Cash Adjustment
 Status: AGREED PRODUCT REQUIREMENTS — 2026-11-22. Implementation present; production rollout remains gated.
 
-Implementation note (2026-11-22): backend snapshots, next-session review records, cash-management review UI, and an explicitly gated confirmation pathway are implemented. Automatic proposals and confirmations remain disabled by default. See [Kite Funds Snapshots and Cash Reconciliation](../current/kite-funds-snapshot-reconciliation.md) for schedule, status rules and Console rollout criteria. The payout-field verification requirement remains open and is not claimed as satisfied.
+Implementation note (2026-11-22): backend snapshots, next-session reconciliation and cash-management controls are implemented. A reliable unmatched flow posts one editable adjustment automatically only when both feature flags are enabled; both remain disabled by default pending Console verification. The user can subsequently confirm the already-posted adjustment; that confirmation records approval only and never posts another ledger entry or changes cash. See [Kite Funds Snapshots and Cash Reconciliation](../current/kite-funds-snapshot-reconciliation.md) for schedule, status rules and Console rollout criteria. The payout-field verification requirement remains open and is not claimed as satisfied.
 
 ## Objective
 Maintain an accurate StoX cash balance for trading decisions, not a complete bank-transfer history. CNC buy/sell cash movements and charges are already handled by StoX transaction recording and its existing fee calculator. This feature concerns bank-to-broker pay-ins and broker-to-bank payouts.

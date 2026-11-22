@@ -726,15 +726,20 @@ class CashManagementService
             // Apply an inflow before an outflow so each immutable row has a valid running balance.
             if ($replacementUnits > 0 && $reversalUnits < 0) {
                 $replacement = $appendReplacement();
+                if ($entry->entry_classification === 'kite_net_adjustment') $replacement->forceFill(['entry_classification' => 'kite_net_adjustment'])->save();
                 $appendReversal();
                 return $replacement;
             }
             if ($replacementUnits < 0 && $reversalUnits > 0) {
                 $appendReversal();
-                return $appendReplacement();
+                $replacement = $appendReplacement();
+                if ($entry->entry_classification === 'kite_net_adjustment') $replacement->forceFill(['entry_classification' => 'kite_net_adjustment'])->save();
+                return $replacement;
             }
             $appendReversal();
-            return $appendReplacement();
+            $replacement = $appendReplacement();
+            if ($entry->entry_classification === 'kite_net_adjustment') $replacement->forceFill(['entry_classification' => 'kite_net_adjustment'])->save();
+            return $replacement;
         });
     }
 

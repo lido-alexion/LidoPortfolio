@@ -559,19 +559,23 @@ export default function CashManagementPage() {
                         </div>
                         <div className="card-body">
                             {kiteFundsUnavailable ? <p className="small text-warning" role="status">Kite funds evidence could not be loaded. StoX cash remains available; no adjustment was applied.</p> : null}
-                            <p className="small text-muted mb-3">Kite available funds are broker buying power and remain separate from StoX ledger cash. Pay-in and payout are stored independently; payout meaning {kiteFunds?.payout_semantics_verified ? 'is marked operator-verified against Console evidence' : 'has not been validated against Console'}, so no cash adjustment is applied automatically without review.</p>
+                            <p className="small text-muted mb-3">Kite available funds are broker buying power and remain separate from StoX ledger cash. Pay-in and payout are stored independently. When both rollout gates are enabled and a complete late-day snapshot is reliable with no manual transfer rows, StoX posts one editable, clearly marked net cash adjustment. Manual mismatches and uncertain evidence remain warnings for review.</p>
                             {kiteFundsUnavailable ? null : kiteFunds?.reconciliations?.length ? <div className="table-responsive mb-3">
                                 <table className="table table-sm align-middle mb-0">
                                     <thead><tr><th>Trading date</th><th>Status</th><th className="text-end">Kite net</th><th className="text-end">Manual net</th><th>Checked</th><th>Review</th></tr></thead>
                                     <tbody>{kiteFunds.reconciliations.map((row) => <tr key={row.id}>
-                                        <td>{row.trading_date}</td><td><span className={`badge ${row.status === 'reconciled' ? 'text-bg-success' : 'text-bg-warning'}`}>{row.status.replaceAll('_', ' ')}</span></td>
+                                        <td>{row.trading_date}</td><td><span className={`badge ${row.status === 'reconciled' || row.status === 'adjustment_confirmed' ? 'text-bg-success' : 'text-bg-warning'}`}>{row.status === 'adjustment_applied' ? 'pending user confirmation' : row.status === 'adjustment_proposed' ? 'pending post approval' : row.status.replaceAll('_', ' ')}</span></td>
                                         <td className="text-end">{money(row.snapshot_net_flow)}</td><td className="text-end">{money(row.manual_net_flow)}</td><td className="small text-muted">{fmtWhen(row.evaluated_at)}</td>
-                                        <td>{row.status === 'adjustment_proposed' && kiteFunds?.automatic_adjustments_enabled && kiteFunds?.payout_semantics_verified ? <>
+                                        <td>{row.status === 'adjustment_applied' ? <button type="button" className="btn btn-sm btn-outline-primary" onClick={async () => {
+                                            if (!window.confirm(`Confirm the already posted Kite net adjustment of ${money(row.snapshot_net_flow)} for ${row.trading_date}? Confirmation records your approval only; the cash balance will not change.`)) return;
+                                            await runApiMutation(() => api.post(`/cash/kite-funds/${row.id}/confirm`, {}, { skipErrorToast: true }), { successMessage: 'Already posted Kite adjustment confirmed', errorFallback: 'Could not confirm Kite adjustment' });
+                                            await load();
+                                        }}>Confirm posted adjustment</button> : row.status === 'adjustment_proposed' && kiteFunds?.automatic_adjustments_enabled && kiteFunds?.payout_semantics_verified ? <>
                                             <button type="button" className="btn btn-sm btn-outline-primary" onClick={async () => {
                                             if (!window.confirm(`Confirm the net Kite adjustment of ${money(row.snapshot_net_flow)} for ${row.trading_date}? This is aggregate broker evidence, not proof of an individual bank transfer.`)) return;
                                             await runApiMutation(() => api.post(`/cash/kite-funds/${row.id}/confirm`, {}, { skipErrorToast: true }), { successMessage: 'Kite adjustment confirmed', errorFallback: 'Could not confirm Kite adjustment' });
                                             notifyPortfolioDashboardRefresh(); await load();
-                                            }}>Confirm adjustment</button>
+                                            }}>Post proposed adjustment</button>
                                             <button type="button" className="btn btn-sm btn-link text-muted" onClick={async () => {
                                                 await runApiMutation(() => api.post(`/cash/kite-funds/${row.id}/dismiss`, {}, { skipErrorToast: true }), { successMessage: 'Proposal dismissed', errorFallback: 'Could not dismiss proposal' });
                                                 await load();

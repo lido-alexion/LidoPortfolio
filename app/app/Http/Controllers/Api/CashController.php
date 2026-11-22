@@ -75,6 +75,7 @@ class CashController extends Controller
             'reconciliations' => $reconciliations->map(fn ($row) => [
                 'id' => $row->id, 'trading_date' => $row->trading_date->toDateString(), 'status' => $row->status,
                 'snapshot_net_flow' => $row->snapshot_net_flow, 'manual_net_flow' => $row->manual_net_flow,
+                'cash_ledger_entry_id' => $row->cash_ledger_entry_id,
                 'evaluated_at' => $row->evaluated_at?->toIso8601String(),
             ]),
         ]]);
@@ -82,15 +83,24 @@ class CashController extends Controller
 
     public function confirmKiteFundsAdjustment(Request $request, int $reconciliation): JsonResponse
     {
-        if (! config('broker.kite_funds.auto_adjustments_enabled', false)
-            || ! config('broker.kite_funds.payout_semantics_verified', false)) {
-            return response()->json(['message' => 'Confirmation is disabled until Console payout evidence is verified.'], 409);
-        }
         $profile = \activePortfolio();
         return DB::transaction(function () use ($profile, $request, $reconciliation) {
             $this->cash->ensureAccount($profile);
             CashAccount::query()->where('profile_id', $profile->id)->lockForUpdate()->firstOrFail();
             $row = KiteFundsReconciliation::query()->where('profile_id', $profile->id)->lockForUpdate()->findOrFail($reconciliation);
+            if ($row->status === 'adjustment_confirmed' && $row->cash_ledger_entry_id) {
+                return response()->json(['data' => ['id' => $row->cash_ledger_entry_id, 'status' => $row->status]]);
+            }
+            if ($row->status === 'adjustment_applied' && $row->cash_ledger_entry_id) {
+                // The adjustment already affected cash. Confirmation is an approval
+                // record only; it must never post, reverse, or amend a ledger row.
+                $row->forceFill(['status' => 'adjustment_confirmed', 'evaluated_at' => now()])->save();
+                return response()->json(['data' => ['id' => $row->cash_ledger_entry_id, 'status' => $row->status]]);
+            }
+            if (! config('broker.kite_funds.auto_adjustments_enabled', false)
+                || ! config('broker.kite_funds.payout_semantics_verified', false)) {
+                return response()->json(['message' => 'Posting a proposal is disabled until Console payout evidence is verified.'], 409);
+            }
             if ($row->status !== 'adjustment_proposed' || $row->cash_ledger_entry_id) {
                 return response()->json(['message' => 'This reconciliation is no longer awaiting confirmation.'], 409);
             }
