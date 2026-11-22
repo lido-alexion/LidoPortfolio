@@ -18,6 +18,13 @@ const quantity = (value) => Number(value).toLocaleString(undefined, { maximumFra
 const completedAt = (value) => value ? new Date(value).toLocaleString(undefined, {
     year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true,
 }) : '—';
+const tradingDate = (value) => value ? new Date(`${value}T12:00:00`).toLocaleDateString() : 'Unknown date';
+const syncStatus = (run) => run.status === 'gap_unavailable' ? 'Historical trades unavailable'
+    : run.status === 'sync_failed' ? 'Sync failed'
+        : run.status === 'needs_review' ? 'Needs review'
+            : run.status === 'running' ? 'In progress' : 'Completed';
+const syncTone = (status) => ['gap_unavailable', 'sync_failed'].includes(status) ? 'text-danger'
+    : status === 'needs_review' ? 'text-warning' : status === 'completed' ? 'text-success' : 'text-muted';
 
 function ComparisonValue({ value, mismatch, money = false }) {
     return <span className={mismatch ? 'text-danger fw-semibold' : 'text-muted'}>{money ? `₹${amount(value)}` : quantity(value)}</span>;
@@ -39,6 +46,12 @@ export default function PortfolioReconciliationCard({ executionMode }) {
     useEffect(() => {
         setSelected(null);
         if (eligible) load().catch(() => setSnapshot(null));
+    }, [eligible, load]);
+
+    useEffect(() => {
+        if (!eligible) return undefined;
+        const timer = window.setInterval(() => load().catch(() => {}), 60_000);
+        return () => window.clearInterval(timer);
     }, [eligible, load]);
 
     if (!eligible) return null;
@@ -129,6 +142,24 @@ export default function PortfolioReconciliationCard({ executionMode }) {
                     {status.execution_blocked ? <div className="alert alert-danger py-2 small">New broker execution is blocked until a successful reconciliation confirms that holdings match.</div> : null}
                     {status.last_failure ? <div className="alert alert-warning py-2 small">Latest sync failed: {status.last_failure}. The last successful result remains authoritative.</div> : null}
                     <p className="small text-muted">Last successful check: {status.last_successful_at ? new Date(status.last_successful_at).toLocaleString() : 'Never'}. Correct discrepancies through normal holdings or cash transactions; broker values are never applied automatically.</p>
+                    <section aria-label="Kite CNC trade sync activity" className="mb-3">
+                        <h3 className="h6 mb-2">Kite CNC trade sync activity</h3>
+                        <p className="small text-muted mb-2">Scheduled and reconnect syncs are shown here for this active portfolio. Kite can provide current-day trades only; historical gaps need review from a broker tradebook.</p>
+                        {(snapshot.trade_sync_runs || []).length === 0 ? <p className="small text-muted">No CNC trade sync activity recorded.</p> : <div className="table-responsive">
+                            <table className="table table-sm align-middle mb-0">
+                                <thead><tr><th>Trading date</th><th>Portfolio</th><th>Source</th><th>Status</th><th>Last run</th><th>Added</th><th>Matched</th><th>Review</th><th>Failed / unavailable details</th></tr></thead>
+                                <tbody>{snapshot.trade_sync_runs.map((run) => <tr key={run.id}>
+                                    <td>{tradingDate(run.trading_date)}</td>
+                                    <td>#{run.profile_id}</td>
+                                    <td>{label(run.trigger)}</td>
+                                    <td className={syncTone(run.status)}>{syncStatus(run)}</td>
+                                    <td>{completedAt(run.completed_at || run.started_at)}</td>
+                                    <td>{run.imported_count ?? 0}</td><td>{run.matched_count ?? 0}</td><td>{run.review_count ?? 0}</td>
+                                    <td className="small">{run.failure_summary || (run.review_count > 0 ? `${run.review_count} fill${run.review_count === 1 ? '' : 's'} require review.` : '—')}</td>
+                                </tr>)}</tbody>
+                            </table>
+                        </div>}
+                    </section>
                     <div className="table-responsive">
                         <table className="table table-sm align-middle mb-0">
                             <thead><tr><th>Run</th><th>Trigger</th><th>Result</th><th>Completed</th><th /></tr></thead>

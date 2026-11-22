@@ -20,7 +20,16 @@ class PortfolioReconciliationController extends Controller
         $profile = \activePortfolio();
         $runs = PortfolioReconciliationRun::query()->where('profile_id', $profile->id)
             ->orderByDesc('id')->limit(100)->get();
-        $tradeRuns = \App\Models\KiteCncTradeSyncRun::query()->where('profile_id', $profile->id)->latest('id')->limit(30)->get();
+        $tradeRuns = \App\Models\KiteCncTradeSyncRun::query()->where('profile_id', $profile->id)->latest('id')->limit(100)
+            ->get(['id', 'profile_id', 'trading_date', 'trigger', 'status', 'received_count', 'eligible_count',
+                'imported_count', 'matched_count', 'review_count', 'started_at', 'completed_at'])
+            ->map(function ($run): array {
+                return [...$run->toArray(), 'failure_summary' => match ($run->status) {
+                    'gap_unavailable' => 'Kite does not provide arbitrary past trading days. Check the broker tradebook to recover this date.',
+                    'sync_failed' => 'Sync did not complete. Check the Kite connection and retry when available.',
+                    default => null,
+                }];
+            });
 
         return response()->json(['data' => [
             'status' => $this->status($profile),
