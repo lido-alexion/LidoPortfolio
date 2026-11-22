@@ -1016,24 +1016,47 @@ class UniversePriceSyncService
 
             return $stats;
         } catch (\Throwable $e) {
-            $summary = sprintf(
-                'Universe price sync aborted (%s/%s): %s',
-                $mode,
-                $scope,
-                $e->getMessage(),
-            );
-            $this->syncLog->log($runId, $jobName, 'error', $summary, [
-                'event' => 'universe_sync_aborted',
-                'exception' => $e::class,
-            ]);
-            $this->syncLog->completeRun($runId, 'failed', [
-                'processed' => $stats['processed'] ?? 0,
-                'failures' => max(1, (int) ($stats['failed'] ?? 0)),
-            ], $summary);
+            $error = \Illuminate\Support\Str::limit(trim($e->getMessage()), 999, '…');
+            $summary = sprintf('Universe price sync aborted (%s/%s): %s: %s',
+                $mode, $scope, class_basename($e), $error);
+
+            // Close the durable run before attempting the optional detail log.
+            // A failed/oversized log row must never leave the run marked running.
+            try {
+                $this->syncLog->completeRun($runId, 'failed', [
+                    'processed' => $stats['processed'] ?? 0,
+                    'failures' => max(1, (int) ($stats['failed'] ?? 0)),
+                ], $summary);
+            } catch (\Throwable $completionError) {
+                $this->logger->scheduler('error', 'Universe price sync failure could not be persisted', [
+                    'event' => 'universe_sync_failure_persistence_failed',
+                    'run_id' => $runId,
+                    'exception' => $completionError::class,
+                    'original_exception' => $e::class,
+                ]);
+            }
+            try {
+                $this->syncLog->log($runId, $jobName, 'error', $summary, [
+                    'event' => 'universe_sync_aborted',
+                    'exception' => $e::class,
+                    'error' => $error,
+                ]);
+            } catch (\Throwable $logError) {
+                // Keep a systemic operational signal even when database logging is unavailable.
+                $this->logger->scheduler('error', 'Universe price sync aborted; sync log persistence failed', [
+                    'event' => 'universe_sync_log_persistence_failed',
+                    'run_id' => $runId,
+                    'exception' => $e::class,
+                    'log_exception' => $logError::class,
+                    'error' => $error,
+                ]);
+            }
             $this->logger->scheduler('error', $summary, [
                 'category' => 'UniversePriceSync',
+                'event' => 'universe_sync_aborted',
+                'run_id' => $runId,
                 'exception' => $e::class,
-                'error' => $e->getMessage(),
+                'error' => $error,
             ]);
 
             throw $e;
