@@ -6,6 +6,7 @@ use App\Engines\Recommendation\RecommendationEngine;
 use App\Exceptions\DomainException;
 use App\Models\ExecutionBatch;
 use App\Models\ExecutionDecision;
+use App\Models\BrokerConnection;
 use App\Models\Holding;
 use App\Models\PortfolioProfile;
 use App\Models\Stock;
@@ -20,6 +21,7 @@ use App\Services\Broker\BrokerOrderRequest;
 use App\Services\Broker\BrokerOrderSnapshot;
 use App\Services\Execution\InternalRecommendationMatcher;
 use App\Services\Execution\RecommendationExecutionLifetime;
+use App\Services\Execution\KitePerOrderBuyingPowerPolicy;
 use App\Services\Lending\RecommendationLendingCoordinator;
 use App\Services\PortfolioLoggerService;
 use App\Services\Protection\PositionProtectionService;
@@ -546,6 +548,25 @@ class LiveBrokerExecutionService
         );
 
         try {
+            if ($this->broker->provider() === 'kite' && config('broker.kite_per_order_buying_power_gate_enabled')) {
+                $connection = BrokerConnection::query()->where('user_id', $user->id)->where('provider', 'kite')->first();
+                $capturedAt = now()->toImmutable();
+                $available = null;
+                if ($connection && $connection->isUsable() && $connection->broker_user_id) {
+                    try { $available = $this->broker->availableEquityFunds((int) $user->id); } catch (Throwable) { $available = null; }
+                }
+                $assessment = app(KitePerOrderBuyingPowerPolicy::class)->assess([
+                    'status' => $available === null ? 'error' : 'success',
+                    'account_id' => $connection && $connection->isUsable() ? (string) $connection->broker_user_id : '',
+                    'available_equity' => $available,
+                    'captured_at' => $capturedAt->toISOString(),
+                ], (string) ($connection?->broker_user_id ?? ''), $side, 'MARKET', (float) $qty, null,
+                    $capturedAt, (int) config('broker.kite_per_order_buying_power_max_age_seconds'),
+                    (float) config('broker.kite_per_order_buying_power_charge_buffer_pct'));
+                if (! $assessment['allowed']) {
+                    throw new DomainException('Kite per-order buying-power evidence is not sufficient for this order: '.$assessment['reason'].'.', 'KITE_PER_ORDER_BUYING_POWER_'.$assessment['reason'], 422);
+                }
+            }
             $placed = $this->broker->placeOrder($request);
         } catch (BrokerAmbiguousException $e) {
             $order->forceFill([
