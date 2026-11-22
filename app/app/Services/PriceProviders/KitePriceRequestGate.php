@@ -35,6 +35,16 @@ final class KitePriceRequestGate
     public function failed(string $kind, int $userId): void
     {
         $key = 'kite:price:circuit:'.$userId.':'.$kind;
-        Cache::put($key, min(3, (int) Cache::get($key, 0) + 1), 30);
+        // Anchor the cooldown to the first failure. Repeated calls while the
+        // circuit is open must not keep extending the outage indefinitely.
+        if (Cache::add($key, 1, 30)) {
+            return;
+        }
+
+        if ((int) Cache::get($key, 0) >= 3) {
+            return;
+        }
+
+        Cache::increment($key);
     }
 }

@@ -6,6 +6,7 @@ use App\Models\BrokerConnection;
 use App\Models\Stock;
 use App\Services\Broker\KiteInstrumentRegistryService;
 use App\Support\KiteTradingSession;
+use App\Support\TradingCalendar;
 use Carbon\Carbon;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
@@ -19,6 +20,8 @@ use RuntimeException;
  */
 final class KiteAuthenticatedPriceData
 {
+    private const MAX_HISTORICAL_CALENDAR_DAYS = 3650;
+
     public function __construct(
         protected KiteCandleNormalizer $normalizer,
         protected KitePriceRequestGate $gate,
@@ -42,9 +45,16 @@ final class KiteAuthenticatedPriceData
         $instrument = $mapping['exchange'].':'.$mapping['trading_symbol'];
         $cacheKey = 'kite:price:quote:'.$userId.':'.hash('sha256', $instrument);
         $cached = Cache::get($cacheKey);
-        if (is_array($cached) && isset($cached['last_price'], $cached['captured_at'])
-            && now('Asia/Kolkata')->diffInSeconds(Carbon::parse($cached['captured_at'], 'Asia/Kolkata')) <= 120) {
-            return $cached;
+        if (is_array($cached) && isset($cached['last_price'], $cached['captured_at'])) {
+            try {
+                $cachedAt = Carbon::parse($cached['captured_at'])->timezone('Asia/Kolkata');
+                $now = now('Asia/Kolkata');
+                if (! $cachedAt->gt($now) && $cachedAt->diffInSeconds($now) <= 120) {
+                    return $cached;
+                }
+            } catch (\Throwable) {
+                Cache::forget($cacheKey);
+            }
         }
 
         try {
@@ -56,7 +66,11 @@ final class KiteAuthenticatedPriceData
                 return null;
             }
             $tradedAt = Carbon::parse($tradedAtRaw, 'Asia/Kolkata');
-            if ($tradedAt->gt(now('Asia/Kolkata')) || $tradedAt->diffInSeconds(now('Asia/Kolkata')) > 120) {
+            $now = now('Asia/Kolkata');
+            $tradeMinutes = ((int) $tradedAt->format('H')) * 60 + (int) $tradedAt->format('i');
+            if ($tradedAt->gt($now) || $tradedAt->diffInSeconds($now) > 120
+                || $tradedAt->toDateString() !== $now->toDateString()
+                || ! $tradedAt->isWeekday() || $tradeMinutes < 555 || $tradeMinutes > 930) {
                 $this->gate->failed('quote', $userId);
                 return null;
             }
@@ -73,12 +87,20 @@ final class KiteAuthenticatedPriceData
     /** @return array<int, array{price_date:string,open_price:?float,high_price:?float,low_price:?float,close_price:float,volume:?int}> */
     public function historicalDaily(int $userId, Stock $stock, Carbon $from, Carbon $to): array
     {
+        $from = $from->copy()->timezone('Asia/Kolkata')->startOfDay();
+        $to = $to->copy()->timezone('Asia/Kolkata')->endOfDay();
         if ($from->gt($to)) {
             return [];
         }
+        if (! $this->usableConnection($userId)) {
+            return [];
+        }
+        if ($from->diffInDays($to) > self::MAX_HISTORICAL_CALENDAR_DAYS) {
+            throw new RuntimeException('Kite daily history is limited to ten years per request.');
+        }
         $mapping = $this->mapping($stock, $userId);
         $rows = [];
-        $cursor = $from->copy()->startOfDay();
+        $cursor = $from->copy();
         while ($cursor->lte($to)) {
             $chunkEnd = $cursor->copy()->addDays(89)->min($to->copy()->endOfDay());
             try {
@@ -91,8 +113,13 @@ final class KiteAuthenticatedPriceData
                     throw new RuntimeException('Kite historical response has no candles array.');
                 }
                 foreach ($candles as $candle) {
-                    if (is_array($candle) && ($row = $this->normalizer->normalize($candle)) !== null
-                        && $row['price_date'] >= $cursor->toDateString() && $row['price_date'] <= $chunkEnd->toDateString()) {
+                    if (! is_array($candle) || ($row = $this->normalizer->normalize($candle)) === null) {
+                        throw new RuntimeException('Kite historical response contains an incomplete or invalid candle.');
+                    }
+                    if ($row['price_date'] >= $cursor->toDateString() && $row['price_date'] <= $chunkEnd->toDateString()) {
+                        if (isset($rows[$row['price_date']])) {
+                            throw new RuntimeException('Kite historical response contains a duplicate daily candle.');
+                        }
                         $rows[$row['price_date']] = $row;
                     }
                 }
@@ -104,6 +131,17 @@ final class KiteAuthenticatedPriceData
             $cursor = $chunkEnd->copy()->addDay()->startOfDay();
         }
         ksort($rows);
+        if ($rows !== []) {
+            $first = Carbon::parse(array_key_first($rows), 'Asia/Kolkata')->addDay()->startOfDay();
+            $last = Carbon::parse(array_key_last($rows), 'Asia/Kolkata')->subDay()->startOfDay();
+            while ($first->lte($last)) {
+                if (TradingCalendar::isEquitySessionDate($first) && ! isset($rows[$first->toDateString()])) {
+                    $this->gate->failed('historical', $userId);
+                    throw new RuntimeException('Kite historical response is missing an internal equity-session candle.');
+                }
+                $first->addDay();
+            }
+        }
         return array_values($rows);
     }
 
@@ -117,7 +155,8 @@ final class KiteAuthenticatedPriceData
         $mapping = $this->instruments->resolve($stock, $userId);
         $token = trim((string) ($mapping['instrument_token'] ?? ''));
         $symbol = trim((string) ($mapping['trading_symbol'] ?? ''));
-        if ($token === '' || ! ctype_digit($token) || $symbol === '') {
+        if ($token === '' || ! ctype_digit($token) || (int) $token < 1
+            || $symbol === '' || ! preg_match('/^[A-Z0-9._&-]+$/', strtoupper($symbol))) {
             throw new RuntimeException('No deterministic Kite instrument mapping exists.');
         }
         return ['exchange' => $exchange, 'trading_symbol' => strtoupper($symbol), 'instrument_token' => $token];

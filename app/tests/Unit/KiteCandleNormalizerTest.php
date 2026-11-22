@@ -30,5 +30,18 @@ class KiteCandleNormalizerTest extends TestCase
 
         $this->assertNull($normalizer->normalize(['2026-11-20T09:15:00+0530', 1, 2]));
         $this->assertNull($normalizer->normalize(['2026-11-20T09:15:00+0530', 100, 90, 95, 98, 10]));
+        $this->assertNull($normalizer->normalize(['2026-11-20T09:15:00+0530', 100, 105, 95, 102]));
+        $this->assertNull($normalizer->normalize(['2026-11-20T09:15:00+0530', 100, 105, 95, 102, -1]));
+        $this->assertNull($normalizer->normalize(['2026-11-20 09:15:00', 100, 105, 95, 102, 10]));
+        $this->assertNull($normalizer->normalize(['2026-11-21T09:15:00+0530', 100, 105, 95, 102, 10]));
+    }
+
+    public function test_converts_offset_timestamp_to_exchange_local_session_date(): void
+    {
+        $row = app(KiteCandleNormalizer::class)->normalize([
+            '2026-11-19T20:00:00Z', 100, 105, 95, 102, 10,
+        ]);
+
+        $this->assertSame('2026-11-20', $row['price_date']);
     }
 }

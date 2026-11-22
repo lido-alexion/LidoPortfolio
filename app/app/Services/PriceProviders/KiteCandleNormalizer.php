@@ -3,6 +3,7 @@
 namespace App\Services\PriceProviders;
 
 use Carbon\Carbon;
+use DateTimeImmutable;
 
 /** Maps Kite's raw, unadjusted daily candles into StoX's OHLCV row shape. */
 final class KiteCandleNormalizer
@@ -10,8 +11,9 @@ final class KiteCandleNormalizer
     /** @return array{price_date:string,open_price:?float,high_price:?float,low_price:?float,close_price:float,volume:?int}|null */
     public function normalize(array $candle): ?array
     {
-        if (count($candle) < 6 || (! is_string($candle[0] ?? null) && ! is_numeric($candle[0] ?? null))
-            || trim((string) ($candle[0] ?? '')) === '') {
+        $timestamp = $candle[0] ?? null;
+        if (count($candle) < 6 || ! is_string($timestamp)
+            || ! preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:?\d{2})$/', trim($timestamp))) {
             return null;
         }
 
@@ -29,23 +31,28 @@ final class KiteCandleNormalizer
             return null;
         }
 
-        $volume = isset($candle[5]) && is_numeric($candle[5]) && is_finite((float) $candle[5]) && (float) $candle[5] >= 0
-            ? (int) $candle[5]
-            : null;
+        if (! is_numeric($candle[5] ?? null) || ! is_finite((float) $candle[5])
+            || (float) $candle[5] < 0 || floor((float) $candle[5]) !== (float) $candle[5]
+            || (float) $candle[5] > PHP_INT_MAX) {
+            return null;
+        }
 
         try {
-            $date = Carbon::parse((string) $candle[0], 'Asia/Kolkata')->timezone('Asia/Kolkata')->toDateString();
+            $date = Carbon::instance(new DateTimeImmutable($timestamp))->timezone('Asia/Kolkata');
         } catch (\Throwable) {
+            return null;
+        }
+        if ($date->isWeekend()) {
             return null;
         }
 
         return [
-            'price_date' => $date,
+            'price_date' => $date->toDateString(),
             'open_price' => $open,
             'high_price' => $high,
             'low_price' => $low,
             'close_price' => $close,
-            'volume' => $volume,
+            'volume' => (int) $candle[5],
         ];
     }
 }
