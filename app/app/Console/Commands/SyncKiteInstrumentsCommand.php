@@ -10,7 +10,7 @@ class SyncKiteInstrumentsCommand extends Command
 {
     protected $signature = 'portfolio:sync-kite-instruments {--stock= : Reconcile one Stock id}';
 
-    protected $description = 'Refresh the deterministic Kite NSE instrument registry';
+    protected $description = 'Refresh deterministic Kite instruments (NSE bulk; targeted stock uses its exchange)';
 
     public function handle(KiteInstrumentRegistryService $registry): int
     {
