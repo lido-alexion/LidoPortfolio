@@ -150,6 +150,8 @@ class BrokerConnectionService
             'broker_connection_id' => $connection->id,
         ]);
 
+        try { app(KiteFundsSnapshotService::class)->capture($connection->fresh(), 'connect'); } catch (\Throwable) { /* Connection success must not depend on optional snapshot capture. */ }
+
         return $connection->fresh();
     }
 

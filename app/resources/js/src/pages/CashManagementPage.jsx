@@ -71,6 +71,8 @@ export default function CashManagementPage() {
     const [summary, setSummary] = useState(null);
     const [ledger, setLedger] = useState([]);
     const [statement, setStatement] = useState(null);
+    const [kiteFunds, setKiteFunds] = useState(null);
+    const [statementType, setStatementType] = useState('');
     const [statementCursor, setStatementCursor] = useState({ profileId: null, page: 1, perPage: 25 });
     const statementPage = statementCursor.profileId === profileId ? statementCursor.page : 1;
     const statementPerPage = statementCursor.profileId === profileId ? statementCursor.perPage : 25;
@@ -97,14 +99,15 @@ export default function CashManagementPage() {
     }, [profileId]);
 
     const { loading, error, reload: load } = useApiGet({
-        deps: [profileId, statementPage, statementPerPage],
+        deps: [profileId, statementPage, statementPerPage, statementType],
         enabled: Boolean(profileId),
         errorFallback: 'Failed to load cash',
         onError: () => {},
         request: async () => {
-            const [summaryRes, ledgerRes] = await Promise.all([
+            const [summaryRes, ledgerRes, fundsRes] = await Promise.all([
                 api.get('/cash', { params: { include_reservations: true }, skipErrorToast: true }),
-                api.get('/cash/statement', { params: { page: statementPage, per_page: statementPerPage, order: 'desc' }, skipErrorToast: true }),
+                api.get('/cash/statement', { params: { page: statementPage, per_page: statementPerPage, order: 'desc', entry_type: statementType || undefined }, skipErrorToast: true }),
+                api.get('/cash/kite-funds', { skipErrorToast: true }),
             ]);
             const nextSummary = summaryRes.data?.data || null;
             const nextStatement = ledgerRes.data?.data || null;
@@ -112,6 +115,7 @@ export default function CashManagementPage() {
             setSummary(nextSummary);
             setStatement(nextStatement);
             setLedger(nextLedger);
+            setKiteFunds(fundsRes.data?.data || null);
             const lastPage = Math.max(1, Number(nextStatement?.pagination?.last_page) || 1);
             if (statementPage > lastPage) setStatementCursor((cursor) => ({ ...cursor, profileId, page: lastPage }));
             const strategies = Array.isArray(nextSummary?.strategies) ? nextSummary.strategies : [];
@@ -539,6 +543,45 @@ export default function CashManagementPage() {
                     <CapitalRecallPanel profileId={profileId} />
 
                     <div className="card mb-3">
+                        <div className="card-header d-flex justify-content-between align-items-center gap-2">
+                            <span>Kite funds snapshots and bank transfer review</span>
+                            <span className={`badge ${kiteFunds?.automatic_adjustments_enabled && kiteFunds?.payout_semantics_verified ? 'text-bg-warning' : 'text-bg-secondary'}`}>{kiteFunds?.automatic_adjustments_enabled && kiteFunds?.payout_semantics_verified ? 'Adjustment review enabled' : 'Automatic adjustments off'}</span>
+                        </div>
+                        <div className="card-body">
+                            <p className="small text-muted mb-3">Kite available funds are broker buying power and remain separate from StoX ledger cash. Pay-in and payout are stored independently; payout meaning {kiteFunds?.payout_semantics_verified ? 'is marked operator-verified against Console evidence' : 'has not been validated against Console'}, so no cash adjustment is applied automatically without review.</p>
+                            {kiteFunds?.reconciliations?.length ? <div className="table-responsive mb-3">
+                                <table className="table table-sm align-middle mb-0">
+                                    <thead><tr><th>Trading date</th><th>Status</th><th className="text-end">Kite net</th><th className="text-end">Manual net</th><th>Checked</th><th>Review</th></tr></thead>
+                                    <tbody>{kiteFunds.reconciliations.map((row) => <tr key={row.id}>
+                                        <td>{row.trading_date}</td><td><span className={`badge ${row.status === 'reconciled' ? 'text-bg-success' : 'text-bg-warning'}`}>{row.status.replaceAll('_', ' ')}</span></td>
+                                        <td className="text-end">{money(row.snapshot_net_flow)}</td><td className="text-end">{money(row.manual_net_flow)}</td><td className="small text-muted">{fmtWhen(row.evaluated_at)}</td>
+                                        <td>{row.status === 'adjustment_proposed' && kiteFunds?.automatic_adjustments_enabled && kiteFunds?.payout_semantics_verified ? <>
+                                            <button type="button" className="btn btn-sm btn-outline-primary" onClick={async () => {
+                                            if (!window.confirm(`Confirm the net Kite adjustment of ${money(row.snapshot_net_flow)} for ${row.trading_date}? This is aggregate broker evidence, not proof of an individual bank transfer.`)) return;
+                                            await runApiMutation(() => api.post(`/cash/kite-funds/${row.id}/confirm`, {}, { skipErrorToast: true }), { successMessage: 'Kite adjustment confirmed', errorFallback: 'Could not confirm Kite adjustment' });
+                                            notifyPortfolioDashboardRefresh(); await load();
+                                            }}>Confirm adjustment</button>
+                                            <button type="button" className="btn btn-sm btn-link text-muted" onClick={async () => {
+                                                await runApiMutation(() => api.post(`/cash/kite-funds/${row.id}/dismiss`, {}, { skipErrorToast: true }), { successMessage: 'Proposal dismissed', errorFallback: 'Could not dismiss proposal' });
+                                                await load();
+                                            }}>Dismiss</button>
+                                        </> : row.status === 'adjustment_proposed' ? <span className="small text-muted">Rollout gate disabled</span> : null}</td>
+                                    </tr>)}</tbody>
+                                </table>
+                            </div> : <p className="small text-muted mb-3">No next-day reconciliation has been recorded yet.</p>}
+                            {kiteFunds?.snapshots?.length ? <div className="table-responsive">
+                                <table className="table table-sm align-middle mb-0">
+                                    <thead><tr><th>Captured</th><th>Date</th><th>Source</th><th>Freshness</th><th className="text-end">Available</th><th className="text-end">Opening</th><th className="text-end">Pay-in</th><th className="text-end">Payout</th></tr></thead>
+                                    <tbody>{kiteFunds.snapshots.slice(0, 8).map((row) => <tr key={row.id}>
+                                        <td className="small">{fmtWhen(row.captured_at)}</td><td>{row.trading_date}</td><td>{row.source}</td><td>{row.freshness}</td>
+                                        <td className="text-end">{money(row.available_balance)}</td><td className="text-end">{money(row.opening_balance)}</td><td className="text-end">{money(row.intraday_payin)}</td><td className="text-end">{money(row.utilised_payout)}</td>
+                                    </tr>)}</tbody>
+                                </table>
+                            </div> : <p className="small text-muted mb-0">No Kite snapshots captured for this portfolio.</p>}
+                        </div>
+                    </div>
+
+                    <div className="card mb-3">
                         <div className="card-header">{editing ? 'Edit cash movement' : 'Record cash movement'}</div>
                         <div className="card-body">
                             <div className="btn-group mb-3" role="group" aria-label="Cash operation">
@@ -616,7 +659,20 @@ export default function CashManagementPage() {
 
                     <div className="card">
                         <div className="card-header d-flex flex-wrap justify-content-between gap-2">
-                            <span>Cash account statement</span>
+                            <div className="d-flex align-items-center gap-2">
+                                <span>Cash account statement</span>
+                                <select className="form-select form-select-sm" aria-label="Filter cash statement by type" value={statementType} onChange={(event) => {
+                                    setStatementType(event.target.value);
+                                    setStatementCursor((cursor) => ({ ...cursor, profileId, page: 1 }));
+                                }}>
+                                    <option value="">All entries</option>
+                                    <option value="deposit">Deposits</option>
+                                    <option value="withdrawal">Withdrawals</option>
+                                    <option value="adjustment">Adjustments, including Kite net adjustment</option>
+                                    <option value="buy">Buys</option>
+                                    <option value="sell">Sells</option>
+                                </select>
+                            </div>
                             {statement ? (
                                 <span className="small text-muted">
                                     Opening {money(statement.opening_balance)} · Closing {money(statement.closing_balance)}
@@ -626,7 +682,7 @@ export default function CashManagementPage() {
                         <div className="card-body p-0">
                             {statementPagination('top')}
                             {ledger.length === 0 ? (
-                                <p className="text-muted mb-0 p-3">No cash ledger entries yet. Deposit cash to start.</p>
+                                <p className="text-muted mb-0 p-3">{statementType ? 'No cash entries match this filter.' : 'No cash ledger entries yet. Deposit cash to start.'}</p>
                             ) : (
                                 <div className="table-responsive">
                                     <table className="table table-sm align-middle mb-0">
@@ -648,7 +704,7 @@ export default function CashManagementPage() {
                                                 <tr key={entry.id}>
                                                     <td className="small">{fmtEntryDate(entry)}</td>
                                                     <td className="small text-muted">{fmtWhen(entry.created_at)}</td>
-                                                    <td>{entry.entry_classification === 'derived_opening_assumption' ? 'Derived opening assumption' : entryTypeLabel(entry.entry_type)}</td>
+                                                    <td>{entry.entry_classification === 'derived_opening_assumption' ? 'Derived opening assumption' : entry.entry_classification === 'kite_net_adjustment' ? 'Kite net cash adjustment' : entryTypeLabel(entry.entry_type)}</td>
                                                     <td className="small text-capitalize">{String(entry.category || 'internal').replace('_', ' ')}</td>
                                                     <td className={`text-end ${Number(entry.amount) < 0 ? 'text-danger' : Number(entry.amount) > 0 ? 'text-success' : ''}`}>
                                                         {money(entry.amount)}

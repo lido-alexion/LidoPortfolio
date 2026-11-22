@@ -556,6 +556,7 @@ class CashManagementService
             return [
                 'id' => $entry->id,
                 'entry_type' => $entry->entry_type,
+                'entry_classification' => $entry->entry_classification,
                 'category' => match ($entry->entry_type) {
                     CashLedgerEntry::TYPE_DEPOSIT, CashLedgerEntry::TYPE_WITHDRAWAL => 'external_flow',
                     CashLedgerEntry::TYPE_ADJUSTMENT => 'adjustment',

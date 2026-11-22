@@ -273,6 +273,9 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::apiResource('transactions', TransactionController::class);
 
     Route::get('/cash', [CashController::class, 'summary']);
+    Route::get('/cash/kite-funds', [CashController::class, 'kiteFunds']);
+    Route::post('/cash/kite-funds/{reconciliation}/confirm', [CashController::class, 'confirmKiteFundsAdjustment'])->whereNumber('reconciliation');
+    Route::post('/cash/kite-funds/{reconciliation}/dismiss', [CashController::class, 'suppressKiteFundsAdjustment'])->whereNumber('reconciliation');
     Route::get('/cash/reservations', [CashController::class, 'reservations']);
     Route::get('/cash/ledger', [CashController::class, 'ledger']);
     Route::get('/cash/statement', [CashController::class, 'statement']);

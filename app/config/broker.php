@@ -14,4 +14,9 @@ return [
         'api_base' => 'https://api.kite.trade',
         'cancel_retry_cooldown_seconds' => max(1, (int) env('KITE_CANCEL_RETRY_COOLDOWN_SECONDS', 60)),
     ],
+    'kite_funds' => [
+        // Both remain off until real Console evidence validates payout behavior and operators approve rollout.
+        'auto_adjustments_enabled' => filter_var(env('KITE_FUNDS_AUTO_ADJUSTMENTS_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'payout_semantics_verified' => filter_var(env('KITE_FUNDS_PAYOUT_SEMANTICS_VERIFIED', false), FILTER_VALIDATE_BOOLEAN),
+    ],
 ];
