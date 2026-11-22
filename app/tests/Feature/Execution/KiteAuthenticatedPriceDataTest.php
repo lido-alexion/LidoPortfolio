@@ -95,6 +95,67 @@ class KiteAuthenticatedPriceDataTest extends TestCase
         Http::assertSent(fn ($request): bool => $request->hasHeader('Authorization', 'token test-key:second-token'));
     }
 
+    public function test_cached_historical_chart_data_is_isolated_between_two_users(): void
+    {
+        [$firstUser, $stock] = $this->connectedStock('NSE', 'ABC');
+        $secondUser = User::factory()->create();
+        BrokerConnection::query()->create([
+            'user_id' => $secondUser->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => null,
+        ])->forceFill(['access_token' => 'second-token'])->save();
+        StockPrice::query()->create([
+            'stock_id' => $stock->id, 'price_date' => '2026-11-23', 'open_price' => 90,
+            'high_price' => 95, 'low_price' => 89, 'close_price' => 91, 'volume' => 10,
+            'data_source' => 'official', 'provider_source' => 'nse',
+        ]);
+        Http::fake([
+            'https://api.kite.trade/instruments/historical/998/day*' => Http::sequence()
+                ->push(['status' => 'success', 'data' => ['candles' => [['2026-11-23T09:15:00+0530', 100, 105, 99, 104, 500]]]])
+                ->push(['status' => 'success', 'data' => ['candles' => [['2026-11-23T09:15:00+0530', 200, 205, 199, 204, 700]]]]),
+        ]);
+
+        $service = app(\App\Services\MarketPriceService::class);
+        $first = $service->accountHistoryForStock($stock, $firstUser->id);
+        $second = $service->accountHistoryForStock($stock, $secondUser->id);
+
+        $this->assertSame(104.0, $first['data'][0]['close_price']);
+        $this->assertSame(204.0, $second['data'][0]['close_price']);
+        $this->assertSame('kite', $first['provider']);
+        $this->assertSame('kite', $second['provider']);
+        Http::assertSentCount(4); // Each account independently fetched history and attempted its optional quote.
+        Http::assertSent(fn ($request): bool => $request->hasHeader('Authorization', 'token test-key:second-token'));
+    }
+
+    public function test_cached_private_history_is_not_returned_after_session_expires(): void
+    {
+        [$user, $stock] = $this->connectedStock('NSE', 'ABC');
+        StockPrice::query()->create([
+            'stock_id' => $stock->id, 'price_date' => '2026-11-23', 'open_price' => 90,
+            'high_price' => 95, 'low_price' => 89, 'close_price' => 91, 'volume' => 10,
+            'data_source' => 'official', 'provider_source' => 'nse',
+        ]);
+        Http::fake(['https://api.kite.trade/instruments/historical/998/day*' => Http::response([
+            'status' => 'success', 'data' => ['candles' => [['2026-11-23T09:15:00+0530', 100, 105, 99, 104, 500]]],
+        ])]);
+        $service = app(\App\Services\MarketPriceService::class);
+        $private = $service->accountHistoryForStock($stock, $user->id);
+        $this->assertSame(104.0, $private['data'][0]['close_price']);
+
+        StockPrice::query()->create([
+            'stock_id' => $stock->id, 'price_date' => '2026-11-22', 'open_price' => 90,
+            'high_price' => 95, 'low_price' => 89, 'close_price' => 91, 'volume' => 10,
+            'data_source' => 'official', 'provider_source' => 'nse',
+        ]);
+        BrokerConnection::query()->where('user_id', $user->id)->update(['expires_at' => now()->subMinute()]);
+        Http::preventStrayRequests();
+
+        $afterExpiry = $service->accountHistoryForStock($stock, $user->id);
+
+        $this->assertSame('stored', $afterExpiry['provider']);
+        $this->assertSame(91.0, $afterExpiry['data'][0]->close_price);
+        $this->assertSame('corporate_action_adjusted_when_available', $afterExpiry['adjustment_basis']);
+        Http::assertSentCount(2); // Initial history and its independent optional quote attempt.
+    }
+
     public function test_historical_request_uses_exchange_local_calendar_dates_for_utc_inputs(): void
     {
         [$user, $stock] = $this->connectedStock('NSE', 'ABC');
