@@ -124,7 +124,7 @@ class KiteHoldingsOnboardingController extends Controller
         $file = $request->validate(['tradebook' => ['required', 'file', 'max:10240']])['tradebook'];
         $extension = strtolower($file->getClientOriginalExtension());
         if (! in_array($extension, ['csv', 'txt', 'xls', 'xlsx'], true)) {
-            throw ValidationException::withMessages(['tradebook' => ['Upload a CSV, TXT, XLS or XLSX tradebook.']]);
+            throw ValidationException::withMessages(['tradebook' => ['Upload a CSV or TXT file, an XLSX workbook, or Excel 2003 XML with an .xls extension. Legacy binary .xls files are not supported; open the file in Excel or LibreOffice and save a copy as .xlsx.']]);
         }
         $draft = DB::table('kite_onboarding_drafts')->where('profile_id', \activePortfolio()->id)->first();
         abort_unless($draft, 409, 'Fetch Kite holdings before importing a tradebook.');
@@ -138,7 +138,9 @@ class KiteHoldingsOnboardingController extends Controller
                 }
                 $old = json_decode($staged->entries, true) ?: [];
                 $identities = array_fill_keys(array_map(fn ($entry) => $this->entryIdentity($entry), $old), true);
-                $kept = array_values(array_filter($old, fn ($e) => ($e['provenance'] ?? '') !== 'kite_opening_position'));
+                // An opening row is provisional only while its suggested date is still marked.
+                // If the user supplied a real date, preserve the reviewed row across imports.
+                $kept = array_values(array_filter($old, fn ($e) => ! (($e['provenance'] ?? '') === 'kite_opening_position' && (bool) ($e['date_placeholder'] ?? false))));
                 foreach ($newEntries as $e) {
                     $identity = $this->entryIdentity($e);
                     if (isset($identities[$identity])) {

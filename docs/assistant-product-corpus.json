@@ -4612,7 +4612,7 @@
     "title": "Kite Holdings Onboarding",
     "path": "app/resources/js/src/data/appDocumentation.js",
     "section": "Console tradebook upload",
-    "snippet": "Upload CSV, TXT, XLSX, or supported Excel 2003 XML XLS files from Zerodha Console. Upload one period at a time; formula and macro content is not executed.",
+    "snippet": "Upload CSV, TXT, XLSX, or Excel 2003 XML XLS files from Zerodha Console. Legacy binary XLS is unsupported; open it in Excel or LibreOffice and use Save As to create an XLSX copy. Upload one period at a time; formula and macro content is not executed.",
     "url": "/docs/kite-holdings-onboarding.html"
   },
   {

@@ -4,7 +4,7 @@ This page documents the implementation of the frozen decisions in [Kite holdings
 
 ## Importing a Zerodha Console tradebook
 
-The wizard accepts CSV and TXT, XLSX workbooks, and Excel 2003 XML workbooks with an `.xls` extension. For `.xlsx`, the parser reads the first worksheet as cell values only. Formulas in that sheet, macro projects, external workbook links, malformed archives, and encrypted workbooks are rejected; formulas are never calculated or executed. Legacy binary OLE/BIFF `.xls` workbooks are not supported by this PHP runtime; save them as `.xlsx` in Excel or LibreOffice before upload.
+The wizard accepts CSV and TXT, XLSX workbooks, and Excel 2003 XML workbooks with an `.xls` extension. Legacy binary OLE/BIFF `.xls` workbooks are unsupported. Open one in Excel or LibreOffice and use **Save As** to create an `.xlsx` copy before uploading. For `.xlsx`, the parser reads the first worksheet as cell values only. Formulas in that sheet, macro projects, external workbook links, malformed archives, and encrypted workbooks are rejected; formulas are never calculated or executed.
 
 Uploads are limited to 10 MB, 20,000 data rows, 64 columns, 500 XLSX archive members, and 25 MB expanded XLSX content. The import requires symbol, side, quantity, price, and a strict supported date. A malformed non-empty trade row rejects the whole upload rather than being silently ignored. Only trades for symbols currently in the Kite holdings draft are merged. Uploading another period preserves manually entered lots and removes only the provisional Kite opening lot for stocks receiving tradebook rows.
 

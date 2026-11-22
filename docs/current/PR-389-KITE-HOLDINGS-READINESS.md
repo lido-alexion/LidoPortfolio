@@ -2,7 +2,7 @@
 
 ## Result
 
-The staging and import iteration is implemented locally in this worktree. The PR is **not ready to close**: legacy binary `.xls` files are not supported by the installed PHP runtime, and hosted CI has not run on these local changes. XLSX and Excel 2003 XML `.xls` files are supported. No production data was written and all feature tests used the fake broker gateway.
+The staging and import iteration is implemented locally in this worktree. The frozen requirement is CSV/Excel; CSV and modern XLSX satisfy that requirement. Legacy binary `.xls` is explicitly unsupported, with user-facing XLSX resave instructions. XLSX and Excel 2003 XML `.xls` are supported. No production data was written and all feature tests used the fake broker gateway.
 
 ## Changed files
 
@@ -12,6 +12,9 @@ The staging and import iteration is implemented locally in this worktree. The PR
 - `app/resources/js/src/data/appDocumentation.js`
 - `app/tests/Feature/KiteHoldingsOnboardingTest.php`
 - `app/tests/js/tos/kite-holdings-onboarding.test.jsx`
+- `app/public/docs/kite-holdings-onboarding.html`
+- `docs/current/KITE-HOLDINGS-ONBOARDING.md`
+- `docs/assistant-product-corpus.json`
 - `app/public/docs/README.txt`
 - `app/public/docs/index.html`
 - `app/public/docs/journeys/04-execution-transactions.html`
@@ -34,15 +37,17 @@ The staging and import iteration is implemented locally in this worktree. The PR
 
 ## Checks
 
-- `OTEL_SDK_DISABLED=true php artisan test --filter=KiteHoldingsOnboardingTest` — passed, 10 tests / 64 assertions.
+- `OTEL_SDK_DISABLED=true php artisan test --filter=KiteHoldingsOnboardingTest` — passed, 14 tests / 91 assertions.
 - `npx vitest run tests/js/tos/kite-holdings-onboarding.test.jsx` — passed, 1 test.
 - `node --test tests/js/documentation-sync.test.mjs` — passed.
 - `npm run typecheck` — passed.
 - `npm run docs:static:check` — passed; static documentation contract current at 54 topics.
-- Pint check and `git diff --check` — passed.
+- Added regression coverage for broker quantity and FIFO remaining-cost reconciliation across multiple lots, multi-period repeat imports, preservation of a user-dated opening entry, selected-stock partial commit, commit rollback, and friendly legacy `.xls` rejection.
+- PHP Pint check for the changed PHP files — passed. `git diff --check` was not run because the owner explicitly prohibited Git metadata operations.
 - `npm run build` — blocked by restricted network DNS lookup for `fonts.bunny.net` (`EAI_AGAIN`).
 - Full local `node --test tests/js/*.test.mjs` attempt — did not finish before the 30-second timeout. The run reported `authenticatedProductionSmoke.test.mjs` failed and later tests remained pending; treat the full local JS gate as unverified.
-- Canonical MySQL backend verifier and Playwright journey verifier were not run locally. The backend verifier uses MySQL; the frontend verifier installs browser/system dependencies. The targeted local feature tests used the available test database and do not replace those gates.
+- `./scripts/verify-ci.sh --backend` — migration portability and Python contracts passed, but MySQL at `127.0.0.1:3306` was unavailable for migration/PHPUnit/OpenAPI gates.
+- `./scripts/verify-ci.sh --frontend` — dependencies installed and the full Node suite began. It reproduced the `authenticatedProductionSmoke.test.mjs` failure and stopped producing progress for over two minutes; it was interrupted. Full frontend/build/Playwright parity remains unverified.
 
 ## Hosted CI observation
 
@@ -53,14 +58,16 @@ Read-only GitHub Actions inspection of PR workflow run [#45015227295](https://gi
 - Frontend tests and production build — failed because `/portfolio/kite-onboarding silently fell back to overview` in `documentation-sync.test.mjs`.
 - Health monitor and CI follow-up watcher jobs — skipped.
 
-The missing documentation topic was added here, and the exact documentation sync test passes locally. That hosted run predates these worktree edits; the prohibition on Git writes means this iteration could not trigger a new hosted run.
+The missing documentation topic was added here, and the exact documentation sync test passes locally. That hosted run predates these worktree edits. Run `45020517337` could not be checked from this environment (`gh` is not installed, and the run page could not be fetched). The prohibition on Git writes means this iteration could not trigger a hosted run for these local changes.
 
 ## Blockers
 
-1. **Legacy binary `.xls`:** the parser intentionally rejects OLE/BIFF `.xls` because this PHP runtime has no spreadsheet library for safely reading it. Excel 2003 XML `.xls` and `.xlsx` work. To satisfy binary `.xls` imports, add and lock a vetted reader dependency, or confirm that XLSX/Excel 2003 XML is the accepted scope.
-2. **PR CI:** rerun required hosted CI after the worktree changes are published through the separately authorized Git workflow. The existing hosted run cannot validate this diff.
-3. **Local build/full suite:** the production build requires the unreachable font host, and the complete local Node test process timed out. Run the canonical CI verifiers in a network-enabled CI environment.
+1. **Backend CI parity:** migration portability and Python contract checks passed, but PHPUnit/migrations could not run because the local MySQL service at `127.0.0.1:3306` is unavailable.
+2. **Frontend CI parity:** the canonical verifier installed dependencies and started the full Node suite. It reproduced the `authenticatedProductionSmoke.test.mjs` failure and stopped making progress in the Node test phase; it was interrupted after more than two minutes without output. The complete frontend gate remains unverified.
+3. **Hosted PR CI:** run `45020517337` could not be inspected from this environment (`gh` is unavailable and the GitHub run page was not fetchable). This worktree was not published, as instructed, so CI feedback for these local changes remains outstanding.
 
 ## ACTION REQUIRED FROM YOU
 
-Confirm whether legacy binary `.xls` imports must be supported. That determines whether the current bounded XML/XLSX implementation is acceptable or a vetted spreadsheet dependency must be added. No approval is needed for the local changes themselves.
+- **Supervisor:** independently review and publish these local changes to PR #389. This is required before GitHub can run checks against this exact diff; the user explicitly reserved publish/merge/deploy actions to the supervisor.
+- **Supervisor:** inspect hosted CI for the published SHA and report any failures. My local backend and frontend CI-parity gates were incomplete for the environment limits above.
+- **None** for legacy binary `.xls` support: CSV and XLSX meet the frozen CSV/Excel scope, and unsupported binary `.xls` has direct resave guidance.

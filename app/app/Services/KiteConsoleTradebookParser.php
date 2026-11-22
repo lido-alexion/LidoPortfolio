@@ -32,7 +32,7 @@ class KiteConsoleTradebookParser
                 'csv', 'txt' => $this->csv($path),
                 'xlsx' => $this->xlsx($path),
                 'xls' => $this->spreadsheetXml($path),
-                default => throw new RuntimeException('Upload a CSV, TXT, XLS or XLSX tradebook.'),
+                default => throw new RuntimeException('Upload a CSV or TXT file, an XLSX workbook, or Excel 2003 XML with an .xls extension.'),
             };
 
             return $this->trades($rows);
@@ -170,7 +170,7 @@ class KiteConsoleTradebookParser
     {
         $content = @file_get_contents($path);
         if (! is_string($content) || strlen($content) > self::MAX_BYTES || ! str_contains($content, '<Workbook')) {
-            throw new RuntimeException('This .xls must be saved as Excel 2003 XML or XLSX; legacy binary XLS files are not supported.');
+            throw new RuntimeException('Legacy binary .xls files are not supported. Open the workbook in Excel or LibreOffice and use Save As to create an .xlsx copy. An .xls file must be Excel 2003 XML.');
         }
         $doc = $this->xml($content);
         $rows = [];

@@ -1862,7 +1862,7 @@ const APP_DOCUMENTATION_BASE = [
             'Kite holdings onboarding creates an editable, profile-scoped staging draft. It does not affect portfolio accounting until selected stocks are individually verified and committed. Kite opening dates are placeholders; replace them with evidence-based dates before verification. Review unresolved sells, cost-basis differences, corporate actions, transfers, and incomplete tradebook periods.',
         controls: [
             { name: 'Fetch current Kite holdings', description: 'Capture the connected account holdings as the reference quantity and average cost for the draft.' },
-            { name: 'Console tradebook upload', description: 'Upload CSV, TXT, XLSX, or supported Excel 2003 XML XLS files from Zerodha Console. Upload one period at a time; formula and macro content is not executed.' },
+            { name: 'Console tradebook upload', description: 'Upload CSV, TXT, XLSX, or Excel 2003 XML XLS files from Zerodha Console. Legacy binary XLS is unsupported; open it in Excel or LibreOffice and use Save As to create an XLSX copy. Upload one period at a time; formula and macro content is not executed.' },
             { name: 'Verify stock', description: 'Verify quantity, covered sells, and staged remaining cost for one stock. Verification does not commit it.' },
             { name: 'Commit verified stocks', description: 'Commit selected stocks after a fresh Kite recheck. Existing StoX transaction history blocks onboarding until it is reconciled.' },
         ],

@@ -16,6 +16,7 @@ describe('Kite holdings onboarding page', () => {
         const upload = await screen.findByLabelText(/Optional Zerodha Console tradebook/);
         expect(upload.getAttribute('accept')).toContain('.xlsx');
         expect(upload.getAttribute('accept')).toContain('.xls');
+        expect(screen.getByText(/Legacy binary \.xls workbooks are unsupported/)).toBeTruthy();
         expect(screen.getByText(/Placeholder date, not acquisition evidence/)).toBeInTheDocument();
 
         fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-11-21' } });
