@@ -193,16 +193,18 @@ Reconciliation compares StoX's observed portfolio/order/accounting evidence with
 The contract includes:
 
 - holdings/instrument and exact-quantity comparison, including supported identifier normalization such as Kite series suffixes;
-- broker funds/cash comparison and distinction between execution-blocking holding mismatches and attention-only cash residuals where supported;
+- broker funds/cash comparison and execution blocking when the holdings or funds baseline does not reconcile;
 - order/recommendation/fill evidence inspection;
 - reconciliation of open primary orders and open protections;
 - durable run payload/history, last-success preservation on failure and deduplicated discrepancy notifications;
-- attention state and execution blocking for material holdings mismatches;
+- attention state and execution blocking for material holdings/funds mismatches or uncertain broker-order state;
 - verified recovery that resolves the corresponding discrepancy notification rather than silently clearing history.
 
 Reconciliation may observe broker and StoX state, persist reconciliation evidence, update supported order/protection lifecycle facts and block unsafe new execution. It may not invent cash, holdings, transactions or fills without traceable broker/order evidence.
 
 Current anchors: `PortfolioReconciliationService`, `PortfolioReconciliationRun`, `PortfolioReconciliationController`, `ReconcileBrokerOrdersCommand`, `portfolio:reconcile`, `V5PortfolioReconciliationFoundationTest`, and `LiveExecutionFeatureTest` reconciliation cases.
+
+Live order flow requires one successful holdings-and-comparable-cash reconciliation baseline per equity session before the first order. Kite's current `/user/margins/equity` value is available buying power, not a comparable cash ledger; production reconciliation records it as unverified and therefore does not pass this baseline. Each BUY still fetches current Kite buying power immediately before submission and includes local unsent buy reservations plus estimated fees. Each SELL fetches current Kite sellable holdings and subtracts pending sell quantities. Unknown order state blocks new trading; confirmed partial fills are ledgered once and the remaining order quantity stays reserved until terminal broker state. A fill no longer triggers a full portfolio reconciliation for every order; the after-close reconciliation remains separate.
 
 ## 14. Failure And Recovery Semantics
 

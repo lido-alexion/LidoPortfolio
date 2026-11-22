@@ -162,8 +162,12 @@ class KiteBrokerGateway implements BrokerGateway
         if (! $holdingsResponse->successful() || ! is_array($holdings) || $cash === null) {
             return null;
         }
-        $positions = $positionsResponse->successful() && is_array(data_get($positionsResponse->json(), 'data.net'))
-            ? data_get($positionsResponse->json(), 'data.net') : [];
+        $positionData = data_get($positionsResponse->json(), 'data');
+        if (! $positionsResponse->successful() || ! is_array($positionData)
+            || ! is_array($positionData['net'] ?? null) || ! is_array($positionData['day'] ?? null)) {
+            return null;
+        }
+        $positions = $positionData['net'];
 
         return [
             'provider' => 'kite', 'captured_at' => now()->toISOString(),
@@ -172,14 +176,35 @@ class KiteBrokerGateway implements BrokerGateway
                 'exchange' => (string) ($row['exchange'] ?? ''),
                 'isin' => ($isin = strtoupper(trim((string) ($row['isin'] ?? '')))) !== '' ? $isin : null,
                 'quantity' => (float) ($row['quantity'] ?? 0),
+                't1_quantity' => (float) ($row['t1_quantity'] ?? 0),
+                'used_quantity' => (float) ($row['used_quantity'] ?? 0),
+                'sellable_quantity' => max(0.0, (float) ($row['quantity'] ?? 0) + (float) ($row['t1_quantity'] ?? 0) - (float) ($row['used_quantity'] ?? 0)),
                 'average_price' => isset($row['average_price']) ? (float) $row['average_price'] : null,
                 'cost' => isset($row['average_price']) ? round((float) ($row['quantity'] ?? 0) * (float) $row['average_price'], 4) : null,
                 'instrument_token' => $row['instrument_token'] ?? null,
                 'product' => $row['product'] ?? 'CNC',
             ])->values()->all(),
-            'positions' => $positions,
+            'positions' => ['net' => $positions, 'day' => $positionData['day'], 'complete' => true],
             'current_cash' => $cash,
+            // /user/margins/equity exposes available buying power, not a
+            // settlement cash ledger suitable for declaring StoX cash exact.
+            'cash_comparable' => false,
+            'cash_basis' => 'available_equity_buying_power',
         ];
+    }
+
+    public function trades(int $userId): ?array
+    {
+        $token = $this->accessToken($userId);
+        try {
+            $response = Http::timeout(20)->withHeaders($this->headers($token))
+                ->get(rtrim((string) config('broker.kite.api_base'), '/').'/trades');
+        } catch (ConnectionException) {
+            return null;
+        }
+        $rows = data_get($response->json(), 'data');
+
+        return $response->successful() && is_array($rows) && array_is_list($rows) ? $rows : null;
     }
 
     public function fetchOrder(int $userId, string $brokerOrderId): ?BrokerOrderSnapshot

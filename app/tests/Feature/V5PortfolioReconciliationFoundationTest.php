@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Engines\Execution\ExecutionGate;
 use App\Models\Holding;
+use App\Models\BrokerConnection;
 use App\Models\NotificationSource;
 use App\Models\PortfolioProfile;
 use App\Models\PortfolioReconciliationRun;
@@ -24,24 +25,20 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_manual_ignore_today_reconstructs_previous_day_holdings_without_mutating_transactions(): void
+    public function test_manual_reconciliation_uses_current_ledger_instead_of_previous_calendar_day(): void
     {
         $user = User::factory()->create();
         $profile = $this->defaultPortfolioFor($user);
-        $profile->forceFill(['execution_mode' => PortfolioProfile::EXECUTION_MODE_AUTOMATIC])->save();
+        $this->connectLiveProfile($user, $profile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC);
         $stock = Stock::query()->create(['symbol' => 'AAA', 'exchange' => 'NSE', 'name' => 'AAA', 'is_active' => true]);
-        Transaction::query()->create([
-            'profile_id' => $profile->id, 'stock_id' => $stock->id, 'type' => 'buy', 'quantity' => 10,
-            'price' => 100, 'fees' => 3, 'transaction_date' => '2026-11-12', 'source' => Transaction::SOURCE_MANUAL,
-        ]);
-        Transaction::query()->create([
-            'profile_id' => $profile->id, 'stock_id' => $stock->id, 'type' => 'sell', 'quantity' => 4,
-            'price' => 110, 'fees' => 2, 'transaction_date' => '2026-11-13', 'source' => Transaction::SOURCE_MANUAL,
-        ]);
-        Transaction::query()->create([
-            'profile_id' => $profile->id, 'stock_id' => $stock->id, 'type' => 'buy', 'quantity' => 2,
-            'price' => 120, 'fees' => 1, 'transaction_date' => '2026-11-13', 'source' => Transaction::SOURCE_MANUAL,
-        ]);
+        app(CashManagementService::class)->deposit($profile, 100_000, 'Test opening cash', $user);
+        $writes = app(\App\Services\TransactionWriteService::class);
+        $writes->create($profile, $stock, ['type' => 'buy', 'quantity' => 10, 'price' => 100,
+            'transaction_date' => '2026-11-12', 'source' => Transaction::SOURCE_MANUAL], user: $user);
+        $writes->create($profile, $stock, ['type' => 'sell', 'quantity' => 4, 'price' => 110,
+            'transaction_date' => '2026-11-13', 'source' => Transaction::SOURCE_MANUAL], user: $user);
+        $writes->create($profile, $stock, ['type' => 'buy', 'quantity' => 2, 'price' => 120,
+            'transaction_date' => '2026-11-13', 'source' => Transaction::SOURCE_MANUAL], user: $user);
         $broker = app(FakeBrokerGateway::class);
         $broker->reconciliationSnapshot = [
             'provider' => 'kite', 'holdings' => [['symbol' => 'AAA', 'exchange' => 'NSE', 'quantity' => 10, 'cost' => 1000]],
@@ -52,12 +49,11 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
             $response = $this->actingAs($user)->withProfileHeader($user, $profile)
                 ->postJson('/api/reconciliation', ['ignore_today_transactions' => true])->assertCreated();
             $run = PortfolioReconciliationRun::query()->findOrFail($response->json('data.run.id'));
-            $this->assertSame(10.0, (float) $run->stox_snapshot['holdings'][0]['quantity']);
-            $this->assertSame(1000.0, (float) $run->stox_snapshot['holdings'][0]['cost']);
-            $this->assertSame(3.0, (float) $run->stox_snapshot['holdings'][0]['fees']);
-            $this->assertSame('2026-11-12', $run->stox_snapshot['comparison']['holdings_as_of']);
+            $this->assertSame(8.0, (float) $run->stox_snapshot['holdings'][0]['quantity']);
+            $this->assertFalse($run->stox_snapshot['comparison']['ignore_today_transactions']);
+            $this->assertSame('current StoX ledger versus Kite settled/T1 holdings with execution-proven settlement adjustments', $run->stox_snapshot['comparison']['comparison_method']);
             $this->assertSame('Asia/Kolkata', $run->stox_snapshot['comparison']['timezone']);
-            $this->assertSame('reconciled', $run->holdings_status);
+            $this->assertSame('mismatch', $run->holdings_status);
             $this->assertSame('attention_required', $run->overall_status);
             $this->assertSame(3, $profile->transactions()->count());
             $this->assertSame('Current Kite cash versus current StoX cash; no historical Kite funds snapshot is available.', $run->stox_snapshot['comparison']['funds_comparison']);
@@ -90,15 +86,34 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
         $this->assertFalse($profile->fresh()->execution_blocked_by_reconciliation);
     }
 
-    public function test_manual_reconciliation_rejects_non_boolean_ignore_today_option(): void
+    public function test_available_buying_power_is_not_accepted_as_exact_cash_reconciliation(): void
     {
         $user = User::factory()->create();
         $profile = $this->defaultPortfolioFor($user);
-        $profile->forceFill(['execution_mode' => PortfolioProfile::EXECUTION_MODE_AUTOMATIC])->save();
+        $broker = [
+            'holdings' => [], 'current_cash' => 100,
+            'cash_comparable' => false, 'cash_basis' => 'available_equity_buying_power',
+        ];
+        $stox = ['holdings' => [], 'cash_balance' => 100];
+
+        $run = app(PortfolioReconciliationService::class)->recordSuccessful(
+            $profile, 'session_baseline', $broker, $stox, ['holding_cost' => 5, 'funds' => 1],
+        );
+
+        $this->assertSame('unknown', $run->funds_status);
+        $this->assertSame('attention_required', $run->overall_status);
+        $this->assertTrue($profile->fresh()->execution_blocked_by_reconciliation);
+        $this->assertFalse($run->discrepancies['funds']['cash_comparable']);
+    }
+
+    public function test_reconciliation_today_selector_remains_boolean_validated(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $this->connectLiveProfile($user, $profile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC);
         $this->actingAs($user)->withProfileHeader($user, $profile)
             ->postJson('/api/reconciliation', ['ignore_today_transactions' => 'sometimes'])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors('ignore_today_transactions');
+            ->assertUnprocessable();
         $this->assertSame(0, PortfolioReconciliationRun::query()->count());
     }
 
@@ -106,7 +121,7 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
     {
         $user = User::factory()->create();
         $profile = $this->defaultPortfolioFor($user);
-        $profile->forceFill(['execution_mode' => PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC])->save();
+        $this->connectLiveProfile($user, $profile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
         Setting::setValue('cron_timezone', 'Asia/Kolkata');
         Setting::setValue('market_close_time', '15:30');
         Setting::setValue('reconciliation_delay_minutes', '30');
@@ -129,7 +144,7 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
     {
         $user = User::factory()->create();
         $profile = $this->defaultPortfolioFor($user);
-        $profile->forceFill(['execution_mode' => PortfolioProfile::EXECUTION_MODE_AUTOMATIC])->save();
+        $this->connectLiveProfile($user, $profile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC);
         Setting::setValue('cron_timezone', 'Asia/Kolkata');
         Setting::setValue('market_close_time', '15:30');
         Setting::setValue('reconciliation_delay_minutes', '30');
@@ -152,7 +167,7 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
     {
         $user = User::factory()->create();
         $profile = $this->defaultPortfolioFor($user);
-        $profile->forceFill(['execution_mode' => PortfolioProfile::EXECUTION_MODE_AUTOMATIC])->save();
+        $this->connectLiveProfile($user, $profile, PortfolioProfile::EXECUTION_MODE_AUTOMATIC);
         $failure = 'Zerodha session is missing or expired. Connect Kite again.';
 
         foreach ([1, 2, 3] as $minute) {
@@ -181,7 +196,7 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
     {
         $user = User::factory()->create();
         $profile = $this->defaultPortfolioFor($user);
-        $profile->forceFill(['execution_mode' => PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC])->save();
+        $this->connectLiveProfile($user, $profile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
         $stock = Stock::query()->create(['symbol' => 'AAA', 'exchange' => 'NSE', 'name' => 'AAA', 'is_active' => true]);
         Holding::query()->create([
             'profile_id' => $profile->id, 'stock_id' => $stock->id,
@@ -284,7 +299,7 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
         $this->assertSame([], $run->unsupported_instruments);
     }
 
-    public function test_cash_only_mismatch_requires_attention_without_execution_block_and_runs_are_immutable(): void
+    public function test_cash_only_mismatch_blocks_execution_and_runs_are_immutable(): void
     {
         $user = User::factory()->create();
         $profile = $this->defaultPortfolioFor($user);
@@ -299,7 +314,7 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
         $this->assertSame('reconciled', $run->holdings_status);
         $this->assertSame('mismatch', $run->funds_status);
         $this->assertSame('attention_required', $run->overall_status);
-        $this->assertFalse($profile->fresh()->execution_blocked_by_reconciliation);
+        $this->assertTrue($profile->fresh()->execution_blocked_by_reconciliation);
         $this->expectException(LogicException::class);
         PortfolioReconciliationRun::query()->findOrFail($run->id)->update(['trigger' => 'manual']);
     }
@@ -330,5 +345,15 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
 
         $this->assertSame('resolved', $source->fresh()->condition_state);
         $this->assertNull($source->fresh()->active_condition_key);
+    }
+
+    private function connectLiveProfile(User $user, PortfolioProfile $profile, string $mode): void
+    {
+        $profile->forceFill(['portfolio_type' => PortfolioProfile::TYPE_LIVE, 'execution_mode' => $mode])->save();
+        BrokerConnection::query()->create([
+            'user_id' => $user->id, 'provider' => BrokerConnection::PROVIDER_KITE,
+            'access_token' => 'test-access-token', 'connected_at' => now(), 'expires_at' => now()->addDay(),
+            'broker_user_id' => 'AB1234',
+        ]);
     }
 }

@@ -19,6 +19,9 @@ interface BrokerGateway
     /** @return array<string,mixed>|null Durable holdings, informational positions, and current cash. */
     public function portfolioSnapshot(int $userId): ?array;
 
+    /** Current-day Kite tradebook rows. Null means the response could not be trusted. @return list<array<string,mixed>>|null */
+    public function trades(int $userId): ?array;
+
     public function fetchOrder(int $userId, string $brokerOrderId): ?BrokerOrderSnapshot;
 
     public function cancelOrder(int $userId, string $brokerOrderId, string $variety = BrokerOrderPolicy::REGULAR): BrokerOrderSnapshot;

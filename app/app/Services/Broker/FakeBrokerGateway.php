@@ -20,6 +20,15 @@ class FakeBrokerGateway implements BrokerGateway
 
     public bool $reconciliationSnapshotUnavailable = false;
 
+    /** @var list<array<string,mixed>>|null */
+    public ?array $tradeRows = [];
+
+    public bool $tradeRowsUnavailable = false;
+
+    public int $tradeReads = 0;
+
+    public int $fundsReads = 0;
+
     public int $placeCalls = 0;
 
     public int $cancelCalls = 0;
@@ -91,6 +100,10 @@ class FakeBrokerGateway implements BrokerGateway
         $this->liveQuote = 100.0;
         $this->reconciliationSnapshot = null;
         $this->reconciliationSnapshotUnavailable = false;
+        $this->tradeRows = [];
+        $this->tradeRowsUnavailable = false;
+        $this->tradeReads = 0;
+        $this->fundsReads = 0;
         $this->placeCalls = 0;
         $this->cancelCalls = 0;
         $this->fetchCalls = 0;
@@ -122,6 +135,7 @@ class FakeBrokerGateway implements BrokerGateway
 
     public function availableEquityFunds(int $userId): ?float
     {
+        $this->fundsReads++;
         if ($this->beforeAvailableEquityFunds) {
             $callback = $this->beforeAvailableEquityFunds;
             $this->beforeAvailableEquityFunds = null;
@@ -146,6 +160,13 @@ class FakeBrokerGateway implements BrokerGateway
             'provider' => 'kite', 'captured_at' => now()->toISOString(),
             'holdings' => [], 'positions' => [], 'current_cash' => $this->availableFunds,
         ];
+    }
+
+    public function trades(int $userId): ?array
+    {
+        $this->tradeReads++;
+
+        return $this->tradeRowsUnavailable ? null : $this->tradeRows;
     }
 
     public function seedSnapshot(BrokerOrderSnapshot $snapshot): void

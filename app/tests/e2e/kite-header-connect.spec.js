@@ -21,6 +21,10 @@ async function openDashboard(page, initialStatus, user = TEST_USER) {
         if (url.pathname.endsWith('/api/portfolios') && request.method() === 'GET') {
             return route.fulfill({ json: { data: [{ ...TEST_PORTFOLIO, execution_mode: 'automatic' }] } });
         }
+        if (url.pathname.endsWith('/api/reconciliation/trades/sync') && request.method() === 'POST') {
+            actions.push(['trade-sync']);
+            return route.fulfill({ json: { success: true, data: { imported: 0, matched: 0, review: 0 } } });
+        }
         if (url.pathname.endsWith('/api/reconciliation')) {
             if (request.method() === 'POST') actions.push(['reconcile']);
             return route.fulfill({ json: { success: true, data: { status: {}, runs: [] } } });
@@ -68,17 +72,17 @@ test('connected Kite menu confirms normal disconnect and refreshes status', asyn
 test('reconciliation stays disabled without usable Kite and runs when connected', async ({ page }) => {
     const { actions } = await openDashboard(page, { configured: true, connected: false, usable: false, expires_at: null });
     const card = page.getByText('Broker portfolio reconciliation').locator('..').locator('..');
-    const primary = card.getByRole('button', { name: 'Reconcile excluding today', exact: true });
+    const primary = card.getByRole('button', { name: 'Reconcile', exact: true });
     await primary.scrollIntoViewIfNeeded();
     await expect(primary).toBeDisabled();
     await expect(card.getByText('Connect Kite to run portfolio reconciliation.')).toBeVisible();
     expect(actions.some(([action]) => action === 'reconcile')).toBe(false);
 });
 
-test('usable Kite enables reconciliation and preserves exclude-today as the primary choice', async ({ page }) => {
+test('usable Kite enables current-ledger reconciliation', async ({ page }) => {
     const { actions } = await openDashboard(page, { configured: true, connected: true, usable: true, expires_at: activeSessionExpiry() });
     const card = page.getByText('Broker portfolio reconciliation').locator('..').locator('..');
-    const primary = card.getByRole('button', { name: 'Reconcile excluding today', exact: true });
+    const primary = card.getByRole('button', { name: 'Reconcile', exact: true });
     await primary.scrollIntoViewIfNeeded();
     await expect(primary).toBeEnabled();
     await primary.click();
@@ -89,13 +93,13 @@ test('expired and unknown broker status remain neutral or fail closed', async ({
     const expired = await openDashboard(page, { configured: true, connected: true, usable: true, expires_at: '2020-01-01T00:00:00Z' });
     await expect(expired.control.getByRole('button', { name: 'Kite session expired · Connect Kite', exact: true })).toBeVisible();
     const card = page.getByText('Broker portfolio reconciliation').locator('..').locator('..');
-    await expect(card.getByRole('button', { name: 'Reconcile excluding today', exact: true })).toBeDisabled();
+    await expect(card.getByRole('button', { name: 'Reconcile', exact: true })).toBeDisabled();
 
     expired.setStatus('error');
     await page.reload();
     await expect(page.locator('.lido-kite-header-control').getByRole('button', { name: 'Kite status unknown · Refresh to check', exact: true })).toBeVisible();
     const unavailableCard = page.getByText('Broker portfolio reconciliation').locator('..').locator('..');
-    await expect(unavailableCard.getByRole('button', { name: 'Reconcile excluding today', exact: true })).toBeDisabled();
+    await expect(unavailableCard.getByRole('button', { name: 'Reconcile', exact: true })).toBeDisabled();
 });
 
 test('connected Kite read-only split menu opens and closes without broker mutations', async ({ page }) => {

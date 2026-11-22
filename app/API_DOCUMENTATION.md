@@ -12,6 +12,8 @@ Base URL: `/api`
 
 **Advanced broker orders (V4-FEAT-002):** `GET/POST /api/v1/protections`, `GET /api/v1/protections/{id}`, `POST /api/v1/protections/{id}/cancel`, `POST /api/v1/protections/{id}/reconcile`. One open GTT Target **or** Stop-Loss per Strategy position. Place/cancel are Semi-Automatic attended actions (existing automated-execution entitlement + TOTP + Kite). Prices are Strategy-derived (`target_amount / quantity` or OD-13 stop). Does not write ledger/cash/capital/lending. OpenAPI: [`openapi/v1.json`](openapi/v1.json).
 
+**Kite CNC sync and portfolio reconciliation:** `POST /api/reconciliation/trades/sync` imports current-day executed NSE/BSE CNC fills only; trade and order IDs remain linked to imported or matched transactions. `GET /api/reconciliation` returns the latest sync, unresolved trade matches and unavailable historical-session gaps. `POST /api/reconciliation` syncs current-day fills before comparing holdings/funds with settlement-aware T+1 quantities. Kite tradebook history is current-day only; older gaps must be reviewed and entered through the normal transaction flow.
+
 **Artifact Library Bundle recovery:** `GET /api/v1/artifact-library/bundle-deployments/{uuid}` reads the exact deployment for the authenticated requester and active Portfolio. It returns only UUID, status, allowlisted failure code, and member artifact UUID/version/action/resulting revision ID. It does not apply or replay a plan. The deploy lookup also requires this same active Portfolio; a UUID belonging to another Portfolio is refused before any plan or member mutation. `POST .../{uuid}/deploy` remains an explicit mutation and completed plans are not idempotently replayed.
 
 ## Auth (session cookies — no Bearer token)

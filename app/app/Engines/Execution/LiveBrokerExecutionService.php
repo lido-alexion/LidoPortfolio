@@ -7,6 +7,7 @@ use App\Exceptions\DomainException;
 use App\Models\ExecutionBatch;
 use App\Models\ExecutionDecision;
 use App\Models\Holding;
+use App\Models\PortfolioReconciliationRun;
 use App\Models\PortfolioProfile;
 use App\Models\Stock;
 use App\Models\TradingOrder;
@@ -26,6 +27,8 @@ use App\Services\Protection\PositionProtectionService;
 use App\Services\Reconciliation\PortfolioReconciliationService;
 use App\Services\StockQuoteService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
+use App\Support\TradingCalendar;
 use Throwable;
 
 /**
@@ -34,6 +37,9 @@ use Throwable;
  */
 class LiveBrokerExecutionService
 {
+    /** @var array<string, true> Session baselines proven by this service instance. */
+    protected array $verifiedSessionBaselines = [];
+
     public function __construct(
         protected ExecutionGate $gate,
         protected ExecutionEngine $execution,
@@ -114,11 +120,14 @@ class LiveBrokerExecutionService
         $results = [];
         $submitted = 0;
         $skipped = 0;
+        $blocked = 0;
         foreach ($recs as $rec) {
             $row = $this->submitOne($user, $profile, (int) $rec->id, ExecutionGate::TRIGGER_AUTOMATIC);
             $results[] = $row;
             if (($row['outcome'] ?? '') === ExecutionDecision::OUTCOME_SUBMITTED) {
                 $submitted++;
+            } elseif (($row['outcome'] ?? '') === ExecutionDecision::OUTCOME_BLOCKED) {
+                $blocked++;
             } else {
                 $skipped++;
             }
@@ -127,7 +136,7 @@ class LiveBrokerExecutionService
         return [
             'submitted' => $submitted,
             'skipped' => $skipped,
-            'blocked' => 0,
+            'blocked' => $blocked,
             'results' => $results,
         ];
     }
@@ -262,6 +271,8 @@ class LiveBrokerExecutionService
             $results[] = $row;
             if (($row['outcome'] ?? '') === ExecutionDecision::OUTCOME_SUBMITTED) {
                 $submitted++;
+            } elseif (($row['outcome'] ?? '') === ExecutionDecision::OUTCOME_BLOCKED) {
+                $blocked++;
             } else {
                 $skipped++;
             }
@@ -277,6 +288,22 @@ class LiveBrokerExecutionService
      * @return array<string, mixed>
      */
     public function submitOne(
+        User $user,
+        PortfolioProfile $profile,
+        int $recommendationId,
+        string $trigger,
+        ?float $quantityOverride = null,
+        int $insufficientFundsRetry = 0,
+    ): array {
+        // Kite funds and holdings are shared by every live portfolio for this
+        // investor. Serialize the check-and-submit at the broker-account scope.
+        return Cache::lock('broker-risk-submit:'.$this->broker->provider().':'.$user->id, 60)->block(10, fn () => $this->submitOneLocked(
+            $user, PortfolioProfile::query()->findOrFail($profile->id), $recommendationId, $trigger, $quantityOverride, $insufficientFundsRetry,
+        ));
+    }
+
+    /** @return array<string,mixed> */
+    private function submitOneLocked(
         User $user,
         PortfolioProfile $profile,
         int $recommendationId,
@@ -312,6 +339,21 @@ class LiveBrokerExecutionService
                 $trigger,
                 ExecutionDecision::OUTCOME_SKIPPED,
                 'outside_execution_opportunity',
+            );
+        }
+
+        // submitOne is also called directly by retry paths, commands and tests; do
+        // not rely on the outer batch methods to establish the session baseline.
+        try {
+            $this->ensureSessionBaseline($profile);
+        } catch (DomainException $e) {
+            return $this->decisionRow(
+                $profile,
+                $user,
+                $recommendationId,
+                $trigger,
+                ExecutionDecision::OUTCOME_BLOCKED,
+                $e->errorCode(),
             );
         }
 
@@ -546,6 +588,21 @@ class LiveBrokerExecutionService
         );
 
         try {
+            if ($side === 'buy') {
+                $this->assertFreshBuyingPower($user, $profile, $stock, $order, $qty, (float) ($sizing['price'] ?? 0));
+            } else {
+                $this->assertFreshSellableQuantity($user, $profile, $stock, $order, $qty);
+            }
+        } catch (DomainException $e) {
+            $order->forceFill(['broker_status' => TradingOrder::BROKER_REJECTED, 'status' => TradingOrder::STATUS_CANCELLED,
+                'cancelled_at' => now(), 'broker_error_type' => $e->errorCode(), 'broker_error_message' => mb_substr($e->getMessage(), 0, 500),
+                'last_broker_sync_at' => now()])->save();
+            $decision->forceFill(['outcome' => ExecutionDecision::OUTCOME_BLOCKED, 'reason' => $e->errorCode(), 'order_id' => $order->id])->save();
+            return ['recommendation_id' => $recommendation->id, 'outcome' => ExecutionDecision::OUTCOME_BLOCKED,
+                'reason' => $e->errorCode(), 'order_id' => $order->id];
+        }
+
+        try {
             $placed = $this->broker->placeOrder($request);
         } catch (BrokerAmbiguousException $e) {
             $order->forceFill([
@@ -556,6 +613,10 @@ class LiveBrokerExecutionService
                 'outcome' => ExecutionDecision::OUTCOME_AMBIGUOUS,
                 'reason' => 'ambiguous_place',
                 'order_id' => $order->id,
+            ])->save();
+            $profile->forceFill([
+                'execution_blocked_by_reconciliation' => true,
+                'last_reconciliation_failure' => 'Broker order submission is ambiguous; confirm broker order state before trading.',
             ])->save();
             $this->logger->event('LiveBrokerExecutionService', 'execution.broker_ambiguous', 'warning', 'Broker place result unknown; will not resubmit', [
                 'profile_id' => $profile->id,
@@ -590,7 +651,7 @@ class LiveBrokerExecutionService
                 && $insufficientFundsRetry < 2) {
                 $reduced = (float) floor($qty * 0.95);
                 if ($reduced >= 1 && $reduced < $qty) {
-                    $retryResult = $this->submitOne(
+                    $retryResult = $this->submitOneLocked(
                         $user,
                         $profile,
                         $recommendationId,
@@ -671,6 +732,8 @@ class LiveBrokerExecutionService
         $snapshot = $this->broker->fetchOrder((int) $profile->user_id, (string) $order->broker_order_id);
         if (! $snapshot) {
             $order->forceFill(['last_broker_sync_at' => now()])->save();
+            $profile->forceFill(['execution_blocked_by_reconciliation' => true,
+                'last_reconciliation_failure' => 'Broker order state could not be confirmed; reconcile account state before trading.'])->save();
 
             return $order->fresh();
         }
@@ -813,13 +876,18 @@ class LiveBrokerExecutionService
             || ($filled + 0.0001 >= $target && $target > 0);
         $terminalUnfilled = in_array($mapped, [TradingOrder::BROKER_REJECTED, TradingOrder::BROKER_CANCELLED], true);
 
+        if ($mapped === TradingOrder::BROKER_UNKNOWN) {
+            $profile->forceFill(['execution_blocked_by_reconciliation' => true,
+                'last_reconciliation_failure' => 'Broker order state is uncertain; reconcile account state before trading.'])->save();
+        }
+
         if ($terminalFilled) {
             $this->execution->applyBrokerFill($profile, $order->fresh(), $filled, (float) ($snapshot->averagePrice ?? 0));
             $this->maybeAutoProtectAfterBuy($profile, $order);
-        } elseif ($terminalUnfilled && $filled > 0.0001) {
+        } elseif (($terminalUnfilled || $mapped === TradingOrder::BROKER_PARTIAL) && $filled > $previousFilled + 0.0001) {
             $this->execution->applyBrokerFill($profile, $order->fresh(), $filled, (float) ($snapshot->averagePrice ?? 0), completeRecommendation: false);
             $this->maybeAutoProtectAfterBuy($profile, $order);
-            if ($order->fresh()->status === TradingOrder::STATUS_PENDING) {
+            if ($terminalUnfilled && $order->fresh()->status === TradingOrder::STATUS_PENDING) {
                 $order->forceFill([
                     'status' => TradingOrder::STATUS_CANCELLED,
                     'cancelled_at' => now(),
@@ -830,16 +898,6 @@ class LiveBrokerExecutionService
                 'status' => TradingOrder::STATUS_CANCELLED,
                 'cancelled_at' => now(),
             ])->save();
-        }
-
-        if (($terminalFilled || $terminalUnfilled) && $filled > $previousFilled + 0.0001) {
-            try {
-                $this->portfolioReconciliation->run($profile->fresh(), 'post_trade');
-            } catch (Throwable $error) {
-                $this->logger->event('LiveBrokerExecutionService', 'reconciliation.post_trade_failed', 'warning', 'Post-trade Portfolio reconciliation could not start', [
-                    'profile_id' => $profile->id, 'order_id' => $order->id, 'error' => $error->getMessage(),
-                ]);
-            }
         }
 
         $this->logger->event('LiveBrokerExecutionService', 'execution.broker_reconciled', 'info', 'Broker order reconciled', [
@@ -1036,6 +1094,86 @@ class LiveBrokerExecutionService
             'price' => $recommendation->reference_price !== null ? (float) $recommendation->reference_price : null,
             'source' => 'suggested_quantity',
         ];
+    }
+
+    private function ensureSessionBaseline(PortfolioProfile $profile): void
+    {
+        $now = now('Asia/Kolkata');
+        if (! TradingCalendar::isEquitySessionDate($now)) {
+            throw new DomainException('Automated trading requires an active equity session.', 'TRADING_SESSION_CLOSED', 403);
+        }
+        $today = $now->toDateString();
+        $baselineKey = $profile->id.'|'.$today;
+        if (isset($this->verifiedSessionBaselines[$baselineKey])) {
+            $this->assertNoUncertainOrders($profile);
+            return;
+        }
+        $latest = PortfolioReconciliationRun::query()->where('profile_id', $profile->id)
+            ->where('trigger', 'session_baseline')->orderByDesc('id')->first();
+        $baselineDate = $latest?->completed_at?->timezone('Asia/Kolkata')->toDateString()
+            ?? $latest?->started_at?->timezone('Asia/Kolkata')->toDateString();
+        $existing = $baselineDate === $today ? $latest : null;
+        if ($existing) {
+            if ($existing->status === 'completed' && $existing->overall_status === 'reconciled') {
+                $this->verifiedSessionBaselines[$baselineKey] = true;
+                $this->assertNoUncertainOrders($profile);
+                return;
+            }
+            throw new DomainException('This trading session has no successful holdings and cash baseline.', 'SESSION_BASELINE_UNAVAILABLE', 403);
+        }
+        $run = $this->portfolioReconciliation->run($profile, 'session_baseline');
+        if ($run->status !== 'completed' || $run->overall_status !== 'reconciled') {
+            throw new DomainException('Holdings and cash must reconcile successfully before the first order of this session.', 'SESSION_BASELINE_MISMATCH', 403);
+        }
+        $this->verifiedSessionBaselines[$baselineKey] = true;
+        $this->assertNoUncertainOrders($profile);
+    }
+
+    private function assertNoUncertainOrders(PortfolioProfile $profile): void
+    {
+        $profileIds = PortfolioProfile::query()->where('user_id', $profile->user_id)->pluck('id');
+        $uncertain = TradingOrder::query()->whereIn('profile_id', $profileIds)->where('status', TradingOrder::STATUS_PENDING)
+            ->whereIn('broker_status', [TradingOrder::BROKER_UNKNOWN, TradingOrder::BROKER_PARTIAL])->exists();
+        if ($uncertain) throw new DomainException('An existing order has uncertain or partial broker state; reconcile it before placing another order.', 'BROKER_ORDER_STATE_UNCERTAIN', 403);
+    }
+
+    private function assertFreshBuyingPower(User $user, PortfolioProfile $profile, Stock $stock, TradingOrder $order, float $quantity, float $price): void
+    {
+        if ($price <= 0) throw new DomainException('A fresh executable price is unavailable.', 'BROKER_PRICE_UNAVAILABLE', 403);
+        $funds = $this->broker->availableEquityFunds((int) $user->id);
+        if ($funds === null) throw new DomainException('Current Kite buying power is unavailable.', 'BROKER_FUNDS_UNAVAILABLE', 403);
+        $components = app(\App\Services\FeeCalculatorService::class)->componentsFromSettings();
+        $fees = app(\App\Services\FeeCalculatorService::class)->calculate($quantity, $price, 'buy', (string) ($stock->exchange ?: 'NSE'), $components, now('Asia/Kolkata')->toDateString())['total'];
+        $required = $quantity * $price + $fees;
+        $accountProfileIds = PortfolioProfile::query()->where('user_id', $user->id)->pluck('id');
+        $pending = TradingOrder::query()->whereIn('profile_id', $accountProfileIds)->whereKeyNot($order->id)
+            ->where('side', 'buy')->where('status', TradingOrder::STATUS_PENDING)->whereNull('broker_order_id')->get();
+        foreach ($pending as $reserved) {
+            $reservationPrice = (float) ($reserved->limit_price ?? $reserved->recommendation?->reference_price ?? 0);
+            if ($reservationPrice <= 0) throw new DomainException('An existing buy order has an unknown reservation; buying is paused.', 'BROKER_ORDER_RESERVATION_UNKNOWN', 403);
+            $remaining = max(0.0, (float) $reserved->quantity - (float) $reserved->filled_quantity);
+            $reservedFees = app(\App\Services\FeeCalculatorService::class)->calculate($remaining, $reservationPrice, 'buy', (string) ($reserved->security?->exchange ?: 'NSE'), $components)['total'];
+            $required += $remaining * $reservationPrice + $reservedFees;
+        }
+        if ($required > $funds + 0.0001) throw new DomainException('Current Kite buying power does not cover this order and local pending buy reservations.', 'BROKER_INSUFFICIENT_FUNDS', 422);
+    }
+
+    private function assertFreshSellableQuantity(User $user, PortfolioProfile $profile, Stock $stock, TradingOrder $order, float $quantity): void
+    {
+        $snapshot = $this->broker->portfolioSnapshot((int) $user->id);
+        if ($snapshot === null || ! isset($snapshot['holdings']) || ! is_array($snapshot['holdings'])) {
+            throw new DomainException('Current Kite sellable holdings are unavailable.', 'BROKER_SELLABLE_QUANTITY_UNAVAILABLE', 403);
+        }
+        $broker = collect($snapshot['holdings'])->first(fn (array $row) => strtoupper((string) ($row['isin'] ?? '')) !== ''
+            ? strtoupper((string) ($row['isin'] ?? '')) === strtoupper((string) ($stock->isin ?? ''))
+            : strtoupper((string) ($row['symbol'] ?? '')) === strtoupper((string) $stock->symbol));
+        if (!$broker) throw new DomainException('Kite reports no sellable holding for this security.', 'BROKER_SELLABLE_QUANTITY_UNAVAILABLE', 403);
+        $available = (float) ($broker['sellable_quantity'] ?? max(0.0, (float) ($broker['quantity'] ?? 0) + (float) ($broker['t1_quantity'] ?? 0) - (float) ($broker['used_quantity'] ?? 0)));
+        $accountProfileIds = PortfolioProfile::query()->where('user_id', $user->id)->pluck('id');
+        $pending = TradingOrder::query()->whereIn('profile_id', $accountProfileIds)->whereKeyNot($order->id)->where('side', 'sell')
+            ->where('status', TradingOrder::STATUS_PENDING)->whereIn('broker_status', TradingOrder::IN_FLIGHT_BROKER_STATUSES)->get()
+            ->sum(fn (TradingOrder $row) => max(0.0, (float) $row->quantity - (float) $row->filled_quantity));
+        if ($quantity + $pending > $available + 0.0001) throw new DomainException('Kite sellable quantity does not cover this order and pending sells.', 'BROKER_INSUFFICIENT_SELLABLE_QUANTITY', 422);
     }
 
     protected function submissionKey(PortfolioProfile $profile, TradingRecommendation $recommendation, string $side, float $qty, int $attempt = 1): string

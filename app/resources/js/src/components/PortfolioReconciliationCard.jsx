@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api, { getApiErrorMessage } from '../api';
 import { showToast } from '../toast';
-import ComboButton from './ComboButton';
 import { useKiteConnection } from '../context/KiteConnectionContext';
 import { tosData } from '../utils/tosEnvelope';
 
@@ -12,7 +11,7 @@ const label = (value) => {
     const readable = value.replaceAll('_', ' ');
     return readable.charAt(0).toUpperCase() + readable.slice(1);
 };
-const tone = (value) => value === 'reconciled' ? 'text-success' : value === 'mismatch' || value === 'attention_required' ? 'text-danger' : 'text-muted';
+const tone = (value) => value === 'reconciled' ? 'text-success' : value === 'mismatch' || value === 'attention_required' ? 'text-danger' : value === 'unknown' ? 'text-warning' : 'text-muted';
 const amount = (value) => Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const quantity = (value) => Number(value).toLocaleString(undefined, { maximumFractionDigits: 4 });
 const completedAt = (value) => value ? new Date(value).toLocaleString(undefined, {
@@ -29,6 +28,7 @@ export default function PortfolioReconciliationCard({ executionMode }) {
     const [snapshot, setSnapshot] = useState(null);
     const [selected, setSelected] = useState(null);
     const [busy, setBusy] = useState(false);
+    const [syncBusy, setSyncBusy] = useState(false);
 
     const load = useCallback(async () => {
         if (!eligible) return;
@@ -43,20 +43,39 @@ export default function PortfolioReconciliationCard({ executionMode }) {
 
     if (!eligible) return null;
 
-    const reconcile = async (ignoreTodayTransactions) => {
+    const syncTrades = async () => {
         const latestBrokerStatus = await refreshBroker();
         const latestExpiry = latestBrokerStatus?.expires_at ? Date.parse(latestBrokerStatus.expires_at) : null;
         if (latestBrokerStatus?.usable !== true
             || (latestExpiry !== null && (!Number.isFinite(latestExpiry) || latestExpiry <= Date.now()))) {
             return;
         }
+        setSyncBusy(true);
+        try {
+            const response = await api.post('/reconciliation/trades/sync', {}, { skipErrorToast: true });
+            await load();
+            const result = response.data?.data;
+            showToast(`Kite CNC sync complete: ${result?.imported ?? 0} added, ${result?.matched ?? 0} matched, ${result?.review ?? 0} to review`, result?.review ? 'warning' : 'success');
+        } catch (error) {
+            showToast(getApiErrorMessage(error, 'Could not sync Kite CNC trades'), 'danger');
+        } finally {
+            setSyncBusy(false);
+        }
+    };
+
+    const reconcile = async () => {
+        const latestBrokerStatus = await refreshBroker();
+        const latestExpiry = latestBrokerStatus?.expires_at ? Date.parse(latestBrokerStatus.expires_at) : null;
+        if (latestBrokerStatus?.usable !== true || (latestExpiry !== null && (!Number.isFinite(latestExpiry) || latestExpiry <= Date.now()))) return;
         setBusy(true);
         try {
-            await api.post('/reconciliation', { ignore_today_transactions: ignoreTodayTransactions }, { skipErrorToast: true });
+            const response = await api.post('/reconciliation', {}, { skipErrorToast: true });
             await load();
-            showToast('Portfolio reconciliation completed', 'success');
+            const run = response.data?.data?.run;
+            if (run?.status === 'sync_failed') showToast(`Reconciliation paused: ${run.failure || 'Kite trade/portfolio data is unavailable'}`, 'danger');
+            else showToast('Trades synced and portfolio reconciled', 'success');
         } catch (error) {
-            showToast(getApiErrorMessage(error, 'Could not run reconciliation'), 'danger');
+            showToast(getApiErrorMessage(error, 'Could not sync and reconcile portfolio'), 'danger');
         } finally {
             setBusy(false);
         }
@@ -80,14 +99,13 @@ export default function PortfolioReconciliationCard({ executionMode }) {
         <div className="card h-100">
             <div className="card-header d-flex justify-content-between align-items-center gap-2">
                 <span>Broker portfolio reconciliation</span>
-                <ComboButton
-                    label={busy ? 'Reconciling…' : 'Reconcile excluding today'}
-                    onPrimaryClick={() => reconcile(true)}
-                    menuItems={[{ key: 'including-today', label: 'Reconcile including today', onClick: () => reconcile(false) }]}
-                    variant="outline-primary"
-                    disabled={busy || !brokerUsable}
-                    title={brokerUsable ? 'Choose which transactions to include in reconciliation' : 'Connect Kite to enable reconciliation'}
-                />
+                <div className="d-flex gap-2">
+                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={syncTrades} disabled={syncBusy || busy || !brokerUsable} title="Import executed CNC equity fills available from Kite today">{syncBusy ? 'Syncing…' : 'Sync CNC trades'}</button>
+                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={reconcile} disabled={busy || syncBusy || !brokerUsable}
+                        title={brokerUsable ? 'Compare current StoX holdings with Kite settled and unsettled CNC executions' : 'Connect Kite to enable reconciliation'}>
+                        {busy ? 'Reconciling…' : 'Reconcile'}
+                    </button>
+                </div>
             </div>
             <div className="card-body">
                 {!brokerUsable ? <div className="alert alert-warning py-2 small d-flex flex-wrap align-items-center justify-content-between gap-2" role="status">
@@ -105,13 +123,16 @@ export default function PortfolioReconciliationCard({ executionMode }) {
                     {brokerState === 'confirmed' && brokerStatus?.configured === false && <Link className="btn btn-outline-secondary btn-sm" to="/settings/account">Kite settings</Link>}
                 </div> : null}
                 {!snapshot ? <p className="small text-muted mb-0">Reconciliation status is unavailable.</p> : <>
-                    <p className="small text-muted mb-2">Holdings can use transactions through the previous day; cash and overall attention may still reflect today’s activity.</p>
+                    <p className="small text-muted mb-2">Reconciliation includes available CNC fills and applies execution-proven T+1 adjustments without double-counting settled, unsettled or sold quantities.</p>
+                    {snapshot.trade_sync ? <p className={snapshot.trade_sync.status === 'gap_unavailable' || snapshot.trade_sync.review_count > 0 ? 'small text-warning mb-2' : 'small text-muted mb-2'}>Latest Kite CNC sync: {label(snapshot.trade_sync.status)} · {snapshot.trade_sync.imported_count || 0} added · {snapshot.trade_sync.matched_count || 0} matched · {snapshot.trade_sync.review_count || 0} for review{snapshot.trade_sync.failure ? ` · ${snapshot.trade_sync.failure}` : ''}</p> : null}
+                    {(snapshot.trade_review || []).length ? <div className="alert alert-warning py-2 small">CNC executions need transaction review: {(snapshot.trade_review || []).map((trade) => `${trade.symbol} ${trade.side.toUpperCase()} ${quantity(trade.quantity)} (trade ${trade.broker_trade_id})`).join('; ')}</div> : null}
+                    {(snapshot.trade_gaps || []).length ? <div className="alert alert-danger py-2 small">Kite could not provide historical trades for: {(snapshot.trade_gaps || []).map((gap) => gap.trading_date).join(', ')}. Review Console tradebook and record missing transactions manually.</div> : null}
                     <div className="d-flex flex-wrap gap-4 mb-2 small">
                         <span>Overall: <strong className={tone(status.overall)}>{label(status.overall)}</strong></span>
                         <span>Holdings: <strong className={tone(status.holdings)}>{label(status.holdings)}</strong></span>
                         <span>Funds: <strong className={tone(status.funds)}>{label(status.funds)}</strong></span>
                     </div>
-                    {status.execution_blocked ? <div className="alert alert-danger py-2 small">New broker execution is blocked until a successful reconciliation confirms that holdings match.</div> : null}
+                    {status.execution_blocked ? <div className="alert alert-danger py-2 small">New broker execution is blocked until reconciliation confirms holdings and comparable cash state.</div> : null}
                     {status.last_failure ? <div className="alert alert-warning py-2 small">Latest sync failed: {status.last_failure}. The last successful result remains authoritative.</div> : null}
                     <p className="small text-muted">Last successful check: {status.last_successful_at ? new Date(status.last_successful_at).toLocaleString() : 'Never'}. Correct discrepancies through normal holdings or cash transactions; broker values are never applied automatically.</p>
                     <div className="table-responsive">
@@ -127,7 +148,7 @@ export default function PortfolioReconciliationCard({ executionMode }) {
                     {selected ? <div className="border rounded p-3 mt-3 small">
                         <div className="d-flex justify-content-between"><strong>Run #{selected.id} evidence</strong><button type="button" className="btn-close" aria-label="Close evidence" onClick={() => setSelected(null)} /></div>
                         {selected.failure ? <p className="text-warning mb-1">Sync failure: {selected.failure}</p> : null}
-                        {selected.stox_snapshot?.comparison ? <p className="text-muted mb-1">Holdings basis: {selected.stox_snapshot.comparison.holdings_as_of || 'current'} ({selected.stox_snapshot.comparison.timezone}). {selected.stox_snapshot.comparison.funds_comparison}</p> : null}
+                        {selected.stox_snapshot?.comparison ? <p className="text-muted mb-1">Holdings comparison: {selected.stox_snapshot.comparison.comparison_method || 'current'}. {selected.stox_snapshot.comparison.funds_comparison}</p> : null}
                         {selected.stox_snapshot?.comparison?.overall_status_note ? <p className="text-warning mb-1">{selected.stox_snapshot.comparison.overall_status_note}</p> : null}
                         {(discrepancies.holdings || []).length ? <div className="table-responsive mt-3">
                             <table className="table table-sm align-middle mb-0">
@@ -148,7 +169,7 @@ export default function PortfolioReconciliationCard({ executionMode }) {
                                 })}</tbody>
                             </table>
                         </div> : null}
-                        {selected.funds_status === 'mismatch' ? <div className="table-responsive mt-3"><table className="table table-sm align-middle mb-0"><thead><tr><th>Cash</th><th className="text-end">StoX</th><th className="text-end">Kite</th><th className="text-end">Difference</th><th className="text-end">Allowed</th></tr></thead><tbody><tr><td>Cash balance</td><td className="text-end"><ComparisonValue value={discrepancies.funds?.stox_cash} mismatch money /></td><td className="text-end"><ComparisonValue value={discrepancies.funds?.broker_cash} mismatch money /></td><td className="text-end"><ComparisonValue value={discrepancies.funds?.difference} mismatch money /></td><td className="text-end text-muted">₹{amount(selected.tolerances?.funds ?? 0)}</td></tr></tbody></table></div> : null}
+                        {selected.funds_status === 'mismatch' || selected.funds_status === 'unknown' ? <div className="table-responsive mt-3"><table className="table table-sm align-middle mb-0"><thead><tr><th>{selected.funds_status === 'unknown' ? `Cash evidence · ${discrepancies.funds?.broker_cash_basis || 'unverified source'}` : 'Cash'}</th><th className="text-end">StoX</th><th className="text-end">Kite reported</th><th className="text-end">Difference</th><th className="text-end">Allowed</th></tr></thead><tbody><tr><td>{selected.funds_status === 'unknown' ? 'Not comparable to ledger cash' : 'Cash balance'}</td><td className="text-end"><ComparisonValue value={discrepancies.funds?.stox_cash} mismatch={selected.funds_status === 'mismatch'} money /></td><td className="text-end"><ComparisonValue value={discrepancies.funds?.broker_cash} mismatch={selected.funds_status === 'mismatch'} money /></td><td className="text-end"><ComparisonValue value={discrepancies.funds?.difference} mismatch={selected.funds_status === 'mismatch'} money /></td><td className="text-end text-muted">{selected.funds_status === 'unknown' ? 'Unverified' : `₹${amount(selected.tolerances?.funds ?? 0)}`}</td></tr></tbody></table></div> : null}
                         {(selected.unsupported_instruments || []).length ? <div className="text-muted mt-1">Informational unsupported Kite instruments: {selected.unsupported_instruments.map((row) => row.symbol).join(', ')}</div> : null}
                     </div> : null}
                 </>}
