@@ -40,6 +40,8 @@ DEPLOYABLE = (
     "app/tests/e2e/productionSmokeDiagnostics.js",
     "app/tests/e2e/productionSmokePolicy.js",
     "app/tests/e2e/productionSmokeSelectors.js",
+    # The feature-specific Kite header/gating E2E contract is a release gate too.
+    "app/tests/e2e/kite-header-connect.spec.js",
     "scripts/ci_release_contract.py",
     ".github/workflows/*.yml", ".github/workflows/*.yaml",
 )
