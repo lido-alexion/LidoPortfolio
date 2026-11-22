@@ -258,6 +258,50 @@ class KiteFundsSnapshotTest extends TestCase
         ]);
     }
 
+    public function test_cash_edit_preserves_omitted_provenance_and_explicitly_clears_it(): void
+    {
+        [$user, $profile, $connection] = $this->connectedUser();
+        $entry = app(CashManagementService::class)->deposit($profile, '250.0000', 'Tagged transfer', $user, '2026-11-20');
+        $entry->forceFill(['broker_account_id' => $connection->broker_user_id])->save();
+
+        $preservedId = $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->putJson('/api/cash/ledger/'.$entry->id, [
+                'amount' => '300.0000',
+                'remarks' => 'Corrected amount',
+            ])
+            ->assertCreated()
+            ->json('data.id');
+        $this->assertDatabaseHas('portfolio_cash_ledger_entries', [
+            'id' => $preservedId,
+            'broker_account_id' => $connection->broker_user_id,
+            'amount' => '300.0000',
+        ]);
+
+        $clearedId = $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->putJson('/api/cash/ledger/'.$preservedId, [
+                'amount' => '325.0000',
+                'remarks' => 'Corrected unattributed flow',
+                'broker_account_id' => null,
+            ])
+            ->assertCreated()
+            ->json('data.id');
+        $this->assertDatabaseHas('portfolio_cash_ledger_entries', [
+            'id' => $clearedId,
+            'broker_account_id' => null,
+            'amount' => '325.0000',
+        ]);
+
+        $untaggedId = $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->postJson('/api/cash/deposit', ['amount' => '10.0000', 'remarks' => 'Legacy-compatible untagged'])
+            ->assertCreated()
+            ->json('data.entry.id');
+        $this->assertDatabaseHas('portfolio_cash_ledger_entries', [
+            'id' => $untaggedId,
+            'broker_account_id' => null,
+            'amount' => '10.0000',
+        ]);
+    }
+
     public function test_untagged_legacy_activity_blocks_a_tagged_match_from_being_claimed(): void
     {
         [$user, $profile, $connection] = $this->connectedUser();

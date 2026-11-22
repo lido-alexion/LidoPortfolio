@@ -190,17 +190,26 @@ export default function CashManagementPage() {
         setBusy(true);
         try {
             await runApiMutation(async () => {
+                const editedEntry = editing ? ledger.find((entry) => entry.id === editing.id) : null;
+                const brokerAccountPayload = op === 'adjust'
+                    ? {}
+                    : brokerAccountId
+                        ? { broker_account_id: brokerAccountId }
+                        : editedEntry?.broker_account_id
+                            ? { broker_account_id: null }
+                            : {};
                 const payload = {
                     amount,
                     remarks: remarks.trim() || undefined,
                     transaction_date: transactionDate,
-                    ...(op !== 'adjust' ? { broker_account_id: brokerAccountId || null } : {}),
+                    ...brokerAccountPayload,
                 };
                 if (editing) await api.put(`/cash/ledger/${editing.id}`, payload, { skipErrorToast: true });
                 else await api.post(selected.endpoint, payload, { skipErrorToast: true });
                 setEditing(null);
                 setAmount('');
                 setRemarks('');
+                setBrokerAccountId('');
                 resetFormDates();
                 notifyPortfolioDashboardRefresh();
                 await load();
@@ -616,6 +625,7 @@ export default function CashManagementPage() {
                                         onClick={() => {
                                             setOp(o.id);
                                             setAmount('');
+                                            setBrokerAccountId('');
                                         }}
                                     >
                                         {o.label}
