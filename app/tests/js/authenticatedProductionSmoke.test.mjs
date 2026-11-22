@@ -21,6 +21,13 @@ test('production dashboard smoke inspects only status UI and never activates fin
     assert.match(source, /pathname === '\/api\/v1\/broker\/status'/);
     assert.match(source, /\.lido-kite-header-control/);
     assert.match(source, /DOCUMENT_POSITION_FOLLOWING/);
+    // Safety controls load asynchronously; the physical order must only be
+    // asserted once both actual controls are visible (never waived).
+    const safetyReadyIndex = source.indexOf("await safetyControls.waitFor({ state: 'visible' });");
+    const headerOrderIndex = source.indexOf("stage = 'dashboard_kite_header_order';");
+    assert.ok(safetyReadyIndex >= 0 && headerOrderIndex > safetyReadyIndex);
+    assert.match(source, /Emergency Kite disconnect/);
+    assert.match(source, /Cancel eligible open orders and disconnect Kite/);
     assert.match(source, /Reconcile excluding today/);
     assert.match(source, /Reconcile including today/);
     assert.match(source, /not_eligible_card_absent/);
