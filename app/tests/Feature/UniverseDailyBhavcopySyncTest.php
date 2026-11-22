@@ -14,6 +14,7 @@ use App\Services\NseBhavcopyService;
 use App\Services\PriceFetchService;
 use App\Services\SyncLogService;
 use App\Services\UniversePrice\UniverseDailyBhavcopySyncService;
+use App\Services\UniversePrice\UniversePriceOutcomeService;
 use App\Services\UniversePriceSyncService;
 use App\Support\TradingCalendar;
 use Carbon\Carbon;
@@ -432,6 +433,56 @@ class UniverseDailyBhavcopySyncTest extends TestCase
         $this->assertSame(1, $second['bulk']['backoff_skips']);
         $this->assertDatabaseMissing('portfolio_stock_prices', ['stock_id' => $stock->id]);
         $this->assertDatabaseHas('portfolio_sync_logs', ['run_id' => $runId, 'level' => 'warning', 'message' => 'Universe daily bhavcopy retry deferred']);
+    }
+
+    public function test_legacy_cached_retry_deferred_receipt_persists_utc_outcome_timestamp(): void
+    {
+        $stock = $this->stock();
+        $this->source('NSE', [['TckrSymb' => 'AAA', 'ISIN' => 'INE999A01010']]);
+        $day = Carbon::parse('2026-10-26');
+        $runId = app(SyncLogService::class)->beginRun('universe-price-sync');
+        $sync = app(UniverseDailyBhavcopySyncService::class);
+        $first = $sync->run(collect([$stock]), $day, $day, $runId, 'universe-price-sync', $this->initialStats())['stats'];
+        $receipts = json_decode((string) Setting::getValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS), true);
+        $receipts['entries']['NSE:2026-10-26']['failure_stage'] = 'exchange_fetch';
+        $receipts['entries']['NSE:2026-10-26']['retry_after'] = '2026-10-26T20:35:00+05:30';
+        Setting::setValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS, json_encode($receipts, JSON_THROW_ON_ERROR));
+
+        $replay = $sync->run(collect([$stock]), $day, $day, $runId, 'universe-price-sync', $this->initialStats())['stats'];
+        $this->assertSame('retry_deferred', $replay['bulk']['files'][0]['status']);
+        $this->assertSame('2026-10-26T20:35:00+05:30', $replay['bulk']['files'][0]['retry_after']);
+
+        app(UniversePriceOutcomeService::class)->recordRun($replay, collect([$stock]), 'legacy-cache-replay');
+        $this->assertDatabaseHas('portfolio_universe_price_session_outcomes', [
+            'stock_id' => $stock->id, 'session_date' => '2026-10-26',
+            'outcome' => 'provider_error', 'retry_after' => '2026-10-26 15:05:00',
+        ]);
+        $this->assertSame(1, $first['bulk']['identity_conflicts']);
+    }
+
+    public function test_malformed_cached_retry_timestamp_becomes_terminal_receipt_failure(): void
+    {
+        $stock = $this->stock();
+        $this->source('NSE', [['TckrSymb' => 'AAA', 'ISIN' => 'INE999A01010']]);
+        $day = Carbon::parse('2026-10-26');
+        $runId = app(SyncLogService::class)->beginRun('universe-price-sync');
+        $sync = app(UniverseDailyBhavcopySyncService::class);
+        $sync->run(collect([$stock]), $day, $day, $runId, 'universe-price-sync', $this->initialStats());
+        $receipts = json_decode((string) Setting::getValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS), true);
+        $receipts['entries']['NSE:2026-10-26']['retry_after'] = 'not-a-time';
+        Setting::setValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS, json_encode($receipts, JSON_THROW_ON_ERROR));
+
+        $replay = $sync->run(collect([$stock]), $day, $day, $runId, 'universe-price-sync', $this->initialStats())['stats'];
+        $this->assertSame('failed', $replay['bulk']['files'][0]['status']);
+        $this->assertSame('receipt_validation', $replay['bulk']['files'][0]['failure_stage']);
+        $this->assertSame(1, $replay['bulk']['file_errors']);
+
+        app(UniversePriceOutcomeService::class)->recordRun($replay, collect([$stock]), 'malformed-cache-replay');
+        $this->assertDatabaseHas('portfolio_universe_price_session_outcomes', [
+            'stock_id' => $stock->id, 'session_date' => '2026-10-26',
+            'outcome' => 'systemic_error', 'failure_stage' => 'receipt_validation',
+            'reason' => 'invalid_retry_after', 'retry_after' => null,
+        ]);
     }
 
     public function test_conflicts_without_valid_revision_evidence_continue_backoff_progression(): void
