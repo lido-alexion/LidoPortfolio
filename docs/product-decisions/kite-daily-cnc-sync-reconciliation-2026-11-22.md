@@ -31,3 +31,10 @@ Status: PRODUCT DECISIONS RECORDED — 2026-11-22. No implementation requested y
 - These are product decisions, not a completed technical design. Exact data mapping, fee source, schedule reliability, reconciling preexisting manually recorded trades, and handling missed trading days require implementation design.
 - Keep separate from frozen historical onboarding/staging decisions at docs/product-decisions/kite-holdings-onboarding-frozen-2026-11-22.md.
 - User has another distinct third topic to discuss later; do not infer or record it yet.
+
+## Addendum — 2026-11-22: Reconciliation UI and order-execution gating
+- Once settlement-aware holdings reconciliation is implemented and validated, remove the existing include-today/exclude-today ComboButton choice. Provide a single Reconcile action that always accounts for today's CNC executions and unsettled prior executions without double-counting. Keep the current control until the replacement is proven.
+- User reports StoX already has recently improved transaction-fee calculations. Reuse the existing charges engine when recording synchronized transactions; do not treat absence of exact charges in Kite trade records as a blocker. Verify accuracy during implementation rather than assuming exactness.
+- Proposed order execution model: full holdings/cash reconciliation once at the beginning of each trading session, record successful session baseline, then avoid repeating full reconciliation before every order; perform end-of-day trade sync/reconciliation.
+- Preserve per-order safeguards: current broker buying power, reserved funds/open orders, risk limits, connection health, idempotency, and confirmed execution updates. A session baseline must not bypass these safeguards or permit trading after material divergence/unknown state.
+- IMPORTANT: This per-session gating model is a design recommendation pending inspection of existing StoX order placement and reconciliation code. Verify whether per-order reconciliation actually happens and whether the proposed change would weaken safety before implementing. Do not remove current safety gates blindly.
