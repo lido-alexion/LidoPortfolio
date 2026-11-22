@@ -26,12 +26,14 @@ class KiteCncTradeSyncTest extends TestCase
     {
         parent::setUp();
         Carbon::setTestNow(Carbon::parse('2026-11-20 16:10:00', 'Asia/Kolkata'));
+        \App\Support\TradingCalendar::clearHolidayCache();
         app(FakeBrokerGateway::class)->reset();
     }
 
     protected function tearDown(): void
     {
         Carbon::setTestNow();
+        \App\Support\TradingCalendar::clearHolidayCache();
         parent::tearDown();
     }
 
@@ -67,7 +69,7 @@ class KiteCncTradeSyncTest extends TestCase
     public function test_matches_aggregate_manual_transaction_and_flags_ambiguous_manual_rows(): void
     {
         [$profile, $stock] = $this->portfolioAndStock();
-        Transaction::query()->create(['profile_id' => $profile->id, 'stock_id' => $stock->id, 'type' => 'buy',
+        $manual = Transaction::query()->create(['profile_id' => $profile->id, 'stock_id' => $stock->id, 'type' => 'buy',
             'quantity' => 5, 'price' => 101.4, 'fees' => 2, 'transaction_date' => '2026-11-20', 'source' => Transaction::SOURCE_MANUAL]);
         app(FakeBrokerGateway::class)->tradeRows = [
             $this->fill(98711, 'B-19', 'BUY', 2, 101.25),
@@ -78,7 +80,7 @@ class KiteCncTradeSyncTest extends TestCase
         $this->assertSame(2, $result['matched']);
         $this->assertSame(1, $profile->transactions()->count());
         $this->assertSame(2, KiteCncTradeImport::query()->where('status', 'matched_manual')->count());
-        $this->assertSame(1, (int) KiteCncTradeImport::query()->first()->matched_transaction_id);
+        $this->assertSame($manual->id, (int) KiteCncTradeImport::query()->first()->matched_transaction_id);
     }
 
     public function test_duplicate_manual_transactions_are_reviewed_without_double_importing(): void
@@ -170,6 +172,7 @@ class KiteCncTradeSyncTest extends TestCase
         ]);
         $fake = app(FakeBrokerGateway::class);
         $fake->tradeRows = [$this->fill(98723, 'S-22', 'SELL', 4, 110)];
+        app(KiteCncTradeSyncService::class)->sync($profile);
         $fake->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [[
             'symbol' => 'AAA', 'exchange' => 'NSE', 'isin' => null, 'quantity' => 10, 't1_quantity' => 0,
             'used_quantity' => 0, 'cost' => null,
@@ -180,6 +183,30 @@ class KiteCncTradeSyncTest extends TestCase
         $this->assertSame(-4.0, (float) $run->broker_snapshot['settlement_adjustments'][0]['quantity_delta']);
         $this->assertSame(6.0, (float) $run->broker_snapshot['comparison_holdings'][0]['quantity']);
         $this->assertSame('reconciled', $run->holdings_status);
+    }
+
+    public function test_unsettled_sale_does_not_hide_a_different_broker_gap(): void
+    {
+        [$profile, $stock] = $this->portfolioAndStock();
+        app(\App\Services\TransactionWriteService::class)->create($profile, $stock, [
+            'type' => 'buy', 'quantity' => 10, 'price' => 100, 'transaction_date' => '2026-11-19',
+            'source' => Transaction::SOURCE_MANUAL,
+        ]);
+        $fake = app(FakeBrokerGateway::class);
+        $fake->tradeRows = [$this->fill(98734, 'S-24', 'SELL', 4, 110)];
+        app(KiteCncTradeSyncService::class)->sync($profile);
+        $fake->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [[
+            'symbol' => 'AAA', 'exchange' => 'NSE', 'isin' => null, 'quantity' => 9, 't1_quantity' => 0,
+            'used_quantity' => 0, 'cost' => null,
+        ]], 'positions' => ['net' => [], 'day' => [], 'complete' => true], 'current_cash' => 0];
+
+        $run = app(PortfolioReconciliationService::class)->run($profile, 'manual');
+
+        $this->assertSame([], $run->broker_snapshot['settlement_adjustments']);
+        $this->assertSame(9.0, (float) $run->broker_snapshot['comparison_holdings'][0]['quantity']);
+        $this->assertSame('mismatch', $run->holdings_status);
+        $this->assertSame(6.0, (float) $run->discrepancies['holdings'][0]['stoxQty']);
+        $this->assertSame(9.0, (float) $run->discrepancies['holdings'][0]['brokerQty']);
     }
 
     public function test_offsetting_same_day_buy_sell_uses_t1_and_used_quantity_without_adjustment(): void
@@ -235,6 +262,7 @@ class KiteCncTradeSyncTest extends TestCase
         app(\App\Services\TransactionWriteService::class)->create($profile, $stock, [
             'type' => 'buy', 'quantity' => 20, 'price' => 100, 'transaction_date' => '2026-11-19', 'source' => Transaction::SOURCE_MANUAL,
         ]);
+        app(KiteCncTradeSyncService::class)->sync($profile);
 
         $run = app(PortfolioReconciliationService::class)->run($profile, 'manual');
 
@@ -340,8 +368,13 @@ class KiteCncTradeSyncTest extends TestCase
         $secondProfile = PortfolioProfile::query()->create([
             'user_id' => $profile->user_id, 'name' => 'Second Live Portfolio', 'is_default' => false,
             'portfolio_type' => PortfolioProfile::TYPE_LIVE,
-            'execution_mode' => PortfolioProfile::EXECUTION_MODE_AUTOMATIC,
         ]);
+        // execution_mode is intentionally not mass assignable on this model.
+        $secondProfile->forceFill(['execution_mode' => PortfolioProfile::EXECUTION_MODE_AUTOMATIC])->save();
+        $this->assertSame(2, PortfolioProfile::query()->where('user_id', $profile->user_id)
+            ->where('portfolio_type', PortfolioProfile::TYPE_LIVE)
+            ->whereIn('execution_mode', [PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC, PortfolioProfile::EXECUTION_MODE_AUTOMATIC])
+            ->count());
         try {
             app(KiteCncTradeSyncService::class)->sync($profile);
             $this->fail('A shared Kite account with ambiguous profile ownership must be paused.');

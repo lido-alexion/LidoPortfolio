@@ -45,7 +45,7 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
         $broker = app(FakeBrokerGateway::class);
         $broker->reconciliationSnapshot = [
             'provider' => 'kite', 'holdings' => [['symbol' => 'AAA', 'exchange' => 'NSE', 'quantity' => 10, 'cost' => 1000]],
-            'positions' => [], 'current_cash' => 50,
+            'positions' => [], 'current_cash' => 50, 'cash_comparable' => false,
         ];
         Carbon::setTestNow(Carbon::parse('2026-11-13 10:00:00', 'Asia/Kolkata'));
         try {
@@ -60,7 +60,7 @@ class V5PortfolioReconciliationFoundationTest extends TestCase
             $this->assertSame('reconciled', $run->holdings_status);
             $this->assertSame('attention_required', $run->overall_status);
             $this->assertSame(3, $profile->transactions()->count());
-            $this->assertSame('Current Kite cash versus current StoX cash; no historical Kite funds snapshot is available.', $run->stox_snapshot['comparison']['funds_comparison']);
+            $this->assertSame('Cash comparison is unknown: Kite exposes available equity buying power here, not a comparable accounting cash ledger.', $run->stox_snapshot['comparison']['funds_comparison']);
         } finally {
             Carbon::setTestNow();
         }
