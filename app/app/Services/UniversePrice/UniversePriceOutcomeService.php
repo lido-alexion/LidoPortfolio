@@ -87,12 +87,12 @@ class UniversePriceOutcomeService
                 $isIgnored = $ignoredGaps->get($stock->id, collect())->contains(fn ($gap) =>
                     Carbon::parse($gap->gap_from)->toDateString() <= $date
                     && Carbon::parse($gap->gap_to)->toDateString() >= $date);
-                // Stock.created_at is the date this row entered our master, not
-                // an exchange listing date. Compare its stored calendar date
-                // directly; converting the timestamp to IST can move a same-day
-                // row into tomorrow and incorrectly classify today's session as
-                // pre-master history.
-                $stockKnownFrom = $stock->created_at ? Carbon::parse($stock->created_at)->toDateString() : null;
+                // created_at is an instant stored in UTC; ledger dates are India
+                // exchange session dates, so compare in the market timezone.
+                $stockKnownFrom = $stock->created_at
+                    ? Carbon::parse((string) $stock->getRawOriginal('created_at'), 'UTC')
+                        ->timezone('Asia/Kolkata')->toDateString()
+                    : null;
                 if (! $hasPrice && $stockKnownFrom !== null && $date < $stockKnownFrom) {
                     $outcome = 'not_expected';
                     $reason = 'before_stock_master_record';
@@ -139,7 +139,9 @@ class UniversePriceOutcomeService
                     $threshold = max(1, (int) config('portfolio.universe_price_sync.no_data_skip_after_sessions', self::DEFAULT_SKIP_AFTER));
                     if ($mayMutateState && $consecutive >= $threshold && ($skippedUntil === null || $date >= $skippedUntil)) {
                         $skipSessions = max(1, (int) config('portfolio.universe_price_sync.no_data_reprobe_after_sessions', self::DEFAULT_REPROBE_AFTER));
-                        $skippedUntil = TradingCalendar::addSessions(Carbon::parse($date), $skipSessions)->toDateString();
+                        // skipped_until_session is the first eligible reprobe
+                        // session; advance past all configured skipped sessions.
+                        $skippedUntil = TradingCalendar::addSessions(Carbon::parse($date), $skipSessions + 1)->toDateString();
                     }
                 } elseif ($outcome === 'covered' && $mayMutateState) {
                     $consecutive = 0;
@@ -192,14 +194,14 @@ class UniversePriceOutcomeService
         }
 
         DB::table('portfolio_universe_price_session_outcomes')
-            ->where('session_date', '<', now()->subDays(self::RETENTION_DAYS)->toDateString())->delete();
+            ->where('session_date', '<', now('Asia/Kolkata')->subDays(self::RETENTION_DAYS)->toDateString())->delete();
 
         return $this->summary() + ['last_run' => $counts];
     }
 
     public function summary(): array
     {
-        $cutoff = TradingCalendar::addSessions(now()->copy()->subDays(self::RETENTION_DAYS), 0)->toDateString();
+        $cutoff = TradingCalendar::addSessions(now('Asia/Kolkata')->subDays(self::RETENTION_DAYS), 0)->toDateString();
         $rows = DB::table('portfolio_universe_price_session_outcomes')
             ->where('session_date', '>=', $cutoff)
             ->select('outcome', DB::raw('COUNT(*) as total'))
@@ -207,7 +209,7 @@ class UniversePriceOutcomeService
         $skipped = DB::table('portfolio_universe_price_symbol_states as state')
             ->join('portfolio_stocks as stock', 'stock.id', '=', 'state.stock_id')
             ->whereNotNull('state.skipped_until_session')
-            ->where('state.skipped_until_session', '>', now()->toDateString())
+            ->where('state.skipped_until_session', '>', now('Asia/Kolkata')->toDateString())
             ->orderBy('stock.symbol')
             ->limit(250)
             ->get(['stock.id as stock_id', 'stock.symbol', 'stock.exchange', 'state.consecutive_no_data_sessions', 'state.last_session_date', 'state.skipped_until_session']);
@@ -271,13 +273,18 @@ class UniversePriceOutcomeService
             $baseline = collect($sessions->slice(2, 10)->map(fn ($date) => $ratioFor((string) $date)))
                 ->filter(fn ($item) => $item !== null && $item['observed'] >= 3)->values();
             $healthyStreak = 0;
-            foreach ($recent as $item) {
-                if ($item !== null && $item['observed'] >= 3 && $item['ratio'] < 0.8) $healthyStreak++;
+            foreach ($recent as $index => $item) {
+                $adjacentToPrior = $index === 0 || TradingCalendar::addSessions(
+                    Carbon::parse((string) $sessions[$index]), 1,
+                )->toDateString() === (string) $sessions[$index - 1];
+                if ($adjacentToPrior && $item !== null && $item['observed'] >= 3 && $item['ratio'] < 0.8) $healthyStreak++;
                 else break;
             }
             $collapsePair = false;
             for ($i = 0; $i < min(3, $recent->count() - 1); $i++) {
-                if ($recent[$i] !== null && $recent[$i + 1] !== null
+                $adjacentPair = TradingCalendar::addSessions(Carbon::parse((string) $sessions[$i + 1]), 1)
+                    ->toDateString() === (string) $sessions[$i];
+                if ($adjacentPair && $recent[$i] !== null && $recent[$i + 1] !== null
                     && $recent[$i]['observed'] >= 3 && $recent[$i + 1]['observed'] >= 3
                     && $recent[$i]['ratio'] >= 0.8 && $recent[$i + 1]['ratio'] >= 0.8) {
                     $collapsePair = true;
@@ -307,7 +314,7 @@ class UniversePriceOutcomeService
                     'stock_id' => $stock->id,
                     'actor_id' => $actorId,
                     'action' => 'manual_reprobe',
-                    'session_date' => now()->toDateString(),
+                    'session_date' => now('Asia/Kolkata')->toDateString(),
                     'details' => json_encode([
                         'previous_consecutive_no_data_sessions' => (int) ($state->consecutive_no_data_sessions ?? 0),
                         'previous_skipped_until_session' => $state->skipped_until_session ?? null,
@@ -327,19 +334,31 @@ class UniversePriceOutcomeService
     }
 
     /** A verified historical row repairs the observed session without erasing its source gap evidence. */
-    public function markRecoveredByHistory(Stock $stock, array $sessionDates, string $source): void
+    public function markRecoveredByHistory(Stock $stock, array $sessionDates): void
     {
         $dates = collect($sessionDates)->map(fn ($date) => Carbon::parse($date)->toDateString())->unique()->values();
         if ($dates->isEmpty()) return;
-        DB::table('portfolio_universe_price_session_outcomes')
-            ->where('stock_id', $stock->id)->whereIn('session_date', $dates)
-            ->whereIn('outcome', ['no_data', 'provider_error', 'systemic_error'])
-            ->update([
-                'outcome' => 'covered', 'price_present' => true, 'reason' => 'recovered_by_historical_backfill',
-                'resolved_by_source' => substr($source, 0, 64), 'updated_at' => now(),
-            ]);
+        $persisted = [];
+        $sessionDates = array_fill_keys($dates->all(), true);
+        foreach (StockPrice::query()->where('stock_id', $stock->id)
+            ->whereDate('price_date', '>=', $dates->min())->whereDate('price_date', '<=', $dates->max())
+            ->get(['price_date', 'provider_source', 'data_source']) as $price) {
+            $date = substr((string) $price->getRawOriginal('price_date'), 0, 10);
+            if (! isset($sessionDates[$date])) continue;
+            $persisted[$date] = $price->provider_source ?: $price->data_source;
+        }
+        if ($persisted === []) return;
+        foreach ($persisted as $date => $source) {
+            DB::table('portfolio_universe_price_session_outcomes')
+                ->where('stock_id', $stock->id)->where('session_date', $date)
+                ->whereIn('outcome', ['no_data', 'provider_error', 'systemic_error'])
+                ->update([
+                    'outcome' => 'covered', 'price_present' => true, 'reason' => 'recovered_by_historical_backfill',
+                    'resolved_by_source' => $source, 'updated_at' => now(),
+                ]);
+        }
         $state = DB::table('portfolio_universe_price_symbol_states')->where('stock_id', $stock->id)->first();
-        if ($state && in_array($state->last_session_date, $dates->all(), true)) {
+        if ($state && array_key_exists($state->last_session_date, $persisted)) {
             DB::table('portfolio_universe_price_symbol_states')->where('stock_id', $stock->id)->update([
                 'consecutive_no_data_sessions' => 0, 'last_outcome' => 'covered',
                 'skipped_until_session' => null, 'updated_at' => now(),

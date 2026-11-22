@@ -285,10 +285,9 @@ class PriceFetchService
 
             $key = [
                 'stock_id' => $stock->id,
-                // Store the exchange session as a DATE value, not a midnight
-                // timestamp. SQLite otherwise persists a datetime string which
-                // does not match exact session-date lookups in the outcome ledger.
-                'price_date' => $priceDate->toDateString(),
+                // Keep the model's normalized midnight value for the unique
+                // session lookup; SQLite stores DATE casts with a time suffix.
+                'price_date' => $priceDate,
             ];
             $attributes = [
                 'open_price' => $row['open_price'],
@@ -315,7 +314,7 @@ class PriceFetchService
         // Daily no-data observations remain gaps until a validated historical
         // repair actually persists the missing session row.
         app(\App\Services\UniversePrice\UniversePriceOutcomeService::class)
-            ->markRecoveredByHistory($stock, array_column($rows, 'price_date'), $provider);
+            ->markRecoveredByHistory($stock, array_column($rows, 'price_date'));
 
         return $stored;
     }

@@ -323,11 +323,10 @@ class UniverseDailyBhavcopySyncService
             // A bounded historical recovery may be processing an old session.
             // Anchor the cooldown to today in that case, or it would already be
             // expired and the same old source failure would be retried every run.
-            // Use the application's current calendar date as the market-date
-            // anchor, then do all session arithmetic in the market timezone.
-            // Converting the current instant can roll a late UTC timestamp into
-            // tomorrow and add an unintended extra equity session.
-            $today = Carbon::parse(now()->toDateString(), 'Asia/Kolkata')->startOfDay();
+            // Anchor to today's exchange date, then do session arithmetic in
+            // the market timezone. The application clock may still be on the
+            // previous UTC date after midnight in India.
+            $today = now('Asia/Kolkata')->startOfDay();
             $cooldownBase = $session->copy()->startOfDay()->gt($today) ? $session->copy()->startOfDay() : $today;
             $retryAfter = TradingCalendar::addSessions($cooldownBase, self::RETRY_REPROBE_SESSIONS)->setTime(20, 0);
         } else {

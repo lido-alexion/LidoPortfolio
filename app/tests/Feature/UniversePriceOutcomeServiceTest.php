@@ -76,7 +76,7 @@ class UniversePriceOutcomeServiceTest extends TestCase
         ]);
         $this->assertDatabaseHas('portfolio_universe_price_symbol_states', [
             'stock_id' => $stock->id, 'consecutive_no_data_sessions' => 5,
-            'last_session_date' => '2026-10-23', 'skipped_until_session' => '2026-10-30',
+            'last_session_date' => '2026-10-23', 'skipped_until_session' => '2026-11-02',
         ]);
         $this->assertSame(5, $service->summary()['outcomes']['no_data']);
         $this->assertDatabaseMissing('portfolio_stock_prices', ['stock_id' => $stock->id]);
@@ -91,10 +91,18 @@ class UniversePriceOutcomeServiceTest extends TestCase
             'stock_id' => $stock->id, 'consecutive_no_data_sessions' => 5,
         ]);
 
-        [$reprobe] = $this->validFiles(['2026-10-30']);
+        foreach (['2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30'] as $date) {
+            [$cooldown] = $this->validFiles([$date]);
+            $service->recordRun(['bulk' => $cooldown], collect([$stock]), 'cooldown-'.$date);
+            $this->assertDatabaseHas('portfolio_universe_price_session_outcomes', [
+                'stock_id' => $stock->id, 'session_date' => $date, 'outcome' => 'skipped',
+            ]);
+        }
+
+        [$reprobe] = $this->validFiles(['2026-11-02']);
         $service->recordRun(['bulk' => $reprobe], collect([$stock]), 'automatic-reprobe');
         $this->assertDatabaseHas('portfolio_universe_price_session_outcomes', [
-            'stock_id' => $stock->id, 'session_date' => '2026-10-30', 'outcome' => 'no_data',
+            'stock_id' => $stock->id, 'session_date' => '2026-11-02', 'outcome' => 'no_data',
         ]);
         $this->assertDatabaseHas('portfolio_universe_price_symbol_states', [
             'stock_id' => $stock->id, 'consecutive_no_data_sessions' => 1,
@@ -158,6 +166,23 @@ class UniversePriceOutcomeServiceTest extends TestCase
         ]);
     }
 
+    public function test_stock_master_creation_instant_is_compared_using_exchange_calendar_date(): void
+    {
+        $stock = $this->stock();
+        $stock->forceFill(['created_at' => Carbon::parse('2026-10-26 20:00:00', 'UTC')])->save();
+        [$bulk] = $this->validFiles(['2026-10-26', '2026-10-27']);
+
+        app(UniversePriceOutcomeService::class)->recordRun(['bulk' => $bulk], collect([$stock]), 'market-date-master');
+
+        $this->assertDatabaseHas('portfolio_universe_price_session_outcomes', [
+            'stock_id' => $stock->id, 'session_date' => '2026-10-26',
+            'outcome' => 'not_expected', 'reason' => 'before_stock_master_record',
+        ]);
+        $this->assertDatabaseHas('portfolio_universe_price_session_outcomes', [
+            'stock_id' => $stock->id, 'session_date' => '2026-10-27', 'outcome' => 'no_data',
+        ]);
+    }
+
     public function test_historical_backfill_recovery_marks_bar_covered_and_clears_latest_skip_state(): void
     {
         $stock = $this->stock();
@@ -170,14 +195,14 @@ class UniversePriceOutcomeServiceTest extends TestCase
         StockPrice::query()->create([
             'stock_id' => $stock->id, 'price_date' => $date, 'open_price' => 10, 'high_price' => 11,
             'low_price' => 9, 'close_price' => 10, 'adjusted_close_price' => 10,
-            'volume' => 100, 'provider_source' => 'yahoo', 'data_source' => 'yahoo',
+            'volume' => 100, 'provider_source' => 'manual', 'data_source' => 'manual',
         ]);
 
-        app(UniversePriceOutcomeService::class)->markRecoveredByHistory($stock, [$date], 'yahoo');
+        app(UniversePriceOutcomeService::class)->markRecoveredByHistory($stock, [$date]);
 
         $this->assertDatabaseHas('portfolio_universe_price_session_outcomes', [
             'stock_id' => $stock->id, 'session_date' => $date, 'outcome' => 'covered',
-            'reason' => 'recovered_by_historical_backfill', 'resolved_by_source' => 'yahoo',
+            'reason' => 'recovered_by_historical_backfill', 'resolved_by_source' => 'manual',
         ]);
         $this->assertDatabaseHas('portfolio_universe_price_symbol_states', [
             'stock_id' => $stock->id, 'consecutive_no_data_sessions' => 0,
@@ -272,5 +297,27 @@ class UniversePriceOutcomeServiceTest extends TestCase
             }
         }
         $this->assertNull($service->systemicCoverageCollapse());
+    }
+
+    public function test_coverage_collapse_does_not_treat_separated_observations_as_consecutive_sessions(): void
+    {
+        $stocks = collect(range(1, 10))->map(fn ($n) => $this->stock('GAP'.$n));
+        $rows = [];
+        $sessions = [
+            '2026-10-12' => 1, '2026-10-13' => 1, '2026-10-14' => 1,
+            '2026-10-15' => 1, '2026-10-16' => 1, '2026-10-20' => 8, '2026-10-22' => 8,
+        ];
+        foreach ($sessions as $date => $noDataCount) {
+            foreach ($stocks as $index => $stock) {
+                $rows[] = [
+                    'stock_id' => $stock->id, 'session_date' => $date, 'exchange' => 'NSE',
+                    'outcome' => $index < $noDataCount ? 'no_data' : 'covered',
+                    'attempt_count' => 0, 'observed_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+                ];
+            }
+        }
+        DB::table('portfolio_universe_price_session_outcomes')->insert($rows);
+
+        $this->assertNull(app(UniversePriceOutcomeService::class)->systemicCoverageCollapse());
     }
 }

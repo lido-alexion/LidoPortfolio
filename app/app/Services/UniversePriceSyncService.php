@@ -885,7 +885,7 @@ class UniversePriceSyncService
         // A queue worker may have cached a date before an admin marked it closed.
         TradingCalendar::clearHolidayCache();
         $from = $this->rangeFrom($mode);
-        $to = TradingCalendar::normalizeToSessionDate(now());
+        $to = TradingCalendar::normalizeToSessionDate(now('Asia/Kolkata'));
 
         $this->logger->scheduler('debug', 'Universe sync batch starting', [
             'event' => 'universe_sync_start',
@@ -1045,12 +1045,12 @@ class UniversePriceSyncService
         if ($mode === 'backfill') {
             $days = (int) config('portfolio.universe_price_sync.history_days', 365);
 
-            return now()->subDays($days)->startOfDay();
+            return now('Asia/Kolkata')->subDays($days)->startOfDay();
         }
 
         $days = (int) config('portfolio.universe_price_sync.daily_lookback_days', 10);
 
-        return now()->subDays($days)->startOfDay();
+        return now('Asia/Kolkata')->subDays($days)->startOfDay();
     }
 
     /**

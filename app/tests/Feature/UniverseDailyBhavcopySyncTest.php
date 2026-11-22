@@ -32,7 +32,7 @@ class UniverseDailyBhavcopySyncTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        Carbon::setTestNow('2026-10-26 20:00:00');
+        Carbon::setTestNow(Carbon::parse('2026-10-26 14:30:00', 'UTC'));
         TradingCalendar::clearHolidayCache();
         config([
             'portfolio.universe_price_sync.enabled' => true,
@@ -459,6 +459,8 @@ class UniverseDailyBhavcopySyncTest extends TestCase
 
     public function test_old_session_failures_schedule_reprobe_from_today_after_short_retries(): void
     {
+        // This instant is still the prior UTC date after midnight in India.
+        Carbon::setTestNow(Carbon::parse('2026-10-26 20:00:00', 'UTC'));
         $service = app(UniverseDailyBhavcopySyncService::class);
         $method = new \ReflectionMethod($service, 'nextRetrySchedule');
         $method->setAccessible(true);
@@ -470,7 +472,23 @@ class UniverseDailyBhavcopySyncTest extends TestCase
 
         $this->assertSame(4, $attempt);
         $this->assertTrue($retryAfter->isFuture());
-        $this->assertSame('2026-11-02 20:00:00', $retryAfter->timezone('Asia/Kolkata')->toDateTimeString());
+        $this->assertSame('2026-11-03 20:00:00', $retryAfter->timezone('Asia/Kolkata')->toDateTimeString());
+    }
+
+    public function test_old_session_reprobe_uses_exchange_date_on_both_sides_of_ist_midnight(): void
+    {
+        $service = app(UniverseDailyBhavcopySyncService::class);
+        $method = new \ReflectionMethod($service, 'nextRetrySchedule');
+        $method->setAccessible(true);
+        $receipt = ['retry_attempt' => 3, 'retry_after' => '2026-10-27T19:00:00+05:30'];
+
+        Carbon::setTestNow(Carbon::parse('2026-10-26 18:29:59', 'UTC'));
+        [, $beforeMidnight] = $method->invoke($service, $receipt, Carbon::parse('2026-10-15'));
+        $this->assertSame('2026-11-02 20:00:00', $beforeMidnight->timezone('Asia/Kolkata')->toDateTimeString());
+
+        Carbon::setTestNow(Carbon::parse('2026-10-26 18:30:00', 'UTC'));
+        [, $afterMidnight] = $method->invoke($service, $receipt, Carbon::parse('2026-10-15'));
+        $this->assertSame('2026-11-03 20:00:00', $afterMidnight->timezone('Asia/Kolkata')->toDateTimeString());
     }
 
     private function initialStats(): array
