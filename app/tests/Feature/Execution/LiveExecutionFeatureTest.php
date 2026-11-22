@@ -140,7 +140,7 @@ class LiveExecutionFeatureTest extends TestCase
         $this->assertSame(2, $fake->placeCalls);
         $this->assertGreaterThanOrEqual($readsBefore + 4, $fake->fundsReads);
         $this->assertSame(1, PortfolioReconciliationRun::query()->where('profile_id', $profile->id)->where('trigger', 'session_baseline')->count());
-        $this->assertSame(1, PortfolioReconciliationRun::query()->where('profile_id', $profile->id)->count());
+        $this->assertSame(2, PortfolioReconciliationRun::query()->where('profile_id', $profile->id)->count());
         $this->assertDatabaseHas('portfolio_reconciliation_runs', ['profile_id' => $profile->id, 'overall_status' => 'reconciled']);
     }
 
@@ -160,6 +160,7 @@ class LiveExecutionFeatureTest extends TestCase
             ->where('trigger', 'session_baseline')->count());
 
         [$otherUser, $otherProfile] = $this->actingReadyUser();
+        $otherProfile->forceFill(['portfolio_type' => PortfolioProfile::TYPE_LIVE])->save();
         $this->setMode($otherUser, $otherProfile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
         $blockedRec = $this->pendingBuy($otherProfile, amount: 1_000);
         $fake->tradeRowsUnavailable = true;
@@ -173,6 +174,87 @@ class LiveExecutionFeatureTest extends TestCase
         $this->assertDatabaseHas('portfolio_reconciliation_runs', [
             'profile_id' => $otherProfile->id, 'trigger' => 'session_baseline', 'status' => 'sync_failed',
         ]);
+    }
+
+    public function test_unsent_buy_reservations_are_shared_across_profiles_for_one_kite_account(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $this->assertSame(PortfolioProfile::TYPE_LIVE, $profile->fresh()->portfolio_type);
+        $recommendation = $this->pendingBuy($profile, amount: 500);
+        $otherProfile = PortfolioProfile::query()->create([
+            'user_id' => $user->id, 'name' => 'Manual Portfolio', 'is_default' => false,
+            'portfolio_type' => PortfolioProfile::TYPE_LIVE,
+        ]);
+        TradingOrder::query()->create([
+            'profile_id' => $otherProfile->id, 'security_id' => $recommendation->security_id,
+            'side' => 'buy', 'quantity' => 6, 'limit_price' => 100, 'status' => TradingOrder::STATUS_PENDING,
+            'filled_quantity' => 0,
+        ]);
+        PortfolioReconciliationRun::query()->create([
+            'profile_id' => $profile->id, 'user_id' => $user->id, 'trigger' => 'session_baseline',
+            'status' => 'completed', 'holdings_status' => 'reconciled', 'funds_status' => 'reconciled',
+            'overall_status' => 'reconciled', 'started_at' => now(), 'completed_at' => now(),
+        ]);
+        $fake = app(FakeBrokerGateway::class);
+        $fake->availableFunds = 1_000;
+
+        $result = app(LiveBrokerExecutionService::class)->submitOne(
+            $user, $profile, $recommendation->id, ExecutionGate::TRIGGER_SEMI,
+        );
+
+        $this->assertSame(ExecutionDecision::OUTCOME_BLOCKED, $result['outcome']);
+        $this->assertSame('BROKER_INSUFFICIENT_FUNDS', $result['reason']);
+        $this->assertSame(0, $fake->placeCalls);
+    }
+
+    public function test_successive_buy_orders_recheck_the_same_live_buying_power(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $first = $this->pendingBuy($profile, amount: 500);
+        $second = $this->pendingBuy($profile, amount: 500);
+        $fake = app(FakeBrokerGateway::class);
+        $fake->availableFunds = 1_000;
+        $fake->afterPlaceOrder = function () use ($fake): void {
+            $fake->availableFunds = 99;
+        };
+
+        $firstResult = app(LiveBrokerExecutionService::class)->submitOne(
+            $user, $profile, $first->id, ExecutionGate::TRIGGER_SEMI,
+        );
+        $secondResult = app(LiveBrokerExecutionService::class)->submitOne(
+            $user, $profile, $second->id, ExecutionGate::TRIGGER_SEMI,
+        );
+
+        $this->assertSame(ExecutionDecision::OUTCOME_SUBMITTED, $firstResult['outcome']);
+        $this->assertSame(ExecutionDecision::OUTCOME_SKIPPED, $secondResult['outcome']);
+        $this->assertSame('not_actionable', $secondResult['reason']);
+        $this->assertSame(1, $fake->placeCalls);
+    }
+
+    public function test_uncertain_order_in_another_profile_blocks_account_submission(): void
+    {
+        [$user, $profile] = $this->actingReadyUser();
+        $this->setMode($user, $profile, PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC);
+        $recommendation = $this->pendingBuy($profile, amount: 500);
+        $otherProfile = PortfolioProfile::query()->create([
+            'user_id' => $user->id, 'name' => 'Manual Portfolio', 'is_default' => false,
+            'portfolio_type' => PortfolioProfile::TYPE_LIVE,
+        ]);
+        TradingOrder::query()->create([
+            'profile_id' => $otherProfile->id, 'security_id' => $recommendation->security_id,
+            'side' => 'buy', 'quantity' => 1, 'limit_price' => 100, 'status' => TradingOrder::STATUS_PENDING,
+            'broker_status' => TradingOrder::BROKER_UNKNOWN, 'filled_quantity' => 0,
+        ]);
+
+        $result = app(LiveBrokerExecutionService::class)->submitOne(
+            $user, $profile, $recommendation->id, ExecutionGate::TRIGGER_SEMI,
+        );
+
+        $this->assertSame(ExecutionDecision::OUTCOME_BLOCKED, $result['outcome']);
+        $this->assertSame('BROKER_ORDER_STATE_UNCERTAIN', $result['reason']);
+        $this->assertSame(0, app(FakeBrokerGateway::class)->placeCalls);
     }
 
     public function test_automatic_does_not_require_per_order_approval_or_totp_code(): void
@@ -1111,11 +1193,14 @@ class LiveExecutionFeatureTest extends TestCase
         $user = User::factory()->create();
         $user->forceFill(['automated_execution_entitled_at' => now()])->save();
         $profile = $this->defaultPortfolioFor($user);
+        $profile->forceFill(['portfolio_type' => PortfolioProfile::TYPE_LIVE])->save();
         $this->assertSame(PortfolioProfile::EXECUTION_MODE_MANUAL, $profile->fresh()->executionMode());
         app(CashManagementService::class)->deposit($profile, 100_000, 'seed', $user);
         $fake = app(FakeBrokerGateway::class);
         $fake->availableFunds = 100_000;
-        $fake->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [], 'positions' => [], 'current_cash' => 100_000];
+        $fake->reconciliationSnapshot = [
+            'provider' => 'kite', 'holdings' => [], 'positions' => [], 'current_cash' => 100_000,
+        ];
         $this->connectKite($user);
         $this->actingAs($user)->withProfileHeader($user, $profile);
         $this->postJson('/api/v1/totp/begin')->assertOk();

@@ -74,7 +74,7 @@ final class KiteCncTradeSyncService
                     $prior = KiteCncTradeImport::query()->where('profile_id', $profile->id)->where('broker_trade_id', $trade['trade_id'])->first();
                     if ($prior) return;
                     $groupKey = $trade['stock']->id.'|'.$trade['date'].'|'.$trade['side'];
-                    $manual = $manualMatches[$groupKey] ?? null;
+                    $manual = $manualMatches[$groupKey][$trade['trade_id']] ?? null;
                     $status = 'imported';
                     $transaction = null;
                     $matchedTransaction = null;
@@ -145,7 +145,7 @@ final class KiteCncTradeSyncService
         }
     }
 
-    /** @param \Illuminate\Support\Collection<int,array<string,mixed>> $trades @return array<string,array<string,mixed>> */
+    /** @param \Illuminate\Support\Collection<int,array<string,mixed>> $trades @return array<string,array<string,array<string,mixed>>> */
     private function manualMatches(PortfolioProfile $profile, $trades): array
     {
         $keys = $trades->map(fn ($t) => $t['stock']->id.'|'.$t['date'].'|'.$t['side'])->unique();
@@ -158,12 +158,42 @@ final class KiteCncTradeSyncService
             $existing = Transaction::query()->where('profile_id', $profile->id)->where('stock_id', (int) $stockId)
                 ->where('type', $side)->whereDate('transaction_date', $date)->get();
             if ($existing->isEmpty()) continue;
-            $matches = $existing->filter(fn ($tx) => abs((float) $tx->quantity - $quantity) < 0.0001
+
+            // Prefer a one-to-one match when the operator entered each partial
+            // fill separately. Identical fills are paired by stable row order
+            // only when the complete candidate multiset has the same counts.
+            $remaining = $existing->sortBy('id')->values();
+            $matchesByTrade = [];
+            $oneToOne = $existing->count() === $rows->count();
+            foreach ($rows as $trade) {
+                $matches = $remaining->filter(fn ($tx) => abs((float) $tx->quantity - (float) $trade['quantity']) < 0.0001
+                    && abs((float) $tx->price - (float) $trade['price']) < 0.02)->values();
+                $identicalFillCount = $rows->filter(fn ($candidate) => abs((float) $candidate['quantity'] - (float) $trade['quantity']) < 0.0001
+                    && abs((float) $candidate['price'] - (float) $trade['price']) < 0.02)->count();
+                if ($matches->count() > 1 && $matches->count() === $identicalFillCount) {
+                    $matches = $matches->take(1)->values();
+                }
+                if ($matches->count() !== 1) {
+                    $oneToOne = false;
+                    break;
+                }
+                $match = $matches->first();
+                $matchesByTrade[$trade['trade_id']] = $match;
+                $remaining = $remaining->reject(fn ($tx) => (int) $tx->id === (int) $match->id)->values();
+            }
+            if ($oneToOne && $remaining->isEmpty()) {
+                foreach ($matchesByTrade as $tradeId => $transaction) {
+                    $result[$key][$tradeId] = ['kind' => 'match', 'transaction' => $transaction];
+                }
+                continue;
+            }
+
+            $aggregateMatches = $existing->filter(fn ($tx) => abs((float) $tx->quantity - $quantity) < 0.0001
                 && abs((float) $tx->price - $turnover / max($quantity, 0.0001)) < 0.02);
-            if ($matches->count() === 1) {
-                $result[$key] = ['kind' => 'match', 'transaction' => $matches->first()];
+            if ($aggregateMatches->count() === 1) {
+                foreach ($rows as $trade) $result[$key][$trade['trade_id']] = ['kind' => 'match', 'transaction' => $aggregateMatches->first()];
             } else {
-                $result[$key] = ['kind' => 'review'];
+                foreach ($rows as $trade) $result[$key][$trade['trade_id']] = ['kind' => 'review'];
             }
         }
         return $result;

@@ -6,7 +6,7 @@ const source = async (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('portfolio reconciliation fails closed and rechecks broker usability before posting', async () => {
     const card = await source('../../resources/js/src/components/PortfolioReconciliationCard.jsx');
-    assert.match(card, /disabled=\{busy \|\| !brokerUsable\}/);
+    assert.match(card, /disabled=\{busy \|\| syncBusy \|\| !brokerUsable\}/);
     assert.match(card, /latestBrokerStatus\?\.usable !== true/);
     assert.ok(card.indexOf('latestBrokerStatus?.usable !== true') < card.indexOf("api.post('/reconciliation'"));
     assert.match(card, /params: \{ return_to: 'dashboard' \}/);

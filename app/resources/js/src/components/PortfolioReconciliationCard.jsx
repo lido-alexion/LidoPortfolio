@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api, { getApiErrorMessage } from '../api';
 import { showToast } from '../toast';
-import ComboButton from './ComboButton';
 import { useKiteConnection } from '../context/KiteConnectionContext';
 import { tosData } from '../utils/tosEnvelope';
 
@@ -64,13 +63,13 @@ export default function PortfolioReconciliationCard({ executionMode }) {
         }
     };
 
-    const reconcile = async (ignoreTodayTransactions) => {
+    const reconcile = async () => {
         const latestBrokerStatus = await refreshBroker();
         const latestExpiry = latestBrokerStatus?.expires_at ? Date.parse(latestBrokerStatus.expires_at) : null;
         if (latestBrokerStatus?.usable !== true || (latestExpiry !== null && (!Number.isFinite(latestExpiry) || latestExpiry <= Date.now()))) return;
         setBusy(true);
         try {
-            const response = await api.post('/reconciliation', { ignore_today_transactions: ignoreTodayTransactions }, { skipErrorToast: true });
+            const response = await api.post('/reconciliation', {}, { skipErrorToast: true });
             await load();
             const run = response.data?.data?.run;
             if (run?.status === 'sync_failed') showToast(`Reconciliation paused: ${run.failure || 'Kite trade/portfolio data is unavailable'}`, 'danger');
@@ -102,14 +101,10 @@ export default function PortfolioReconciliationCard({ executionMode }) {
                 <span>Broker portfolio reconciliation</span>
                 <div className="d-flex gap-2">
                     <button type="button" className="btn btn-sm btn-outline-secondary" onClick={syncTrades} disabled={syncBusy || busy || !brokerUsable} title="Import executed CNC equity fills available from Kite today">{syncBusy ? 'Syncing…' : 'Sync CNC trades'}</button>
-                    <ComboButton
-                        label={busy ? 'Reconciling…' : 'Reconcile excluding today'}
-                        onPrimaryClick={() => reconcile(true)}
-                        menuItems={[{ key: 'including-today', label: 'Reconcile including today', onClick: () => reconcile(false) }]}
-                        variant="outline-primary"
-                        disabled={busy || syncBusy || !brokerUsable}
-                        title={brokerUsable ? 'Choose the comparison date while settlement behavior is being validated' : 'Connect Kite to enable reconciliation'}
-                    />
+                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={reconcile} disabled={busy || syncBusy || !brokerUsable}
+                        title={brokerUsable ? 'Compare current StoX holdings with Kite settled and unsettled CNC executions' : 'Connect Kite to enable reconciliation'}>
+                        {busy ? 'Reconciling…' : 'Reconcile'}
+                    </button>
                 </div>
             </div>
             <div className="card-body">
@@ -128,7 +123,7 @@ export default function PortfolioReconciliationCard({ executionMode }) {
                     {brokerState === 'confirmed' && brokerStatus?.configured === false && <Link className="btn btn-outline-secondary btn-sm" to="/settings/account">Kite settings</Link>}
                 </div> : null}
                 {!snapshot ? <p className="small text-muted mb-0">Reconciliation status is unavailable.</p> : <>
-                    <p className="small text-muted mb-2">Including today syncs available CNC fills and applies execution-proven T+1 adjustments. Excluding today keeps the previous-calendar-day comparison until settlement cases are fully validated.</p>
+                    <p className="small text-muted mb-2">Reconciliation includes available CNC fills and applies execution-proven T+1 adjustments without double-counting settled, unsettled or sold quantities.</p>
                     {snapshot.trade_sync ? <p className={snapshot.trade_sync.status === 'gap_unavailable' || snapshot.trade_sync.review_count > 0 ? 'small text-warning mb-2' : 'small text-muted mb-2'}>Latest Kite CNC sync: {label(snapshot.trade_sync.status)} · {snapshot.trade_sync.imported_count || 0} added · {snapshot.trade_sync.matched_count || 0} matched · {snapshot.trade_sync.review_count || 0} for review{snapshot.trade_sync.failure ? ` · ${snapshot.trade_sync.failure}` : ''}</p> : null}
                     {(snapshot.trade_review || []).length ? <div className="alert alert-warning py-2 small">CNC executions need transaction review: {(snapshot.trade_review || []).map((trade) => `${trade.symbol} ${trade.side.toUpperCase()} ${quantity(trade.quantity)} (trade ${trade.broker_trade_id})`).join('; ')}</div> : null}
                     {(snapshot.trade_gaps || []).length ? <div className="alert alert-danger py-2 small">Kite could not provide historical trades for: {(snapshot.trade_gaps || []).map((gap) => gap.trading_date).join(', ')}. Review Console tradebook and record missing transactions manually.</div> : null}

@@ -3,6 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\KiteCncTradeImport;
+use App\Models\KiteCncTradeSyncRun;
+use App\Models\CalendarEvent;
+use App\Models\BrokerConnection;
 use App\Models\PortfolioProfile;
 use App\Models\PortfolioReconciliationRun;
 use App\Models\Stock;
@@ -35,7 +38,8 @@ class KiteCncTradeSyncTest extends TestCase
     public function test_imports_only_cnc_fills_with_ids_and_engine_fees_idempotently(): void
     {
         [$profile, $stock] = $this->portfolioAndStock();
-        app(FakeBrokerGateway::class)->tradeRows = [
+        $fake = app(FakeBrokerGateway::class);
+        $fake->tradeRows = [
             $this->fill(98701, 'B-17', 'BUY', 2, 101.25),
             $this->fill(98702, 'B-17', 'BUY', 3, 101.50),
             [...$this->fill(98703, 'M-1', 'BUY', 100, 1), 'product' => 'MIS'],
@@ -51,10 +55,13 @@ class KiteCncTradeSyncTest extends TestCase
         $this->assertGreaterThan(0, (float) $profile->transactions()->first()->fees);
         $this->assertDatabaseHas('kite_cnc_trade_imports', ['broker_trade_id' => '98701', 'broker_order_id' => 'B-17', 'status' => 'imported']);
 
+        $fake->tradeRows = [$this->fill(98701, 'B-17', 'BUY', 99, 1), $this->fill(98702, 'B-17', 'BUY', 99, 1)];
         $second = app(KiteCncTradeSyncService::class)->sync($profile);
         $this->assertSame(0, $second['imported']);
         $this->assertSame(2, $profile->transactions()->count());
         $this->assertSame(2, KiteCncTradeImport::query()->where('profile_id', $profile->id)->count());
+        $this->assertSame(2.0, (float) KiteCncTradeImport::query()->where('broker_trade_id', '98701')->value('quantity'));
+        $this->assertSame(101.25, (float) KiteCncTradeImport::query()->where('broker_trade_id', '98701')->value('price'));
     }
 
     public function test_matches_aggregate_manual_transaction_and_flags_ambiguous_manual_rows(): void
@@ -92,6 +99,27 @@ class KiteCncTradeSyncTest extends TestCase
         $this->assertDatabaseHas('kite_cnc_trade_imports', [
             'broker_trade_id' => '98713', 'status' => 'manual_match_review', 'matched_transaction_id' => null,
         ]);
+    }
+
+    public function test_matching_partial_manual_rows_links_each_fill_without_importing_again(): void
+    {
+        [$profile, $stock] = $this->portfolioAndStock();
+        $first = Transaction::query()->create(['profile_id' => $profile->id, 'stock_id' => $stock->id, 'type' => 'buy',
+            'quantity' => 2, 'price' => 101.25, 'fees' => 1, 'transaction_date' => '2026-11-20', 'source' => Transaction::SOURCE_MANUAL]);
+        $second = Transaction::query()->create(['profile_id' => $profile->id, 'stock_id' => $stock->id, 'type' => 'buy',
+            'quantity' => 3, 'price' => 101.50, 'fees' => 1, 'transaction_date' => '2026-11-20', 'source' => Transaction::SOURCE_MANUAL]);
+        app(FakeBrokerGateway::class)->tradeRows = [
+            $this->fill(98728, 'B-26', 'BUY', 2, 101.25), $this->fill(98729, 'B-26', 'BUY', 3, 101.50),
+        ];
+
+        $result = app(KiteCncTradeSyncService::class)->sync($profile);
+
+        $this->assertSame(0, $result['imported']);
+        $this->assertSame(2, $result['matched']);
+        $this->assertSame(0, $result['review']);
+        $this->assertSame($first->id, (int) KiteCncTradeImport::query()->where('broker_trade_id', '98728')->value('matched_transaction_id'));
+        $this->assertSame($second->id, (int) KiteCncTradeImport::query()->where('broker_trade_id', '98729')->value('matched_transaction_id'));
+        $this->assertSame(2, $profile->transactions()->count());
     }
 
     public function test_settlement_reconciliation_adds_only_execution_proven_t1_delta_and_uses_trading_days(): void
@@ -154,6 +182,85 @@ class KiteCncTradeSyncTest extends TestCase
         $this->assertSame('reconciled', $run->holdings_status);
     }
 
+    public function test_offsetting_same_day_buy_sell_uses_t1_and_used_quantity_without_adjustment(): void
+    {
+        [$profile, $stock] = $this->portfolioAndStock();
+        app(\App\Services\TransactionWriteService::class)->create($profile, $stock, [
+            'type' => 'buy', 'quantity' => 10, 'price' => 100, 'transaction_date' => '2026-11-19',
+            'source' => Transaction::SOURCE_MANUAL,
+        ]);
+        $fake = app(FakeBrokerGateway::class);
+        $fake->tradeRows = [
+            $this->fill(98724, 'S-23', 'SELL', 5, 110),
+            $this->fill(98725, 'B-24', 'BUY', 5, 105),
+        ];
+        $fake->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [[
+            'symbol' => 'AAA', 'exchange' => 'NSE', 'isin' => null, 'quantity' => 10, 't1_quantity' => 5,
+            'used_quantity' => 5, 'cost' => null,
+        ]], 'positions' => ['net' => [], 'day' => [], 'complete' => true], 'current_cash' => 0];
+
+        $run = app(PortfolioReconciliationService::class)->run($profile, 'manual');
+
+        $this->assertSame([], $run->broker_snapshot['settlement_adjustments']);
+        $this->assertSame(10.0, (float) $run->broker_snapshot['comparison_holdings'][0]['quantity']);
+        $this->assertSame('reconciled', $run->holdings_status);
+    }
+
+    public function test_pending_imports_across_a_trading_holiday_are_netted_by_execution_evidence(): void
+    {
+        [$profile, $stock] = $this->portfolioAndStock();
+        CalendarEvent::query()->create(['profile_id' => null, 'category' => CalendarEvent::CATEGORY_TRADE_HOLIDAY,
+            'title' => 'Test holiday', 'anchor_date' => '2026-11-23', 'recurrence_type' => CalendarEvent::RECURRENCE_NONE,
+            'is_active' => true]);
+        \App\Support\TradingCalendar::clearHolidayCache();
+        Carbon::setTestNow(Carbon::parse('2026-11-24 16:10:00', 'Asia/Kolkata'));
+        app(\App\Services\TransactionWriteService::class)->create($profile, $stock, [
+            'type' => 'buy', 'quantity' => 2, 'price' => 100, 'transaction_date' => '2026-11-20', 'source' => Transaction::SOURCE_OTHER,
+        ]);
+        $pastRun = KiteCncTradeSyncRun::query()->create(['profile_id' => $profile->id, 'user_id' => $profile->user_id,
+            'trading_date' => '2026-11-20', 'trigger' => 'scheduled', 'status' => 'completed',
+            'started_at' => '2026-11-20 16:00:00', 'completed_at' => '2026-11-20 16:01:00']);
+        KiteCncTradeImport::query()->create(['profile_id' => $profile->id, 'sync_run_id' => $pastRun->id,
+            'stock_id' => $stock->id, 'broker_trade_id' => '98726',
+            'symbol' => 'AAA', 'exchange' => 'NSE', 'side' => 'buy', 'quantity' => 2, 'price' => 100,
+            'executed_at' => '2026-11-20 15:20:00', 'product' => 'CNC', 'status' => 'imported', 'broker_evidence' => ['trade_id' => '98726']]);
+        $fake = app(FakeBrokerGateway::class);
+        $fake->tradeRows = [[...$this->fill(98727, 'B-25', 'BUY', 3, 100), 'fill_timestamp' => '2026-11-24 15:20:00']];
+        $fake->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [[
+            'symbol' => 'AAA', 'exchange' => 'NSE', 'isin' => null, 'quantity' => 20, 't1_quantity' => 0,
+            'used_quantity' => 0, 'cost' => null,
+        ]], 'positions' => ['net' => [], 'day' => [], 'complete' => true], 'current_cash' => 0];
+        // The established base position is 20; Friday and Tuesday fills add five
+        // while the Monday holiday delays Friday's T+1 settlement until Tuesday.
+        app(\App\Services\TransactionWriteService::class)->create($profile, $stock, [
+            'type' => 'buy', 'quantity' => 20, 'price' => 100, 'transaction_date' => '2026-11-19', 'source' => Transaction::SOURCE_MANUAL,
+        ]);
+
+        $run = app(PortfolioReconciliationService::class)->run($profile, 'manual');
+
+        $this->assertSame(5.0, (float) $run->broker_snapshot['settlement_adjustments'][0]['quantity_delta']);
+        $this->assertSame('2026-11-25', $run->broker_snapshot['settlement_adjustments'][0]['settles_by']);
+        $this->assertSame(25.0, (float) $run->broker_snapshot['comparison_holdings'][0]['quantity']);
+        $this->assertSame('reconciled', $run->holdings_status);
+    }
+
+    public function test_reconnect_records_each_unavailable_session_once_after_tradebook_gap(): void
+    {
+        [$profile] = $this->portfolioAndStock();
+        KiteCncTradeSyncRun::query()->create(['profile_id' => $profile->id, 'user_id' => $profile->user_id,
+            'trading_date' => '2026-11-24', 'trigger' => 'scheduled', 'status' => 'completed',
+            'started_at' => '2026-11-24 16:00:00', 'completed_at' => '2026-11-24 16:01:00']);
+        Carbon::setTestNow(Carbon::parse('2026-11-27 16:10:00', 'Asia/Kolkata'));
+        $fake = app(FakeBrokerGateway::class);
+        $fake->tradeRows = [];
+
+        app(KiteCncTradeSyncService::class)->sync($profile, 'reconnect');
+        app(KiteCncTradeSyncService::class)->sync($profile, 'reconnect');
+
+        $gaps = KiteCncTradeSyncRun::query()->where('profile_id', $profile->id)->where('status', 'gap_unavailable')->orderBy('trading_date')->get();
+        $this->assertSame(['2026-11-25', '2026-11-26'], $gaps->map(fn ($run) => $run->trading_date->toDateString())->all());
+    }
+
     public function test_missing_tradebook_is_recorded_as_failed_and_surfaces_error(): void
     {
         [$profile] = $this->portfolioAndStock();
@@ -172,7 +279,14 @@ class KiteCncTradeSyncTest extends TestCase
     {
         $user = User::factory()->create();
         $profile = $this->defaultPortfolioFor($user);
-        $profile->forceFill(['execution_mode' => PortfolioProfile::EXECUTION_MODE_AUTOMATIC])->save();
+        $profile->forceFill(['portfolio_type' => PortfolioProfile::TYPE_LIVE,
+            'execution_mode' => PortfolioProfile::EXECUTION_MODE_AUTOMATIC])->save();
+        BrokerConnection::query()->create([
+            'user_id' => $user->id, 'provider' => BrokerConnection::PROVIDER_KITE,
+            'access_token' => 'test-access-token', 'connected_at' => now(), 'expires_at' => now()->addDay(),
+            'broker_user_id' => 'AB1234',
+        ]);
+        app(\App\Services\CashManagementService::class)->deposit($profile, 100000, 'Test opening cash', $user);
         $stock = Stock::query()->create(['symbol' => 'AAA', 'exchange' => 'NSE', 'name' => 'AAA', 'is_active' => true]);
         return [$profile, $stock];
     }

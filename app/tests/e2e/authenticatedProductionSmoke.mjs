@@ -336,7 +336,7 @@ try {
     const reconciliationCard = page.locator('.card').filter({ hasText: 'Broker portfolio reconciliation' });
     if (await reconciliationCard.count()) {
         await reconciliationCard.waitFor({ state: 'visible' });
-        const reconcile = reconciliationCard.getByRole('button', { name: 'Reconcile excluding today', exact: true });
+        const reconcile = reconciliationCard.getByRole('button', { name: 'Reconcile', exact: true });
         await reconcile.waitFor({ state: 'visible' });
         const brokerUsable = brokerStatusPayload?.usable === true
             && (!brokerStatusPayload.expires_at || Date.parse(brokerStatusPayload.expires_at) > Date.now());
