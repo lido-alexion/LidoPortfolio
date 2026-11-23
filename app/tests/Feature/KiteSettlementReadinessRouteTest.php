@@ -78,16 +78,32 @@ class KiteSettlementReadinessRouteTest extends TestCase
 
         $user = User::factory()->create();
         $profile = $this->defaultPortfolioFor($user);
-        $this->connect($user, 'ACCOUNT-A');
-        $this->connect($user, 'ACCOUNT-B');
+        // The schema permits one provider connection per user. A missing
+        // connection is therefore the valid representation of no account.
         $this->actingAs($user)->withProfileHeader($user, $profile)
             ->getJson('/api/kite/settlement-readiness')->assertStatus(409);
 
+        $this->connect($user, 'ACCOUNT-A');
+        $request = fn () => $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->getJson('/api/kite/settlement-readiness');
+
+        \DB::table('portfolio_broker_connections')->where('user_id', $user->id)->update(['expires_at' => now()->subMinute()]);
+        $request()->assertStatus(409); // expired
+
         \DB::table('portfolio_broker_connections')->where('user_id', $user->id)->update([
-            'expires_at' => null, 'connected_at' => null,
+            'expires_at' => now()->addHour(), 'connected_at' => null,
         ]);
-        $this->actingAs($user)->withProfileHeader($user, $profile)
-            ->getJson('/api/kite/settlement-readiness')->assertStatus(409);
+        $request()->assertStatus(409); // stale/incomplete connection metadata
+
+        \DB::table('portfolio_broker_connections')->where('user_id', $user->id)->update([
+            'connected_at' => now(), 'broker_user_id' => 'invalid/account',
+        ]);
+        $request()->assertStatus(409); // malformed account identity
+
+        \DB::table('portfolio_broker_connections')->where('user_id', $user->id)->update([
+            'broker_user_id' => 'ACCOUNT-A', 'access_token' => null,
+        ]);
+        $request()->assertStatus(409); // missing session credential
     }
 
     public function test_snapshot_scope_uses_stored_profile_and_cnc_day_uses_ist_boundaries(): void
