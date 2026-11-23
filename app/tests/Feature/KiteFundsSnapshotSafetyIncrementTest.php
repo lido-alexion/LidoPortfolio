@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\BrokerConnection;
 use App\Models\CalendarEvent;
 use App\Models\KiteFundsReconciliation;
 use App\Models\KiteFundsSnapshot;
@@ -27,6 +28,11 @@ class KiteFundsSnapshotSafetyIncrementTest extends TestCase
     {
         $user = User::factory()->create();
         $profile = $this->defaultPortfolioFor($user);
+        BrokerConnection::query()->create([
+            'user_id' => $user->id,
+            'provider' => BrokerConnection::PROVIDER_KITE,
+            'broker_user_id' => 'AB1234',
+        ]);
 
         return [$user, $profile];
     }
