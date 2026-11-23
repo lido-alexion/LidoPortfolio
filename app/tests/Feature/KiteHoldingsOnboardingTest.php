@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\BrokerConnection;
 use App\Models\Stock;
 use App\Models\User;
 use App\Services\Broker\FakeBrokerGateway;
@@ -22,7 +23,7 @@ class KiteHoldingsOnboardingTest extends TestCase
         Stock::query()->create(['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'name' => 'Onboard', 'is_active' => true, 'is_benchmark' => false]);
         $gateway = app(FakeBrokerGateway::class);
         $gateway->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'quantity' => 5, 'average_price' => 100]], 'positions' => [], 'current_cash' => 0];
-        $response = $this->actingAs($user)->withProfileHeader($user, $profile)->postJson('/api/kite/holdings-onboarding')->assertCreated();
+        $response = $this->startOnboarding($user, $profile)->assertCreated();
         $item = $response->json('data.stocks.0');
         $this->assertSame('needs_review', $item['status']);
         $this->assertTrue($item['entries'][0]['date_placeholder']);
@@ -40,7 +41,7 @@ class KiteHoldingsOnboardingTest extends TestCase
         Stock::query()->create(['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'name' => 'Onboard', 'is_active' => true, 'is_benchmark' => false]);
         $gateway = app(FakeBrokerGateway::class);
         $gateway->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'quantity' => 5, 'average_price' => 100]], 'positions' => [], 'current_cash' => 0];
-        $response = $this->actingAs($user)->withProfileHeader($user, $profile)->postJson('/api/kite/holdings-onboarding')->assertCreated();
+        $response = $this->startOnboarding($user, $profile)->assertCreated();
         $item = $response->json('data.stocks.0');
         $this->putJson('/api/kite/holdings-onboarding/stocks/'.$item['id'], ['entries' => [['type' => 'buy', 'quantity' => 2, 'price' => 100, 'date' => today()->toDateString(), 'provenance' => 'manual'], ['type' => 'sell', 'quantity' => 3, 'price' => 100, 'date' => today()->toDateString(), 'provenance' => 'manual']]])->assertOk();
         $this->postJson('/api/kite/holdings-onboarding/stocks/'.$item['id'].'/verify')->assertUnprocessable();
@@ -53,7 +54,7 @@ class KiteHoldingsOnboardingTest extends TestCase
         Stock::query()->create(['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'name' => 'Onboard', 'is_active' => true, 'is_benchmark' => false]);
         app(FakeBrokerGateway::class)->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'quantity' => 5, 'average_price' => 120]], 'positions' => [], 'current_cash' => 0];
         $this->actingAs($user)->withProfileHeader($user, $profile);
-        $item = $this->postJson('/api/kite/holdings-onboarding')->assertCreated()->json('data.stocks.0');
+        $item = $this->startOnboarding($user, $profile)->assertCreated()->json('data.stocks.0');
         $entries = [
             ['type' => 'buy', 'quantity' => 10, 'price' => 90, 'date' => '2026-01-01', 'date_placeholder' => false, 'provenance' => 'console_tradebook'],
             ['type' => 'buy', 'quantity' => 5, 'price' => 120, 'date' => '2026-02-01', 'date_placeholder' => false, 'provenance' => 'console_tradebook'],
@@ -73,7 +74,7 @@ class KiteHoldingsOnboardingTest extends TestCase
         $profile = $this->defaultPortfolioFor($user);
         Stock::query()->create(['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'name' => 'Onboard', 'is_active' => true, 'is_benchmark' => false]);
         app(FakeBrokerGateway::class)->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'quantity' => 5, 'average_price' => 100]], 'positions' => [], 'current_cash' => 0];
-        $this->actingAs($user)->withProfileHeader($user, $profile)->postJson('/api/kite/holdings-onboarding')->assertCreated();
+        $this->startOnboarding($user, $profile)->assertCreated();
         $csv = "symbol,trade_type,quantity,price,trade_date,trade_id\nONBOARD,BUY,5,100,2026-11-21,T-1\n";
         $this->post('/api/kite/holdings-onboarding/tradebook', ['tradebook' => UploadedFile::fake()->createWithContent('trades.csv', $csv)])->assertOk()->assertJsonPath('merged_stocks', 1);
         $this->post('/api/kite/holdings-onboarding/tradebook', ['tradebook' => UploadedFile::fake()->createWithContent('trades.csv', $csv)])->assertOk();
@@ -90,7 +91,7 @@ class KiteHoldingsOnboardingTest extends TestCase
         Stock::query()->create(['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'name' => 'Onboard', 'is_active' => true, 'is_benchmark' => false]);
         app(FakeBrokerGateway::class)->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'quantity' => 5, 'average_price' => 100]], 'positions' => [], 'current_cash' => 0];
         $this->actingAs($user)->withProfileHeader($user, $profile);
-        $item = $this->postJson('/api/kite/holdings-onboarding')->assertCreated()->json('data.stocks.0');
+        $item = $this->startOnboarding($user, $profile)->assertCreated()->json('data.stocks.0');
         $opening = [['type' => 'buy', 'quantity' => 5, 'price' => 100, 'date' => '2026-01-01', 'date_placeholder' => false, 'provenance' => 'kite_opening_position']];
         $this->putJson('/api/kite/holdings-onboarding/stocks/'.$item['id'], ['entries' => $opening])->assertOk();
         $periodOne = "symbol,trade_type,quantity,price,trade_date\nONBOARD,BUY,2,90,2026-02-01\n";
@@ -112,7 +113,7 @@ class KiteHoldingsOnboardingTest extends TestCase
         $profile = $this->defaultPortfolioFor($user);
         Stock::query()->create(['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'name' => 'Onboard', 'is_active' => true, 'is_benchmark' => false]);
         app(FakeBrokerGateway::class)->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'quantity' => 5, 'average_price' => 100]], 'positions' => [], 'current_cash' => 0];
-        $this->actingAs($user)->withProfileHeader($user, $profile)->postJson('/api/kite/holdings-onboarding')->assertCreated();
+        $this->startOnboarding($user, $profile)->assertCreated();
         $this->post('/api/kite/holdings-onboarding/tradebook', ['tradebook' => $this->xlsx(['symbol', 'trade_type', 'quantity', 'price', 'trade_date', 'trade_id'], ['ONBOARD', 'BUY', '5', '100', '2026-11-21', 'X-1'])])->assertOk();
         $this->assertSame('X-1', $this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.entries.0.broker_trade_id'));
         $this->post('/api/kite/holdings-onboarding/tradebook', ['tradebook' => $this->xlsx(['symbol', 'trade_type', 'quantity', 'price', 'trade_date'], ['ONBOARD', 'BUY', '5', '100', '2026-11-21'], true)])->assertUnprocessable();
@@ -124,7 +125,7 @@ class KiteHoldingsOnboardingTest extends TestCase
         $profile = $this->defaultPortfolioFor($user);
         Stock::query()->create(['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'name' => 'Onboard', 'is_active' => true, 'is_benchmark' => false]);
         app(FakeBrokerGateway::class)->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'quantity' => 5, 'average_price' => 100]], 'positions' => [], 'current_cash' => 0];
-        $this->actingAs($user)->withProfileHeader($user, $profile)->postJson('/api/kite/holdings-onboarding')->assertCreated();
+        $this->startOnboarding($user, $profile)->assertCreated();
         $xml = '<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet><Table><Row><Cell><Data>symbol</Data></Cell><Cell><Data>trade_type</Data></Cell><Cell><Data>quantity</Data></Cell><Cell><Data>price</Data></Cell><Cell><Data>trade_date</Data></Cell></Row><Row><Cell><Data>ONBOARD</Data></Cell><Cell><Data>BUY</Data></Cell><Cell><Data>5</Data></Cell><Cell><Data>100</Data></Cell><Cell><Data>2026-11-21</Data></Cell></Row></Table></Worksheet></Workbook>';
         $this->post('/api/kite/holdings-onboarding/tradebook', ['tradebook' => UploadedFile::fake()->createWithContent('trades.xls', $xml)])->assertOk();
         $this->assertSame('console_tradebook', $this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.entries.0.provenance'));
@@ -138,7 +139,7 @@ class KiteHoldingsOnboardingTest extends TestCase
         $profile = $this->defaultPortfolioFor($user);
         $this->actingAs($user)->withProfileHeader($user, $profile);
         app(FakeBrokerGateway::class)->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [], 'positions' => [], 'current_cash' => 0];
-        $this->postJson('/api/kite/holdings-onboarding')->assertCreated();
+        $this->startOnboarding($user, $profile)->assertCreated();
         $binaryXls = "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1".'legacy workbook bytes';
 
         $response = $this->post('/api/kite/holdings-onboarding/tradebook', ['tradebook' => UploadedFile::fake()->createWithContent('legacy.xls', $binaryXls)])
@@ -155,7 +156,7 @@ class KiteHoldingsOnboardingTest extends TestCase
         $gateway = app(FakeBrokerGateway::class);
         $gateway->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'quantity' => 5, 'average_price' => 100]], 'positions' => [], 'current_cash' => 0];
         $this->actingAs($user)->withProfileHeader($user, $profile);
-        $item = $this->postJson('/api/kite/holdings-onboarding')->assertCreated()->json('data.stocks.0');
+        $item = $this->startOnboarding($user, $profile)->assertCreated()->json('data.stocks.0');
         $this->putJson('/api/kite/holdings-onboarding/stocks/'.$item['id'], ['entries' => [['type' => 'buy', 'quantity' => 5, 'price' => 100, 'date' => '2026-11-21', 'date_placeholder' => false, 'provenance' => 'console_tradebook', 'broker_trade_id' => 'COMMIT-1']]])->assertOk();
         $this->postJson('/api/kite/holdings-onboarding/stocks/'.$item['id'].'/verify')->assertOk();
         $this->assertDatabaseCount('portfolio_transactions', 0);
@@ -175,12 +176,102 @@ class KiteHoldingsOnboardingTest extends TestCase
         $gateway = app(FakeBrokerGateway::class);
         $gateway->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'quantity' => 5, 'average_price' => 100]], 'positions' => [], 'current_cash' => 0];
         $this->actingAs($user)->withProfileHeader($user, $profile);
-        $item = $this->postJson('/api/kite/holdings-onboarding')->assertCreated()->json('data.stocks.0');
+        $item = $this->startOnboarding($user, $profile)->assertCreated()->json('data.stocks.0');
         $this->putJson('/api/kite/holdings-onboarding/stocks/'.$item['id'], ['entries' => [['type' => 'buy', 'quantity' => 5, 'price' => 100, 'date' => '2026-11-21', 'date_placeholder' => false, 'provenance' => 'manual']]])->assertOk();
         $this->postJson('/api/kite/holdings-onboarding/stocks/'.$item['id'].'/verify')->assertOk();
         $gateway->reconciliationSnapshot['holdings'][0]['quantity'] = 6;
         $this->postJson('/api/kite/holdings-onboarding/commit', ['stock_ids' => [$item['id']]])->assertStatus(409);
         $this->assertDatabaseCount('portfolio_transactions', 0);
+    }
+
+    public function test_commit_rejects_a_different_kite_account_even_when_holdings_match(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        Stock::query()->create(['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'name' => 'Onboard', 'is_active' => true, 'is_benchmark' => false]);
+        app(FakeBrokerGateway::class)->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'quantity' => 5, 'average_price' => 100]], 'positions' => [], 'current_cash' => 0];
+        $item = $this->startOnboarding($user, $profile)->assertCreated()->json('data.stocks.0');
+        $this->putJson('/api/kite/holdings-onboarding/stocks/'.$item['id'], ['entries' => [['type' => 'buy', 'quantity' => 5, 'price' => 100, 'date' => '2026-11-21', 'date_placeholder' => false, 'provenance' => 'manual']]])->assertOk();
+        $this->postJson('/api/kite/holdings-onboarding/stocks/'.$item['id'].'/verify')->assertOk();
+
+        BrokerConnection::query()->where('user_id', $user->id)->where('provider', BrokerConnection::PROVIDER_KITE)->update(['broker_user_id' => 'KITE-ACCOUNT-2']);
+
+        $this->postJson('/api/kite/holdings-onboarding/commit', ['stock_ids' => [$item['id']]])
+            ->assertStatus(409)
+            ->assertJsonFragment(['message' => 'Kite account changed since staging. Fetch holdings again and review the draft before committing.']);
+        $this->assertDatabaseCount('portfolio_transactions', 0);
+        $this->assertDatabaseHas('kite_onboarding_stocks', ['id' => $item['id'], 'status' => 'verified']);
+    }
+
+    public function test_legacy_accountless_draft_requires_explicit_recovery_and_preserves_entries(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        Stock::query()->create(['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'name' => 'Onboard', 'is_active' => true, 'is_benchmark' => false]);
+        app(FakeBrokerGateway::class)->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'quantity' => 5, 'average_price' => 100]], 'positions' => [], 'current_cash' => 0];
+        $item = $this->startOnboarding($user, $profile)->assertCreated()->json('data.stocks.0');
+        $manual = [['type' => 'buy', 'quantity' => 5, 'price' => 100, 'date' => '2026-05-04', 'date_placeholder' => false, 'provenance' => 'manual']];
+        $this->putJson('/api/kite/holdings-onboarding/stocks/'.$item['id'], ['entries' => $manual])->assertOk();
+        $this->postJson('/api/kite/holdings-onboarding/stocks/'.$item['id'].'/verify')->assertOk();
+        $draftId = DB::table('kite_onboarding_stocks')->where('id', $item['id'])->value('draft_id');
+        DB::table('kite_onboarding_drafts')->where('id', $draftId)->update(['kite_snapshot' => json_encode(['provider' => 'kite'])]);
+
+        $this->actingAs($user)->withProfileHeader($user, $profile)->postJson('/api/kite/holdings-onboarding')->assertStatus(409);
+        $this->postJson('/api/kite/holdings-onboarding', ['confirm_legacy_draft' => true])->assertCreated();
+        $this->assertSame($this->sortEntryFields($manual), $this->sortEntryFields($this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.entries')));
+        $this->assertSame('KITE-ACCOUNT-1', $this->getJson('/api/kite/holdings-onboarding')->json('data.broker_account_id'));
+        $this->assertSame('needs_review', $this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.status'));
+        $this->assertSame(['edited', 'verified', 'legacy_account_bound_reverification_required'], array_column($this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.audit'), 'event'));
+        $this->postJson('/api/kite/holdings-onboarding/commit', ['stock_ids' => [$item['id']]])->assertStatus(409);
+        $this->postJson('/api/kite/holdings-onboarding/stocks/'.$item['id'].'/verify')->assertOk();
+        $this->postJson('/api/kite/holdings-onboarding/commit', ['stock_ids' => [$item['id']]])->assertOk();
+    }
+
+    public function test_same_account_refresh_resumes_without_overwriting_manual_dates_or_partial_status(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        Stock::query()->create(['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'name' => 'Onboard', 'is_active' => true, 'is_benchmark' => false]);
+        app(FakeBrokerGateway::class)->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'quantity' => 5, 'average_price' => 100]], 'positions' => [], 'current_cash' => 0];
+        $item = $this->startOnboarding($user, $profile)->assertCreated()->json('data.stocks.0');
+        $entries = [['type' => 'buy', 'quantity' => 5, 'price' => 100, 'date' => '2026-05-04', 'date_placeholder' => false, 'provenance' => 'manual']];
+        $this->putJson('/api/kite/holdings-onboarding/stocks/'.$item['id'], ['entries' => $entries])->assertOk();
+        $this->postJson('/api/kite/holdings-onboarding/stocks/'.$item['id'].'/verify')->assertOk();
+        $this->startOnboarding($user, $profile)->assertCreated();
+        $this->assertSame($this->sortEntryFields($entries), $this->sortEntryFields($this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.entries')));
+        $this->assertSame('verified', $this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.status'));
+    }
+
+    public function test_accountless_legacy_draft_with_committed_history_cannot_be_bound(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        Stock::query()->create(['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'name' => 'Onboard', 'is_active' => true, 'is_benchmark' => false]);
+        app(FakeBrokerGateway::class)->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'quantity' => 5, 'average_price' => 100]], 'positions' => [], 'current_cash' => 0];
+        $item = $this->startOnboarding($user, $profile)->assertCreated()->json('data.stocks.0');
+        $this->putJson('/api/kite/holdings-onboarding/stocks/'.$item['id'], ['entries' => [['type' => 'buy', 'quantity' => 5, 'price' => 100, 'date' => '2026-05-04', 'date_placeholder' => false, 'provenance' => 'manual']]])->assertOk();
+        $this->postJson('/api/kite/holdings-onboarding/stocks/'.$item['id'].'/verify')->assertOk();
+        $this->postJson('/api/kite/holdings-onboarding/commit', ['stock_ids' => [$item['id']]])->assertOk();
+        $draftId = DB::table('kite_onboarding_stocks')->where('id', $item['id'])->value('draft_id');
+        DB::table('kite_onboarding_drafts')->where('id', $draftId)->update(['kite_snapshot' => json_encode(['provider' => 'kite'])]);
+        $this->postJson('/api/kite/holdings-onboarding', ['confirm_legacy_draft' => true])->assertStatus(409);
+        $this->assertSame('committed', $this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.status'));
+        $this->assertSame(1, DB::table('portfolio_transactions')->count());
+    }
+
+    public function test_refresh_rejects_changed_account_without_rebinding_or_mutating_staging(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        Stock::query()->create(['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'name' => 'Onboard', 'is_active' => true, 'is_benchmark' => false]);
+        app(FakeBrokerGateway::class)->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'quantity' => 5, 'average_price' => 100]], 'positions' => [], 'current_cash' => 0];
+        $item = $this->startOnboarding($user, $profile)->assertCreated()->json('data.stocks.0');
+        $entries = [['type' => 'buy', 'quantity' => 5, 'price' => 100, 'date' => '2026-05-04', 'date_placeholder' => false, 'provenance' => 'manual']];
+        $this->putJson('/api/kite/holdings-onboarding/stocks/'.$item['id'], ['entries' => $entries])->assertOk();
+        BrokerConnection::query()->where('user_id', $user->id)->where('provider', BrokerConnection::PROVIDER_KITE)->update(['broker_user_id' => 'KITE-ACCOUNT-2']);
+        $this->actingAs($user)->withProfileHeader($user, $profile)->postJson('/api/kite/holdings-onboarding')->assertStatus(409);
+        $this->assertSame($this->sortEntryFields($entries), $this->sortEntryFields($this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.entries')));
+        $this->assertSame('KITE-ACCOUNT-1', $this->getJson('/api/kite/holdings-onboarding')->json('data.broker_account_id'));
     }
 
     public function test_selected_stock_can_be_committed_while_other_stocks_remain_staged(): void
@@ -195,7 +286,7 @@ class KiteHoldingsOnboardingTest extends TestCase
             ['symbol' => 'ONBOARD2', 'exchange' => 'NSE', 'quantity' => 3, 'average_price' => 70],
         ], 'positions' => [], 'current_cash' => 0];
         $this->actingAs($user)->withProfileHeader($user, $profile);
-        $items = $this->postJson('/api/kite/holdings-onboarding')->assertCreated()->json('data.stocks');
+        $items = $this->startOnboarding($user, $profile)->assertCreated()->json('data.stocks');
         $selected = collect($items)->firstWhere('symbol', 'ONBOARD1');
         $this->putJson('/api/kite/holdings-onboarding/stocks/'.$selected['id'], ['entries' => [['type' => 'buy', 'quantity' => 2, 'price' => 50, 'date' => '2026-11-21', 'date_placeholder' => false, 'provenance' => 'manual']]])->assertOk();
         $this->postJson('/api/kite/holdings-onboarding/stocks/'.$selected['id'].'/verify')->assertOk();
@@ -214,7 +305,7 @@ class KiteHoldingsOnboardingTest extends TestCase
         $stock = Stock::query()->create(['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'name' => 'Onboard', 'is_active' => true, 'is_benchmark' => false]);
         app(FakeBrokerGateway::class)->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'quantity' => 5, 'average_price' => 100]], 'positions' => [], 'current_cash' => 0];
         $this->actingAs($user)->withProfileHeader($user, $profile);
-        $item = $this->postJson('/api/kite/holdings-onboarding')->assertCreated()->json('data.stocks.0');
+        $item = $this->startOnboarding($user, $profile)->assertCreated()->json('data.stocks.0');
         $this->putJson('/api/kite/holdings-onboarding/stocks/'.$item['id'], ['entries' => [['type' => 'buy', 'quantity' => 5, 'price' => 100, 'date' => '2026-11-21', 'date_placeholder' => false, 'provenance' => 'manual']]])->assertOk();
         $this->postJson('/api/kite/holdings-onboarding/stocks/'.$item['id'].'/verify')->assertOk();
         DB::table('portfolio_transactions')->insert(['profile_id' => $profile->id, 'stock_id' => $stock->id, 'execution_exchange' => 'NSE', 'type' => 'buy', 'quantity' => 1, 'price' => 100, 'fees' => 0, 'transaction_date' => '2026-01-01', 'source' => 'manual', 'notes' => 'Existing StoX trade', 'created_at' => now(), 'updated_at' => now()]);
@@ -232,7 +323,7 @@ class KiteHoldingsOnboardingTest extends TestCase
         Stock::query()->create(['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'name' => 'Onboard', 'is_active' => true, 'is_benchmark' => false]);
         app(FakeBrokerGateway::class)->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [['symbol' => 'ONBOARD', 'exchange' => 'NSE', 'quantity' => 5, 'average_price' => 100]], 'positions' => [], 'current_cash' => 0];
         $this->actingAs($user)->withProfileHeader($user, $profile);
-        $item = $this->postJson('/api/kite/holdings-onboarding')->assertCreated()->json('data.stocks.0');
+        $item = $this->startOnboarding($user, $profile)->assertCreated()->json('data.stocks.0');
 
         $this->withProfileHeader($user, $other)->getJson('/api/kite/holdings-onboarding')->assertOk()->assertJsonPath('data', null);
         $this->putJson('/api/kite/holdings-onboarding/stocks/'.$item['id'], ['entries' => [['type' => 'buy', 'quantity' => 5, 'price' => 100, 'date' => '2026-11-21']]])->assertNotFound();
@@ -246,7 +337,7 @@ class KiteHoldingsOnboardingTest extends TestCase
         $gateway = app(FakeBrokerGateway::class);
         $gateway->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [['symbol' => 'ONBOARD1', 'exchange' => 'NSE', 'quantity' => 2, 'average_price' => 50]], 'positions' => [], 'current_cash' => 0];
         $this->actingAs($user)->withProfileHeader($user, $profile);
-        $items = $this->postJson('/api/kite/holdings-onboarding')->assertCreated()->json('data.stocks');
+        $items = $this->startOnboarding($user, $profile)->assertCreated()->json('data.stocks');
         $this->assertCount(1, $items);
         foreach ($items as $item) {
             $this->putJson('/api/kite/holdings-onboarding/stocks/'.$item['id'], ['entries' => [['type' => 'buy', 'quantity' => $item['kite_quantity'], 'price' => $item['kite_average_price'], 'date' => '2026-11-21', 'date_placeholder' => false, 'provenance' => 'manual']]])->assertOk();
@@ -266,6 +357,27 @@ class KiteHoldingsOnboardingTest extends TestCase
         $this->assertSame(1, $calls);
         $this->assertDatabaseCount('portfolio_transactions', 0);
         $this->assertSame(1, DB::table('kite_onboarding_stocks')->where('status', 'verified')->count());
+    }
+
+    private function startOnboarding(User $user, $profile): \Illuminate\Testing\TestResponse
+    {
+        $connection = BrokerConnection::query()->updateOrCreate(
+            ['user_id' => $user->id, 'provider' => BrokerConnection::PROVIDER_KITE],
+            ['broker_user_id' => 'KITE-ACCOUNT-1'],
+        );
+        $connection->forceFill(['access_token' => 'test-token'])->save();
+
+        return $this->actingAs($user)->withProfileHeader($user, $profile)->postJson('/api/kite/holdings-onboarding');
+    }
+
+    private function sortEntryFields(array $entries): array
+    {
+        foreach ($entries as &$entry) {
+            ksort($entry);
+        }
+        unset($entry);
+
+        return $entries;
     }
 
     private function xlsx(array $header, array $values, bool $formula = false): UploadedFile
