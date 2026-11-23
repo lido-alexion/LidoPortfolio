@@ -130,6 +130,8 @@ final class KiteSettlementDiagnosticReportTest extends TestCase
         self::assertNull($report['holdings_diagnostic']);
         self::assertContains('true_profile_holdings_source_missing', $report['diagnostics']);
         self::assertContains('legacy_or_unbound_cnc_imports_not_account_evidence', $report['diagnostics']);
+        self::assertSame(0, $report['evidence']['cnc_imports']['count']);
+        self::assertSame(1, $report['evidence']['cnc_imports']['legacy_unbound_count']);
         self::assertStringNotContainsString('DO_NOT_RETURN', json_encode($report));
         self::assertSame('diagnostic_only_review_required', $report['status']);
     }

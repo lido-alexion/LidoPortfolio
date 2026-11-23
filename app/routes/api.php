@@ -33,6 +33,7 @@ use App\Http\Controllers\Api\DeveloperOptionsController;
 use App\Http\Controllers\Api\HelpFeedbackController;
 use App\Http\Controllers\Api\HistoricalHoldingsController;
 use App\Http\Controllers\Api\KiteHoldingsOnboardingController;
+use App\Http\Controllers\Api\KiteSettlementReadinessController;
 use App\Http\Controllers\Api\HoldingController;
 use App\Http\Controllers\Api\IndexController;
 use App\Http\Controllers\Api\InviteAcceptController;
@@ -240,6 +241,9 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/portfolios/{portfolio}/simulation/resume', [PaperSimulationController::class, 'resume']);
     Route::get('/reconciliation', [PortfolioReconciliationController::class, 'index']);
     Route::get('/kite/holdings-onboarding', [KiteHoldingsOnboardingController::class, 'show']);
+    Route::get('/kite/settlement-readiness', [KiteSettlementReadinessController::class, 'show'])
+        ->middleware('token.scope:portfolio:read')
+        ->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class);
     Route::post('/kite/holdings-onboarding', [KiteHoldingsOnboardingController::class, 'start']);
     Route::post('/kite/holdings-onboarding/tradebook', [KiteHoldingsOnboardingController::class, 'importTradebook']);
     Route::put('/kite/holdings-onboarding/stocks/{item}', [KiteHoldingsOnboardingController::class, 'update'])->whereNumber('item');
