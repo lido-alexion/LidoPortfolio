@@ -5,6 +5,7 @@ namespace App\Services\Reconciliation;
 use App\Models\PortfolioProfile;
 use App\Models\PortfolioReconciliationRun;
 use App\Models\KiteCncTradeImport;
+use App\Models\BrokerConnection;
 use App\Models\Stock;
 use App\Models\Transaction;
 use App\Services\Broker\BrokerGateway;
@@ -105,11 +106,15 @@ final class PortfolioReconciliationService
             $row['quantity'] = round((float) ($row['quantity'] ?? 0) + (float) ($row['t1_quantity'] ?? 0) - (float) ($row['used_quantity'] ?? 0), 4);
         }
         unset($row);
+        $accountId = trim((string) (BrokerConnection::query()->where('user_id', $profile->user_id)
+            ->where('provider', BrokerConnection::PROVIDER_KITE)->value('broker_user_id') ?? ''));
+        if ($accountId === '') return ['holdings' => $holdings, 'adjustments' => []];
         $today = $asOfDate;
         // Use the settlement calendar below as the expiry boundary. A fixed
         // calendar-day lookback can drop still-pending executions over long
         // exchange closures.
         $imports = KiteCncTradeImport::query()->where('profile_id', $profile->id)
+            ->where('broker_account_id', $accountId)
             ->whereIn('status', ['imported', 'matched_manual', 'matched_existing'])->whereNotNull('executed_at')
             ->whereDate('executed_at', '<=', $asOfDate)->get();
         $brokerRows = $this->groupHoldings($holdings);

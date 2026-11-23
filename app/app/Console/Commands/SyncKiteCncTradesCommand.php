@@ -33,7 +33,9 @@ class SyncKiteCncTradesCommand extends Command
             $connection = BrokerConnection::query()->where('user_id', $profile->user_id)
                 ->where('provider', BrokerConnection::PROVIDER_KITE)->first();
             if (! $connection?->isUsable()) continue;
+            $brokerAccountId = trim((string) ($connection->broker_user_id ?? ''));
             $alreadyCompleted = \App\Models\KiteCncTradeSyncRun::query()->where('profile_id', $profile->id)
+                ->where('broker_account_id', $brokerAccountId)
                 ->whereDate('trading_date', $now->toDateString())
                 ->whereIn('status', ['completed', 'needs_review'])->exists();
             if ($alreadyCompleted) continue;
