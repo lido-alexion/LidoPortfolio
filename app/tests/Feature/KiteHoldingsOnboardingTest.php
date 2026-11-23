@@ -361,10 +361,11 @@ class KiteHoldingsOnboardingTest extends TestCase
 
     private function startOnboarding(User $user, $profile): \Illuminate\Testing\TestResponse
     {
-        BrokerConnection::query()->updateOrCreate(
+        $connection = BrokerConnection::query()->updateOrCreate(
             ['user_id' => $user->id, 'provider' => BrokerConnection::PROVIDER_KITE],
-            ['broker_user_id' => 'KITE-ACCOUNT-1', 'access_token' => 'test-token'],
+            ['broker_user_id' => 'KITE-ACCOUNT-1'],
         );
+        $connection->forceFill(['access_token' => 'test-token'])->save();
 
         return $this->actingAs($user)->withProfileHeader($user, $profile)->postJson('/api/kite/holdings-onboarding');
     }
