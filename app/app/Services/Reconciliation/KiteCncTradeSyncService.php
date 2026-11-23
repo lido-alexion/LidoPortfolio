@@ -159,7 +159,7 @@ final class KiteCncTradeSyncService
                             ->where('evidence_key', $key)->lockForUpdate()->first();
                     }
                     if ($existingEvidence && $existingEvidence->evidence_kind === 'malformed_candidate'
-                        && $existingEvidence->broker_evidence !== $safe
+                        && $this->canonicalizeEvidence((array) $existingEvidence->broker_evidence) !== $this->canonicalizeEvidence($safe)
                         && in_array($existingEvidence->status, ['unresolved_candidate', 'acknowledged_unresolved'], true)) {
                         $existingEvidence->forceFill(['broker_evidence' => $safe,
                             'symbol' => mb_substr((string) ($safe['tradingsymbol'] ?? 'UNKNOWN'), 0, 64),
@@ -379,6 +379,22 @@ final class KiteCncTradeSyncService
             // Invalid source timestamps are omitted from safe persisted evidence.
         }
         return $safe;
+    }
+
+    /**
+     * MySQL normalizes JSON object key order when storing a document, while
+     * provider evidence is assembled in a stable application order. Compare
+     * object content independent of that serialization detail, preserving
+     * list order because candidate variants are meaningful evidence.
+     */
+    private function canonicalizeEvidence(array $evidence): array
+    {
+        $canonical = [];
+        foreach ($evidence as $key => $value) {
+            $canonical[$key] = is_array($value) ? $this->canonicalizeEvidence($value) : $value;
+        }
+        if (! array_is_list($canonical)) ksort($canonical, SORT_STRING);
+        return $canonical;
     }
 
     private function assertCurrentBrokerAccount(PortfolioProfile $profile, string $brokerAccountId): void

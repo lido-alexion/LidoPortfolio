@@ -244,8 +244,15 @@ class KiteCncTradeSyncTest extends TestCase
             ->postJson("/api/reconciliation/trades/review/{$item->id}/resolve", $payload)->assertOk()
             ->assertJsonPath('data.status', 'acknowledged_unresolved');
 
+        // A MySQL JSON column can return object keys in a different order
+        // from the provider field order used to build the replayed evidence.
+        // This content-preserving reorder must not reopen the acknowledgement.
+        $persistedEvidence = $item->fresh()->broker_evidence;
+        ksort($persistedEvidence, SORT_STRING);
+        $item->forceFill(['broker_evidence' => $persistedEvidence])->save();
         app(KiteCncTradeSyncService::class)->sync($profile);
         $this->assertDatabaseHas('kite_cnc_trade_imports', ['id' => $item->id, 'status' => 'acknowledged_unresolved']);
+        $this->assertDatabaseHas('kite_cnc_trade_imports', ['id' => $item->id, 'transaction_id' => null, 'matched_transaction_id' => null]);
         $this->actingAs($user)->withHeader('X-Profile-Id', (string) $profile->id)
             ->postJson("/api/reconciliation/trades/review/{$item->id}/resolve", $payload)->assertOk()
             ->assertJsonPath('data.status', 'acknowledged_unresolved');
