@@ -234,6 +234,24 @@ final class KiteSettlementHoldingsEvidenceTest extends TestCase
         self::assertStringNotContainsString('isin-collision', json_encode($result['unresolved'], JSON_THROW_ON_ERROR));
     }
 
+    public function test_matching_isin_allows_holdings_venue_variation_between_nse_and_bse(): void
+    {
+        // Demat holdings are exchange-agnostic; Kite can display NSE or BSE
+        // independently of the purchase exchange (Zerodha's holdings guidance).
+        // This does not relax execution-level venue matching for CNC fills.
+        $snapshot = ['holdings' => [['symbol' => 'AAA', 'exchange' => 'BSE', 'isin' => 'ABCD12345678', 'quantity' => 5]],
+            'holdings_complete' => true, 'positions' => ['complete' => true, 'net' => [], 'day' => []],
+            'account_id' => 10, 'captured_at' => '2026-11-23 12:00:00'];
+
+        $result = $this->service->compare(10, '2026-11-23', [
+            ['symbol' => 'AAA', 'exchange' => 'NSE', 'isin' => 'ABCD12345678', 'quantity' => 5],
+        ], $snapshot, [], true);
+
+        self::assertSame('evidence_consistent', $result['status']);
+        self::assertSame([], $result['unresolved']);
+        self::assertSame('isin:ABCD12345678', $result['holdings'][0]['identity']);
+    }
+
     public function test_expired_conflicts_remain_global_for_trade_only_identity_and_are_profile_scoped(): void
     {
         $first = $this->trade(10, 'shared-id', 'AAA', 'buy', 1, '2026-11-20', '2026-11-21');
