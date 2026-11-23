@@ -221,7 +221,7 @@ class KiteHoldingsOnboardingTest extends TestCase
         $this->assertSame($this->sortEntryFields($manual), $this->sortEntryFields($this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.entries')));
         $this->assertSame('KITE-ACCOUNT-1', $this->getJson('/api/kite/holdings-onboarding')->json('data.broker_account_id'));
         $this->assertSame('needs_review', $this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.status'));
-        $this->assertSame('legacy_account_bound_reverification_required', $this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.audit.1.event'));
+        $this->assertSame(['edited', 'verified', 'legacy_account_bound_reverification_required'], array_column($this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.audit'), 'event'));
         $this->postJson('/api/kite/holdings-onboarding/commit', ['stock_ids' => [$item['id']]])->assertStatus(409);
         $this->postJson('/api/kite/holdings-onboarding/stocks/'.$item['id'].'/verify')->assertOk();
         $this->postJson('/api/kite/holdings-onboarding/commit', ['stock_ids' => [$item['id']]])->assertOk();
