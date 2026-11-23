@@ -218,7 +218,7 @@ class KiteHoldingsOnboardingTest extends TestCase
 
         $this->actingAs($user)->withProfileHeader($user, $profile)->postJson('/api/kite/holdings-onboarding')->assertStatus(409);
         $this->postJson('/api/kite/holdings-onboarding', ['confirm_legacy_draft' => true])->assertCreated();
-        $this->assertSame($manual, $this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.entries'));
+        $this->assertSame($this->sortEntryFields($manual), $this->sortEntryFields($this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.entries')));
         $this->assertSame('KITE-ACCOUNT-1', $this->getJson('/api/kite/holdings-onboarding')->json('data.broker_account_id'));
         $this->assertSame('needs_review', $this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.status'));
         $this->assertSame('legacy_account_bound_reverification_required', $this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.audit.1.event'));
@@ -238,7 +238,7 @@ class KiteHoldingsOnboardingTest extends TestCase
         $this->putJson('/api/kite/holdings-onboarding/stocks/'.$item['id'], ['entries' => $entries])->assertOk();
         $this->postJson('/api/kite/holdings-onboarding/stocks/'.$item['id'].'/verify')->assertOk();
         $this->startOnboarding($user, $profile)->assertCreated();
-        $this->assertSame($entries, $this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.entries'));
+        $this->assertSame($this->sortEntryFields($entries), $this->sortEntryFields($this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.entries')));
         $this->assertSame('verified', $this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.status'));
     }
 
@@ -270,7 +270,7 @@ class KiteHoldingsOnboardingTest extends TestCase
         $this->putJson('/api/kite/holdings-onboarding/stocks/'.$item['id'], ['entries' => $entries])->assertOk();
         BrokerConnection::query()->where('user_id', $user->id)->where('provider', BrokerConnection::PROVIDER_KITE)->update(['broker_user_id' => 'KITE-ACCOUNT-2']);
         $this->actingAs($user)->withProfileHeader($user, $profile)->postJson('/api/kite/holdings-onboarding')->assertStatus(409);
-        $this->assertSame($entries, $this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.entries'));
+        $this->assertSame($this->sortEntryFields($entries), $this->sortEntryFields($this->getJson('/api/kite/holdings-onboarding')->json('data.stocks.0.entries')));
         $this->assertSame('KITE-ACCOUNT-1', $this->getJson('/api/kite/holdings-onboarding')->json('data.broker_account_id'));
     }
 
@@ -368,6 +368,16 @@ class KiteHoldingsOnboardingTest extends TestCase
         $connection->forceFill(['access_token' => 'test-token'])->save();
 
         return $this->actingAs($user)->withProfileHeader($user, $profile)->postJson('/api/kite/holdings-onboarding');
+    }
+
+    private function sortEntryFields(array $entries): array
+    {
+        foreach ($entries as &$entry) {
+            ksort($entry);
+        }
+        unset($entry);
+
+        return $entries;
     }
 
     private function xlsx(array $header, array $values, bool $formula = false): UploadedFile
