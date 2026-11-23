@@ -47,6 +47,7 @@ class CashLedgerEntry extends Model
 
     protected $fillable = [
         'profile_id',
+        'broker_account_id',
         'entry_type',
         'entry_classification',
         'amount',
@@ -64,6 +65,7 @@ class CashLedgerEntry extends Model
     {
         return [
             'profile_id' => 'integer',
+            'broker_account_id' => 'string',
             'amount' => 'decimal:4',
             'balance_after' => 'decimal:4',
             'entry_date' => 'date',

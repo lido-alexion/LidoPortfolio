@@ -145,6 +145,51 @@ for (const viewport of VIEWPORTS) {
             expect(balance).toBe(11500); expect(entries).toHaveLength(3); expect(evidence.writes).toHaveLength(6); expect(evidence.blocked).toEqual([]);
         });
 
+        test(`cash provenance is explicit per movement and omitted for unattributed transfers (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'E2E-22');
+            const evidence = await prepare(page, viewport, (method, path) => path === '/api/logs/frontend' || (method === 'POST' && path === '/api/cash/deposit'));
+            const payloads = [];
+            let balance = 10000;
+            let entries = [];
+            await page.route(/\/api\/cash(?:\?.*)?$/, route => route.fulfill({ json: { data: {
+                cash_balance: balance, reserved_cash: 0, available_physical_cash: balance,
+                available_investable_cash: balance, strategies: [], reservations: [],
+            } } }));
+            await page.route('**/api/cash/statement*', route => route.fulfill({ json: { data: { entries, opening_balance: 0, closing_balance: balance } } }));
+            await page.route('**/api/cash/kite-funds', route => route.fulfill({ json: { data: {
+                automatic_adjustments_enabled: false, payout_semantics_verified: false, snapshots: [], reconciliations: [],
+                broker_accounts: [{ id: 'KITE-A', label: 'Kite account KITE-A' }, { id: 'KITE-B', label: 'Kite account KITE-B' }],
+            } } }));
+            for (const resource of ['recalls', 'bridge-loans', 'pending-sale-proceeds']) await page.route(`**/api/v1/capital/${resource}*`, route => route.fulfill({ json: { data: [] } }));
+            await page.route('**/api/cash/deposit', route => {
+                const payload = route.request().postDataJSON();
+                expect(route.request().headers()['x-profile-id']).toBe(String(TEST_PORTFOLIO.id));
+                payloads.push(payload);
+                balance += Number(payload.amount);
+                entries.push({ id: entries.length + 1, entry_type: 'deposit', amount: Number(payload.amount), running_balance: balance, entry_date: payload.transaction_date, reason: payload.remarks });
+                return route.fulfill({ status: 201, json: { data: { entry: entries.at(-1) } } });
+            });
+            await evidence.seal(); await page.goto('/cash');
+            const form = page.locator('form').filter({ has: page.getByLabel('Amount', { exact: true }) });
+            const account = page.getByLabel('Kite broker account', { exact: true });
+            await expect(account).toHaveValue('');
+            await account.selectOption('KITE-A');
+            await page.getByLabel('Amount', { exact: true }).fill('100');
+            await page.getByLabel('Remarks', { exact: true }).fill('Tagged transfer');
+            await form.getByRole('button', { name: 'Deposit', exact: true }).click();
+            await expect.poll(() => payloads.length).toBe(1);
+            expect(payloads[0]).toEqual({ amount: '100', remarks: 'Tagged transfer', transaction_date: expect.any(String), broker_account_id: 'KITE-A' });
+            await expect(account).toHaveValue('');
+
+            await page.getByLabel('Amount', { exact: true }).fill('50');
+            await page.getByLabel('Remarks', { exact: true }).fill('Unattributed transfer');
+            await form.getByRole('button', { name: 'Deposit', exact: true }).click();
+            await expect.poll(() => payloads.length).toBe(2);
+            expect(payloads[1]).toEqual({ amount: '50', remarks: 'Unattributed transfer', transaction_date: expect.any(String) });
+            expect(evidence.writes).toHaveLength(2);
+            expect(evidence.blocked).toEqual([]);
+        });
+
         test(`cash withdrawal bounds restore the edited amount and preview partial decimals (${viewport.name})`, async ({ page }, testInfo) => {
             journeyId(testInfo, 'E2E-22');
             const evidence = await prepare(page, viewport, (method, path) => path === '/api/logs/frontend' || (method === 'PUT' && path === '/api/cash/ledger/2') || (method === 'POST' && path === '/api/cash/withdraw'));

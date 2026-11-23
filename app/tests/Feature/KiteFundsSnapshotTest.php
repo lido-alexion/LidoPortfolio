@@ -155,6 +155,179 @@ class KiteFundsSnapshotTest extends TestCase
         Date::setTestNow();
     }
 
+    public function test_explicitly_tagged_manual_flow_reconciles_only_to_same_broker_account(): void
+    {
+        [$user, $profile, $connection] = $this->connectedUser();
+        Date::setTestNow('2026-11-23 09:20:00 Asia/Kolkata');
+        config(['broker.kite_funds.auto_adjustments_enabled' => true, 'broker.kite_funds.payout_semantics_verified' => true]);
+        $entry = app(CashManagementService::class)->deposit($profile, '4000.0000', 'Transfer', $user, '2026-11-20');
+        $entry->forceFill(['broker_account_id' => $connection->broker_user_id])->save();
+        KiteFundsSnapshot::query()->create([
+            'profile_id' => $profile->id, 'user_id' => $user->id, 'broker_account_id' => $connection->broker_user_id,
+            'trading_date' => '2026-11-20', 'captured_at' => '2026-11-20 23:55:00',
+            'available_balance' => 100, 'opening_balance' => 100, 'intraday_payin' => 5000, 'utilised_payout' => 1000,
+            'payout_semantics_verified' => true, 'capture_source' => 'late_day', 'freshness' => 'complete',
+            'idempotency_key' => str_repeat('c', 64), 'provenance' => ['test' => true],
+        ]);
+        app(KiteFundsSnapshotService::class)->reconcilePreviousSession();
+        $row = KiteFundsReconciliation::query()->firstOrFail();
+        $this->assertSame('reconciled', $row->status);
+        $this->assertSame('4000.0000', $row->manual_net_flow);
+        $this->assertSame(1, \App\Models\CashLedgerEntry::query()->where('profile_id', $profile->id)->count());
+        Date::setTestNow();
+    }
+
+    public function test_other_account_tagged_flow_does_not_offset_this_accounts_snapshot(): void
+    {
+        [$user, $profile, $connection] = $this->connectedUser();
+        Date::setTestNow('2026-11-23 09:20:00 Asia/Kolkata');
+        config(['broker.kite_funds.auto_adjustments_enabled' => true, 'broker.kite_funds.payout_semantics_verified' => true]);
+        $manual = app(CashManagementService::class)->deposit($profile, '1000.0000', 'Other account transfer', $user, '2026-11-20');
+        $manual->forceFill(['broker_account_id' => 'CD5678'])->save();
+        KiteFundsSnapshot::query()->create([
+            'profile_id' => $profile->id, 'user_id' => $user->id, 'broker_account_id' => $connection->broker_user_id,
+            'trading_date' => '2026-11-20', 'captured_at' => '2026-11-20 23:55:00',
+            'available_balance' => 100, 'opening_balance' => 100, 'intraday_payin' => 500, 'utilised_payout' => 100,
+            'payout_semantics_verified' => true, 'capture_source' => 'late_day', 'freshness' => 'complete',
+            'idempotency_key' => str_repeat('8', 64), 'provenance' => ['test' => true],
+        ]);
+
+        app(KiteFundsSnapshotService::class)->reconcilePreviousSession();
+
+        $row = KiteFundsReconciliation::query()->where('broker_account_id', $connection->broker_user_id)->firstOrFail();
+        $this->assertSame('adjustment_applied', $row->status);
+        $adjustment = \App\Models\CashLedgerEntry::query()->where('entry_classification', 'kite_net_adjustment')->firstOrFail();
+        $this->assertSame('400.0000', $adjustment->amount);
+        $this->assertSame('1400.0000', \App\Models\CashAccount::query()->where('profile_id', $profile->id)->value('balance'));
+        Date::setTestNow();
+    }
+
+    public function test_manual_cash_provenance_rejects_another_users_broker_account(): void
+    {
+        [$user, $profile, $ownedConnection] = $this->connectedUser();
+        [, , $otherConnection] = $this->connectedUser();
+        $otherConnection->forceFill(['broker_user_id' => 'FOREIGN9'])->save();
+        $this->assertNotSame($user->id, $otherConnection->user_id);
+
+        $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->postJson('/api/cash/deposit', [
+                'amount' => '250.0000',
+                'broker_account_id' => $otherConnection->broker_user_id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('broker_account_id');
+
+        $this->assertDatabaseCount('portfolio_cash_ledger_entries', 0);
+        $this->assertNull(\App\Models\CashAccount::query()->where('profile_id', $profile->id)->value('balance'));
+
+        $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->postJson('/api/cash/adjust', [
+                'amount' => '25.0000',
+                'reason' => 'Non-transfer adjustment',
+                'broker_account_id' => $ownedConnection->broker_user_id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('broker_account_id');
+
+        $entryId = $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->postJson('/api/cash/deposit', [
+                'amount' => '250.0000',
+                'broker_account_id' => $ownedConnection->broker_user_id,
+            ])
+            ->assertCreated()
+            ->json('data.entry.id');
+        $this->assertDatabaseHas('portfolio_cash_ledger_entries', [
+            'profile_id' => $profile->id,
+            'entry_type' => 'deposit',
+            'broker_account_id' => $ownedConnection->broker_user_id,
+        ]);
+
+        $ownedConnection->delete();
+        $replacementId = $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->putJson('/api/cash/ledger/'.$entryId, [
+                'amount' => '200.0000',
+                'broker_account_id' => $ownedConnection->broker_user_id,
+            ])
+            ->assertCreated()
+            ->json('data.id');
+        $this->assertDatabaseHas('portfolio_cash_ledger_entries', [
+            'id' => $replacementId,
+            'entry_type' => 'deposit',
+            'amount' => '200.0000',
+            'broker_account_id' => $ownedConnection->broker_user_id,
+        ]);
+    }
+
+    public function test_cash_edit_preserves_omitted_provenance_and_explicitly_clears_it(): void
+    {
+        [$user, $profile, $connection] = $this->connectedUser();
+        $entry = app(CashManagementService::class)->deposit($profile, '250.0000', 'Tagged transfer', $user, '2026-11-20');
+        $entry->forceFill(['broker_account_id' => $connection->broker_user_id])->save();
+
+        $preservedId = $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->putJson('/api/cash/ledger/'.$entry->id, [
+                'amount' => '300.0000',
+                'remarks' => 'Corrected amount',
+            ])
+            ->assertCreated()
+            ->json('data.id');
+        $this->assertDatabaseHas('portfolio_cash_ledger_entries', [
+            'id' => $preservedId,
+            'broker_account_id' => $connection->broker_user_id,
+            'amount' => '300.0000',
+        ]);
+
+        $clearedId = $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->putJson('/api/cash/ledger/'.$preservedId, [
+                'amount' => '325.0000',
+                'remarks' => 'Corrected unattributed flow',
+                'broker_account_id' => null,
+            ])
+            ->assertCreated()
+            ->json('data.id');
+        $this->assertDatabaseHas('portfolio_cash_ledger_entries', [
+            'id' => $clearedId,
+            'broker_account_id' => null,
+            'amount' => '325.0000',
+        ]);
+
+        $untaggedId = $this->actingAs($user)->withProfileHeader($user, $profile)
+            ->postJson('/api/cash/deposit', ['amount' => '10.0000', 'remarks' => 'Legacy-compatible untagged'])
+            ->assertCreated()
+            ->json('data.entry.id');
+        $this->assertDatabaseHas('portfolio_cash_ledger_entries', [
+            'id' => $untaggedId,
+            'broker_account_id' => null,
+            'amount' => '10.0000',
+        ]);
+    }
+
+    public function test_untagged_legacy_activity_blocks_a_tagged_match_from_being_claimed(): void
+    {
+        [$user, $profile, $connection] = $this->connectedUser();
+        Date::setTestNow('2026-11-23 09:20:00 Asia/Kolkata');
+        config(['broker.kite_funds.auto_adjustments_enabled' => true, 'broker.kite_funds.payout_semantics_verified' => true]);
+        $snapshot = KiteFundsSnapshot::query()->create([
+            'profile_id' => $profile->id, 'user_id' => $user->id, 'broker_account_id' => $connection->broker_user_id,
+            'trading_date' => '2026-11-20', 'captured_at' => '2026-11-20 23:55:00',
+            'available_balance' => 100, 'opening_balance' => 100, 'intraday_payin' => 500, 'utilised_payout' => 100,
+            'payout_semantics_verified' => true, 'capture_source' => 'late_day', 'freshness' => 'complete',
+            'idempotency_key' => str_repeat('a', 64), 'provenance' => ['test' => true],
+        ]);
+        app(CashManagementService::class)->deposit($profile, '400.0000', 'Legacy movement', $user, '2026-11-20');
+        $tagged = app(CashManagementService::class)->deposit($profile, '400.0000', 'Explicit movement', $user, '2026-11-20');
+        $tagged->forceFill(['broker_account_id' => $connection->broker_user_id])->save();
+
+        app(KiteFundsSnapshotService::class)->reconcilePreviousSession();
+
+        $row = KiteFundsReconciliation::query()->firstOrFail();
+        $this->assertSame('manual_activity_unattributed', $row->status);
+        $this->assertNull($row->cash_ledger_entry_id);
+        $this->assertSame($snapshot->id, $row->snapshot_id);
+        $this->assertSame(2, \App\Models\CashLedgerEntry::query()->where('profile_id', $profile->id)->count());
+        Date::setTestNow();
+    }
+
     public function test_legacy_proposal_confirmation_posts_once_and_repeat_cannot_post_again(): void
     {
         [$user, $profile] = $this->connectedUser();
