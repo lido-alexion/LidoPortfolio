@@ -16,6 +16,8 @@ Base URL: `/api`
 
 **Artifact Library Bundle recovery:** `GET /api/v1/artifact-library/bundle-deployments/{uuid}` reads the exact deployment for the authenticated requester and active Portfolio. It returns only UUID, status, allowlisted failure code, and member artifact UUID/version/action/resulting revision ID. It does not apply or replay a plan. The deploy lookup also requires this same active Portfolio; a UUID belonging to another Portfolio is refused before any plan or member mutation. `POST .../{uuid}/deploy` remains an explicit mutation and completed plans are not idempotently replayed.
 
+**Kite CNC trade review:** `GET /reconciliation/trades/review` lists unresolved review rows for the active Portfolio and currently connected Kite account (`status`, `trading_date`, `per_page` filters); `GET /reconciliation/trades/review/{item}` returns bounded evidence and exact existing-transaction candidates. `POST /reconciliation/trades/review/{item}/resolve` accepts `action=acknowledge_unresolved` or `match_existing`, plus `idempotency_key` and the displayed `evidence_key`; `match_existing` also requires `transaction_id`. Review resolutions are account-bound and manual matching requires the same stock, venue, side, date, quantity, and price. Acknowledgment preserves unresolved status; neither action writes a broker order or creates a transaction. These routes require authenticated session access and portfolio read/write token scopes respectively.
+
 ## Auth (session cookies — no Bearer token)
 
 Uses Laravel Sanctum SPA mode. Browser must send cookies (`credentials: include`). Call `GET /sanctum/csrf-cookie` before login.

@@ -247,6 +247,9 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/kite/holdings-onboarding/commit', [KiteHoldingsOnboardingController::class, 'commit']);
     Route::post('/reconciliation', [PortfolioReconciliationController::class, 'store']);
     Route::post('/reconciliation/trades/sync', [PortfolioReconciliationController::class, 'syncTrades']);
+    Route::get('/reconciliation/trades/review', [PortfolioReconciliationController::class, 'reviewItems'])->middleware('token.scope:portfolio:read');
+    Route::get('/reconciliation/trades/review/{item}', [PortfolioReconciliationController::class, 'reviewItem'])->whereNumber('item')->middleware('token.scope:portfolio:read');
+    Route::post('/reconciliation/trades/review/{item}/resolve', [PortfolioReconciliationController::class, 'resolveReviewItem'])->whereNumber('item')->middleware('token.scope:portfolio:write');
     Route::get('/reconciliation/{run}', [PortfolioReconciliationController::class, 'show'])->whereNumber('run');
     Route::get('/replays', [PortfolioReplayController::class, 'index']);
     Route::post('/replays/readiness', [PortfolioReplayController::class, 'readiness']);

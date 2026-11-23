@@ -80,6 +80,45 @@ describe('Portfolio reconciliation card', () => {
         expect(screen.getByText(/GOLD/)).toBeInTheDocument();
     });
 
+    it('links only a selected existing transaction from sanitized row review evidence', async () => {
+        const review = { id: 88, symbol: 'AAA', exchange: 'NSE', side: 'buy', quantity: '2.0000', price: '100.0000',
+            status: 'manual_match_review', evidence_kind: 'execution', broker_trade_id: '99888', review_version: 'a'.repeat(64), evidence: { trade_id: '99888' } };
+        apiMock.get.mockImplementation((url) => Promise.resolve(url === '/v1/broker/status'
+            ? { data: { data: brokerStatus } }
+            : url === '/reconciliation/trades/review'
+                ? { data: { data: { data: [review] } } }
+                : url === '/reconciliation/trades/review/88'
+                    ? { data: { data: { ...review, exact_match_candidates: [{ id: 501, type: 'buy', quantity: '2.0000', price: '100.0000', transaction_date: '2026-11-20', source: 'manual' }] } } }
+                    : snapshot));
+        apiMock.post.mockResolvedValue({ data: { data: { status: 'matched_manual' } } });
+
+        renderWithKiteConnection(<PortfolioReconciliationCard executionMode="automatic" />);
+        await screen.findByText('Trade 99888');
+        fireEvent.click(screen.getAllByRole('button', { name: 'Evidence' })[0]);
+        expect(await screen.findByText(/Broker evidence is sanitized/)).toBeInTheDocument();
+        fireEvent.change(screen.getByRole('combobox', { name: 'Exact existing transaction' }), { target: { value: '501' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Link existing' }));
+
+        await waitFor(() => expect(apiMock.post).toHaveBeenCalledWith('/reconciliation/trades/review/88/resolve', expect.objectContaining({
+            action: 'match_existing', transaction_id: 501, evidence_key: 'a'.repeat(64),
+        }), { skipErrorToast: true }));
+    });
+
+    it('records an acknowledgment while keeping malformed evidence unresolved', async () => {
+        const review = { id: 89, symbol: 'UNKNOWN', exchange: 'UNKNOWN', side: 'unknown', quantity: '0.0000', price: '0.0000',
+            status: 'unresolved_candidate', evidence_kind: 'malformed_candidate', review_version: 'b'.repeat(64) };
+        apiMock.get.mockImplementation((url) => Promise.resolve(url === '/v1/broker/status'
+            ? { data: { data: brokerStatus } }
+            : url === '/reconciliation/trades/review' ? { data: { data: { data: [review] } } } : snapshot));
+        apiMock.post.mockResolvedValue({ data: { data: { status: 'acknowledged_unresolved' } } });
+
+        renderWithKiteConnection(<PortfolioReconciliationCard executionMode="automatic" />);
+        fireEvent.click(await screen.findByRole('button', { name: 'Record review, keep unresolved' }));
+        await waitFor(() => expect(apiMock.post).toHaveBeenCalledWith('/reconciliation/trades/review/89/resolve', expect.objectContaining({
+            action: 'acknowledge_unresolved', evidence_key: 'b'.repeat(64),
+        }), { skipErrorToast: true }));
+    });
+
     it('shows per-portfolio daily trade sync counts and exceptions', async () => {
         renderWithKiteConnection(<PortfolioReconciliationCard executionMode="automatic" />);
         expect(await screen.findByRole('heading', { name: 'Kite CNC trade sync activity' })).toBeInTheDocument();
