@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Stock;
 use App\Models\Transaction;
+use App\Models\BrokerConnection;
 use App\Services\Broker\BrokerGateway;
 use App\Services\KiteConsoleTradebookParser;
 use App\Services\StockResolverService;
@@ -26,18 +27,68 @@ class KiteHoldingsOnboardingController extends Controller
         return response()->json(['data' => $draft ? $this->payload($draft->id) : null]);
     }
 
-    public function start(): JsonResponse
+    public function start(Request $request): JsonResponse
     {
+        $request->validate(['confirm_legacy_draft' => 'sometimes|accepted']);
         $profile = \activePortfolio();
+        $connection = BrokerConnection::query()->where('user_id', $profile->user_id)->where('provider', BrokerConnection::PROVIDER_KITE)->first();
+        $accountId = trim((string) ($connection?->broker_user_id ?? ''));
+        if (! $connection?->isUsable() || $accountId === '') {
+            return response()->json(['message' => 'Kite account identity is unavailable. Reconnect Kite and retry.'], 409);
+        }
+        $existingDraft = DB::table('kite_onboarding_drafts')->where('profile_id', $profile->id)->first();
+        $existingAccountId = trim((string) data_get(json_decode($existingDraft->kite_snapshot ?? '', true), 'broker_account_id', ''));
+        if ($existingDraft && $existingAccountId !== '' && ! hash_equals($existingAccountId, $accountId)) {
+            return response()->json(['message' => 'This staging draft belongs to a different Kite account. Its entries were preserved; reconnect that account to resume.'], 409);
+        }
+        if ($existingDraft && $existingAccountId === '' && ! $request->boolean('confirm_legacy_draft')) {
+            return response()->json(['message' => 'This older draft has no saved Kite account identity. Review it, then explicitly confirm that it belongs to the currently connected Kite account to resume.'], 409);
+        }
+        if ($existingDraft && $existingAccountId === '' && DB::table('kite_onboarding_stocks')->where('draft_id', $existingDraft->id)->where('status', 'committed')->exists()) {
+            return response()->json(['message' => 'This older draft contains committed history but has no saved Kite account identity. It cannot be safely bound to an account; existing history was preserved.'], 409);
+        }
         $snapshot = $this->broker->portfolioSnapshot((int) auth()->id());
         if (! $snapshot) {
             return response()->json(['message' => 'Kite holdings could not be fetched. Reconnect Kite and retry.'], 422);
         }
+        $afterFetch = BrokerConnection::query()->where('user_id', $profile->user_id)->where('provider', BrokerConnection::PROVIDER_KITE)->first();
+        if (! $afterFetch?->isUsable() || $afterFetch->broker_user_id !== $connection->broker_user_id || $afterFetch->updated_at?->toISOString() !== $connection->updated_at?->toISOString()) {
+            return response()->json(['message' => 'Kite connection changed while holdings were fetched. Nothing was staged; retry with the current account.'], 409);
+        }
         $rows = collect($snapshot['holdings'] ?? [])->filter(fn ($r) => (float) ($r['quantity'] ?? 0) > 0)->values();
-        $draft = DB::transaction(function () use ($profile, $snapshot, $rows) {
-            $id = DB::table('kite_onboarding_drafts')->where('profile_id', $profile->id)->value('id');
+        $snapshot['broker_account_id'] = $accountId;
+        $confirmedLegacy = $request->boolean('confirm_legacy_draft');
+        $draft = DB::transaction(function () use ($profile, $snapshot, $rows, $existingDraft, $existingAccountId, $connection, $accountId, $confirmedLegacy) {
+            $lockedConnection = BrokerConnection::query()->where('user_id', $profile->user_id)->where('provider', BrokerConnection::PROVIDER_KITE)->lockForUpdate()->first();
+            if (! $lockedConnection?->isUsable() || trim((string) $lockedConnection->broker_user_id) !== $accountId || $lockedConnection->updated_at?->toISOString() !== $connection->updated_at?->toISOString()) {
+                abort(409, 'Kite connection changed while holdings were fetched. Nothing was staged; retry with the current account.');
+            }
+            $lockedDraft = DB::table('kite_onboarding_drafts')->where('profile_id', $profile->id)->lockForUpdate()->first();
+            $id = $lockedDraft?->id;
+            $lockedAccountId = trim((string) data_get(json_decode($lockedDraft->kite_snapshot ?? '', true), 'broker_account_id', ''));
+            if ($lockedDraft && $lockedAccountId !== '' && ! hash_equals($lockedAccountId, $accountId)) {
+                abort(409, 'This staging draft belongs to a different Kite account. Its entries were preserved; reconnect that account to resume.');
+            }
+            if ($lockedDraft && $lockedAccountId === '' && ! $confirmedLegacy) {
+                abort(409, 'This older draft has no saved Kite account identity. Explicit confirmation is required.');
+            }
+            if ($lockedDraft && $lockedAccountId === '' && DB::table('kite_onboarding_stocks')->where('draft_id', $id)->where('status', 'committed')->exists()) {
+                abort(409, 'This older draft contains committed history but has no saved Kite account identity. It cannot be safely bound to an account; existing history was preserved.');
+            }
             if (! $id) {
                 $id = DB::table('kite_onboarding_drafts')->insertGetId(['profile_id' => $profile->id, 'status' => 'draft', 'kite_snapshot' => json_encode($snapshot), 'snapshot_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+            } elseif ($lockedDraft && $lockedAccountId === '') {
+                // Bind only after explicit attestation. Existing entry evidence is preserved,
+                // but verification from an unknown account is revoked and audited.
+                DB::table('kite_onboarding_drafts')->where('id', $id)->update(['kite_snapshot' => json_encode($snapshot), 'snapshot_at' => now(), 'updated_at' => now()]);
+                $legacyRows = DB::table('kite_onboarding_stocks')->where('draft_id', $id)->where('status', '!=', 'committed')->lockForUpdate()->get();
+                foreach ($legacyRows as $legacyRow) {
+                    DB::table('kite_onboarding_stocks')->where('id', $legacyRow->id)->update([
+                        'status' => 'needs_review',
+                        'audit' => json_encode(array_merge(json_decode($legacyRow->audit ?: '[]', true), [['event' => 'legacy_account_bound_reverification_required', 'at' => now()->toISOString(), 'by' => auth()->id()]])),
+                        'updated_at' => now(),
+                    ]);
+                }
             }
             foreach ($rows as $row) {
                 $stock = $this->stocks->resolveFromAttributes(['symbol' => $row['symbol'] ?? '', 'exchange' => $row['exchange'] ?? 'NSE']);
@@ -163,12 +214,22 @@ class KiteHoldingsOnboardingController extends Controller
         $ids = $request->validate(['stock_ids' => 'required|array|min:1', 'stock_ids.*' => 'integer'])['stock_ids'];
         $profile = \activePortfolio();
         $draft = DB::table('kite_onboarding_drafts')->where('profile_id', $profile->id)->firstOrFail();
+        $capturedAccountId = trim((string) data_get(json_decode($draft->kite_snapshot, true), 'broker_account_id', ''));
+        $connectionBeforeFetch = BrokerConnection::query()->where('user_id', $profile->user_id)->where('provider', BrokerConnection::PROVIDER_KITE)->first();
+        if (! $connectionBeforeFetch?->isUsable() || $capturedAccountId === '' || ! hash_equals($capturedAccountId, trim((string) $connectionBeforeFetch->broker_user_id))) {
+            return response()->json(['message' => 'Kite account changed since staging. Fetch holdings again and review the draft before committing.'], 409);
+        }
         $fresh = $this->broker->portfolioSnapshot((int) auth()->id());
         if (! $fresh) {
             return response()->json(['message' => 'Fresh Kite recheck failed; nothing was committed.'], 409);
         }
 
-        return DB::transaction(function () use ($ids, $profile, $draft, $fresh) {
+        return DB::transaction(function () use ($ids, $profile, $draft, $fresh, $capturedAccountId, $connectionBeforeFetch) {
+            $connection = BrokerConnection::query()->where('user_id', $profile->user_id)->where('provider', BrokerConnection::PROVIDER_KITE)->lockForUpdate()->first();
+            $activeAccountId = trim((string) ($connection?->broker_user_id ?? ''));
+            if (! $connection?->isUsable() || $capturedAccountId === '' || $activeAccountId === '' || ! hash_equals($capturedAccountId, $activeAccountId) || $connection->updated_at?->toISOString() !== $connectionBeforeFetch->updated_at?->toISOString()) {
+                return response()->json(['message' => 'Kite account changed since staging. Fetch holdings again and review the draft before committing.'], 409);
+            }
             $rows = DB::table('kite_onboarding_stocks')->where('draft_id', $draft->id)->whereIn('id', $ids)->lockForUpdate()->get();
             if ($rows->count() !== count(array_unique($ids)) || $rows->contains(fn ($r) => $r->status !== 'verified')) {
                 return response()->json(['message' => 'Only verified staged stocks can be committed.'], 409);
@@ -206,7 +267,7 @@ class KiteHoldingsOnboardingController extends Controller
         $draft = DB::table('kite_onboarding_drafts')->find($draftId);
         $rows = DB::table('kite_onboarding_stocks')->where('draft_id', $draftId)->orderBy('symbol')->get()->map(fn ($r) => ['id' => $r->id, 'stock_id' => $r->stock_id, 'symbol' => $r->symbol, 'exchange' => $r->exchange, 'kite_quantity' => (float) $r->kite_quantity, 'kite_average_price' => (float) $r->kite_average_price, 'entries' => json_decode($r->entries, true), 'status' => $r->status, 'audit' => json_decode($r->audit ?: '[]', true)]);
 
-        return ['id' => $draft->id, 'snapshot_at' => $draft->snapshot_at, 'stocks' => $rows];
+        return ['id' => $draft->id, 'snapshot_at' => $draft->snapshot_at, 'broker_account_id' => data_get(json_decode($draft->kite_snapshot, true), 'broker_account_id'), 'stocks' => $rows];
     }
 
     private function entryIdentity(array $entry): string
