@@ -17,8 +17,10 @@ final class KiteSettlementDiagnosticReportTest extends TestCase
                 ['profile_id' => 7, 'snapshot_date' => '2026-11-22'],
             ],
             tradeImports: [
-                ['profile_id' => 7, 'executed_at' => '2026-11-23 10:00:00'],
+                ['profile_id' => 7, 'broker_account_id' => 'kite-a', 'executed_at' => '2026-11-23 10:00:00'],
                 ['profile_id' => 8, 'executed_at' => '2026-11-23 10:00:00'],
+                ['profile_id' => 7, 'executed_at' => '2026-11-23 10:00:00'],
+                ['profile_id' => 7, 'broker_account_id' => 'kite-b', 'executed_at' => '2026-11-23 10:00:00'],
             ],
             syncRuns: [['profile_id' => 7, 'trading_date' => '2026-11-23', 'status' => 'completed', 'review_count' => 0]],
             fundsSnapshots: [
@@ -29,7 +31,8 @@ final class KiteSettlementDiagnosticReportTest extends TestCase
 
         self::assertSame(1, $report['evidence']['portfolio_snapshots']['count']);
         self::assertSame(1, $report['evidence']['cnc_imports']['count']);
-        self::assertSame(0, $report['evidence']['cnc_imports']['foreign_account_rows_excluded']);
+        self::assertSame(1, $report['evidence']['cnc_imports']['legacy_unbound_count']);
+        self::assertSame(1, $report['evidence']['cnc_imports']['foreign_account_rows_excluded']);
         self::assertSame(1, $report['evidence']['funds_snapshots']['count']);
         self::assertSame(1, $report['evidence']['foreign_account_funds_excluded']);
         self::assertFalse($report['evidence']['independent_settlement_data_available']);
@@ -93,12 +96,16 @@ final class KiteSettlementDiagnosticReportTest extends TestCase
                 ['profile_id' => 7, 'snapshot_date' => '2026-11-23T00:00:00Z'],
             ],
             tradeImports: [
-                ['profile_id' => 7, 'executed_at' => '2026-11-22T20:00:00Z'],
+                ['profile_id' => 7, 'broker_account_id' => 'kite-a', 'executed_at' => '2026-11-22T20:00:00Z'],
                 ['profile_id' => 7, 'executed_at' => '2026-11-23 25:61:61'],
+                ['profile_id' => 7, 'broker_account_id' => 'kite-b', 'executed_at' => '2026-11-22T20:00:00Z'],
+                ['profile_id' => 7, 'executed_at' => '2026-11-22T20:00:00Z'],
             ]);
 
         self::assertSame(0, $report['evidence']['portfolio_snapshots']['count']);
         self::assertSame(1, $report['evidence']['cnc_imports']['count']);
+        self::assertSame(1, $report['evidence']['cnc_imports']['legacy_unbound_count']);
+        self::assertSame(1, $report['evidence']['cnc_imports']['foreign_account_rows_excluded']);
         self::assertContains('profile_level_evidence_contains_malformed_or_unverified_rows', $report['diagnostics']);
     }
 
@@ -130,6 +137,8 @@ final class KiteSettlementDiagnosticReportTest extends TestCase
         self::assertNull($report['holdings_diagnostic']);
         self::assertContains('true_profile_holdings_source_missing', $report['diagnostics']);
         self::assertContains('legacy_or_unbound_cnc_imports_not_account_evidence', $report['diagnostics']);
+        self::assertSame(0, $report['evidence']['cnc_imports']['count']);
+        self::assertSame(1, $report['evidence']['cnc_imports']['legacy_unbound_count']);
         self::assertStringNotContainsString('DO_NOT_RETURN', json_encode($report));
         self::assertSame('diagnostic_only_review_required', $report['status']);
     }

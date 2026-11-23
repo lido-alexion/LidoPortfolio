@@ -69,9 +69,12 @@ final class KiteSettlementDiagnosticReport
 
         $portfolio = $this->exactRows($portfolioSnapshots, $profileId, null, $tradingDay, 'snapshot_date');
         $profileTrades = $this->exactRows($tradeImports, $profileId, null, $tradingDay, 'executed_at');
-        $trades = array_values(array_filter($profileTrades, fn ($row) => ! array_key_exists('broker_account_id', $row)
-            || (is_string($row['broker_account_id']) && hash_equals($brokerAccountId, $row['broker_account_id']))));
-        $foreignTrades = count($profileTrades) - count($trades);
+        $trades = array_values(array_filter($profileTrades, fn ($row) => is_string($row['broker_account_id'] ?? null)
+            && hash_equals($brokerAccountId, $row['broker_account_id'])));
+        $legacyUnboundTrades = array_values(array_filter($profileTrades, static fn ($row) => ! array_key_exists('broker_account_id', $row)
+            || $row['broker_account_id'] === null || $row['broker_account_id'] === ''));
+        $foreignTrades = count(array_filter($profileTrades, fn ($row) => is_string($row['broker_account_id'] ?? null)
+            && ! hash_equals($brokerAccountId, $row['broker_account_id'])));
         $runs = $this->exactRows($syncRuns, $profileId, null, $tradingDay, 'trading_date');
         $funds = $this->exactRows($fundsSnapshots, $profileId, $brokerAccountId, $tradingDay, 'trading_date');
         $foreignFunds = array_values(array_filter($fundsSnapshots, fn ($row) => is_array($row)
@@ -102,7 +105,7 @@ final class KiteSettlementDiagnosticReport
             || $this->hasMalformedOrOutOfScope($syncRuns, $profileId, 'trading_date', $tradingDay)) {
             $diagnostics[] = 'profile_level_evidence_contains_malformed_or_unverified_rows';
         }
-        if (count(array_filter($trades, static fn ($row) => ! array_key_exists('broker_account_id', $row))) > 0) {
+        if ($legacyUnboundTrades !== []) {
             $diagnostics[] = 'legacy_or_unbound_cnc_imports_not_account_evidence';
         }
         if ($foreignTrades > 0) $diagnostics[] = 'other_broker_account_cnc_imports_excluded';
@@ -173,6 +176,7 @@ final class KiteSettlementDiagnosticReport
                 'portfolio_snapshots' => ['count' => count($portfolio), 'attribution' => 'profile_only_not_broker_account'],
                 'cnc_imports' => ['count' => count($trades), 'attribution' => 'profile_only_account_provenance_unverified',
                     'historical_account_classifiable' => false,
+                    'legacy_unbound_count' => count($legacyUnboundTrades),
                     'foreign_account_rows_excluded' => $foreignTrades,
                     'unmappable_instrument_count' => count(array_filter($trades, static fn ($row) => ! is_numeric($row['stock_id'] ?? null)
                         || trim((string) ($row['symbol'] ?? '')) === '' || trim((string) ($row['exchange'] ?? '')) === '')),
