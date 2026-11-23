@@ -90,7 +90,7 @@ final class KiteSettlementHoldingsEvidence
             if (substr((string) $trade['executed_at'], 0, 10) > $asOf) {
                 continue;
             }
-            $fingerprint = implode('|', [(string) ($trade['symbol'] ?? ''), (string) ($trade['exchange'] ?? ''), strtolower((string) $trade['side']), (string) $trade['quantity'], (string) $trade['executed_at'], (string) $trade['settles_by']]);
+            $fingerprint = implode('|', [strtoupper(trim((string) ($trade['isin'] ?? ''))), (string) ($trade['symbol'] ?? ''), (string) ($trade['exchange'] ?? ''), strtolower((string) $trade['side']), (string) $trade['quantity'], (string) $trade['executed_at'], (string) $trade['settles_by']]);
             if (isset($trades[$tradeId]) && $trades[$tradeId]['fingerprint'] !== $fingerprint) {
                 $tradeConflicts[$tradeId] = true;
                 $tradeConflictIdentities[$trades[$tradeId]['identity']] = true;
@@ -122,6 +122,11 @@ final class KiteSettlementHoldingsEvidence
         }
         if (! $tradeEvidenceComplete || ! $tradeRowsValid) {
             $unresolved[] = ['identity' => null, 'state' => 'unresolved', 'reason' => 'trade_evidence_partial_or_unknown'];
+        }
+        if ($tradeConflicts !== []) {
+            // Keep the global result conservative even when conflicting executions are expired,
+            // trade-only, or otherwise outside the current holdings identity set. Do not expose IDs.
+            $unresolved[] = ['identity' => null, 'state' => 'unresolved', 'reason' => 'conflicting_duplicate_trade_id'];
         }
         if (! $positionsComplete) {
             $unresolved[] = ['identity' => null, 'state' => 'unresolved', 'reason' => 'broker_positions_partial_or_unknown'];

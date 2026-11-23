@@ -99,14 +99,14 @@ final class KiteSettlementHoldingsEvidenceTest extends TestCase
                 $this->trade(10, 'dup', 'AAA', 'buy', 3, '2026-11-23', '2026-11-24'),
                 $this->trade(10, 'dup', 'AAA', 'buy', 4, '2026-11-23', '2026-11-24'),
             ]);
-        self::assertSame('conflicting_duplicate_broker_holdings', $result['unresolved'][0]['reason']);
+        self::assertContains('conflicting_duplicate_broker_holdings', array_column($result['unresolved'], 'reason'));
 
         $tradeConflict = $this->compare(10, '2026-11-23', [['symbol' => 'AAA', 'exchange' => 'NSE', 'quantity' => 5]],
             [['symbol' => 'AAA', 'exchange' => 'NSE', 'quantity' => 2]], [
                 $this->trade(10, 'same-id', 'AAA', 'buy', 3, '2026-11-23', '2026-11-24'),
                 $this->trade(10, 'same-id', 'AAA', 'buy', 4, '2026-11-23', '2026-11-24'),
             ]);
-        self::assertSame('conflicting_duplicate_trade_id', $tradeConflict['unresolved'][0]['reason']);
+        self::assertContains('conflicting_duplicate_trade_id', array_column($tradeConflict['unresolved'], 'reason'));
     }
 
     public function test_identical_duplicate_trade_ids_count_once_and_expired_or_non_cnc_trades_do_not_explain_gaps(): void
@@ -216,6 +216,52 @@ final class KiteSettlementHoldingsEvidenceTest extends TestCase
         self::assertSame('evidence_consistent', $result['status']);
         self::assertSame([], $result['holdings']);
         self::assertSame([], $result['unresolved']);
+    }
+
+    public function test_isin_collision_is_a_global_conflict_even_when_expired_and_holdings_match(): void
+    {
+        $first = $this->trade(10, 'isin-collision', 'AAA', 'buy', 1, '2026-11-20', '2026-11-21');
+        $second = [...$first, 'isin' => 'US0000000001'];
+        $snapshot = ['holdings' => [['symbol' => 'AAA', 'exchange' => 'NSE', 'quantity' => 5]],
+            'holdings_complete' => true, 'positions' => ['complete' => true, 'net' => [], 'day' => []],
+            'account_id' => 10, 'captured_at' => '2026-11-23 12:00:00'];
+
+        $result = $this->service->compare(10, '2026-11-23', [['symbol' => 'AAA', 'exchange' => 'NSE', 'quantity' => 5]],
+            $snapshot, [$first, $second], true);
+
+        self::assertSame('review_required', $result['status']);
+        self::assertContains('conflicting_duplicate_trade_id', array_column($result['unresolved'], 'reason'));
+        self::assertStringNotContainsString('isin-collision', json_encode($result['unresolved'], JSON_THROW_ON_ERROR));
+    }
+
+    public function test_expired_conflicts_remain_global_for_trade_only_identity_and_are_profile_scoped(): void
+    {
+        $first = $this->trade(10, 'shared-id', 'AAA', 'buy', 1, '2026-11-20', '2026-11-21');
+        $otherInstrument = [...$first, 'symbol' => 'BBB'];
+        $otherAccount = [...$this->trade(11, 'shared-id', 'AAA', 'buy', 1, '2026-11-20', '2026-11-21'), 'symbol' => 'BBB'];
+        $snapshot = ['holdings' => [], 'holdings_complete' => true,
+            'positions' => ['complete' => true, 'net' => [], 'day' => []], 'account_id' => 10,
+            'captured_at' => '2026-11-23 12:00:00'];
+
+        $conflict = $this->service->compare(10, '2026-11-23', [], $snapshot, [$first, $otherInstrument], true);
+        self::assertSame('review_required', $conflict['status']);
+        self::assertContains('conflicting_duplicate_trade_id', array_column($conflict['unresolved'], 'reason'));
+        self::assertSame('evidence_consistent', $this->service->compare(10, '2026-11-23', [], $snapshot, [$first, $otherAccount], true)['status']);
+    }
+
+    public function test_malformed_relevant_trade_evidence_prevents_global_consistency_without_payload_echo(): void
+    {
+        $malformed = $this->trade(10, 'private-id', 'AAA', 'buy', 1, '2026-11-20', '2026-11-21');
+        unset($malformed['side']);
+        $snapshot = ['holdings' => [], 'holdings_complete' => true,
+            'positions' => ['complete' => true, 'net' => [], 'day' => []], 'account_id' => 10,
+            'captured_at' => '2026-11-23 12:00:00'];
+
+        $result = $this->service->compare(10, '2026-11-23', [], $snapshot, [$malformed], true);
+
+        self::assertSame('review_required', $result['status']);
+        self::assertContains('trade_evidence_partial_or_unknown', array_column($result['unresolved'], 'reason'));
+        self::assertStringNotContainsString('private-id', json_encode($result['unresolved'], JSON_THROW_ON_ERROR));
     }
 
     public function test_position_rows_without_quantity_are_incomplete(): void
