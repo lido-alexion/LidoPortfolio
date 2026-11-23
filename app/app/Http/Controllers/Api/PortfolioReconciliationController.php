@@ -219,8 +219,11 @@ class PortfolioReconciliationController extends Controller
     }
 
     /** Defense in depth for old rows written before evidence validation was added. */
-    private function safeReviewEvidence(array $evidence): array
+    private function safeReviewEvidence(array $evidence, int $depth = 0): array
     {
+        // Legacy JSON can predate provider payload validation. Bound both
+        // breadth (below) and nesting before recursively sanitizing variants.
+        if ($depth >= 3) return [];
         $safe = [];
         foreach (['trade_id', 'order_id'] as $key) {
             $pattern = $key === 'trade_id' ? '/^[0-9]{1,64}$/' : '/^(?:[0-9]{1,64}|[A-Z]{1,4}-[0-9]{1,20})$/';
@@ -239,7 +242,7 @@ class PortfolioReconciliationController extends Controller
             $safe['ambiguity_count'] = min(5000, max(0, (int) $evidence['ambiguity_count']));
         }
         if (isset($evidence['candidate_variants']) && is_array($evidence['candidate_variants'])) {
-            $safe['candidate_variants'] = array_map(fn ($variant) => is_array($variant) ? $this->safeReviewEvidence($variant) : [], array_slice($evidence['candidate_variants'], 0, 8));
+            $safe['candidate_variants'] = array_map(fn ($variant) => is_array($variant) ? $this->safeReviewEvidence($variant, $depth + 1) : [], array_slice($evidence['candidate_variants'], 0, 8));
         }
         if (isset($evidence['exchange_timestamp']) && is_string($evidence['exchange_timestamp'])
             && preg_match('/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$/', $evidence['exchange_timestamp'])) {

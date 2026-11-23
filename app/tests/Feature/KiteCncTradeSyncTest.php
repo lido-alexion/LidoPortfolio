@@ -326,6 +326,51 @@ class KiteCncTradeSyncTest extends TestCase
         $this->assertStringNotContainsString('private-secret', (string) $run->failure);
     }
 
+    public function test_review_migration_preserves_historical_transaction_notes_and_legacy_evidence(): void
+    {
+        [$profile] = $this->portfolioAndStock();
+        app(FakeBrokerGateway::class)->tradeRows = [$this->fill(99898, 'ORD-98', 'BUY', 2, 100)];
+        app(KiteCncTradeSyncService::class)->sync($profile);
+        $row = KiteCncTradeImport::query()->where('broker_trade_id', '99898')->firstOrFail();
+        $transaction = Transaction::query()->findOrFail($row->transaction_id);
+        $historicalNote = 'Kite CNC execution 99898 (order ORD-98)';
+        $legacyEvidence = ['trade_id' => '99898', 'access_token' => 'legacy-sensitive-value'];
+        $transaction->forceFill(['notes' => $historicalNote])->save();
+        DB::table('kite_cnc_trade_imports')->where('id', $row->id)->update([
+            'broker_evidence' => json_encode($legacyEvidence),
+        ]);
+
+        $migration = require database_path('migrations/2026_11_23_000001_add_kite_cnc_manual_review.php');
+        $migration->down();
+        $migration->up();
+
+        $this->assertSame($historicalNote, $transaction->fresh()->notes);
+        $this->assertSame($legacyEvidence, $row->fresh()->broker_evidence);
+        $this->assertSame('legacy_unbound', $row->fresh()->evidence_kind);
+        $this->assertSame('unresolved_candidate', $row->fresh()->status);
+    }
+
+    public function test_review_payload_caps_recursive_legacy_candidate_variants(): void
+    {
+        [$profile] = $this->portfolioAndStock();
+        app(FakeBrokerGateway::class)->tradeRows = [[...$this->fill(99897, 'ORD-97', 'BUY', 2, 100), 'exchange_timestamp' => null]];
+        app(KiteCncTradeSyncService::class)->sync($profile);
+        $item = KiteCncTradeImport::query()->where('broker_trade_id', '99897')->firstOrFail();
+        $nested = ['trade_id' => '99897'];
+        for ($i = 0; $i < 20; $i++) $nested = ['candidate_variants' => [$nested]];
+        $item->forceFill(['broker_evidence' => $nested])->save();
+        $user = User::query()->findOrFail($profile->user_id);
+
+        $response = $this->actingAs($user)->withHeader('X-Profile-Id', (string) $profile->id)
+            ->getJson("/api/reconciliation/trades/review/{$item->id}")->assertOk();
+        $evidence = $response->json('data.evidence');
+        for ($depth = 0; $depth < 3; $depth++) {
+            $this->assertArrayHasKey('candidate_variants', $evidence);
+            $evidence = $evidence['candidate_variants'][0];
+        }
+        $this->assertSame([], $evidence);
+    }
+
     public function test_review_rejects_stale_evidence_and_other_profiles_cannot_read_row(): void
     {
         [$profile] = $this->portfolioAndStock();
