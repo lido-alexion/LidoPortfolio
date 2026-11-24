@@ -64,6 +64,8 @@ class SimulationDayProcessor
             array_keys($heldQty),
             $eligibleIds
         )));
+        $quarantined = app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)
+            ->quarantinedStockIds($candidateIds);
 
         $thresholds = $config[TradingOsConfig::STRATEGY_THRESHOLDS] ?? [];
         $buyMin = (float) ($thresholds[TradingOsConfig::THRESHOLD_OPEN_POSITION] ?? TradingOsConfig::recommendationBuyScoreMin());
@@ -100,6 +102,9 @@ class SimulationDayProcessor
         $drafts = [];
 
         foreach ($candidateIds as $stockId) {
+            if (isset($quarantined[$stockId])) {
+                continue;
+            }
             $qtyHeld = (float) ($heldQty[$stockId] ?? 0);
             $isHeld = $qtyHeld > 0;
             $isEligible = ! $eligibilityRestricted || isset($eligibleSet[$stockId]);

@@ -85,7 +85,8 @@ class CorporateActionPriceAdjustmentService
      *   rows_adjusted: int,
      *   price_divisor: float,
      *   volume_multiplier: float,
-     *   adjusted_before_date: string
+     *   adjusted_before_date: string,
+     *   _invalidated_proofs: array<int, array<string, mixed>>
      * }
      */
     public function adjustHistoricalPrices(
@@ -112,7 +113,8 @@ class CorporateActionPriceAdjustmentService
      *   rows_adjusted: int,
      *   price_divisor: float,
      *   volume_multiplier: float,
-     *   adjusted_before_date: string
+     *   adjusted_before_date: string,
+     *   _invalidated_proofs: array<int, array<string, mixed>>
      * }
      */
     public function adjustHistoricalPricesByDivisors(
@@ -122,6 +124,18 @@ class CorporateActionPriceAdjustmentService
         float $volumeMultiplier,
     ): array {
         $rows = $this->rowsQuery($stock, $exDate)->get();
+        if ($rows->isEmpty()) {
+            return [
+                'rows_adjusted' => 0,
+                'price_divisor' => $priceDivisor,
+                'volume_multiplier' => $volumeMultiplier,
+                'adjusted_before_date' => $exDate,
+                '_invalidated_proofs' => [],
+            ];
+        }
+
+        $invalidatedProofs = app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)
+            ->invalidateRepairProof($stock);
         $updated = 0;
 
         foreach ($rows as $row) {
@@ -138,6 +152,7 @@ class CorporateActionPriceAdjustmentService
             'price_divisor' => $priceDivisor,
             'volume_multiplier' => $volumeMultiplier,
             'adjusted_before_date' => $exDate,
+            '_invalidated_proofs' => $invalidatedProofs,
         ];
     }
 

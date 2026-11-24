@@ -409,6 +409,13 @@ class ExecutionEngine
         }
 
         $stock = $order->security ?? Stock::query()->findOrFail($order->security_id);
+        if (empty($input['_from_broker_reconcile'])
+            && app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)
+                ->quarantinedStockIds([(int) $stock->id]) !== []) {
+            throw ValidationException::withMessages([
+                'stock' => ['Execution is blocked while corporate-action price history lacks verified adjustment evidence.'],
+            ]);
+        }
         $side = $order->side;
         $quantity = (float) $order->quantity;
         $date = $input['transaction_date'] ?? now()->toDateString();

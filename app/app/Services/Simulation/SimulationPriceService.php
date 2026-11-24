@@ -26,6 +26,11 @@ final class SimulationPriceService
             throw ValidationException::withMessages(['adverse_slippage_percent' => 'Slippage must be between 0 and 100 percent.']);
         }
 
+        if (isset(app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)
+            ->quarantinedStockIds([$stockId])[$stockId])) {
+            return $this->blocked($stockId, $sessionDate, $method, 'historical_adjustment_unproven');
+        }
+
         // Exact economic session only: a later observation must never leak backward.
         $row = StockPrice::query()->where('stock_id', $stockId)
             ->whereDate('price_date', $sessionDate)->orderByDesc('id')->first();

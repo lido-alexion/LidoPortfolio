@@ -29,6 +29,12 @@ final class ReplayStrategyEvaluator
         $generated = 0;
         $stockIds = StockPrice::query()->whereDate('price_date', $session)->whereNotNull('close_price')
             ->distinct()->pluck('stock_id')->map(fn ($id) => (int) $id)->all();
+        $quarantined = app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)
+            ->quarantinedStockIds($stockIds);
+        if ($quarantined !== []) {
+            $stockIds = array_values(array_filter($stockIds, fn (int $id): bool => ! isset($quarantined[$id])));
+            $limitations[] = 'historical_adjustment_unproven_stocks_excluded';
+        }
         $symbols = Stock::query()->whereIn('id', $stockIds)->pluck('symbol', 'id');
 
         foreach ($pinnedWorld['binding_revisions'] ?? [] as $binding) {
@@ -50,7 +56,13 @@ final class ReplayStrategyEvaluator
             $held = collect($state['holdings'] ?? [])->filter(fn ($holding) => (int) ($holding['strategy_id'] ?? 0) === $strategyId)
                 ->keyBy(fn ($holding) => (int) $holding['stock_id']);
             $candidates = array_values(array_unique([...$stockIds, ...$held->keys()->map(fn ($id) => (int) $id)->all()]));
+            $quarantinedCandidates = app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)
+                ->quarantinedStockIds($candidates);
             foreach ($candidates as $stockId) {
+                if (isset($quarantinedCandidates[$stockId])) {
+                    $limitations[] = 'historical_adjustment_unproven_stocks_excluded';
+                    continue;
+                }
                 $bars = $this->bars($stockId, $session);
                 $eligible = false;
                 foreach ($definitions as $definition) {

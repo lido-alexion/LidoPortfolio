@@ -60,6 +60,7 @@ class CorporateActionService
         $payload = $this->normalizeInput($input);
         $existing = $this->findAppliedAction($profile, $stock, $payload);
         if ($existing !== null) {
+            $this->assertActionRatioMatches($existing, $payload);
             return $this->presentAppliedState(
                 $profile,
                 $stock,
@@ -78,7 +79,10 @@ class CorporateActionService
         $priorTargets = $this->snapshotTargetAmounts($profile, $stock);
         $userId = auth()->id();
 
-        $action = DB::transaction(function () use ($profile, $stock, $payload, $preview, $userId) {
+        $adjustmentGate = app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class);
+        $protectedHistory = $adjustmentGate->restatementTouchesProtectedHistory($stock);
+        $applyLedger = function (?array $ledgerPreview = null) use ($profile, $stock, $payload, $preview, $userId): CorporateAction {
+            $ledgerPreview ??= $preview;
             $action = CorporateAction::query()->create([
                 'profile_id' => $profile->id,
                 'stock_id' => $stock->id,
@@ -89,58 +93,115 @@ class CorporateActionService
                 'notes' => $payload['notes'],
                 'applied_at' => now(),
                 'created_by' => $userId,
-                'metadata' => $preview['metadata'] ?? null,
+                'metadata' => $ledgerPreview['metadata'] ?? null,
             ]);
 
             if ($payload['action_type'] === 'split') {
-                $this->applySplit($action, $preview);
+                $this->applySplit($action, $ledgerPreview);
             } else {
-                $this->applyBonus($profile, $stock, $action, $preview);
+                $this->applyBonus($profile, $stock, $action, $ledgerPreview);
             }
 
             return $action;
-        });
+        };
 
         // Single OHLCV writer invariant: when an active F042 factor owns this
         // stock+ex-date+action event, F043 performs historical price repair.
         // F020 still applies ledger changes above; only OHLCV mutation is skipped.
-        $delegatingFactor = PriceAdjustmentFactor::findActiveOhlcvRepairForEvent(
-            (int) $stock->id,
-            $payload['ex_date'],
-            $payload['action_type'],
-        );
-
-        if ($delegatingFactor !== null) {
-            $factors = $this->priceAdjustment->factorsForAction(
-                $payload['action_type'],
-                $payload['ratio_from'],
-                $payload['ratio_to'],
-            );
-            $priceAdjustment = [
-                'rows_adjusted' => 0,
-                'price_divisor' => $factors['price_divisor'],
-                'volume_multiplier' => $factors['volume_multiplier'],
-                'adjusted_before_date' => $payload['ex_date'],
-                'deferred_to_factor' => true,
-                'factor_id' => $delegatingFactor->id,
-                'ohlcv_repair_status' => $delegatingFactor->metadata['ohlcv_repair_status'] ?? null,
-                'repair_note' => 'ohlcv_delegated_to_f043_price_adjustment_factor',
-            ];
-        } else {
-            $priceAdjustment = $this->priceAdjustment->adjustHistoricalPrices(
+        if ($protectedHistory) {
+            // For this narrowly configured identity, the ledger and F020 OHLCV
+            // write share one transaction so a stale proof cannot leave a
+            // committed ledger action paired with unadjusted prices.
+            [$action, $priceAdjustment, $idempotent] = DB::transaction(function () use (
+                $applyLedger,
+                $profile,
                 $stock,
-                $payload['ex_date'],
-                $payload['action_type'],
-                $payload['ratio_from'],
-                $payload['ratio_to'],
-            );
-        }
+                $input,
+                $payload,
+                $adjustmentGate,
+            ): array {
+                Stock::query()->whereKey($stock->id)->lockForUpdate()->firstOrFail();
+                $existing = $this->findAppliedAction($profile, $stock, $payload);
+                if ($existing !== null) {
+                    $this->assertActionRatioMatches($existing, $payload);
+                    return [$existing, ($existing->metadata ?? [])['price_adjustment'] ?? [], true];
+                }
+                $stockEvent = $this->findAppliedStockEvent($stock, $payload);
+                $this->assertActiveFactorMatches($stock, $payload);
+                if ($stockEvent !== null
+                    && (int) ((($stockEvent->metadata ?? [])['price_adjustment']['rows_adjusted'] ?? 0)) > 0
+                    && ! $adjustmentGate->hasCurrentCorporateActionProof($stockEvent)) {
+                    throw new InvalidArgumentException('Existing stock-global F020 restatement proof is stale or incomplete; refusing another ledger application.');
+                }
 
-        $action->update([
-            'metadata' => array_merge($action->metadata ?? [], [
-                'price_adjustment' => $priceAdjustment,
-            ]),
-        ]);
+                $lockedPreview = $this->preview($profile, $stock, $input);
+                if (! empty($lockedPreview['blocking_errors'])) {
+                    throw new InvalidArgumentException(implode(' ', $lockedPreview['blocking_errors']));
+                }
+                $action = $applyLedger($lockedPreview);
+                if ($stockEvent !== null) {
+                    $priceAdjustment = $this->duplicateStockEventMetadata($stockEvent, $stock, $payload);
+                    $invalidatedProofs = [];
+                } else {
+                    [$priceAdjustment, $invalidatedProofs] = $this->applyF020PriceAdjustment($stock, $payload, $adjustmentGate);
+                }
+
+                $action->update([
+                    'metadata' => array_merge($action->metadata ?? [], [
+                        'price_adjustment' => $priceAdjustment,
+                    ]),
+                ]);
+                $adjustmentGate->refreshOverlappingRepairProofs($stock, $invalidatedProofs);
+
+                return [$action, $priceAdjustment, false];
+            });
+            if ($idempotent) {
+                return $this->presentAppliedState($profile, $stock, $action, $priceAdjustment, idempotent: true);
+            }
+        } else {
+            // Keep the established F020 ledger transaction boundary for all
+            // unaffected stocks; only the configured history quarantine needs
+            // atomic ledger + proof + OHLCV handling.
+            [$action, $priceAdjustment, $idempotent] = DB::transaction(function () use (
+                $applyLedger,
+                $profile,
+                $stock,
+                $payload,
+                $adjustmentGate,
+            ): array {
+                Stock::query()->whereKey($stock->id)->lockForUpdate()->firstOrFail();
+                $existing = $this->findAppliedAction($profile, $stock, $payload);
+                if ($existing !== null) {
+                    $this->assertActionRatioMatches($existing, $payload);
+                    return [$existing, ($existing->metadata ?? [])['price_adjustment'] ?? [], true];
+                }
+                $stockEvent = $this->findAppliedStockEvent($stock, $payload);
+                $this->assertActiveFactorMatches($stock, $payload);
+                $action = $applyLedger();
+                if ($stockEvent !== null) {
+                    $priceAdjustment = $this->duplicateStockEventMetadata($stockEvent, $stock, $payload);
+                } else {
+                    [$priceAdjustment] = $this->applyF020PriceAdjustment($stock, $payload, $adjustmentGate);
+                }
+                $action->update([
+                    'metadata' => array_merge($action->metadata ?? [], [
+                        'price_adjustment' => $priceAdjustment,
+                    ]),
+                ]);
+
+                return [$action, $priceAdjustment, false];
+            });
+            if ($idempotent) {
+                return $this->presentAppliedState(
+                    $profile,
+                    $stock,
+                    $action,
+                    ($action->metadata ?? [])['price_adjustment'] ?? [],
+                    idempotent: true,
+                );
+            }
+
+        }
 
         $holdings = $this->holdings->recalculateOwnerLotsForProfileStock($profile, $stock);
         $this->restoreTargetAmounts($holdings, $priorTargets);
@@ -170,6 +231,152 @@ class CorporateActionService
     }
 
     /**
+     * @param array<string, mixed> $payload
+     * @return array{0: array<string, mixed>, 1: array<int, array<string, mixed>>}
+     */
+    protected function applyF020PriceAdjustment(
+        Stock $stock,
+        array $payload,
+        \App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate $adjustmentGate,
+    ): array {
+        $delegatingFactor = PriceAdjustmentFactor::findActiveOhlcvRepairForEvent(
+            (int) $stock->id,
+            $payload['ex_date'],
+            $payload['action_type'],
+        );
+        if ($delegatingFactor !== null) {
+            $this->assertFactorRatioMatches($delegatingFactor, $payload);
+            $factors = $this->priceAdjustment->factorsForAction(
+                $payload['action_type'],
+                $payload['ratio_from'],
+                $payload['ratio_to'],
+            );
+
+            return [[
+                'rows_adjusted' => 0,
+                'price_divisor' => $factors['price_divisor'],
+                'volume_multiplier' => $factors['volume_multiplier'],
+                'adjusted_before_date' => $payload['ex_date'],
+                'deferred_to_factor' => true,
+                'factor_id' => $delegatingFactor->id,
+                'ohlcv_repair_status' => $delegatingFactor->metadata['ohlcv_repair_status'] ?? null,
+                'repair_note' => 'ohlcv_delegated_to_f043_price_adjustment_factor',
+            ], []];
+        }
+
+        $adjustment = $this->priceAdjustment->adjustHistoricalPrices(
+            $stock,
+            $payload['ex_date'],
+            $payload['action_type'],
+            $payload['ratio_from'],
+            $payload['ratio_to'],
+        );
+        $invalidatedProofs = $adjustment['_invalidated_proofs'] ?? [];
+        unset($adjustment['_invalidated_proofs']);
+
+        return [array_merge(
+            $adjustment,
+            $adjustmentGate->historyEvidence((int) $stock->id, $payload['ex_date']),
+        ), $invalidatedProofs];
+    }
+
+    /** Find the stock-global ledger event, independent of portfolio ownership. */
+    protected function findAppliedStockEvent(Stock $stock, array $payload): ?CorporateAction
+    {
+        $events = CorporateAction::query()->where('stock_id', $stock->id)
+            ->whereIn('action_type', $this->stockEventTypes($payload['action_type']))
+            ->whereDate('ex_date', $payload['ex_date'])
+            ->whereNotNull('applied_at')->orderBy('id')->get();
+        foreach ($events as $event) {
+            $this->assertActionRatioMatches($event, $payload);
+        }
+
+        return $events->first();
+    }
+
+    /** Split and face-value split are the same OHLCV event class. */
+    protected function stockEventTypes(string $actionType): array
+    {
+        return in_array($actionType, ['split', 'face_value_split'], true)
+            ? ['split', 'face_value_split']
+            : [$actionType];
+    }
+
+    protected function assertActionRatioMatches(CorporateAction $action, array $payload): void
+    {
+        if ((int) $action->ratio_from !== (int) $payload['ratio_from']
+            || (int) $action->ratio_to !== (int) $payload['ratio_to']) {
+            throw new InvalidArgumentException('A stock-global corporate-action event already exists with a conflicting ratio.');
+        }
+    }
+
+    protected function assertActiveFactorMatches(Stock $stock, array $payload): void
+    {
+        $factor = PriceAdjustmentFactor::findActiveOhlcvRepairForEvent(
+            (int) $stock->id,
+            $payload['ex_date'],
+            $payload['action_type'],
+        );
+        if ($factor !== null) $this->assertFactorRatioMatches($factor, $payload);
+    }
+
+    protected function assertFactorRatioMatches(PriceAdjustmentFactor $factor, array $payload): void
+    {
+        $expected = $this->priceAdjustment->factorsForAction(
+            $payload['action_type'],
+            (int) $payload['ratio_from'],
+            (int) $payload['ratio_to'],
+        );
+        if (abs((float) $factor->price_divisor - $expected['price_divisor']) > 0.000001
+            || abs((float) $factor->volume_multiplier - $expected['volume_multiplier']) > 0.000001) {
+            throw new InvalidArgumentException('The active F042 factor conflicts with this stock-global corporate-action ratio.');
+        }
+    }
+
+    /** @return array<string, mixed> */
+    protected function duplicateStockEventMetadata(CorporateAction $existing, Stock $stock, array $payload): array
+    {
+        $factor = PriceAdjustmentFactor::findActiveOhlcvRepairForEvent(
+            (int) $stock->id,
+            $payload['ex_date'],
+            $payload['action_type'],
+        );
+        if ($factor !== null) {
+            $this->assertFactorRatioMatches($factor, $payload);
+            $factors = $this->priceAdjustment->factorsForAction(
+                $payload['action_type'],
+                (int) $payload['ratio_from'],
+                (int) $payload['ratio_to'],
+            );
+
+            return [
+                'rows_adjusted' => 0,
+                'price_divisor' => $factors['price_divisor'],
+                'volume_multiplier' => $factors['volume_multiplier'],
+                'adjusted_before_date' => $payload['ex_date'],
+                'deferred_to_factor' => true,
+                'factor_id' => $factor->id,
+                'repair_note' => 'ohlcv_delegated_to_f043_price_adjustment_factor',
+            ];
+        }
+
+        $factors = $this->priceAdjustment->factorsForAction(
+            $payload['action_type'],
+            (int) $payload['ratio_from'],
+            (int) $payload['ratio_to'],
+        );
+
+        return [
+            'rows_adjusted' => 0,
+            'price_divisor' => $factors['price_divisor'],
+            'volume_multiplier' => $factors['volume_multiplier'],
+            'adjusted_before_date' => $payload['ex_date'],
+            'duplicate_stock_event_id' => $existing->id,
+            'repair_note' => 'ohlcv_restatement_skipped_for_existing_stock_event',
+        ];
+    }
+
+    /**
      * Same profile + stock + action_type + ex-date already applied → do not mutate again.
      *
      * @param  array<string, mixed>  $payload
@@ -179,7 +386,7 @@ class CorporateActionService
         return CorporateAction::query()
             ->where('profile_id', $profile->id)
             ->where('stock_id', $stock->id)
-            ->where('action_type', $payload['action_type'])
+            ->whereIn('action_type', $this->stockEventTypes($payload['action_type']))
             ->whereDate('ex_date', $payload['ex_date'])
             ->whereNotNull('applied_at')
             ->orderByDesc('id')

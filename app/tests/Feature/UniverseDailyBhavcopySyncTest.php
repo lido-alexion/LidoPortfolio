@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\CalendarEvent;
+use App\Models\PriceAdjustmentFactor;
 use App\Models\Setting;
 use App\Models\Stock;
 use App\Models\StockPrice;
@@ -10,6 +11,7 @@ use App\Models\SyncRun;
 use App\Services\BenchmarkPriceSyncService;
 use App\Services\Bhavcopy\UdiffBhavcopyParser;
 use App\Services\BseBhavcopyService;
+use App\Services\CorporateActionPriceRepairService;
 use App\Services\NseBhavcopyService;
 use App\Services\PriceFetchService;
 use App\Services\SyncLogService;
@@ -20,6 +22,7 @@ use App\Support\TradingCalendar;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Mockery;
 use Tests\Concerns\BhavcopyFixtures;
@@ -324,6 +327,336 @@ class UniverseDailyBhavcopySyncTest extends TestCase
         $this->assertSame(1, $saved['entries']['NSE:2026-10-15']['retry_attempt']);
     }
 
+    public function test_bnagrochem_verified_historical_identity_preserves_adjusted_price_and_receipt(): void
+    {
+        $stock = $this->stock('BNAGROCHEM', ['isin' => 'INE00HZ01029']);
+        $this->seedBnaGrochemRawPriceHistory($stock);
+        $this->assertSame(3, StockPrice::query()->where('stock_id', $stock->id)->whereDate('price_date', '<', '2026-11-16')->count(), 'Raw bars remain available as repair evidence.');
+        $writerCount = app(PriceFetchService::class)->storeHistoricalRows($stock, [[
+            'price_date' => '2026-11-13', 'open_price' => 159, 'high_price' => 162.66,
+            'low_price' => 158.68, 'close_price' => 999, 'adjusted_close_price' => 999, 'volume' => 101471,
+        ]], 'yahoo');
+        $this->assertSame(0, $writerCount);
+        $this->assertEquals(162.66, (float) StockPrice::query()
+            ->where('stock_id', $stock->id)->whereDate('price_date', '2026-11-13')->value('close_price'));
+        $this->assertArrayHasKey($stock->id, app(\App\Services\DataQualityGuardService::class)
+            ->blockedStockIdMap([$stock->id]));
+        $universeQuery = (new \ReflectionMethod(\App\Services\ML\MlTrainingDatasetBuilder::class, 'universeQuery'))
+            ->invoke(app(\App\Services\ML\MlTrainingDatasetBuilder::class));
+        $this->assertNotContains($stock->id, $universeQuery->pluck('id')->all());
+        $aliasedRows = StockPrice::query()->from('portfolio_stock_prices as p')
+            ->where('p.stock_id', $stock->id)->whereDate('p.price_date', '<', '2026-11-16')->count();
+        $this->assertSame(3, $aliasedRows, 'Aliased model reads preserve physical repair evidence.');
+        $this->assertSame([17.08, 16.23], StockPrice::query()->where('stock_id', $stock->id)->whereDate('price_date', '>=', '2026-11-16')
+            ->orderBy('price_date')->pluck('close_price')->map(fn ($value) => (float) $value)->all());
+        $directRows = app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)
+            ->apply(DB::table('portfolio_stock_prices'), 'portfolio_stock_prices')
+            ->where('stock_id', $stock->id)->whereDate('price_date', '<', '2026-11-16')->count();
+        $this->assertSame(0, $directRows);
+        $screenerBars = app(\App\Services\Screener\ScreenerBacktestService::class)
+            ->loadBarsWithDates($stock->id, '2026-11-17', 20);
+        $this->assertSame(['2026-11-16', '2026-11-17'], array_column($screenerBars, 'date'));
+        $factor = $this->bnagrochemPendingSplitFactor($stock);
+        $repair = app(CorporateActionPriceRepairService::class)->repairPendingFactors(factorId: $factor->id, dryRun: false);
+        $this->assertSame(1, $repair['repaired']);
+        $this->assertSame(PriceAdjustmentFactor::REPAIR_STATUS_COMPLETED, $factor->fresh()->metadata['ohlcv_repair_status']);
+        $proof = app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)->historyEvidence($stock->id, '2026-11-16');
+        $this->assertSame($factor->fresh()->metadata['ohlcv_repair']['rows_sha256'], $proof['rows_sha256']);
+        $this->assertSame(3, $proof['rows_adjusted']);
+        $this->assertArrayNotHasKey($stock->id, app(\App\Services\DataQualityGuardService::class)
+            ->blockedStockIdMap([$stock->id]), json_encode($factor->fresh()->metadata, JSON_THROW_ON_ERROR));
+        $universeQuery = (new \ReflectionMethod(\App\Services\ML\MlTrainingDatasetBuilder::class, 'universeQuery'))
+            ->invoke(app(\App\Services\ML\MlTrainingDatasetBuilder::class));
+        $this->assertContains($stock->id, $universeQuery->pluck('id')->all());
+        $this->assertSame(3, StockPrice::query()->where('stock_id', $stock->id)->whereDate('price_date', '<', '2026-11-16')->count());
+        $this->assertSame([14.755, 15.492, 16.266], StockPrice::query()->where('stock_id', $stock->id)
+            ->whereDate('price_date', '<', '2026-11-16')->orderBy('price_date')
+            ->pluck('close_price')->map(fn ($value) => (float) $value)->all());
+        $overwriteCount = app(PriceFetchService::class)->storeHistoricalRows($stock, [[
+            'price_date' => '2026-11-13', 'open_price' => 159, 'high_price' => 162.66,
+            'low_price' => 158.68, 'close_price' => 162.66, 'adjusted_close_price' => 162.66, 'volume' => 101471,
+        ]], 'yahoo');
+        $this->assertSame(0, $overwriteCount);
+        $this->assertEquals(16.266, (float) StockPrice::query()->where('stock_id', $stock->id)
+            ->whereDate('price_date', '2026-11-13')->value('close_price'));
+        $screenerBars = app(\App\Services\Screener\ScreenerBacktestService::class)
+            ->loadBarsWithDates($stock->id, '2026-11-17', 20);
+        $this->assertSame(['2026-11-11', '2026-11-12', '2026-11-13', '2026-11-16', '2026-11-17'], array_column($screenerBars, 'date'));
+        $this->assertSame([14.755, 15.492, 16.266], array_slice(array_column($screenerBars, 'close'), 0, 3));
+        $this->assertSame([17.08, 16.23], StockPrice::query()->where('stock_id', $stock->id)
+            ->whereDate('price_date', '>=', '2026-11-16')->orderBy('price_date')
+            ->pluck('close_price')->map(fn ($value) => (float) $value)->all());
+        $before = StockPrice::query()->where('stock_id', $stock->id)->whereDate('price_date', '2026-11-13')->first()->getAttributes();
+        $this->assertEquals(16.266, (float) $before['close_price']);
+        $this->source('NSE', [[
+            'FinInstrmId' => '762608', 'TckrSymb' => 'BNAGROCHEM', 'ISIN' => 'INE00HZ01011',
+            'SctySrs' => 'EQ', 'OpnPric' => '159.00', 'HghPric' => '162.66',
+            'LwPric' => '158.68', 'ClsPric' => '162.66', 'TtlTradgVol' => '101471',
+        ]], calls: 2);
+        $service = app(UniverseDailyBhavcopySyncService::class);
+        $day = Carbon::parse('2026-11-13');
+        $runId = app(SyncLogService::class)->beginRun('universe-price-sync');
+        $run = fn () => $service->run(collect([$stock]), $day, $day, $runId, 'universe-price-sync', $this->initialStats())['stats'];
+
+        $first = $run();
+        $second = $run();
+
+        $this->assertSame(1, $first['bulk']['historical_identity_rows'], json_encode($first['bulk'], JSON_THROW_ON_ERROR));
+        $this->assertSame(0, $first['bulk']['identity_conflicts']);
+        $this->assertSame(0, $first['stored_rows']);
+        $this->assertSame(1, $second['bulk']['file_cache_hits']);
+        $this->assertSame($before, StockPrice::query()->where('stock_id', $stock->id)
+            ->whereDate('price_date', '2026-11-13')->first()->getAttributes());
+        $receipt = json_decode((string) Setting::getValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS), true);
+        $this->assertSame($first['bulk']['files'][0]['source_revision_sha256'], $receipt['entries']['NSE:2026-11-13']['source_revision_sha256']);
+        $this->assertSame(1, $receipt['entries']['NSE:2026-11-13']['historical_identity_rows']);
+
+        // A same-count content change must fail the live fingerprint comparison
+        // even if the persisted repair marker was not manually cleared.
+        DB::table('portfolio_stock_prices')->where('stock_id', $stock->id)->whereDate('price_date', '2026-11-13')
+            ->update(['close_price' => 162.66, 'adjusted_close_price' => 162.66]);
+        $this->assertSame(3, StockPrice::query()->where('stock_id', $stock->id)
+            ->whereDate('price_date', '<', '2026-11-16')->count());
+        $afterTrustChange = $run();
+        $this->assertSame(1, $afterTrustChange['bulk']['files_downloaded']);
+        $this->assertSame(1, $afterTrustChange['bulk']['historical_adjustment_required']);
+        $this->assertSame(0, $afterTrustChange['stored_rows']);
+        $this->assertArrayHasKey($stock->id, app(\App\Services\DataQualityGuardService::class)
+            ->blockedStockIdMap([$stock->id]));
+    }
+
+    public function test_later_split_restatement_refreshes_overlapping_proof_without_double_adjustment(): void
+    {
+        $stock = $this->stock('BNAGROCHEM', ['isin' => 'INE00HZ01029']);
+        $this->seedBnaGrochemRawPriceHistory($stock);
+        $first = $this->bnagrochemPendingSplitFactor($stock);
+        $repair = app(CorporateActionPriceRepairService::class);
+
+        $firstResult = $repair->repairPendingFactors(factorId: $first->id, dryRun: false);
+        $this->assertSame(1, $firstResult['repaired']);
+        $this->assertSame(16.266, (float) StockPrice::query()->where('stock_id', $stock->id)
+            ->whereDate('price_date', '2026-11-13')->value('close_price'));
+
+        $duplicate = PriceAdjustmentFactor::query()->create([
+            'stock_id' => $stock->id, 'issue_id' => null, 'factor_type' => 'corporate_action',
+            'action_type' => 'split', 'effective_ex_date' => '2026-11-16',
+            'applied_ratio' => 10, 'price_divisor' => 10, 'volume_multiplier' => 10,
+            'is_active' => true, 'applied_at' => now(),
+            'metadata' => ['source' => 'duplicate_test_factor', 'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_PENDING],
+        ]);
+        $duplicateResult = $repair->repairPendingFactors(factorId: $duplicate->id, dryRun: false);
+        $this->assertSame(0, $duplicateResult['repaired']);
+        $this->assertSame(CorporateActionPriceRepairService::STATUS_DEFERRED_TO_FACTOR, $duplicateResult['details'][0]['status']);
+        $this->assertSame(16.266, (float) StockPrice::query()->where('stock_id', $stock->id)
+            ->whereDate('price_date', '2026-11-13')->value('close_price'));
+
+        $later = PriceAdjustmentFactor::query()->create([
+            'stock_id' => $stock->id, 'issue_id' => null, 'factor_type' => 'corporate_action',
+            'action_type' => 'split', 'effective_ex_date' => '2026-11-24',
+            'applied_ratio' => 2, 'price_divisor' => 2, 'volume_multiplier' => 2,
+            'is_active' => true, 'applied_at' => now(),
+            'metadata' => ['source' => 'test_reviewed_evidence', 'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_PENDING],
+        ]);
+
+        $laterResult = $repair->repairPendingFactors(factorId: $later->id, dryRun: false);
+        $this->assertSame(1, $laterResult['repaired']);
+        $this->assertEquals(8.133, (float) StockPrice::query()->where('stock_id', $stock->id)
+            ->whereDate('price_date', '2026-11-13')->value('close_price'));
+        $this->assertEquals(8.54, (float) StockPrice::query()->where('stock_id', $stock->id)
+            ->whereDate('price_date', '2026-11-16')->value('close_price'));
+
+        $gate = app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class);
+        $firstEvidence = $gate->historyEvidence((int) $stock->id, '2026-11-16');
+        $this->assertSame($firstEvidence['rows_sha256'], $first->fresh()->metadata['ohlcv_repair']['rows_sha256']);
+        $this->assertArrayNotHasKey($stock->id, app(\App\Services\DataQualityGuardService::class)
+            ->blockedStockIdMap([$stock->id]));
+
+        $again = $repair->repairPendingFactors(factorId: $first->id, dryRun: false);
+        $this->assertSame(0, $again['repaired']);
+        $this->assertEquals(8.133, (float) StockPrice::query()->where('stock_id', $stock->id)
+            ->whereDate('price_date', '2026-11-13')->value('close_price'));
+    }
+
+    public function test_overlapping_restatement_refuses_a_stale_prior_content_proof(): void
+    {
+        $stock = $this->stock('BNAGROCHEM', ['isin' => 'INE00HZ01029']);
+        $this->seedBnaGrochemRawPriceHistory($stock);
+        $repair = app(CorporateActionPriceRepairService::class);
+        $first = $this->bnagrochemPendingSplitFactor($stock);
+        $this->assertSame(1, $repair->repairPendingFactors(factorId: $first->id, dryRun: false)['repaired']);
+
+        DB::table('portfolio_stock_prices')->where('stock_id', $stock->id)->whereDate('price_date', '2026-11-13')
+            ->update(['close_price' => 16.267]);
+        $later = PriceAdjustmentFactor::query()->create([
+            'stock_id' => $stock->id, 'issue_id' => null, 'factor_type' => 'corporate_action',
+            'action_type' => 'split', 'effective_ex_date' => '2026-11-24',
+            'applied_ratio' => 2, 'price_divisor' => 2, 'volume_multiplier' => 2,
+            'is_active' => true, 'applied_at' => now(),
+            'metadata' => ['source' => 'stale_overlap_test', 'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_PENDING],
+        ]);
+
+        $result = $repair->repairPendingFactors(factorId: $later->id, dryRun: false);
+        $this->assertSame(0, $result['repaired']);
+        $this->assertSame(CorporateActionPriceRepairService::STATUS_INVALID_FACTOR, $result['details'][0]['status']);
+        $this->assertSame(16.267, (float) StockPrice::query()->where('stock_id', $stock->id)
+            ->whereDate('price_date', '2026-11-13')->value('close_price'));
+        $this->assertSame(17.08, (float) StockPrice::query()->where('stock_id', $stock->id)
+            ->whereDate('price_date', '2026-11-16')->value('close_price'));
+        $this->assertSame(PriceAdjustmentFactor::REPAIR_STATUS_PENDING, $later->fresh()->metadata['ohlcv_repair_status']);
+    }
+
+    public function test_bnagrochem_missing_adjusted_history_blocks_raw_split_bar_and_keeps_retry_receipt(): void
+    {
+        $stock = $this->stock('BNAGROCHEM', ['isin' => 'INE00HZ01029']);
+        $this->seedBnaGrochemRawPriceHistory($stock);
+        $this->bnagrochemPendingSplitFactor($stock);
+        $this->source('NSE', [[
+            'FinInstrmId' => '762608', 'TckrSymb' => 'BNAGROCHEM', 'ISIN' => 'INE00HZ01011',
+            'SctySrs' => 'EQ', 'OpnPric' => '159.00', 'HghPric' => '162.66',
+            'LwPric' => '158.68', 'ClsPric' => '162.66', 'TtlTradgVol' => '101471',
+        ]]);
+        $day = Carbon::parse('2026-11-13');
+        $runId = app(SyncLogService::class)->beginRun('universe-price-sync');
+        $result = app(UniverseDailyBhavcopySyncService::class)->run(
+            collect([$stock]), $day, $day, $runId, 'universe-price-sync', $this->initialStats(),
+        )['stats'];
+
+        $this->assertSame(0, $result['bulk']['historical_identity_rows']);
+        $this->assertSame(1, $result['bulk']['historical_adjustment_required']);
+        $this->assertSame(0, $result['stored_rows']);
+        $this->assertSame(0, $result['bulk']['projected_rows']);
+        $this->assertSame([147.55, 154.92, 162.66], StockPrice::query()
+            ->where('stock_id', $stock->id)->whereDate('price_date', '<', '2026-11-16')
+            ->orderBy('price_date')->pluck('close_price')->map(fn ($value) => (float) $value)->all());
+        $this->assertSame(3, StockPrice::query()->where('stock_id', $stock->id)->whereDate('price_date', '<', '2026-11-16')->count());
+        $receipt = json_decode((string) Setting::getValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS), true);
+        $this->assertSame(1, $receipt['entries']['NSE:2026-11-13']['retry_attempt']);
+        $this->assertSame('2026-10-26 14:35:00', $receipt['entries']['NSE:2026-11-13']['retry_after']);
+        $this->assertSame('historical_adjustment_required', $receipt['entries']['NSE:2026-11-13']['identity_conflict_samples'][0]['reason']);
+    }
+
+    public function test_legacy_completed_factor_without_content_fingerprint_remains_quarantined(): void
+    {
+        $stock = $this->stock('BNAGROCHEM', ['isin' => 'INE00HZ01029']);
+        $this->seedBnaGrochemRawPriceHistory($stock);
+        $factor = $this->bnagrochemPendingSplitFactor($stock);
+        $factor->update(['metadata' => [
+            'source' => 'legacy_record', 'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_COMPLETED,
+            'ohlcv_repair' => ['rows_adjusted' => 3, 'price_divisor' => 10],
+        ]]);
+
+        $this->assertSame(3, StockPrice::query()->where('stock_id', $stock->id)
+            ->whereDate('price_date', '<', '2026-11-16')->count());
+        $this->assertArrayHasKey($stock->id, app(\App\Services\DataQualityGuardService::class)
+            ->blockedStockIdMap([$stock->id]));
+    }
+
+    public function test_corporate_action_detection_can_read_quarantined_physical_bars(): void
+    {
+        $stock = $this->stock('BNAGROCHEM', ['isin' => 'INE00HZ01029']);
+        foreach ([
+            ['2026-11-12', 160.0, 162.66],
+            ['2026-11-13', 16.0, 16.26],
+        ] as [$date, $open, $close]) {
+            DB::table('portfolio_stock_prices')->insert([
+                'stock_id' => $stock->id, 'price_date' => $date.' 00:00:00', 'open_price' => $open,
+                'high_price' => max($open, $close), 'low_price' => min($open, $close), 'close_price' => $close,
+                'adjusted_close_price' => $close, 'volume' => 100, 'provider_source' => 'test_raw',
+                'data_source' => 'test_raw', 'created_at' => now(),
+            ]);
+        }
+
+        $this->assertSame(2, StockPrice::query()->where('stock_id', $stock->id)
+            ->whereDate('price_date', '<', '2026-11-16')->count());
+        $detected = app(\App\Services\DataQualityCorporateActionHeuristicService::class)
+            ->scanStock($stock, minGapPercent: 25.0);
+
+        // The detector bypasses only the read quarantine so its physical OHLCV
+        // evidence remains available for independent human review.
+        $this->assertTrue($detected);
+    }
+
+    public function test_retry_stays_deferred_with_unrelated_coverage_then_revalidates_after_split_repair(): void
+    {
+        $stock = $this->stock('BNAGROCHEM', ['isin' => 'INE00HZ01029']);
+        $unrelated = $this->stock('OTHER');
+        $this->seedBnaGrochemRawPriceHistory($stock);
+        app(PriceFetchService::class)->storeHistoricalRows($unrelated, [[
+            'price_date' => '2026-11-13', 'open_price' => 100, 'high_price' => 101,
+            'low_price' => 99, 'close_price' => 100, 'volume' => 100,
+        ]], 'manual');
+        $factor = $this->bnagrochemPendingSplitFactor($stock);
+        $source = Mockery::mock(NseBhavcopyService::class);
+        $source->shouldReceive('fetchDailyRows')->twice()->andReturnUsing(fn (Carbon $day) => $this->parsedSource('NSE', $day, [[
+            'FinInstrmId' => '762608', 'TckrSymb' => 'BNAGROCHEM', 'ISIN' => 'INE00HZ01011',
+            'SctySrs' => 'EQ', 'OpnPric' => '159.00', 'HghPric' => '162.66',
+            'LwPric' => '158.68', 'ClsPric' => '162.66', 'TtlTradgVol' => '101471',
+        ]]));
+        $this->app->instance(NseBhavcopyService::class, $source);
+        $day = Carbon::parse('2026-11-13');
+        $runId = app(SyncLogService::class)->beginRun('universe-price-sync');
+        $service = app(UniverseDailyBhavcopySyncService::class);
+        $stocks = collect([$stock, $unrelated]);
+        $run = fn () => $service->run($stocks, $day, $day, $runId, 'universe-price-sync', $this->initialStats())['stats'];
+
+        $first = $run();
+        $receipts = json_decode((string) Setting::getValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS), true);
+        $receipts['entries']['NSE:2026-11-13']['retry_after'] = '2026-11-30T20:00:00+05:30';
+        Setting::setValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS, json_encode($receipts, JSON_THROW_ON_ERROR));
+        config(['universe_nse_price_identities.version' => 2]);
+
+        $stillRaw = $run();
+        $this->assertSame(1, $stillRaw['bulk']['backoff_skips']);
+        $this->assertSame('2026-11-30T20:00:00+05:30', $stillRaw['bulk']['files'][0]['retry_after']);
+        $this->assertSame(0, $stillRaw['bulk']['files_downloaded']);
+
+        $repair = app(CorporateActionPriceRepairService::class)->repairPendingFactors(factorId: $factor->id, dryRun: false);
+        $this->assertSame(1, $repair['repaired']);
+        $adjusted = $run();
+
+        $this->assertSame(0, $adjusted['bulk']['backoff_skips']);
+        $this->assertSame(1, $adjusted['bulk']['files_downloaded']);
+        $this->assertSame(0, $adjusted['bulk']['identity_conflicts']);
+        $this->assertSame(1, $first['bulk']['historical_adjustment_required']);
+        $this->assertSame([14.755, 15.492, 16.266], StockPrice::query()->where('stock_id', $stock->id)
+            ->whereDate('price_date', '<', '2026-11-16')->orderBy('price_date')
+            ->pluck('close_price')->map(fn ($value) => (float) $value)->all());
+        app(PriceFetchService::class)->storeHistoricalRows($stock, [[
+            'price_date' => '2026-11-10', 'open_price' => 140, 'high_price' => 141,
+            'low_price' => 139, 'close_price' => 140, 'volume' => 100,
+        ]], 'late_raw_backfill');
+        $this->assertDatabaseMissing('portfolio_stock_prices', ['stock_id' => $stock->id, 'price_date' => '2026-11-10']);
+    }
+
+    private function seedBnaGrochemRawPriceHistory(Stock $stock): void
+    {
+        $rows = [
+            ['price_date' => '2026-11-11', 'open_price' => 147.55, 'high_price' => 147.55, 'low_price' => 147.55, 'close_price' => 147.55, 'adjusted_close_price' => 147.55, 'volume' => 100],
+            ['price_date' => '2026-11-12', 'open_price' => 154.92, 'high_price' => 154.92, 'low_price' => 154.92, 'close_price' => 154.92, 'adjusted_close_price' => 154.92, 'volume' => 100],
+            ['price_date' => '2026-11-13', 'open_price' => 162.66, 'high_price' => 162.66, 'low_price' => 162.66, 'close_price' => 162.66, 'adjusted_close_price' => 162.66, 'volume' => 101471],
+            ['price_date' => '2026-11-16', 'open_price' => 17.08, 'high_price' => 17.08, 'low_price' => 17.08, 'close_price' => 17.08, 'adjusted_close_price' => 17.08, 'volume' => 1000],
+            ['price_date' => '2026-11-17', 'open_price' => 16.23, 'high_price' => 16.23, 'low_price' => 16.23, 'close_price' => 16.23, 'adjusted_close_price' => 16.23, 'volume' => 1000],
+        ];
+        foreach ($rows as $row) {
+            $row['price_date'] .= ' 00:00:00';
+            DB::table('portfolio_stock_prices')->insert($row + [
+                'stock_id' => $stock->id, 'provider_source' => 'nse_bhavcopy',
+                'data_source' => 'nse_bhavcopy', 'created_at' => now(),
+            ]);
+        }
+    }
+
+    private function bnagrochemPendingSplitFactor(Stock $stock): PriceAdjustmentFactor
+    {
+        return PriceAdjustmentFactor::query()->create([
+            'stock_id' => $stock->id, 'issue_id' => null, 'factor_type' => 'corporate_action',
+            'action_type' => 'face_value_split', 'effective_ex_date' => '2026-11-16',
+            'applied_ratio' => 10, 'price_divisor' => 10, 'volume_multiplier' => 10,
+            'is_active' => true, 'applied_at' => now(),
+            'metadata' => ['source' => 'test_reviewed_evidence', 'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_PENDING],
+        ]);
+    }
+
     public function test_identity_conflicts_are_logged_as_bounded_stock_id_reasons_and_never_assigned(): void
     {
         $stock = $this->stock('AAA', ['isin' => 'INE001A01010']);
@@ -403,6 +736,107 @@ class UniverseDailyBhavcopySyncTest extends TestCase
         $this->assertSame(0, $third['failed']);
         $this->assertSame(1, $third['bulk']['files_downloaded']);
         $this->assertDatabaseHas('portfolio_stock_prices', ['stock_id' => $stock->id, 'price_date' => '2026-10-26 00:00:00']);
+    }
+
+    public function test_identity_catalogue_revision_preserves_pending_retry_for_unchanged_scope(): void
+    {
+        $stock = $this->stock();
+        $this->source('NSE', [['TckrSymb' => 'AAA', 'ISIN' => 'INE999A01010']]);
+        $day = Carbon::parse('2026-10-26');
+        $runId = app(SyncLogService::class)->beginRun('universe-price-sync');
+        $service = app(UniverseDailyBhavcopySyncService::class);
+        $first = $service->run(collect([$stock]), $day, $day, $runId, 'universe-price-sync', $this->initialStats())['stats'];
+        $before = json_decode((string) Setting::getValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS), true);
+        $savedRetry = Carbon::parse('2026-11-30 20:00:00', 'Asia/Kolkata')->toIso8601String();
+        $before['entries']['NSE:2026-10-26']['retry_after'] = $savedRetry;
+        Setting::setValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS, json_encode($before, JSON_THROW_ON_ERROR));
+
+        config(['universe_nse_price_identities.version' => 2]);
+        $second = $service->run(collect([$stock]), $day, $day, $runId, 'universe-price-sync', $this->initialStats())['stats'];
+        $after = json_decode((string) Setting::getValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS), true);
+
+        $this->assertSame(1, $second['bulk']['backoff_skips']);
+        $this->assertSame('retry_deferred', $second['bulk']['files'][0]['status']);
+        $this->assertSame($savedRetry, $second['bulk']['files'][0]['retry_after']);
+        $this->assertSame(1, $after['entries']['NSE:2026-10-26']['retry_attempt']);
+        $this->assertSame($savedRetry, $after['entries']['NSE:2026-10-26']['retry_after']);
+        $this->assertSame(1, $first['bulk']['identity_conflicts']);
+    }
+
+    public function test_legacy_receipt_keeps_retry_only_when_previous_identity_fingerprint_proves_same_scope(): void
+    {
+        $stock = $this->stock();
+        $currentDocument = config('universe_nse_price_identities');
+        $oldDocument = $currentDocument;
+        unset($oldDocument['transitions']['CML77412']);
+        $oldDocument['identities'] = array_values(array_filter($oldDocument['identities'], fn ($identity) => $identity['symbol'] !== 'BNAGROCHEM'));
+        config(['universe_nse_price_identities' => $oldDocument]);
+        $this->source('NSE', [['TckrSymb' => 'AAA', 'ISIN' => 'INE999A01010']]);
+        $day = Carbon::parse('2026-10-26');
+        $runId = app(SyncLogService::class)->beginRun('universe-price-sync');
+        $service = app(UniverseDailyBhavcopySyncService::class);
+        $service->run(collect([$stock]), $day, $day, $runId, 'universe-price-sync', $this->initialStats());
+
+        $legacy = json_decode((string) Setting::getValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS), true);
+        unset($legacy['scope_fingerprint']);
+        $legacy['entries']['NSE:2026-10-26']['retry_after'] = Carbon::parse('2026-11-30 20:00:00', 'Asia/Kolkata')->toIso8601String();
+        Setting::setValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS, json_encode($legacy, JSON_THROW_ON_ERROR));
+        config(['universe_nse_price_identities' => $currentDocument]);
+
+        $result = $service->run(collect([$stock]), $day, $day, $runId, 'universe-price-sync', $this->initialStats())['stats'];
+        $saved = json_decode((string) Setting::getValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS), true);
+
+        $this->assertSame(1, $result['bulk']['backoff_skips']);
+        $this->assertSame(0, $result['bulk']['files_downloaded']);
+        $this->assertSame('2026-11-30T20:00:00+05:30', $result['bulk']['files'][0]['retry_after']);
+        $this->assertSame(1, $saved['entries']['NSE:2026-10-26']['retry_attempt']);
+    }
+
+    public function test_membership_change_discards_pending_retry_classification_and_rechecks_source(): void
+    {
+        $stock = $this->stock();
+        $source = Mockery::mock(NseBhavcopyService::class);
+        $source->shouldReceive('fetchDailyRows')->twice()->andReturnUsing(fn (Carbon $day) => $this->parsedSource('NSE', $day, [
+            ['TckrSymb' => 'AAA', 'ISIN' => 'INE999A01010'],
+        ]));
+        $this->app->instance(NseBhavcopyService::class, $source);
+        $day = Carbon::parse('2026-10-26');
+        $runId = app(SyncLogService::class)->beginRun('universe-price-sync');
+        $service = app(UniverseDailyBhavcopySyncService::class);
+        $service->run(collect([$stock]), $day, $day, $runId, 'universe-price-sync', $this->initialStats());
+        $stock->update(['isin' => 'INE003A01010']);
+
+        $result = $service->run(collect([$stock->fresh()]), $day, $day, $runId, 'universe-price-sync', $this->initialStats())['stats'];
+
+        $this->assertSame(0, $result['bulk']['backoff_skips']);
+        $this->assertSame(1, $result['bulk']['files_downloaded']);
+        $this->assertSame(1, $result['bulk']['identity_conflicts']);
+    }
+
+    public function test_coverage_change_revalidates_a_pending_conflict_even_after_catalogue_revision(): void
+    {
+        $stock = $this->stock();
+        $source = Mockery::mock(NseBhavcopyService::class);
+        $source->shouldReceive('fetchDailyRows')->twice()->andReturnUsing(fn (Carbon $day) => $this->parsedSource('NSE', $day, [
+            ['TckrSymb' => 'AAA', 'ISIN' => 'INE999A01010'],
+        ]));
+        $this->app->instance(NseBhavcopyService::class, $source);
+        $day = Carbon::parse('2026-10-26');
+        $runId = app(SyncLogService::class)->beginRun('universe-price-sync');
+        $service = app(UniverseDailyBhavcopySyncService::class);
+        $service->run(collect([$stock]), $day, $day, $runId, 'universe-price-sync', $this->initialStats());
+        app(PriceFetchService::class)->storeHistoricalRows($stock, [[
+            'price_date' => '2026-10-26', 'open_price' => 100, 'high_price' => 101,
+            'low_price' => 99, 'close_price' => 100, 'volume' => 100,
+        ]], 'manual');
+        config(['universe_nse_price_identities.version' => 2]);
+
+        $result = $service->run(collect([$stock]), $day, $day, $runId, 'universe-price-sync', $this->initialStats())['stats'];
+
+        $this->assertSame(0, $result['bulk']['backoff_skips']);
+        $this->assertSame(1, $result['bulk']['files_downloaded']);
+        $this->assertSame(1, $result['bulk']['identity_conflicts']);
+        $this->assertSame('conflicting_identity_or_rows', $result['bulk']['files'][0]['identity_conflict_samples'][0]['reason']);
     }
 
     public function test_bse_conflict_backoff_keeps_failure_and_warning_evidence(): void
