@@ -110,6 +110,8 @@ class UniverseDailyBhavcopySyncTest extends TestCase
         $this->assertSame(3, $first['succeeded']);
         $this->assertSame(3, $first['stored_rows']);
         $this->assertSame(2, $first['bulk']['files_downloaded']);
+        $this->assertSame(['NSE', 'BSE'], $first['bulk']['expected_exchanges']);
+        $this->assertSame(['NSE', 'BSE'], array_column($first['bulk']['files'], 'exchange'));
         $this->assertSame(0, $second['stored_rows']);
         $this->assertSame(3, $second['cache_hits']);
         $this->assertSame(2, $second['bulk']['file_cache_hits']);
@@ -161,6 +163,8 @@ class UniverseDailyBhavcopySyncTest extends TestCase
             'session_date' => '2026-10-26', 'outcome' => 'no_data', 'price_present' => false,
         ]);
         $this->assertSame('partial', SyncRun::query()->latest('finished_at')->value('status'));
+        $this->assertSame('SUCCESS', SyncRun::query()->latest('finished_at')->value('operational_outcome'), json_encode($result['bulk'], JSON_THROW_ON_ERROR));
+        $this->assertSame(SyncRun::query()->latest('finished_at')->value('id'), json_decode(Setting::getValue(UniversePriceSyncService::KEY_LAST_RUN_JSON), true)['run_id'] ?? null);
         Http::assertNothingSent();
     }
 
