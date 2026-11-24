@@ -186,13 +186,20 @@ class CorporateActionPriceRepairService
                 continue;
             }
 
-            [$stock, $adjustment] = DB::transaction(function () use ($actionIdValue): array {
+            // Resolve the parent key before opening a transaction; this
+            // consistent read must not pin a snapshot ahead of the stock lock.
+            $candidateStockId = CorporateAction::query()->whereKey($actionIdValue)->value('stock_id');
+            if ($candidateStockId === null) {
+                $skipped++;
+                continue;
+            }
+            $candidateStockId = (int) $candidateStockId;
+            [$stock, $adjustment] = DB::transaction(function () use ($actionIdValue, $candidateStockId): array {
                 // Every F020/F042 OHLCV writer takes locks in stock → event order.
-                // Read the parent key without a lock, lock the shared stock row,
-                // then lock and revalidate the action while serialized.
-                $stockId = CorporateAction::query()->whereKey($actionIdValue)->value('stock_id');
-                if ($stockId === null) return [null, null];
-                $stock = Stock::query()->whereKey($stockId)->lockForUpdate()->first();
+                // Resolve the parent ID during the earlier scan, before this
+                // transaction begins. Its first database read is the locking
+                // read, so REPEATABLE READ cannot pin a pre-lock snapshot.
+                $stock = Stock::query()->whereKey($candidateStockId)->lockForUpdate()->first();
                 if ($stock === null) return [null, null];
                 $action = CorporateAction::query()->whereKey($actionIdValue)->lockForUpdate()->firstOrFail();
                 if ((int) $action->stock_id !== (int) $stock->id) {
@@ -757,19 +764,23 @@ class CorporateActionPriceRepairService
      */
     protected function applyFactorRepair(int $factorId, string $repairSource): array
     {
-        return DB::transaction(function () use ($factorId, $repairSource) {
+        // This lookup must stay outside the transaction: a consistent read
+        // inside it could establish a stale REPEATABLE READ snapshot before
+        // waiting on the stock lock.
+        $candidateStockId = PriceAdjustmentFactor::query()->whereKey($factorId)->value('stock_id');
+        if ($candidateStockId === null) {
+            return [
+                'factor_id' => $factorId,
+                'action' => 'skipped',
+                'status' => self::STATUS_INVALID_FACTOR,
+                'reason' => 'Factor not found.',
+            ];
+        }
+
+        return DB::transaction(function () use ($factorId, $repairSource, $candidateStockId) {
             /** @var PriceAdjustmentFactor|null $factor */
             // Keep writer lock order stock → factor, matching direct and repair F020.
-            $stockId = DB::table('portfolio_price_adjustment_factors')->where('id', $factorId)->value('stock_id');
-            if ($stockId === null) {
-                return [
-                    'factor_id' => $factorId,
-                    'action' => 'skipped',
-                    'status' => self::STATUS_INVALID_FACTOR,
-                    'reason' => 'Factor not found.',
-                ];
-            }
-            $stock = Stock::query()->whereKey($stockId)->lockForUpdate()->first();
+            $stock = Stock::query()->whereKey($candidateStockId)->lockForUpdate()->first();
             if ($stock === null) {
                 return [
                     'factor_id' => $factorId,
@@ -789,7 +800,7 @@ class CorporateActionPriceRepairService
                 ];
             }
 
-            if ((int) $factor->stock_id !== (int) $stockId) {
+            if ((int) $factor->stock_id !== (int) $candidateStockId) {
                 return [
                     'factor_id' => $factor->id,
                     'issue_id' => $factor->issue_id,
@@ -989,13 +1000,16 @@ class CorporateActionPriceRepairService
      */
     protected function markMetadataOnly(int $actionId): bool
     {
-        return DB::transaction(function () use ($actionId): bool {
-            $stockId = CorporateAction::query()->whereKey($actionId)->value('stock_id');
-            if ($stockId === null) return false;
-            $stock = Stock::query()->whereKey($stockId)->lockForUpdate()->first();
+        // Resolve the parent key before opening the transaction. Inside it,
+        // take the shared stock lock before any consistent inspection reads.
+        $candidateStockId = CorporateAction::query()->whereKey($actionId)->value('stock_id');
+        if ($candidateStockId === null) return false;
+
+        return DB::transaction(function () use ($actionId, $candidateStockId): bool {
+            $stock = Stock::query()->whereKey($candidateStockId)->lockForUpdate()->first();
             if ($stock === null) return false;
             $action = CorporateAction::query()->whereKey($actionId)->lockForUpdate()->first();
-            if ($action === null || (int) $action->stock_id !== (int) $stock->id) return false;
+            if ($action === null || (int) $action->stock_id !== (int) $candidateStockId) return false;
             $action->setRelation('stock', $stock);
             $fresh = $this->inspectAction($action);
             if ($fresh['status'] !== self::STATUS_SUSPECTED_ALREADY_ADJUSTED
