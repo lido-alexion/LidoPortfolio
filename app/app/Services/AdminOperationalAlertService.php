@@ -89,6 +89,14 @@ class AdminOperationalAlertService
         if ($this->universeSync->isEnabled()) {
             $status = $this->universeSync->status();
             $lastRun = $status['last_run'] ?? null;
+            $universeRun = $this->syncLog->latestFinishedRun(SyncLogService::JOB_UNIVERSE_PRICE_SYNC);
+            // The setting cache and SyncRun can cross a completion boundary.
+            // Operational alerts use the completion log tied to the exact run
+            // selected above, so status cards cannot pair old counts with a new
+            // terminal outcome (or vice versa).
+            if ($universeRun !== null) {
+                $lastRun = $this->syncLog->completionStatsForRun($universeRun);
+            }
             $recentIssues = $status['rate_limits']['recent_issues'] ?? [];
             $bulkDaily = ($lastRun['collection_method'] ?? null) === 'exchange_bhavcopy';
             $failureTitle = $bulkDaily ? 'Universe daily bhavcopy sync failed' : 'Universe sync batch failed';
@@ -109,7 +117,9 @@ class AdminOperationalAlertService
                 );
             }
 
-            $universeRun = $this->syncLog->latestFinishedRun(SyncLogService::JOB_UNIVERSE_PRICE_SYNC);
+            $terminalOperationalSuccess = $universeRun !== null
+                && $universeRun->operational_outcome === 'SUCCESS'
+                && $this->dailyStatsMatchRun($lastRun, $universeRun);
             $validatedDailyFiles = $this->hasValidatedDailyFileEvidence($lastRun);
             $identityConflict = $bulkDaily && (int) ($lastRun['bulk']['identity_conflicts'] ?? 0) > 0;
             $persistentDailyFileFailure = $bulkDaily && $this->hasPersistentDailyFileFailure($lastRun, $universeRun);
@@ -140,7 +150,7 @@ class AdminOperationalAlertService
                         'files' => $lastRun['bulk']['files'] ?? [],
                     ]),
                 );
-            } elseif ($universeRun && in_array($universeRun->status, ['failed', 'partial'], true)
+            } elseif (! $terminalOperationalSuccess && $universeRun && in_array($universeRun->status, ['failed', 'partial'], true)
                 && ! $this->dailyCoverageOnly($lastRun, $validatedDailyFiles, $universeRun)
                 && ! ($bulkDaily && $this->dailyTransientFailureOnly($lastRun, $universeRun))) {
                 $alerts[] = $this->alert(
@@ -150,7 +160,7 @@ class AdminOperationalAlertService
                     $this->formatRunFailureMessage('Universe price sync', $universeRun),
                     $this->runContext($universeRun),
                 );
-            } elseif ($lastRun && ($lastRun['failed'] ?? 0) > 0 && ($lastRun['succeeded'] ?? 0) === 0
+            } elseif (! $terminalOperationalSuccess && $lastRun && ($lastRun['failed'] ?? 0) > 0 && ($lastRun['succeeded'] ?? 0) === 0
                 && ! ($bulkDaily && $this->dailyCoverageOnly($lastRun, $validatedDailyFiles, $universeRun))
                 && ! ($bulkDaily && $this->dailyTransientFailureOnly($lastRun, $universeRun))) {
                 $alerts[] = $this->alert(
@@ -591,6 +601,7 @@ class AdminOperationalAlertService
     protected function dailyStatsMatchRun(?array $lastRun, ?SyncRun $run): bool
     {
         if (! $lastRun || ! $run || ! $this->isIsoTimestamp($lastRun['completed_at'] ?? null) || ! $run->finished_at) return false;
+        if (isset($lastRun['run_id']) && (string) $lastRun['run_id'] !== (string) $run->id) return false;
         try {
             return abs(Carbon::parse($lastRun['completed_at'])->getTimestamp() - Carbon::parse($run->finished_at)->getTimestamp()) <= 300;
         } catch (\Throwable) {

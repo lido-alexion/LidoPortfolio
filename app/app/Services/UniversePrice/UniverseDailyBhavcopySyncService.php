@@ -114,6 +114,8 @@ class UniverseDailyBhavcopySyncService
                 throw new InvalidArgumentException('Unsupported daily bhavcopy exchange.');
             }
         }
+        usort($exchanges, fn (string $left, string $right): int =>
+            array_search($left, ['NSE', 'BSE'], true) <=> array_search($right, ['NSE', 'BSE'], true));
         $stats['bulk']['expected_exchanges'] = array_values($exchanges);
         for ($expectedDay = $from->copy(); $expectedDay->lte($to); $expectedDay->addDay()) {
             if (! TradingCalendar::isEquitySessionDate($expectedDay)) continue;
@@ -126,10 +128,12 @@ class UniverseDailyBhavcopySyncService
             if (! TradingCalendar::isEquitySessionDate($day)) {
                 continue;
             }
-            foreach ($stocks->groupBy('exchange') as $exchange => $exchangeStocks) {
+            $stockGroups = $stocks->groupBy('exchange');
+            foreach ($exchanges as $exchange) {
                 if (! in_array($exchange, ['NSE', 'BSE'], true)) {
                     throw new InvalidArgumentException('Unsupported daily bhavcopy exchange.');
                 }
+                $exchangeStocks = $stockGroups->get($exchange, collect());
                 $key = $exchange.':'.$day->toDateString();
                 $stockIds = $exchangeStocks->pluck('id')->all();
                 $physicalCoverage = $this->receiptCoverage($stockIds, $day);

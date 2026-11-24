@@ -19,6 +19,7 @@ class SyncRun extends Model
         'id',
         'job_name',
         'status',
+        'operational_outcome',
         'started_at',
         'finished_at',
         'stocks_processed',

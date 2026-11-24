@@ -39,6 +39,8 @@ class DataQualityResolutionService
                 );
             }
 
+            app(BnagrochemF042EvidenceValidator::class)->assertReviewedEvidence($issue->loadMissing(['stock', 'evidences']), $appliedRatio, $auto);
+
             $isReversal = $issue->latest_resolution_id !== null && $issue->issue_status !== DataQualityIssue::STATUS_PENDING_REVIEW;
             $resolutionType = $auto
                 ? DataQualityIssueResolution::TYPE_AUTO_ACCEPTED
@@ -182,6 +184,11 @@ class DataQualityResolutionService
     protected function isEligibleForAutoAccept(DataQualityIssue $issue, int $thresholdDays): bool
     {
         if ($issue->issue_status !== DataQualityIssue::STATUS_PENDING_REVIEW) {
+            return false;
+        }
+
+        // The #383 BNAGROCHEM factor requires a named human review of its exact source bundle.
+        if (app(BnagrochemF042EvidenceValidator::class)->appliesTo($issue)) {
             return false;
         }
 
