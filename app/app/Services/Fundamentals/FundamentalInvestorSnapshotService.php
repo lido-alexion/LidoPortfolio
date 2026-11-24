@@ -239,7 +239,8 @@ class FundamentalInvestorSnapshotService
         string $frequency,
     ): array {
         $cutoff = $this->rangeCutoff($asOf, $range);
-        $priceRows = DB::table('portfolio_stock_prices')
+        $priceRows = app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)
+            ->apply(DB::table('portfolio_stock_prices'), 'portfolio_stock_prices')
             ->where('stock_id', $stock->id)
             ->whereDate('price_date', '>=', $cutoff->toDateString())
             ->whereDate('price_date', '<=', $asOf->toDateString())
@@ -378,7 +379,8 @@ class FundamentalInvestorSnapshotService
 
     public function latestMarketPrice(Stock $stock, Carbon $asOf): ?float
     {
-        $row = DB::table('portfolio_stock_prices')
+        $row = app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)
+            ->apply(DB::table('portfolio_stock_prices'), 'portfolio_stock_prices')
             ->where('stock_id', $stock->id)
             ->whereDate('price_date', '<=', $asOf->toDateString())
             ->orderByDesc('price_date')

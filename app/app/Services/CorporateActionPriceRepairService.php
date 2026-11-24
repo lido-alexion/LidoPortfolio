@@ -24,6 +24,8 @@ class CorporateActionPriceRepairService
 
     public const STATUS_DEFERRED_TO_FACTOR = 'deferred_to_factor';
 
+    public const STATUS_DUPLICATE_STOCK_EVENT = 'duplicate_stock_event';
+
     public const STATUS_UNSUPPORTED_ACTION = 'unsupported_action';
 
     public const STATUS_INVALID_FACTOR = 'invalid_factor';
@@ -143,13 +145,22 @@ class CorporateActionPriceRepairService
                         continue;
                     }
 
-                    $this->markMetadataOnly(CorporateAction::query()->findOrFail($actionIdValue), $finding);
-                    $details[] = [
-                        'corporate_action_id' => $actionIdValue,
-                        'action' => 'marked_metadata_only',
-                        'status' => $status,
-                    ];
-                    $repaired++;
+                    if ($this->markMetadataOnly($actionIdValue)) {
+                        $details[] = [
+                            'corporate_action_id' => $actionIdValue,
+                            'action' => 'marked_metadata_only',
+                            'status' => $status,
+                        ];
+                        $repaired++;
+                    } else {
+                        $details[] = [
+                            'corporate_action_id' => $actionIdValue,
+                            'action' => 'skipped',
+                            'status' => self::STATUS_DUPLICATE_STOCK_EVENT,
+                            'reason' => 'Stock-event state changed after inspection; metadata was not rewritten.',
+                        ];
+                        $skipped++;
+                    }
                     continue;
                 }
 
@@ -175,29 +186,68 @@ class CorporateActionPriceRepairService
                 continue;
             }
 
-            $action = CorporateAction::query()->with('stock')->findOrFail($actionIdValue);
-            $stock = $action->stock;
+            [$stock, $adjustment] = DB::transaction(function () use ($actionIdValue): array {
+                // Every F020/F042 OHLCV writer takes locks in stock → event order.
+                // Read the parent key without a lock, lock the shared stock row,
+                // then lock and revalidate the action while serialized.
+                $stockId = CorporateAction::query()->whereKey($actionIdValue)->value('stock_id');
+                if ($stockId === null) return [null, null];
+                $stock = Stock::query()->whereKey($stockId)->lockForUpdate()->first();
+                if ($stock === null) return [null, null];
+                $action = CorporateAction::query()->whereKey($actionIdValue)->lockForUpdate()->firstOrFail();
+                if ((int) $action->stock_id !== (int) $stock->id) {
+                    throw new \RuntimeException('Corporate action stock changed while acquiring repair locks.');
+                }
+                $action->setRelation('stock', $stock);
+                $freshFinding = $this->inspectAction($action);
+                if (! in_array($freshFinding['status'], [self::STATUS_MISSING_METADATA, self::STATUS_SUSPECTED_UNADJUSTED], true)) {
+                    return [$stock, [
+                        'rows_adjusted' => 0,
+                        '_skipped_status' => $freshFinding['status'],
+                    ]];
+                }
+
+                $adjustment = $this->priceAdjustment->adjustHistoricalPrices(
+                    $stock,
+                    $action->ex_date->toDateString(),
+                    $action->action_type,
+                    (int) $action->ratio_from,
+                    (int) $action->ratio_to,
+                );
+                $invalidatedProofs = $adjustment['_invalidated_proofs'] ?? [];
+                unset($adjustment['_invalidated_proofs']);
+                $historyEvidence = app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)
+                    ->historyEvidence((int) $stock->id, $action->ex_date->toDateString());
+
+                $action->update([
+                    'metadata' => array_merge($action->metadata ?? [], [
+                        'price_adjustment' => array_merge($adjustment, [
+                            'rows_adjusted' => $historyEvidence['rows_adjusted'],
+                            'rows_sha256' => $historyEvidence['rows_sha256'],
+                            'repaired_at' => now()->toIso8601String(),
+                            'repair_source' => 'portfolio:repair-corporate-action-prices',
+                        ]),
+                    ]),
+                ]);
+                app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)
+                    ->refreshOverlappingRepairProofs($stock, $invalidatedProofs);
+
+                return [$stock, $adjustment];
+            });
             if ($stock === null) {
                 $skipped++;
                 continue;
             }
-
-            $adjustment = $this->priceAdjustment->adjustHistoricalPrices(
-                $stock,
-                $action->ex_date->toDateString(),
-                $action->action_type,
-                (int) $action->ratio_from,
-                (int) $action->ratio_to,
-            );
-
-            $action->update([
-                'metadata' => array_merge($action->metadata ?? [], [
-                    'price_adjustment' => array_merge($adjustment, [
-                        'repaired_at' => now()->toIso8601String(),
-                        'repair_source' => 'portfolio:repair-corporate-action-prices',
-                    ]),
-                ]),
-            ]);
+            if (isset($adjustment['_skipped_status'])) {
+                $skipped++;
+                $details[] = [
+                    'corporate_action_id' => $actionIdValue,
+                    'action' => 'skipped',
+                    'status' => $adjustment['_skipped_status'],
+                    'reason' => 'Stock-event state changed after inspection; no OHLCV write was made.',
+                ];
+                continue;
+            }
 
             $this->metricsUpdate->updateStock($stock);
 
@@ -348,6 +398,71 @@ class CorporateActionPriceRepairService
             (int) $action->ratio_from,
             (int) $action->ratio_to,
         )['price_divisor'];
+
+        $eventTypes = in_array($action->action_type, ['split', 'face_value_split'], true)
+            ? ['split', 'face_value_split']
+            : [$action->action_type];
+        $stockEvents = CorporateAction::query()->where('stock_id', $action->stock_id)
+            ->whereIn('action_type', $eventTypes)->whereDate('ex_date', $exDate)
+            ->whereNotNull('applied_at')->orderBy('id')->get();
+        foreach ($stockEvents as $stockEvent) {
+            if ((int) $stockEvent->ratio_from !== (int) $action->ratio_from
+                || (int) $stockEvent->ratio_to !== (int) $action->ratio_to) {
+                return $this->finding($action, self::STATUS_DUPLICATE_STOCK_EVENT,
+                    'Conflicting ratios exist for this stock-global corporate-action event; manual resolution is required.', [
+                        'rows_before_ex_date' => $rowsBefore,
+                        'expected_price_divisor' => $expectedDivisor,
+                        'errors' => ['conflicting_stock_event_ratio'],
+                    ]);
+            }
+        }
+
+        $adjustedEvents = $stockEvents->filter(function (CorporateAction $candidate): bool {
+            $adjustment = ($candidate->metadata ?? [])['price_adjustment'] ?? [];
+            return is_array($adjustment)
+                && ! isset($adjustment['repair_note'])
+                && (int) ($adjustment['rows_adjusted'] ?? 0) > 0;
+        })->values();
+        if ($adjustedEvents->count() > 1) {
+            return $this->finding($action, self::STATUS_DUPLICATE_STOCK_EVENT,
+                'Multiple F020 records claim an OHLCV restatement for this stock event; refusing another adjustment.', [
+                    'rows_before_ex_date' => $rowsBefore,
+                    'expected_price_divisor' => $expectedDivisor,
+                    'errors' => ['multiple_stock_event_restatements'],
+                ]);
+        }
+        if ($adjustedEvents->isNotEmpty()) {
+            /** @var CorporateAction $restatementOwner */
+            $restatementOwner = $adjustedEvents->first();
+            $gate = app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class);
+            if ($gate->restatementTouchesProtectedHistory($stock)
+                && ! $gate->hasCurrentCorporateActionProof($restatementOwner)) {
+                return $this->finding($action, self::STATUS_DUPLICATE_STOCK_EVENT,
+                    'The existing stock-event restatement proof is stale or incomplete; refusing to trust or repeat it.', [
+                        'rows_before_ex_date' => $rowsBefore,
+                        'expected_price_divisor' => $expectedDivisor,
+                        'errors' => ['stale_stock_event_restatement_proof'],
+                    ]);
+            }
+            if ((int) $restatementOwner->id !== (int) $action->id) {
+                return $this->finding($action, self::STATUS_SUSPECTED_ALREADY_ADJUSTED,
+                    'Another portfolio already owns the stock-global OHLCV restatement for this event.', [
+                        'rows_before_ex_date' => $rowsBefore,
+                        'expected_price_divisor' => $expectedDivisor,
+                        'rows_adjusted' => (int) (($restatementOwner->metadata ?? [])['price_adjustment']['rows_adjusted'] ?? 0),
+                    ]);
+            }
+        }
+        if ($stockEvents->count() > 1
+            && (int) $stockEvents->first()->id !== (int) $action->id
+            && $adjustedEvents->isEmpty()) {
+            return $this->finding($action, self::STATUS_DUPLICATE_STOCK_EVENT,
+                'Only the earliest stock-global action record may own legacy OHLCV repair for this event.', [
+                    'rows_before_ex_date' => $rowsBefore,
+                    'expected_price_divisor' => $expectedDivisor,
+                    'errors' => ['noncanonical_stock_event_restatement'],
+                ]);
+        }
 
         if ($stock !== null && $this->activeFactorExistsForStockExDate((int) $stock->id, $exDate, $action->action_type)) {
             return $this->finding($action, self::STATUS_DEFERRED_TO_FACTOR, 'Active F042 PriceAdjustmentFactor exists for this stock/ex-date/action; use factor repair path to avoid double adjustment.', [
@@ -528,6 +643,84 @@ class CorporateActionPriceRepairService
             ]);
         }
 
+        $existingActions = CorporateAction::query()->where('stock_id', $factor->stock_id)
+            ->whereDate('ex_date', $exDate)
+            ->whereIn('action_type', ['split', 'face_value_split'])
+            ->whereNotNull('applied_at')->orderBy('id')->get();
+        foreach ($existingActions as $existingAction) {
+            $expectedAction = $this->priceAdjustment->factorsForAction(
+                $existingAction->action_type,
+                (int) $existingAction->ratio_from,
+                (int) $existingAction->ratio_to,
+            );
+            if (abs($expectedAction['price_divisor'] - $priceDivisor) > 0.000001
+                || abs($expectedAction['volume_multiplier'] - $volumeMultiplier) > 0.000001) {
+                return array_merge($base, [
+                    'status' => self::STATUS_DUPLICATE_STOCK_EVENT,
+                    'message' => 'F020 and F042 ratios conflict for this stock-global event; manual resolution is required.',
+                    'errors' => ['conflicting_f020_f042_ratio'],
+                ]);
+            }
+        }
+        $restatementOwners = $existingActions->filter(function (CorporateAction $candidate): bool {
+            $candidateAdjustment = ($candidate->metadata ?? [])['price_adjustment'] ?? [];
+            return is_array($candidateAdjustment)
+                && ! isset($candidateAdjustment['repair_note'])
+                && (int) ($candidateAdjustment['rows_adjusted'] ?? 0) > 0;
+        })->values();
+        if ($restatementOwners->count() > 1) {
+            return array_merge($base, [
+                'status' => self::STATUS_DUPLICATE_STOCK_EVENT,
+                'message' => 'Multiple F020 records claim this stock-global restatement; refusing F042 repair.',
+                'errors' => ['multiple_f020_restatement_owners'],
+            ]);
+        }
+        if ($restatementOwners->isNotEmpty()) {
+            $owner = $restatementOwners->first();
+            if (app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)
+                ->restatementTouchesProtectedHistory($stock)
+                && ! app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)
+                    ->hasCurrentCorporateActionProof($owner)) {
+                return array_merge($base, [
+                    'status' => self::STATUS_DUPLICATE_STOCK_EVENT,
+                    'message' => 'F020 restatement proof is stale or incomplete; refusing to trust or repeat it.',
+                    'errors' => ['stale_f020_restatement_proof'],
+                ]);
+            }
+            return array_merge($base, [
+                'status' => self::STATUS_DEFERRED_TO_FACTOR,
+                'message' => 'F020 already restated this stock/ex-date; refusing a second F042 adjustment.',
+                'errors' => ['duplicate_action_restatement'],
+            ]);
+        }
+
+        if ($existingActions->isNotEmpty()) {
+            $continuity = $this->continuityRatio($stock, $exDate);
+            if ($continuity === null || ! $this->ratioNear($continuity, $priceDivisor)) {
+                return array_merge($base, [
+                    'status' => self::STATUS_AMBIGUOUS,
+                    'message' => 'An applied F020 action exists without matching raw-price evidence; refusing possible double adjustment.',
+                    'errors' => ['duplicate_action_price_state_ambiguous'],
+                ]);
+            }
+        }
+
+        $completedFactor = PriceAdjustmentFactor::query()->where('stock_id', $factor->stock_id)
+            ->whereDate('effective_ex_date', $exDate)
+            ->where('id', '!=', $factor->id)
+            ->where('is_active', true)
+            ->get(['id', 'metadata'])
+            ->first(fn (PriceAdjustmentFactor $candidate): bool =>
+                (($candidate->metadata ?? [])['ohlcv_repair_status'] ?? null) === PriceAdjustmentFactor::REPAIR_STATUS_COMPLETED
+            );
+        if ($completedFactor !== null) {
+            return array_merge($base, [
+                'status' => self::STATUS_DEFERRED_TO_FACTOR,
+                'message' => 'A completed F042 factor already restated this stock/ex-date; refusing a second adjustment.',
+                'errors' => ['duplicate_factor_restatement'],
+            ]);
+        }
+
         $samples = $this->priceAdjustment->sampleAdjustmentPreview(
             $stock,
             $exDate,
@@ -566,11 +759,26 @@ class CorporateActionPriceRepairService
     {
         return DB::transaction(function () use ($factorId, $repairSource) {
             /** @var PriceAdjustmentFactor|null $factor */
-            $factor = PriceAdjustmentFactor::query()
-                ->with(['stock', 'issue'])
-                ->whereKey($factorId)
-                ->lockForUpdate()
-                ->first();
+            // Keep writer lock order stock → factor, matching direct and repair F020.
+            $stockId = DB::table('portfolio_price_adjustment_factors')->where('id', $factorId)->value('stock_id');
+            if ($stockId === null) {
+                return [
+                    'factor_id' => $factorId,
+                    'action' => 'skipped',
+                    'status' => self::STATUS_INVALID_FACTOR,
+                    'reason' => 'Factor not found.',
+                ];
+            }
+            $stock = Stock::query()->whereKey($stockId)->lockForUpdate()->first();
+            if ($stock === null) {
+                return [
+                    'factor_id' => $factorId,
+                    'action' => 'skipped',
+                    'status' => self::STATUS_INVALID_FACTOR,
+                    'reason' => 'Factor stock no longer exists.',
+                ];
+            }
+            $factor = PriceAdjustmentFactor::query()->with('issue')->whereKey($factorId)->lockForUpdate()->first();
 
             if ($factor === null) {
                 return [
@@ -580,6 +788,17 @@ class CorporateActionPriceRepairService
                     'reason' => 'Factor not found.',
                 ];
             }
+
+            if ((int) $factor->stock_id !== (int) $stockId) {
+                return [
+                    'factor_id' => $factor->id,
+                    'issue_id' => $factor->issue_id,
+                    'action' => 'skipped',
+                    'status' => self::STATUS_INVALID_FACTOR,
+                    'reason' => 'Factor stock changed while acquiring repair locks.',
+                ];
+            }
+            $factor->setRelation('stock', $stock);
 
             $ambiguousKeys = $this->ambiguousPendingStockExDateKeys(
                 PriceAdjustmentFactor::query()->pendingOhlcvRepair()->get()
@@ -630,11 +849,15 @@ class CorporateActionPriceRepairService
             }
 
             $metadata = $factor->metadata ?? [];
+            $invalidatedProofs = $adjustment['_invalidated_proofs'] ?? [];
+            unset($adjustment['_invalidated_proofs']);
             $metadata['ohlcv_repair_status'] = PriceAdjustmentFactor::REPAIR_STATUS_COMPLETED;
             $metadata['ohlcv_repair'] = [
                 'previous_status' => $previousStatus,
                 'resulting_status' => PriceAdjustmentFactor::REPAIR_STATUS_COMPLETED,
                 'rows_adjusted' => $adjustment['rows_adjusted'],
+                'rows_sha256' => app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)
+                    ->historyEvidence((int) $factor->stock_id, $exDate)['rows_sha256'],
                 'price_divisor' => $adjustment['price_divisor'],
                 'volume_multiplier' => $adjustment['volume_multiplier'],
                 'adjusted_before_date' => $adjustment['adjusted_before_date'],
@@ -647,6 +870,8 @@ class CorporateActionPriceRepairService
             ];
 
             $factor->update(['metadata' => $metadata]);
+            app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)
+                ->refreshOverlappingRepairProofs($stock, $invalidatedProofs);
 
             $this->metricsUpdate->updateStock($stock);
 
@@ -762,30 +987,39 @@ class CorporateActionPriceRepairService
     /**
      * @param  array<string, mixed>  $finding
      */
-    protected function markMetadataOnly(CorporateAction $action, array $finding): void
+    protected function markMetadataOnly(int $actionId): bool
     {
-        $stock = $action->stock;
-        if ($stock === null) {
-            return;
-        }
+        return DB::transaction(function () use ($actionId): bool {
+            $stockId = CorporateAction::query()->whereKey($actionId)->value('stock_id');
+            if ($stockId === null) return false;
+            $stock = Stock::query()->whereKey($stockId)->lockForUpdate()->first();
+            if ($stock === null) return false;
+            $action = CorporateAction::query()->whereKey($actionId)->lockForUpdate()->first();
+            if ($action === null || (int) $action->stock_id !== (int) $stock->id) return false;
+            $action->setRelation('stock', $stock);
+            $fresh = $this->inspectAction($action);
+            if ($fresh['status'] !== self::STATUS_SUSPECTED_ALREADY_ADJUSTED
+                || ! empty(($action->metadata ?? [])['price_adjustment'])) return false;
 
-        $preview = $this->priceAdjustment->previewAdjustment(
-            $stock,
-            $action->ex_date->toDateString(),
-            $action->action_type,
-            (int) $action->ratio_from,
-            (int) $action->ratio_to,
-        );
-
-        $action->update([
-            'metadata' => array_merge($action->metadata ?? [], [
-                'price_adjustment' => array_merge($preview, [
-                    'rows_adjusted' => 0,
-                    'repaired_at' => now()->toIso8601String(),
-                    'repair_source' => 'portfolio:repair-corporate-action-prices',
-                    'repair_note' => 'metadata_only_prices_already_continuous',
+            $preview = $this->priceAdjustment->previewAdjustment(
+                $stock,
+                $action->ex_date->toDateString(),
+                $action->action_type,
+                (int) $action->ratio_from,
+                (int) $action->ratio_to,
+            );
+            $action->update([
+                'metadata' => array_merge($action->metadata ?? [], [
+                    'price_adjustment' => array_merge($preview, [
+                        'rows_adjusted' => 0,
+                        'repaired_at' => now()->toIso8601String(),
+                        'repair_source' => 'portfolio:repair-corporate-action-prices',
+                        'repair_note' => 'metadata_only_prices_already_continuous',
+                    ]),
                 ]),
-            ]),
-        ]);
+            ]);
+
+            return true;
+        });
     }
 }
