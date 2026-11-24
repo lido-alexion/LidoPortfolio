@@ -637,6 +637,7 @@ class UniversePriceSyncServiceTest extends TestCase
             ];
         }
         foreach (array_chunk($stockRows, 500) as $chunk) DB::table('portfolio_stocks')->insert($chunk);
+        unset($stockRows, $chunk);
         $stocks = DB::table('portfolio_stocks')->orderBy('id')->get(['id', 'exchange']);
         $outcomeRows = [];
         $counts = ['not_expected' => 0, 'no_data' => 0, 'covered' => 0];
@@ -651,9 +652,14 @@ class UniversePriceSyncServiceTest extends TestCase
                     'source_revision_sha256' => $sourceHashes[$stock->exchange.':'.$date],
                     'run_id' => $runId, 'observed_at' => $stamp, 'created_at' => $stamp, 'updated_at' => $stamp,
                 ];
+                if (count($outcomeRows) === 1000) {
+                    DB::table('portfolio_universe_price_session_outcomes')->insert($outcomeRows);
+                    $outcomeRows = [];
+                }
             }
         }
-        foreach (array_chunk($outcomeRows, 1000) as $chunk) DB::table('portfolio_universe_price_session_outcomes')->insert($chunk);
+        if ($outcomeRows !== []) DB::table('portfolio_universe_price_session_outcomes')->insert($outcomeRows);
+        unset($outcomeRows, $stocks);
         $this->assertSame(['not_expected' => 2, 'no_data' => 3182, 'covered' => 27884], $counts);
 
         $stats = [
