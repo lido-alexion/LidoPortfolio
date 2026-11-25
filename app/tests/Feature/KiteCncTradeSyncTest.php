@@ -69,6 +69,63 @@ class KiteCncTradeSyncTest extends TestCase
         $this->assertArrayNotHasKey('access_token', KiteCncTradeImport::query()->where('broker_trade_id', '98701')->firstOrFail()->broker_evidence);
     }
 
+    public function test_kite_trades_average_price_and_fill_timestamp_drive_multiple_execution_imports(): void
+    {
+        [$profile] = $this->portfolioAndStock();
+        $fake = app(FakeBrokerGateway::class);
+        $firstFill = [...$this->fill(98601, 'B-16', 'BUY', 2, 999), 'average_price' => 101.25,
+            'trade_id' => '98601', 'instrument_token' => 123456, 'exchange_order_id' => 'EX-16',
+            'order_timestamp' => '09:16:35', 'fill_timestamp' => '2026-11-20 09:16:39', 'exchange_timestamp' => '2026-11-20 09:16:38'];
+        $secondFill = [...$this->fill(98602, 'B-16', 'BUY', 3, 999), 'average_price' => 101.50,
+            'trade_id' => '98602', 'instrument_token' => 123456, 'exchange_order_id' => 'EX-16',
+            'order_timestamp' => '09:16:35', 'fill_timestamp' => '2026-11-20 09:16:40', 'exchange_timestamp' => '2026-11-20 09:16:38'];
+        unset($firstFill['price'], $secondFill['price']);
+        $fake->tradeRows = [$firstFill, $secondFill];
+        $result = app(KiteCncTradeSyncService::class)->sync($profile);
+        $this->assertSame(2, $result['imported']);
+        $this->assertSame([101.25, 101.5], KiteCncTradeImport::query()->orderBy('broker_trade_id')->pluck('price')->map(fn ($v) => (float) $v)->all());
+        $this->assertSame('2026-11-20 09:16:39', KiteCncTradeImport::query()->where('broker_trade_id', '98601')->firstOrFail()->executed_at->format('Y-m-d H:i:s'));
+        $this->assertSame(0, app(KiteCncTradeSyncService::class)->sync($profile)['imported']);
+        $this->assertSame(2, $profile->transactions()->count());
+    }
+
+    public function test_conflicting_or_malformed_kite_price_evidence_stays_unresolved(): void
+    {
+        [$profile] = $this->portfolioAndStock();
+        app(FakeBrokerGateway::class)->tradeRows = [
+            [...$this->fill(98611, 'B-16', 'BUY', 2, 100), 'average_price' => 101],
+            [...$this->fill(98612, 'B-16', 'BUY', 2, 100), 'average_price' => 'invalid'],
+        ];
+        $result = app(KiteCncTradeSyncService::class)->sync($profile);
+        $this->assertSame(0, $result['imported']);
+        $this->assertSame(2, $result['review']);
+        $this->assertSame(0, $profile->transactions()->count());
+        $this->assertSame(2, KiteCncTradeImport::query()->where('evidence_kind', 'malformed_candidate')->count());
+    }
+
+    public function test_same_day_retry_promotes_malformed_candidate_to_review_without_posting_and_is_idempotent(): void
+    {
+        [$profile] = $this->portfolioAndStock();
+        $fake = app(FakeBrokerGateway::class);
+        $malformed = [...$this->fill(98621, 'B-16', 'BUY', 2, 100), 'average_price' => 0];
+        unset($malformed['price']);
+        $fake->tradeRows = [$malformed];
+        app(KiteCncTradeSyncService::class)->sync($profile);
+        $candidate = KiteCncTradeImport::query()->where('broker_trade_id', '98621')->firstOrFail();
+        $corrected = [...$malformed, 'average_price' => 101.25];
+        $fake->tradeRows = [$corrected];
+        $firstRetry = app(KiteCncTradeSyncService::class)->sync($profile);
+        $secondRetry = app(KiteCncTradeSyncService::class)->sync($profile);
+        $candidate->refresh();
+        $this->assertSame(0, $firstRetry['imported']);
+        $this->assertSame(0, $secondRetry['imported']);
+        $this->assertSame('manual_match_review', $candidate->status);
+        $this->assertSame('execution', $candidate->evidence_kind);
+        $this->assertSame(101.25, (float) $candidate->price);
+        $this->assertSame(0, $profile->transactions()->count());
+        $this->assertSame(1, KiteCncTradeImport::query()->where('profile_id', $profile->id)->where('broker_trade_id', '98621')->count());
+    }
+
     public function test_new_execution_never_reuses_an_auto_imported_transaction_as_a_match(): void
     {
         [$profile] = $this->portfolioAndStock();
@@ -107,7 +164,7 @@ class KiteCncTradeSyncTest extends TestCase
     public function test_malformed_cnc_candidates_are_persisted_sanitized_and_replay_idempotently(): void
     {
         [$profile] = $this->portfolioAndStock();
-        $candidate = [...$this->fill(99801, 'ORD-1', 'BUY', 2, 100), 'exchange' => null, 'exchange_timestamp' => null,
+        $candidate = [...$this->fill(99801, 'ORD-1', 'BUY', 2, 100), 'exchange' => null, 'fill_timestamp' => null, 'exchange_timestamp' => null,
             'access_token' => 'must-not-persist', 'api_key' => 'also-secret'];
         app(FakeBrokerGateway::class)->tradeRows = [$candidate];
 
@@ -170,7 +227,7 @@ class KiteCncTradeSyncTest extends TestCase
     public function test_identical_candidates_without_trade_ids_keep_duplicate_count_and_variants(): void
     {
         [$profile] = $this->portfolioAndStock();
-        $candidate = [...$this->fill(99813, 'ORD-13', 'BUY', 2, 100), 'trade_id' => null, 'exchange_timestamp' => null];
+        $candidate = [...$this->fill(99813, 'ORD-13', 'BUY', 2, 100), 'trade_id' => null, 'fill_timestamp' => null, 'exchange_timestamp' => null];
         app(FakeBrokerGateway::class)->tradeRows = [$candidate, $candidate];
 
         $result = app(KiteCncTradeSyncService::class)->sync($profile);
@@ -233,7 +290,7 @@ class KiteCncTradeSyncTest extends TestCase
     public function test_review_acknowledgment_is_idempotent_audited_and_keeps_fill_unresolved(): void
     {
         [$profile] = $this->portfolioAndStock();
-        app(FakeBrokerGateway::class)->tradeRows = [[...$this->fill(99802, 'ORD-2', 'BUY', 2, 100), 'exchange_timestamp' => null]];
+        app(FakeBrokerGateway::class)->tradeRows = [[...$this->fill(99802, 'ORD-2', 'BUY', 2, 100), 'fill_timestamp' => null, 'exchange_timestamp' => null]];
         app(KiteCncTradeSyncService::class)->sync($profile);
         $item = KiteCncTradeImport::query()->where('profile_id', $profile->id)->firstOrFail();
         $user = User::query()->findOrFail($profile->user_id);
@@ -353,7 +410,7 @@ class KiteCncTradeSyncTest extends TestCase
     public function test_review_payload_caps_recursive_legacy_candidate_variants(): void
     {
         [$profile] = $this->portfolioAndStock();
-        app(FakeBrokerGateway::class)->tradeRows = [[...$this->fill(99897, 'ORD-97', 'BUY', 2, 100), 'exchange_timestamp' => null]];
+        app(FakeBrokerGateway::class)->tradeRows = [[...$this->fill(99897, 'ORD-97', 'BUY', 2, 100), 'fill_timestamp' => null, 'exchange_timestamp' => null]];
         app(KiteCncTradeSyncService::class)->sync($profile);
         $item = KiteCncTradeImport::query()->where('broker_trade_id', '99897')->firstOrFail();
         $nested = ['trade_id' => '99897'];
@@ -374,7 +431,7 @@ class KiteCncTradeSyncTest extends TestCase
     public function test_review_rejects_stale_evidence_and_other_profiles_cannot_read_row(): void
     {
         [$profile] = $this->portfolioAndStock();
-        app(FakeBrokerGateway::class)->tradeRows = [[...$this->fill(99810, 'ORD-10', 'BUY', 2, 100), 'exchange_timestamp' => null]];
+        app(FakeBrokerGateway::class)->tradeRows = [[...$this->fill(99810, 'ORD-10', 'BUY', 2, 100), 'fill_timestamp' => null, 'exchange_timestamp' => null]];
         app(KiteCncTradeSyncService::class)->sync($profile);
         $item = KiteCncTradeImport::query()->where('profile_id', $profile->id)->firstOrFail();
         $user = User::query()->findOrFail($profile->user_id);
@@ -669,7 +726,7 @@ class KiteCncTradeSyncTest extends TestCase
             'symbol' => 'AAA', 'exchange' => 'NSE', 'side' => 'buy', 'quantity' => 2, 'price' => 100,
             'executed_at' => '2026-11-20 15:20:00', 'product' => 'CNC', 'status' => 'imported', 'broker_evidence' => ['trade_id' => '98726']]);
         $fake = app(FakeBrokerGateway::class);
-        $fake->tradeRows = [[...$this->fill(98727, 'B-25', 'BUY', 3, 100), 'exchange_timestamp' => '2026-11-24 15:20:00']];
+        $fake->tradeRows = [[...$this->fill(98727, 'B-25', 'BUY', 3, 100), 'fill_timestamp' => '2026-11-24 15:20:00', 'exchange_timestamp' => '2026-11-24 15:20:00']];
         $fake->reconciliationSnapshot = ['provider' => 'kite', 'holdings' => [[
             'symbol' => 'AAA', 'exchange' => 'NSE', 'isin' => null, 'quantity' => 20, 't1_quantity' => 0,
             'used_quantity' => 0, 'cost' => null,
@@ -730,7 +787,7 @@ class KiteCncTradeSyncTest extends TestCase
         KiteCncTradeSyncRun::query()->create(['profile_id' => $profile->id, 'user_id' => $profile->user_id,
             'broker_account_id' => $account, 'trading_date' => '2026-11-24', 'trigger' => 'manual',
             'status' => 'completed', 'started_at' => '2026-11-25 10:45:00', 'completed_at' => '2026-11-25 10:46:00']);
-        app(FakeBrokerGateway::class)->tradeRows = [[...$this->fill(98701, 'EOD-1', 'BUY', 2, 100), 'exchange_timestamp' => '2026-11-25 15:20:00']];
+        app(FakeBrokerGateway::class)->tradeRows = [[...$this->fill(98701, 'EOD-1', 'BUY', 2, 100), 'fill_timestamp' => '2026-11-25 15:20:00', 'exchange_timestamp' => '2026-11-25 15:20:00']];
         Carbon::setTestNow(Carbon::parse('2026-11-25 10:45:00', 'UTC'));
         $this->assertTrue(\App\Support\TradingCalendar::isEquitySessionDate(Carbon::now('UTC')), 'session date');
         $conn = BrokerConnection::query()->where('user_id', $profile->user_id)->where('provider', 'kite')->firstOrFail();
@@ -795,7 +852,7 @@ class KiteCncTradeSyncTest extends TestCase
         app(FakeBrokerGateway::class)->tradeRows = [[
             ...$this->fill(98730, 'B-30', 'BUY', 2, 100),
             'fill_timestamp' => null,
-            'exchange_timestamp' => null,
+            'exchange_timestamp' => '2026-11-20 15:19:59',
             'order_timestamp' => '2026-11-20 15:20:00',
         ]];
 
@@ -925,6 +982,6 @@ class KiteCncTradeSyncTest extends TestCase
     {
         return ['trade_id' => $id, 'order_id' => $orderId, 'tradingsymbol' => 'AAA', 'exchange' => 'NSE',
             'transaction_type' => $side, 'product' => 'CNC', 'quantity' => $quantity, 'price' => $price,
-            'exchange_timestamp' => '2026-11-20 15:20:00'];
+            'fill_timestamp' => '2026-11-20 15:20:00', 'exchange_timestamp' => '2026-11-20 15:20:00'];
     }
 }
