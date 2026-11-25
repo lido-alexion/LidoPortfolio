@@ -29,15 +29,24 @@ class SyncKiteCncTradesCommand extends Command
             ->whereIn('execution_mode', [PortfolioProfile::EXECUTION_MODE_SEMI_AUTOMATIC, PortfolioProfile::EXECUTION_MODE_AUTOMATIC]);
         if ($this->option('profile')) $query->whereKey((int) $this->option('profile'));
         $failed = 0;
+        // Run timestamps are persisted as database timestamps (UTC). Compare
+        // against the configured local cutoff as an instant, and only accept
+        // evidence with a known start time. Missing/ambiguous legacy timing
+        // must not suppress today's scheduled catch-up.
+        $dueUtc = $due->copy()->utc();
+        $tradingDate = $now->copy()->timezone('Asia/Kolkata')->toDateString();
         foreach ($query->get() as $profile) {
             $connection = BrokerConnection::query()->where('user_id', $profile->user_id)
                 ->where('provider', BrokerConnection::PROVIDER_KITE)->first();
             if (! $connection?->isUsable()) continue;
             $brokerAccountId = trim((string) ($connection->broker_user_id ?? ''));
+            if ($brokerAccountId === '') continue;
             $alreadyCompleted = \App\Models\KiteCncTradeSyncRun::query()->where('profile_id', $profile->id)
                 ->where('broker_account_id', $brokerAccountId)
-                ->whereDate('trading_date', $now->toDateString())
-                ->whereIn('status', ['completed', 'needs_review'])->exists();
+                ->whereDate('trading_date', $tradingDate)
+                ->whereIn('status', ['completed', 'needs_review'])
+                ->whereNotNull('started_at')->where('started_at', '>=', $dueUtc)
+                ->exists();
             if ($alreadyCompleted) continue;
             try {
                 $result = $sync->sync($profile, 'scheduled');

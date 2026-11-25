@@ -707,6 +707,74 @@ class KiteCncTradeSyncTest extends TestCase
         $this->assertSame(['2026-11-25', '2026-11-26'], $gaps->map(fn ($run) => $run->trading_date->toDateString())->all());
     }
 
+    public function test_scheduled_sync_ignores_pre_cutoff_runs_and_uses_cutoff_instant(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-25 09:00:00', 'UTC'));
+        [$profile] = $this->portfolioAndStock();
+        BrokerConnection::query()->where('user_id', $profile->user_id)->firstOrFail()->forceFill([
+            'access_token' => 'test-access-token', 'connected_at' => '2026-11-25 09:00:00', 'expires_at' => '2026-11-26 00:30:00',
+        ])->save();
+        $account = (string) BrokerConnection::query()->where('user_id', $profile->user_id)->value('broker_user_id');
+        // 10:30 UTC is 16:00 IST, the configured 10:00 + 30 minute cutoff.
+        \App\Models\Setting::setValue('cron_timezone', 'UTC');
+        \App\Models\Setting::setValue('market_close_time', '10:00');
+        \App\Models\Setting::setValue('reconciliation_delay_minutes', '30');
+        KiteCncTradeSyncRun::query()->create(['profile_id' => $profile->id, 'user_id' => $profile->user_id,
+            'broker_account_id' => $account, 'trading_date' => '2026-11-25', 'trigger' => 'manual',
+            'status' => 'completed', 'started_at' => '2026-11-25 10:00:00', 'completed_at' => '2026-11-25 10:01:00']);
+        KiteCncTradeSyncRun::query()->create(['profile_id' => $profile->id, 'user_id' => $profile->user_id,
+            'broker_account_id' => $account, 'trading_date' => '2026-11-25', 'trigger' => 'reconnect',
+            // Completion after cutoff cannot upgrade a pre-cutoff start into
+            // evidence that the scheduled post-close sync ran.
+            'status' => 'needs_review', 'started_at' => '2026-11-25 10:20:00', 'completed_at' => '2026-11-25 10:40:00']);
+        KiteCncTradeSyncRun::query()->create(['profile_id' => $profile->id, 'user_id' => $profile->user_id,
+            'broker_account_id' => $account, 'trading_date' => '2026-11-24', 'trigger' => 'manual',
+            'status' => 'completed', 'started_at' => '2026-11-25 10:45:00', 'completed_at' => '2026-11-25 10:46:00']);
+        app(FakeBrokerGateway::class)->tradeRows = [[...$this->fill(98701, 'EOD-1', 'BUY', 2, 100), 'exchange_timestamp' => '2026-11-25 15:20:00']];
+        Carbon::setTestNow(Carbon::parse('2026-11-25 10:45:00', 'UTC'));
+        $this->assertTrue(\App\Support\TradingCalendar::isEquitySessionDate(Carbon::now('UTC')), 'session date');
+        $conn = BrokerConnection::query()->where('user_id', $profile->user_id)->where('provider', 'kite')->firstOrFail();
+        $this->assertTrue($conn->isUsable(), 'connection usable');
+        $this->assertSame('10:00', app(\App\Services\SettingsService::class)->get('market_close_time'));
+        $this->assertSame('UTC', app(\App\Services\SettingsService::class)->get('cron_timezone'));
+        $this->assertSame('2026-11-25 10:45:00', Carbon::now('UTC')->toDateTimeString());
+
+        $this->artisan('portfolio:sync-kite-cnc', ['--profile' => $profile->id])->assertSuccessful();
+
+        $this->assertTrue(KiteCncTradeSyncRun::query()->where('profile_id', $profile->id)->where('trigger', 'scheduled')
+            ->whereDate('trading_date', '2026-11-25')->exists());
+        $this->assertDatabaseHas('kite_cnc_trade_imports', ['profile_id' => $profile->id, 'broker_trade_id' => '98701', 'status' => 'imported']);
+        $this->artisan('portfolio:sync-kite-cnc', ['--profile' => $profile->id])->assertSuccessful();
+        $this->assertSame(1, $profile->transactions()->count());
+        $this->assertDatabaseCount('kite_cnc_trade_sync_runs', 4);
+    }
+
+    public function test_scheduled_sync_skips_qualifying_post_cutoff_review_for_same_profile_and_account_only(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-25 09:00:00', 'UTC'));
+        [$profile] = $this->portfolioAndStock();
+        BrokerConnection::query()->where('user_id', $profile->user_id)->firstOrFail()->forceFill([
+            'access_token' => 'test-access-token', 'connected_at' => '2026-11-25 09:00:00', 'expires_at' => '2026-11-26 00:30:00',
+        ])->save();
+        $account = (string) BrokerConnection::query()->where('user_id', $profile->user_id)->value('broker_user_id');
+        \App\Models\Setting::setValue('cron_timezone', 'UTC');
+        \App\Models\Setting::setValue('market_close_time', '10:00');
+        \App\Models\Setting::setValue('reconciliation_delay_minutes', '30');
+        KiteCncTradeSyncRun::query()->create(['profile_id' => $profile->id, 'user_id' => $profile->user_id,
+            'broker_account_id' => $account, 'trading_date' => '2026-11-25', 'trigger' => 'reconnect',
+            'status' => 'needs_review', 'started_at' => '2026-11-25 10:30:00', 'completed_at' => '2026-11-25 10:31:00']);
+        // A later run for another account must not suppress this profile's sync.
+        KiteCncTradeSyncRun::query()->create(['profile_id' => $profile->id, 'user_id' => $profile->user_id,
+            'broker_account_id' => 'OTHER', 'trading_date' => '2026-11-25', 'trigger' => 'manual',
+            'status' => 'completed', 'started_at' => '2026-11-25 10:45:00', 'completed_at' => '2026-11-25 10:46:00']);
+        Carbon::setTestNow(Carbon::parse('2026-11-25 11:00:00', 'UTC'));
+        $this->assertTrue(BrokerConnection::query()->where('user_id', $profile->user_id)->where('provider', 'kite')->firstOrFail()->isUsable());
+
+        $this->artisan('portfolio:sync-kite-cnc', ['--profile' => $profile->id])->assertSuccessful();
+
+        $this->assertDatabaseCount('kite_cnc_trade_sync_runs', 2);
+    }
+
     public function test_missing_tradebook_is_recorded_as_failed_and_surfaces_error(): void
     {
         [$profile] = $this->portfolioAndStock();
