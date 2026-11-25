@@ -85,14 +85,12 @@ final class KiteCncTradeSyncService
                 && is_string($row['transaction_type'] ?? null) && in_array(strtoupper($row['transaction_type']), ['BUY', 'SELL'], true)
                 && is_scalar($row['trade_id'] ?? null) && ctype_digit((string) $row['trade_id']) && strlen((string) $row['trade_id']) <= 64
                 && $this->positiveDecimal($row['quantity'] ?? null) !== null
-                && $this->positiveDecimal($row['price'] ?? null) !== null
+                && $this->providerFillPrice($row) !== null
                 && ! in_array((string) ($row['trade_id'] ?? ''), $duplicateTradeIds, true)
-                // Never substitute an order submission timestamp for execution
-                // evidence: it can cross a session boundary or be absent.
-                // Kite's tradebook contract exposes exchange_timestamp as the
-                // execution time. Do not infer execution time from order or
-                // undocumented fill timestamp fields.
-                && $this->parseExecutionTime($row['exchange_timestamp'] ?? null) !== null)
+                // The documented /trades fill_timestamp is execution time.
+                // exchange_timestamp means exchange order-registration time,
+                // so it cannot safely stand in for a missing fill timestamp.
+                && $this->parseExecutionTime($row['fill_timestamp'] ?? null) !== null)
                 ->values();
             $prepared = $eligible->map(function (array $row): ?array {
                 $rawSymbol = $row['tradingsymbol'] ?? null;
@@ -102,12 +100,12 @@ final class KiteCncTradeSyncService
                     $q->where('exchange', $exchange)->orWhere('is_dual_listed', true);
                 })->first();
                 if (! $stock) return null;
-                $executedAt = $this->parseExecutionTime($row['exchange_timestamp'] ?? null);
+                $executedAt = $this->parseExecutionTime($row['fill_timestamp'] ?? null);
                 if (! $executedAt) return null;
                 return ['raw' => $row, 'stock' => $stock, 'symbol' => $symbol, 'exchange' => $exchange,
                     'date' => $executedAt->toDateString(),
                     'side' => strtolower((string) $row['transaction_type']), 'trade_id' => (string) $row['trade_id'],
-                    'quantity' => $this->positiveDecimal($row['quantity']), 'price' => $this->positiveDecimal($row['price']), 'executed_at' => $executedAt];
+                    'quantity' => $this->positiveDecimal($row['quantity']), 'price' => $this->providerFillPrice($row), 'executed_at' => $executedAt];
             })->filter(fn (?array $trade) => $trade !== null && $trade['date'] === $started->copy()->timezone('Asia/Kolkata')->toDateString())->values();
 
             $manualMatches = $this->manualMatches($profile, $prepared);
@@ -366,14 +364,16 @@ final class KiteCncTradeSyncService
         $rawProduct = $row['product'] ?? '';
         $product = is_string($rawProduct) && strlen($rawProduct) <= 16 ? strtoupper(trim($rawProduct)) : '';
         if (in_array($product, ['CNC', 'MIS', 'NRML', 'MTF'], true)) $safe['product'] = $product;
-        foreach (['quantity', 'price'] as $key) {
-            $value = $this->positiveDecimal($row[$key] ?? null);
-            if ($value !== null) $safe[$key] = number_format($value, 4, '.', '');
-        }
+        $quantity = $this->positiveDecimal($row['quantity'] ?? null);
+        if ($quantity !== null) $safe['quantity'] = number_format($quantity, 4, '.', '');
+        $fillPrice = $this->providerFillPrice($row);
+        if ($fillPrice !== null) $safe['price'] = number_format($fillPrice, 4, '.', '');
         try {
-            if (is_string($row['exchange_timestamp'] ?? null) && strlen($row['exchange_timestamp']) <= 64
-                && preg_match('/^[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:?[0-9]{2})?$/', $row['exchange_timestamp'])) {
-                $safe['exchange_timestamp'] = \Illuminate\Support\Carbon::parse($row['exchange_timestamp'], 'Asia/Kolkata')->timezone('Asia/Kolkata')->toIso8601String();
+            foreach (['fill_timestamp', 'exchange_timestamp'] as $timestampField) {
+                if (is_string($row[$timestampField] ?? null) && strlen($row[$timestampField]) <= 64
+                    && $this->parseExecutionTime($row[$timestampField]) !== null) {
+                    $safe[$timestampField] = \Illuminate\Support\Carbon::parse($row[$timestampField], 'Asia/Kolkata')->timezone('Asia/Kolkata')->toIso8601String();
+                }
             }
         } catch (Throwable) {
             // Invalid source timestamps are omitted from safe persisted evidence.
@@ -470,6 +470,25 @@ final class KiteCncTradeSyncService
         $number = (float) $value;
         if (! is_finite($number) || $number <= 0 || $number > 99999999999999) return null;
         return round($number, 4);
+    }
+
+    /** Kite /trades uses average_price for each fill.
+     * If a row supplies both names, both must be valid and agree.
+     */
+    private function providerFillPrice(array $row): ?float
+    {
+        $hasAverage = array_key_exists('average_price', $row);
+        $hasLegacyPrice = array_key_exists('price', $row);
+        if ($hasAverage) {
+            $average = $this->positiveDecimal($row['average_price']);
+            if ($average === null) return null;
+            if ($hasLegacyPrice) {
+                $legacy = $this->positiveDecimal($row['price']);
+                if ($legacy === null || abs($average - $legacy) >= 0.00005) return null;
+            }
+            return $average;
+        }
+        return $hasLegacyPrice ? $this->positiveDecimal($row['price']) : null;
     }
 
     private function parseExecutionTime(mixed $value): ?\Illuminate\Support\Carbon
