@@ -70,7 +70,7 @@ verify_backend() {
     export DB_CONNECTION DB_HOST DB_PORT DB_DATABASE DB_USERNAME DB_PASSWORD
     [[ "$DB_CONNECTION" == "mysql" ]] || { echo "CI parity requires DB_CONNECTION=mysql." >&2; exit 1; }
     php artisan migrate:fresh --seed --force
-    php -d memory_limit=512M vendor/bin/phpunit
+    bash "$root/scripts/run-ci-phpunit.sh"
     php artisan openapi:v1 --check
   )
 }
