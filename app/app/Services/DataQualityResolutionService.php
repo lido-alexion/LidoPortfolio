@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\DataQualityIssue;
 use App\Models\DataQualityIssueResolution;
 use App\Exceptions\DomainException;
+use App\Models\Stock;
 use Illuminate\Support\Facades\DB;
 
 class DataQualityResolutionService
@@ -28,6 +29,7 @@ class DataQualityResolutionService
 
         return DB::transaction(function () use ($issue, $appliedRatio, $notes, $userId, $auto, $requirePendingReview) {
             $issue = DataQualityIssue::query()->lockForUpdate()->findOrFail($issue->id);
+            $this->lockIssueStock($issue);
 
             if ($requirePendingReview && $issue->issue_status !== DataQualityIssue::STATUS_PENDING_REVIEW) {
                 throw new DomainException(
@@ -36,6 +38,8 @@ class DataQualityResolutionService
                     409,
                 );
             }
+
+            app(BnagrochemF042EvidenceValidator::class)->assertReviewedEvidence($issue->loadMissing(['stock', 'evidences']), $appliedRatio, $auto);
 
             $isReversal = $issue->latest_resolution_id !== null && $issue->issue_status !== DataQualityIssue::STATUS_PENDING_REVIEW;
             $resolutionType = $auto
@@ -84,6 +88,7 @@ class DataQualityResolutionService
     ): DataQualityIssue {
         return DB::transaction(function () use ($issue, $notes, $userId, $requirePendingReview) {
             $issue = DataQualityIssue::query()->lockForUpdate()->findOrFail($issue->id);
+            $this->lockIssueStock($issue);
 
             if ($requirePendingReview && $issue->issue_status !== DataQualityIssue::STATUS_PENDING_REVIEW) {
                 throw new DomainException(
@@ -182,6 +187,11 @@ class DataQualityResolutionService
             return false;
         }
 
+        // The #383 BNAGROCHEM factor requires a named human review of its exact source bundle.
+        if (app(BnagrochemF042EvidenceValidator::class)->appliesTo($issue)) {
+            return false;
+        }
+
         if ($issue->detection_method !== DataQualityIssue::DETECTION_METHOD_EXCHANGE_FEED) {
             return false;
         }
@@ -214,5 +224,11 @@ class DataQualityResolutionService
         }
 
         return abs($suggested - $appliedRatio) < 0.000001;
+    }
+
+    /** Serialize factor activation/deactivation with stock-global F020/F042 OHLCV writers. */
+    private function lockIssueStock(DataQualityIssue $issue): void
+    {
+        Stock::query()->whereKey($issue->stock_id)->lockForUpdate()->first();
     }
 }

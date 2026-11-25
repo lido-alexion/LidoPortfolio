@@ -10,9 +10,13 @@ Base URL: `/api`
 
 **Cash statement pagination:** `GET /cash/statement` accepts `page`, `per_page` (1–100), and optional `order=asc|desc`. `asc` remains the default for API compatibility; `desc` sorts by effective date, creation timestamp and ID newest-first. Running balances are always computed chronologically. The Cash Management page requests `desc` and exposes 25/50/100 rows per page.
 
+**Kite cash provenance:** `GET /cash/kite-funds` includes the user's connected Kite account identifiers for explicit attribution in the cash form. `POST /cash/deposit`, `/cash/withdraw`, and updates to deposit/withdrawal entries accept optional nullable `broker_account_id`; omitted/null remains unattributed and is never inferred from the currently connected account. Newly selected identifiers must belong to a Kite connection on the authenticated user. Existing provenance remains editable after that connection is removed. Adjustments cannot carry broker provenance. Cash statement rows return the stored `broker_account_id`. Same-account/date manual flows are compared with that account's snapshot; untagged activity remains review-required.
+
 **Advanced broker orders (V4-FEAT-002):** `GET/POST /api/v1/protections`, `GET /api/v1/protections/{id}`, `POST /api/v1/protections/{id}/cancel`, `POST /api/v1/protections/{id}/reconcile`. One open GTT Target **or** Stop-Loss per Strategy position. Place/cancel are Semi-Automatic attended actions (existing automated-execution entitlement + TOTP + Kite). Prices are Strategy-derived (`target_amount / quantity` or OD-13 stop). Does not write ledger/cash/capital/lending. OpenAPI: [`openapi/v1.json`](openapi/v1.json).
 
 **Artifact Library Bundle recovery:** `GET /api/v1/artifact-library/bundle-deployments/{uuid}` reads the exact deployment for the authenticated requester and active Portfolio. It returns only UUID, status, allowlisted failure code, and member artifact UUID/version/action/resulting revision ID. It does not apply or replay a plan. The deploy lookup also requires this same active Portfolio; a UUID belonging to another Portfolio is refused before any plan or member mutation. `POST .../{uuid}/deploy` remains an explicit mutation and completed plans are not idempotently replayed.
+
+**Kite CNC trade review:** `GET /reconciliation/trades/review` lists unresolved review rows for the active Portfolio and currently connected Kite account (`status`, `trading_date`, `per_page` filters); `GET /reconciliation/trades/review/{item}` returns bounded evidence and exact existing-transaction candidates. `POST /reconciliation/trades/review/{item}/resolve` accepts `action=acknowledge_unresolved` or `match_existing`, plus `idempotency_key` and the displayed `evidence_key`; `match_existing` also requires `transaction_id`. Review resolutions are account-bound and manual matching requires the same stock, venue, side, date, quantity, and price. Acknowledgment preserves unresolved status; neither action writes a broker order or creates a transaction. These routes require authenticated session access and portfolio read/write token scopes respectively.
 
 ## Auth (session cookies — no Bearer token)
 
@@ -246,6 +250,7 @@ Request body:
 - `POST /sync/daily` (auth, **admin**) — body/query `force` (boolean)
 - `POST /sync/backfill/{stock}` (auth, **admin**) — force fetch from user's buy date
 - `GET /universe-price-sync/status` (auth, **admin**) — query `scope` (`all_equities`|`all_nse` deprecated|`nifty500`); progress, coverage, cursor, `rate_limits.likely_rate_limited`, `rate_limits.recent_issues`
+- `POST /universe-price-sync/outcomes/{stock}/reprobe` (auth, **admin**, throttle 12/min) — clear a temporary no-data cooldown, audit the manual reprobe, and check it on the next daily bulk run
 - `POST /universe-price-sync/run` (auth, **admin**, throttle 12/min) — body: `mode` (`daily`|`backfill`), `scope`, `batch` (1–200), `reset_cursor`, `process_all` (avoid on cPanel — may timeout)
 - `POST /universe-price-sync/stock-master` (auth, **admin**, throttle 12/min) — NSE equity master CSV import
 - `GET /sync-logs`, `GET /sync-logs/runs`, `GET /sync-logs/export` (auth, **admin**)

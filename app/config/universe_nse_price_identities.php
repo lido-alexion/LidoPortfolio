@@ -1,6 +1,6 @@
 <?php
 
-// Official source hashes and trade-date cutoffs reviewed under GH #282.
+// Official source hashes and trade-date cutoffs reviewed under GH #282 and #383.
 // Clearing EPI old-ISIN instructions corroborate identity, not a later trade cutoff.
 // This catalogue cannot authorize writing unadjusted pre-action price bars.
 return json_decode(<<<'JSON'
@@ -8,6 +8,35 @@ return json_decode(<<<'JSON'
     "version": 1,
     "purpose": "Daily bhavcopy identity acknowledgement only; not price adjustment or ML membership.",
     "transitions": {
+        "CML77412": {
+            "action": "subdivision",
+            "symbol": "BNAGROCHEM",
+            "old_isin": "INE00HZ01011",
+            "new_isin": "INE00HZ01029",
+            "effective_on": "2026-11-16",
+            "requires_price_adjustment_proof": true,
+            "price_divisor": 10,
+            "evidence": [
+                {
+                    "role": "old_isin_event",
+                    "document": "CMPT77438",
+                    "url": "https://nsearchives.nseindia.com/content/circulars/CMPT77438.pdf",
+                    "date": "2026-11-13",
+                    "sha256": "70d93d11da034e34af5184e63af651b04d826f7935ca375bc0c14bc116e6c454",
+                    "isin": "INE00HZ01011",
+                    "effective_on": "2026-11-16"
+                },
+                {
+                    "role": "new_isin_event",
+                    "document": "CML77412",
+                    "url": "https://nsearchives.nseindia.com/content/circulars/CML77412.pdf",
+                    "date": "2026-11-12",
+                    "sha256": "c0faa54145565b1650c98748562c81b5444dc63d53b57c39f5e28e07aa8b4532",
+                    "isin": "INE00HZ01029",
+                    "effective_on": "2026-11-16"
+                }
+            ]
+        },
         "CML77034": {
             "action": "subdivision",
             "symbol": "AZADIND",
@@ -91,6 +120,26 @@ return json_decode(<<<'JSON'
         }
     },
     "identities": [
+        {
+            "symbol": "BNAGROCHEM",
+            "historical_isin": "INE00HZ01011",
+            "canonical_isin": "INE00HZ01029",
+            "valid_from": "2026-11-13",
+            "valid_until": "2026-11-15",
+            "transition_ids": [
+                "CML77412"
+            ],
+            "evidence": [
+                {
+                    "role": "historical_observation",
+                    "url": "https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_20261113_F_0000.csv.zip",
+                    "sha256": "758ec3b60fd492a29ff3ebc6c069269bc326dc5ca662cfba8892f16939841b7b",
+                    "date": "2026-11-13",
+                    "isin": "INE00HZ01011",
+                    "symbol": "BNAGROCHEM"
+                }
+            ]
+        },
         {
             "symbol": "AZADIND",
             "historical_isin": "INE566M01017",

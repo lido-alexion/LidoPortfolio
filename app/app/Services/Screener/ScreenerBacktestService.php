@@ -560,14 +560,14 @@ class ScreenerBacktestService
     public function loadBarsWithDates(int $stockId, string $toDate, int $limit): array
     {
         $table = (new StockPrice)->getTable();
-        $rows = DB::select(
-            "select price_date, open_price, high_price, low_price, close_price, adjusted_close_price, volume
-             from {$table}
-             where stock_id = ? and price_date <= ?
-             order by price_date desc
-             limit ".max(1, (int) $limit),
-            [$stockId, $toDate],
-        );
+        $query = DB::query()->from($table);
+        app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)->apply($query, $table);
+        $rows = $query->where('stock_id', $stockId)
+            ->whereDate('price_date', '<=', $toDate)
+            ->orderByDesc('price_date')
+            ->limit(max(1, (int) $limit))
+            ->get(['price_date', 'open_price', 'high_price', 'low_price', 'close_price', 'adjusted_close_price', 'volume'])
+            ->all();
 
         $bars = [];
         for ($i = count($rows) - 1; $i >= 0; $i--) {

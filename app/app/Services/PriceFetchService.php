@@ -272,10 +272,20 @@ class PriceFetchService
     public function storeHistoricalRows(Stock $stock, array $rows, string $provider, bool $onlyMissing = false): int
     {
         $stored = 0;
+        $recoveredDates = [];
 
         foreach ($rows as $row) {
             $priceDate = Carbon::parse($row['price_date'])->startOfDay();
             if (! TradingCalendar::isEquitySessionDate($priceDate)) {
+                continue;
+            }
+
+            // Provider bars cannot repair or overwrite the reviewed pre-action
+            // interval. F042/F020 repair services are the only writers allowed
+            // to restate these rows; skipping also avoids scoped updateOrCreate
+            // treating a quarantined physical row as missing.
+            if (app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)
+                ->requiresAdjustmentProofFor($stock, $priceDate->toDateString())) {
                 continue;
             }
 
@@ -285,10 +295,8 @@ class PriceFetchService
 
             $key = [
                 'stock_id' => $stock->id,
-                // Match the model's date serialization exactly. Providers may
-                // return the same session as Y-m-d, ISO-8601, or a timestamp;
-                // mixing the raw value with Eloquent's stored midnight value
-                // can miss the row and violate the unique session key.
+                // Keep the model's normalized midnight value for the unique
+                // session lookup; SQLite stores DATE casts with a time suffix.
                 'price_date' => $priceDate,
             ];
             $attributes = [
@@ -306,12 +314,22 @@ class PriceFetchService
                 // Preserve an existing repaired/adjusted row even if another writer
                 // fills the same session between our coverage check and insert.
                 $record = new StockPrice(array_merge($key, $attributes));
-                $stored += StockPrice::query()->insertOrIgnore($record->getAttributes());
+                $inserted = StockPrice::query()->insertOrIgnore($record->getAttributes());
+                $stored += $inserted;
+                if ($inserted > 0) {
+                    $recoveredDates[] = $priceDate->toDateString();
+                }
                 continue;
             }
             StockPrice::query()->updateOrCreate($key, $attributes);
             $stored++;
+            $recoveredDates[] = $priceDate->toDateString();
         }
+
+        // Daily no-data observations remain gaps until a validated historical
+        // repair actually persists the missing session row.
+        app(\App\Services\UniversePrice\UniversePriceOutcomeService::class)
+            ->markRecoveredByHistory($stock, $recoveredDates);
 
         return $stored;
     }

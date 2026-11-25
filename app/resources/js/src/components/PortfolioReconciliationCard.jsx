@@ -18,6 +18,13 @@ const quantity = (value) => Number(value).toLocaleString(undefined, { maximumFra
 const completedAt = (value) => value ? new Date(value).toLocaleString(undefined, {
     year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true,
 }) : '—';
+const tradingDate = (value) => value ? new Date(`${value}T12:00:00`).toLocaleDateString() : 'Unknown date';
+const syncStatus = (run) => run.status === 'gap_unavailable' ? 'Historical trades unavailable'
+    : run.status === 'sync_failed' ? 'Sync failed'
+        : run.status === 'needs_review' ? 'Needs review'
+            : run.status === 'running' ? 'In progress' : 'Completed';
+const syncTone = (status) => ['gap_unavailable', 'sync_failed'].includes(status) ? 'text-danger'
+    : status === 'needs_review' ? 'text-warning' : status === 'completed' ? 'text-success' : 'text-muted';
 
 function ComparisonValue({ value, mismatch, money = false }) {
     return <span className={mismatch ? 'text-danger fw-semibold' : 'text-muted'}>{money ? `₹${amount(value)}` : quantity(value)}</span>;
@@ -29,16 +36,27 @@ export default function PortfolioReconciliationCard({ executionMode }) {
     const [snapshot, setSnapshot] = useState(null);
     const [selected, setSelected] = useState(null);
     const [busy, setBusy] = useState(false);
+    const [reviewItems, setReviewItems] = useState([]);
+    const [reviewDetail, setReviewDetail] = useState(null);
+    const [matchTransactionId, setMatchTransactionId] = useState('');
 
     const load = useCallback(async () => {
         if (!eligible) return;
         const response = await api.get('/reconciliation', { skipErrorToast: true });
         setSnapshot(response.data?.data || null);
+        const reviews = await api.get('/reconciliation/trades/review', { skipErrorToast: true });
+        setReviewItems(reviews.data?.data?.data || []);
     }, [eligible]);
 
     useEffect(() => {
         setSelected(null);
         if (eligible) load().catch(() => setSnapshot(null));
+    }, [eligible, load]);
+
+    useEffect(() => {
+        if (!eligible) return undefined;
+        const timer = window.setInterval(() => load().catch(() => {}), 60_000);
+        return () => window.clearInterval(timer);
     }, [eligible, load]);
 
     if (!eligible) return null;
@@ -62,6 +80,20 @@ export default function PortfolioReconciliationCard({ executionMode }) {
         }
     };
 
+    const syncTrades = async () => {
+        setBusy(true);
+        try {
+            const response = await api.post('/reconciliation/trades/sync', {}, { skipErrorToast: true });
+            await load();
+            const result = response.data?.data || {};
+            showToast(`Kite trades synced: ${result.imported || 0} added, ${result.matched || 0} matched, ${result.review || 0} for review`, result.review ? 'warning' : 'success');
+        } catch (error) {
+            showToast(getApiErrorMessage(error, 'Could not sync Kite trades'), 'danger');
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const openRun = async (id) => {
         try {
             const response = await api.get(`/reconciliation/${id}`, { skipErrorToast: true });
@@ -69,6 +101,48 @@ export default function PortfolioReconciliationCard({ executionMode }) {
         } catch (error) {
             showToast(getApiErrorMessage(error, 'Could not load reconciliation evidence'), 'danger');
         }
+    };
+
+    const acknowledgeReview = async (item) => {
+        setBusy(true);
+        try {
+            await api.post(`/reconciliation/trades/review/${item.id}/resolve`, {
+                action: 'acknowledge_unresolved',
+                idempotency_key: window.crypto?.randomUUID?.() || `review-${item.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                evidence_key: item.review_version,
+            }, { skipErrorToast: true });
+            await load();
+            showToast('Review recorded; this item remains unresolved and no transaction was created', 'warning');
+        } catch (error) {
+            showToast(getApiErrorMessage(error, 'Could not record review'), 'danger');
+        } finally { setBusy(false); }
+    };
+
+    const openReview = async (item) => {
+        try {
+            const response = await api.get(`/reconciliation/trades/review/${item.id}`, { skipErrorToast: true });
+            setReviewDetail(response.data?.data || null);
+            setMatchTransactionId('');
+        } catch (error) {
+            showToast(getApiErrorMessage(error, 'Could not load row review evidence'), 'danger');
+        }
+    };
+
+    const linkExistingTransaction = async () => {
+        if (!reviewDetail || !matchTransactionId) return;
+        setBusy(true);
+        try {
+            await api.post(`/reconciliation/trades/review/${reviewDetail.id}/resolve`, {
+                action: 'match_existing', transaction_id: Number(matchTransactionId),
+                idempotency_key: window.crypto?.randomUUID?.() || `match-${reviewDetail.id}-${Date.now()}`,
+                evidence_key: reviewDetail.review_version,
+            }, { skipErrorToast: true });
+            setReviewDetail(null);
+            await load();
+            showToast('Linked to the existing transaction; no transaction was created', 'success');
+        } catch (error) {
+            showToast(getApiErrorMessage(error, 'Could not link transaction'), 'danger');
+        } finally { setBusy(false); }
     };
 
     const status = snapshot?.status || {};
@@ -80,6 +154,7 @@ export default function PortfolioReconciliationCard({ executionMode }) {
         <div className="card h-100">
             <div className="card-header d-flex justify-content-between align-items-center gap-2">
                 <span>Broker portfolio reconciliation</span>
+                <button type="button" className="btn btn-outline-secondary btn-sm" onClick={syncTrades} disabled={busy || !brokerUsable}>Sync today’s CNC trades</button>
                 <ComboButton
                     label={busy ? 'Reconciling…' : 'Reconcile excluding today'}
                     onPrimaryClick={() => reconcile(true)}
@@ -114,6 +189,46 @@ export default function PortfolioReconciliationCard({ executionMode }) {
                     {status.execution_blocked ? <div className="alert alert-danger py-2 small">New broker execution is blocked until a successful reconciliation confirms that holdings match.</div> : null}
                     {status.last_failure ? <div className="alert alert-warning py-2 small">Latest sync failed: {status.last_failure}. The last successful result remains authoritative.</div> : null}
                     <p className="small text-muted">Last successful check: {status.last_successful_at ? new Date(status.last_successful_at).toLocaleString() : 'Never'}. Correct discrepancies through normal holdings or cash transactions; broker values are never applied automatically.</p>
+                    <section aria-label="Kite CNC trade sync activity" className="mb-3">
+                        <h3 className="h6 mb-2">Kite CNC trade sync activity</h3>
+                        <p className="small text-muted mb-2">Scheduled and reconnect syncs are shown here for this active portfolio. Kite can provide current-day trades only; historical gaps need review from a broker tradebook.</p>
+                        {(snapshot.trade_sync_runs || []).length === 0 ? <p className="small text-muted">No CNC trade sync activity recorded.</p> : <div className="table-responsive">
+                            <table className="table table-sm align-middle mb-0">
+                                <thead><tr><th>Trading date</th><th>Portfolio</th><th>Source</th><th>Status</th><th>Last run</th><th>Added</th><th>Matched</th><th>Review</th><th>Failed / unavailable details</th></tr></thead>
+                                <tbody>{snapshot.trade_sync_runs.map((run) => <tr key={run.id}>
+                                    <td>{tradingDate(run.trading_date)}</td>
+                                    <td>#{run.profile_id}</td>
+                                    <td>{label(run.trigger)}</td>
+                                    <td className={syncTone(run.status)}>{syncStatus(run)}</td>
+                                    <td>{completedAt(run.completed_at || run.started_at)}</td>
+                                    <td>{run.imported_count ?? 0}</td><td>{run.matched_count ?? 0}</td><td>{run.review_count ?? 0}</td>
+                                    <td className="small">{run.failure_summary || (run.review_count > 0 ? `${run.review_count} fill${run.review_count === 1 ? '' : 's'} require review.` : '—')}</td>
+                                </tr>)}</tbody>
+                            </table>
+                        </div>}
+                    </section>
+                    <section aria-label="Kite CNC fill review" className="mb-3">
+                        <h3 className="h6 mb-2">Fill exceptions requiring review</h3>
+                        <p className="small text-muted">Review acknowledgment records who inspected the evidence. It does not reconcile the fill or change StoX cash or holdings. Incomplete evidence cannot be imported.</p>
+                        {reviewItems.length === 0 ? <p className="small text-muted">No row level CNC review items.</p> : <div className="table-responsive"><table className="table table-sm align-middle mb-0">
+                            <thead><tr><th>Date</th><th>Evidence</th><th>Fill</th><th>Status</th><th>Action</th></tr></thead>
+                            <tbody>{reviewItems.map((item) => <tr key={item.id}>
+                                <td>{tradingDate(item.sync_run?.trading_date)}</td>
+                                <td>{item.symbol} / {item.exchange}<div className="small text-muted">{item.evidence_kind === 'malformed_candidate' ? 'Malformed CNC candidate' : item.evidence_kind === 'legacy_unbound' ? 'Legacy account unknown' : item.evidence_kind === 'account_conflict' ? 'Legacy trade ID conflict' : `Trade ${item.broker_trade_id}`}</div></td>
+                                <td>{item.side} {quantity(item.quantity)} @ ₹{amount(item.price)}</td>
+                                <td className="text-warning">{label(item.status)}</td>
+                                <td><button type="button" className="btn btn-link btn-sm p-0 me-2" disabled={busy} onClick={() => openReview(item)}>Evidence</button>{item.status !== 'acknowledged_unresolved' ? <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy} onClick={() => acknowledgeReview(item)}>Record review, keep unresolved</button> : <span className="small text-muted">Reviewed {completedAt(item.reviewed_at)}; still unresolved</span>}</td>
+                            </tr>)}</tbody>
+                        </table></div>}
+                        {reviewDetail ? <div className="border rounded p-3 mt-2" aria-label="Row review details">
+                            <div className="d-flex justify-content-between"><strong>{reviewDetail.symbol} {reviewDetail.side} {quantity(reviewDetail.quantity)} @ ₹{amount(reviewDetail.price)}</strong><button type="button" className="btn-close" aria-label="Close row review" onClick={() => setReviewDetail(null)} /></div>
+                            <p className="small text-muted mb-2">Broker evidence is sanitized. Linking requires an exact existing transaction in this portfolio and will not create or alter a transaction.</p>
+                            {reviewDetail.exact_match_candidates?.length ? <div className="d-flex gap-2 align-items-center"><select className="form-select form-select-sm" value={matchTransactionId} onChange={(event) => setMatchTransactionId(event.target.value)} aria-label="Exact existing transaction">
+                                <option value="">Select exact existing transaction</option>{reviewDetail.exact_match_candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>#{candidate.id} · {candidate.type} {quantity(candidate.quantity)} @ ₹{amount(candidate.price)} · {tradingDate(candidate.transaction_date)} · {candidate.source}</option>)}
+                            </select><button type="button" className="btn btn-primary btn-sm" disabled={busy || !matchTransactionId} onClick={linkExistingTransaction}>Link existing</button></div> : <p className="small text-muted mb-0">No exact unlinked transaction is available.</p>}
+                            <pre className="small bg-light p-2 mt-2 mb-0">{JSON.stringify(reviewDetail.evidence, null, 2)}</pre>
+                        </div> : null}
+                    </section>
                     <div className="table-responsive">
                         <table className="table table-sm align-middle mb-0">
                             <thead><tr><th>Run</th><th>Trigger</th><th>Result</th><th>Completed</th><th /></tr></thead>

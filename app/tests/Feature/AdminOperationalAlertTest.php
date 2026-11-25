@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\OperationalAlert;
 use App\Models\Setting;
+use App\Models\SyncLog;
 use App\Models\SyncRun;
 use App\Models\User;
 use App\Services\AdminOperationalAlertService;
@@ -71,6 +72,22 @@ class AdminOperationalAlertTest extends TestCase
         SyncRun::query()->create(['id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
             'status' => 'partial', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
             'stocks_processed' => 574, 'failures' => 74, 'summary' => 'bounded daily receipt run']);
+    }
+
+    /** Give alert tests the same durable, run-bound completion evidence as production. */
+    protected function bindCompletionLogToLatestUniverseRun(): void
+    {
+        $run = SyncRun::query()->where('job_name', SyncLogService::JOB_UNIVERSE_PRICE_SYNC)->latest('finished_at')->first();
+        $raw = Setting::getValue('universe_price_sync_last_run_json');
+        $stats = is_string($raw) ? json_decode($raw, true) : null;
+        if ($run === null || ! is_array($stats)) return;
+
+        $stats['run_id'] = $run->id;
+        SyncLog::query()->create([
+            'run_id' => $run->id, 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'level' => 'info', 'message' => 'Universe price sync completed', 'context' => $stats,
+            'logged_at' => now(),
+        ]);
     }
 
     protected function incompleteDailyPriceReport(float $coverage = 80.0, ?string $latest = '2026-07-03'): array
@@ -549,20 +566,38 @@ class AdminOperationalAlertTest extends TestCase
     public function test_validated_bhavcopy_with_partial_coverage_does_not_raise_universe_failure(): void
     {
         config(['portfolio.universe_price_sync.enabled' => true]);
-        Setting::setValue('universe_price_sync_last_run_json', json_encode([
-            'collection_method' => 'exchange_bhavcopy', 'processed' => 574, 'succeeded' => 0, 'failed' => 574,
-            'completed_at' => now()->toIso8601String(), 'rate_limit_hits' => 0,
+        $runId = (string) Str::uuid();
+        $completedAt = now()->toIso8601String();
+        $completionStats = [
+            'run_id' => $runId, 'collection_method' => 'exchange_bhavcopy', 'processed' => 574, 'succeeded' => 0, 'failed' => 574,
+            'completed_at' => $completedAt, 'rate_limit_hits' => 0,
             'bulk' => ['file_errors' => 0, 'identity_conflicts' => 0, 'unavailable_stocks' => 574,
                 'files_downloaded' => 2] + $this->validatedDailyFiles(['NSE' => 'applied', 'BSE' => 'applied']),
+        ];
+        // Simulate a stale cached setting from a different completed run.
+        Setting::setValue('universe_price_sync_last_run_json', json_encode([
+            'collection_method' => 'exchange_bhavcopy', 'processed' => 574, 'succeeded' => 0, 'failed' => 574,
+            'completed_at' => now()->subHour()->toIso8601String(), 'rate_limit_hits' => 0,
+            'bulk' => ['file_errors' => 1, 'identity_conflicts' => 0, 'unavailable_stocks' => 574],
         ]));
         SyncRun::query()->create([
-            'id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
-            'status' => 'failed', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
+            'id' => $runId, 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'failed', 'operational_outcome' => 'SUCCESS',
+            'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
             'stocks_processed' => 574, 'failures' => 574, 'summary' => 'source=exchange_bhavcopy',
         ]);
+        SyncLog::query()->create([
+            'run_id' => $runId, 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'level' => 'info', 'message' => 'Universe price sync completed', 'context' => $completionStats,
+            'logged_at' => now(),
+        ]);
+        $this->assertSame($runId, app(SyncLogService::class)->completionStatsForRun(SyncRun::query()->findOrFail($runId))['run_id']);
 
         $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
         $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
+        $result = app(AdminOperationalAlertService::class)->syncAndNotify();
+        $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, collect($result['active'])->pluck('key')->all());
+        $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $result['notified']);
     }
 
     public function test_source_evidence_must_match_complete_expected_exchange_session_set(): void
@@ -596,6 +631,7 @@ class AdminOperationalAlertTest extends TestCase
             SyncRun::query()->create(['id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
                 'status' => 'partial', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
                 'stocks_processed' => 2, 'failures' => 2, 'summary' => 'bounded daily run']);
+            $this->bindCompletionLogToLatestUniverseRun();
             $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
             $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
             SyncRun::query()->where('job_name', SyncLogService::JOB_UNIVERSE_PRICE_SYNC)->delete();
@@ -606,6 +642,7 @@ class AdminOperationalAlertTest extends TestCase
         SyncRun::query()->create(['id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
             'status' => 'partial', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
             'stocks_processed' => 2, 'failures' => 2, 'summary' => 'truncated expected workset']);
+        $this->bindCompletionLogToLatestUniverseRun();
         $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
         $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
         SyncRun::query()->where('job_name', SyncLogService::JOB_UNIVERSE_PRICE_SYNC)->delete();
@@ -615,6 +652,7 @@ class AdminOperationalAlertTest extends TestCase
         SyncRun::query()->create(['id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
             'status' => 'partial', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
             'stocks_processed' => 2, 'failures' => 2, 'summary' => 'complete receipts']);
+        $this->bindCompletionLogToLatestUniverseRun();
         $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
         $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
     }
@@ -633,13 +671,14 @@ class AdminOperationalAlertTest extends TestCase
             SyncRun::query()->create(['id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
                 'status' => 'failed', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
                 'stocks_processed' => 2, 'failures' => 2, 'summary' => 'timestamp mismatch']);
+            $this->bindCompletionLogToLatestUniverseRun();
             $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
             $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
             SyncRun::query()->where('job_name', SyncLogService::JOB_UNIVERSE_PRICE_SYNC)->delete();
         }
     }
 
-    public function test_persistent_retry_deferred_is_actionable_when_aggregate_file_errors_is_zero(): void
+    public function test_retry_pending_exchange_file_is_not_actionable_when_provenance_is_complete(): void
     {
         config(['portfolio.universe_price_sync.enabled' => true]);
         Setting::setValue('universe_price_sync_last_run_json', json_encode([
@@ -652,6 +691,14 @@ class AdminOperationalAlertTest extends TestCase
         SyncRun::query()->create(['id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
             'status' => 'success', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
             'stocks_processed' => 2, 'failures' => 0, 'summary' => 'retry deferred']);
+        $this->bindCompletionLogToLatestUniverseRun();
+        $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
+        $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
+
+        $payload = json_decode((string) Setting::getValue('universe_price_sync_last_run_json'), true);
+        $payload['bulk']['files'][0]['retry_attempt'] = 4;
+        Setting::setValue('universe_price_sync_last_run_json', json_encode($payload));
+        $this->bindCompletionLogToLatestUniverseRun();
         $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
         $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
     }
@@ -691,6 +738,7 @@ class AdminOperationalAlertTest extends TestCase
         SyncRun::query()->create(['id' => (string) Str::uuid(), 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
             'status' => 'failed', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
             'stocks_processed' => 2, 'failures' => 2, 'summary' => 'no expected exchange sessions']);
+        $this->bindCompletionLogToLatestUniverseRun();
         $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
         $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
     }
@@ -708,12 +756,14 @@ class AdminOperationalAlertTest extends TestCase
             'status' => 'failed', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
             'stocks_processed' => 2, 'failures' => 2, 'summary' => 'cached receipt coverage partial',
         ]);
+        $this->bindCompletionLogToLatestUniverseRun();
         $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
         $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
 
         Setting::setValue('universe_price_sync_last_run_json', json_encode(array_replace_recursive($base, [
             'bulk' => ['file_errors' => 1, 'files' => [['exchange' => 'BSE', 'status' => 'failed', 'retry_attempt' => 2]]],
         ])));
+        $this->bindCompletionLogToLatestUniverseRun();
         $keys = collect(app(AdminOperationalAlertService::class)->evaluateConditions())->pluck('key')->all();
         $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $keys);
     }
@@ -754,6 +804,7 @@ class AdminOperationalAlertTest extends TestCase
             'status' => 'partial', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
             'stocks_processed' => 574, 'failures' => 1, 'summary' => 'identity conflict',
         ]);
+        $this->bindCompletionLogToLatestUniverseRun();
 
         $alerts = collect(app(AdminOperationalAlertService::class)->evaluateConditions())
             ->where('key', AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED);
@@ -832,6 +883,7 @@ class AdminOperationalAlertTest extends TestCase
             'status' => 'failed', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
             'stocks_processed' => 574, 'failures' => 574, 'summary' => 'validated source with row coverage gaps',
         ]);
+        $this->bindCompletionLogToLatestUniverseRun();
         foreach ([SyncLogService::JOB_DAILY_MARKET_DATA, SyncLogService::JOB_STOCK_MASTER] as $jobName) {
             SyncRun::query()->create([
                 'id' => (string) Str::uuid(), 'job_name' => $jobName, 'status' => 'success',
@@ -882,6 +934,7 @@ class AdminOperationalAlertTest extends TestCase
             'status' => 'partial', 'started_at' => now()->subMinute(), 'finished_at' => now()->timezone('Asia/Kolkata'),
             'stocks_processed' => 10, 'failures' => 5, 'summary' => 'BSE exchange file persistently failed',
         ]);
+        $this->bindCompletionLogToLatestUniverseRun();
         $messages = [];
         $telegram = $this->createStub(TelegramNotificationService::class);
         $telegram->method('sendAdminOperationalAlert')
@@ -898,8 +951,19 @@ class AdminOperationalAlertTest extends TestCase
         $retryPayload = json_decode((string) Setting::getValue('universe_price_sync_last_run_json'), true);
         $retryPayload['bulk']['files'][1]['retry_attempt'] = 2;
         Setting::setValue('universe_price_sync_last_run_json', json_encode($retryPayload));
+        $this->bindCompletionLogToLatestUniverseRun();
         $result = app(AdminOperationalAlertService::class)->syncAndNotify();
         $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $result['notified']);
+        $this->assertTrue(collect($messages)->contains(fn (string $message) => str_contains($message, 'Universe daily bhavcopy sync failed')));
+
+        $retryPayload['bulk']['files'][1]['retry_attempt'] = 4;
+        Setting::setValue('universe_price_sync_last_run_json', json_encode($retryPayload));
+        $this->bindCompletionLogToLatestUniverseRun();
+        $result = app(AdminOperationalAlertService::class)->syncAndNotify();
+        // The alert remains active, while the existing alert lifecycle avoids
+        // sending a duplicate Telegram notification for the same incident.
+        $this->assertContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, collect($result['active'])->pluck('key')->all());
+        $this->assertNotContains(AdminOperationalAlertService::KEY_UNIVERSE_SYNC_FAILED, $result['notified']);
         $this->assertTrue(collect($messages)->contains(fn (string $message) => str_contains($message, 'Universe daily bhavcopy sync failed')));
     }
 

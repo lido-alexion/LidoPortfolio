@@ -15,6 +15,7 @@ use App\Services\UniverseStockResolverService;
 use App\Support\TradingCalendar;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Mockery;
 use Tests\Concerns\CreatesPortfolioProfiles;
 use Tests\TestCase;
@@ -181,7 +182,7 @@ class UniversePriceSyncServiceTest extends TestCase
 
     public function test_daily_sync_uses_fixed_daily_lookback_config(): void
     {
-        Carbon::setTestNow('2026-10-23 16:00:00');
+        Carbon::setTestNow(Carbon::parse('2026-10-26 20:00:00', 'UTC'));
         config([
             'portfolio.universe_price_sync.enabled' => true,
             'portfolio.universe_price_sync.batch_size' => 1,
@@ -201,9 +202,8 @@ class UniversePriceSyncServiceTest extends TestCase
         $priceFetch->shouldNotReceive('syncStock');
         $this->fakeBulk(function ($stocks, Carbon $from, Carbon $to) use ($stock): void {
             $this->assertSame([$stock->id], $stocks->pluck('id')->all());
-            $this->assertTrue($from->lte(now()->subDays(10)));
-            $this->assertTrue($from->gte(now()->subDays(11)));
-            $this->assertTrue($to->isToday());
+            $this->assertSame('2026-10-17', $from->toDateString());
+            $this->assertSame('2026-10-27', $to->toDateString());
         }, stored: 1);
 
         $benchmarkSync = Mockery::mock(BenchmarkPriceSyncService::class);
@@ -427,6 +427,261 @@ class UniversePriceSyncServiceTest extends TestCase
         $this->assertFalse($service->priorEquitySessionHadFailures($saturday));
         $this->assertFalse($service->allowsMaintenanceOnCalendarDay($saturday));
         $this->assertFalse($service->isMaintenanceWindowDue($saturday));
+    }
+
+    private function insertCoverageOnlyRun(array $overrides = [], string $status = 'partial'): string
+    {
+        $id = (string) \Illuminate\Support\Str::uuid();
+        $started = Carbon::parse('2026-11-23 19:00:00', 'Asia/Kolkata')->utc();
+        $finished = Carbon::parse('2026-11-23 19:01:00', 'Asia/Kolkata')->utc();
+        $run = \App\Models\SyncRun::query()->create([
+            'id' => $id, 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC, 'status' => $status,
+            'operational_outcome' => ((int) (($overrides['bulk']['file_errors'] ?? 0)) === 0
+                && (int) (($overrides['bulk']['identity_conflicts'] ?? 0)) === 0
+                && count($overrides['bulk']['files'] ?? [[ 'status' => 'applied' ]]) === 1)
+                    ? 'SUCCESS' : null,
+            'started_at' => $started, 'finished_at' => $finished, 'stocks_processed' => 2, 'failures' => 2,
+        ]);
+        $file = [
+            'exchange' => 'NSE', 'date' => '2026-11-23', 'status' => 'applied',
+            'source_revision_sha256' => str_repeat('a', 64), 'coverage_hash' => str_repeat('b', 64),
+            'checked_at' => '2026-11-23T19:00:30+05:30',
+        ];
+        $bulk = [
+            'from_date' => '2026-11-23', 'to_date' => '2026-11-23', 'expected_exchanges' => ['NSE'],
+            'expected_files' => [['exchange' => 'NSE', 'date' => '2026-11-23']], 'files' => [$file],
+            'file_errors' => 0, 'identity_conflicts' => 0, 'unavailable_stocks' => 2,
+            'outcomes' => [
+                'covered' => 0, 'no_data' => 2, 'skipped' => 0, 'ignored' => 0,
+                'provider_error' => 0, 'systemic_error' => 0, 'not_expected' => 0,
+            ],
+        ];
+        $stats = array_merge([
+            'processed' => 2, 'failed' => 2, 'completed_at' => '2026-11-23T19:01:00+05:30', 'bulk' => $bulk,
+        ], $overrides);
+        $stats['bulk'] = array_merge($bulk, $overrides['bulk'] ?? []);
+        $stockIds = [];
+        $fixtureSuffix = \Illuminate\Support\Str::random(6);
+        for ($index = 0; $index < 2; $index++) {
+            $stockIds[] = Stock::query()->create([
+                'symbol' => 'COV'.$fixtureSuffix.$index, 'name' => 'Coverage fixture '.$index,
+                'exchange' => 'NSE', 'is_active' => true,
+            ])->id;
+        }
+        foreach ($stockIds as $stockId) {
+            DB::table('portfolio_universe_price_session_outcomes')->insert([
+                'stock_id' => $stockId, 'session_date' => '2026-11-23', 'exchange' => 'NSE',
+                'outcome' => 'no_data', 'price_present' => false, 'run_id' => $id,
+                'source_revision_sha256' => str_repeat('a', 64),
+                'observed_at' => $finished, 'created_at' => $finished, 'updated_at' => $finished,
+            ]);
+        }
+        \App\Models\SyncLog::query()->create([
+            'run_id' => $id, 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'level' => 'info', 'message' => 'Universe price sync completed', 'context' => $stats,
+            'logged_at' => $finished,
+        ]);
+
+        return $run->id;
+    }
+
+    public function test_holiday_retry_skips_only_when_partial_run_has_complete_healthy_file_evidence(): void
+    {
+        config([
+            'portfolio.universe_price_sync.skip_weekends' => true,
+            'portfolio.universe_price_sync.weekend_retry_on_prior_session_failures' => true,
+        ]);
+        Setting::setValue('cron_timezone', 'Asia/Kolkata');
+        CalendarEvent::query()->create([
+            'profile_id' => null, 'category' => CalendarEvent::CATEGORY_TRADE_HOLIDAY,
+            'title' => 'Recovery holiday', 'color' => CalendarEvent::TRADE_HOLIDAY_DEFAULT_COLOR,
+            'anchor_date' => '2026-11-24', 'recurrence_type' => CalendarEvent::RECURRENCE_NONE,
+            'reminder_enabled' => false, 'is_active' => true,
+        ]);
+        TradingCalendar::clearHolidayCache();
+        $this->insertCoverageOnlyRun();
+        $holidayEvening = Carbon::parse('2026-11-24 19:00:00', 'Asia/Kolkata');
+
+        $this->assertTrue(TradingCalendar::isEquitySessionDate(Carbon::parse('2026-11-23')));
+        $this->assertFalse(TradingCalendar::isEquitySessionDate($holidayEvening));
+        $this->assertFalse(app(UniversePriceSyncService::class)->priorEquitySessionHadFailures($holidayEvening));
+        $this->assertFalse(app(UniversePriceSyncService::class)->allowsMaintenanceOnCalendarDay($holidayEvening));
+    }
+
+    public function test_terminal_evidence_counts_stock_outcomes_once_per_session_across_both_exchanges(): void
+    {
+        config([
+            'portfolio.universe_price_sync.skip_weekends' => true,
+            'portfolio.universe_price_sync.weekend_retry_on_prior_session_failures' => true,
+        ]);
+        Setting::setValue('cron_timezone', 'Asia/Kolkata');
+        $id = $this->insertCoverageOnlyRun(['bulk' => [
+            'expected_exchanges' => ['NSE', 'BSE'],
+            'expected_files' => [
+                ['exchange' => 'NSE', 'date' => '2026-11-23'],
+                ['exchange' => 'BSE', 'date' => '2026-11-23'],
+            ],
+            'files' => [
+                ['exchange' => 'NSE', 'date' => '2026-11-23', 'status' => 'applied',
+                    'source_revision_sha256' => str_repeat('a', 64), 'coverage_hash' => str_repeat('b', 64),
+                    'checked_at' => '2026-11-23T19:00:30+05:30'],
+                ['exchange' => 'BSE', 'date' => '2026-11-23', 'status' => 'applied',
+                    'source_revision_sha256' => str_repeat('c', 64), 'coverage_hash' => str_repeat('d', 64),
+                    'checked_at' => '2026-11-23T19:00:30+05:30'],
+            ],
+        ]]);
+        \App\Models\SyncRun::query()->whereKey($id)->update(['operational_outcome' => 'SUCCESS']);
+
+        $holidayEvening = Carbon::parse('2026-11-24 19:00:00', 'Asia/Kolkata');
+        $this->assertFalse(app(UniversePriceSyncService::class)->priorEquitySessionHadFailures($holidayEvening));
+    }
+
+    public function test_all_no_data_run_stays_failed_for_coverage_but_does_not_trigger_holiday_source_retry(): void
+    {
+        config(['portfolio.universe_price_sync.weekend_retry_on_prior_session_failures' => true]);
+        Setting::setValue('cron_timezone', 'Asia/Kolkata');
+        CalendarEvent::query()->create([
+            'profile_id' => null, 'category' => CalendarEvent::CATEGORY_TRADE_HOLIDAY,
+            'title' => 'Recovery holiday', 'color' => CalendarEvent::TRADE_HOLIDAY_DEFAULT_COLOR,
+            'anchor_date' => '2026-11-24', 'recurrence_type' => CalendarEvent::RECURRENCE_NONE,
+            'reminder_enabled' => false, 'is_active' => true,
+        ]);
+        TradingCalendar::clearHolidayCache();
+        $this->insertCoverageOnlyRun([], 'failed');
+        $holidayEvening = Carbon::parse('2026-11-24 19:00:00', 'Asia/Kolkata');
+
+        $this->assertFalse(app(UniversePriceSyncService::class)->priorEquitySessionHadFailures($holidayEvening));
+    }
+
+    public function test_incomplete_evidence_or_real_file_failures_keep_holiday_retry_enabled(): void
+    {
+        config(['portfolio.universe_price_sync.weekend_retry_on_prior_session_failures' => true]);
+        Setting::setValue('cron_timezone', 'Asia/Kolkata');
+        $holidayEvening = Carbon::parse('2026-11-24 19:00:00', 'Asia/Kolkata');
+        CalendarEvent::query()->create([
+            'profile_id' => null, 'category' => CalendarEvent::CATEGORY_TRADE_HOLIDAY,
+            'title' => 'Recovery holiday', 'color' => CalendarEvent::TRADE_HOLIDAY_DEFAULT_COLOR,
+            'anchor_date' => '2026-11-24', 'recurrence_type' => CalendarEvent::RECURRENCE_NONE,
+            'reminder_enabled' => false, 'is_active' => true,
+        ]);
+        TradingCalendar::clearHolidayCache();
+
+        $this->insertCoverageOnlyRun(['bulk' => ['files' => []]]);
+        $this->assertTrue(app(UniversePriceSyncService::class)->priorEquitySessionHadFailures($holidayEvening));
+
+        \App\Models\SyncRun::query()->delete();
+        \App\Models\SyncLog::query()->delete();
+        $this->insertCoverageOnlyRun(['bulk' => ['file_errors' => 1]]);
+        $this->assertTrue(app(UniversePriceSyncService::class)->priorEquitySessionHadFailures($holidayEvening));
+
+        \App\Models\SyncRun::query()->delete();
+        \App\Models\SyncLog::query()->delete();
+        $this->insertCoverageOnlyRun(['bulk' => ['identity_conflicts' => 1]]);
+        $this->assertTrue(app(UniversePriceSyncService::class)->priorEquitySessionHadFailures($holidayEvening));
+
+        \App\Models\SyncRun::query()->delete();
+        \App\Models\SyncLog::query()->delete();
+        $runId = $this->insertCoverageOnlyRun();
+        DB::table('portfolio_universe_price_session_outcomes')->where('run_id', $runId)
+            ->update(['source_revision_sha256' => str_repeat('c', 64)]);
+        $this->assertTrue(app(UniversePriceSyncService::class)->priorEquitySessionHadFailures($holidayEvening));
+    }
+
+    public function test_historical_systemic_stock_outcome_is_not_operational_success(): void
+    {
+        config(['portfolio.universe_price_sync.weekend_retry_on_prior_session_failures' => true]);
+        Setting::setValue('cron_timezone', 'Asia/Kolkata');
+        $this->insertCoverageOnlyRun(['bulk' => ['outcomes' => [
+            'covered' => 0, 'no_data' => 1, 'skipped' => 0, 'ignored' => 0,
+            'provider_error' => 0, 'systemic_error' => 1, 'not_expected' => 0,
+        ]]]);
+
+        $this->assertTrue(app(UniversePriceSyncService::class)->priorEquitySessionHadFailures(
+            Carbon::parse('2026-11-24 19:00:00', 'Asia/Kolkata'),
+        ));
+    }
+
+    public function test_november_24_scale_run_requires_all_twelve_matching_receipts_and_31068_outcomes(): void
+    {
+        $finished = Carbon::parse('2026-11-24 14:30:00', 'UTC');
+        $runId = (string) \Illuminate\Support\Str::uuid();
+        $run = \App\Models\SyncRun::query()->create([
+            'id' => $runId, 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'status' => 'partial', 'started_at' => $finished->copy()->subMinutes(2),
+            'finished_at' => $finished, 'stocks_processed' => 5178, 'failures' => 546,
+        ]);
+        $stamp = $finished->toIso8601String();
+        $sessions = ['2026-11-16', '2026-11-17', '2026-11-18', '2026-11-19', '2026-11-20', '2026-11-23'];
+        $files = $expectedFiles = $sourceHashes = [];
+        foreach ($sessions as $date) {
+            foreach (['NSE', 'BSE'] as $exchange) {
+                $sourceHash = hash('sha256', $exchange.':'.$date);
+                $key = $exchange.':'.$date;
+                $sourceHashes[$key] = $sourceHash;
+                $files[] = [
+                    'exchange' => $exchange, 'date' => $date, 'status' => 'receipt_cached',
+                    'source_revision_sha256' => $sourceHash, 'coverage_hash' => hash('sha256', 'coverage:'.$key),
+                    'checked_at' => $stamp,
+                ];
+                $expectedFiles[] = ['exchange' => $exchange, 'date' => $date];
+            }
+        }
+
+        $stockRows = [];
+        for ($index = 0; $index < 5178; $index++) {
+            $stockRows[] = [
+                'symbol' => 'SCALE'.$index, 'name' => 'Scale fixture '.$index,
+                'exchange' => $index < 5000 ? 'NSE' : 'BSE',
+                'is_active' => true, 'is_benchmark' => false,
+                'created_at' => $stamp, 'updated_at' => $stamp,
+            ];
+        }
+        foreach (array_chunk($stockRows, 500) as $chunk) DB::table('portfolio_stocks')->insert($chunk);
+        unset($stockRows, $chunk);
+        $stocks = DB::table('portfolio_stocks')->orderBy('id')->get(['id', 'exchange']);
+        $outcomeRows = [];
+        $counts = ['not_expected' => 0, 'no_data' => 0, 'covered' => 0];
+        foreach ($sessions as $sessionIndex => $date) {
+            foreach ($stocks as $index => $stock) {
+                $outcomeIndex = $sessionIndex * 5178 + $index;
+                $outcome = $outcomeIndex < 2 ? 'not_expected' : ($outcomeIndex < 3184 ? 'no_data' : 'covered');
+                $counts[$outcome]++;
+                $outcomeRows[] = [
+                    'stock_id' => $stock->id, 'session_date' => $date, 'exchange' => $stock->exchange,
+                    'outcome' => $outcome, 'price_present' => $outcome === 'covered',
+                    'source_revision_sha256' => $sourceHashes[$stock->exchange.':'.$date],
+                    'run_id' => $runId, 'observed_at' => $stamp, 'created_at' => $stamp, 'updated_at' => $stamp,
+                ];
+                if (count($outcomeRows) === 1000) {
+                    DB::table('portfolio_universe_price_session_outcomes')->insert($outcomeRows);
+                    $outcomeRows = [];
+                }
+            }
+        }
+        if ($outcomeRows !== []) DB::table('portfolio_universe_price_session_outcomes')->insert($outcomeRows);
+        unset($outcomeRows, $stocks);
+        $this->assertSame(['not_expected' => 2, 'no_data' => 3182, 'covered' => 27884], $counts);
+
+        $stats = [
+            'run_id' => $runId, 'processed' => 5178, 'succeeded' => 4632, 'failed' => 546,
+            'completed_at' => $stamp, 'bulk' => [
+                'from_date' => '2026-11-16', 'to_date' => '2026-11-23',
+                'expected_exchanges' => ['NSE', 'BSE'], 'expected_files' => $expectedFiles, 'files' => $files,
+                'file_errors' => 0, 'identity_conflicts' => 0, 'unavailable_stocks' => 546,
+                'outcomes' => [
+                    'covered' => 27884, 'no_data' => 3182, 'skipped' => 0, 'ignored' => 0,
+                    'provider_error' => 0, 'systemic_error' => 0, 'not_expected' => 2,
+                ],
+            ],
+        ];
+        \App\Models\SyncLog::query()->create([
+            'run_id' => $runId, 'job_name' => SyncLogService::JOB_UNIVERSE_PRICE_SYNC,
+            'level' => 'info', 'message' => 'Universe price sync completed', 'context' => $stats,
+            'logged_at' => $finished,
+        ]);
+
+        $method = new \ReflectionMethod(UniversePriceSyncService::class, 'hasCompleteOperationalSourceEvidence');
+        $this->assertTrue($method->invoke(app(UniversePriceSyncService::class), $run));
     }
 
     public function test_weekend_maintenance_runs_when_prior_session_had_failures(): void

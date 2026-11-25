@@ -507,6 +507,7 @@ class CashManagementService
         ?string $type = null,
         ?string $cutoff = null,
         string $order = 'asc',
+        ?string $classification = null,
     ): array {
         $fromDate = $from ? CarbonImmutable::parse($from)->toDateString() : null;
         $toDate = $to ? CarbonImmutable::parse($to)->toDateString() : now()->toDateString();
@@ -528,6 +529,7 @@ class CashManagementService
             ->when($cutoff, fn ($query) => $query->where('created_at', '<=', $cutoff))
             ->when($fromDate, fn ($q) => $q->whereDate('entry_date', '>=', $fromDate))
             ->whereDate('entry_date', '<=', $toDate)
+            ->when($classification, fn ($query) => $query->where('entry_classification', $classification))
             ->when($type, fn ($q) => $q->where('entry_type', $type))
             ->orderBy('entry_date', $direction)
             ->orderBy('created_at', $direction)
@@ -556,6 +558,8 @@ class CashManagementService
             return [
                 'id' => $entry->id,
                 'entry_type' => $entry->entry_type,
+                'entry_classification' => $entry->entry_classification,
+                'broker_account_id' => $entry->broker_account_id,
                 'category' => match ($entry->entry_type) {
                     CashLedgerEntry::TYPE_DEPOSIT, CashLedgerEntry::TYPE_WITHDRAWAL => 'external_flow',
                     CashLedgerEntry::TYPE_ADJUSTMENT => 'adjustment',
@@ -723,15 +727,20 @@ class CashManagementService
             // Apply an inflow before an outflow so each immutable row has a valid running balance.
             if ($replacementUnits > 0 && $reversalUnits < 0) {
                 $replacement = $appendReplacement();
+                if ($entry->entry_classification === 'kite_net_adjustment') $replacement->forceFill(['entry_classification' => 'kite_net_adjustment'])->save();
                 $appendReversal();
                 return $replacement;
             }
             if ($replacementUnits < 0 && $reversalUnits > 0) {
                 $appendReversal();
-                return $appendReplacement();
+                $replacement = $appendReplacement();
+                if ($entry->entry_classification === 'kite_net_adjustment') $replacement->forceFill(['entry_classification' => 'kite_net_adjustment'])->save();
+                return $replacement;
             }
             $appendReversal();
-            return $appendReplacement();
+            $replacement = $appendReplacement();
+            if ($entry->entry_classification === 'kite_net_adjustment') $replacement->forceFill(['entry_classification' => 'kite_net_adjustment'])->save();
+            return $replacement;
         });
     }
 

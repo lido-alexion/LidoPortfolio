@@ -1,6 +1,13 @@
 <?php
 
 return [
+    // Staged safety gate. Keep disabled until bounded order types, charge model,
+    // and provider semantics receive an independent safety review.
+    'kite_per_order_buying_power_gate_enabled' => (bool) env('KITE_PER_ORDER_BUYING_POWER_GATE_ENABLED', false),
+    'kite_per_order_buying_power_max_age_seconds' => max(1, (int) env('KITE_PER_ORDER_BUYING_POWER_MAX_AGE_SECONDS', 15)),
+    'kite_per_order_buying_power_charge_buffer_pct' => max(0.0, (float) env('KITE_PER_ORDER_BUYING_POWER_CHARGE_BUFFER_PCT', 5.0)),
+    // Reserved for a future reviewed block-only gate. Shadow evidence never gates execution.
+    'kite_session_evidence_gate_enabled' => (bool) env('KITE_SESSION_EVIDENCE_GATE_ENABLED', false),
     /*
     | Per-user Zerodha/Kite Connect (V4-FEAT-001). App key/secret live in env;
     | each Lido user authorizes their own Kite account. Access tokens are
@@ -13,5 +20,10 @@ return [
         'login_url' => 'https://kite.trade/connect/login',
         'api_base' => 'https://api.kite.trade',
         'cancel_retry_cooldown_seconds' => max(1, (int) env('KITE_CANCEL_RETRY_COOLDOWN_SECONDS', 60)),
+    ],
+    'kite_funds' => [
+        // Both remain off until real Console evidence validates payout behavior and operators approve rollout.
+        'auto_adjustments_enabled' => filter_var(env('KITE_FUNDS_AUTO_ADJUSTMENTS_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'payout_semantics_verified' => filter_var(env('KITE_FUNDS_PAYOUT_SEMANTICS_VERIFIED', false), FILTER_VALIDATE_BOOLEAN),
     ],
 ];

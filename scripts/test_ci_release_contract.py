@@ -71,6 +71,25 @@ class ScopeTests(unittest.TestCase):
     def test_release_gate_implementation_change_qualifies_its_activation(self):
         self.assertTrue(classify(["scripts/ci_release_contract.py"])['deployable'])
 
+    def test_authenticated_production_smoke_and_direct_dependencies_are_deployable(self):
+        for path in (
+            "app/tests/e2e/authenticatedProductionSmoke.mjs",
+            "app/tests/e2e/productionSmokeDiagnostics.js",
+            "app/tests/e2e/productionSmokePolicy.js",
+            "app/tests/e2e/productionSmokeSelectors.js",
+            "app/tests/e2e/production-smoke.spec.js",
+            "app/tests/e2e/kite-header-connect.spec.js",
+        ):
+            with self.subTest(path=path):
+                scope = classify([path])
+                self.assertTrue(scope["frontend"])
+                self.assertTrue(scope["deployable"])
+
+    def test_generic_e2e_tests_remain_frontend_only(self):
+        scope = classify(["app/tests/e2e/example.spec.js"])
+        self.assertTrue(scope["frontend"])
+        self.assertFalse(scope["deployable"])
+
 
 class ReleaseGateTests(unittest.TestCase):
     def test_successful_exact_master_candidate_is_accepted(self):

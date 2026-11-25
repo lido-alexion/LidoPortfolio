@@ -47,4 +47,24 @@ class V5SimulationPriceServiceTest extends TestCase
         $this->assertSame('blocked', $result['status']);
         $this->assertContains('missing_high_price', $result['limitations']);
     }
+
+    public function test_raw_bnagrochem_pre_split_bar_cannot_supply_a_strategy_execution_price(): void
+    {
+        $stock = Stock::query()->create([
+            'symbol' => 'BNAGROCHEM', 'isin' => 'INE00HZ01029', 'exchange' => 'NSE', 'name' => 'BN Agrochem',
+        ]);
+        StockPrice::query()->create([
+            'stock_id' => $stock->id, 'price_date' => '2026-11-13',
+            'open_price' => 159, 'high_price' => 162.66, 'low_price' => 158.68,
+            'close_price' => 162.66, 'adjusted_close_price' => 162.66,
+            'data_source' => 'nse_bhavcopy', 'created_at' => '2026-11-13 18:00:00',
+        ]);
+
+        $result = app(SimulationPriceService::class)->resolve($stock->id, '2026-11-13', 'next_close');
+
+        $this->assertSame('blocked', $result['status']);
+        $this->assertNull($result['execution_price']);
+        $this->assertContains('historical_adjustment_unproven', $result['limitations']);
+        $this->assertSame(162.66, (float) StockPrice::query()->where('stock_id', $stock->id)->value('close_price'));
+    }
 }

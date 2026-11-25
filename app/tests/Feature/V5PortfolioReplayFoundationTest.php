@@ -117,6 +117,27 @@ class V5PortfolioReplayFoundationTest extends TestCase
             ->assertJsonCount(2, 'data.runs');
     }
 
+    public function test_replay_excludes_raw_bnagrochem_history_until_adjustment_proof_exists(): void
+    {
+        $stock = Stock::query()->create([
+            'symbol' => 'BNAGROCHEM', 'isin' => 'INE00HZ01029', 'exchange' => 'NSE', 'name' => 'BN Agrochem',
+        ]);
+        StockPrice::query()->create([
+            'stock_id' => $stock->id, 'price_date' => '2026-11-13',
+            'open_price' => 159, 'high_price' => 162.66, 'low_price' => 158.68,
+            'close_price' => 162.66, 'adjusted_close_price' => 162.66,
+            'data_source' => 'nse_bhavcopy', 'created_at' => '2026-11-13 18:00:00',
+        ]);
+
+        $result = app(ReplayStrategyEvaluator::class)->evaluate([
+            'holdings' => [], 'pending_recommendations' => [], 'strategies' => [],
+        ], ['binding_revisions' => []], '2026-11-13');
+
+        $this->assertSame(0, $result['generated']);
+        $this->assertContains('historical_adjustment_unproven_stocks_excluded', $result['limitations']);
+        $this->assertSame(162.66, (float) StockPrice::query()->where('stock_id', $stock->id)->value('close_price'));
+    }
+
     public function test_ready_scenario_pins_world_and_cannot_be_modified_after_queueing(): void
     {
         $user = User::factory()->create();

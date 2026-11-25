@@ -219,7 +219,165 @@ class UniversePriceSyncService
             ->orderByDesc('finished_at')
             ->first();
 
-        return $lastRun !== null && in_array($lastRun->status, ['failed', 'partial'], true);
+        if ($lastRun === null || ! in_array($lastRun->status, ['failed', 'partial'], true)) {
+            return false;
+        }
+
+        if ($lastRun->operational_outcome === 'SUCCESS'
+            && $this->hasCompleteOperationalSourceEvidence($lastRun)) {
+            return false;
+        }
+
+        // Keep the externally visible run partial while avoiding a holiday retry
+        // when its only failures are stock coverage gaps and every expected
+        // exchange file is independently proven healthy for this run.
+        return true;
+    }
+
+    private function hasCompleteOperationalSourceEvidence(SyncRun $run): bool
+    {
+        $log = SyncLog::query()->where('run_id', $run->id)
+            ->where('message', 'Universe price sync completed')->latest('id')->first();
+        $stats = $log?->context;
+        $bulk = is_array($stats) ? ($stats['bulk'] ?? null) : null;
+        if ($run->job_name !== SyncLogService::JOB_UNIVERSE_PRICE_SYNC
+            || ! in_array($run->status, ['success', 'partial', 'failed'], true)
+            || ! is_array($bulk)
+            || ! is_numeric($stats['processed'] ?? null)
+            || ! is_numeric($stats['failed'] ?? null)
+            || (int) $stats['processed'] !== (int) $run->stocks_processed
+            || (int) $stats['failed'] !== (int) $run->failures
+            || (int) ($stats['failed'] ?? -1) !== (int) ($bulk['unavailable_stocks'] ?? -2)
+            || ($run->status !== 'success' && (int) ($bulk['unavailable_stocks'] ?? 0) < 1)
+            || (int) ($bulk['file_errors'] ?? -1) !== 0
+            || (int) ($bulk['identity_conflicts'] ?? -1) !== 0
+            || ! is_array($bulk['expected_files'] ?? null)
+            || ! is_array($bulk['files'] ?? null)
+            || ! is_string($bulk['from_date'] ?? null) || ! is_string($bulk['to_date'] ?? null)
+            || ! is_array($bulk['expected_exchanges'] ?? null) || $bulk['expected_exchanges'] === []
+            || ! is_array($bulk['outcomes'] ?? null)
+            || ! is_string($stats['completed_at'] ?? null)
+            || preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/', $stats['completed_at']) !== 1
+            || preg_match('/^\d{4}-\d{2}-\d{2}$/', $bulk['from_date']) !== 1
+            || preg_match('/^\d{4}-\d{2}-\d{2}$/', $bulk['to_date']) !== 1
+            || ! checkdate((int) substr($bulk['from_date'], 5, 2), (int) substr($bulk['from_date'], 8, 2), (int) substr($bulk['from_date'], 0, 4))
+            || ! checkdate((int) substr($bulk['to_date'], 5, 2), (int) substr($bulk['to_date'], 8, 2), (int) substr($bulk['to_date'], 0, 4))
+            || ! $run->finished_at) {
+            return false;
+        }
+
+        try {
+            if (abs(Carbon::parse($stats['completed_at'])->getTimestamp() - $run->finished_at->getTimestamp()) > 300) return false;
+            $from = Carbon::parse($bulk['from_date'], 'Asia/Kolkata')->startOfDay();
+            $to = Carbon::parse($bulk['to_date'], 'Asia/Kolkata')->startOfDay();
+            if ($to->lt($from) || $from->diffInDays($to, true) > 31) return false;
+        } catch (\Throwable) {
+            return false;
+        }
+
+        $exchanges = [];
+        foreach ($bulk['expected_exchanges'] as $exchange) {
+            if (! in_array($exchange, ['NSE', 'BSE'], true) || isset($exchanges[$exchange])) return false;
+            $exchanges[$exchange] = true;
+        }
+        if ($exchanges === []) return false;
+        $expected = [];
+        for ($day = $from->copy(); $day->lte($to); $day->addDay()) {
+            if (! TradingCalendar::isEquitySessionDate($day)) continue;
+            foreach (array_keys($exchanges) as $exchange) $expected[$exchange.':'.$day->toDateString()] = true;
+        }
+        $declared = [];
+        foreach ($bulk['expected_files'] as $file) {
+            if (! is_array($file) || ! in_array($file['exchange'] ?? null, ['NSE', 'BSE'], true)
+                || ! is_string($file['date'] ?? null)) return false;
+            $key = $file['exchange'].':'.$file['date'];
+            if (isset($declared[$key])) return false;
+            $declared[$key] = true;
+        }
+        if ($expected === [] || $declared !== $expected) return false;
+
+        $observed = [];
+        foreach ($bulk['files'] as $file) {
+            if (! is_array($file) || ! in_array($file['exchange'] ?? null, ['NSE', 'BSE'], true)
+                || ! is_string($file['date'] ?? null)) return false;
+            $key = $file['exchange'].':'.$file['date'];
+            if (! isset($expected[$key]) || isset($observed[$key])
+                || ! in_array($file['status'] ?? null, ['applied', 'receipt_cached'], true)
+                || ! is_string($file['source_revision_sha256'] ?? null)
+                || preg_match('/^[a-f0-9]{64}$/', $file['source_revision_sha256']) !== 1
+                || ! is_string($file['coverage_hash'] ?? null)
+                || preg_match('/^[a-f0-9]{64}$/', $file['coverage_hash']) !== 1
+                || ! is_string($file['checked_at'] ?? null)
+                || preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/', $file['checked_at']) !== 1) return false;
+            try {
+                $checkedAt = Carbon::parse($file['checked_at']);
+                if ($checkedAt->gt($run->finished_at->copy()->addMinutes(5))
+                    || $checkedAt->lt(Carbon::parse($file['date'], 'Asia/Kolkata')->startOfDay())) return false;
+            } catch (\Throwable) {
+                return false;
+            }
+            $observed[$key] = true;
+        }
+
+        if (count($observed) !== count($expected)) return false;
+
+        // Operational success requires a receipt-backed per-stock terminal
+        // outcome for every stock/session pair. No-data remains a coverage gap;
+        // provider and systemic failures remain actionable and visible.
+        $outcomes = $bulk['outcomes'];
+        foreach (['covered', 'no_data', 'skipped', 'ignored', 'provider_error', 'systemic_error', 'not_expected'] as $key) {
+            if (! isset($outcomes[$key]) || ! is_int($outcomes[$key]) || $outcomes[$key] < 0) return false;
+        }
+        $sessionCount = intdiv(count($expected), count($exchanges));
+        if ($sessionCount < 1 || $sessionCount * count($exchanges) !== count($expected)) return false;
+        $expectedOutcomeRows = (int) $stats['processed'] * $sessionCount;
+        $actualOutcomeRows = array_sum(array_intersect_key($outcomes, array_flip([
+            'covered', 'no_data', 'skipped', 'ignored', 'provider_error', 'systemic_error', 'not_expected',
+        ])));
+        if ($expectedOutcomeRows < 1 || $actualOutcomeRows !== $expectedOutcomeRows
+            || $outcomes['provider_error'] !== 0 || $outcomes['systemic_error'] !== 0
+            || ! Schema::hasTable('portfolio_universe_price_session_outcomes')) return false;
+
+        $expectedDates = array_values(array_unique(array_map(
+            fn (string $key): string => substr($key, strpos($key, ':') + 1),
+            array_keys($expected),
+        )));
+        $rows = \Illuminate\Support\Facades\DB::table('portfolio_universe_price_session_outcomes')
+            ->where('run_id', $run->id)->whereIn('session_date', $expectedDates)
+            ->get(['stock_id', 'session_date', 'exchange', 'outcome', 'source_revision_sha256']);
+        if ($rows->count() !== $expectedOutcomeRows) return false;
+
+        $stockIdsByDate = [];
+        $persistedCounts = array_fill_keys(['covered', 'no_data', 'skipped', 'ignored', 'provider_error', 'systemic_error', 'not_expected'], 0);
+        $sourceHashes = [];
+        foreach ($bulk['files'] as $file) {
+            $sourceHashes[$file['exchange'].':'.$file['date']] = $file['source_revision_sha256'];
+        }
+        foreach ($rows as $row) {
+            if (! in_array($row->exchange, array_keys($exchanges), true)
+                || ! in_array($row->session_date, $expectedDates, true)
+                || ! array_key_exists($row->outcome, $persistedCounts)
+                || ! isset($sourceHashes[$row->exchange.':'.$row->session_date])
+                || ! is_string($row->source_revision_sha256)
+                || ! hash_equals($sourceHashes[$row->exchange.':'.$row->session_date], $row->source_revision_sha256)) return false;
+            $stockIdsByDate[$row->session_date][] = (int) $row->stock_id;
+            $persistedCounts[$row->outcome]++;
+        }
+        $stockIdsByDate = array_map(function (array $ids): array {
+            sort($ids, SORT_NUMERIC);
+
+            return $ids;
+        }, $stockIdsByDate);
+        $firstCohort = reset($stockIdsByDate);
+        foreach ($expectedDates as $date) {
+            if (! isset($stockIdsByDate[$date]) || count($stockIdsByDate[$date]) !== (int) $stats['processed']
+                || $stockIdsByDate[$date] !== $firstCohort) return false;
+        }
+
+        $loggedCounts = [];
+        foreach (array_keys($persistedCounts) as $key) $loggedCounts[$key] = (int) $outcomes[$key];
+
+        return $persistedCounts === $loggedCounts;
     }
 
     public function isMaintenanceWindowDue(?Carbon $at = null): bool
@@ -300,7 +458,7 @@ class UniversePriceSyncService
         );
         if ($this->skipsWeekends()) {
             $windowLabel .= $this->weekendRetryOnPriorFailures()
-                ? ' (weekdays; weekend retry if prior session ended failed/partial)'
+                ? ' (weekdays; weekend retry when prior session has actionable failures)'
                 : ' (weekdays only)';
         }
 
@@ -379,6 +537,7 @@ class UniversePriceSyncService
             'remaining_in_cycle' => max(0, $universeCount - $processedThrough),
             'last_cycle_completed_at' => $lastCycleCompletedAt,
             'last_run' => $lastRun,
+            'daily_outcomes' => app(\App\Services\UniversePrice\UniversePriceOutcomeService::class)->summary(),
             'latest_sync_run' => $latestSyncRun,
             'rate_limits' => [
                 'last_run_hits' => (int) ($lastRun['rate_limit_hits'] ?? 0),
@@ -884,7 +1043,7 @@ class UniversePriceSyncService
         // A queue worker may have cached a date before an admin marked it closed.
         TradingCalendar::clearHolidayCache();
         $from = $this->rangeFrom($mode);
-        $to = TradingCalendar::normalizeToSessionDate(now());
+        $to = TradingCalendar::normalizeToSessionDate(now('Asia/Kolkata'));
 
         $this->logger->scheduler('debug', 'Universe sync batch starting', [
             'event' => 'universe_sync_start',
@@ -961,6 +1120,7 @@ class UniversePriceSyncService
                     ->run($stocks, $from, $to, $runId, $jobName, $stats, $resetCursor)
                 : $this->executor->run($stocks, $from, $to, $delayMs, $runId, $jobName, $stats);
             $stats = $batchResult['stats'];
+            $stats['run_id'] = $runId;
             $lastStockId = $batchResult['last_stock_id'];
 
             if (! $daily && $lastStockId > 0) {
@@ -983,8 +1143,6 @@ class UniversePriceSyncService
                 ? round(($stats['failed'] / $stats['processed']) * 100, 1)
                 : 0.0;
 
-            Setting::setValue(self::KEY_LAST_RUN_JSON, json_encode($stats));
-
             $bulkErrors = ($stats['bulk']['file_errors'] ?? 0) + ($stats['bulk']['identity_conflicts'] ?? 0);
             $status = $stats['failed'] === 0 && $bulkErrors === 0
                 ? 'success' : ($stats['succeeded'] > 0 ? 'partial' : 'failed');
@@ -1005,34 +1163,71 @@ class UniversePriceSyncService
             }
 
             $this->syncLog->log($runId, $jobName, 'info', 'Universe price sync completed', $stats);
+            $finishedAt = now();
+            $completedRun = $runId ? SyncRun::query()->find($runId) : null;
+            $operationalOutcome = null;
+            if ($completedRun !== null) {
+                $completedRun->status = $status;
+                $completedRun->finished_at = $finishedAt;
+                $completedRun->stocks_processed = $stats['processed'];
+                $completedRun->failures = $stats['failed'];
+                if ($this->hasCompleteOperationalSourceEvidence($completedRun)) {
+                    $operationalOutcome = 'SUCCESS';
+                }
+            }
             $this->syncLog->completeRun($runId, $status, [
                 'processed' => $stats['processed'],
                 'failures' => $stats['failed'],
                 'stored_rows' => $stats['stored_rows'],
-            ], $summary);
+            ], $summary, $operationalOutcome, [
+                self::KEY_LAST_RUN_JSON => json_encode($stats, JSON_THROW_ON_ERROR),
+            ]);
 
             $this->logger->scheduler('info', $summary, array_merge(['category' => 'UniversePriceSync'], $stats));
 
             return $stats;
         } catch (\Throwable $e) {
-            $summary = sprintf(
-                'Universe price sync aborted (%s/%s): %s',
-                $mode,
-                $scope,
-                $e->getMessage(),
-            );
-            $this->syncLog->log($runId, $jobName, 'error', $summary, [
-                'event' => 'universe_sync_aborted',
-                'exception' => $e::class,
-            ]);
-            $this->syncLog->completeRun($runId, 'failed', [
-                'processed' => $stats['processed'] ?? 0,
-                'failures' => max(1, (int) ($stats['failed'] ?? 0)),
-            ], $summary);
+            $error = \Illuminate\Support\Str::limit(trim($e->getMessage()), 999, '…');
+            $summary = sprintf('Universe price sync aborted (%s/%s): %s: %s',
+                $mode, $scope, class_basename($e), $error);
+
+            // Close the durable run before attempting the optional detail log.
+            // A failed/oversized log row must never leave the run marked running.
+            try {
+                $this->syncLog->completeRun($runId, 'failed', [
+                    'processed' => $stats['processed'] ?? 0,
+                    'failures' => max(1, (int) ($stats['failed'] ?? 0)),
+                ], $summary);
+            } catch (\Throwable $completionError) {
+                $this->logger->scheduler('error', 'Universe price sync failure could not be persisted', [
+                    'event' => 'universe_sync_failure_persistence_failed',
+                    'run_id' => $runId,
+                    'exception' => $completionError::class,
+                    'original_exception' => $e::class,
+                ]);
+            }
+            try {
+                $this->syncLog->log($runId, $jobName, 'error', $summary, [
+                    'event' => 'universe_sync_aborted',
+                    'exception' => $e::class,
+                    'error' => $error,
+                ]);
+            } catch (\Throwable $logError) {
+                // Keep a systemic operational signal even when database logging is unavailable.
+                $this->logger->scheduler('error', 'Universe price sync aborted; sync log persistence failed', [
+                    'event' => 'universe_sync_log_persistence_failed',
+                    'run_id' => $runId,
+                    'exception' => $e::class,
+                    'log_exception' => $logError::class,
+                    'error' => $error,
+                ]);
+            }
             $this->logger->scheduler('error', $summary, [
                 'category' => 'UniversePriceSync',
+                'event' => 'universe_sync_aborted',
+                'run_id' => $runId,
                 'exception' => $e::class,
-                'error' => $e->getMessage(),
+                'error' => $error,
             ]);
 
             throw $e;
@@ -1044,12 +1239,12 @@ class UniversePriceSyncService
         if ($mode === 'backfill') {
             $days = (int) config('portfolio.universe_price_sync.history_days', 365);
 
-            return now()->subDays($days)->startOfDay();
+            return now('Asia/Kolkata')->subDays($days)->startOfDay();
         }
 
         $days = (int) config('portfolio.universe_price_sync.daily_lookback_days', 10);
 
-        return now()->subDays($days)->startOfDay();
+        return now('Asia/Kolkata')->subDays($days)->startOfDay();
     }
 
     /**

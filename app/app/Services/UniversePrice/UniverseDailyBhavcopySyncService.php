@@ -22,7 +22,11 @@ class UniverseDailyBhavcopySyncService
 {
     public const METHOD = 'exchange_bhavcopy';
     public const KEY_RECEIPTS = 'universe_price_sync_bulk_receipts_v1';
-    private const RETRY_BACKOFF_MINUTES = [5, 15, 60, 360];
+    // Pre-#383 identity-catalogue digest, used only to scope-migrate legacy retries.
+    private const LEGACY_NSE_IDENTITY_EVIDENCE_HASH = '2a901d0113697d65b98577f8c34bd6dcbff21d486f9305b43b23787dfe5e780a';
+    private const RETRY_BACKOFF_MINUTES = [5, 15, 60];
+    private const MAX_ATTEMPTS_PER_RECOVERY_WINDOW = 4;
+    private const RETRY_REPROBE_SESSIONS = 5;
 
     public function __construct(
         protected NseBhavcopyService $nse,
@@ -53,17 +57,41 @@ class UniverseDailyBhavcopySyncService
         $stockIds = $stocks->pluck('id')->map(fn ($id) => (int) $id)->all();
         $ignored = $stockIds === [] ? collect() : IgnoredPriceGap::query()
             ->whereIn('stock_id', $stockIds)->orderBy('stock_id')->orderBy('gap_from')->orderBy('gap_to')->get();
-        $fingerprint = hash('sha256', json_encode([
+        $scope = [
             'stocks' => $stocks->sortBy('id')->map(fn ($s) => [
                 (int) $s->id, $s->exchange, $s->symbol, $s->series, $s->isin, $s->bse_scrip_code,
             ])->values()->all(),
-            'identity_evidence_sha256' => $this->matcher->evidenceHash(),
             'ignored' => $ignored->map(fn ($g) => [$g->stock_id, $g->gap_from->toDateString(), $g->gap_to->toDateString()])->all(),
+        ];
+        $scopeFingerprint = hash('sha256', json_encode($scope, JSON_THROW_ON_ERROR));
+        $identityEvidenceHash = $this->matcher->evidenceHash();
+        $fingerprint = hash('sha256', json_encode([
+            'stocks' => $scope['stocks'],
+            'identity_evidence_sha256' => $identityEvidenceHash,
+            'ignored' => $scope['ignored'],
         ], JSON_THROW_ON_ERROR));
         Cache::forget('setting.'.self::KEY_RECEIPTS);
         $storedReceipts = json_decode((string) Setting::getValue(self::KEY_RECEIPTS), true);
-        $entries = ! $force && ($storedReceipts['fingerprint'] ?? null) === $fingerprint
+        $receiptFingerprintMatches = ($storedReceipts['fingerprint'] ?? null) === $fingerprint;
+        $entries = ! $force && $receiptFingerprintMatches
             ? ($storedReceipts['entries'] ?? []) : [];
+        $legacyFingerprint = hash('sha256', json_encode([
+            'stocks' => $scope['stocks'],
+            'identity_evidence_sha256' => self::LEGACY_NSE_IDENTITY_EVIDENCE_HASH,
+            'ignored' => $scope['ignored'],
+        ], JSON_THROW_ON_ERROR));
+        $sameScope = ($storedReceipts['scope_fingerprint'] ?? null) === $scopeFingerprint
+            || (! isset($storedReceipts['scope_fingerprint']) && ($storedReceipts['fingerprint'] ?? null) === $legacyFingerprint);
+        $preservingRetryAfterEvidenceChange = ! $force && ! $receiptFingerprintMatches && $sameScope;
+        if ($preservingRetryAfterEvidenceChange && $entries === [] && is_array($storedReceipts['entries'] ?? null)) {
+            // A reviewed identity-catalogue revision changes the receipt
+            // fingerprint so successful receipts are revalidated. Keep only
+            // pending retry state when the exact stock/ignored-gap scope is
+            // proven unchanged. Membership and coverage scope changes discard
+            // old classifications and retry state.
+            $entries = array_filter($storedReceipts['entries'], fn ($entry) => is_array($entry)
+                && ! empty($entry['retry_after']));
+        }
         $entries = array_filter($entries, fn ($v) => is_array($v)
             && ($v['date'] ?? '') >= $from->toDateString() && ($v['date'] ?? '') <= $to->toDateString());
         $ignoredByStock = $ignored->groupBy('stock_id');
@@ -86,6 +114,8 @@ class UniverseDailyBhavcopySyncService
                 throw new InvalidArgumentException('Unsupported daily bhavcopy exchange.');
             }
         }
+        usort($exchanges, fn (string $left, string $right): int =>
+            array_search($left, ['NSE', 'BSE'], true) <=> array_search($right, ['NSE', 'BSE'], true));
         $stats['bulk']['expected_exchanges'] = array_values($exchanges);
         for ($expectedDay = $from->copy(); $expectedDay->lte($to); $expectedDay->addDay()) {
             if (! TradingCalendar::isEquitySessionDate($expectedDay)) continue;
@@ -98,22 +128,55 @@ class UniverseDailyBhavcopySyncService
             if (! TradingCalendar::isEquitySessionDate($day)) {
                 continue;
             }
-            foreach ($stocks->groupBy('exchange') as $exchange => $exchangeStocks) {
+            $stockGroups = $stocks->groupBy('exchange');
+            foreach ($exchanges as $exchange) {
                 if (! in_array($exchange, ['NSE', 'BSE'], true)) {
                     throw new InvalidArgumentException('Unsupported daily bhavcopy exchange.');
                 }
+                $exchangeStocks = $stockGroups->get($exchange, collect());
                 $key = $exchange.':'.$day->toDateString();
-                $coverage = $this->coverage($exchangeStocks->pluck('id')->all(), $day);
-                $coverageHash = $this->coverageHash($coverage);
+                $stockIds = $exchangeStocks->pluck('id')->all();
+                $physicalCoverage = $this->receiptCoverage($stockIds, $day);
+                $trustedCoverage = $this->trustedCoverage($stockIds, $day);
+                $coverageHash = $this->coverageHash($physicalCoverage);
                 $receipt = $entries[$key] ?? null;
-                if (! $force && is_array($receipt) && empty($receipt['retry_after']) && ($receipt['coverage_hash'] ?? null) === $coverageHash) {
+                $receiptPriceTrustHash = is_array($receipt)
+                    ? $this->priceTrustHash($receipt['historical_stock_ids'] ?? [], $day)
+                    : null;
+                $retryNowTrustedHistoricalCoverage = $preservingRetryAfterEvidenceChange
+                    && is_array($receipt)
+                    && collect($receipt['identity_conflict_samples'] ?? [])->contains(fn ($sample) =>
+                        is_array($sample)
+                        && ($sample['reason'] ?? null) === 'historical_adjustment_required'
+                        && isset($trustedCoverage[(int) ($sample['stock_id'] ?? 0)])
+                    );
+                if (! $force && is_array($receipt) && empty($receipt['retry_after'])
+                    && ($receipt['coverage_hash'] ?? null) === $coverageHash
+                    && is_string($receipt['price_trust_sha256'] ?? null)
+                    && hash_equals($receipt['price_trust_sha256'], (string) $receiptPriceTrustHash)) {
                     $stats['bulk']['file_cache_hits']++;
                     $stats['bulk']['historical_identity_rows'] += $receipt['historical_identity_rows'] ?? 0;
                     $stats['bulk']['files'][] = array_merge($receipt, ['status' => 'receipt_cached']);
                     continue;
                 }
                 if (! $force && is_array($receipt) && ($receipt['coverage_hash'] ?? null) === $coverageHash
-                    && ! empty($receipt['retry_after']) && Carbon::parse($receipt['retry_after'])->isFuture()) {
+                    && ! empty($receipt['retry_after']) && ! $this->isValidRetryInstant($receipt['retry_after'])) {
+                    $failedReceipt = array_merge($receipt, [
+                        'status' => 'failed',
+                        'failure_stage' => 'receipt_validation',
+                        'error' => 'Cached receipt retry_after is not a valid instant.',
+                    ]);
+                    $stats['bulk']['file_errors']++;
+                    if (count($stats['errors']) < 20) $stats['errors'][] = $key.': '.$failedReceipt['error'];
+                    $stats['bulk']['files'][] = $failedReceipt;
+                    if (! $dryRun) {
+                        $this->logs->log($runId, $jobName, 'warning', 'Universe daily bhavcopy file checked', $failedReceipt);
+                    }
+                    continue;
+                }
+                if (! $force && is_array($receipt) && ($receipt['coverage_hash'] ?? null) === $coverageHash
+                    && ! empty($receipt['retry_after']) && Carbon::parse($receipt['retry_after'])->isFuture()
+                    && ! $retryNowTrustedHistoricalCoverage) {
                     $stats['bulk']['backoff_skips']++;
                     $stats['bulk']['historical_identity_rows'] += (int) ($receipt['historical_identity_rows'] ?? 0);
                     $deferred = array_merge($receipt, ['status' => 'retry_deferred']);
@@ -144,7 +207,7 @@ class UniverseDailyBhavcopySyncService
                     $matched = $this->matcher->match($exchangeStocks, $data['rows'], $exchange);
                     $historicalBlocked = 0;
                     foreach ($matched['historical_stock_ids'] as $id) {
-                        if (! isset($coverage[$id]) && ! $this->isIgnored($ignoredByStock->get($id, collect()), $day)) {
+                        if (! isset($trustedCoverage[$id]) && ! $this->isIgnored($ignoredByStock->get($id, collect()), $day)) {
                             // Source bars predate a split. Identity evidence is
                             // not authority to mix raw bars into adjusted history.
                             $matched['conflicts'][$id] = 'historical_adjustment_required';
@@ -164,9 +227,11 @@ class UniverseDailyBhavcopySyncService
                         // a later revision validates against canonical identity.
                         'source_revision_sha256' => $data['source_revision_sha256'] ?? null,
                         'matched_rows' => count($matched['rows_by_stock_id']),
+                        'historical_stock_ids' => array_values(array_map('intval', $matched['historical_stock_ids'])),
                         'historical_identity_rows' => $historicalAccepted,
                         'historical_adjustment_required' => $historicalBlocked,
                         'identity_conflicts' => count($matched['conflicts']),
+                        'failure_stage' => $matched['conflicts'] === [] ? null : 'identity_validation',
                         // Keep the durable run log actionable without dumping a
                         // potentially large conflict set or any price payload.
                         'identity_conflict_samples' => array_slice(array_map(
@@ -181,7 +246,7 @@ class UniverseDailyBhavcopySyncService
                     $failureStage = 'price_persistence';
                     foreach ($exchangeStocks as $stock) {
                         $id = (int) $stock->id;
-                        if (isset($coverage[$id]) || ! isset($matched['rows_by_stock_id'][$id])
+                        if (isset($physicalCoverage[$id]) || ! isset($matched['rows_by_stock_id'][$id])
                             || $this->isIgnored($ignoredByStock->get($id, collect()), $day)) {
                             continue;
                         }
@@ -199,11 +264,12 @@ class UniverseDailyBhavcopySyncService
                     $file['status'] = $dryRun ? 'preview' : ($matched['conflicts'] === [] ? 'applied' : 'identity_conflict');
                     $file['stored_rows'] = $fileStored;
                     if (! $dryRun && $matched['conflicts'] === []) {
-                        $file['coverage_hash'] = $this->coverageHash($this->coverage($exchangeStocks->pluck('id')->all(), $day));
+                        $file['coverage_hash'] = $this->coverageHash($this->receiptCoverage($exchangeStocks->pluck('id')->all(), $day));
+                        $file['price_trust_sha256'] = $this->priceTrustHash($file['historical_stock_ids'], $day);
                         $file['checked_at'] = now()->toIso8601String();
                         $entries[$key] = $file;
                         Setting::setValue(self::KEY_RECEIPTS, json_encode([
-                            'fingerprint' => $fingerprint, 'entries' => $entries,
+                            'fingerprint' => $fingerprint, 'scope_fingerprint' => $scopeFingerprint, 'entries' => $entries,
                         ], JSON_THROW_ON_ERROR));
                     } elseif (! $dryRun && $matched['conflicts'] !== []) {
                         $previous = $receipt['source_revision_sha256'] ?? null;
@@ -213,21 +279,23 @@ class UniverseDailyBhavcopySyncService
                         // A known new revision earns an immediate retry window.
                         // Missing/malformed evidence cannot prove a revision, so
                         // it must not pin repeated conflicts to the first delay.
-                        $attempt = $currentValid && (! $previousValid || $current !== $previous)
-                            ? 1
-                            : min((int) ($receipt['retry_attempt'] ?? 0) + 1, count(self::RETRY_BACKOFF_MINUTES));
+                        $knownRevisionChanged = $currentValid && (! $previousValid || $current !== $previous);
+                        [$attempt, $retryAfter] = $knownRevisionChanged
+                            ? [1, now()->addMinutes(self::RETRY_BACKOFF_MINUTES[0])]
+                            : $this->nextRetrySchedule($receipt, $day);
                         $file['coverage_hash'] = $coverageHash;
+                        $file['price_trust_sha256'] = $this->priceTrustHash($file['historical_stock_ids'], $day);
                         $file['retry_attempt'] = $attempt;
-                        $file['retry_after'] = now()->addMinutes(self::RETRY_BACKOFF_MINUTES[$attempt - 1])->toIso8601String();
+                        $file['retry_after'] = $this->retryTimestamp($retryAfter);
                         $entries[$key] = $file;
                         Setting::setValue(self::KEY_RECEIPTS, json_encode([
-                            'fingerprint' => $fingerprint, 'entries' => $entries,
+                            'fingerprint' => $fingerprint, 'scope_fingerprint' => $scopeFingerprint, 'entries' => $entries,
                         ], JSON_THROW_ON_ERROR));
                     }
                 } catch (\Throwable $e) {
                     $stats['bulk']['file_errors']++;
                     $file['error'] = $this->redactor->message($e->getMessage());
-                    $file['failure_stage'] = $failureStage;
+                    $file['failure_stage'] = $this->failureStage($e, $failureStage);
                     if (preg_match('/\bHTTP\s+429\b/i', (string) $file['error']) === 1) {
                         $stats['rate_limit_hits']++;
                     }
@@ -235,14 +303,16 @@ class UniverseDailyBhavcopySyncService
                         $stats['errors'][] = $key.': '.$file['error'];
                     }
                     if (! $dryRun) {
-                        $attempt = min((int) ($receipt['retry_attempt'] ?? 0) + 1, count(self::RETRY_BACKOFF_MINUTES));
+                        [$attempt, $retryAfter] = $this->nextRetrySchedule($receipt, $day);
                         $file['retry_attempt'] = $attempt;
-                        $file['retry_after'] = now()->addMinutes(self::RETRY_BACKOFF_MINUTES[$attempt - 1])->toIso8601String();
+                        $file['retry_after'] = $this->retryTimestamp($retryAfter);
+                        $file['historical_stock_ids'] = [];
+                        $file['price_trust_sha256'] = $this->priceTrustHash([], $day);
                         $entries[$key] = $file + [
                             'coverage_hash' => $coverageHash,
                         ];
                         Setting::setValue(self::KEY_RECEIPTS, json_encode([
-                            'fingerprint' => $fingerprint, 'entries' => $entries,
+                            'fingerprint' => $fingerprint, 'scope_fingerprint' => $scopeFingerprint, 'entries' => $entries,
                         ], JSON_THROW_ON_ERROR));
                     }
                 }
@@ -278,6 +348,11 @@ class UniverseDailyBhavcopySyncService
             }
         }
 
+        if (! $dryRun) {
+            $outcomes = app(UniversePriceOutcomeService::class)->recordRun($stats, $stocks, $runId);
+            $stats['bulk']['outcomes'] = $outcomes['last_run'] ?? [];
+        }
+
         return ['stats' => $stats, 'last_stock_id' => 0];
     }
 
@@ -290,16 +365,92 @@ class UniverseDailyBhavcopySyncService
         ], force: true, dryRun: true)['stats'];
     }
 
-    private function coverage(array $ids, Carbon $day): array
+    /** Presence is not trust: use the adjustment gate only for historical identity acceptance. */
+    private function trustedCoverage(array $ids, Carbon $day): array
     {
         $present = [];
         foreach (array_chunk($ids, 1000) as $chunk) {
-            foreach (StockPrice::query()->whereIn('stock_id', $chunk)->where('price_date', $day->copy()->startOfDay())->pluck('stock_id') as $id) {
+            $query = StockPrice::query()->whereIn('stock_id', $chunk)
+                ->where('price_date', $day->copy()->startOfDay());
+            app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)
+                ->apply($query->getQuery(), 'portfolio_stock_prices');
+            foreach ($query->pluck('stock_id') as $id) $present[(int) $id] = true;
+        }
+
+        return $present;
+    }
+
+    /** Physical receipt coverage is stable across evidence-only read gates. */
+    private function receiptCoverage(array $ids, Carbon $day): array
+    {
+        $present = [];
+        foreach (array_chunk($ids, 1000) as $chunk) {
+            foreach (StockPrice::query()->whereIn('stock_id', $chunk)
+                ->where('price_date', $day->copy()->startOfDay())->pluck('stock_id') as $id) {
                 $present[(int) $id] = true;
             }
         }
 
         return $present;
+    }
+
+    /** Four short retries per recovery window, then one calendar-aware reprobe every five sessions. */
+    private function nextRetrySchedule(?array $receipt, Carbon $session): array
+    {
+        $previousAttempt = (int) ($receipt['retry_attempt'] ?? 0);
+        $previousRetryAt = isset($receipt['retry_after']) ? Carbon::parse($receipt['retry_after']) : null;
+        $windowExpired = $previousAttempt >= self::MAX_ATTEMPTS_PER_RECOVERY_WINDOW
+            && $previousRetryAt !== null && $previousRetryAt->lte(now());
+        $attempt = $windowExpired ? 1 : min($previousAttempt + 1, self::MAX_ATTEMPTS_PER_RECOVERY_WINDOW);
+        if ($attempt >= self::MAX_ATTEMPTS_PER_RECOVERY_WINDOW) {
+            // A bounded historical recovery may be processing an old session.
+            // Anchor the cooldown to today in that case, or it would already be
+            // expired and the same old source failure would be retried every run.
+            // Anchor to today's exchange date, then do session arithmetic in
+            // the market timezone. The application clock may still be on the
+            // previous UTC date after midnight in India.
+            $today = now('Asia/Kolkata')->startOfDay();
+            $cooldownBase = $session->copy()->startOfDay()->gt($today) ? $session->copy()->startOfDay() : $today;
+            $retryAfter = TradingCalendar::addSessions($cooldownBase, self::RETRY_REPROBE_SESSIONS)->setTime(20, 0);
+        } else {
+            $retryAfter = now()->addMinutes(self::RETRY_BACKOFF_MINUTES[$attempt - 1]);
+        }
+
+        return [$attempt, $retryAfter];
+    }
+
+    /** Store retry instants as UTC SQL timestamps; session arithmetic remains IST based. */
+    private function retryTimestamp(Carbon $retryAfter): string
+    {
+        return $retryAfter->copy()->utc()->format('Y-m-d H:i:s');
+    }
+
+    private function isValidRetryInstant(mixed $value): bool
+    {
+        if (! is_string($value) || preg_match(
+            '/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/',
+            $value,
+        ) !== 1) return false;
+
+        try {
+            Carbon::parse($value);
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function failureStage(\Throwable $error, string $stage): string
+    {
+        if ($stage !== 'exchange_fetch') return $stage;
+        $message = strtolower($error->getMessage());
+        if (preg_match('/\bhttp\s+\d{3}\b|connection|timed?\s*out|download failed|not published yet|rate limit/', $message) === 1) {
+            return 'exchange_fetch';
+        }
+
+        // Archive, parser, schema and session-identity rejection must not look
+        // like an ordinary provider transport error.
+        return 'source_validation';
     }
 
     private function coverageHash(array $coverage): string
@@ -308,6 +459,27 @@ class UniverseDailyBhavcopySyncService
         sort($ids, SORT_NUMERIC);
 
         return hash('sha256', implode(',', $ids));
+    }
+
+    /** Hash trusted values, not only row membership, to invalidate stale success receipts. */
+    private function priceTrustHash(array $stockIds, Carbon $day): string
+    {
+        $stockIds = array_values(array_unique(array_map('intval', $stockIds)));
+        sort($stockIds, SORT_NUMERIC);
+        $rows = [];
+        foreach (array_chunk($stockIds, 500) as $chunk) {
+            $query = StockPrice::query()->whereIn('stock_id', $chunk)
+                ->whereDate('price_date', $day->toDateString());
+            app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)
+                ->apply($query->getQuery(), 'portfolio_stock_prices');
+            foreach ($query->orderBy('stock_id')->orderBy('id')
+                ->get(['id', 'stock_id', 'price_date', 'open_price', 'high_price', 'low_price', 'close_price',
+                    'adjusted_close_price', 'volume', 'provider_source', 'data_source', 'created_at']) as $row) {
+                $rows[] = $row->getAttributes();
+            }
+        }
+
+        return hash('sha256', json_encode($rows, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
     }
 
     private function isIgnored(Collection $ranges, Carbon $day): bool

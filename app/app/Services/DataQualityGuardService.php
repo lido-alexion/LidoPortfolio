@@ -31,6 +31,10 @@ class DataQualityGuardService
             $map[$stockId] = true;
         }
 
+        foreach (app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)->quarantinedStockIds($stockIds) as $stockId => $_) {
+            $map[(int) $stockId] = true;
+        }
+
         return $map;
     }
 
@@ -40,9 +44,6 @@ class DataQualityGuardService
             return false;
         }
 
-        return DataQualityIssue::query()
-            ->where('stock_id', $stock->id)
-            ->where('issue_status', DataQualityIssue::STATUS_PENDING_REVIEW)
-            ->exists();
+        return isset($this->blockedStockIdMap([(int) $stock->id])[(int) $stock->id]);
     }
 }

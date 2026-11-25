@@ -9,6 +9,7 @@ use App\Models\V8\MlAcceptanceSource;
 use App\Services\Fundamentals\FundamentalBankMetricsService;
 use App\Services\Fundamentals\FundamentalDataService;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 class MlTrainingDatasetBuilder
@@ -106,17 +107,17 @@ class MlTrainingDatasetBuilder
     }
 
     /** Canonical viable reference dates and label ends; no dataset or membership writes. */
-    public function requiredReferenceDates(string $horizon, Carbon $cutoff, ?array $sessionDates = null): array
+    public function requiredReferenceDates(string $horizon, Carbon $cutoff, ?array $sessionDates = null, ?array $untrustedStockIds = null, ?Stock $benchmark = null): array
     {
         $horizonDays = ['1m' => 21, '3m' => 63, '6m' => 126][$horizon] ?? throw new RuntimeException('Unsupported ML horizon.');
-        $benchmark = Stock::query()->where('symbol', 'NIFTY50')->first();
+        $benchmark ??= Stock::query()->where('symbol', 'NIFTY50')->first();
         if ($benchmark === null) {
             return [];
         }
         $benchmarkSeries = $this->priceSeries($benchmark, $cutoff);
         $sessionDates ??= $this->verifiedSessionDates($benchmarkSeries, $cutoff);
         $referenceDates = [];
-        $this->universeQuery()->chunkById(100, function ($stockChunk) use (&$referenceDates, $benchmarkSeries, $sessionDates, $horizonDays, $cutoff): void {
+        $this->universeQuery($untrustedStockIds)->chunkById(100, function ($stockChunk) use (&$referenceDates, $benchmarkSeries, $sessionDates, $horizonDays, $cutoff): void {
             foreach ($stockChunk as $stock) {
                 $series = $this->priceSeries($stock, $cutoff, $sessionDates);
                 foreach ($this->viableObservations($series, $benchmarkSeries, $horizonDays, $cutoff) as $observation) {
@@ -154,7 +155,11 @@ class MlTrainingDatasetBuilder
 
         $benchmarkSeries = $this->priceSeries($benchmark, $cutoff);
         $sessionDates = $this->verifiedSessionDates($benchmarkSeries, $cutoff);
-        $referenceDates = $this->requiredReferenceDates($horizon, $cutoff, $sessionDates);
+        // Both streaming passes use one point-in-time trust evaluation. If an
+        // authorized repair commits meanwhile, it only composes adjusted bars;
+        // an untrusted stock stays excluded for the full dataset build.
+        $untrustedStockIds = app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)->untrustedStockIds();
+        $referenceDates = $this->requiredReferenceDates($horizon, $cutoff, $sessionDates, $untrustedStockIds, $benchmark);
         $dates = array_keys($referenceDates);
         sort($dates);
         if (count($dates) < 3) {
@@ -181,7 +186,7 @@ class MlTrainingDatasetBuilder
             'sector_relative_missing' => 0,
         ];
         try {
-            $this->universeQuery()->chunkById(100, function ($stockChunk) use (&$handles, &$rowCounts, &$purgedRows, &$peakBufferedRows, &$stocksProcessed, &$contextCoverage, $benchmarkSeries, $sessionDates, $horizonDays, $cutoff, $partitions): void {
+            $this->universeQuery($untrustedStockIds)->chunkById(100, function ($stockChunk) use (&$handles, &$rowCounts, &$purgedRows, &$peakBufferedRows, &$stocksProcessed, &$contextCoverage, $benchmarkSeries, $sessionDates, $horizonDays, $cutoff, $partitions): void {
                 foreach ($stockChunk as $stock) {
                     $stocksProcessed++;
                     $series = $this->priceSeries($stock, $cutoff, $sessionDates);
@@ -292,16 +297,21 @@ class MlTrainingDatasetBuilder
         ];
     }
 
-    private function universeQuery()
+    private function universeQuery(?array $untrustedStockIds = null)
     {
+        $quarantinedStocks = app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)
+            ->applyStockEligibility(DB::query()->select('id')->from('portfolio_stocks'), 'portfolio_stocks', $untrustedStockIds);
+
         return Stock::query()
             ->where('is_active', true)
             ->where(function ($query): void {
                 $query->where('is_benchmark', false)->orWhereNull('is_benchmark');
             })
             ->where('exchange', 'NSE')
-            ->whereExists(fn ($query) => $query->selectRaw('1')
-                ->from('portfolio_stock_prices')
+            ->whereNotIn('id', $quarantinedStocks)
+            // Stock eligibility above already proves the configured history
+            // trust boundary. Keep the correlated price-presence probe cheap.
+            ->whereExists(fn ($query) => $query->selectRaw('1')->from('portfolio_stock_prices')
                 ->whereColumn('portfolio_stock_prices.stock_id', 'portfolio_stocks.id'))
             ->orderBy('id');
     }

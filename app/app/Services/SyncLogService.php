@@ -4,7 +4,9 @@ namespace App\Services;
 
 use App\Models\SyncLog;
 use App\Models\SyncRun;
+use App\Models\Setting;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -90,7 +92,9 @@ class SyncLogService
             'run_id' => $runId,
             'job_name' => $jobName,
             'level' => strtolower($level),
-            'message' => $message,
+            // Keep operational messages small enough for deployed MySQL variants
+            // and preserve the useful prefix when provider exceptions are verbose.
+            'message' => Str::limit($message, 999, '…'),
             'context' => $context ?: null,
             'logged_at' => now(),
         ]);
@@ -104,6 +108,8 @@ class SyncLogService
         string $status,
         array $stats = [],
         ?string $summary = null,
+        ?string $operationalOutcome = null,
+        array $settingUpdates = [],
     ): void {
         if (! $runId || ! Schema::hasTable('portfolio_sync_runs')) {
             return;
@@ -111,14 +117,20 @@ class SyncLogService
 
         $normalized = in_array($status, ['success', 'partial', 'failed'], true) ? $status : 'failed';
 
-        SyncRun::query()->where('id', $runId)->update([
-            'status' => $normalized,
-            'finished_at' => now(),
-            'stocks_processed' => $stats['stocks_processed'] ?? $stats['processed'] ?? null,
-            'failures' => $stats['failures'] ?? $stats['failed'] ?? null,
-            'skipped' => $stats['skipped'] ?? null,
-            'summary' => $summary,
-        ]);
+        DB::transaction(function () use ($runId, $normalized, $stats, $summary, $operationalOutcome, $settingUpdates): void {
+            SyncRun::query()->where('id', $runId)->update([
+                'status' => $normalized,
+                'operational_outcome' => $operationalOutcome,
+                'finished_at' => now(),
+                'stocks_processed' => $stats['stocks_processed'] ?? $stats['processed'] ?? null,
+                'failures' => $stats['failures'] ?? $stats['failed'] ?? null,
+                'skipped' => $stats['skipped'] ?? null,
+                'summary' => $summary === null ? null : Str::limit($summary, 3999, '…'),
+            ]);
+            foreach ($settingUpdates as $key => $value) {
+                Setting::setValue((string) $key, $value === null ? null : (string) $value);
+            }
+        });
     }
 
     /**
@@ -189,6 +201,29 @@ class SyncLogService
         }
 
         return $query->first();
+    }
+
+    /**
+     * Read the terminal evidence captured by one completed run. Callers that
+     * make operational decisions must bind this to their selected run instead
+     * of combining the cached last-run setting with a separate latest-run read.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function completionStatsForRun(SyncRun $run): ?array
+    {
+        if (! Schema::hasTable('portfolio_sync_logs')) {
+            return null;
+        }
+
+        $log = SyncLog::query()
+            ->where('run_id', $run->id)
+            ->where('job_name', $run->job_name)
+            ->where('message', 'Universe price sync completed')
+            ->latest('id')
+            ->first();
+
+        return is_array($log?->context) ? $log->context : null;
     }
 
     public function latestSuccessfulFinishedAt(?string $jobName = null): ?Carbon

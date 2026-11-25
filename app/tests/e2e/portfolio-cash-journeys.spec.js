@@ -145,6 +145,51 @@ for (const viewport of VIEWPORTS) {
             expect(balance).toBe(11500); expect(entries).toHaveLength(3); expect(evidence.writes).toHaveLength(6); expect(evidence.blocked).toEqual([]);
         });
 
+        test(`cash provenance is explicit per movement and omitted for unattributed transfers (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'E2E-22');
+            const evidence = await prepare(page, viewport, (method, path) => path === '/api/logs/frontend' || (method === 'POST' && path === '/api/cash/deposit'));
+            const payloads = [];
+            let balance = 10000;
+            let entries = [];
+            await page.route(/\/api\/cash(?:\?.*)?$/, route => route.fulfill({ json: { data: {
+                cash_balance: balance, reserved_cash: 0, available_physical_cash: balance,
+                available_investable_cash: balance, strategies: [], reservations: [],
+            } } }));
+            await page.route('**/api/cash/statement*', route => route.fulfill({ json: { data: { entries, opening_balance: 0, closing_balance: balance } } }));
+            await page.route('**/api/cash/kite-funds', route => route.fulfill({ json: { data: {
+                automatic_adjustments_enabled: false, payout_semantics_verified: false, snapshots: [], reconciliations: [],
+                broker_accounts: [{ id: 'KITE-A', label: 'Kite account KITE-A' }, { id: 'KITE-B', label: 'Kite account KITE-B' }],
+            } } }));
+            for (const resource of ['recalls', 'bridge-loans', 'pending-sale-proceeds']) await page.route(`**/api/v1/capital/${resource}*`, route => route.fulfill({ json: { data: [] } }));
+            await page.route('**/api/cash/deposit', route => {
+                const payload = route.request().postDataJSON();
+                expect(route.request().headers()['x-profile-id']).toBe(String(TEST_PORTFOLIO.id));
+                payloads.push(payload);
+                balance += Number(payload.amount);
+                entries.push({ id: entries.length + 1, entry_type: 'deposit', amount: Number(payload.amount), running_balance: balance, entry_date: payload.transaction_date, reason: payload.remarks });
+                return route.fulfill({ status: 201, json: { data: { entry: entries.at(-1) } } });
+            });
+            await evidence.seal(); await page.goto('/cash');
+            const form = page.locator('form').filter({ has: page.getByLabel('Amount', { exact: true }) });
+            const account = page.getByLabel('Kite broker account', { exact: true });
+            await expect(account).toHaveValue('');
+            await account.selectOption('KITE-A');
+            await page.getByLabel('Amount', { exact: true }).fill('100');
+            await page.getByLabel('Remarks', { exact: true }).fill('Tagged transfer');
+            await form.getByRole('button', { name: 'Deposit', exact: true }).click();
+            await expect.poll(() => payloads.length).toBe(1);
+            expect(payloads[0]).toEqual({ amount: '100', remarks: 'Tagged transfer', transaction_date: expect.any(String), broker_account_id: 'KITE-A' });
+            await expect(account).toHaveValue('');
+
+            await page.getByLabel('Amount', { exact: true }).fill('50');
+            await page.getByLabel('Remarks', { exact: true }).fill('Unattributed transfer');
+            await form.getByRole('button', { name: 'Deposit', exact: true }).click();
+            await expect.poll(() => payloads.length).toBe(2);
+            expect(payloads[1]).toEqual({ amount: '50', remarks: 'Unattributed transfer', transaction_date: expect.any(String) });
+            expect(evidence.writes).toHaveLength(2);
+            expect(evidence.blocked).toEqual([]);
+        });
+
         test(`cash withdrawal bounds restore the edited amount and preview partial decimals (${viewport.name})`, async ({ page }, testInfo) => {
             journeyId(testInfo, 'E2E-22');
             const evidence = await prepare(page, viewport, (method, path) => path === '/api/logs/frontend' || (method === 'PUT' && path === '/api/cash/ledger/2') || (method === 'POST' && path === '/api/cash/withdraw'));
@@ -194,6 +239,37 @@ for (const viewport of VIEWPORTS) {
             expect(saveResponse.request().postDataJSON()).toEqual({ amount: '70.0001', remarks: 'Original withdrawal', transaction_date: '2026-10-10' });
             expect(evidence.writes.map(write => `${write.method} ${write.path}`)).toEqual(['PUT /api/cash/ledger/2']);
             expect(evidence.blocked).toEqual([]);
+        });
+
+        test(`Kite adjustment classification remains visible and filterable in the cash statement (${viewport.name})`, async ({ page }, testInfo) => {
+            journeyId(testInfo, 'E2E-22');
+            const evidence = await prepare(page, viewport, (method, path) => path === '/api/logs/frontend');
+            const entries = [
+                { id: 91, entry_type: 'adjustment', entry_classification: 'kite_net_adjustment', amount: 4000, running_balance: 4000, entry_date: '2026-11-20', reason: 'Kite net bank-transfer adjustment' },
+                { id: 90, entry_type: 'deposit', amount: 1500, running_balance: 1500, entry_date: '2026-11-19', reason: 'Manual deposit' },
+            ];
+            const seenClassification = [];
+            await page.route(/\/api\/cash(?:\?.*)?$/, route => route.fulfill({ json: { data: { cash_balance: 4000, reserved_cash: 0, available_physical_cash: 4000, available_investable_cash: 4000, strategies: [], reservations: [] } } }));
+            await page.route('**/api/cash/statement*', route => {
+                const url = new URL(route.request().url());
+                seenClassification.push(url.searchParams.get('classification'));
+                const selected = url.searchParams.get('classification') === 'kite_net_adjustment'
+                    ? entries.filter(row => row.entry_classification === 'kite_net_adjustment') : entries;
+                return route.fulfill({ json: { data: { entries: selected, opening_balance: 0, closing_balance: 4000, pagination: { current_page: 1, last_page: 1 } } } });
+            });
+            await page.route('**/api/cash/kite-funds', route => route.fulfill({ json: { data: {
+                automatic_adjustments_enabled: false, payout_semantics_verified: false, snapshots: [],
+                reconciliations: [{ id: 1, trading_date: '2026-11-20', status: 'adjustment_disabled', snapshot_net_flow: '4000.0000', manual_net_flow: null, evaluated_at: '2026-11-23T03:50:00Z' }],
+            } } }));
+            for (const resource of ['recalls', 'bridge-loans', 'pending-sale-proceeds']) await page.route(`**/api/v1/capital/${resource}*`, route => route.fulfill({ json: { data: [] } }));
+            await evidence.seal(); await page.goto('/cash');
+            await expect(page.getByRole('cell', { name: 'Kite net cash adjustment', exact: true })).toBeVisible();
+            await expect(page.getByText('adjustment disabled', { exact: true })).toBeVisible();
+            await page.getByLabel('Filter cash statement by classification', { exact: true }).selectOption('kite_net_adjustment');
+            await expect(page.getByRole('cell', { name: 'Kite net cash adjustment', exact: true })).toBeVisible();
+            await expect(page.getByRole('cell', { name: 'Manual deposit', exact: true })).toHaveCount(0);
+            expect(seenClassification).toContain('kite_net_adjustment');
+            expect(evidence.writes).toEqual([]); expect(evidence.blocked).toEqual([]);
         });
     });
 }

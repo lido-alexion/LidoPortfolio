@@ -32,6 +32,8 @@ use App\Http\Controllers\Api\GuidedTourController;
 use App\Http\Controllers\Api\DeveloperOptionsController;
 use App\Http\Controllers\Api\HelpFeedbackController;
 use App\Http\Controllers\Api\HistoricalHoldingsController;
+use App\Http\Controllers\Api\KiteHoldingsOnboardingController;
+use App\Http\Controllers\Api\KiteSettlementReadinessController;
 use App\Http\Controllers\Api\HoldingController;
 use App\Http\Controllers\Api\IndexController;
 use App\Http\Controllers\Api\InviteAcceptController;
@@ -238,7 +240,20 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::post('/portfolios/{portfolio}/simulation/pause', [PaperSimulationController::class, 'pause']);
     Route::post('/portfolios/{portfolio}/simulation/resume', [PaperSimulationController::class, 'resume']);
     Route::get('/reconciliation', [PortfolioReconciliationController::class, 'index']);
+    Route::get('/kite/holdings-onboarding', [KiteHoldingsOnboardingController::class, 'show']);
+    Route::get('/kite/settlement-readiness', [KiteSettlementReadinessController::class, 'show'])
+        ->middleware('token.scope:portfolio:read')
+        ->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class);
+    Route::post('/kite/holdings-onboarding', [KiteHoldingsOnboardingController::class, 'start']);
+    Route::post('/kite/holdings-onboarding/tradebook', [KiteHoldingsOnboardingController::class, 'importTradebook']);
+    Route::put('/kite/holdings-onboarding/stocks/{item}', [KiteHoldingsOnboardingController::class, 'update'])->whereNumber('item');
+    Route::post('/kite/holdings-onboarding/stocks/{item}/verify', [KiteHoldingsOnboardingController::class, 'verify'])->whereNumber('item');
+    Route::post('/kite/holdings-onboarding/commit', [KiteHoldingsOnboardingController::class, 'commit']);
     Route::post('/reconciliation', [PortfolioReconciliationController::class, 'store']);
+    Route::post('/reconciliation/trades/sync', [PortfolioReconciliationController::class, 'syncTrades']);
+    Route::get('/reconciliation/trades/review', [PortfolioReconciliationController::class, 'reviewItems'])->middleware('token.scope:portfolio:read');
+    Route::get('/reconciliation/trades/review/{item}', [PortfolioReconciliationController::class, 'reviewItem'])->whereNumber('item')->middleware('token.scope:portfolio:read');
+    Route::post('/reconciliation/trades/review/{item}/resolve', [PortfolioReconciliationController::class, 'resolveReviewItem'])->whereNumber('item')->middleware('token.scope:portfolio:write');
     Route::get('/reconciliation/{run}', [PortfolioReconciliationController::class, 'show'])->whereNumber('run');
     Route::get('/replays', [PortfolioReplayController::class, 'index']);
     Route::post('/replays/readiness', [PortfolioReplayController::class, 'readiness']);
@@ -273,6 +288,9 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
     Route::apiResource('transactions', TransactionController::class);
 
     Route::get('/cash', [CashController::class, 'summary']);
+    Route::get('/cash/kite-funds', [CashController::class, 'kiteFunds']);
+    Route::post('/cash/kite-funds/{reconciliation}/confirm', [CashController::class, 'confirmKiteFundsAdjustment'])->whereNumber('reconciliation');
+    Route::post('/cash/kite-funds/{reconciliation}/dismiss', [CashController::class, 'suppressKiteFundsAdjustment'])->whereNumber('reconciliation');
     Route::get('/cash/reservations', [CashController::class, 'reservations']);
     Route::get('/cash/ledger', [CashController::class, 'ledger']);
     Route::get('/cash/statement', [CashController::class, 'statement']);
@@ -464,6 +482,8 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         Route::post('/operational-alerts/run-check', [OperationalAlertController::class, 'runCheck']);
 
         Route::get('/universe-price-sync/status', [UniversePriceSyncController::class, 'status']);
+        Route::post('/universe-price-sync/outcomes/{stock}/reprobe', [UniversePriceSyncController::class, 'reprobeStock'])
+            ->whereNumber('stock')->middleware('throttle:universe-price-sync');
         Route::post('/universe-price-sync/operational-alerts/acknowledge', [UniversePriceSyncController::class, 'acknowledgeOperationalAlert']);
         Route::post('/universe-price-sync/run', [UniversePriceSyncController::class, 'run'])
             ->middleware('throttle:universe-price-sync');
@@ -605,6 +625,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(fun
     Route::post('/totp/disable', [TradingOsTotpController::class, 'disable']);
 
     Route::get('/broker/status', [TradingOsBrokerController::class, 'status'])->middleware('token.scope:execution:read');
+    Route::post('/broker/session-evidence/refresh', [TradingOsBrokerController::class, 'refreshEvidence'])->middleware('token.scope:execution:read');
     Route::get('/broker/kite/login-url', [TradingOsBrokerController::class, 'kiteLoginUrl']);
     Route::post('/broker/kite/session', [TradingOsBrokerController::class, 'kiteSession']);
     Route::post('/broker/kite/disconnect', [TradingOsBrokerController::class, 'disconnect']);
