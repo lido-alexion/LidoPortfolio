@@ -195,7 +195,13 @@ class DataQualityResolutionServiceTest extends TestCase
         $this->assertSame($before, StockPrice::query()->where('stock_id', $stock->id)->orderBy('id')->get()->toArray());
         $this->assertSame($unrelatedBefore, StockPrice::query()->where('stock_id', $unrelated->id)->orderBy('id')->get()->toArray());
         $this->assertSame(DataQualityIssue::STATUS_REJECTED, $updated->issue_status);
-        $this->assertSame([['sha256' => 'abc123', 'raw' => ['receipt' => 'preserve-me']]], $updated->evidences->pluck('evidence_payload')->all());
+        // Native JSON columns may reorder object keys; compare exact persisted values,
+        // not the insertion order of a PHP associative array.
+        $payloads = $updated->evidences->pluck('evidence_payload')->all();
+        $this->assertCount(1, $payloads);
+        $this->assertCount(2, $payloads[0]);
+        $this->assertSame('abc123', $payloads[0]['sha256']);
+        $this->assertSame(['receipt' => 'preserve-me'], $payloads[0]['raw']);
         $factor->refresh();
         $this->assertFalse($factor->is_active);
         $this->assertSame('rolled_back', $factor->metadata['ohlcv_repair_status']);
