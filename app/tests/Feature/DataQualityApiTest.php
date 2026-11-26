@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\CorporateAction;
-use App\Exceptions\DomainException;
 use App\Models\DataQualityIssue;
 use App\Models\PortfolioProfile;
 use App\Models\PriceAdjustmentFactor;
@@ -11,10 +10,11 @@ use App\Models\Stock;
 use App\Models\StockPrice;
 use App\Services\CorporateActionPriceRepairService;
 use App\Services\DataQualityLegacyCorporateActionMigrationService;
-use App\Services\DataQualityIssueService;
+use App\Services\DataQualityCorporateActionSyncService;
 use App\Services\DataQualityResolutionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Tests\Concerns\CreatesDataQualityFixtures;
 use Tests\TestCase;
@@ -67,6 +67,9 @@ class DataQualityApiTest extends TestCase
         $this->actingAs($user)
             ->postJson("/api/data-quality/issues/{$issue->id}/accept")
             ->assertForbidden();
+        $this->actingAs($user)
+            ->post("/api/data-quality/issues/{$issue->id}/stage-bnagrochem-f042-evidence", $this->officialBnagrochemEvidenceFiles())
+            ->assertForbidden();
     }
 
     public function test_unauthenticated_access_is_rejected(): void
@@ -75,6 +78,20 @@ class DataQualityApiTest extends TestCase
 
         $this->getJson('/api/data-quality/dashboard')->assertUnauthorized();
         $this->postJson("/api/data-quality/issues/{$issue->id}/accept")->assertUnauthorized();
+    }
+
+    public function test_completed_repair_rollback_api_requires_admin_and_audit_note(): void
+    {
+        $admin = $this->createAdminUser();
+        $issue = $this->createPendingExchangeIssue($this->createDataQualityStock());
+        $this->actingAs($admin)->postJson("/api/data-quality/issues/{$issue->id}/rollback-completed-repair", ['notes' => '   '])->assertUnprocessable()->assertJsonValidationErrors(['notes']);
+    }
+
+    public function test_non_admin_cannot_call_completed_repair_rollback(): void
+    {
+        $regular = $this->createRegularUser();
+        $issue = $this->createPendingExchangeIssue($this->createDataQualityStock());
+        $this->actingAs($regular)->postJson("/api/data-quality/issues/{$issue->id}/rollback-completed-repair", ['notes' => 'x'])->assertForbidden();
     }
 
     public function test_stale_accept_on_already_accepted_issue_returns_conflict(): void
@@ -182,125 +199,97 @@ class DataQualityApiTest extends TestCase
         $this->assertSame('100.0000', number_format((float) $stock->prices()->orderByDesc('price_date')->value('open_price'), 4, '.', ''));
     }
 
-    public function test_bn_agrochem_bundle_with_contradictory_reviewed_bhavcopy_row_cannot_stage_factor(): void
+    public function test_bn_agrochem_staging_rejects_out_of_scope_issue_with_genuine_source_bundle(): void
     {
-        $stock = Stock::query()->forceCreate([
-            'id' => 7096, 'symbol' => 'BNAGROCHEM', 'exchange' => 'NSE', 'series' => 'EQ',
-            'name' => 'BNAGROCHEM fixture', 'isin' => 'INE00HZ01029', 'is_active' => true,
-        ]);
-        StockPrice::query()->create([
-            'stock_id' => $stock->id, 'price_date' => '2026-11-13',
-            'open_price' => 100.0, 'high_price' => 101.0, 'low_price' => 99.0,
-            'close_price' => 100.0, 'adjusted_close_price' => 100.0, 'volume' => 1000,
-            'data_source' => 'fixture', 'created_at' => now(),
-        ]);
-        $issue = DataQualityIssue::query()->create([
-            'stock_id' => $stock->id, 'symbol' => 'BNAGROCHEM',
-            'issue_type' => DataQualityIssue::TYPE_CORPORATE_ACTION,
-            'issue_status' => DataQualityIssue::STATUS_PENDING_REVIEW,
-            'detection_method' => DataQualityIssue::DETECTION_METHOD_EXCHANGE_FEED,
-            'detection_source' => 'exchange_feed', 'suggested_ratio' => 10,
-            'corporate_action_type' => 'face_value_split', 'ex_date' => '2026-11-16',
-            'exchange_match' => true, 'detected_at' => now(),
-        ]);
-        app(DataQualityIssueService::class)->attachEvidence($issue, [
-            ['evidence_key' => 'bnagrochem_listing_circular', 'evidence_payload' => [
-                'document' => 'CML77412', 'url' => 'https://nsearchives.nseindia.com/content/circulars/CML77412.pdf',
-                'sha256' => 'c0faa54145565b1650c98748562c81b5444dc63d53b57c39f5e28e07aa8b4532',
-                'symbol' => 'BNAGROCHEM', 'old_isin' => 'INE00HZ01011', 'new_isin' => 'INE00HZ01029', 'ex_date' => '2026-11-16',
-            ]],
-            ['evidence_key' => 'bnagrochem_clearing_circular', 'evidence_payload' => [
-                'document' => 'CMPT77438', 'url' => 'https://nsearchives.nseindia.com/content/circulars/CMPT77438.pdf',
-                'sha256' => '70d93d11da034e34af5184e63af651b04d826f7935ca375bc0c14bc116e6c454',
-                'symbol' => 'BNAGROCHEM', 'old_isin' => 'INE00HZ01011', 'ex_date' => '2026-11-16',
-            ]],
-            ['evidence_key' => 'bnagrochem_bhavcopy', 'evidence_payload' => [
-                'source_url' => 'https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_20261113_F_0000.csv.zip',
-                'source_archive_sha256' => '758ec3b60fd492a29ff3ebc6c069269bc326dc5ca662cfba8892f16939841b7b',
-                'source_csv_sha256' => '5736864df9797ba7b0427ec91dc506b5cd07c283edaefa8cf3f5609da4720b9e',
-                'trade_date' => '2026-11-13', 'symbol' => 'BNAGROCHEM', 'isin' => 'INE00HZ01011',
-                'instrument_id' => 762608, 'open' => 159.00, 'high' => 162.66, 'low' => 158.68,
-                'close' => 162.65, 'volume' => 101471,
-            ]],
-        ]);
-
+        [$stock, $issue] = $this->createBnagrochemIssue(9.0);
         $admin = $this->createAdminUser();
-        try {
-            app(DataQualityResolutionService::class)->accept($issue, null, 'Review blocked pending independent official bhavcopy evidence.', $admin->id);
-            $this->fail('Unverified bhavcopy payload must not stage an F042 factor.');
-        } catch (DomainException $exception) {
-            $this->assertSame('DATA_QUALITY_SOURCE_EVIDENCE_REQUIRED', $exception->errorCode());
-        }
+        $files = $this->officialBnagrochemEvidenceFiles();
+
+        $this->actingAs($admin)
+            ->post("/api/data-quality/issues/{$issue->id}/stage-bnagrochem-f042-evidence", $files)
+            ->assertUnprocessable()
+            ->assertJsonPath('error.code', 'DATA_QUALITY_SOURCE_EVIDENCE_REQUIRED');
+
         $this->assertSame(DataQualityIssue::STATUS_PENDING_REVIEW, $issue->fresh()->issue_status);
+        $this->assertDatabaseMissing('portfolio_data_quality_issue_evidence', ['issue_id' => $issue->id, 'evidence_key' => 'bnagrochem_listing_circular']);
         $this->assertDatabaseMissing('portfolio_price_adjustment_factors', ['issue_id' => $issue->id]);
-        $this->assertSame('100.0000', number_format((float) StockPrice::query()->where('stock_id', 7096)->value('close_price'), 4, '.', ''));
+        $this->assertSame(0, StockPrice::query()->where('stock_id', $stock->id)->count());
     }
 
-    public function test_reviewed_f042_factor_stages_without_price_writes_and_reversal_is_audited(): void
+    public function test_f042_staging_rejects_mismatched_genuine_official_artifact_without_mutation(): void
     {
-        $stock = Stock::query()->forceCreate([
-            'id' => 7096, 'symbol' => 'BNAGROCHEM', 'exchange' => 'NSE', 'series' => 'EQ',
-            'name' => 'BNAGROCHEM fixture', 'isin' => 'INE00HZ01029', 'is_active' => true,
-        ]);
+        [, $issue] = $this->createBnagrochemIssue();
+        $admin = $this->createAdminUser();
+        $files = $this->officialBnagrochemEvidenceFiles();
+        $files['listing_circular'] = new \Illuminate\Http\UploadedFile(
+            base_path('tests/Fixtures/bnagrochem-f042-official/CMPT77438.pdf'), 'CMPT77438.pdf', 'application/pdf', null, true,
+        );
+
+        $this->actingAs($admin)
+            ->post("/api/data-quality/issues/{$issue->id}/stage-bnagrochem-f042-evidence", $files)
+            ->assertUnprocessable()
+            ->assertJsonPath('error.code', 'DATA_QUALITY_SOURCE_EVIDENCE_INVALID');
+
+        $this->assertSame(0, $issue->evidences()->whereIn('evidence_key', [
+            'bnagrochem_listing_circular', 'bnagrochem_clearing_circular', 'bnagrochem_bhavcopy',
+        ])->count());
+        $this->assertDatabaseMissing('portfolio_price_adjustment_factors', ['issue_id' => $issue->id]);
+    }
+
+    public function test_genuine_f042_bundle_stages_idempotently_then_human_acceptance_only_stages_factor(): void
+    {
+        [$stock, $issue, $sync] = $this->syncBnagrochemIssueFromFeed();
+        $this->assertSame(1, $sync['created']);
+        $this->assertSame(1, $sync['synced']);
+        $this->assertSame(DataQualityIssue::DETECTION_METHOD_EXCHANGE_FEED, $issue->detection_method);
+        $this->assertSame('1:10', $issue->evidences()->where('evidence_key', 'exchange_ratio')->value('evidence_value'));
         $price = StockPrice::query()->create([
             'stock_id' => $stock->id, 'price_date' => '2026-11-13',
             'open_price' => 159.0, 'high_price' => 162.66, 'low_price' => 158.68,
             'close_price' => 162.66, 'adjusted_close_price' => 162.66, 'volume' => 101471,
             'data_source' => 'official_bhavcopy', 'created_at' => now(),
         ]);
-        $issue = DataQualityIssue::query()->create([
-            'stock_id' => $stock->id, 'symbol' => 'BNAGROCHEM',
-            'issue_type' => DataQualityIssue::TYPE_CORPORATE_ACTION,
-            'issue_status' => DataQualityIssue::STATUS_PENDING_REVIEW,
-            'detection_method' => DataQualityIssue::DETECTION_METHOD_EXCHANGE_FEED,
-            'detection_source' => 'exchange_feed', 'suggested_ratio' => 10,
-            'corporate_action_type' => 'face_value_split', 'ex_date' => '2026-11-16',
-            'exchange_match' => true, 'detected_at' => now(),
-        ]);
-        app(DataQualityIssueService::class)->attachEvidence($issue, [
-            ['evidence_key' => 'bnagrochem_listing_circular', 'evidence_payload' => [
-                'document' => 'CML77412', 'url' => 'https://nsearchives.nseindia.com/content/circulars/CML77412.pdf',
-                'sha256' => 'c0faa54145565b1650c98748562c81b5444dc63d53b57c39f5e28e07aa8b4532',
-                'symbol' => 'BNAGROCHEM', 'old_isin' => 'INE00HZ01011', 'new_isin' => 'INE00HZ01029', 'ex_date' => '2026-11-16',
-            ]],
-            ['evidence_key' => 'bnagrochem_clearing_circular', 'evidence_payload' => [
-                'document' => 'CMPT77438', 'url' => 'https://nsearchives.nseindia.com/content/circulars/CMPT77438.pdf',
-                'sha256' => '70d93d11da034e34af5184e63af651b04d826f7935ca375bc0c14bc116e6c454',
-                'symbol' => 'BNAGROCHEM', 'old_isin' => 'INE00HZ01011', 'ex_date' => '2026-11-16',
-            ]],
-            ['evidence_key' => 'bnagrochem_bhavcopy', 'evidence_payload' => [
-                'source_url' => 'https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_20261113_F_0000.csv.zip',
-                'source_archive_sha256' => '758ec3b60fd492a29ff3ebc6c069269bc326dc5ca662cfba8892f16939841b7b',
-                'source_csv_sha256' => '5736864df9797ba7b0427ec91dc506b5cd07c283edaefa8cf3f5609da4720b9e',
-                'trade_date' => '2026-11-13', 'symbol' => 'BNAGROCHEM', 'isin' => 'INE00HZ01011',
-                'instrument_id' => 762608, 'open' => 159.00, 'high' => 162.66, 'low' => 158.68,
-                'close' => 162.66, 'volume' => 101471,
-            ]],
-        ]);
-
         $admin = $this->createAdminUser();
-        $accepted = app(DataQualityResolutionService::class)->accept($issue, 10.0, 'Reviewed exact official source bundle.', $admin->id);
-        $firstResolution = $accepted->latestResolution;
+        $stageUrl = "/api/data-quality/issues/{$issue->id}/stage-bnagrochem-f042-evidence";
+
+        $this->actingAs($admin)->post($stageUrl, $this->officialBnagrochemEvidenceFiles())
+            ->assertOk()->assertJsonPath('data.issue_status', DataQualityIssue::STATUS_PENDING_REVIEW);
+        $this->actingAs($admin)->post($stageUrl, $this->officialBnagrochemEvidenceFiles())
+            ->assertOk()->assertJsonPath('data.issue_status', DataQualityIssue::STATUS_PENDING_REVIEW);
+        $this->assertSame(3, $issue->evidences()->whereIn('evidence_key', [
+            'bnagrochem_listing_circular', 'bnagrochem_clearing_circular', 'bnagrochem_bhavcopy',
+        ])->count());
+        $this->assertSame(1, $issue->evidences()->where('evidence_key', 'exchange_ratio')->count());
+        $listingEvidence = $issue->evidences()->where('evidence_key', 'bnagrochem_listing_circular')->firstOrFail()->evidence_payload;
+        $bhavcopyEvidence = $issue->evidences()->where('evidence_key', 'bnagrochem_bhavcopy')->firstOrFail()->evidence_payload;
+        $this->assertSame('c0faa54145565b1650c98748562c81b5444dc63d53b57c39f5e28e07aa8b4532', $listingEvidence['sha256']);
+        $this->assertSame('758ec3b60fd492a29ff3ebc6c069269bc326dc5ca662cfba8892f16939841b7b', $bhavcopyEvidence['source_archive_sha256']);
+        $this->assertDatabaseMissing('portfolio_price_adjustment_factors', ['issue_id' => $issue->id]);
+
+        $accepted = $this->postJson("/api/data-quality/issues/{$issue->id}/accept", [
+            'applied_ratio' => 10, 'notes' => 'Human reviewed the exact official CML77412, CMPT77438 and NSE archive evidence.',
+        ])->assertOk()->assertJsonPath('data.issue_status', DataQualityIssue::STATUS_ACCEPTED);
+        $humanResolution = $issue->resolutions()->latest('id')->firstOrFail();
+        $this->assertSame($admin->id, $humanResolution->resolved_by);
+        $this->assertFalse((bool) $humanResolution->is_auto);
         $factor = PriceAdjustmentFactor::query()->where('issue_id', $issue->id)->where('is_active', true)->firstOrFail();
-        $this->assertSame(10.0, (float) $factor->applied_ratio);
         $this->assertSame(PriceAdjustmentFactor::REPAIR_STATUS_PENDING, $factor->metadata['ohlcv_repair_status']);
-        $this->assertSame($price->getKey(), $price->fresh()->getKey());
         $this->assertSame('162.6600', number_format((float) $price->fresh()->close_price, 4, '.', ''));
 
-        try {
-            app(DataQualityResolutionService::class)->accept($accepted, 10.0, 'Replay.', $admin->id);
-            $this->fail('A repeated acceptance must be rejected as stale.');
-        } catch (DomainException $exception) {
-            $this->assertSame('DATA_QUALITY_STALE_RESOLUTION', $exception->errorCode());
-        }
+        $repair = app(CorporateActionPriceRepairService::class)->repairPendingFactors(factorId: (int) $factor->id, dryRun: false);
+        $this->assertSame(1, $repair['repaired']);
+        $this->assertSame('16.2660', number_format((float) $price->fresh()->close_price, 4, '.', ''));
+        $this->assertSame(PriceAdjustmentFactor::REPAIR_STATUS_COMPLETED, $factor->fresh()->metadata['ohlcv_repair_status']);
 
-        $rejected = app(DataQualityResolutionService::class)->reject($accepted, 'Rollback staged F042 factor.', $admin->id, requirePendingReview: false);
-        $latestResolution = $rejected->latestResolution;
-        $this->assertFalse((bool) $factor->fresh()->is_active);
-        $this->assertTrue((bool) $latestResolution->is_reversal);
-        $this->assertSame($firstResolution->id, $latestResolution->supersedes_resolution_id);
-        $this->assertSame(2, $issue->resolutions()->count());
+        $this->actingAs($admin)->postJson("/api/data-quality/issues/{$issue->id}/rollback-completed-repair", [
+            'notes' => 'Restore the exact captured official-fixture before-image.',
+        ])->assertOk()->assertJsonPath('data.issue_status', DataQualityIssue::STATUS_REJECTED);
         $this->assertSame('162.6600', number_format((float) $price->fresh()->close_price, 4, '.', ''));
+        $this->assertSame(101471, (int) $price->fresh()->volume);
+        $this->assertSame(PriceAdjustmentFactor::REPAIR_STATUS_ROLLED_BACK, $factor->fresh()->metadata['ohlcv_repair_status']);
+
+        $this->postJson("/api/data-quality/issues/{$issue->id}/accept", ['notes' => 'stale admin acceptance'])
+            ->assertStatus(409)->assertJsonPath('error.code', 'DATA_QUALITY_STALE_RESOLUTION');
     }
 
     public function test_legacy_corporate_action_migration_dry_run_counts_without_writes(): void
@@ -325,4 +314,54 @@ class DataQualityApiTest extends TestCase
         $this->assertTrue($result['dry_run']);
         $this->assertSame(0, DataQualityIssue::query()->count());
     }
+
+    /** @return array{0:Stock,1:DataQualityIssue} */
+    private function createBnagrochemIssue(float $ratio = 10.0): array
+    {
+        $stock = Stock::query()->forceCreate([
+            'id' => 7096, 'symbol' => 'BNAGROCHEM', 'exchange' => 'NSE', 'series' => 'EQ',
+            'name' => 'BNAGROCHEM fixture', 'isin' => 'INE00HZ01029', 'is_active' => true,
+        ]);
+        $issue = DataQualityIssue::query()->create([
+            'stock_id' => $stock->id, 'symbol' => 'BNAGROCHEM',
+            'issue_type' => DataQualityIssue::TYPE_CORPORATE_ACTION,
+            'issue_status' => DataQualityIssue::STATUS_PENDING_REVIEW,
+            'detection_method' => DataQualityIssue::DETECTION_METHOD_EXCHANGE_FEED,
+            'detection_source' => 'exchange_feed', 'suggested_ratio' => $ratio,
+            'corporate_action_type' => 'face_value_split', 'ex_date' => '2026-11-16',
+            'exchange_match' => true, 'detected_at' => now(),
+        ]);
+        return [$stock, $issue];
+    }
+
+    /** @return array{0:Stock,1:DataQualityIssue,2:array<string,mixed>} */
+    private function syncBnagrochemIssueFromFeed(): array
+    {
+        $stock = Stock::query()->forceCreate([
+            'id' => 7096, 'symbol' => 'BNAGROCHEM', 'exchange' => 'NSE', 'series' => 'EQ',
+            'name' => 'BNAGROCHEM fixture', 'isin' => 'INE00HZ01029', 'is_active' => true,
+        ]);
+        config(['services.data_quality.corporate_actions_feed_url' => 'https://fixture.invalid/ca.json']);
+        Http::fake([
+            'https://fixture.invalid/ca.json' => Http::response([[
+                'symbol' => 'BNAGROCHEM', 'action_type' => 'face_value_split',
+                'ratio' => '1:10', 'ex_date' => '2026-11-16', 'source' => 'test-feed-contract',
+            ]], 200),
+        ]);
+        $sync = app(DataQualityCorporateActionSyncService::class)->syncFromExchangeFeed();
+        $issue = DataQualityIssue::query()->where('stock_id', $stock->id)->firstOrFail();
+        return [$stock, $issue, $sync];
+    }
+
+    /** @return array<string,\Symfony\Component\HttpFoundation\File\UploadedFile> */
+    private function officialBnagrochemEvidenceFiles(): array
+    {
+        $directory = base_path('tests/Fixtures/bnagrochem-f042-official');
+        return [
+            'listing_circular' => new \Illuminate\Http\UploadedFile($directory.'/CML77412.pdf', 'CML77412.pdf', 'application/pdf', null, true),
+            'clearing_circular' => new \Illuminate\Http\UploadedFile($directory.'/CMPT77438.pdf', 'CMPT77438.pdf', 'application/pdf', null, true),
+            'bhavcopy_archive' => new \Illuminate\Http\UploadedFile($directory.'/bhavcopy.zip', 'bhavcopy.zip', 'application/zip', null, true),
+        ];
+    }
+
 }

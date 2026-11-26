@@ -841,6 +841,19 @@ class CorporateActionPriceRepairService
             $exDate = $factor->effective_ex_date->toDateString();
             $previousStatus = (string) (($factor->metadata ?? [])['ohlcv_repair_status'] ?? PriceAdjustmentFactor::REPAIR_STATUS_PENDING);
 
+            $beforeRows = DB::table('portfolio_stock_prices')->where('stock_id', $stock->id)
+                ->where('price_date', '<', $exDate)->orderBy('id')->lockForUpdate()->get()->map(fn ($r) => (array) $r)->all();
+            if ($beforeRows === []) {
+                return ['factor_id' => $factor->id, 'issue_id' => $factor->issue_id, 'action' => 'skipped', 'status' => self::STATUS_NO_PRICES, 'reason' => 'No rows to snapshot.'];
+            }
+            // Immutable exact row image; no inverse arithmetic is used during rollback.
+            foreach ($beforeRows as $row) {
+                DB::table('portfolio_price_adjustment_repair_snapshots')->insert([
+                    'factor_id' => $factor->id, 'stock_price_id' => $row['id'],
+                    'before_row' => json_encode($row, JSON_THROW_ON_ERROR),
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
             $adjustment = $this->priceAdjustment->adjustHistoricalPricesByDivisors(
                 $stock,
                 $exDate,
@@ -849,6 +862,7 @@ class CorporateActionPriceRepairService
             );
 
             if ((int) $adjustment['rows_adjusted'] < 1) {
+                DB::table('portfolio_price_adjustment_repair_snapshots')->where('factor_id', $factor->id)->delete();
                 // Leave pending — no successful mutation to audit as completed.
                 return [
                     'factor_id' => $factor->id,
@@ -863,6 +877,15 @@ class CorporateActionPriceRepairService
             $invalidatedProofs = $adjustment['_invalidated_proofs'] ?? [];
             unset($adjustment['_invalidated_proofs']);
             $metadata['ohlcv_repair_status'] = PriceAdjustmentFactor::REPAIR_STATUS_COMPLETED;
+            $afterRows = DB::table('portfolio_stock_prices')->whereIn('id', array_column($beforeRows, 'id'))->orderBy('id')->get()->map(fn ($r) => (array) $r)->all();
+            if (count($afterRows) !== count($beforeRows) || array_column($afterRows, 'id') !== array_column($beforeRows, 'id')) {
+                throw new \RuntimeException('Exact post-repair row set differs from the locked pre-repair row set.');
+            }
+            foreach ($afterRows as $row) {
+                DB::table('portfolio_price_adjustment_repair_snapshots')->where('factor_id', $factor->id)->where('stock_price_id', $row['id'])->update([
+                    'after_row' => json_encode($row, JSON_THROW_ON_ERROR), 'after_sha256' => $this->rowHash($row), 'updated_at' => now(),
+                ]);
+            }
             $metadata['ohlcv_repair'] = [
                 'previous_status' => $previousStatus,
                 'resulting_status' => PriceAdjustmentFactor::REPAIR_STATUS_COMPLETED,
@@ -878,6 +901,10 @@ class CorporateActionPriceRepairService
                 'action_type' => $factor->action_type,
                 'repaired_at' => now()->toIso8601String(),
                 'repair_source' => $repairSource,
+                'snapshot_version' => 1,
+                'snapshot_rows' => count($beforeRows),
+                'snapshot_before_sha256' => hash('sha256', implode('', array_map(fn ($r) => $this->rowHash($r), $beforeRows))),
+                'snapshot_sha256' => hash('sha256', implode('', array_map(fn ($r) => $this->rowHash($r), $afterRows))),
             ];
 
             $factor->update(['metadata' => $metadata]);
@@ -898,6 +925,68 @@ class CorporateActionPriceRepairService
                 'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_COMPLETED,
             ];
         });
+    }
+
+    /** Restore exact captured rows. Caller holds issue → stock → factor locks and transaction. */
+    public function restoreCompletedFactor(PriceAdjustmentFactor $factor): array
+    {
+        $meta = $factor->metadata ?? [];
+        if (($meta['ohlcv_repair_status'] ?? null) !== PriceAdjustmentFactor::REPAIR_STATUS_COMPLETED
+            || (int) (($meta['ohlcv_repair']['snapshot_version'] ?? 0)) !== 1) {
+            throw new \App\Exceptions\DomainException('Completed factor has no supported exact row snapshot.', 'DATA_QUALITY_PRICE_REPAIR_ROLLBACK_REQUIRED', 409);
+        }
+        $snapshots = DB::table('portfolio_price_adjustment_repair_snapshots')->where('factor_id', $factor->id)->orderBy('stock_price_id')->lockForUpdate()->get();
+        if ($snapshots->isEmpty() || $snapshots->count() !== (int) ($meta['ohlcv_repair']['snapshot_rows'] ?? -1)
+            || $snapshots->contains(fn ($s) => $s->after_row === null || $s->after_sha256 === null)) {
+            throw new \App\Exceptions\DomainException('Repair snapshot is incomplete.', 'DATA_QUALITY_PRICE_REPAIR_ROLLBACK_REQUIRED', 409);
+        }
+        $beforeHashes = [];
+        $afterHashes = [];
+        foreach ($snapshots as $snapshot) {
+            $beforeRow = json_decode($snapshot->before_row, true, flags: JSON_THROW_ON_ERROR);
+            $afterRow = json_decode($snapshot->after_row, true, flags: JSON_THROW_ON_ERROR);
+            $beforeHashes[] = $this->rowHash($beforeRow);
+            $afterHashes[] = $this->rowHash($afterRow);
+        }
+        if (! hash_equals((string) ($meta['ohlcv_repair']['snapshot_before_sha256'] ?? ''), hash('sha256', implode('', $beforeHashes)))
+            || ! hash_equals((string) ($meta['ohlcv_repair']['snapshot_sha256'] ?? ''), hash('sha256', implode('', $afterHashes)))) {
+            throw new \App\Exceptions\DomainException('Stored exact row snapshot failed its metadata integrity check.', 'DATA_QUALITY_PRICE_REPAIR_ROLLBACK_REQUIRED', 409);
+        }
+        $ids = $snapshots->pluck('stock_price_id')->map(fn ($id) => (int) $id)->all();
+        // The whole affected interval is part of the exact image. Newly inserted
+        // rows must fail closed just like deleted or modified captured rows.
+        $current = DB::table('portfolio_stock_prices')->where('stock_id', $factor->stock_id)
+            ->where('price_date', '<', $factor->effective_ex_date->toDateString())
+            ->orderBy('id')->lockForUpdate()->get()->map(fn ($r) => (array) $r)->all();
+        if (count($current) !== count($ids) || array_column($current, 'id') !== $ids) {
+            throw new \App\Exceptions\DomainException('Price row set drifted since repair.', 'DATA_QUALITY_PRICE_REPAIR_ROLLBACK_REQUIRED', 409);
+        }
+        $invalidated = app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)->invalidateRepairProof($factor->stock);
+        foreach ($current as $index => $row) {
+            if (! hash_equals((string) $snapshots[$index]->after_sha256, $this->rowHash($row))) {
+                throw new \App\Exceptions\DomainException('Price rows drifted since repair; exact rollback refused.', 'DATA_QUALITY_PRICE_REPAIR_ROLLBACK_REQUIRED', 409);
+            }
+        }
+        foreach ($snapshots as $snapshot) {
+            $before = json_decode($snapshot->before_row, true, flags: JSON_THROW_ON_ERROR);
+            $id = (int) $before['id']; unset($before['id']);
+            DB::table('portfolio_stock_prices')->where('id', $id)->update($before);
+        }
+        $restoredRows = DB::table('portfolio_stock_prices')->where('stock_id', $factor->stock_id)
+            ->where('price_date', '<', $factor->effective_ex_date->toDateString())->orderBy('id')->get()->map(fn ($r) => (array) $r)->all();
+        if (count($restoredRows) !== count($snapshots)
+            || ! hash_equals((string) $meta['ohlcv_repair']['snapshot_before_sha256'], hash('sha256', implode('', array_map(fn ($r) => $this->rowHash($r), $restoredRows))))
+        ) {
+            throw new \App\Exceptions\DomainException('Restored price row set failed exact before-image verification.', 'DATA_QUALITY_PRICE_REPAIR_ROLLBACK_REQUIRED', 409);
+        }
+        app(\App\Services\Bhavcopy\NseHistoricalPriceAdjustmentGate::class)->refreshOverlappingRepairProofs($factor->stock, $invalidated);
+        return ['rows_restored' => count($ids), 'rows_sha256' => hash('sha256', implode('', array_map(fn ($s) => hash('sha256', $s->before_row), $snapshots->all())))];
+    }
+
+    private function rowHash(array $row): string
+    {
+        ksort($row);
+        return hash('sha256', json_encode($row, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
     }
 
     /**

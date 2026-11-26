@@ -557,8 +557,10 @@ Route::middleware(['auth:sanctum', EnsureAuthSessionRole::class, 'active.portfol
         Route::get('/data-quality/issues/unresolved', [DataQualityController::class, 'unresolved']);
         Route::get('/data-quality/issues/history', [DataQualityController::class, 'history']);
         Route::get('/data-quality/issues/{issue}', [DataQualityController::class, 'show']);
+        Route::post('/data-quality/issues/{issue}/stage-bnagrochem-f042-evidence', [DataQualityController::class, 'stageBnagrochemF042Evidence']);
         Route::post('/data-quality/issues/{issue}/accept', [DataQualityController::class, 'accept']);
         Route::post('/data-quality/issues/{issue}/reject', [DataQualityController::class, 'reject']);
+        Route::post('/data-quality/issues/{issue}/rollback-completed-repair', [DataQualityController::class, 'rollbackCompletedRepair']);
     });
 });
 

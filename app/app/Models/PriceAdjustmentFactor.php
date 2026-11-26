@@ -11,6 +11,8 @@ class PriceAdjustmentFactor extends Model
 
     public const REPAIR_STATUS_COMPLETED = 'completed';
 
+    public const REPAIR_STATUS_ROLLED_BACK = 'rolled_back';
+
     protected $table = 'portfolio_price_adjustment_factors';
 
     protected $fillable = [

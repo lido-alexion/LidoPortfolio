@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\DataQualityIssue;
+use App\Services\BnagrochemF042EvidenceStager;
 use App\Services\DataQualityResolutionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -103,6 +104,24 @@ class DataQualityController extends Controller
         return response()->json(['data' => $updated]);
     }
 
+    /** Verify and stage the exact official #383 source artifacts; acceptance remains a separate human action. */
+    public function stageBnagrochemF042Evidence(Request $request, DataQualityIssue $issue, BnagrochemF042EvidenceStager $stager): JsonResponse
+    {
+        $request->validate([
+            'listing_circular' => ['required', 'file', 'mimes:pdf', 'max:512'],
+            'clearing_circular' => ['required', 'file', 'mimes:pdf', 'max:512'],
+            'bhavcopy_archive' => ['required', 'file', 'mimes:zip', 'max:2048'],
+        ]);
+
+        $updated = $stager->stage($issue, [
+            'listing_circular' => $request->file('listing_circular'),
+            'clearing_circular' => $request->file('clearing_circular'),
+            'bhavcopy_archive' => $request->file('bhavcopy_archive'),
+        ]);
+
+        return response()->json(['data' => $updated]);
+    }
+
     public function reject(Request $request, DataQualityIssue $issue): JsonResponse
     {
         $reResolve = $request->boolean('re_resolve');
@@ -126,6 +145,16 @@ class DataQualityController extends Controller
         );
 
         return response()->json(['data' => $updated]);
+    }
+
+    public function rollbackCompletedRepair(Request $request, DataQualityIssue $issue): JsonResponse
+    {
+        $payload = $request->validate(['notes' => ['required', 'string', 'min:1', 'max:2000']]);
+        $notes = trim($payload['notes']);
+        if ($notes === '') {
+            throw ValidationException::withMessages(['notes' => ['A non-empty rollback audit note is required.']]);
+        }
+        return response()->json(['data' => $this->resolutions->rollbackCompletedRepair($issue, $notes, auth()->id())]);
     }
 
     /**

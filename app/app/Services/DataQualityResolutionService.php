@@ -30,6 +30,7 @@ class DataQualityResolutionService
         return DB::transaction(function () use ($issue, $appliedRatio, $notes, $userId, $auto, $requirePendingReview) {
             $issue = DataQualityIssue::query()->lockForUpdate()->findOrFail($issue->id);
             $this->lockIssueStock($issue);
+            $this->assertNoCompletedPriceRepair($issue);
 
             if ($requirePendingReview && $issue->issue_status !== DataQualityIssue::STATUS_PENDING_REVIEW) {
                 throw new DomainException(
@@ -89,6 +90,7 @@ class DataQualityResolutionService
         return DB::transaction(function () use ($issue, $notes, $userId, $requirePendingReview) {
             $issue = DataQualityIssue::query()->lockForUpdate()->findOrFail($issue->id);
             $this->lockIssueStock($issue);
+            $this->assertNoCompletedPriceRepair($issue);
 
             if ($requirePendingReview && $issue->issue_status !== DataQualityIssue::STATUS_PENDING_REVIEW) {
                 throw new DomainException(
@@ -124,6 +126,50 @@ class DataQualityResolutionService
                 'latest_resolution_id' => $resolution->id,
             ]);
 
+            return $issue->fresh(['stock', 'evidences', 'resolutions.resolver']);
+        });
+    }
+
+    /** Exact F042 price restoration and linked issue reversal in one transaction. */
+    public function rollbackCompletedRepair(DataQualityIssue $issue, string $notes, ?int $userId): DataQualityIssue
+    {
+        return DB::transaction(function () use ($issue, $notes, $userId) {
+            $issue = DataQualityIssue::query()->lockForUpdate()->findOrFail($issue->id);
+            $stock = Stock::query()->whereKey($issue->stock_id)->lockForUpdate()->firstOrFail();
+            $factors = \App\Models\PriceAdjustmentFactor::query()->where('issue_id', $issue->id)->orderBy('id')->lockForUpdate()->get();
+            $completed = $factors->filter(fn ($factor) => (($factor->metadata ?? [])['ohlcv_repair_status'] ?? null) === \App\Models\PriceAdjustmentFactor::REPAIR_STATUS_COMPLETED)->values();
+            if ($completed->isEmpty()) {
+                if ($factors->contains(fn ($f) => (($f->metadata ?? [])['ohlcv_repair_status'] ?? null) === \App\Models\PriceAdjustmentFactor::REPAIR_STATUS_ROLLED_BACK)) return $issue->fresh(['stock', 'evidences', 'resolutions.resolver']);
+                throw new DomainException('No completed repair is available to roll back.', 'DATA_QUALITY_PRICE_REPAIR_ROLLBACK_REQUIRED', 409);
+            }
+            if ($completed->count() !== 1) throw new DomainException('Multiple completed factors overlap this issue.', 'DATA_QUALITY_PRICE_REPAIR_ROLLBACK_REQUIRED', 409);
+            $factor = $completed->first();
+            // Any later event may have rewritten rows in this factor's historical
+            // interval. Same-date checks alone miss composed adjustments.
+            $snapMinDate = \Illuminate\Support\Facades\DB::table('portfolio_price_adjustment_repair_snapshots as s')
+                ->join('portfolio_stock_prices as p', 'p.id', '=', 's.stock_price_id')
+                ->where('s.factor_id', $factor->id)->min('p.price_date');
+            $overlap = \App\Models\PriceAdjustmentFactor::query()->where('stock_id', $stock->id)->where('id', '!=', $factor->id)
+                ->where('metadata->ohlcv_repair_status', \App\Models\PriceAdjustmentFactor::REPAIR_STATUS_COMPLETED)
+                ->whereDate('effective_ex_date', '>=', $snapMinDate)->exists();
+            $actionOverlap = \App\Models\CorporateAction::query()->where('stock_id', $stock->id)->whereNotNull('applied_at')
+                ->whereDate('ex_date', '>=', $snapMinDate)->exists();
+            if ($overlap || $actionOverlap) throw new DomainException('Overlapping factor or corporate-action event prevents exact rollback.', 'DATA_QUALITY_PRICE_REPAIR_ROLLBACK_REQUIRED', 409);
+            $restored = app(CorporateActionPriceRepairService::class)->restoreCompletedFactor($factor);
+            $priorResolution = $issue->latest_resolution_id;
+            $resolution = DataQualityIssueResolution::query()->create([
+                'issue_id' => $issue->id, 'resolution_type' => DataQualityIssueResolution::TYPE_REJECTED,
+                'resolution_status' => DataQualityIssue::STATUS_REJECTED, 'suggested_ratio_snapshot' => $issue->suggested_ratio,
+                'is_reversal' => $priorResolution !== null, 'supersedes_resolution_id' => $priorResolution,
+                'resolved_by' => $userId, 'notes' => $notes, 'resolved_at' => now(),
+                'metadata' => ['previous_status' => $issue->issue_status, 'price_repair_rollback' => $restored, 'factor_id' => $factor->id],
+            ]);
+            $metadata = $factor->metadata ?? [];
+            $metadata['ohlcv_repair_status'] = \App\Models\PriceAdjustmentFactor::REPAIR_STATUS_ROLLED_BACK;
+            $metadata['ohlcv_rollback'] = ['resolution_id' => $resolution->id, 'rolled_back_at' => now()->toIso8601String(), 'resolved_by' => $userId, 'rows_restored' => $restored['rows_restored']];
+            $factor->update(['metadata' => $metadata, 'is_active' => false, 'reversed_at' => now()]);
+            $issue->update(['issue_status' => DataQualityIssue::STATUS_REJECTED, 'resolved_at' => now(), 'applied_ratio' => null, 'latest_resolution_id' => $resolution->id]);
+            app(MetricsUpdateService::class)->updateStock($stock);
             return $issue->fresh(['stock', 'evidences', 'resolutions.resolver']);
         });
     }
@@ -230,5 +276,27 @@ class DataQualityResolutionService
     private function lockIssueStock(DataQualityIssue $issue): void
     {
         Stock::query()->whereKey($issue->stock_id)->lockForUpdate()->first();
+    }
+
+    /**
+     * A metadata-only reversal cannot restore OHLCV already rewritten by F043.
+     * Lock factors after stock (the writer lock order) so an accept/reject cannot
+     * race a repair that is committing its completed marker.
+     */
+    private function assertNoCompletedPriceRepair(DataQualityIssue $issue): void
+    {
+        $completed = \App\Models\PriceAdjustmentFactor::query()
+            ->where('issue_id', $issue->id)
+            ->where('metadata->ohlcv_repair_status', \App\Models\PriceAdjustmentFactor::REPAIR_STATUS_COMPLETED)
+            ->lockForUpdate()
+            ->exists();
+
+        if ($completed) {
+            throw new DomainException(
+                'Completed OHLCV repair cannot be re-resolved until its exact price snapshot has been restored and verified.',
+                'DATA_QUALITY_PRICE_REPAIR_ROLLBACK_REQUIRED',
+                409,
+            );
+        }
     }
 }
