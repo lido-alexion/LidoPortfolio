@@ -70,6 +70,9 @@ class DataQualityApiTest extends TestCase
         $this->actingAs($user)
             ->post("/api/data-quality/issues/{$issue->id}/stage-bnagrochem-f042-evidence", $this->officialBnagrochemEvidenceFiles())
             ->assertForbidden();
+        $this->actingAs($user)
+            ->post('/api/data-quality/discover-bnagrochem-historical-action', $this->officialBnagrochemEvidenceFiles())
+            ->assertForbidden();
     }
 
     public function test_unauthenticated_access_is_rejected(): void
@@ -78,6 +81,7 @@ class DataQualityApiTest extends TestCase
 
         $this->getJson('/api/data-quality/dashboard')->assertUnauthorized();
         $this->postJson("/api/data-quality/issues/{$issue->id}/accept")->assertUnauthorized();
+        $this->post('/api/data-quality/discover-bnagrochem-historical-action', $this->officialBnagrochemEvidenceFiles())->assertUnauthorized();
     }
 
     public function test_completed_repair_rollback_api_requires_admin_and_audit_note(): void
@@ -290,6 +294,94 @@ class DataQualityApiTest extends TestCase
 
         $this->postJson("/api/data-quality/issues/{$issue->id}/accept", ['notes' => 'stale admin acceptance'])
             ->assertStatus(409)->assertJsonPath('error.code', 'DATA_QUALITY_STALE_RESOLUTION');
+    }
+
+    public function test_admin_can_discover_missing_historical_issue_from_exact_bundle_idempotently_and_pending_only(): void
+    {
+        Stock::query()->forceCreate([
+            'id' => 7096, 'symbol' => 'BNAGROCHEM', 'exchange' => 'NSE', 'series' => 'EQ',
+            'name' => 'BNAGROCHEM fixture', 'isin' => 'INE00HZ01029', 'is_active' => true,
+        ]);
+        $admin = $this->createAdminUser();
+        $url = '/api/data-quality/discover-bnagrochem-historical-action';
+
+        $this->actingAs($admin)->post($url, $this->officialBnagrochemEvidenceFiles())
+            ->assertOk()->assertJsonPath('data.issue_status', DataQualityIssue::STATUS_PENDING_REVIEW)
+            ->assertJsonPath('data.suggested_ratio', '10.000000');
+        $this->actingAs($admin)->post($url, $this->officialBnagrochemEvidenceFiles())
+            ->assertOk()->assertJsonPath('data.issue_status', DataQualityIssue::STATUS_PENDING_REVIEW);
+
+        $issue = DataQualityIssue::query()->where('stock_id', 7096)->firstOrFail();
+        $this->assertSame(1, DataQualityIssue::query()->where('stock_id', 7096)->count());
+        $this->assertSame(1, $issue->evidences()->where('evidence_key', 'exchange_ratio')->count());
+        $this->assertSame(3, $issue->evidences()->whereIn('evidence_key', [
+            'bnagrochem_listing_circular', 'bnagrochem_clearing_circular', 'bnagrochem_bhavcopy',
+        ])->count());
+        $this->assertDatabaseMissing('portfolio_price_adjustment_factors', ['issue_id' => $issue->id]);
+        $this->assertDatabaseCount('portfolio_price_adjustment_factors', 0);
+        $this->assertDatabaseCount('portfolio_stock_prices', 0);
+        $auditPayload = $issue->evidences()->where('evidence_key', 'exchange_ratio')->firstOrFail()->evidence_payload;
+        $this->assertSame('official_historical_discovery', $auditPayload['source']);
+        $this->assertNotEmpty($auditPayload['detection_run_id']);
+    }
+
+    public function test_historical_discovery_requires_admin_and_rejects_tampered_bytes_before_issue_creation(): void
+    {
+        Stock::query()->forceCreate([
+            'id' => 7096, 'symbol' => 'BNAGROCHEM', 'exchange' => 'NSE', 'series' => 'EQ',
+            'name' => 'BNAGROCHEM fixture', 'isin' => 'INE00HZ01029', 'is_active' => true,
+        ]);
+        $url = '/api/data-quality/discover-bnagrochem-historical-action';
+        $files = $this->officialBnagrochemEvidenceFiles();
+        $bytes = file_get_contents(base_path('tests/Fixtures/bnagrochem-f042-official/bhavcopy.zip'));
+        $bytes[100] = chr(ord($bytes[100]) ^ 1);
+        $files['bhavcopy_archive'] = \Illuminate\Http\UploadedFile::fake()->createWithContent('bhavcopy.zip', $bytes);
+        $this->actingAs($this->createAdminUser())->post($url, $files)
+            ->assertUnprocessable()->assertJsonPath('error.code', 'DATA_QUALITY_SOURCE_EVIDENCE_INVALID');
+        $this->assertDatabaseCount('portfolio_data_quality_issues', 0);
+        $this->assertDatabaseCount('portfolio_price_adjustment_factors', 0);
+    }
+
+    public function test_historical_discovery_fails_closed_when_duplicate_event_records_exist(): void
+    {
+        Stock::query()->forceCreate([
+            'id' => 7096, 'symbol' => 'BNAGROCHEM', 'exchange' => 'NSE', 'series' => 'EQ',
+            'name' => 'BNAGROCHEM fixture', 'isin' => 'INE00HZ01029', 'is_active' => true,
+        ]);
+        foreach ([DataQualityIssue::DETECTION_METHOD_EXCHANGE_FEED, DataQualityIssue::DETECTION_METHOD_HEURISTIC_GAP] as $method) {
+            DataQualityIssue::query()->create([
+                'stock_id' => 7096, 'symbol' => 'BNAGROCHEM', 'issue_type' => DataQualityIssue::TYPE_CORPORATE_ACTION,
+                'issue_status' => DataQualityIssue::STATUS_PENDING_REVIEW, 'detection_method' => $method,
+                'detection_source' => 'test', 'suggested_ratio' => 10, 'latest_suggested_ratio' => 10,
+                'corporate_action_type' => 'split', 'ex_date' => '2026-11-16', 'exchange_match' => true, 'detected_at' => now(),
+            ]);
+        }
+
+        $this->actingAs($this->createAdminUser())
+            ->post('/api/data-quality/discover-bnagrochem-historical-action', $this->officialBnagrochemEvidenceFiles())
+            ->assertStatus(409)->assertJsonPath('error.code', 'DATA_QUALITY_SOURCE_EVIDENCE_CONFLICT');
+        $this->assertSame(2, DataQualityIssue::query()->where('stock_id', 7096)->count());
+        $this->assertDatabaseCount('portfolio_price_adjustment_factors', 0);
+    }
+
+    public function test_historical_discovery_does_not_reopen_resolved_event(): void
+    {
+        Stock::query()->forceCreate([
+            'id' => 7096, 'symbol' => 'BNAGROCHEM', 'exchange' => 'NSE', 'series' => 'EQ',
+            'name' => 'BNAGROCHEM fixture', 'isin' => 'INE00HZ01029', 'is_active' => true,
+        ]);
+        DataQualityIssue::query()->create([
+            'stock_id' => 7096, 'symbol' => 'BNAGROCHEM', 'issue_type' => DataQualityIssue::TYPE_CORPORATE_ACTION,
+            'issue_status' => DataQualityIssue::STATUS_REJECTED, 'detection_method' => DataQualityIssue::DETECTION_METHOD_EXCHANGE_FEED,
+            'detection_source' => 'test', 'suggested_ratio' => 10, 'latest_suggested_ratio' => 10,
+            'corporate_action_type' => 'split', 'ex_date' => '2026-11-16', 'exchange_match' => true, 'detected_at' => now(),
+        ]);
+
+        $this->actingAs($this->createAdminUser())
+            ->post('/api/data-quality/discover-bnagrochem-historical-action', $this->officialBnagrochemEvidenceFiles())
+            ->assertStatus(409)->assertJsonPath('error.code', 'DATA_QUALITY_STALE_RESOLUTION');
+        $this->assertSame(1, DataQualityIssue::query()->where('stock_id', 7096)->count());
+        $this->assertDatabaseCount('portfolio_price_adjustment_factors', 0);
     }
 
     public function test_legacy_corporate_action_migration_dry_run_counts_without_writes(): void
