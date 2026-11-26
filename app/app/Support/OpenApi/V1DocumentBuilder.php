@@ -53,6 +53,7 @@ class V1DocumentBuilder
                     'Machine-readable contract for the existing Stox (Stox by Lido Alexion) `/api/v1` HTTP API.',
                     'This documents current behaviour. It is not an API redesign.',
                     'Authentication is Laravel Sanctum **SPA session cookies**, not JWT and not a Bearer token in localStorage. Login lives on the legacy `/api/auth/*` surface (outside `/api/v1`). Call `GET /sanctum/csrf-cookie` (or `GET /api/auth/csrf-token`) before cookie-authenticated mutating requests.',
+                    'Browser cookie clients send `X-Stox-Auth-Context: investor` (default) or `admin` on every API and CSRF bootstrap request. These select independent HttpOnly session and remember-me cookies; an authenticated browser session must match the selected role context.',
                     'Portfolio-scoped routes resolve the active portfolio from header `X-Profile-Id` (legacy alias `X-Portfolio-Id`), query `portfolio_id`, or the user default portfolio.',
                     'Successful `/api/v1` JSON uses `ApiEnvelope`: `{success: true, data, meta}`. Domain failures use `{success: false, error: {code, message}, meta}`. Laravel validation may still return the framework 422 `{message, errors}` shape.',
                     'Standalone Discovery / Evaluation / Recommendation endpoints are **not** gated by dataset freshness. `POST /api/v1/pipeline/run` **is** gated (V4-FEAT-022): last successful market sync must be ≤ 24 hours old, or ≤ 72 hours when the pipeline instant is Monday in `cron_timezone`. A missing/stale timestamp returns envelope error `DATASET_NOT_FRESH` (422) and does not run Discovery.',
@@ -199,7 +200,10 @@ class V1DocumentBuilder
         $operationId = $overlay['operationId'] ?? $this->operationId($entry);
 
         $parameters = array_merge(
-            $entry['authenticated'] ? [['$ref' => '#/components/parameters/XProfileId']] : [],
+            $entry['authenticated'] ? [
+                ['$ref' => '#/components/parameters/XAuthSessionContext'],
+                ['$ref' => '#/components/parameters/XProfileId'],
+            ] : [],
             $this->pathParameters($entry['path'], $overlay['pathParameterSchemas'] ?? []),
             $overlay['parameters'] ?? [],
         );
@@ -414,6 +418,13 @@ class V1DocumentBuilder
                     'required' => false,
                     'description' => 'Active portfolio id. Legacy alias: `X-Portfolio-Id`. Query `portfolio_id` is also accepted. Omitted → user default portfolio.',
                     'schema' => ['type' => 'integer'],
+                ],
+                'XAuthSessionContext' => [
+                    'name' => 'X-Stox-Auth-Context',
+                    'in' => 'header',
+                    'required' => false,
+                    'description' => 'Browser session context: `investor` (default, preserves native login cookie) or `admin` (isolated administrator session). Send the same value to `/sanctum/csrf-cookie` and `/api/auth/csrf-token`.',
+                    'schema' => ['type' => 'string', 'enum' => ['investor', 'admin'], 'default' => 'investor'],
                 ],
             ],
             'schemas' => [

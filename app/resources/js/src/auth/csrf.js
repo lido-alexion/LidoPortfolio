@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { appUrl } from '../appBase';
+import { getAuthSessionContext } from './sessionContext';
 
 let csrfReady = false;
 let csrfTokenMemory = null;
@@ -49,7 +50,7 @@ async function waitForCsrfToken(maxAttempts = 20, delayMs = 50) {
 async function fetchPlainCsrfToken() {
     const response = await axios.get(appUrl('/api/auth/csrf-token'), {
         withCredentials: true,
-        headers: { Accept: 'application/json' },
+        headers: { Accept: 'application/json', 'X-Stox-Auth-Context': getAuthSessionContext() },
     });
     const token = response?.data?.token;
     if (!token || typeof token !== 'string') {
@@ -104,7 +105,7 @@ export async function ensureCsrfCookie({ force = false } = {}) {
 
     await axios.get(sanctumUrl, {
         withCredentials: true,
-        headers: { Accept: 'application/json' },
+        headers: { Accept: 'application/json', 'X-Stox-Auth-Context': getAuthSessionContext() },
     });
 
     // Always read the session token from the API after sanctum. Mobile browsers can

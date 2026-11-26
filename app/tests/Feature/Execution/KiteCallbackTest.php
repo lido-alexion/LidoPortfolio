@@ -71,6 +71,32 @@ class KiteCallbackTest extends TestCase
         $this->assertDatabaseCount('portfolio_broker_connections', 0);
     }
 
+    public function test_kite_login_state_is_consumed_by_the_first_callback(): void
+    {
+        $user = User::factory()->create();
+        $loginUrl = app(BrokerConnectionService::class)->loginUrl($user);
+        parse_str((string) parse_url($loginUrl, PHP_URL_QUERY), $loginQuery);
+        parse_str($loginQuery['redirect_params'], $redirectParams);
+
+        Http::fake([
+            'https://api.kite.trade/session/token' => Http::response([
+                'status' => 'success',
+                'data' => ['access_token' => 'one-use-token', 'user_id' => 'AB1234'],
+            ]),
+        ]);
+        $callback = '/api/v1/broker/kite/callback?'.http_build_query([
+            'status' => 'success',
+            'request_token' => 'one-time-request-token',
+            'state' => $redirectParams['state'],
+        ]);
+
+        $this->get($callback)->assertRedirect('https://www.lidoalexion.com/portfolio/settings/account?kite=connected');
+        $this->get($callback)->assertRedirect('https://www.lidoalexion.com/portfolio/settings/account?kite=failed');
+
+        Http::assertSentCount(1);
+        $this->assertDatabaseCount('portfolio_broker_connections', 1);
+    }
+
     public function test_dashboard_login_state_returns_to_dashboard_after_connect(): void
     {
         $user = User::factory()->create();

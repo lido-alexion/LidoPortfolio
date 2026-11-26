@@ -4,9 +4,11 @@ import { useAuth } from '../context/AuthContext';
 import { saveRedirectPath } from '../auth/redirect';
 import { appUrl } from '../appBase';
 import { getApiErrorMessage } from '../api';
+import { getAuthSessionContext } from '../auth/sessionContext';
 
 export default function LoginPage() {
     const { login, sessionExpired, consumeRedirectPath } = useAuth();
+    const adminContext = getAuthSessionContext() === 'admin';
     const navigate = useNavigate();
     const { pathname, search } = useLocation();
     const [form, setForm] = useState({ email: '', password: '', remember: true });
@@ -14,7 +16,11 @@ export default function LoginPage() {
     const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
-        const path = `${pathname}${search || ''}`;
+        const query = new URLSearchParams(search || '');
+        query.delete('auth_context');
+        const queryString = query.toString();
+        const path = `${pathname}${queryString ? `?${queryString}` : ''}`;
+        if (pathname === '/login' && !queryString) return;
         if (
             path
             && path !== '/'
@@ -60,6 +66,7 @@ export default function LoginPage() {
             <div className="login-card shadow p-4">
                 <p className="text-muted small text-center mb-4">Indian stock portfolio tracker</p>
                 <h2 className="h6 mb-3 text-center">Login</h2>
+                <p className="small text-muted text-center">{adminContext ? 'Administrator sign-in' : 'Investor sign-in'}</p>
                 {sessionExpired && (
                     <div className="alert alert-warning py-2">
                         Your session expired. Please sign in again.
@@ -110,6 +117,11 @@ export default function LoginPage() {
                 <p className="text-muted small mt-3 mb-0 text-center">
                     New accounts are invite-only.
                     <Link to="/request-account" className="ms-1">Request an account</Link>
+                </p>
+                <p className="text-center mt-2 mb-0">
+                    <a className="small" href={`/login?auth_context=${adminContext ? 'investor' : 'admin'}`}>
+                        {adminContext ? 'Investor sign-in' : 'Administrator sign-in'}
+                    </a>
                 </p>
                 <p className="text-center mt-2 mb-0">
                     <a href={appUrl('/docs/index.html')} className="small">

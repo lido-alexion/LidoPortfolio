@@ -146,7 +146,7 @@
         <h2>Concepts</h2>
         <dl class="doc-list">
         <dt>Session auth</dt>
-        <dd>Sign-in uses Sanctum SPA cookies, not bearer tokens in localStorage.</dd>
+        <dd>Sign-in uses Sanctum SPA cookies, not bearer tokens in localStorage. Administrator and investor tabs select independent sessions with X-Stox-Auth-Context; choose Administrator sign-in from the login screen.</dd>
 
         <dt>Credential-change sessions</dt>
         <dd>A successful password change revokes other browser sessions and invalidates remember-me cookies on other devices (PD-006).</dd>

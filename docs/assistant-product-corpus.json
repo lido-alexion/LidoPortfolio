@@ -4420,7 +4420,7 @@
     "title": "Profile",
     "path": "app/resources/js/src/data/appDocumentation.js",
     "section": "Session auth",
-    "snippet": "Sign-in uses Sanctum SPA cookies, not bearer tokens in localStorage.",
+    "snippet": "Sign-in uses Sanctum SPA cookies, not bearer tokens in localStorage. Administrator and investor tabs select independent sessions with X-Stox-Auth-Context; choose Administrator sign-in from the login screen.",
     "url": "/docs/profile.html"
   },
   {

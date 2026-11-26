@@ -10,7 +10,8 @@ import React, {
 import api from '../api';
 import { ensureCsrfCookie, resetCsrfCookie } from '../auth/csrf';
 import { consumeRedirectPath, saveRedirectPath } from '../auth/redirect';
-import { clearAllDashboardCaches } from '../utils/dashboardCache';
+import { clearDashboardCachesForUser } from '../utils/dashboardCache';
+import { setAuthSessionUserId } from '../auth/sessionContext';
 
 const AuthContext = createContext(null);
 
@@ -19,20 +20,34 @@ export function AuthProvider({ children }) {
     const [loading, setLoading] = useState(true);
     const [sessionExpired, setSessionExpired] = useState(false);
     const userRef = useRef(null);
-
-    useEffect(() => {
-        userRef.current = user;
-    }, [user]);
+    const identityGeneration = useRef(0);
+    userRef.current = user;
 
     const refreshUser = useCallback(async () => {
+        const generation = identityGeneration.current;
         try {
             const res = await api.get('/auth/me');
-            setUser(res.data.user || null);
+            if (generation !== identityGeneration.current) return null;
+            const observedUser = res.data.user || null;
+            const previousUserId = userRef.current?.id;
+            if (previousUserId != null && String(observedUser?.id ?? '') !== String(previousUserId)) {
+                // The shared role cookie was replaced in another tab. Do not
+                // adopt that principal into this tab's existing page state.
+                identityGeneration.current += 1;
+                setUser(null);
+                setAuthSessionUserId(null);
+                setSessionExpired(true);
+                return null;
+            }
+            setUser(observedUser);
+            setAuthSessionUserId(observedUser?.id);
             setSessionExpired(false);
-            return res.data.user;
+            return observedUser;
         } catch (error) {
+            if (generation !== identityGeneration.current) return null;
             if (error?.response?.status === 401) {
                 setUser(null);
+                setAuthSessionUserId(null);
             }
             return null;
         }
@@ -56,6 +71,8 @@ export function AuthProvider({ children }) {
         })();
 
         const onUnauthorized = () => {
+            identityGeneration.current += 1;
+            setAuthSessionUserId(null);
             const wasLoggedIn = Boolean(userRef.current);
             setUser(null);
             if (wasLoggedIn) {
@@ -73,6 +90,7 @@ export function AuthProvider({ children }) {
     }, [refreshUser]);
 
     const login = useCallback(async ({ email, password, remember = false }) => {
+        identityGeneration.current += 1;
         setSessionExpired(false);
 
         const attempt = async () => {
@@ -82,13 +100,17 @@ export function AuthProvider({ children }) {
 
         try {
             const res = await attempt();
+            identityGeneration.current += 1;
             setUser(res.data.user);
+            setAuthSessionUserId(res.data.user?.id);
             return res.data.user;
         } catch (error) {
             if (error?.response?.status === 419) {
                 resetCsrfCookie();
                 const res = await attempt();
+                identityGeneration.current += 1;
                 setUser(res.data.user);
+                setAuthSessionUserId(res.data.user?.id);
                 return res.data.user;
             }
             throw error;
@@ -100,6 +122,8 @@ export function AuthProvider({ children }) {
     }, []);
 
     const logout = useCallback(async () => {
+        identityGeneration.current += 1;
+        const previousUserId = userRef.current?.id;
         try {
             await api.post('/auth/logout', {}, { skipErrorToast: true });
         } catch (error) {
@@ -109,7 +133,8 @@ export function AuthProvider({ children }) {
             }
         }
         resetCsrfCookie();
-        clearAllDashboardCaches();
+        clearDashboardCachesForUser(previousUserId);
+        setAuthSessionUserId(null);
         setUser(null);
         setSessionExpired(false);
         return true;

@@ -22,6 +22,8 @@ Base URL: `/api`
 
 Uses Laravel Sanctum SPA mode. Browser must send cookies (`credentials: include`). Call `GET /sanctum/csrf-cookie` before login.
 
+Browser requests select a session with `X-Stox-Auth-Context: investor` or `X-Stox-Auth-Context: admin`. Omit it for the existing investor/native login context. The admin context uses its own HttpOnly session and remember-me cookies; role mismatch fails closed. Send the selected context on `/sanctum/csrf-cookie`, `/api/auth/csrf-token`, login, API calls, and logout. The SPA exposes the admin entry from Login as **Administrator sign-in** (`/login?auth_context=admin`).
+
 - `POST /auth/login` — body: `email`, `password`, optional `remember`. If email has a pending invite, returns `422` with `invite_setup_required: true` and `invite_token` (redirect user to `/invite/{token}`).
 - `POST /auth/logout` (session)
 - `GET /auth/me` (session) — includes `user.is_admin` (boolean) and `user.default_portfolio_id`
@@ -34,7 +36,7 @@ Portfolio-scoped endpoints (transactions, holdings, dashboard, alerts, settings 
 - Query `portfolio_id` (optional alternative)
 - If omitted, the user's **default** portfolio is used (`portfolio_profiles.is_default`)
 
-Active portfolio is **per browser tab** on the SPA (`sessionStorage` key `portfolio_active_id`); Laravel session cookies are shared across tabs, so the server does not store active portfolio in session.
+Active portfolio is **per browser tab** on the SPA (`sessionStorage` key `portfolio_active_id`); the server does not store active portfolio in either authentication session. Existing `X-Profile-Id` selection and server-side portfolio ownership checks remain in force.
 
 ### Portfolios (user-scoped)
 

@@ -49,6 +49,21 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        \Illuminate\Support\Facades\Auth::extend('contextual-session', function ($app, string $name, array $config) {
+            $guard = new \App\Auth\ContextualSessionGuard(
+                $name,
+                \Illuminate\Support\Facades\Auth::createUserProvider($config['provider'] ?? null),
+                $app['session.store'],
+                rehashOnLogin: $app['config']->get('hashing.rehash_on_login', true),
+                timeboxDuration: $app['config']->get('auth.timebox_duration', 200000),
+                hashKey: $app['config']->get('app.key'),
+            );
+            $guard->setCookieJar($app['cookie']);
+            $guard->setDispatcher($app['events']);
+            $guard->setRequest($app->refresh('request', $guard, 'setRequest'));
+
+            return $guard;
+        });
         $this->app->bind(\App\Services\Fundamentals\Scheduling\BootstrapScheduleLaunchAdapter::class,
             \App\Services\Fundamentals\Scheduling\CanonicalBootstrapScheduleLaunchAdapter::class);
         $this->app->bind(\App\Services\Fundamentals\Scheduling\BootstrapEligibleStockResolver::class, function ($app) {

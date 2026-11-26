@@ -1822,7 +1822,7 @@ const APP_DOCUMENTATION_BASE = [
             },
         ],
         concepts: [
-            { name: 'Session auth', description: 'Sign-in uses Sanctum SPA cookies, not bearer tokens in localStorage.' },
+            { name: 'Session auth', description: 'Sign-in uses Sanctum SPA cookies, not bearer tokens in localStorage. Administrator and investor tabs select independent sessions with X-Stox-Auth-Context; choose Administrator sign-in from the login screen.' },
             {
                 name: 'Credential-change sessions',
                 description:

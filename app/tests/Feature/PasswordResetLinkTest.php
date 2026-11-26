@@ -33,7 +33,7 @@ class PasswordResetLinkTest extends TestCase
         $user->is_admin = true;
         $user->save();
 
-        $this->postJson('/api/auth/login', [
+        $this->withHeader('X-Stox-Auth-Context', 'admin')->postJson('/api/auth/login', [
             'email' => $user->email,
             'password' => 'password123',
         ])->assertOk();
@@ -97,7 +97,7 @@ class PasswordResetLinkTest extends TestCase
             ->assertJsonPath('valid', true)
             ->assertJsonPath('data.email', $member->email);
 
-        $this->postJson('/api/reset-password/accept', [
+        $this->withHeader('X-Stox-Auth-Context', 'investor')->postJson('/api/reset-password/accept', [
             'token' => $token,
             'password' => 'new-password-1',
             'password_confirmation' => 'new-password-1',
@@ -110,6 +110,25 @@ class PasswordResetLinkTest extends TestCase
         $this->assertNotNull(
             PasswordResetLink::query()->where('user_id', $member->id)->value('used_at')
         );
+    }
+
+    public function test_password_reset_rejects_a_mismatched_context_before_changing_credentials(): void
+    {
+        $this->makeAdmin();
+        $member = $this->makeMember();
+        $link = $this->postJson('/api/password-reset-links', ['user_id' => $member->id])
+            ->assertCreated()->json('data');
+        $token = Str::afterLast($link['reset_url'], '/reset-password/');
+        $this->postJson('/api/auth/logout')->assertOk();
+
+        $this->withHeader('X-Stox-Auth-Context', 'admin')->postJson('/api/reset-password/accept', [
+            'token' => $token,
+            'password' => 'new-password-1',
+            'password_confirmation' => 'new-password-1',
+        ])->assertForbidden();
+
+        $this->assertTrue(Hash::check('old-password', $member->fresh()->password));
+        $this->assertDatabaseHas('portfolio_password_reset_links', ['token' => $token, 'used_at' => null]);
     }
 
     public function test_expired_reset_link_is_removed_on_access(): void
@@ -184,7 +203,7 @@ class PasswordResetLinkTest extends TestCase
 
         $this->postJson('/api/auth/logout')->assertOk();
 
-        $accept = $this->postJson('/api/reset-password/accept', [
+        $accept = $this->withHeader('X-Stox-Auth-Context', 'investor')->postJson('/api/reset-password/accept', [
             'token' => $token,
             'password' => 'new-password-1',
             'password_confirmation' => 'new-password-1',

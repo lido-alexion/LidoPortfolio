@@ -218,7 +218,7 @@ export async function installInvestorWorkflowApiMocks(page, options = {}) {
             return json(route, { user: options.user ?? TEST_USER });
         }
         if (path.endsWith('/api/portfolios') && method === 'GET') {
-            return json(route, { data: [TEST_PORTFOLIO] });
+            return json(route, { data: options.portfolios ?? [TEST_PORTFOLIO] });
         }
         if (path.endsWith('/api/holdings') && method === 'GET') {
             return json(route, { data: [] });

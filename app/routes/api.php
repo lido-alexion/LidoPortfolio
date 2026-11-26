@@ -114,6 +114,7 @@ use App\Http\Controllers\Api\WatchlistsController;
 use App\Http\Controllers\Api\WikiExportController;
 use App\Http\Controllers\Api\WikiPageController;
 use App\Http\Controllers\Api\WikiShareController;
+use App\Http\Middleware\EnsureAuthSessionRole;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -141,7 +142,7 @@ Route::get('/auth/me', [AuthController::class, 'me']);
 Route::get('/auth/csrf-token', [AuthController::class, 'csrfToken']);
 Route::get('/build-info', [BuildInfoController::class, 'show']);
 Route::post('/help-feedback', [HelpFeedbackController::class, 'store'])
-    ->middleware('auth:sanctum')->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class);
+    ->middleware(['auth:sanctum', EnsureAuthSessionRole::class])->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class);
 Route::post('/telemetry/otlp/v1/traces', [\App\Http\Controllers\Api\LidoTelemetryController::class, 'relayTraces'])
     ->middleware('throttle:telemetry-relay');
 
@@ -157,13 +158,13 @@ Route::prefix('internal/v1/ai-runtime')->middleware('ai.runtime.internal')->grou
 });
 // AI-002 private gateway and authenticated run controls deliberately avoid lazy profile initialization.
 Route::post('/internal/v1/ai-tools/call', [\App\Http\Controllers\Api\AiAgentController::class, 'gateway'])->middleware('ai.runtime.internal')->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class);
-Route::prefix('ai/insights')->middleware(['auth:sanctum', 'token.scope:portfolio:read', 'throttle:20,1'])->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class)->group(function () {
+Route::prefix('ai/insights')->middleware(['auth:sanctum', EnsureAuthSessionRole::class, 'token.scope:portfolio:read', 'throttle:20,1'])->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class)->group(function () {
     Route::post('/stocks/{stock}', [\App\Http\Controllers\Api\EmbeddedAiController::class, 'stock']);
     Route::post('/strategy', [\App\Http\Controllers\Api\EmbeddedAiController::class, 'strategy']);
     Route::post('/strategy/draft', [\App\Http\Controllers\Api\EmbeddedAiController::class, 'draft'])->middleware('token.scope:portfolio:write');
 });
 
-Route::prefix('ai/assistant/runs')->middleware(['auth:sanctum', 'token.scope:portfolio:read'])->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class)->group(function () {
+Route::prefix('ai/assistant/runs')->middleware(['auth:sanctum', EnsureAuthSessionRole::class, 'token.scope:portfolio:read'])->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class)->group(function () {
     $controller = \App\Http\Controllers\Api\AiAgentController::class;
     Route::get('/', [$controller, 'index']);
     Route::post('/', [$controller, 'store']);
@@ -179,7 +180,7 @@ Route::get('/wiki/shared/{token}/images/{image}', [WikiShareController::class, '
 // session cookie. A short-lived encrypted state binds it to the initiating user.
 Route::get('/v1/broker/kite/callback', [TradingOsBrokerController::class, 'kiteCallback']);
 
-Route::middleware('auth:sanctum')->prefix('notification-center')->group(function () {
+Route::middleware(['auth:sanctum', EnsureAuthSessionRole::class])->prefix('notification-center')->group(function () {
     Route::get('/', [NotificationCenterController::class, 'index']);
     Route::post('/mark-all-read', [NotificationCenterController::class, 'markAllRead']);
     Route::post('/{notification}/deliveries/{delivery}/retry', [NotificationCenterController::class, 'retryDelivery'])
@@ -189,7 +190,7 @@ Route::middleware('auth:sanctum')->prefix('notification-center')->group(function
     Route::post('/{notification}/unread', [NotificationCenterController::class, 'markUnread'])->whereNumber('notification');
 });
 
-Route::middleware('auth:sanctum')->prefix('notification-settings')->group(function () {
+Route::middleware(['auth:sanctum', EnsureAuthSessionRole::class])->prefix('notification-settings')->group(function () {
     Route::get('/', [NotificationSettingsController::class, 'index']);
     Route::put('/optional-emails', [NotificationSettingsController::class, 'updateOptionalEmailPreferences']);
     Route::get('/email-destinations', [NotificationSettingsController::class, 'emailDestinations']);
@@ -206,16 +207,16 @@ Route::get('/notification-settings/email-destinations/{destination}/verify', [No
     ->name('notification.email.verify');
 
 // Temporary own-user testing actions; no portfolio or elevated capabilities.
-Route::prefix('developer-options')->middleware('auth:sanctum')
+Route::prefix('developer-options')->middleware(['auth:sanctum', EnsureAuthSessionRole::class])
     ->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class)->group(function () {
         Route::post('/guided-tour/reset', [DeveloperOptionsController::class, 'resetGuidedTour']);
     });
 
 Route::post('/ops/browser-errors', [BrowserErrorReportController::class, 'store'])
-    ->middleware(['auth:sanctum', 'throttle:browser-error-report'])
+    ->middleware(['auth:sanctum', EnsureAuthSessionRole::class, 'throttle:browser-error-report'])
     ->withoutMiddleware(\App\Http\Middleware\ResolveActivePortfolio::class);
 
-Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
+Route::middleware(['auth:sanctum', EnsureAuthSessionRole::class, 'active.portfolio'])->group(function () {
     Route::post('/ai/assistant/feedback', [AiAssistantStreamController::class, 'feedback'])->middleware('throttle:20,1');
     Route::post('/ai/assistant/stream', [AiAssistantStreamController::class, 'stream'])->middleware('throttle:20,1');
     Route::post('/logs/frontend', [FrontendLogController::class, 'store']);
@@ -566,7 +567,7 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
 | Additive /api/v1 surface; legacy /api/* routes above are unchanged.
 | Auth: Sanctum session (existing SPA) rather than JWT.
 */
-Route::prefix('v1')->middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
+Route::prefix('v1')->middleware(['auth:sanctum', EnsureAuthSessionRole::class, 'active.portfolio'])->group(function () {
     Route::get('/stock-details/combo-chart-preference', [ComboChartPreferenceController::class, 'show']);
     Route::put('/stock-details/combo-chart-preference', [ComboChartPreferenceController::class, 'update']);
     Route::get('/securities', [TradingOsDataController::class, 'securities']);

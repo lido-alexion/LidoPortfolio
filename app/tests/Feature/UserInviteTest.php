@@ -34,7 +34,7 @@ class UserInviteTest extends TestCase
         $user->is_admin = true;
         $user->save();
 
-        $this->postJson('/api/auth/login', [
+        $this->withHeader('X-Stox-Auth-Context', 'admin')->postJson('/api/auth/login', [
             'email' => $user->email,
             'password' => 'password123',
         ])->assertOk();
@@ -123,7 +123,7 @@ class UserInviteTest extends TestCase
             ->assertJsonPath('data.email', Str::lower($email))
             ->assertJsonMissing(['token']);
 
-        $accept = $this->postJson('/api/invites/accept', [
+        $accept = $this->withHeader('X-Stox-Auth-Context', 'investor')->postJson('/api/invites/accept', [
             'token' => $token,
             'name' => 'Invited User',
             'password' => 'password123',
@@ -158,7 +158,7 @@ class UserInviteTest extends TestCase
 
         $this->getJson('/api/invites/'.Str::random(64))->assertStatus(410);
 
-        $this->postJson('/api/invites/accept', [
+        $this->withHeader('X-Stox-Auth-Context', 'investor')->postJson('/api/invites/accept', [
             'token' => $token,
             'name' => 'First',
             'password' => 'password123',
@@ -172,6 +172,25 @@ class UserInviteTest extends TestCase
             'password' => 'password123',
             'password_confirmation' => 'password123',
         ])->assertUnprocessable();
+    }
+
+    public function test_admin_context_cannot_accept_an_investor_invitation(): void
+    {
+        $this->makeAdmin();
+        $email = 'context-'.Str::random(8).'@example.com';
+        $invite = $this->postJson('/api/invites', ['email' => $email])->assertCreated()->json('data');
+        $token = $this->rawTokenFromCreatePayload($invite);
+        $this->postJson('/api/auth/logout')->assertOk();
+
+        $this->withHeader('X-Stox-Auth-Context', 'admin')->postJson('/api/invites/accept', [
+            'token' => $token,
+            'name' => 'Invited User',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ])->assertForbidden();
+
+        $this->assertDatabaseMissing('portfolio_users', ['email' => $email]);
+        $this->assertDatabaseHas('portfolio_user_invites', ['email' => Str::lower($email), 'accepted_at' => null]);
     }
 
     public function test_expired_invite_is_removed_on_access(): void
@@ -249,7 +268,7 @@ class UserInviteTest extends TestCase
             'email' => 'user2-'.Str::random(8).'@example.com',
             'password' => Hash::make('password123'),
         ]);
-        $this->postJson('/api/auth/login', [
+        $this->withHeader('X-Stox-Auth-Context', 'investor')->postJson('/api/auth/login', [
             'email' => $user->email,
             'password' => 'password123',
         ])->assertOk();

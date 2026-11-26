@@ -37,7 +37,7 @@ class PasswordResetLinkService
         $this->purgeExpired();
 
         $link = PasswordResetLink::query()
-            ->with('user:id,name,email')
+            ->with('user:id,name,email,is_admin')
             ->where('token', $token)
             ->first();
 
