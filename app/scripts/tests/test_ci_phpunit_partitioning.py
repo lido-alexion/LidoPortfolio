@@ -20,9 +20,11 @@ partitioner_spec.loader.exec_module(partitioner)
 PHPUNIT_NAMESPACE = partitioner.PHPUNIT_NAMESPACE
 TestFile = partitioner.TestFile
 _run_batch = partitioner._run_batch
+case_outcomes = partitioner.case_outcomes
 load_inventory = partitioner.load_inventory
 partition_inventory = partitioner.partition_inventory
 run_partitioned = partitioner.run_partitioned
+validate_case_outcomes = partitioner.validate_case_outcomes
 
 
 class PhpunitPartitioningTests(unittest.TestCase):
@@ -133,27 +135,68 @@ class PhpunitPartitioningTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "single test file exceeds"):
                 partition_inventory([test_file], max_cases=3)
 
-    def test_success_requires_exact_finished_case_inventory(self):
+    def test_success_requires_exact_terminal_outcome_inventory(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             test_file = self.make_test_file(root / "app" / "tests", "Unit", "One", ["Tests\\Unit\\OneTest::test_one"])
             event_path = root / "events.txt"
 
-            def fake_run(command, cwd, check):
-                event_path.write_text("Test Finished (Tests\\Unit\\OneTest::test_one)\n")
-                return SimpleNamespace(returncode=0, stdout=None, stderr=None)
+            def check_events(events: str, expected_optional_skips: set[str] | None = None) -> int:
+                def fake_run(command, cwd, check):
+                    event_path.write_text(events)
+                    return SimpleNamespace(returncode=0, stdout=None, stderr=None)
 
-            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                status = _run_batch([test_file], 1, 1, event_path, root / "app", run=fake_run, time_binary="fake-time")
-            self.assertEqual(status, 0)
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    return _run_batch(
+                        [test_file], 1, 1, event_path, root / "app",
+                        run=fake_run, time_binary="fake-time",
+                        expected_optional_skips=expected_optional_skips or set(),
+                    )
 
-            def missing_event(command, cwd, check):
-                event_path.write_text("Test Prepared (Tests\\Unit\\OneTest::test_one)\n")
-                return SimpleNamespace(returncode=0, stdout=None, stderr=None)
+            case_id = "Tests\\Unit\\OneTest::test_one"
+            finished = f"Test Finished ({case_id})\n"
+            skipped = f"Test Skipped ({case_id})\n"
+            self.assertEqual(check_events(finished), 0)
+            self.assertEqual(check_events(skipped, {case_id}), 0)  # Skip from setUp: no Test Finished event.
+            self.assertEqual(check_events(skipped + finished, {case_id}), 0)  # Runtime skip emits both events.
+            self.assertEqual(check_events(skipped), 1)  # New skips require an explicit CI policy entry.
+            self.assertEqual(check_events(f"Test Prepared ({case_id})\n"), 1)
+            self.assertEqual(check_events(finished + finished), 1)
+            self.assertEqual(check_events(finished + f"Test Finished ({case_id}-unexpected)\n"), 1)
+            self.assertEqual(check_events(f"Test Errored ({case_id})\n"), 1)
 
-            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                status = _run_batch([test_file], 1, 1, event_path, root / "app", run=missing_event, time_binary="fake-time")
-            self.assertEqual(status, 1)
+    def test_terminal_outcome_parser_rejects_invalid_skip_lifecycle_sequences(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            event_path = Path(temporary) / "events.txt"
+            case_id = "Tests\\Feature\\FixtureTest::test_skip"
+            event_path.write_text(
+                f"Test Skipped ({case_id})\n"
+                f"Test Finished ({case_id})\n"
+                f"Test Errored ({case_id})\n"
+            )
+            outcomes = case_outcomes(event_path)
+            self.assertEqual(outcomes[case_id], ["Skipped", "Finished", "Errored"])
+            expected_skips = {case_id}
+            self.assertTrue(validate_case_outcomes([case_id], outcomes, expected_skips))
+            self.assertTrue(validate_case_outcomes([case_id, "Tests\\Feature\\Other::test_missing"], outcomes, expected_skips))
+            self.assertTrue(validate_case_outcomes(
+                [case_id],
+                {**outcomes, "Tests\\Feature\\Other::test_extra": ["Finished"]},
+                expected_skips,
+            ))
+
+    def test_failure_incomplete_and_risky_events_are_not_terminal_successes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            event_path = Path(temporary) / "events.txt"
+            event_types = ["Failed", "Errored", "Marked Incomplete", "Considered Risky"]
+            case_ids = [f"Tests\\Feature\\FixtureTest::test_{index}" for index in range(len(event_types))]
+            event_path.write_text("".join(
+                f"Test {event} ({case_id})\n"
+                for event, case_id in zip(event_types, case_ids, strict=True)
+            ))
+            outcomes = case_outcomes(event_path)
+            self.assertEqual([outcomes[case_id][0] for case_id in case_ids], event_types)
+            self.assertTrue(validate_case_outcomes(case_ids, outcomes, set()))
 
 
 if __name__ == "__main__":

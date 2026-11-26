@@ -16,6 +16,16 @@ Both test classes extended bare `PHPUnit\Framework\TestCase` despite calling Lar
 
 The remaining partition 3 was not replayed locally: its inventory includes migration-backed `RefreshDatabase` tests and other integration-shaped tests, so running the complete batch with SQLite would not match hosted MySQL CI and could fail for dialect reasons. Its hosted low RSS and two deterministic test-bootstrap errors do not support an OOM diagnosis. The PHP-process partitioning remains a mitigation for the earlier termination pattern, not a proven root-cause correction; hosted CI on the reviewed candidate is still required.
 
+## Terminal skip accounting
+
+Hosted run `45738127955`, job `139636270178`, verified partitions 1–9. In partition 10, PHPUnit itself exited 0 after 295 tests and 2,800 assertions, including one skip, at 202,588 KiB maximum RSS. The verifier rejected the batch because it expected 295 `Test Finished` events and observed 294. The missing finish belonged to `Tests\Feature\V8\MlBoundedTrainingCampaignTest::test_real_adapter_campaign_completes_each_horizon_with_persisted_evidence`.
+
+The backend workflow does not install or configure `STOXLA_ML_TEST_PYTHON`; `MlBoundedTrainingCampaignTest::setUp()` therefore intentionally skips that optional real-adapter campaign. The existing `ml-production-acceptance.md` records the bounded real-adapter campaign as an optional, separate run, and the implementation ledger records it with a matching external runtime. Canonical backend CI does not require that runtime, so no CI dependency or execution policy was changed.
+
+With PHPUnit 12.5.28, a skip raised in `setUp()` emits `Test Skipped (case-id)` and no `Test Finished`; a skip raised in the test method emits `Test Skipped` followed by `Test Finished`. A passing test emits only `Test Finished`. The verifier now accepts only those exact successful terminal sequences, after requiring PHPUnit exit 0. It still rejects missing/aborted cases, unexpected IDs, duplicate or out-of-order terminal events, and failure/error/incomplete/risky outcomes. Only the existing optional Vite-manifest and bounded real-adapter ML cases are allowlisted to skip under canonical backend CI; PHPUnit-only skip fixtures and any newly skipped test fail inventory verification until the skip policy is deliberately reviewed. Skip events are counted and reported; they do not alter the discovered inventory or permit a nonzero PHPUnit run.
+
+The exact ML campaign test was run in isolation with `STOXLA_ML_TEST_PYTHON` unset and the same local empty DB config stub/SQLite `:memory:` setup. Its actual event stream showed the expected setUp skip and teardown completion. Synthetic lifecycle fixtures separately confirmed the in-method skip sequence. The complete partition 10 and partition 11 have not been replayed locally; the canonical hosted MySQL job must verify the updated accounting and still reach/pass partition 11.
+
 ## Partition and inventory contract
 
 The hosted runner asks PHPUnit for its XML test inventory before running tests. That inventory includes concrete data-provider cases. The runner:
@@ -24,7 +34,7 @@ The hosted runner asks PHPUnit for its XML test inventory before running tests. 
 - preserves PHPUnit discovery order and groups whole files into sequential batches of at most 300 cases, without mixing suites;
 - runs each batch with the normal PHPUnit configuration and full assertions, with no filter or skip;
 - records per-process resource usage and PHPUnit events;
-- requires each successful batch's `Test Finished` event IDs to match its discovered inventory exactly; and
+- requires each successful batch to report exactly one accepted terminal outcome for every discovered case (normal completion or an explicitly allowlisted optional skip); and
 - stops and returns the first nonzero PHPUnit status, printing the final events for diagnosis.
 
 The current inventory contains 2,919 cases across 464 test files and produces 11 batches (three Unit and eight Feature). The runner recalculates these from the checked-out PHPUnit configuration each run; it does not keep a static test list.

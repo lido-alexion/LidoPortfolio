@@ -3,10 +3,10 @@
 
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import dataclass
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -109,15 +109,58 @@ def partition_inventory(files: list[TestFile], max_cases: int = MAX_CASES_PER_PR
     return batches
 
 
-def finished_case_ids(event_log: Path) -> list[str]:
-    prefix = "Test Finished ("
-    ids = []
+CASE_EVENT = re.compile(r"^Test (Finished|Skipped|Failed|Errored|Marked Incomplete|Considered Risky|Risky) \((.+)\)$")
+EXPECTED_OPTIONAL_SKIP_CASES = {
+    "Tests\\Unit\\ViteAssetPathTest::test_vite_entry_urls_are_root_relative_for_subdirectory_deploy",
+    "Tests\\Feature\\V8\\MlBoundedTrainingCampaignTest::test_real_adapter_campaign_completes_each_horizon_with_persisted_evidence",
+}
+
+
+def case_outcomes(event_log: Path) -> dict[str, list[str]]:
+    """Collect PHPUnit's terminal lifecycle events for each case."""
+    outcomes: dict[str, list[str]] = {}
     if not event_log.is_file():
-        return ids
+        return outcomes
     for line in event_log.read_text(errors="replace").splitlines():
-        if line.startswith(prefix) and line.endswith(")"):
-            ids.append(line[len(prefix):-1])
-    return ids
+        match = CASE_EVENT.fullmatch(line)
+        if match:
+            event, case_id = match.groups()
+            outcomes.setdefault(case_id, []).append(event)
+    return outcomes
+
+
+def validate_case_outcomes(
+    expected: list[str],
+    outcomes: dict[str, list[str]],
+    expected_optional_skips: set[str],
+) -> list[str]:
+    """Require one complete, successful PHPUnit lifecycle for every inventory case."""
+    expected_ids = set(expected)
+    actual_ids = set(outcomes)
+    missing = sorted(expected_ids - actual_ids)
+    unexpected = sorted(actual_ids - expected_ids)
+    invalid = []
+    for case_id, events in outcomes.items():
+        if case_id not in expected_ids:
+            continue
+        sequence = tuple(events)
+        if sequence == ("Finished",):
+            continue
+        if case_id in expected_optional_skips and sequence in {
+            ("Skipped",),
+            ("Skipped", "Finished"),
+        }:
+            continue
+        invalid.append((case_id, sequence))
+    invalid.sort()
+    issues = []
+    if missing:
+        issues.append(f"missing={missing[:10]}")
+    if unexpected:
+        issues.append(f"unexpected={unexpected[:10]}")
+    if invalid:
+        issues.append(f"invalid_terminal_sequences={invalid[:10]}")
+    return issues
 
 
 def _emit_captured(result: subprocess.CompletedProcess[str]) -> None:
@@ -135,6 +178,7 @@ def _run_batch(
     app_dir: Path,
     run=subprocess.run,
     time_binary: str = "/usr/bin/time",
+    expected_optional_skips: set[str] = EXPECTED_OPTIONAL_SKIP_CASES,
 ) -> int:
     expected = [case_id for test_file in batch for case_id in test_file.case_ids]
     command = [
@@ -163,20 +207,21 @@ def _run_batch(
             print("\n".join(lines[-100:]), file=sys.stderr)
         return result.returncode
 
-    actual = finished_case_ids(event_log)
-    expected_counts = Counter(expected)
-    actual_counts = Counter(actual)
-    if actual_counts != expected_counts:
-        missing = list((expected_counts - actual_counts).elements())
-        unexpected = list((actual_counts - expected_counts).elements())
+    outcomes = case_outcomes(event_log)
+    issues = validate_case_outcomes(expected, outcomes, expected_optional_skips)
+    if issues:
         print(
-            f"PHPUnit partition {index}/{total} inventory mismatch: "
-            f"expected_finished={len(expected)} actual_finished={len(actual)} "
-            f"missing={missing[:10]} unexpected={unexpected[:10]}",
+            f"PHPUnit partition {index}/{total} terminal outcome inventory mismatch: "
+            f"expected_cases={len(expected)} observed_cases={len(outcomes)} "
+            + " ".join(issues),
             file=sys.stderr,
         )
         return 1
-    print(f"PHPUnit partition {index}/{total}: inventory verified ({len(actual)} finished cases)")
+    skipped = sum("Skipped" in events for events in outcomes.values())
+    print(
+        f"PHPUnit partition {index}/{total}: inventory verified "
+        f"({len(outcomes)} terminal cases, {skipped} skipped)"
+    )
     return 0
 
 
