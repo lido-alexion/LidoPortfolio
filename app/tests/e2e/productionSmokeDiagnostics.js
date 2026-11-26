@@ -46,6 +46,8 @@ const AUTHENTICATED_SMOKE_STAGES = new Set([
     'dashboard_kite_menu',
     'dashboard_kite_menu_ready',
     'dashboard_kite_menu_open',
+    'dashboard_kite_menu_click_timeout',
+    'dashboard_kite_menu_click_error',
     'dashboard_kite_menu_expanded',
     'dashboard_kite_menu_items',
     'dashboard_kite_menu_close',
@@ -57,6 +59,15 @@ const AUTHENTICATED_SMOKE_STAGES = new Set([
 // Only fixed labels may cross the production-smoke logging boundary.
 export function safeAuthenticatedSmokeStage(stage) {
     return AUTHENTICATED_SMOKE_STAGES.has(stage) ? stage : 'unknown';
+}
+
+/** Parse one fixed, redacted Kite-menu click diagnostic; never return raw child output. */
+export function readSafeKiteMenuClickDiagnostic(stdout) {
+    const lines = String(stdout).split(/\r?\n/);
+    const matches = lines.map(line => line.match(/^AUTHENTICATED_SMOKE_KITE_MENU_CLICK:(timeout|error);count=([01]);connected=([01]);visible=([01]);enabled=([01]);expanded=(true|false|unknown)$/)).filter(Boolean);
+    if (matches.length !== 1) return null;
+    const [, kind, count, connected, visible, enabled, expanded] = matches[0];
+    return { kind, count: count === '1', connected: connected === '1', visible: visible === '1', enabled: enabled === '1', expanded };
 }
 
 /** Parse only complete, fixed smoke outcome enums; never return child output. */

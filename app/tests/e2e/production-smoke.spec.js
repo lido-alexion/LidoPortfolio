@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { summarizeProductionSmokeBlocks } from './productionSmokePolicy.js';
-import { readSafeAuthenticatedSmokeMarkers } from './productionSmokeDiagnostics.js';
+import { readSafeAuthenticatedSmokeMarkers, readSafeKiteMenuClickDiagnostic } from './productionSmokeDiagnostics.js';
 const run = promisify(execFile);
 
 test('production smoke is available and non-destructive', async ({ page }) => {
@@ -49,6 +49,10 @@ test('dedicated smoke identity reports read-only feature eligibility honestly', 
     } catch (error) {
         const stage = String(error.stdout || '').match(/AUTHENTICATED_SMOKE_FAILED:([a-z_]+)/)?.[1] || diagnosticStage;
         const blocked = summarizeProductionSmokeBlocks(error.stdout);
-        throw new Error(`Authenticated production smoke failed at ${stage}${blocked.length ? ` (blocked categories: ${blocked.join(', ')})` : ''}; credentials and provider responses are omitted.`);
+        const click = readSafeKiteMenuClickDiagnostic(error.stdout || '');
+        const clickSummary = click
+            ? ` (menu click ${click.kind}; target ${click.count ? 'present' : 'missing'}, ${click.connected ? 'connected' : 'detached'}, ${click.visible ? 'visible' : 'not visible'}, ${click.enabled ? 'enabled' : 'disabled'}, expanded=${click.expanded})`
+            : '';
+        throw new Error(`Authenticated production smoke failed at ${stage}${clickSummary}${blocked.length ? ` (blocked categories: ${blocked.join(', ')})` : ''}; credentials and provider responses are omitted.`);
     }
 });
