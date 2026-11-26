@@ -39,6 +39,11 @@ if (($argv[1] ?? null) === 'expire-session') {
 
 foreach (['investor-a', 'investor-b', 'admin'] as $name) {
     $admin = $name === 'admin';
+    $displayName = match ($name) {
+        'investor-a' => 'Investor A',
+        'investor-b' => 'Investor B',
+        default => 'Admin',
+    };
     $user = User::query()->create([
         'name' => $name,
         'email' => $name.'@auth-e2e.example.test',
@@ -49,7 +54,7 @@ foreach (['investor-a', 'investor-b', 'admin'] as $name) {
     if (! $admin) {
         PortfolioProfile::query()->create([
             'user_id' => $user->id,
-            'name' => ucfirst($name).' Default',
+            'name' => $displayName.' Default',
             'is_default' => true,
             'portfolio_type' => PortfolioProfile::TYPE_PAPER,
             'simulation_state' => PortfolioProfile::SIMULATION_ACTIVE,
@@ -58,7 +63,7 @@ foreach (['investor-a', 'investor-b', 'admin'] as $name) {
         ]);
         PortfolioProfile::query()->create([
             'user_id' => $user->id,
-            'name' => ucfirst($name).' Secondary',
+            'name' => $displayName.' Secondary',
             'is_default' => false,
             'portfolio_type' => PortfolioProfile::TYPE_PAPER,
             'simulation_state' => PortfolioProfile::SIMULATION_ACTIVE,

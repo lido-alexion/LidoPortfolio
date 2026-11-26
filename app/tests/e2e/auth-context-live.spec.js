@@ -62,6 +62,10 @@ test('real cookie sessions, independent role contexts, CSRF writes and portfolio
 
     const investorList = await apiCall(tabA, '/api/portfolios', { user: investor.id });
     expect(investorList.status).toBe(200);
+    expect(investorList.body.data.map((portfolio) => portfolio.name)).toEqual([
+        'Investor A Default',
+        'Investor A Secondary',
+    ]);
     const ownedProfile = investorList.body.data[0].id;
     const secondOwnedProfile = investorList.body.data[1].id;
 
@@ -86,7 +90,7 @@ test('real cookie sessions, independent role contexts, CSRF writes and portfolio
     await expect(switcherA).toBeVisible();
     await expect(switcherB).toBeVisible();
     await switcherA.click();
-    await tabA.getByRole('button', { name: /Investor A Secondary/ }).click();
+    await tabA.locator('.lido-portfolio-menu').getByRole('button', { name: /Investor A Secondary/ }).click();
     await expect(switcherA).toContainText('Investor A Secondary');
     await expect(switcherB).toContainText('Investor A Default');
     await tabA.reload();
