@@ -1,6 +1,6 @@
 import { allowProductionSmokeRequest, createTransientWelcomeSkipGate, neutralizeProductionSmokeRequest, productionSmokeBlockReason, transientWelcomeSkipPayload } from './productionSmokePolicy.js';
 import { readOnlyReviewHeading } from './productionSmokeSelectors.js';
-import { createGuidedTourResponseCapture, readGuidedTourPayload, safeAuthenticatedSmokeStage, waitForPresetChartGeometry } from './productionSmokeDiagnostics.js';
+import { captureKiteMenuHitTest, createComboPreferenceLifecycleCapture, createGuidedTourResponseCapture, readGuidedTourPayload, safeAuthenticatedSmokeStage, waitForPresetChartGeometry } from './productionSmokeDiagnostics.js';
 
 let stage = 'configuration';
 let browser;
@@ -8,6 +8,8 @@ let statusResponseWatchdog;
 const blockedReasons = new Set();
 let kiteMenuClickDiagnostic = null;
 let kiteMenuCloseClickDiagnostic = null;
+let kiteHitTestDiagnostic = null;
+let comboPreferenceDiagnostic = null;
 try {
     const baseURL = process.env.STOX_E2E_BASE_URL;
     const email = process.env.STOX_SMOKE_EMAIL;
@@ -100,6 +102,7 @@ try {
     if (await resume.count()) throw new Error();
     stage = 'combo_navigation';
     const baseOrigin = new URL(baseURL).origin;
+    const preferenceCapture = createComboPreferenceLifecycleCapture(page, baseURL);
     const preferenceResponsePromise = page.waitForResponse(response => {
         try {
             const target = new URL(response.url());
@@ -110,9 +113,19 @@ try {
             return false;
         }
     });
-    await page.goto('/watchlist/TCS');
-    stage = 'combo_preference_response_wait';
-    const preferenceResponse = await preferenceResponsePromise;
+    // The waiter is armed before navigation; handle early rejection without changing its outcome.
+    preferenceResponsePromise.catch(() => {});
+    let preferenceResponse;
+    try {
+        await page.goto('/watchlist/TCS');
+        stage = 'combo_preference_response_wait';
+        preferenceResponse = await preferenceResponsePromise;
+    } catch (error) {
+        try { comboPreferenceDiagnostic = preferenceCapture.snapshot(); } catch { comboPreferenceDiagnostic = 'absent'; }
+        try { preferenceCapture.dispose(); } catch { /* Preserve the original navigation/response failure. */ }
+        throw error;
+    }
+    try { preferenceCapture.dispose(); } catch { /* Capture cleanup is diagnostic only. */ }
     stage = 'combo_preference_response_status';
     if (!preferenceResponse.ok()) throw new Error();
     stage = 'combo_preference_scope';
@@ -317,6 +330,11 @@ try {
             } catch (error) {
                 const kind = error?.name === 'TimeoutError' ? 'timeout' : 'error';
                 try {
+                    kiteHitTestDiagnostic = await captureKiteMenuHitTest(page);
+                } catch {
+                    kiteHitTestDiagnostic = { hit: 'unknown', overlay: 'unknown' };
+                }
+                try {
                     kiteMenuClickDiagnostic = await page.evaluate(() => {
                         const buttons = [...document.querySelectorAll('.lido-header .lido-kite-header-control button[aria-haspopup="menu"]')];
                         const button = buttons.length === 1 ? buttons[0] : null;
@@ -422,6 +440,8 @@ try {
         const d = kiteMenuClickDiagnostic;
         console.log(`AUTHENTICATED_SMOKE_KITE_MENU_CLICK:${stage === 'dashboard_kite_menu_click_timeout' ? 'timeout' : 'error'};count=${d.count ? '1' : '0'};connected=${d.connected ? '1' : '0'};visible=${d.visible ? '1' : '0'};enabled=${d.enabled ? '1' : '0'};expanded=${d.expanded}`);
     }
+    if (kiteHitTestDiagnostic) console.log(`AUTHENTICATED_SMOKE_KITE_HIT_TEST:${['target','descendant','other','none'].includes(kiteHitTestDiagnostic.hit) ? kiteHitTestDiagnostic.hit : 'unknown'};overlay=${['none','guided_tour'].includes(kiteHitTestDiagnostic.overlay) ? kiteHitTestDiagnostic.overlay : 'unknown'}`);
+    if (comboPreferenceDiagnostic) console.log(`AUTHENTICATED_SMOKE_COMBO_PREFERENCE:${comboPreferenceDiagnostic}`);
     if (kiteMenuCloseClickDiagnostic) {
         const d = kiteMenuCloseClickDiagnostic;
         console.log(`AUTHENTICATED_SMOKE_KITE_MENU_CLOSE_CLICK:${stage === 'dashboard_kite_menu_close_click_timeout' ? 'timeout' : 'error'};count=${d.count ? '1' : '0'};connected=${d.connected ? '1' : '0'};visible=${d.visible ? '1' : '0'};enabled=${d.enabled ? '1' : '0'};expanded=${d.expanded}`);
