@@ -21,12 +21,15 @@ abstract class TestCase extends BaseTestCase
      */
     public function actingAs(Authenticatable $user, $driver = null): static
     {
+        $context = (bool) ($user->is_admin ?? false) ? 'admin' : 'investor';
+        // SelectAuthSessionContext clears cached guards when a request changes
+        // contexts. Mark the test's intended context before actingAs installs
+        // its in-memory principal so that setup is not mistaken for a stale
+        // cross-context request.
+        app()->instance('stox.auth_session_context', $context);
         parent::actingAs($user, $driver);
 
-        return $this->withHeader(
-            'X-Stox-Auth-Context',
-            (bool) ($user->is_admin ?? false) ? 'admin' : 'investor',
-        );
+        return $this->withHeader('X-Stox-Auth-Context', $context);
     }
 
     /** Login a fixture through the real session endpoint in its stated role context. */

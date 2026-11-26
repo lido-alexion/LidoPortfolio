@@ -202,7 +202,7 @@ class AuthSessionContextTest extends TestCase
             ->withHeader('X-Stox-Auth-Context', 'admin')
             ->withHeader('X-Stox-Auth-User', (string) $investor->id)
             ->getJson('/api/notification-settings')
-            ->assertForbidden();
+            ->assertUnauthorized();
     }
 
     private function user(bool $admin): User
