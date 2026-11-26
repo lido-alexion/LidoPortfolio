@@ -70,6 +70,17 @@ test('real cookie sessions, independent role contexts, CSRF writes and portfolio
     await tabA.evaluate(() => sessionStorage.setItem('stox_auth_session_context', 'investor'));
     await tabB.evaluate(() => sessionStorage.setItem('stox_auth_session_context', 'investor'));
     await Promise.all([tabA.goto('/holdings'), tabB.goto('/holdings')]);
+    // Fresh disposable investors are eligible for the real guided-tour welcome
+    // prompt. Dismiss it through its normal control before exercising the
+    // portfolio switcher; a force click here would bypass the modal contract.
+    const welcomeA = tabA.getByRole('dialog', { name: 'Welcome to StoX' });
+    const welcomeB = tabB.getByRole('dialog', { name: 'Welcome to StoX' });
+    await expect(welcomeA).toBeVisible();
+    await expect(welcomeB).toBeVisible();
+    await welcomeA.getByRole('button', { name: 'Skip for now', exact: true }).click();
+    await welcomeB.getByRole('button', { name: 'Skip for now', exact: true }).click();
+    await expect(welcomeA).toBeHidden();
+    await expect(welcomeB).toBeHidden();
     const switcherA = tabA.locator('.lido-portfolio-switcher');
     const switcherB = tabB.locator('.lido-portfolio-switcher');
     await expect(switcherA).toBeVisible();
