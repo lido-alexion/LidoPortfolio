@@ -8,6 +8,14 @@ PHPUnit 12.5.28 sets the text `Premature end of PHP process when running …` wh
 
 The repeated late-suite location and high process RSS support accumulated process memory as a credible risk. The root cause is not proven. The CI change is a bounded mitigation: it starts fresh PHP processes sequentially for complete, disjoint batches while retaining the full PHPUnit inventory, MySQL CI setup, and 512 MiB per-process limit.
 
+## Partition 3 lifecycle failure
+
+On draft PR416 head `ae067c0b6a0f21caf3a159061aefa02d41178d92`, hosted run `45724122330` (job `139589603303`) completed and inventory-verified partitions 1 and 2. Partition 3 ran 152 cases and exited 2 at maximum RSS 177,212 KiB, before reaching the previously observed archive test. Its two errors were `IndicatorSeriesParityTest::test_series_last_value_matches_single_evaluate_for_every_indicator` and `LiquidityTradabilityRuntimeTest::test_screener_runtime_can_evaluate_composites_without_catalog_ids`; both failed with `Target class [config] does not exist` through `FundamentalMetricCatalog::derivedMetrics()` while `ScreenerCatalog::indicatorIds()` built the catalog.
+
+Both test classes extended bare `PHPUnit\Framework\TestCase` despite calling Laravel-backed catalog and evaluation services. Isolated runs reproduced both errors before any assertions. Changing those two classes to the repository's `Tests\TestCase` boots the actual application and test configuration; no catalog data is stubbed and no assertions or provider cases are removed. Under isolated SQLite, both exact methods then passed (1 test/156 assertions and 1 test/7 assertions), both complete classes passed (13/364), and adjacent screener/indicator registry tests passed (34/555).
+
+The remaining partition 3 was not replayed locally: its inventory includes migration-backed `RefreshDatabase` tests and other integration-shaped tests, so running the complete batch with SQLite would not match hosted MySQL CI and could fail for dialect reasons. Its hosted low RSS and two deterministic test-bootstrap errors do not support an OOM diagnosis. The PHP-process partitioning remains a mitigation for the earlier termination pattern, not a proven root-cause correction; hosted CI on the reviewed candidate is still required.
+
 ## Partition and inventory contract
 
 The hosted runner asks PHPUnit for its XML test inventory before running tests. That inventory includes concrete data-provider cases. The runner:
