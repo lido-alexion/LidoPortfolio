@@ -5,13 +5,19 @@ app_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 temp_root="$(mktemp -d "${TMPDIR:-/tmp}/stox-auth-e2e.XXXXXX")"
 backend_pid=''
 cleanup() {
+  local status=$?
   if [[ -n "$backend_pid" ]]; then
     # The PHP development server may fork workers. Stop the entire isolated
     # process group so a failed Playwright run cannot leave listeners behind.
     kill -TERM -- "-$backend_pid" 2>/dev/null || true
     wait "$backend_pid" 2>/dev/null || true
   fi
+  if [[ $status -ne 0 && -n "${STOX_AUTH_E2E_OUTPUT_DIR:-}" && -f "$temp_root/laravel.log" ]]; then
+    cp "$temp_root/laravel.log" "$STOX_AUTH_E2E_OUTPUT_DIR/harness-laravel.log"
+  fi
+  rm -f "$temp_root/readiness.json"
   rm -rf "$temp_root"
+  return "$status"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -66,11 +72,32 @@ php tests/e2e/authFixture.php
 
 setsid env PHP_CLI_SERVER_WORKERS=4 php -S 127.0.0.1:8001 -t public public/index.php >"$temp_root/laravel.log" 2>&1 &
 backend_pid=$!
+# Sanctum's stateful API middleware is selected from Origin/Referer. A bare
+# health request to this session-backed endpoint is stateless and would fail
+# when AuthController asks for the session. Emulate the browser origin that
+# Playwright will use through Vite, and require a real CSRF token response.
+backend_ready() {
+  curl --silent --show-error --fail \
+    --header 'Accept: application/json' \
+    --header 'Origin: http://127.0.0.1:4178' \
+    --header 'Referer: http://127.0.0.1:4178/' \
+    --header 'X-Stox-Auth-Context: investor' \
+    --cookie-jar "$temp_root/readiness-cookies.txt" \
+    --output "$temp_root/readiness.json" \
+    http://127.0.0.1:8001/api/auth/csrf-token \
+    2>/dev/null \
+    && php -r '
+      $r=json_decode(file_get_contents($argv[1]),true);
+      $cookies=file_get_contents($argv[2]);
+      $hasSessionCookie=preg_match("/^(?:#HttpOnly_)?127\\.0\\.0\\.1\\s+FALSE\\s+\\/\\s+FALSE\\s+\\d+\\s+stox-auth-e2e-session\\s+\\S+$/m", $cookies) === 1;
+      exit(is_string($r["token"]??null) && $r["token"]!=="" && $hasSessionCookie ? 0 : 1);
+    ' "$temp_root/readiness.json" "$temp_root/readiness-cookies.txt"
+}
 for attempt in $(seq 1 60); do
-  if curl --silent --fail http://127.0.0.1:8001/api/auth/csrf-token >/dev/null; then break; fi
+  if backend_ready; then break; fi
   if ! kill -0 "$backend_pid" 2>/dev/null; then cat "$temp_root/laravel.log" >&2; exit 1; fi
   sleep 1
 done
-curl --silent --fail http://127.0.0.1:8001/api/auth/csrf-token >/dev/null || { cat "$temp_root/laravel.log" >&2; exit 1; }
+backend_ready || { cat "$temp_root/laravel.log" >&2; exit 1; }
 
 npx playwright test --config tests/e2e/auth-live.playwright.config.js

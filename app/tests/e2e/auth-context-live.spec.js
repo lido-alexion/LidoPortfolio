@@ -172,6 +172,17 @@ test('real cookie sessions, independent role contexts, CSRF writes and portfolio
     ], { cwd: path.resolve('.') });
     expect((await apiCall(expiryPage, '/api/portfolios', { user: expiryUser.id })).status).toBe(401);
     expect((await apiCall(tabA, '/api/auth/me', { context: 'admin' })).body.user.id).toBe(admin.id);
+
+    // Signing out of the administrator context must preserve the active
+    // investor session just as investor logout above preserved administrator.
+    const adminLogoutToken = await csrf(tabB, 'admin');
+    const adminLogout = await apiCall(tabB, '/api/auth/logout', {
+        method: 'POST', context: 'admin', token: adminLogoutToken,
+    });
+    expect(adminLogout.status).toBe(200);
+    expect((await apiCall(tabB, '/api/auth/me', { context: 'admin' })).status).toBe(401);
+    expect((await apiCall(tabB, '/api/auth/me', { context: 'investor' })).body.user.id).toBe(otherUser.id);
+
     await expiryContext.close();
     await context.close();
 });
