@@ -46,17 +46,109 @@ const AUTHENTICATED_SMOKE_STAGES = new Set([
     'dashboard_kite_menu',
     'dashboard_kite_menu_ready',
     'dashboard_kite_menu_open',
+    'dashboard_kite_menu_click_timeout',
+    'dashboard_kite_menu_click_error',
     'dashboard_kite_menu_expanded',
     'dashboard_kite_menu_items',
     'dashboard_kite_menu_close',
+    'dashboard_kite_menu_close_click_timeout',
+    'dashboard_kite_menu_close_click_error',
     'dashboard_kite_menu_collapsed',
     'dashboard_reconciliation_gate',
     'request_safety',
 ]);
 
+const PREFERENCE_STATES = new Set(['absent', 'matching_pending', 'failed', 'response', 'method_mismatch', 'path_mismatch']);
+
+/** Track only the fixed lifecycle categories for same-origin preference-like requests. */
+export function createComboPreferenceLifecycleCapture(page, baseURL) {
+    const origin = new URL(baseURL).origin;
+    let state = 'absent';
+    const matching = new WeakSet();
+    let sawExactRequest = false;
+    const classify = request => {
+        try {
+            const url = new URL(request.url());
+            if (url.origin !== origin || !url.pathname.startsWith('/api/v1/stock-details/')) return;
+            if (url.pathname !== '/api/v1/stock-details/combo-chart-preference') {
+                if (!sawExactRequest && state === 'absent') state = 'path_mismatch';
+            } else if (request.method() !== 'GET') {
+                if (!sawExactRequest) state = 'method_mismatch';
+            } else {
+                sawExactRequest = true;
+                matching.add(request);
+                state = 'matching_pending';
+            }
+        } catch { /* Keep fixed state only. */ }
+    };
+    const onRequest = request => classify(request);
+    const onResponse = response => {
+        if (matching.has(response.request())) state = 'response';
+    };
+    const onFailed = request => {
+        if (matching.has(request)) state = 'failed';
+    };
+    page.on('request', onRequest);
+    page.on('response', onResponse);
+    page.on('requestfailed', onFailed);
+    return {
+        snapshot: () => PREFERENCE_STATES.has(state) ? state : 'absent',
+        dispose() {
+            page.off('request', onRequest);
+            page.off('response', onResponse);
+            page.off('requestfailed', onFailed);
+        },
+    };
+}
+
+/** Parse only the bounded preference lifecycle marker. */
+export function readSafeComboPreferenceDiagnostic(stdout) {
+    const matches = String(stdout).split(/\r?\n/).map(line => line.match(/^AUTHENTICATED_SMOKE_COMBO_PREFERENCE:(absent|matching_pending|failed|response|method_mismatch|path_mismatch)$/)).filter(Boolean);
+    return matches.length === 1 ? matches[0][1] : null;
+}
+
+/** Non-waiting, bounded post-failure sample, not proof of the original click cause. */
+export async function captureKiteMenuHitTest(page) {
+    return page.evaluate(() => {
+        const buttons = document.querySelectorAll('.lido-header .lido-kite-header-control button[aria-haspopup="menu"]');
+        if (buttons.length !== 1) return { hit: 'unknown', overlay: 'unknown' };
+        const button = buttons[0];
+        const box = button.getBoundingClientRect();
+        const hit = box.width > 0 && box.height > 0
+            ? document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
+            : null;
+        const overlay = document.querySelector('.lido-guided-tour-scrim, .lido-guided-tour-modal') ? 'guided_tour' : 'none';
+        return { hit: !hit ? 'none' : hit === button ? 'target' : button.contains(hit) ? 'descendant' : 'other', overlay };
+    });
+}
+
+/** Parse fixed hit-test enums; no coordinates, DOM text, or selector values cross the boundary. */
+export function readSafeKiteHitTestDiagnostic(stdout) {
+    const matches = String(stdout).split(/\r?\n/).map(line => line.match(/^AUTHENTICATED_SMOKE_KITE_HIT_TEST:(target|descendant|other|none|unknown);overlay=(none|guided_tour|unknown)$/)).filter(Boolean);
+    return matches.length === 1 ? { hit: matches[0][1], overlay: matches[0][2] } : null;
+}
+
 // Only fixed labels may cross the production-smoke logging boundary.
 export function safeAuthenticatedSmokeStage(stage) {
     return AUTHENTICATED_SMOKE_STAGES.has(stage) ? stage : 'unknown';
+}
+
+/** Parse one fixed, redacted Kite-menu click diagnostic; never return raw child output. */
+export function readSafeKiteMenuClickDiagnostic(stdout) {
+    const lines = String(stdout).split(/\r?\n/);
+    const matches = lines.map(line => line.match(/^AUTHENTICATED_SMOKE_KITE_MENU_CLICK:(timeout|error);count=([01]);connected=([01]);visible=([01]);enabled=([01]);expanded=(true|false|unknown)$/)).filter(Boolean);
+    if (matches.length !== 1) return null;
+    const [, kind, count, connected, visible, enabled, expanded] = matches[0];
+    return { kind, count: count === '1', connected: connected === '1', visible: visible === '1', enabled: enabled === '1', expanded };
+}
+
+/** Parse only fixed state captured when the Kite menu close click itself fails. */
+export function readSafeKiteMenuCloseClickDiagnostic(stdout) {
+    const lines = String(stdout).split(/\r?\n/);
+    const matches = lines.map(line => line.match(/^AUTHENTICATED_SMOKE_KITE_MENU_CLOSE_CLICK:(timeout|error);count=([01]);connected=([01]);visible=([01]);enabled=([01]);expanded=(true|false|unknown)$/)).filter(Boolean);
+    if (matches.length !== 1) return null;
+    const [, kind, count, connected, visible, enabled, expanded] = matches[0];
+    return { kind, count: count === '1', connected: connected === '1', visible: visible === '1', enabled: enabled === '1', expanded };
 }
 
 /** Parse only complete, fixed smoke outcome enums; never return child output. */

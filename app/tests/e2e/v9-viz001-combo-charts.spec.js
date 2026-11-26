@@ -520,6 +520,20 @@ test('an open welcome prompt blocks the production pointer legend action until s
     await legend.setChecked(true);
     await expect(legend).toBeChecked();
     await expect.poll(() => pricePaths.evaluateAll(paths => paths.filter(path => Boolean(path.getAttribute('d')?.trim())).length)).toBe(pathsBefore);
+    // Reproduce the production smoke's later dashboard control check against
+    // the actual app header and Kite menu after normal welcome dismissal.
+    // Keep the app shell mounted after the locally fulfilled, transient Skip.
+    const dashboardStatus = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/v1/broker/status');
+    await page.locator('.lido-header-title-link').click();
+    await expect(page).toHaveURL(/\/$/);
+    expect((await dashboardStatus).ok()).toBe(true);
+    await expect(welcome).toHaveCount(0);
+    const kiteMenu = page.locator('.lido-header .lido-kite-header-control button[aria-haspopup="menu"]');
+    await expect(kiteMenu).toBeVisible();
+    await expect(kiteMenu).toBeEnabled();
+    await kiteMenu.click();
+    await expect(kiteMenu).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('menu').getByRole('menuitem', { name: 'Kite settings', exact: true })).toBeVisible();
     expect(safety.writes).toEqual([
         'PUT /api/guided-tour record_welcome_shown',
         'PUT /api/guided-tour skip_prompt',
