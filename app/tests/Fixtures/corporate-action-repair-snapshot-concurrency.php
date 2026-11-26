@@ -9,6 +9,30 @@ $mode = (string) ($argv[1] ?? '');
 $id = (int) ($argv[2] ?? 0);
 $readyPath = (string) getenv('CA_REPAIR_READY_PATH');
 $resultPath = (string) getenv('CA_REPAIR_RESULT_PATH');
+if ($mode === 'accept') {
+    $staleIssue = \App\Models\DataQualityIssue::query()->findOrFail($id);
+    file_put_contents($readyPath, 'stale-issue-loaded', LOCK_EX);
+    try {
+        app(\App\Services\DataQualityResolutionService::class)->accept($staleIssue, 2.0, 'Competing stale acceptance.', null);
+        $workerResult = ['accepted' => true];
+    } catch (\App\Exceptions\DomainException $exception) {
+        $workerResult = ['exception_code' => $exception->errorCode(), 'http_status' => $exception->httpStatus()];
+    }
+    file_put_contents($resultPath, json_encode($workerResult, JSON_THROW_ON_ERROR), LOCK_EX);
+    exit(0);
+}
+if ($mode === 'rollback') {
+    $issue = \App\Models\DataQualityIssue::query()->findOrFail($id);
+    file_put_contents($readyPath, 'rollback-issue-loaded', LOCK_EX);
+    try {
+        app(\App\Services\DataQualityResolutionService::class)->rollbackCompletedRepair($issue, 'Competing rollback worker.', null);
+        $workerResult = ['rolled_back' => true];
+    } catch (\App\Exceptions\DomainException $exception) {
+        $workerResult = ['exception_code' => $exception->errorCode(), 'http_status' => $exception->httpStatus()];
+    }
+    file_put_contents($resultPath, json_encode($workerResult, JSON_THROW_ON_ERROR), LOCK_EX);
+    exit(0);
+}
 $table = match ($mode) {
     'action' => 'portfolio_corporate_actions',
     'factor' => 'portfolio_price_adjustment_factors',
