@@ -21,6 +21,15 @@ try {
     // No Playwright Test reporter/instrumentation, tracing, HAR, video or screenshot.
     const context = await browser.newContext({ baseURL, serviceWorkers: 'block' });
     const page = await context.newPage();
+    let latestAuthenticatedUserResponse = null;
+    page.on('response', response => {
+        try {
+            const target = new URL(response.url());
+            if (response.request().method() === 'GET' && target.origin === new URL(baseURL).origin && target.pathname === '/api/auth/me') latestAuthenticatedUserResponse = response;
+        } catch {
+            // Unreadable response metadata cannot establish the authenticated identity.
+        }
+    });
     page.setDefaultTimeout(20_000);
     let login = true;
     let blocked = false;
@@ -117,6 +126,7 @@ try {
     preferenceResponsePromise.catch(() => {});
     let preferenceResponse;
     try {
+        latestAuthenticatedUserResponse = null;
         await page.goto('/watchlist/TCS');
         stage = 'combo_preference_response_wait';
         preferenceResponse = await preferenceResponsePromise;
@@ -180,13 +190,13 @@ try {
     } else {
         await page.waitForFunction(({ selector, opening }) => document.querySelector(selector)?.value === opening, { selector: '#combo-chart-preset', opening: openingPreset });
     }
+    // Dismiss in the combo document, after the full navigation, so the
+    // transient local Skip survives the later dashboard SPA transition.
     stage = 'account_onboarding_prompt';
     if (welcomeExpected) {
         await welcome.waitFor({ state: 'visible' });
         const skip = welcome.getByRole('button', { name: 'Skip for now', exact: true });
-        const skipResponsePromise = page.waitForResponse(response => {
-            return response.request() === welcomeSkipRequest;
-        });
+        const skipResponsePromise = page.waitForResponse(response => response.request() === welcomeSkipRequest);
         welcomeSkipUiActionInProgress = true;
         let skipResponse;
         try {
@@ -242,15 +252,15 @@ try {
         }
     };
     page.on('response', capturePhysicalBrokerStatusResponse);
-    const authenticatedUserResponsePromise = page.waitForResponse(response => {
-        const request = response.request();
-        try { return request.method() === 'GET' && new URL(response.url()).pathname === '/api/auth/me'; } catch { return false; }
-    });
     let brokerStatusPayload = null;
-    await page.goto('/');
+    // Keep the authenticated SPA mounted: Skip is intentionally local to this
+    // smoke run, so a document reload would re-read unchanged server state.
+    await page.locator('.lido-header-title-link').click();
+    await page.waitForURL(url => url.pathname === '/');
+    if (await welcome.count() || await resume.count()) throw new Error();
     stage = 'dashboard_identity_response';
-    const authenticatedUserResponse = await authenticatedUserResponsePromise;
-    if (!authenticatedUserResponse.ok()) throw new Error();
+    const authenticatedUserResponse = latestAuthenticatedUserResponse;
+    if (!authenticatedUserResponse?.ok()) throw new Error();
     const authenticatedUserPayload = await authenticatedUserResponse.json();
     const isAdmin = authenticatedUserPayload?.user?.is_admin;
     if (typeof isAdmin !== 'boolean') throw new Error();
