@@ -58,6 +58,76 @@ const AUTHENTICATED_SMOKE_STAGES = new Set([
     'request_safety',
 ]);
 
+const PREFERENCE_STATES = new Set(['absent', 'matching_pending', 'failed', 'response', 'method_mismatch', 'path_mismatch']);
+
+/** Track only the fixed lifecycle categories for same-origin preference-like requests. */
+export function createComboPreferenceLifecycleCapture(page, baseURL) {
+    const origin = new URL(baseURL).origin;
+    let state = 'absent';
+    const matching = new WeakSet();
+    let sawExactRequest = false;
+    const classify = request => {
+        try {
+            const url = new URL(request.url());
+            if (url.origin !== origin || !url.pathname.startsWith('/api/v1/stock-details/')) return;
+            if (url.pathname !== '/api/v1/stock-details/combo-chart-preference') {
+                if (!sawExactRequest && state === 'absent') state = 'path_mismatch';
+            } else if (request.method() !== 'GET') {
+                if (!sawExactRequest) state = 'method_mismatch';
+            } else {
+                sawExactRequest = true;
+                matching.add(request);
+                state = 'matching_pending';
+            }
+        } catch { /* Keep fixed state only. */ }
+    };
+    const onRequest = request => classify(request);
+    const onResponse = response => {
+        if (matching.has(response.request())) state = 'response';
+    };
+    const onFailed = request => {
+        if (matching.has(request)) state = 'failed';
+    };
+    page.on('request', onRequest);
+    page.on('response', onResponse);
+    page.on('requestfailed', onFailed);
+    return {
+        snapshot: () => PREFERENCE_STATES.has(state) ? state : 'absent',
+        dispose() {
+            page.off('request', onRequest);
+            page.off('response', onResponse);
+            page.off('requestfailed', onFailed);
+        },
+    };
+}
+
+/** Parse only the bounded preference lifecycle marker. */
+export function readSafeComboPreferenceDiagnostic(stdout) {
+    const matches = String(stdout).split(/\r?\n/).map(line => line.match(/^AUTHENTICATED_SMOKE_COMBO_PREFERENCE:(absent|matching_pending|failed|response|method_mismatch|path_mismatch)$/)).filter(Boolean);
+    return matches.length === 1 ? matches[0][1] : null;
+}
+
+/** Non-waiting, bounded post-failure sample, not proof of the original click cause. */
+export async function captureKiteMenuHitTest(page) {
+    return page.evaluate(() => {
+        const buttons = document.querySelectorAll('.lido-header .lido-kite-header-control button[aria-haspopup="menu"]');
+        if (buttons.length !== 1) return { hit: 'unknown', overlay: 'unknown' };
+        const button = buttons[0];
+        const box = button.getBoundingClientRect();
+        const hit = box.width > 0 && box.height > 0
+            ? document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
+            : null;
+        const overlay = document.querySelector('.lido-guided-tour-scrim, .lido-guided-tour-modal') ? 'guided_tour' : 'none';
+        return { hit: !hit ? 'none' : hit === button ? 'target' : button.contains(hit) ? 'descendant' : 'other', overlay };
+    });
+}
+
+/** Parse fixed hit-test enums; no coordinates, DOM text, or selector values cross the boundary. */
+export function readSafeKiteHitTestDiagnostic(stdout) {
+    const matches = String(stdout).split(/\r?\n/).map(line => line.match(/^AUTHENTICATED_SMOKE_KITE_HIT_TEST:(target|descendant|other|none|unknown);overlay=(none|guided_tour|unknown)$/)).filter(Boolean);
+    return matches.length === 1 ? { hit: matches[0][1], overlay: matches[0][2] } : null;
+}
+
 // Only fixed labels may cross the production-smoke logging boundary.
 export function safeAuthenticatedSmokeStage(stage) {
     return AUTHENTICATED_SMOKE_STAGES.has(stage) ? stage : 'unknown';
