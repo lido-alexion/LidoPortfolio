@@ -162,12 +162,181 @@ class CorporateActionRepairSnapshotConcurrencyTest extends TestCase
         $this->assertNull($action->fresh()->metadata['price_adjustment'] ?? null);
     }
 
+    public function test_two_factor_repair_workers_apply_once_after_stock_lock_serialization(): void
+    {
+        $this->requireMysql();
+        [$user, $profile, $stock] = $this->portfolioStock('RACED'.Str::random(4));
+        foreach ([['2026-11-11', 100], ['2026-11-12', 100], ['2026-11-15', 100], ['2026-11-16', 10]] as [$date, $close]) {
+            $this->price($stock->id, $date, $close);
+        }
+        $factor = $this->pendingFactor($stock, '2026-11-16', 10.0);
+
+        $this->withStockLock($stock, function (string $ready, string $result) use ($factor): void {
+            $worker = $this->startWorker('factor', (int) $factor->id, $ready, $result);
+            try {
+                $this->waitForReady($worker, $ready);
+                $parent = app(CorporateActionPriceRepairService::class)->repairPendingFactors(
+                    factorId: (int) $factor->id, dryRun: false,
+                );
+                $this->assertSame(1, $parent['repaired']);
+            } finally {
+                $this->commitStockLock();
+                $worker->wait();
+                $this->assertTrue($worker->isSuccessful(), $worker->getErrorOutput().$worker->getOutput());
+            }
+            $workerResult = json_decode((string) file_get_contents($result), true, flags: JSON_THROW_ON_ERROR);
+            $this->assertSame(1, $workerResult['skipped']);
+        });
+
+        $this->assertSame(10.0, $this->closeOn($stock->id, '2026-11-11'));
+        $this->assertSame(3, DB::table('portfolio_price_adjustment_repair_snapshots')->where('factor_id', $factor->id)->count());
+        $this->assertSame(PriceAdjustmentFactor::REPAIR_STATUS_COMPLETED, $factor->fresh()->metadata['ohlcv_repair_status']);
+    }
+
+    public function test_repair_worker_observes_rollback_committed_while_waiting_for_stock_lock(): void
+    {
+        $this->requireMysql();
+        [$user, $profile, $stock] = $this->portfolioStock('RACER'.Str::random(4));
+        foreach ([['2026-11-11', 100], ['2026-11-12', 100], ['2026-11-15', 100], ['2026-11-16', 10]] as [$date, $close]) {
+            $this->price($stock->id, $date, $close);
+        }
+        $issue = $this->pendingIssue($stock, '2026-11-16');
+        $factor = $this->pendingFactor($stock, '2026-11-16', 10.0);
+        $factor->update(['issue_id' => $issue->id]);
+        $this->assertSame(PriceAdjustmentFactor::REPAIR_STATUS_PENDING, $factor->fresh()->metadata['ohlcv_repair_status']);
+        $before = DB::table('portfolio_stock_prices')->where('stock_id', $stock->id)
+            ->where('price_date', '<', '2026-11-16')->orderBy('id')->get()->map(fn ($row) => (array) $row)->all();
+
+        $this->withStockLock($stock, function (string $ready, string $result) use ($factor, $issue): void {
+            $worker = $this->startWorker('factor', (int) $factor->id, $ready, $result);
+            try {
+                $this->waitForReady($worker, $ready);
+                $repair = app(CorporateActionPriceRepairService::class)->repairPendingFactors(
+                    factorId: (int) $factor->id, dryRun: false,
+                );
+                $this->assertSame(1, $repair['repaired']);
+                $this->assertSame(PriceAdjustmentFactor::REPAIR_STATUS_COMPLETED, $factor->fresh()->metadata['ohlcv_repair_status']);
+
+                $rolledBack = app(DataQualityResolutionService::class)->rollbackCompletedRepair(
+                    $issue, 'Concurrency rollback fixture', null,
+                );
+                $this->assertSame(DataQualityIssue::STATUS_REJECTED, $rolledBack->issue_status);
+            } finally {
+                $this->commitStockLock();
+                $worker->wait();
+                $this->assertTrue($worker->isSuccessful(), $worker->getErrorOutput().$worker->getOutput());
+            }
+            $workerResult = json_decode((string) file_get_contents($result), true, flags: JSON_THROW_ON_ERROR);
+            $this->assertSame(1, $workerResult['skipped']);
+            $this->assertSame(CorporateActionPriceRepairService::STATUS_INACTIVE, $workerResult['details'][0]['status']);
+        });
+
+        $after = DB::table('portfolio_stock_prices')->where('stock_id', $stock->id)
+            ->where('price_date', '<', '2026-11-16')->orderBy('id')->get()->map(fn ($row) => (array) $row)->all();
+        $this->assertSame($before, $after, 'Rollback must restore every captured price row exactly, without an extra worker adjustment.');
+        $this->assertSame(PriceAdjustmentFactor::REPAIR_STATUS_ROLLED_BACK, $factor->fresh()->metadata['ohlcv_repair_status']);
+        $this->assertFalse((bool) $factor->fresh()->is_active);
+        $this->assertSame(DataQualityIssue::STATUS_REJECTED, $issue->fresh()->issue_status);
+    }
+
+    public function test_stale_admin_acceptance_worker_rechecks_after_competing_accept_commits(): void
+    {
+        $this->requireMysql();
+        [$user, $profile, $stock] = $this->portfolioStock('RACEQ'.Str::random(4));
+        $issue = $this->pendingIssue($stock, '2026-03-01');
+
+        $this->withStockLock($stock, function (string $ready, string $result) use ($issue): void {
+            $accepted = app(DataQualityResolutionService::class)->accept($issue, 2.0, 'Parent acceptance wins.', null);
+            $worker = $this->startWorker('accept', (int) $issue->id, $ready, $result);
+            try {
+                $this->waitForReady($worker, $ready);
+            } finally {
+                $this->commitStockLock();
+                $worker->wait();
+                $this->assertTrue($worker->isSuccessful(), $worker->getErrorOutput().$worker->getOutput());
+            }
+            $workerResult = json_decode((string) file_get_contents($result), true, flags: JSON_THROW_ON_ERROR);
+            $this->assertSame('DATA_QUALITY_STALE_RESOLUTION', $workerResult['exception_code']);
+            $this->assertSame(409, $workerResult['http_status']);
+            $this->assertSame($accepted->latest_resolution_id, $issue->fresh()->latest_resolution_id);
+        });
+
+        $this->assertSame(1, $issue->resolutions()->count());
+        $this->assertSame(1, PriceAdjustmentFactor::query()->where('issue_id', $issue->id)->count());
+    }
+
+    public function test_rollback_worker_rejects_new_historical_row_committed_while_waiting_for_stock_lock(): void
+    {
+        $this->requireMysql();
+        [$user, $profile, $stock] = $this->portfolioStock('RACEN'.Str::random(4));
+        foreach ([['2026-11-11', 100], ['2026-11-12', 100], ['2026-11-15', 100], ['2026-11-16', 10]] as [$date, $close]) {
+            $this->price($stock->id, $date, $close);
+        }
+        $issue = $this->pendingIssue($stock, '2026-11-16');
+        $factor = $this->pendingFactor($stock, '2026-11-16', 10.0);
+        $factor->update(['issue_id' => $issue->id]);
+        app(CorporateActionPriceRepairService::class)->repairPendingFactors(factorId: (int) $factor->id, dryRun: false);
+
+        $this->withStockLock($stock, function (string $ready, string $result) use ($factor, $issue, $stock): void {
+            $worker = $this->startWorker('rollback', (int) $issue->id, $ready, $result);
+            try {
+                $this->waitForReady($worker, $ready);
+                $this->price($stock->id, '2026-11-10', 95);
+            } finally {
+                $this->commitStockLock();
+                $worker->wait();
+                $this->assertTrue($worker->isSuccessful(), $worker->getErrorOutput().$worker->getOutput());
+            }
+            $workerResult = json_decode((string) file_get_contents($result), true, flags: JSON_THROW_ON_ERROR);
+            $this->assertSame('DATA_QUALITY_PRICE_REPAIR_ROLLBACK_REQUIRED', $workerResult['exception_code']);
+            $this->assertSame(409, $workerResult['http_status']);
+        });
+
+        $this->assertSame(PriceAdjustmentFactor::REPAIR_STATUS_COMPLETED, $factor->fresh()->metadata['ohlcv_repair_status']);
+        $this->assertSame(10.0, $this->closeOn($stock->id, '2026-11-11'));
+        $this->assertSame(95.0, $this->closeOn($stock->id, '2026-11-10'));
+    }
+
+    public function test_rollback_worker_rechecks_later_action_committed_while_waiting_for_stock_lock(): void
+    {
+        $this->requireMysql();
+        [$user, $profile, $stock] = $this->portfolioStock('RACEO'.Str::random(4));
+        foreach ([['2026-11-11', 100], ['2026-11-12', 100], ['2026-11-15', 100], ['2026-11-16', 10]] as [$date, $close]) {
+            $this->price($stock->id, $date, $close);
+        }
+        $issue = $this->pendingIssue($stock, '2026-11-16');
+        $factor = $this->pendingFactor($stock, '2026-11-16', 10.0);
+        $factor->update(['issue_id' => $issue->id]);
+        app(CorporateActionPriceRepairService::class)->repairPendingFactors(factorId: (int) $factor->id, dryRun: false);
+
+        $this->withStockLock($stock, function (string $ready, string $result) use ($factor, $issue, $profile, $stock): void {
+            $worker = $this->startWorker('rollback', (int) $issue->id, $ready, $result);
+            try {
+                $this->waitForReady($worker, $ready);
+                $this->corporateAction($profile->id, $stock->id, '2026-11-12');
+            } finally {
+                $this->commitStockLock();
+                $worker->wait();
+                $this->assertTrue($worker->isSuccessful(), $worker->getErrorOutput().$worker->getOutput());
+            }
+            $workerResult = json_decode((string) file_get_contents($result), true, flags: JSON_THROW_ON_ERROR);
+            $this->assertSame('DATA_QUALITY_PRICE_REPAIR_ROLLBACK_REQUIRED', $workerResult['exception_code']);
+            $this->assertSame(409, $workerResult['http_status']);
+        });
+
+        $this->assertSame(PriceAdjustmentFactor::REPAIR_STATUS_COMPLETED, $factor->fresh()->metadata['ohlcv_repair_status']);
+        $this->assertSame(10.0, $this->closeOn($stock->id, '2026-11-11'));
+    }
+
     private function requireMysql(): void
     {
         if (DB::connection()->getDriverName() !== 'mysql') {
             $this->markTestSkipped('Separate-process MySQL row-lock regression requires the hosted MySQL test database.');
         }
-        $isolation = DB::selectOne('select @@transaction_isolation as isolation_level');
+        $version = DB::selectOne('select version() as server_version');
+        $variable = stripos((string) $version->server_version, 'MariaDB') !== false
+            ? '@@tx_isolation' : '@@transaction_isolation';
+        $isolation = DB::selectOne('select '.$variable.' as isolation_level');
         $this->assertSame('REPEATABLE-READ', strtoupper(str_replace('_', '-', (string) $isolation->isolation_level)));
     }
 
@@ -296,6 +465,7 @@ class CorporateActionRepairSnapshotConcurrencyTest extends TestCase
             'DB_HOST' => $connection['host'] ?? '', 'DB_PORT' => (string) ($connection['port'] ?? ''),
             'DB_DATABASE' => $connection['database'] ?? '', 'DB_USERNAME' => $connection['username'] ?? '',
             'DB_PASSWORD' => (string) ($connection['password'] ?? ''), 'DB_URL' => '',
+            'DB_SOCKET' => (string) ($connection['unix_socket'] ?? ''),
             'CA_REPAIR_READY_PATH' => $readyPath, 'CA_REPAIR_RESULT_PATH' => $resultPath,
         ];
         $process = new Process([

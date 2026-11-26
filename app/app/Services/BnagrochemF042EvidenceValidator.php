@@ -40,9 +40,15 @@ class BnagrochemF042EvidenceValidator
 
         $evidenceRows = $issue->evidences;
         $expectedKeys = ['bnagrochem_listing_circular', 'bnagrochem_clearing_circular', 'bnagrochem_bhavcopy'];
-        $validEvidenceKeys = $evidenceRows->count() === count($expectedKeys)
-            && $evidenceRows->pluck('evidence_key')->unique()->sort()->values()->all() === collect($expectedKeys)->sort()->values()->all();
-        $evidence = $evidenceRows->keyBy('evidence_key');
+        // Keep generic exchange-feed discovery evidence intact. It is not one of
+        // the three official source proofs, and repeated feed observations may
+        // append multiple exchange_ratio rows for the same pending issue.
+        $officialRows = $evidenceRows->whereIn('evidence_key', $expectedKeys);
+        $allowedKeys = [...$expectedKeys, 'exchange_ratio'];
+        $validEvidenceKeys = $officialRows->count() === count($expectedKeys)
+            && $officialRows->pluck('evidence_key')->unique()->sort()->values()->all() === collect($expectedKeys)->sort()->values()->all()
+            && $evidenceRows->every(fn ($row): bool => in_array($row->evidence_key, $allowedKeys, true));
+        $evidence = $officialRows->keyBy('evidence_key');
         $listing = $evidence->get('bnagrochem_listing_circular')?->evidence_payload ?? [];
         $clearing = $evidence->get('bnagrochem_clearing_circular')?->evidence_payload ?? [];
         $bhavcopy = $evidence->get('bnagrochem_bhavcopy')?->evidence_payload ?? [];
