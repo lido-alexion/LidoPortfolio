@@ -18,6 +18,13 @@ class EnsureAuthSessionRole
         $user = Auth::guard('sanctum')->user();
         $context = $request->attributes->get('auth_session_context', 'investor');
 
+        // DebugAgentToken is a distinct, legacy API credential. It creates a
+        // synthetic admin principal without a browser cookie; keep that API
+        // contract separate from browser-session context enforcement.
+        if ($request->attributes->get('stox_debug_agent_auth') === true) {
+            return $next($request);
+        }
+
         // Explicit API tokens are not browser sessions and retain their own scopes.
         $accessToken = $user?->currentAccessToken();
         $isBrowserSession = $accessToken === null || $accessToken instanceof TransientToken;

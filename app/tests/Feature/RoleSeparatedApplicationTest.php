@@ -40,10 +40,7 @@ class RoleSeparatedApplicationTest extends TestCase
 
     protected function login(User $user): void
     {
-        $this->postJson('/api/auth/login', [
-            'email' => $user->email,
-            'password' => 'password123',
-        ])->assertOk();
+        $this->loginAs($user)->assertOk();
     }
 
     public function test_admin_login_does_not_create_a_portfolio_and_reports_no_default(): void

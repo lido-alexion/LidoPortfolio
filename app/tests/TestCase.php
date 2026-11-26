@@ -5,13 +5,40 @@ namespace Tests;
 use App\Models\PortfolioProfile;
 use App\Services\StrategyConfigurationService;
 use App\Models\TradingStrategyVersion;
+use App\Models\User;
 use App\Services\StrategyEligibilityService;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Tests\Concerns\CreatesPortfolioProfiles;
 
 abstract class TestCase extends BaseTestCase
 {
     use CreatesPortfolioProfiles;
+
+    /**
+     * Model an authenticated test request in the matching browser context.
+     * Tests for context mismatch must override this header explicitly.
+     */
+    public function actingAs(Authenticatable $user, $driver = null): static
+    {
+        parent::actingAs($user, $driver);
+
+        return $this->withHeader(
+            'X-Stox-Auth-Context',
+            (bool) ($user->is_admin ?? false) ? 'admin' : 'investor',
+        );
+    }
+
+    /** Login a fixture through the real session endpoint in its stated role context. */
+    protected function loginAs(User $user, string $password = 'password123')
+    {
+        $context = (bool) $user->is_admin ? 'admin' : 'investor';
+
+        return $this->withHeader('X-Stox-Auth-Context', $context)->postJson('/api/auth/login', [
+            'email' => $user->email,
+            'password' => $password,
+        ]);
+    }
 
     /** Return the frozen executable Strategy contract for activation fixtures. */
     protected function executableStrategyConfig(PortfolioProfile $profile): array

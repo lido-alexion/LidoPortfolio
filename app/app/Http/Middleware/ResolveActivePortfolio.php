@@ -29,6 +29,14 @@ class ResolveActivePortfolio
                 return $next($request);
             }
 
+            // Preserve the portfolio ownership API contract: a caller naming
+            // a portfolio they cannot own gets the same not-found response as
+            // any foreign portfolio, while other investor routes remain
+            // explicitly barred to administrator accounts.
+            if ($request->is('api/portfolios/*')) {
+                abort(404, 'Portfolio not found.');
+            }
+
             abort(403, 'Investor application access is not available to Admin accounts.');
         }
 

@@ -44,9 +44,13 @@ class DebugAgentToken
             return $next($request);
         }
 
-        Auth::guard('web')->login($admin);
         Auth::guard('sanctum')->setUser($admin);
         $request->setUserResolver(static fn () => $admin);
+        // This legacy developer hook is an API credential that synthesizes an
+        // admin principal. It is not a browser session selected by the
+        // X-Stox-Auth-Context cookie, so the browser role/context binding must
+        // not reinterpret it as an investor session.
+        $request->attributes->set('stox_debug_agent_auth', true);
 
         if (app()->bound(PortfolioLoggerService::class)) {
             app(PortfolioLoggerService::class)->security('warning', 'Debug agent token used for API access', [

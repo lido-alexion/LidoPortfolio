@@ -4,6 +4,19 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mode="${1:---all}"
 
+# Pin every PHP, Artisan, and Composer invocation to disposable testing config.
+# CI process variables can still override these values for the isolated MySQL
+# backend job; local runs cannot accidentally resolve an external LIDO env file.
+verifier_env_file="$(mktemp "${TMPDIR:-/tmp}/stox-verify-ci-env.XXXXXX")"
+chmod 600 "$verifier_env_file"
+printf '%s\n' \
+  'APP_ENV=testing' \
+  'APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' \
+  'DB_CONNECTION=sqlite' \
+  'DB_DATABASE=:memory:' > "$verifier_env_file"
+export LIDO_ENV_PATH="$verifier_env_file"
+trap 'rm -f "$verifier_env_file"' EXIT
+
 if [[ "$mode" != "--all" && "$mode" != "--backend" && "$mode" != "--frontend" && "$mode" != "--journeys" ]]; then
   echo "Usage: $0 [--all|--backend|--frontend|--journeys]" >&2
   exit 64
@@ -78,17 +91,27 @@ verify_backend() {
 verify_frontend() {
   require_command node
   require_command npm
+  require_command php
+  require_command composer
+  local frontend_php_modules
+  frontend_php_modules="$(php -m | tr '[:upper:]' '[:lower:]')"
+  grep -Fx pdo_sqlite <<< "$frontend_php_modules" >/dev/null || {
+    echo "Missing PHP extension required by live auth browser fixture: pdo_sqlite." >&2
+    exit 1
+  }
   local node_major
   node_major="$(node -p 'process.versions.node.split(".")[0]')"
   [[ "$node_major" -ge 20 ]] || { echo "Node.js 20 or newer is required; found $(node --version)." >&2; exit 1; }
   (
     cd "$root/app"
+    composer install --no-interaction --prefer-dist --no-progress --no-dev
     npm ci --registry=https://registry.npmjs.org
     npm run test:js
     npm run typecheck
     # Keep the hosted-path build contract identical to the existing CI job.
     VITE_APP_BASE=/portfolio/build/ npm run build
     verify_playwright
+    npm run test:e2e:auth-live
     npm run test:e2e:journeys
   )
 }

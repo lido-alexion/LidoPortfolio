@@ -110,3 +110,54 @@ Required release gates and execution ownership:
 ```
 
 Run these against the isolated CI test database and a network-enabled build/browser runner, never a production database. Before release, complete interactive acceptance with safe test accounts across two investor tabs and simultaneous investor/admin contexts, covering refresh, expiry/revocation, CSRF refresh, concurrent writes, and session logout. Supervisor owns master reconciliation and PR/CI; this checkout has made no remote or Git metadata changes.
+
+## Live backend/browser assurance additions (2026-11-26)
+
+Added an additive live Playwright harness, `npm run test:e2e:auth-live`. It starts Laravel against a newly created SQLite database in a temporary directory, inserts synthetic investor/admin users and paper portfolios, and proxies browser requests to that Laravel process. It explicitly sets `LIDO_ENV_PATH` to a temporary test-only environment file, uses a fake app key, database sessions, array cache, synchronous queue, four PHP development-server workers, and disabled telemetry. Playwright results also stay in that temporary directory. It makes no broker API calls and creates no orders. The browser case uses one Chromium context with two real pages and exercises independent HttpOnly investor/admin cookies, simultaneous portfolio writes sharing a CSRF session, page refresh, same-role stale identity rejection, foreign portfolio denial, role restrictions, and context-specific logout. Existing focused backend tests cover session expiry/revocation, CSRF context separation, and Kite callback state binding/replay.
+
+The new expiry feature regression resets Laravel's retained in-memory session between test requests, ages the disposable database session row, and verifies the cookie is rejected. Focused backend verification passed **37 tests / 144 assertions**, including auth contexts, sessions, CSRF login, Kite callbacks, and portfolio middleware. TypeScript typecheck, JavaScript syntax checks, Playwright test discovery, and `git diff --check` passed. The live browser harness successfully ran `migrate:fresh` against its temporary SQLite file and created fixtures, then stopped because this sandbox denies listening on `127.0.0.1:8001`; the browser test did not run here. The hosted frontend verifier now provisions PHP/SQLite and runs this live test before the existing mocked journeys. Hosted CI must still provide the browser execution evidence.
+
+Isolation note: the first local Laravel feature-test invocations preceded the explicit `LIDO_ENV_PATH` pin in the harness. Process-level variables selected the fake key and SQLite `:memory:` database, and no production database operation or real broker request was made; however, Laravel bootstrap may have resolved an external environment file during those initial invocations. Later feature-test runs used a temporary test-only environment file. No environment values were printed or copied into the repository. This checkout has not fetched, pushed, deployed, or changed Git metadata.
+
+## Phase 1 CI remediation review (2026-11-26)
+
+Hosted PR #420 run **45827129762** at `fc53489` reported 31 failures among 296 backend tests, mostly 403 responses from administrator fixtures, including `DebugAgentTokenTest::test_debug_token_grants_admin_access_to_protected_api`; frontend CI reported the four desktop/mobile login screenshots changed after adding the context selector.
+
+The 403 causes are separated by authentication type. A real browser session must match `X-Stox-Auth-Context`; test `actingAs` requests and session-login fixtures now select the fixture user's intentional role context. The explicit role-mismatch contract still sends the conflicting header and remains covered. A debug-agent header is a legacy synthetic API credential, not a browser cookie: it now sets only the Sanctum request identity, is marked as synthetic for context middleware, and does not create or own a web session. Personal bearer tokens continue through their existing scope middleware. Addressing a named portfolio as an admin retains the API's ownership-hiding 404; other investor routes remain forbidden.
+
+Current focused local verification, always with `LIDO_ENV_PATH=/tmp/stox418-phase1-test.env`, a fake key, and SQLite `:memory:`:
+
+```bash
+cd app
+./vendor/bin/phpunit \
+  tests/Feature/DebugAgentTokenTest.php \
+  tests/Feature/AuthSessionContextTest.php \
+  tests/Feature/AuthSessionTest.php \
+  tests/Feature/AuthCsrfLoginTest.php \
+  tests/Feature/V6PersonalApiTokenTest.php \
+  tests/Feature/Execution/KiteCallbackTest.php \
+  tests/Feature/PortfolioMiddlewareTest.php \
+  tests/Feature/AdminGlobalSettingsTest.php \
+  tests/Feature/UserManagementTest.php \
+  tests/Feature/RoleSeparatedApplicationTest.php \
+  tests/Feature/V8/AccessRequestWorkflowTest.php
+# 92 tests passed / 437 assertions
+```
+
+PHP syntax checks passed for the debug middleware and live fixture. `npm run typecheck`, JavaScript syntax validation, and shell syntax validation passed. The live harness completed isolated SQLite migrations and fixture creation, then its PHP server could not bind `127.0.0.1:8001`; the mocked login screenshot suite's Vite server also could not bind `127.0.0.1:4177` (`listen EPERM`). Neither browser test executed locally. No screenshot files were regenerated without visual evidence.
+
+The live browser test now covers two real cookie contexts, tab refresh, concurrent writes with one context-local CSRF token, foreign portfolio denial, stale same-role identity denial, context-specific logout, remote session revocation from a separate login, and server-side expiry by aging only a session row in the temporary SQLite database. All live login fixtures disable remember-me so expiry cannot restore a session through a recaller cookie. The PHP server runs in a dedicated process group; cleanup stops the whole group and removes its temporary database, environment file, and Playwright artifacts.
+
+### Hosted verification still required
+
+On the network-enabled GitHub Ubuntu runner, with Node 22, PHP 8.4 plus `pdo_sqlite`, and the existing Chromium install, run the canonical `./scripts/verify-ci.sh --frontend` with `LIDO_ENV_PATH` pinned to a disposable test file. The verifier runs `npm ci`, Vitest, typecheck, the `/portfolio/build/` production build, Chromium setup, the live auth test, and the mocked journey suite. Bunny Fonts CSS must resolve during build. First run `npx playwright test tests/e2e/auth-entry.spec.js --config tests/e2e/playwright.config.js --project=chromium --update-snapshots`; review all four generated login snapshots against the existing baselines, checking the investor/admin context label and reciprocal entry link at desktop and mobile sizes and ensuring form controls are not clipped. Then rerun that test without `--update-snapshots`, followed by the live auth test and complete journey suite. Commit only those four reviewed snapshot files if the 70px card movement is visually intentional. Do not use snapshot update mode for the complete journey suite.
+
+Run `./scripts/verify-ci.sh --backend` on the isolated MySQL CI service to validate the complete backend inventory and migration gate. The 296-test hosted inventory was not run to completion locally, and focused green tests do not substitute for that gate. No production config, data, runtime, provider, or trade was accessed. Git metadata was inspected read-only and not modified.
+
+The remediation review additionally corrected the live fixture to test a portfolio owned by investor A while authenticated as investor B (the prior fixture selected B's own portfolio). Its browser flow now operates the real portfolio switcher in two investor tabs, checks tab-local selection across refresh and duplicate-tab creation, attempts writes with missing and wrong-context CSRF, tests concurrent writes and stale identity, and retains Playwright results under `app/tests/e2e/test-results/auth-live/` so the workflow's failure artifact upload survives harness cleanup. The admin CSRF bootstrap now sends `X-Stox-Auth-Context: admin`. Both destructive migration and fixture creation fail closed unless `LIDO_ENV_PATH` and SQLite database resolve inside the harness's unique temporary directory; all verifier PHP/Composer calls receive an explicitly pinned disposable `LIDO_ENV_PATH`.
+
+On this sandbox, the final focused backend run passed **92 tests / 437 assertions**. Shell/PHP/JavaScript syntax checks and `git diff --check` passed. The live auth harness successfully migrated its isolated SQLite database and created fixtures, then could not bind its local PHP server (`127.0.0.1:8001`); the browser assertions did not execute and no screenshot baseline was modified. This is an environment restriction, not a passing browser gate.
+
+**Hosted steps:** run `./scripts/verify-ci.sh --frontend` and `./scripts/verify-ci.sh --backend` as required CI jobs. The frontend job uploads `app/tests/e2e/test-results/` on failure (including the live auth trace). Inspect the uploaded trace and any actual visual diffs; do not update snapshots until all four auth-entry desktop/mobile images are reviewed, then run the auth-entry test once in update mode and once without it. Keep hosted Chromium, full journeys, MySQL backend suite, migration portability, and full auth browser execution as open gates until those exact runs pass.
+
+Read-only branch audit at review time found local `HEAD` (`fc53489`) and `origin/master` (`b898f17`) have diverged from merge base `7df06f7`; the current master delta removes several authentication-upgrade files present in this feature checkout. Supervisor integration must reconcile that delta before treating this candidate as current-master ready. This review did not fetch or change refs, index, or other Git metadata.

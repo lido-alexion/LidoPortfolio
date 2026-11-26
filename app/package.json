@@ -15,6 +15,7 @@
         "test:js:tos": "vitest run",
         "test:e2e:tos": "playwright test --config tests/e2e/playwright.config.js",
         "test:e2e:journeys": "playwright test --config tests/e2e/playwright.config.js",
+        "test:e2e:auth-live": "bash scripts/run-auth-live-e2e.sh",
         "test:e2e:production-smoke": "STOX_PRODUCTION_BASE_URL=1 STOX_E2E_BASE_URL=$STOX_E2E_BASE_URL playwright test tests/e2e/production-smoke.spec.js --config tests/e2e/playwright.config.js",
         "typecheck": "tsc --noEmit"
     },

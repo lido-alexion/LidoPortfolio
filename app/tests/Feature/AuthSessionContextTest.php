@@ -8,6 +8,7 @@ use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Auth\SessionGuard;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -139,6 +140,30 @@ class AuthSessionContextTest extends TestCase
 
         $this->withCookies([$this->baseCookieName().'-admin' => $adminCookie->getValue()])
             ->withHeader('X-Stox-Auth-Context', 'investor')
+            ->getJson('/api/portfolios')->assertUnauthorized();
+    }
+
+    public function test_expired_investor_session_is_rejected(): void
+    {
+        $investor = $this->user(false);
+
+        $investorLogin = $this->postJson('/api/auth/login', [
+            'email' => $investor->email,
+            'password' => 'secret-password',
+        ])->assertOk();
+        $investorCookie = $investorLogin->getCookie($this->baseCookieName());
+
+        DB::table(config('session.table', 'sessions'))
+            ->update(['last_activity' => now()->subMinutes(config('session.lifetime') + 1)->timestamp]);
+        // Feature tests normally retain the same in-memory session store across
+        // requests; a real HTTP request rebuilds it from the presented cookie.
+        app('session')->forgetDrivers();
+        app()->forgetInstance('session.store');
+        Auth::forgetGuards();
+
+        $this->withCookies([
+            $this->baseCookieName() => $investorCookie->getValue(),
+        ])->withHeader('X-Stox-Auth-Context', 'investor')
             ->getJson('/api/portfolios')->assertUnauthorized();
     }
 

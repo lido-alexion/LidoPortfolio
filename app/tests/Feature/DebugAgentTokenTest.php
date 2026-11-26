@@ -19,9 +19,14 @@ class DebugAgentTokenTest extends TestCase
 
         User::factory()->create(['is_admin' => true, 'email' => 'admin@example.com']);
 
-        $this->getJson('/api/universe-price-sync/status', [
+        $response = $this->getJson('/api/universe-price-sync/status', [
             'X-Lido-Debug-Token' => 'test-debug-token',
         ])->assertOk();
+
+        $this->assertNull(
+            $response->getCookie(config('session.cookie')),
+            'The API debug credential must not mint or take ownership of a browser session.',
+        );
     }
 
     public function test_wrong_debug_token_stays_unauthorized(): void
