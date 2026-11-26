@@ -5,7 +5,7 @@ namespace Tests\Unit\Screener;
 use App\Services\Screener\ScreenerCatalog;
 use App\Services\Screener\ScreenerEvaluationService;
 use App\Services\Screener\TechnicalIndicatorService;
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 
 /**
  * The stock-major backtest reads full indicator series instead of re-evaluating
