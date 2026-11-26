@@ -112,6 +112,63 @@ class V4Spec005SellAttributionTest extends TestCase
         );
     }
 
+    public function test_sell_recalculation_is_idempotent_and_keeps_realized_profit_with_its_owner(): void
+    {
+        [$user, $profile, $stock, $strategyA] = $this->twoOwnerLots();
+        $ownerA = Holding::ownerKeyFor((int) $strategyA->id);
+
+        $this->actingAs($user)->withProfileHeader($user, $profile);
+        $this->postJson('/api/transactions', $this->sellPayload($stock, 3, 110, [
+            'owner_key' => Holding::OWNER_UNMANAGED,
+        ]))->assertCreated();
+
+        $service = app(HoldingsCalculationService::class);
+        $service->recalculateOwnerLotsForProfileStock($profile, $stock);
+        $firstUnmanaged = $this->holding($profile, $stock, Holding::OWNER_UNMANAGED);
+        $this->assertNotNull($firstUnmanaged);
+        $firstCalculation = (float) $firstUnmanaged->realized_profit;
+        $service->recalculateOwnerLotsForProfileStock($profile, $stock);
+
+        $unmanaged = $this->holding($profile, $stock, Holding::OWNER_UNMANAGED);
+        $strategy = $this->holding($profile, $stock, $ownerA);
+        $sell = Transaction::query()->where('type', 'sell')->sole();
+        $grossRealizedProfit = ((float) $sell->price - 100.0) * (float) $sell->quantity;
+        $this->assertNotNull($unmanaged);
+        $this->assertNotNull($strategy);
+        $this->assertSame(Holding::OWNER_UNMANAGED, $sell->owner_key);
+        $this->assertGreaterThan(0.0, (float) $sell->fees);
+        $this->assertEqualsWithDelta($grossRealizedProfit, (float) $sell->realized_pl, 0.0001);
+        $this->assertEqualsWithDelta(
+            $grossRealizedProfit - (float) $sell->fees,
+            (float) $unmanaged->realized_profit,
+            0.0001,
+        );
+        $this->assertEqualsWithDelta($firstCalculation, (float) $unmanaged->realized_profit, 0.0001);
+        $this->assertEqualsWithDelta(7.0, (float) $unmanaged->quantity, 0.0001);
+        $this->assertEqualsWithDelta(10.0, (float) $strategy->quantity, 0.0001);
+        $this->assertEqualsWithDelta(0.0, (float) $strategy->realized_profit, 0.0001);
+        $this->assertSame(2, Holding::query()
+            ->where('profile_id', $profile->id)
+            ->where('stock_id', $stock->id)
+            ->count());
+    }
+
+    public function test_holding_save_keeps_an_explicit_owner_key_when_strategy_id_changes(): void
+    {
+        [$user, $profile, $stock, $strategyA] = $this->twoOwnerLots();
+        $unmanaged = $this->holding($profile, $stock, Holding::OWNER_UNMANAGED);
+
+        $unmanaged->strategy_id = $strategyA->id;
+        $unmanaged->save();
+
+        $this->assertSame(Holding::OWNER_UNMANAGED, $unmanaged->fresh()->owner_key);
+        $this->assertNull($unmanaged->fresh()->strategy_id);
+        $this->assertSame(2, Holding::query()
+            ->where('profile_id', $profile->id)
+            ->where('stock_id', $stock->id)
+            ->count());
+    }
+
     public function test_invalid_owner_is_rejected(): void
     {
         [$user, $profile, $stock] = $this->twoOwnerLots();
