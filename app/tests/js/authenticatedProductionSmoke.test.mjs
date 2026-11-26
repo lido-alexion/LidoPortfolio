@@ -67,6 +67,7 @@ test('Kite production smoke waits for hydrated state and verifies a read-only me
     assert.match(source, /error\?\.name === 'TimeoutError' \? 'timeout' : 'error'/);
     assert.match(source, /getBoundingClientRect\(\)/);
     assert.match(source, /AUTHENTICATED_SMOKE_KITE_MENU_CLICK/);
+    assert.match(source, /AUTHENTICATED_SMOKE_KITE_MENU_CLOSE_CLICK/);
     assert.doesNotMatch(source, /console\.(?:log|error)\([^\n]*(?:error\.message|error\.stack|\.url\(\)|outerHTML|innerHTML)/);
     const ready = source.indexOf("stage = 'dashboard_kite_menu_ready';");
     const open = source.indexOf("stage = 'dashboard_kite_menu_open';");

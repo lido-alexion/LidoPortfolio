@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGuidedTourResponseCapture, hasPresetChartGeometry, readGuidedTourPayload, readSafeAuthenticatedSmokeMarkers, readSafeKiteMenuClickDiagnostic, safeAuthenticatedSmokeStage, waitForPresetChartGeometry } from '../e2e/productionSmokeDiagnostics.js';
+import { createGuidedTourResponseCapture, hasPresetChartGeometry, readGuidedTourPayload, readSafeAuthenticatedSmokeMarkers, readSafeKiteMenuClickDiagnostic, readSafeKiteMenuCloseClickDiagnostic, safeAuthenticatedSmokeStage, waitForPresetChartGeometry } from '../e2e/productionSmokeDiagnostics.js';
 import { allowProductionSmokeRequest, allowTransientWelcomeSkipRequest } from '../e2e/productionSmokePolicy.js';
 import { EventEmitter } from 'node:events';
 
@@ -61,6 +61,15 @@ test('Kite menu click diagnostics distinguish timeout from click error using fix
     assert.equal(readSafeKiteMenuClickDiagnostic('AUTHENTICATED_SMOKE_KITE_MENU_CLICK:timeout;count=1;connected=1;visible=0;enabled=1;expanded=false\nAUTHENTICATED_SMOKE_KITE_MENU_CLICK:error;count=0;connected=0;visible=0;enabled=0;expanded=unknown'), null);
     assert.equal(readSafeKiteMenuClickDiagnostic('AUTHENTICATED_SMOKE_KITE_MENU_CLICK:timeout;count=1;connected=1;visible=0;enabled=1;expanded=false https://private.test/?token=secret'), null);
     assert.equal(JSON.stringify([timeout, error]).includes('private'), false);
+});
+
+test('Kite menu close click diagnostics expose only fixed redacted target state', () => {
+    const timeout = readSafeKiteMenuCloseClickDiagnostic('private URL and response\nAUTHENTICATED_SMOKE_KITE_MENU_CLOSE_CLICK:timeout;count=1;connected=1;visible=1;enabled=1;expanded=true');
+    assert.deepEqual(timeout, { kind: 'timeout', count: true, connected: true, visible: true, enabled: true, expanded: 'true' });
+    assert.deepEqual(readSafeKiteMenuCloseClickDiagnostic('AUTHENTICATED_SMOKE_KITE_MENU_CLOSE_CLICK:error;count=0;connected=0;visible=0;enabled=0;expanded=unknown'), {
+        kind: 'error', count: false, connected: false, visible: false, enabled: false, expanded: 'unknown',
+    });
+    assert.equal(readSafeKiteMenuCloseClickDiagnostic('AUTHENTICATED_SMOKE_KITE_MENU_CLOSE_CLICK:timeout;count=1;connected=1;visible=1;enabled=1;expanded=true https://private.test/?token=secret'), null);
 });
 
 test('guided-tour JSON diagnostics separate syntax from other read failures without exposing details', async () => {

@@ -7,6 +7,7 @@ let browser;
 let statusResponseWatchdog;
 const blockedReasons = new Set();
 let kiteMenuClickDiagnostic = null;
+let kiteMenuCloseClickDiagnostic = null;
 try {
     const baseURL = process.env.STOX_E2E_BASE_URL;
     const email = process.env.STOX_SMOKE_EMAIL;
@@ -348,7 +349,31 @@ try {
             if (brokerStatusPayload?.connected) await disconnectItem.waitFor({ state: 'visible' });
             else if (await disconnectItem.count()) throw new Error();
             stage = 'dashboard_kite_menu_close';
-            await kiteMenuButton.click();
+            try {
+                await kiteMenuButton.click();
+            } catch (error) {
+                const kind = error?.name === 'TimeoutError' ? 'timeout' : 'error';
+                try {
+                    kiteMenuCloseClickDiagnostic = await page.evaluate(() => {
+                        const buttons = [...document.querySelectorAll('.lido-header .lido-kite-header-control button[aria-haspopup="menu"]')];
+                        const button = buttons.length === 1 ? buttons[0] : null;
+                        const rect = button?.getBoundingClientRect();
+                        const style = button ? getComputedStyle(button) : null;
+                        const visible = Boolean(button && rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none');
+                        return {
+                            count: buttons.length === 1,
+                            connected: Boolean(button?.isConnected),
+                            visible,
+                            enabled: Boolean(button && !button.disabled),
+                            expanded: button?.getAttribute('aria-expanded') === 'true' ? 'true' : button?.getAttribute('aria-expanded') === 'false' ? 'false' : 'unknown',
+                        };
+                    });
+                } catch {
+                    kiteMenuCloseClickDiagnostic = null;
+                }
+                stage = kind === 'timeout' ? 'dashboard_kite_menu_close_click_timeout' : 'dashboard_kite_menu_close_click_error';
+                throw error;
+            }
             stage = 'dashboard_kite_menu_collapsed';
             await page.waitForFunction(() => document.querySelector(
                 '.lido-header .lido-kite-header-control button[aria-haspopup="menu"]'
@@ -396,6 +421,10 @@ try {
     if (kiteMenuClickDiagnostic) {
         const d = kiteMenuClickDiagnostic;
         console.log(`AUTHENTICATED_SMOKE_KITE_MENU_CLICK:${stage === 'dashboard_kite_menu_click_timeout' ? 'timeout' : 'error'};count=${d.count ? '1' : '0'};connected=${d.connected ? '1' : '0'};visible=${d.visible ? '1' : '0'};enabled=${d.enabled ? '1' : '0'};expanded=${d.expanded}`);
+    }
+    if (kiteMenuCloseClickDiagnostic) {
+        const d = kiteMenuCloseClickDiagnostic;
+        console.log(`AUTHENTICATED_SMOKE_KITE_MENU_CLOSE_CLICK:${stage === 'dashboard_kite_menu_close_click_timeout' ? 'timeout' : 'error'};count=${d.count ? '1' : '0'};connected=${d.connected ? '1' : '0'};visible=${d.visible ? '1' : '0'};enabled=${d.enabled ? '1' : '0'};expanded=${d.expanded}`);
     }
     console.log(`AUTHENTICATED_SMOKE_FAILED:${safeAuthenticatedSmokeStage(stage)}`);
     process.exitCode = 1;
