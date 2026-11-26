@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGuidedTourResponseCapture, hasPresetChartGeometry, readGuidedTourPayload, readSafeAuthenticatedSmokeMarkers, readSafeKiteMenuClickDiagnostic, readSafeKiteMenuCloseClickDiagnostic, safeAuthenticatedSmokeStage, waitForPresetChartGeometry } from '../e2e/productionSmokeDiagnostics.js';
+import { createComboPreferenceLifecycleCapture, createGuidedTourResponseCapture, hasPresetChartGeometry, readGuidedTourPayload, readSafeAuthenticatedSmokeMarkers, readSafeComboPreferenceDiagnostic, readSafeKiteHitTestDiagnostic, readSafeKiteMenuClickDiagnostic, readSafeKiteMenuCloseClickDiagnostic, safeAuthenticatedSmokeStage, waitForPresetChartGeometry } from '../e2e/productionSmokeDiagnostics.js';
 import { allowProductionSmokeRequest, allowTransientWelcomeSkipRequest } from '../e2e/productionSmokePolicy.js';
 import { EventEmitter } from 'node:events';
 
@@ -70,6 +70,52 @@ test('Kite menu close click diagnostics expose only fixed redacted target state'
         kind: 'error', count: false, connected: false, visible: false, enabled: false, expanded: 'unknown',
     });
     assert.equal(readSafeKiteMenuCloseClickDiagnostic('AUTHENTICATED_SMOKE_KITE_MENU_CLOSE_CLICK:timeout;count=1;connected=1;visible=1;enabled=1;expanded=true https://private.test/?token=secret'), null);
+});
+
+test('Kite hit-test and preference lifecycle markers accept only bounded redacted enums', () => {
+    assert.deepEqual(readSafeKiteHitTestDiagnostic('AUTHENTICATED_SMOKE_KITE_HIT_TEST:other;overlay=guided_tour'), { hit: 'other', overlay: 'guided_tour' });
+    assert.equal(readSafeKiteHitTestDiagnostic('AUTHENTICATED_SMOKE_KITE_HIT_TEST:other;overlay=guided_tour;coordinates=10,20'), null);
+    assert.equal(readSafeComboPreferenceDiagnostic('private body\nAUTHENTICATED_SMOKE_COMBO_PREFERENCE:matching_pending'), 'matching_pending');
+    assert.equal(readSafeComboPreferenceDiagnostic('AUTHENTICATED_SMOKE_COMBO_PREFERENCE:response https://private.test'), null);
+    assert.equal(JSON.stringify([readSafeKiteHitTestDiagnostic('AUTHENTICATED_SMOKE_KITE_HIT_TEST:other;overlay=guided_tour'), readSafeComboPreferenceDiagnostic('AUTHENTICATED_SMOKE_COMBO_PREFERENCE:failed')]).includes('private'), false);
+});
+
+test('combo preference lifecycle capture keeps fixed states and removes listeners', () => {
+    const page = new EventEmitter();
+    const capture = createComboPreferenceLifecycleCapture(page, 'https://stox.example.test');
+    const request = (method, path) => ({ method: () => method, url: () => `https://stox.example.test${path}` });
+    assert.equal(capture.snapshot(), 'absent');
+    const pending = request('GET', '/api/v1/stock-details/combo-chart-preference');
+    page.emit('request', pending);
+    assert.equal(capture.snapshot(), 'matching_pending');
+    page.emit('requestfailed', pending);
+    assert.equal(capture.snapshot(), 'failed');
+    page.emit('request', pending);
+    page.emit('response', { request: () => pending });
+    assert.equal(capture.snapshot(), 'response');
+    const wrongMethod = request('POST', '/api/v1/stock-details/combo-chart-preference');
+    page.emit('request', wrongMethod);
+    assert.equal(capture.snapshot(), 'response');
+    const wrongPath = request('GET', '/api/v1/stock-details/other');
+    page.emit('request', wrongPath);
+    assert.equal(capture.snapshot(), 'response');
+    capture.dispose();
+    const mismatchCapture = createComboPreferenceLifecycleCapture(page, 'https://stox.example.test');
+    page.emit('request', wrongPath);
+    assert.equal(mismatchCapture.snapshot(), 'path_mismatch');
+    page.emit('request', wrongMethod);
+    page.emit('request', wrongPath);
+    assert.equal(mismatchCapture.snapshot(), 'method_mismatch');
+    page.emit('request', pending);
+    page.emit('request', wrongPath);
+    assert.equal(mismatchCapture.snapshot(), 'matching_pending');
+    page.emit('requestfailed', pending);
+    page.emit('request', wrongPath);
+    assert.equal(mismatchCapture.snapshot(), 'failed');
+    mismatchCapture.dispose();
+    assert.equal(page.listenerCount('request'), 0);
+    assert.equal(page.listenerCount('response'), 0);
+    assert.equal(page.listenerCount('requestfailed'), 0);
 });
 
 test('guided-tour JSON diagnostics separate syntax from other read failures without exposing details', async () => {
