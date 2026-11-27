@@ -21,13 +21,19 @@ class DataQualityResolutionService
         ?int $userId = null,
         bool $auto = false,
         bool $requirePendingReview = true,
+        bool $adminManualOverride = false,
+        array $manualOverrideContext = [],
     ): DataQualityIssue {
         $appliedRatio = $ratio ?? (float) ($issue->suggested_ratio ?? 0);
-        if ($appliedRatio <= 0) {
-            throw new \InvalidArgumentException('Applied ratio must be greater than zero.');
+        if (! is_finite($appliedRatio) || $appliedRatio <= 0 || $appliedRatio > 10000) {
+            throw new \InvalidArgumentException('Applied ratio must be finite, positive, and no greater than 10000.');
         }
 
-        return DB::transaction(function () use ($issue, $appliedRatio, $notes, $userId, $auto, $requirePendingReview) {
+        if ($adminManualOverride && ($auto || $userId === null || $issue->issue_type !== DataQualityIssue::TYPE_CORPORATE_ACTION)) {
+            throw new \InvalidArgumentException('Manual evidence override requires an authenticated human corporate-action review.');
+        }
+
+        return DB::transaction(function () use ($issue, $appliedRatio, $notes, $userId, $auto, $requirePendingReview, $adminManualOverride, $manualOverrideContext) {
             $issue = DataQualityIssue::query()->lockForUpdate()->findOrFail($issue->id);
             $this->lockIssueStock($issue);
             $this->assertNoCompletedPriceRepair($issue);
@@ -40,7 +46,11 @@ class DataQualityResolutionService
                 );
             }
 
-            app(BnagrochemF042EvidenceValidator::class)->assertReviewedEvidence($issue->loadMissing(['stock', 'evidences']), $appliedRatio, $auto);
+            if (! $adminManualOverride) {
+                app(BnagrochemF042EvidenceValidator::class)->assertReviewedEvidence($issue->loadMissing(['stock', 'evidences']), $appliedRatio, $auto);
+            } elseif ($issue->issue_type !== DataQualityIssue::TYPE_CORPORATE_ACTION) {
+                throw new \InvalidArgumentException('Manual evidence override is limited to corporate-action issues.');
+            }
 
             $isReversal = $issue->latest_resolution_id !== null && $issue->issue_status !== DataQualityIssue::STATUS_PENDING_REVIEW;
             $resolutionType = $auto
@@ -62,6 +72,10 @@ class DataQualityResolutionService
                 'metadata' => [
                     'auto_resolved' => $auto,
                     'previous_status' => $issue->issue_status,
+                    'provenance' => $adminManualOverride ? 'admin_verified_manual_override' : null,
+                    'evidence_override' => $adminManualOverride,
+                    'human_approval_required' => ! $auto,
+                    'manual_override_context' => $adminManualOverride ? $manualOverrideContext : null,
                 ],
                 'resolved_at' => now(),
             ]);

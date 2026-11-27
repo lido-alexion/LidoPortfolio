@@ -45,6 +45,48 @@ class DataQualityApiTest extends TestCase
             ->assertJsonPath('data.issue_status', DataQualityIssue::STATUS_ACCEPTED);
     }
 
+    public function test_authenticated_admin_can_explicitly_accept_corporate_action_without_collected_evidence(): void
+    {
+        [$stock, $issue] = $this->createBnagrochemIssue();
+        $admin = $this->createAdminUser();
+
+        $this->assertSame(0, $issue->evidences()->count());
+        $this->actingAs($admin)->postJson("/api/data-quality/issues/{$issue->id}/accept", [
+            'applied_ratio' => 10,
+            'manual_evidence_override' => true,
+            'confirm_manual_evidence_override' => true,
+            'manual_source_reference' => 'Owner-verified off-platform circular',
+            'manual_justification' => 'Independent review confirmed the split terms.',
+        ])->assertOk()->assertJsonPath('data.issue_status', DataQualityIssue::STATUS_ACCEPTED);
+
+        $resolution = $issue->fresh()->resolutions()->latest('id')->firstOrFail();
+        $this->assertSame('admin_verified_manual_override', $resolution->metadata['provenance']);
+        $this->assertSame($admin->id, $resolution->resolved_by);
+        $this->assertSame('Owner-verified off-platform circular', $resolution->metadata['manual_override_context']['source_reference']);
+        $this->assertSame(1, PriceAdjustmentFactor::query()->where('issue_id', $issue->id)->where('is_active', true)->count());
+        $this->assertSame(PriceAdjustmentFactor::REPAIR_STATUS_PENDING, PriceAdjustmentFactor::query()->where('issue_id', $issue->id)->firstOrFail()->metadata['ohlcv_repair_status']);
+        $this->assertSame(0, StockPrice::query()->where('stock_id', $stock->id)->count(), 'Approval must stage F042 only; it must not directly rewrite prices.');
+    }
+
+    public function test_manual_evidence_override_requires_explicit_confirmation_and_bounded_ratio(): void
+    {
+        [, $issue] = $this->createBnagrochemIssue();
+        $admin = $this->createAdminUser();
+
+        $this->actingAs($admin)->postJson("/api/data-quality/issues/{$issue->id}/accept", [
+            'manual_evidence_override' => true,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['confirm_manual_evidence_override']);
+
+        $this->actingAs($admin)->postJson("/api/data-quality/issues/{$issue->id}/accept", [
+            'applied_ratio' => 10001,
+            'manual_evidence_override' => true,
+            'confirm_manual_evidence_override' => true,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['applied_ratio']);
+
+        $this->assertSame(DataQualityIssue::STATUS_PENDING_REVIEW, $issue->fresh()->issue_status);
+        $this->assertDatabaseMissing('portfolio_price_adjustment_factors', ['issue_id' => $issue->id]);
+    }
+
     public function test_admin_can_reject_pending_issue(): void
     {
         $admin = $this->createAdminUser();

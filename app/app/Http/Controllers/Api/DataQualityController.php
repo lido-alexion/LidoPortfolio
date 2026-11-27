@@ -79,8 +79,9 @@ class DataQualityController extends Controller
     public function accept(Request $request, DataQualityIssue $issue): JsonResponse
     {
         $reResolve = $request->boolean('re_resolve');
+        $manualOverride = $request->boolean('manual_evidence_override');
         $payload = $request->validate([
-            'applied_ratio' => ['nullable', 'numeric', 'gt:0'],
+            'applied_ratio' => ['nullable', 'numeric', 'gt:0', 'max:10000'],
             'notes' => [
                 Rule::requiredIf($reResolve),
                 'nullable',
@@ -88,6 +89,10 @@ class DataQualityController extends Controller
                 'max:2000',
             ],
             're_resolve' => ['sometimes', 'boolean'],
+            'manual_evidence_override' => ['sometimes', 'boolean'],
+            'confirm_manual_evidence_override' => [$manualOverride ? 'required' : 'sometimes', 'boolean', 'accepted'],
+            'manual_source_reference' => ['nullable', 'string', 'max:500'],
+            'manual_justification' => ['nullable', 'string', 'max:2000'],
         ]);
 
         $notes = $this->normalizedNotes($payload['notes'] ?? null, $reResolve);
@@ -99,6 +104,12 @@ class DataQualityController extends Controller
             auth()->id(),
             false,
             requirePendingReview: ! $reResolve,
+            adminManualOverride: $manualOverride,
+            manualOverrideContext: [
+                'source_reference' => isset($payload['manual_source_reference']) ? trim($payload['manual_source_reference']) : null,
+                'justification' => isset($payload['manual_justification']) ? trim($payload['manual_justification']) : null,
+                'confirmed' => $manualOverride,
+            ],
         );
 
         return response()->json(['data' => $updated]);
