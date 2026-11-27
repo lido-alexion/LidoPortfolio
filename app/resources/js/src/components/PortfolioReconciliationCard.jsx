@@ -18,7 +18,21 @@ const quantity = (value) => Number(value).toLocaleString(undefined, { maximumFra
 const completedAt = (value) => value ? new Date(value).toLocaleString(undefined, {
     year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true,
 }) : '—';
-const tradingDate = (value) => value ? new Date(`${value}T12:00:00`).toLocaleDateString() : 'Unknown date';
+const tradingDate = (value) => {
+    // API date casts may arrive as either YYYY-MM-DD or an ISO datetime. Treat
+    // both as a calendar date: parsing the date portion in UTC avoids shifting
+    // it when the browser runs in a different timezone.
+    const match = typeof value === 'string' ? value.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/) : null;
+    if (!match) return 'Unknown date';
+
+    const [, year, month, day] = match;
+    const calendarDate = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+    if (calendarDate.getUTCFullYear() !== Number(year)
+        || calendarDate.getUTCMonth() !== Number(month) - 1
+        || calendarDate.getUTCDate() !== Number(day)) return 'Unknown date';
+
+    return calendarDate.toLocaleDateString(undefined, { timeZone: 'UTC' });
+};
 const syncStatus = (run) => run.status === 'gap_unavailable' ? 'Historical trades unavailable'
     : run.status === 'sync_failed' ? 'Sync failed'
         : run.status === 'needs_review' ? 'Needs review'
