@@ -44,6 +44,10 @@ class DataQualityIssueService
         ?string $detectionRunId = null,
     ): DataQualityIssue {
         return DB::transaction(function () use ($stock, $issueType, $detectionMethod, $attributes, $evidences, $detectionRunId) {
+            // Serialize discovery by stock before checking for a pending issue.
+            // Without this parent-row lock, concurrent feed and bounded-history
+            // discovery can both observe an empty event key and insert duplicates.
+            $stock = Stock::query()->whereKey($stock->id)->lockForUpdate()->firstOrFail();
             $base = [
                 'stock_id' => $stock->id,
                 'symbol' => $stock->symbol,
