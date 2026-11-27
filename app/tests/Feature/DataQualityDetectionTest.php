@@ -44,6 +44,11 @@ class DataQualityDetectionTest extends TestCase
         $this->assertNotNull($checkpoint);
         $this->assertSame(1, $checkpoint->rows_seen);
         $this->assertNotNull($checkpoint->last_successful_at);
+        $evidence = $issue->evidences->first();
+        $this->assertSame('TCS', $evidence->evidence_payload['symbol'] ?? null);
+        $this->assertSame($checkpoint->payload_hash, $evidence->evidence_payload['source_receipt']['sha256'] ?? null);
+        $this->assertSame(0, $evidence->evidence_payload['source_receipt']['row_index'] ?? null);
+        $this->assertSame('https://example.test/ca.json', $evidence->evidence_payload['source_receipt']['url'] ?? null);
     }
 
     public function test_exchange_feed_skips_rights_issues(): void

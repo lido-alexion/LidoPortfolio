@@ -67,7 +67,8 @@ class DataQualityCorporateActionSyncService
         $created = 0;
         $skipped = 0;
         $errors = [];
-        foreach ($rows as $payload) {
+        $receiptSha256 = hash('sha256', $response->body());
+        foreach ($rows as $rowIndex => $payload) {
             if (! is_array($payload)) {
                 $skipped++;
                 continue;
@@ -113,7 +114,17 @@ class DataQualityCorporateActionSyncService
                         'evidence_key' => 'exchange_ratio',
                         'evidence_label' => 'Exchange ratio',
                         'evidence_value' => $mapped['ratio_label'],
-                        'evidence_payload' => $payload,
+                        // Keep the source row intact while binding it to the exact
+                        // response receipt and its position. The checkpoint hash
+                        // alone cannot identify which receipt produced an issue.
+                        'evidence_payload' => array_merge($payload, [
+                            'source_receipt' => [
+                                'url' => $url,
+                                'sha256' => $receiptSha256,
+                                'row_index' => $rowIndex,
+                                'received_at' => now()->toIso8601String(),
+                            ],
+                        ]),
                         'captured_at' => now(),
                     ],
                 ],
@@ -122,7 +133,7 @@ class DataQualityCorporateActionSyncService
             $created++;
         }
 
-        $checkpoint->forceFill(['last_successful_at' => now(), 'payload_hash' => hash('sha256', $response->body()), 'rows_seen' => count($rows), 'last_error' => null])->save();
+        $checkpoint->forceFill(['last_successful_at' => now(), 'payload_hash' => $receiptSha256, 'rows_seen' => count($rows), 'last_error' => null])->save();
 
         return [
             'synced' => count($rows),
