@@ -7,6 +7,7 @@ use App\Models\Stock;
 use App\Support\ExternalHttp;
 use App\Support\StockValidationResult;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 class StockValidationService
@@ -70,6 +71,7 @@ class StockValidationService
     ?string $name = null,
     ?string $isin = null,
     ?string $sector = null,
+    bool $enqueueHistoricalBackfill = true,
   ): StockValidationResult {
     $result = $this->validate($inputSymbol, $exchange, true);
 
@@ -100,7 +102,9 @@ class StockValidationService
 
       if ($result->source !== 'local' || ! $this->isRecentlyVerified($stock)) {
         $this->markVerified($stock);
-        $this->triggerHistoricalBackfill($stock);
+        if ($enqueueHistoricalBackfill) {
+          $this->triggerHistoricalBackfill($stock);
+        }
       }
 
       return StockValidationResult::valid($stock->fresh(), $result->source, $result->meta);
@@ -337,7 +341,14 @@ class StockValidationService
   protected function triggerHistoricalBackfill(Stock $stock): void
   {
     try {
-      BackfillHistoricalDataJob::dispatchSync($stock->id);
+      $queueDatabase = config('queue.connections.database.connection') ?: config('database.default');
+      if ($queueDatabase !== DB::connection()->getName()) {
+        throw new \RuntimeException('Historical backfill requires the database queue to share the stock database connection.');
+      }
+      BackfillHistoricalDataJob::dispatch($stock->id)
+        ->onConnection('database')
+        ->onQueue('default')
+        ->beforeCommit();
     } catch (\Throwable $e) {
       $this->portfolioLogger->api('warning', 'Historical backfill after validation failed', [
         'stock_id' => $stock->id,

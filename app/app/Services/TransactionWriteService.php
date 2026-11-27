@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\CashLedgerEntry;
 use App\Services\Ownership\SellAttributionService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -18,7 +19,7 @@ use Illuminate\Validation\ValidationException;
  * Used by Transactions UI (POST /api/transactions), F019 bulk import, and TOS ExecutionEngine fills.
  *
  * Financial unit (PD-F019-14): ledger insert + holdings/realizations + cash — one DB transaction.
- * OHLCV backfill and snapshots run after that unit commits (best-effort; must not undo financial consistency).
+ * OHLCV queue insertion joins that DB transaction; snapshots rebuild after commit (best-effort).
  */
 class TransactionWriteService
 {
@@ -45,7 +46,7 @@ class TransactionWriteService
         bool $applyCash = true,
     ): Transaction {
         $transaction = DB::transaction(function () use ($profile, $stock, $input, $user, $applyCash) {
-            return $this->createFinancialUnit($profile, $stock, $input, $user, $applyCash);
+            return $this->createFinancialUnit($profile, $stock, $input, $user, $applyCash, enqueuePriceEnrichment: true);
         });
 
         $this->applyPostCommitSideEffects($profile, $stock, $transaction, $softFailSnapshots);
@@ -78,21 +79,12 @@ class TransactionWriteService
         $oldStockId = (int) $transaction->stock_id;
 
         $updated = DB::transaction(function () use ($profile, $transaction, $stock, $input, $user, $applyCash) {
-            return $this->updateFinancialUnit($profile, $transaction, $stock, $input, $user, $applyCash);
+            return $this->updateFinancialUnit($profile, $transaction, $stock, $input, $user, $applyCash, enqueuePriceEnrichment: true);
         });
 
         if (! app()->runningUnitTests()) {
-            $type = strtolower((string) $updated->type);
             $dateOnly = $updated->transaction_date?->toDateString()
                 ?? (string) $updated->getRawOriginal('transaction_date');
-
-            if ($type === 'buy') {
-                try {
-                    BackfillHistoricalDataJob::dispatchSync($stock->id, $dateOnly);
-                } catch (\Throwable) {
-                    // Buy is saved; price sync can be retried from Holdings → OHLCV → Force sync.
-                }
-            }
 
             try {
                 $this->snapshots->rebuildAfterTransactionChange(
@@ -104,6 +96,10 @@ class TransactionWriteService
                 if (! $softFailSnapshots) {
                     throw $e;
                 }
+                Log::warning('Transaction snapshot rebuild failed after committed update.', [
+                    'profile_id' => $profile->id, 'transaction_id' => $updated->id,
+                    'failure' => $e->getMessage(),
+                ]);
             }
         }
 
@@ -153,6 +149,10 @@ class TransactionWriteService
             if (! $softFailSnapshots) {
                 throw $e;
             }
+            Log::warning('Transaction snapshot rebuild failed after committed delete.', [
+                'profile_id' => $profile->id, 'transaction_id' => $transaction->id,
+                'failure' => $e->getMessage(),
+            ]);
         }
 
         if (in_array($deletedType, ['buy', 'sell'], true)) {
@@ -177,6 +177,7 @@ class TransactionWriteService
         array $input,
         ?User $user = null,
         bool $applyCash = true,
+        bool $enqueuePriceEnrichment = false,
     ): Transaction {
         PortfolioProfile::query()->whereKey($profile->id)->lockForUpdate()->firstOrFail();
         $this->lockLifecycleOwner($profile, $input);
@@ -197,6 +198,9 @@ class TransactionWriteService
         if ($applyCash) {
             $this->cash->applyTradeTransaction($profile, $transaction, $user);
         }
+        if ($enqueuePriceEnrichment) {
+            $this->enqueuePriceEnrichment($transaction, $stock);
+        }
 
         return $transaction;
     }
@@ -213,6 +217,7 @@ class TransactionWriteService
         array $input,
         ?User $user = null,
         bool $applyCash = true,
+        bool $enqueuePriceEnrichment = false,
     ): Transaction {
         if ((int) $transaction->profile_id !== (int) $profile->id) {
             throw ValidationException::withMessages([
@@ -290,6 +295,9 @@ class TransactionWriteService
 
         if ($applyCash) {
             $this->cash->applyTradeTransaction($profile, $transaction, $user);
+        }
+        if ($enqueuePriceEnrichment) {
+            $this->enqueuePriceEnrichment($transaction, $stock);
         }
 
         return $transaction;
@@ -447,20 +455,11 @@ class TransactionWriteService
         Transaction $transaction,
         bool $softFailSnapshots = true,
     ): void {
-        if (app()->runningUnitTests()) {
-            return;
-        }
-
-        $type = strtolower((string) $transaction->type);
         $dateOnly = $transaction->transaction_date?->toDateString()
             ?? (string) $transaction->getRawOriginal('transaction_date');
 
-        if ($type === 'buy') {
-            try {
-                BackfillHistoricalDataJob::dispatchSync($stock->id, $dateOnly);
-            } catch (\Throwable) {
-                // Buy is saved; price sync can be retried from Holdings → OHLCV → Force sync.
-            }
+        if (app()->runningUnitTests() && ! config('transactions.run_post_commit_side_effects_in_tests', false)) {
+            return;
         }
 
         try {
@@ -473,7 +472,68 @@ class TransactionWriteService
             if (! $softFailSnapshots) {
                 throw $e;
             }
+            Log::warning('Transaction snapshot rebuild failed after committed write.', [
+                'profile_id' => $profile->id, 'transaction_id' => $transaction->id,
+                'failure' => $e->getMessage(),
+            ]);
         }
+    }
+
+    /** Queue buy price enrichment after an externally executed fill has committed.
+     *
+     * Broker fills cannot be rolled back when the durable queue is unavailable. Keep
+     * this separate from enqueuePriceEnrichment(), which is intentionally atomic for
+     * user initiated ledger writes.
+     */
+    public function enqueueCommittedPriceEnrichment(Transaction $transaction, Stock $stock): void
+    {
+        if (strtolower((string) $transaction->type) !== 'buy') {
+            return;
+        }
+
+        try {
+            $this->enqueuePriceEnrichment($transaction, $stock);
+        } catch (\Throwable $e) {
+            Log::warning('Unable to queue historical price enrichment after committed external fill.', [
+                'profile_id' => $transaction->profile_id,
+                'transaction_id' => $transaction->id,
+                'stock_id' => $stock->id,
+                'failure' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /** Queue within the financial DB transaction so the job row and ledger commit together. */
+    private function enqueuePriceEnrichment(Transaction $transaction, Stock $stock): void
+    {
+        if (strtolower((string) $transaction->type) !== 'buy') {
+            return;
+        }
+        $dateOnly = $transaction->transaction_date?->toDateString()
+            ?? (string) $transaction->getRawOriginal('transaction_date');
+        try {
+            $queueDatabase = config('queue.connections.database.connection') ?: config('database.default');
+            if ($queueDatabase !== DB::connection()->getName()) {
+                throw new \RuntimeException('Transaction price enrichment requires the database queue to share the ledger connection.');
+            }
+
+            BackfillHistoricalDataJob::dispatch((int) $stock->id, $dateOnly)
+                ->onConnection('database')
+                ->onQueue('default')
+                ->beforeCommit();
+        } catch (\Throwable $e) {
+            Log::error('Unable to durably queue transaction price enrichment; financial unit will roll back.', [
+                'profile_id' => $transaction->profile_id, 'transaction_id' => $transaction->id,
+                'stock_id' => $stock->id, 'failure' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /** Run non-financial protection effects after the durable ledger commit. */
+    public function notifyCommittedTransaction(PortfolioProfile $profile, Stock $stock, Transaction $transaction): void
+    {
+        $this->notifyProtectionAfterTrade($profile, $stock, $transaction);
     }
 
     /**
@@ -787,8 +847,13 @@ class TransactionWriteService
         try {
             app(\App\Services\Protection\PositionProtectionService::class)
                 ->afterCommittedFill($profile, $stock, $type, $source);
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
             // Protection sync must not undo a committed ledger write.
+            Log::warning('Position protection sync failed after committed transaction.', [
+                'profile_id' => $profile->id, 'stock_id' => $stock->id,
+                'transaction_id' => $transaction?->id, 'type' => $type,
+                'failure' => $e->getMessage(),
+            ]);
         }
     }
 }
