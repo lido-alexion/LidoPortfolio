@@ -100,16 +100,38 @@ test('real cookie sessions, independent role contexts, CSRF writes and portfolio
     await expect(duplicateTab.locator('.lido-portfolio-switcher')).toContainText('Investor A Default');
 
     const csrfToken = await csrf(tabA, 'investor');
+    const profileBeforeCsrfChecks = (await apiCall(tabA, `/api/portfolios/${ownedProfile}`, {
+        profile: ownedProfile, user: investor.id,
+    })).body.data.name;
     const missingCsrf = await apiCall(tabA, `/api/portfolios/${ownedProfile}`, {
         method: 'PUT', profile: ownedProfile, user: investor.id,
         body: { name: 'Missing CSRF' },
     });
     expect([419, 403]).toContain(missingCsrf.status);
+    expect((await apiCall(tabA, `/api/portfolios/${ownedProfile}`, {
+        profile: ownedProfile, user: investor.id,
+    })).body.data.name).toBe(profileBeforeCsrfChecks);
+
+    // The selected admin session has a different CSRF token. An investor
+    // token must not authorize a write under that session, even in the same
+    // browser context and with Chromium's same-origin Fetch Metadata header.
     const wrongContextCsrf = await apiCall(tabA, `/api/portfolios/${ownedProfile}`, {
         method: 'PUT', context: 'admin', token: csrfToken, profile: ownedProfile,
         user: investor.id, body: { name: 'Wrong context CSRF' },
     });
     expect([401, 403, 419]).toContain(wrongContextCsrf.status);
+    expect((await apiCall(tabA, `/api/portfolios/${ownedProfile}`, {
+        profile: ownedProfile, user: investor.id,
+    })).body.data.name).toBe(profileBeforeCsrfChecks);
+
+    const validCsrfWrite = await apiCall(tabA, `/api/portfolios/${ownedProfile}`, {
+        method: 'PUT', context: 'investor', token: csrfToken, profile: ownedProfile,
+        user: investor.id, body: { name: 'E2E CSRF Valid Write' },
+    });
+    expect(validCsrfWrite.status).toBe(200);
+    expect((await apiCall(tabA, `/api/portfolios/${ownedProfile}`, {
+        profile: ownedProfile, user: investor.id,
+    })).body.data.name).toBe('E2E CSRF Valid Write');
 
     // A second independent login is revocable from the active browser session.
     const revocationContext = await browser.newContext();
