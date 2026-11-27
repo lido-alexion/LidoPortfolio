@@ -132,6 +132,32 @@ describe('Portfolio reconciliation card', () => {
         expect(screen.getAllByText('#4')).toHaveLength(4);
     });
 
+    it('renders date-only and serialized ISO calendar dates across sync, review, and candidate rows', async () => {
+        const review = { id: 90, symbol: 'AAA', exchange: 'NSE', side: 'buy', quantity: '2.0000', price: '100.0000',
+            status: 'manual_match_review', evidence_kind: 'execution', broker_trade_id: '99890', review_version: 'c'.repeat(64),
+            sync_run: { trading_date: '2026-11-19T00:00:00.000000Z' } };
+        const datesSnapshot = { data: { data: { ...snapshot.data.data, trade_sync_runs: [
+            { id: 22, profile_id: 4, trading_date: '2026-11-20T00:00:00.000000Z', trigger: 'manual', status: 'completed', imported_count: 1, matched_count: 0, review_count: 0 },
+            { id: 23, profile_id: 4, trading_date: '2026-02-30', trigger: 'manual', status: 'completed', imported_count: 0, matched_count: 0, review_count: 0 },
+            { id: 24, profile_id: 4, trading_date: null, trigger: 'manual', status: 'completed', imported_count: 0, matched_count: 0, review_count: 0 },
+        ] } } };
+        apiMock.get.mockImplementation((url) => Promise.resolve(url === '/v1/broker/status'
+            ? { data: { data: brokerStatus } }
+            : url === '/reconciliation/trades/review'
+                ? { data: { data: { data: [review] } } }
+                : url === '/reconciliation/trades/review/90'
+                    ? { data: { data: { ...review, exact_match_candidates: [{ id: 502, type: 'buy', quantity: '2.0000', price: '100.0000', transaction_date: '2026-11-18T00:00:00.000000Z', source: 'manual' }] } } }
+                    : datesSnapshot));
+
+        renderWithKiteConnection(<PortfolioReconciliationCard executionMode="automatic" />);
+        expect(await screen.findByText('Trade 99890')).toBeInTheDocument();
+        expect(screen.queryByText('Invalid Date')).not.toBeInTheDocument();
+        expect(screen.getAllByText('Unknown date')).toHaveLength(2);
+        fireEvent.click(screen.getAllByRole('button', { name: 'Evidence' })[0]);
+        expect(await screen.findByText(/Broker evidence is sanitized/)).toBeInTheDocument();
+        expect(screen.getByRole('option', { name: /#502 · buy/ }).textContent).not.toContain('Invalid Date');
+    });
+
     it('runs the main action excluding today and refreshes status', async () => {
         apiMock.post.mockResolvedValue({ data: { data: {} } });
         renderWithKiteConnection(<PortfolioReconciliationCard executionMode="semi_automatic" />);
