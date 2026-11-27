@@ -97,24 +97,31 @@ class KiteBrokerGateway implements BrokerGateway
 
     public function availableEquityFunds(int $userId): ?float
     {
-        $token = $this->accessToken($userId);
+        $token = $this->readAccessToken($userId, 'user/margins/equity');
         try {
             $response = Http::timeout(20)
                 ->withHeaders($this->headers($token))
                 ->get(rtrim((string) config('broker.kite.api_base'), '/').'/user/margins/equity');
         } catch (ConnectionException) {
+            $this->logReadFailure('user/margins/equity', 'transport');
             return null;
         }
         if (! $response->successful()) {
+            $this->logReadFailure('user/margins/equity', in_array($response->status(), [401, 403], true) ? 'auth' : 'http', $response->status());
             return null;
         }
         $data = data_get($response->json(), 'data');
         if (! is_array($data)) {
+            $this->logReadFailure('user/margins/equity', 'schema', $response->status());
             return null;
         }
         $value = data_get($data, 'available.live_balance', $data['net'] ?? null);
+        if (! $this->isFiniteNumeric($value)) {
+            $this->logReadFailure('user/margins/equity', 'schema', $response->status());
+            return null;
+        }
 
-        return is_numeric($value) ? max(0.0, (float) $value) : null;
+        return max(0.0, (float) $value);
     }
 
     public function liveQuote(int $userId, Stock $stock): ?float
@@ -148,23 +155,43 @@ class KiteBrokerGateway implements BrokerGateway
 
     public function portfolioSnapshot(int $userId): ?array
     {
-        $token = $this->accessToken($userId);
+        $token = $this->readAccessToken($userId, 'portfolio');
         try {
             $holdingsResponse = Http::timeout(20)->withHeaders($this->headers($token))
                 ->get(rtrim((string) config('broker.kite.api_base'), '/').'/portfolio/holdings');
+        } catch (ConnectionException) {
+            $this->logReadFailure('portfolio/holdings', 'transport');
+            return null;
+        }
+        if (! $holdingsResponse->successful()) {
+            $this->logReadFailure('portfolio/holdings', in_array($holdingsResponse->status(), [401, 403], true) ? 'auth' : 'http', $holdingsResponse->status());
+            return null;
+        }
+        $holdings = data_get($holdingsResponse->json(), 'data');
+        if (! is_array($holdings) || ! array_is_list($holdings) || ! $this->validHoldingsRows($holdings)) {
+            $this->logReadFailure('portfolio/holdings', 'schema', $holdingsResponse->status());
+            return null;
+        }
+        try {
             $positionsResponse = Http::timeout(20)->withHeaders($this->headers($token))
                 ->get(rtrim((string) config('broker.kite.api_base'), '/').'/portfolio/positions');
         } catch (ConnectionException) {
+            $this->logReadFailure('portfolio/positions', 'transport');
+            return null;
+        }
+        if (! $positionsResponse->successful()) {
+            $this->logReadFailure('portfolio/positions', in_array($positionsResponse->status(), [401, 403], true) ? 'auth' : 'http', $positionsResponse->status());
+            return null;
+        }
+        $positions = data_get($positionsResponse->json(), 'data.net');
+        if (! is_array($positions) || ! array_is_list($positions) || ! $this->validPositionRows($positions)) {
+            $this->logReadFailure('portfolio/positions', 'schema', $positionsResponse->status());
             return null;
         }
         $cash = $this->availableEquityFunds($userId);
-        $holdings = data_get($holdingsResponse->json(), 'data');
-        if (! $holdingsResponse->successful() || ! is_array($holdings) || $cash === null) {
+        if ($cash === null) {
             return null;
         }
-        $positions = $positionsResponse->successful() && is_array(data_get($positionsResponse->json(), 'data.net'))
-            ? data_get($positionsResponse->json(), 'data.net') : [];
-
         return [
             'provider' => 'kite', 'captured_at' => now()->toISOString(),
             'holdings' => collect($holdings)->map(fn (array $row): array => [
@@ -188,15 +215,92 @@ class KiteBrokerGateway implements BrokerGateway
 
     public function trades(int $userId): ?array
     {
-        $token = $this->accessToken($userId);
+        $token = $this->readAccessToken($userId, 'trades');
         try {
             $response = Http::timeout(20)->withHeaders($this->headers($token))
                 ->get(rtrim((string) config('broker.kite.api_base'), '/').'/trades');
         } catch (ConnectionException) {
+            $this->logReadFailure('trades', 'transport');
             return null;
         }
         $rows = data_get($response->json(), 'data');
-        return $response->successful() && is_array($rows) && array_is_list($rows) ? $rows : null;
+        if (! $response->successful()) {
+            $failure = in_array($response->status(), [401, 403], true) ? 'auth' : 'http';
+            $this->logReadFailure('trades', $failure, $response->status());
+            return null;
+        }
+        if (! is_array($rows) || ! array_is_list($rows)) {
+            $this->logReadFailure('trades', 'schema', $response->status());
+            return null;
+        }
+
+        return $rows;
+    }
+
+    private function readAccessToken(int $userId, string $endpoint): string
+    {
+        try {
+            return $this->accessToken($userId);
+        } catch (DomainException $error) {
+            if ($error->errorCode() === 'BROKER_SESSION_EXPIRED') {
+                $this->logReadFailure($endpoint, 'session');
+            }
+            throw $error;
+        }
+    }
+
+    /** Log only fixed endpoint labels, a failure category, and bounded HTTP status. */
+    protected function logReadFailure(string $endpoint, string $failure, ?int $status = null): void
+    {
+        $context = ['endpoint' => $endpoint, 'failure' => $failure];
+        if ($status !== null && $status >= 100 && $status <= 599) {
+            $context['http_status'] = $status;
+        }
+        $this->logger->event('KiteBrokerGateway', 'broker.read_failed', 'warning', 'Kite read failed', $context);
+    }
+
+    /** @param array<mixed> $rows */
+    private function validHoldingsRows(array $rows): bool
+    {
+        foreach ($rows as $row) {
+            if (! is_array($row)
+                || ! $this->validIdentity($row['tradingsymbol'] ?? null)
+                || ! $this->validIdentity($row['exchange'] ?? null)
+                || ! $this->isFiniteNumeric($row['quantity'] ?? null)
+                || (isset($row['t1_quantity']) && ! $this->isFiniteNumeric($row['t1_quantity']))
+                || (isset($row['used_quantity']) && ! $this->isFiniteNumeric($row['used_quantity']))
+                || (isset($row['average_price']) && ! $this->isFiniteNumeric($row['average_price']))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** @param array<mixed> $rows */
+    private function validPositionRows(array $rows): bool
+    {
+        foreach ($rows as $row) {
+            $symbol = is_array($row) ? ($row['tradingsymbol'] ?? null) : null;
+            $exchange = is_array($row) ? ($row['exchange'] ?? null) : null;
+            $quantity = is_array($row) ? ($row['quantity'] ?? $row['net_quantity'] ?? null) : null;
+            if (! is_array($row) || ! $this->validIdentity($symbol) || ! $this->validIdentity($exchange)
+                || ! $this->isFiniteNumeric($quantity)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function validIdentity(mixed $value): bool
+    {
+        return is_string($value) && trim($value) !== '';
+    }
+
+    private function isFiniteNumeric(mixed $value): bool
+    {
+        return is_numeric($value) && is_finite((float) $value);
     }
 
     public function fetchOrder(int $userId, string $brokerOrderId): ?BrokerOrderSnapshot
