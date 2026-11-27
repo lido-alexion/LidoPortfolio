@@ -46,15 +46,16 @@ describe('VPS health metric tips', () => {
         expect(screen.getByText('Waiting for a usable consecutive sample or block-device counters.')).toBeInTheDocument();
         expect(screen.getByText('Unavailable until consecutive /proc/stat counters are readable.')).toBeInTheDocument();
 
-        for (const [label, title, uniqueText] of [
-            ['Root disk used', 'Root disk used tips', 'Filesystem capacity'],
-            ['Root inode usage', 'Root inode usage tips', 'Filesystem inode capacity'],
-            ['Disk I/O', 'Disk I/O tips', 'Block device counters'],
-            ['Disk I/O wait', 'Disk I/O wait tips', 'Host-wide signal'],
+        for (const [label, title, guidance, command] of [
+            ['Root disk used', 'Root disk used tips', 'Check filesystem capacity and the largest top-level directories.', 'df -h /'],
+            ['Root inode usage', 'Root inode usage tips', 'Check inode capacity and compare it with byte capacity.', 'df -i /'],
+            ['Disk I/O', 'Disk I/O tips', 'Compare read and write rates across consecutive samples.', 'cat /proc/diskstats'],
+            ['Disk I/O wait', 'Disk I/O wait tips', 'Check whether the reading is available and compare it with disk throughput over several samples.', 'iostat -xz 1 5'],
         ]) {
             fireEvent.click(screen.getByRole('button', { name: `Tips for ${label}` }));
             const tipDialog = screen.getByRole('dialog', { name: title });
-            expect(within(tipDialog).getByText(new RegExp(uniqueText, 'i'))).toBeInTheDocument();
+            expect(within(tipDialog).getByText(guidance, { exact: true })).toBeInTheDocument();
+            expect(within(tipDialog).getByText(command, { exact: true })).toBeInTheDocument();
             fireEvent.click(within(tipDialog).getByRole('button', { name: 'Close tips' }));
         }
 
