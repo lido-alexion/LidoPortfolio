@@ -36,6 +36,8 @@ export LIDO_ENV_PATH="$temp_root/auth-e2e.env"
 export APP_ENV=testing
 export APP_KEY='base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
 export APP_URL='http://127.0.0.1:4178'
+auth_e2e_api_port="${STOX_AUTH_E2E_PORT:-8001}"
+export STOX_AUTH_E2E_API="http://127.0.0.1:${auth_e2e_api_port}"
 export APP_DEBUG=false
 export DB_CONNECTION=sqlite
 export DB_DATABASE="$temp_root/auth-e2e.sqlite"
@@ -51,7 +53,12 @@ export CACHE_STORE=array
 export QUEUE_CONNECTION=sync
 export MAIL_MAILER=array
 export SANCTUM_STATEFUL_DOMAINS='127.0.0.1:4178,localhost:4178'
-export PHP_CLI_SERVER_WORKERS=4
+auth_e2e_php_workers="${STOX_AUTH_E2E_PHP_WORKERS:-8}"
+[[ "$auth_e2e_php_workers" =~ ^[0-9]+$ ]] && (( auth_e2e_php_workers >= 4 && auth_e2e_php_workers <= 16 )) || {
+  echo "STOX_AUTH_E2E_PHP_WORKERS must be an integer from 4 to 16." >&2
+  exit 64
+}
+export PHP_CLI_SERVER_WORKERS="$auth_e2e_php_workers"
 export STOX_AUTH_E2E_OUTPUT_DIR="$app_root/tests/e2e/test-results/auth-live"
 export OTEL_SDK_DISABLED=true
 export LIDO_TELEMETRY_OFFICIAL_SDK_ENABLED=false
@@ -70,7 +77,7 @@ touch "$DB_DATABASE"
 php artisan migrate:fresh --force
 php tests/e2e/authFixture.php
 
-setsid env PHP_CLI_SERVER_WORKERS=4 php -S 127.0.0.1:8001 -t public public/index.php >"$temp_root/laravel.log" 2>&1 &
+setsid php -S "127.0.0.1:${auth_e2e_api_port}" -t public public/index.php >"$temp_root/laravel.log" 2>&1 &
 backend_pid=$!
 # Sanctum's stateful API middleware is selected from Origin/Referer. A bare
 # health request to this session-backed endpoint is stateless and would fail
@@ -84,7 +91,7 @@ backend_ready() {
     --header 'X-Stox-Auth-Context: investor' \
     --cookie-jar "$temp_root/readiness-cookies.txt" \
     --output "$temp_root/readiness.json" \
-    http://127.0.0.1:8001/api/auth/csrf-token \
+    "${STOX_AUTH_E2E_API}/api/auth/csrf-token" \
     2>/dev/null \
     && php -r '
       $r=json_decode(file_get_contents($argv[1]),true);

@@ -37,6 +37,21 @@ if (($argv[1] ?? null) === 'expire-session') {
     exit($updated === 1 ? 0 : 1);
 }
 
+if (($argv[1] ?? null) === 'revoke-remember') {
+    $email = $argv[2] ?? '';
+    if (! str_ends_with($email, '@auth-e2e.example.test')) {
+        fwrite(STDERR, "Refusing remember-token rotation outside disposable auth identities.\n");
+        exit(64);
+    }
+    $user = User::query()->where('email', $email)->first();
+    if (! $user) {
+        exit(1);
+    }
+    $user->setRememberToken(bin2hex(random_bytes(30)));
+    $user->save();
+    exit(0);
+}
+
 foreach (['investor-a', 'investor-b', 'admin'] as $name) {
     $admin = $name === 'admin';
     $displayName = match ($name) {

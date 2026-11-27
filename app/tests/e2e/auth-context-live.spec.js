@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 
 const password = 'Disposable-E2E-Password-418!';
+const apiTimeoutMs = 10_000;
 const apiCall = (page, path, { method = 'GET', context = 'investor', body, token, profile, user } = {}) => page.evaluate(async (args) => {
     const headers = { Accept: 'application/json', 'X-Stox-Auth-Context': args.context };
     if (args.token) headers['X-CSRF-TOKEN'] = args.token;
@@ -14,31 +15,51 @@ const apiCall = (page, path, { method = 'GET', context = 'investor', body, token
         credentials: 'same-origin',
         headers,
         body: args.body ? JSON.stringify(args.body) : undefined,
+        signal: AbortSignal.timeout(args.timeoutMs),
     });
     return { status: response.status, body: await response.json().catch(() => null) };
-}, { path, method, context, body, token, profile, user });
+}, { path, method, context, body, token, profile, user, timeoutMs: apiTimeoutMs });
 
 async function csrf(page, context) {
     await page.evaluate((authContext) => fetch('/sanctum/csrf-cookie', {
         credentials: 'same-origin',
         headers: { 'X-Stox-Auth-Context': authContext },
+        signal: AbortSignal.timeout(10_000),
     }), context);
     const result = await apiCall(page, '/api/auth/csrf-token', { context });
     expect(result.status).toBe(200);
     return result.body.token;
 }
 
-async function login(page, email, context = 'investor') {
+async function login(page, email, context = 'investor', remember = false) {
     const token = await csrf(page, context);
     const result = await apiCall(page, '/api/auth/login', {
         method: 'POST', context, token,
-        body: { email, password, remember: false },
+        body: { email, password, remember },
     });
     expect(result.status, JSON.stringify(result.body)).toBe(200);
     return result.body.user;
 }
 
-test('real cookie sessions, independent role contexts, CSRF writes and portfolio ownership', async ({ browser }) => {
+async function openApiOnlyPage(page) {
+    // These isolated contexts exercise Laravel's real cookie/CSRF endpoints,
+    // but do not need the SPA. Loading the SPA starts its own background CSRF
+    // bootstrap requests; those can rotate the same guest session cookie while
+    // this fixture is acquiring a token, making the later login nondeterministic.
+    await page.route('**/', (route) => route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<!doctype html><html><head><meta name="csrf-token" content=""></head><body></body></html>',
+    }));
+    await page.goto('/');
+}
+
+test('real cookie sessions, independent role contexts, CSRF writes and portfolio ownership', async ({ browser }, testInfo) => {
+    // The journey covers multiple independent browser sessions and real UI
+    // flows; give it a bounded but realistic end-to-end budget. Individual
+    // API calls have a shorter timeout so a saturated fixture server is
+    // reported at the request that stalled.
+    test.setTimeout(120_000);
     const context = await browser.newContext();
     const tabA = await context.newPage();
     const tabB = await context.newPage();
@@ -136,7 +157,7 @@ test('real cookie sessions, independent role contexts, CSRF writes and portfolio
     // A second independent login is revocable from the active browser session.
     const revocationContext = await browser.newContext();
     const revocationPage = await revocationContext.newPage();
-    await revocationPage.goto('/');
+    await openApiOnlyPage(revocationPage);
     await login(revocationPage, 'investor-a@auth-e2e.example.test');
     const sessions = await apiCall(tabA, '/api/auth/sessions', { user: investor.id });
     expect(sessions.status).toBe(200);
@@ -167,7 +188,30 @@ test('real cookie sessions, independent role contexts, CSRF writes and portfolio
     await tabB.reload();
     expect((await apiCall(tabB, '/api/auth/me')).body.user.id).toBe(investor.id);
 
+    // Deleting a portfolio in one tab must recover another same-user tab whose
+    // tab-local selection points at the deleted profile. The broadcast is
+    // user-scoped, so an unrelated account tab does not consume this event.
+    expect(await tabA.evaluate(() => sessionStorage.getItem('portfolio_active_id')))
+        .toBe(String(secondOwnedProfile));
+    await tabB.goto('/portfolios');
+    const secondaryRow = tabB.locator('.list-group-item').filter({ hasText: 'E2E Concurrent Beta' });
+    const acceptDelete = tabB.waitForEvent('dialog').then((dialog) => dialog.accept());
+    await secondaryRow.getByRole('button', { name: 'Delete', exact: true }).click();
+    await acceptDelete;
+    await expect.poll(() => tabA.evaluate(() => sessionStorage.getItem('portfolio_active_id')))
+        .toBe(String(ownedProfile));
+    // Only the default portfolio remains, so the switcher correctly disappears.
+    await expect(tabA.locator('.lido-portfolio-switcher')).toHaveCount(0);
+    await expect(tabB.locator('.list-group-item').filter({ hasText: 'E2E Concurrent Beta' })).toHaveCount(0);
+    await tabA.screenshot({ path: testInfo.outputPath('same-user-deletion-recovery.png'), fullPage: true });
+    await tabB.screenshot({ path: testInfo.outputPath('deleted-portfolio-list.png'), fullPage: true });
+
     const otherUser = await login(tabA, 'investor-b@auth-e2e.example.test');
+    // Confirm the shared cookie now resolves to B before probing A's portfolio.
+    // This distinguishes a stale browser/header race from ownership behavior.
+    const switchedIdentity = await apiCall(tabA, '/api/auth/me');
+    expect(switchedIdentity.status, JSON.stringify(switchedIdentity.body)).toBe(200);
+    expect(switchedIdentity.body.user.id).toBe(otherUser.id);
     const otherList = await apiCall(tabA, '/api/portfolios', { user: otherUser.id });
     const foreignProfile = investorList.body.data[0].id;
     const denied = await apiCall(tabA, `/api/portfolios/${foreignProfile}`, { user: otherUser.id });
@@ -192,13 +236,17 @@ test('real cookie sessions, independent role contexts, CSRF writes and portfolio
     const investorLogoutToken = await csrf(tabA, 'investor');
     const logout = await apiCall(tabA, '/api/auth/logout', { method: 'POST', token: investorLogoutToken });
     expect(logout.status).toBe(200);
+    const investorAfterLogout = await apiCall(tabB, '/api/auth/me');
+    expect(investorAfterLogout.status).toBe(200);
+    expect(investorAfterLogout.body.user).toBeNull();
+    expect((await apiCall(tabB, '/api/portfolios')).status).toBe(401);
     expect((await apiCall(tabB, '/api/auth/me', { context: 'admin' })).body.user.id).toBe(admin.id);
 
     // Age the real disposable database session row so the next request proves
     // server-side expiry instead of merely deleting a browser cookie.
     const expiryContext = await browser.newContext();
     const expiryPage = await expiryContext.newPage();
-    await expiryPage.goto('/');
+    await openApiOnlyPage(expiryPage);
     const expiryUser = await login(expiryPage, 'investor-b@auth-e2e.example.test');
     const expiringSession = await apiCall(expiryPage, '/api/auth/sessions', { user: expiryUser.id });
     expect(expiringSession.status).toBe(200);
@@ -212,13 +260,43 @@ test('real cookie sessions, independent role contexts, CSRF writes and portfolio
 
     // Signing out of the administrator context must preserve the active
     // investor session just as investor logout above preserved administrator.
+    // Restore B in the original shared browser after the explicit investor
+    // logout above, rather than treating the separate expiry jar as a login.
+    const restoredInvestor = await login(tabA, 'investor-b@auth-e2e.example.test');
+    expect(restoredInvestor.id).toBe(otherUser.id);
     const adminLogoutToken = await csrf(tabB, 'admin');
     const adminLogout = await apiCall(tabB, '/api/auth/logout', {
         method: 'POST', context: 'admin', token: adminLogoutToken,
     });
     expect(adminLogout.status).toBe(200);
-    expect((await apiCall(tabB, '/api/auth/me', { context: 'admin' })).status).toBe(401);
+    const adminAfterLogout = await apiCall(tabB, '/api/auth/me', { context: 'admin' });
+    expect(adminAfterLogout.status).toBe(200);
+    expect(adminAfterLogout.body.user).toBeNull();
+    expect((await apiCall(tabB, '/api/admin/stocks', { context: 'admin' })).status).toBe(401);
     expect((await apiCall(tabB, '/api/auth/me', { context: 'investor' })).body.user.id).toBe(otherUser.id);
+
+    // Remember-me restores an expired server session by issuing a fresh
+    // session. Rotating only investor A's remember token revokes that device
+    // while investor B's session remains valid.
+    const rememberContext = await browser.newContext();
+    const rememberPage = await rememberContext.newPage();
+    await openApiOnlyPage(rememberPage);
+    const rememberedUser = await login(rememberPage, 'investor-a@auth-e2e.example.test', 'investor', true);
+    const recaller = (await rememberContext.cookies()).find((cookie) => cookie.name.startsWith('remember_web_'));
+    expect(recaller).toBeTruthy();
+    const rememberedSessions = await apiCall(rememberPage, '/api/auth/sessions', { user: rememberedUser.id });
+    const priorRememberSession = rememberedSessions.body.data.find((session) => session.is_current);
+    execFileSync('php', [path.resolve('tests/e2e/authFixture.php'), 'expire-session', priorRememberSession.id], { cwd: path.resolve('.') });
+    expect((await apiCall(rememberPage, '/api/auth/me')).body.user.id).toBe(rememberedUser.id);
+    const renewedSessions = await apiCall(rememberPage, '/api/auth/sessions', { user: rememberedUser.id });
+    expect(renewedSessions.body.data.find((session) => session.is_current).id).not.toBe(priorRememberSession.id);
+    execFileSync('php', [path.resolve('tests/e2e/authFixture.php'), 'revoke-remember', 'investor-a@auth-e2e.example.test'], { cwd: path.resolve('.') });
+    await rememberContext.clearCookies({ name: 'stox-auth-e2e-session' });
+    const revokedRememberProbe = await apiCall(rememberPage, '/api/auth/me');
+    expect(revokedRememberProbe.status).toBe(200);
+    expect(revokedRememberProbe.body.user).toBeNull();
+    expect((await apiCall(tabB, '/api/auth/me')).body.user.id).toBe(otherUser.id);
+    await rememberContext.close();
 
     await expiryContext.close();
     await context.close();
