@@ -3,11 +3,13 @@
 namespace Tests\Feature;
 
 use App\Models\DataQualityIssue;
+use App\Models\CorporateActionSourceReceipt;
 use App\Models\StockPrice;
 use App\Services\DataQualityCorporateActionHeuristicService;
 use App\Services\DataQualityCorporateActionSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use App\Services\Fundamentals\AI\FundamentalAiUsageService;
 use Tests\Concerns\CreatesDataQualityFixtures;
 use Tests\TestCase;
 
@@ -49,6 +51,10 @@ class DataQualityDetectionTest extends TestCase
         $this->assertSame($checkpoint->payload_hash, $evidence->evidence_payload['source_receipt']['sha256'] ?? null);
         $this->assertSame(0, $evidence->evidence_payload['source_receipt']['row_index'] ?? null);
         $this->assertSame('https://example.test/ca.json', $evidence->evidence_payload['source_receipt']['url'] ?? null);
+        $receipt = CorporateActionSourceReceipt::query()->findOrFail($evidence->evidence_payload['source_receipt']['receipt_id']);
+        $this->assertSame(hash('sha256', $receipt->rawBody()), $receipt->sha256);
+        $this->assertSame($receipt->sha256, $evidence->evidence_payload['source_receipt']['sha256']);
+        $this->assertStringContainsString('TCS', $receipt->rawBody());
     }
 
     public function test_ai_official_source_discovery_runs_after_deterministic_feed_and_stages_untrusted_hashed_evidence(): void
@@ -74,6 +80,9 @@ class DataQualityDetectionTest extends TestCase
         $this->assertSame(hash('sha256', '%PDF-evidence'), $evidence->evidence_payload['sha256']);
         $this->assertFalse($evidence->evidence_payload['ai_authority']);
         $this->assertSame('https://www.nseindia.com/archive/TCS.pdf', $evidence->evidence_payload['url']);
+        $receipt = CorporateActionSourceReceipt::query()->findOrFail($evidence->evidence_payload['receipt_id']);
+        $this->assertSame('%PDF-evidence', $receipt->rawBody());
+        $this->assertSame(hash('sha256', '%PDF-evidence'), $receipt->sha256);
         app(DataQualityCorporateActionSyncService::class)->syncFromExchangeFeed();
         $this->assertSame(1, $issue->fresh()->evidences()->where('evidence_key', 'ai_official_proposal')->count(), 'Repeated discovery must not duplicate the same AI source URL.');
     }
@@ -86,6 +95,39 @@ class DataQualityDetectionTest extends TestCase
         Http::fake([
             'https://example.test/ca.json' => Http::response([['symbol' => 'TCS', 'action_type' => 'split', 'ratio' => '1:2', 'ex_date' => '2026-05-01']], 200),
             'api.openai.com/v1/chat/completions' => Http::response([], 503),
+        ]);
+        $result = app(DataQualityCorporateActionSyncService::class)->syncFromExchangeFeed();
+        $this->assertSame(1, $result['created']);
+        $this->assertSame('unavailable', $result['ai_evidence_discovery']['status']);
+        $this->assertSame(DataQualityIssue::STATUS_PENDING_REVIEW, DataQualityIssue::query()->firstOrFail()->issue_status);
+    }
+
+    public function test_ai_zero_credit_budget_does_not_block_feed_or_admin_queue(): void
+    {
+        $this->createDataQualityStock('TCS');
+        config(['services.data_quality.corporate_actions_feed_url' => 'https://example.test/ca.json']);
+        config(['fundamentals_ai.enabled' => true]);
+        Http::fake(['https://example.test/ca.json' => Http::response([['symbol' => 'TCS', 'action_type' => 'split', 'ratio' => '1:2', 'ex_date' => '2026-05-01']], 200)]);
+        $usage = \Mockery::mock(FundamentalAiUsageService::class);
+        $usage->shouldReceive('allowInvocation')->once()->with(null)->andReturn(false);
+        $this->app->instance(FundamentalAiUsageService::class, $usage);
+
+        $result = app(DataQualityCorporateActionSyncService::class)->syncFromExchangeFeed();
+
+        $this->assertSame(1, $result['created']);
+        $this->assertSame('unavailable', $result['ai_evidence_discovery']['status']);
+        $this->assertSame(DataQualityIssue::STATUS_PENDING_REVIEW, DataQualityIssue::query()->firstOrFail()->issue_status);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.openai.com'));
+    }
+
+    public function test_ai_provider_timeout_does_not_block_deterministic_collection(): void
+    {
+        $this->createDataQualityStock('TCS');
+        config(['services.data_quality.corporate_actions_feed_url' => 'https://example.test/ca.json']);
+        config(['fundamentals_ai.enabled' => true, 'fundamentals_ai.primary_provider' => 'codex', 'fundamentals_ai.codex.api_key' => 'test-only']);
+        Http::fake([
+            'https://example.test/ca.json' => Http::response([['symbol' => 'TCS', 'action_type' => 'split', 'ratio' => '1:2', 'ex_date' => '2026-05-01']], 200),
+            'api.openai.com/v1/chat/completions' => fn () => throw new \Illuminate\Http\Client\ConnectionException('Timed out'),
         ]);
         $result = app(DataQualityCorporateActionSyncService::class)->syncFromExchangeFeed();
         $this->assertSame(1, $result['created']);

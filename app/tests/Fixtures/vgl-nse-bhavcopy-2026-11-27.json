@@ -1,0 +1,24 @@
+{
+  "provenance": {
+    "source_url": "https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_20261127_F_0000.csv.zip",
+    "source_csv_sha256": "2c2af4f26d7e76098e5e9ddcb6654fafdf6eb418b64a5f3cd8c80aed21a5685e",
+    "source_row_index": 3571,
+    "note": "Minimal row extracted byte-for-byte from the verified source CSV; raw CSV and ZIP are local-only and excluded from version control."
+  },
+  "row": {
+    "trade_date": "2026-11-27",
+    "segment": "CM",
+    "instrument_type": "STK",
+    "instrument_id": "13771",
+    "isin": "INE273D01035",
+    "symbol": "VGL",
+    "series": "EQ",
+    "name": "VARVEE GLOBAL LIMITED",
+    "open": "21.99",
+    "high": "22.29",
+    "low": "20.30",
+    "close": "21.07",
+    "previous_close": "52.81",
+    "volume": "165825"
+  }
+}

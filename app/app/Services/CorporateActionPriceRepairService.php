@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\CorporateAction;
+use App\Models\DataQualityIssue;
 use App\Models\PriceAdjustmentFactor;
 use App\Models\Stock;
 use App\Models\StockPrice;
@@ -616,6 +617,33 @@ class CorporateActionPriceRepairService
             ]);
         }
 
+        $appliedRatio = (float) $factor->applied_ratio;
+        $expectedDivisor = $actionType === 'bonus' ? 1 + $appliedRatio : $appliedRatio;
+        if ($appliedRatio <= 0 || abs($priceDivisor - $expectedDivisor) > 0.000001
+            || abs($volumeMultiplier - $expectedDivisor) > 0.000001) {
+            return array_merge($base, [
+                'status' => self::STATUS_INVALID_FACTOR,
+                'message' => 'Stored F042 divisors do not exactly match the approved action ratio.',
+                'errors' => ['factor_ratio_divisor_mismatch'],
+            ]);
+        }
+
+        if ($factor->issue_id !== null) {
+            $issue = $factor->issue;
+            if ($issue === null || $issue->issue_type !== DataQualityIssue::TYPE_CORPORATE_ACTION
+                || $issue->issue_status !== DataQualityIssue::STATUS_ACCEPTED
+                || (int) $issue->stock_id !== (int) $factor->stock_id
+                || $issue->ex_date?->toDateString() !== $exDate
+                || strtolower((string) $issue->corporate_action_type) !== $actionType
+                || abs((float) $issue->applied_ratio - $appliedRatio) > 0.000001) {
+                return array_merge($base, [
+                    'status' => self::STATUS_INVALID_FACTOR,
+                    'message' => 'Linked Data Quality approval no longer matches this F042 factor.',
+                    'errors' => ['factor_approval_binding_mismatch'],
+                ]);
+            }
+        }
+
         $key = $this->stockExDateKey((int) $factor->stock_id, (string) $exDate);
         if ($exDate !== null && isset($ambiguousKeys[$key])) {
             return array_merge($base, [
@@ -652,7 +680,7 @@ class CorporateActionPriceRepairService
 
         $existingActions = CorporateAction::query()->where('stock_id', $factor->stock_id)
             ->whereDate('ex_date', $exDate)
-            ->whereIn('action_type', ['split', 'face_value_split'])
+            ->whereIn('action_type', ['split', 'face_value_split', 'bonus'])
             ->whereNotNull('applied_at')->orderBy('id')->get();
         foreach ($existingActions as $existingAction) {
             $expectedAction = $this->priceAdjustment->factorsForAction(

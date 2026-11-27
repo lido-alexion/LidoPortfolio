@@ -143,8 +143,12 @@ class UniverseDailyBhavcopySyncService
                 $receiptPriceTrustHash = is_array($receipt)
                     ? $this->priceTrustHash($receipt['historical_stock_ids'] ?? [], $day)
                     : null;
-                $retryNowTrustedHistoricalCoverage = $preservingRetryAfterEvidenceChange
-                    && is_array($receipt)
+                // A completed, approved corporate-action repair can make a
+                // previously blocked historical bar eligible without any
+                // change to the identity catalogue or exchange source. Let
+                // that exact stock retry naturally; unrelated coverage and
+                // unresolved identity conflicts keep their normal backoff.
+                $retryNowTrustedHistoricalCoverage = is_array($receipt)
                     && collect($receipt['identity_conflict_samples'] ?? [])->contains(fn ($sample) =>
                         is_array($sample)
                         && ($sample['reason'] ?? null) === 'historical_adjustment_required'

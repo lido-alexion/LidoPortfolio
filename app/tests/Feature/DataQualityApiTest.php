@@ -12,6 +12,8 @@ use App\Services\CorporateActionPriceRepairService;
 use App\Services\DataQualityLegacyCorporateActionMigrationService;
 use App\Services\DataQualityCorporateActionSyncService;
 use App\Services\DataQualityResolutionService;
+use App\Services\Bhavcopy\NsePriceIdentityEvidence;
+use App\Services\Bhavcopy\BhavcopyStockMatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
@@ -68,6 +70,106 @@ class DataQualityApiTest extends TestCase
         $this->assertSame(0, StockPrice::query()->where('stock_id', $stock->id)->count(), 'Approval must stage F042 only; it must not directly rewrite prices.');
     }
 
+    public function test_admin_can_preview_and_create_manual_corporate_action_without_stox_evidence(): void
+    {
+        $stock = $this->createDataQualityStock('MANUALCA');
+        StockPrice::query()->create(['stock_id' => $stock->id, 'price_date' => '2026-01-01', 'open_price' => 100, 'high_price' => 110, 'low_price' => 90, 'close_price' => 100, 'volume' => 1000, 'data_source' => 'test']);
+        $admin = $this->createAdminUser();
+        $request = ['stock_id' => $stock->id, 'corporate_action_type' => 'split', 'ex_date' => '2026-02-01', 'applied_ratio' => 2];
+
+        $preview = $this->actingAs($admin)->postJson('/api/data-quality/manual-corporate-actions/preview', $request)
+            ->assertOk()->assertJsonPath('data.affected_price_rows', 1)
+            ->assertJsonPath('data.sample_rows.0.close_after', 50)
+            ->assertJsonPath('data.writes_prices', false);
+        $this->assertDatabaseHas('portfolio_stock_prices', ['stock_id' => $stock->id, 'close_price' => 100]);
+
+        $createPayload = $request + ['preview_confirmed' => true, 'preview_token' => $preview->json('data.preview_token'), 'source_reference' => 'External circular'];
+        $this->actingAs($admin)->postJson('/api/data-quality/manual-corporate-actions', $createPayload)
+            ->assertCreated()->assertJsonPath('data.issue_status', DataQualityIssue::STATUS_PENDING_REVIEW)
+            ->assertJsonPath('data.detection_source', 'admin_manual_entry');
+        $this->actingAs($admin)->postJson('/api/data-quality/manual-corporate-actions', $createPayload)->assertStatus(409);
+        $issue = DataQualityIssue::query()->where('stock_id', $stock->id)->firstOrFail();
+        $this->assertSame(0, $issue->evidences()->count());
+        $this->assertSame('External circular', $issue->detection_payload['source_reference']);
+        $this->assertSame($admin->id, $issue->detection_payload['entered_by']);
+        $this->assertDatabaseMissing('portfolio_price_adjustment_factors', ['issue_id' => $issue->id]);
+    }
+
+    public function test_manual_corporate_action_requires_preview_confirmation_and_admin(): void
+    {
+        $stock = $this->createDataQualityStock('MANUALCA');
+        $this->actingAs($this->createAdminUser())->postJson('/api/data-quality/manual-corporate-actions', [
+            'stock_id' => $stock->id, 'corporate_action_type' => 'bonus', 'ex_date' => '2026-02-01', 'applied_ratio' => 0.5,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['preview_confirmed']);
+        $this->assertSame(0, DataQualityIssue::query()->count());
+        $this->assertSame(0, DataQualityIssue::query()->count());
+    }
+
+    public function test_manual_corporate_action_rejects_a_preview_for_different_action_inputs(): void
+    {
+        $stock = $this->createDataQualityStock('MANUALCA');
+        $admin = $this->createAdminUser();
+        $preview = $this->actingAs($admin)->postJson('/api/data-quality/manual-corporate-actions/preview', [
+            'stock_id' => $stock->id, 'corporate_action_type' => 'split', 'ex_date' => '2026-02-01', 'applied_ratio' => 2,
+        ])->assertOk();
+        $this->actingAs($admin)->postJson('/api/data-quality/manual-corporate-actions', [
+            'stock_id' => $stock->id, 'corporate_action_type' => 'bonus', 'ex_date' => '2026-02-01', 'applied_ratio' => 2,
+            'preview_confirmed' => true, 'preview_token' => $preview->json('data.preview_token'),
+        ])->assertUnprocessable()->assertJsonValidationErrors(['preview_token']);
+        $this->assertSame(0, DataQualityIssue::query()->count());
+    }
+
+    public function test_manual_corporate_action_rejects_preview_after_price_rows_change(): void
+    {
+        $stock = $this->createDataQualityStock('MANUALCA');
+        $price = StockPrice::query()->create(['stock_id' => $stock->id, 'price_date' => '2026-01-01', 'open_price' => 100, 'high_price' => 110, 'low_price' => 90, 'close_price' => 100, 'volume' => 1000, 'data_source' => 'test']);
+        $admin = $this->createAdminUser();
+        $request = ['stock_id' => $stock->id, 'corporate_action_type' => 'split', 'ex_date' => '2026-02-01', 'applied_ratio' => 2];
+        $preview = $this->actingAs($admin)->postJson('/api/data-quality/manual-corporate-actions/preview', $request)->assertOk();
+        $price->update(['close_price' => 99]);
+        $this->actingAs($admin)->postJson('/api/data-quality/manual-corporate-actions', $request + [
+            'preview_confirmed' => true, 'preview_token' => $preview->json('data.preview_token'),
+        ])->assertUnprocessable()->assertJsonValidationErrors(['preview_token']);
+        $this->assertSame(0, DataQualityIssue::query()->count());
+    }
+
+    public function test_approved_admin_transition_matches_only_its_historical_isin_interval_against_vgl_receipt(): void
+    {
+        $fixture = json_decode(file_get_contents(__DIR__.'/../Fixtures/vgl-nse-bhavcopy-2026-11-27.json'), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('2c2af4f26d7e76098e5e9ddcb6654fafdf6eb418b64a5f3cd8c80aed21a5685e', $fixture['provenance']['source_csv_sha256']);
+        $this->assertSame('INE273D01035', $fixture['row']['isin']);
+
+        $stock = $this->createDataQualityStock('VGL');
+        $stock->update(['isin' => 'INE273D01035']);
+        $issue = $this->createPendingExchangeIssue($stock, [
+            'ex_date' => '2026-11-26', 'suggested_ratio' => 2.5, 'latest_suggested_ratio' => 2.5,
+            'raw_payload' => ['source' => 'official_historical_transition_review'],
+        ]);
+        $resolver = app(NsePriceIdentityEvidence::class);
+        self::assertNull($resolver->canonicalIsin(['symbol' => 'VGL', 'isin' => 'INE273D01027'], '2026-11-25'));
+
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin)->postJson("/api/data-quality/issues/{$issue->id}/accept", [
+            'applied_ratio' => 2.5,
+            'manual_evidence_override' => true,
+            'confirm_manual_evidence_override' => true,
+            'historical_isin' => 'INE273D01027',
+            'historical_valid_from' => '2026-11-20',
+        ])->assertOk();
+
+        self::assertSame('INE273D01035', $resolver->canonicalIsin(['symbol' => 'VGL', 'isin' => 'INE273D01027'], '2026-11-25'));
+        self::assertNull($resolver->canonicalIsin(['symbol' => 'VGL', 'isin' => 'INE273D01027'], '2026-11-19'));
+        self::assertNull($resolver->canonicalIsin(['symbol' => 'VGL', 'isin' => 'INE273D01027'], '2026-11-26'));
+        self::assertNull($resolver->canonicalIsin(['symbol' => 'OTHER', 'isin' => 'INE273D01027'], '2026-11-25'));
+        $matched = app(BhavcopyStockMatcher::class)->match(collect([$stock]), [[
+            'symbol' => $fixture['row']['symbol'], 'series' => $fixture['row']['series'],
+            'isin' => $fixture['row']['isin'], 'price_date' => $fixture['row']['trade_date'],
+            'scrip_code' => $fixture['row']['instrument_id'], 'close' => (float) $fixture['row']['close'],
+        ]], 'NSE');
+        self::assertSame([$stock->id], array_keys($matched['rows_by_stock_id']));
+        self::assertSame([], $matched['historical_stock_ids'], 'The official current ISIN row is ordinary membership, not retroactive historical authorization.');
+    }
+
     public function test_manual_evidence_override_requires_explicit_confirmation_and_bounded_ratio(): void
     {
         [, $issue] = $this->createBnagrochemIssue();
@@ -115,6 +217,9 @@ class DataQualityApiTest extends TestCase
         $this->actingAs($user)
             ->post('/api/data-quality/discover-bnagrochem-historical-action', $this->officialBnagrochemEvidenceFiles())
             ->assertForbidden();
+        $this->actingAs($user)->postJson('/api/data-quality/manual-corporate-actions', [
+            'stock_id' => $issue->stock_id, 'corporate_action_type' => 'split', 'ex_date' => '2026-02-01', 'applied_ratio' => 2, 'preview_confirmed' => true, 'preview_token' => str_repeat('a', 64),
+        ])->assertForbidden();
     }
 
     public function test_unauthenticated_access_is_rejected(): void

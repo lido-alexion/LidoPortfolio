@@ -4,12 +4,15 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\DataQualityIssue;
+use App\Models\Stock;
+use App\Models\StockPrice;
 use App\Services\BnagrochemF042EvidenceStager;
 use App\Services\DataQualityResolutionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Database\QueryException;
 
 class DataQualityController extends Controller
 {
@@ -76,6 +79,130 @@ class DataQualityController extends Controller
         ]);
     }
 
+    /** Read-only estimate of historic OHLCV rows owned by a proposed F042 action. */
+    public function previewManualCorporateAction(Request $request): JsonResponse
+    {
+        $payload = $request->validate([
+            'stock_id' => ['required', 'integer', 'exists:portfolio_stocks,id'],
+            'corporate_action_type' => ['required', Rule::in(['split', 'bonus'])],
+            'ex_date' => ['required', 'date_format:Y-m-d'],
+            'applied_ratio' => ['required', 'numeric', 'gt:0', 'max:10000'],
+        ]);
+        $stock = Stock::query()->findOrFail($payload['stock_id']);
+        $divisor = $payload['corporate_action_type'] === 'bonus'
+            ? 1 + (float) $payload['applied_ratio']
+            : (float) $payload['applied_ratio'];
+        $prices = StockPrice::query()->where('stock_id', $stock->id)
+            ->whereDate('price_date', '<', $payload['ex_date'])
+            ->orderBy('price_date');
+        $digest = $this->manualPriceRowsDigest($stock, $payload['ex_date']);
+        $count = $digest['count'];
+        $sample = (clone $prices)->limit(10)->get(['price_date', 'open_price', 'high_price', 'low_price', 'close_price', 'volume']);
+        $firstDate = $digest['first_date'];
+        $lastDate = $digest['last_date'];
+        $previewToken = hash_hmac('sha256', implode('|', [$stock->id, $payload['corporate_action_type'], $payload['ex_date'], (string) (float) $payload['applied_ratio'], $digest['rows_sha256'], auth()->id()]), (string) config('app.key'));
+
+        return response()->json(['data' => [
+            'stock' => ['id' => $stock->id, 'symbol' => $stock->symbol, 'name' => $stock->name, 'exchange' => $stock->exchange, 'isin' => $stock->isin],
+            'corporate_action_type' => $payload['corporate_action_type'],
+            'ex_date' => $payload['ex_date'],
+            'applied_ratio' => (float) $payload['applied_ratio'],
+            'price_divisor' => $divisor,
+            'volume_multiplier' => $divisor,
+            'affected_price_rows' => $count,
+            'first_price_date' => $firstDate,
+            'last_price_date' => $lastDate,
+            'affected_rows_sha256' => $digest['rows_sha256'],
+            'preview_token' => $previewToken,
+            'sample_rows' => $sample->map(fn (StockPrice $row) => [
+                'price_date' => $row->price_date->toDateString(),
+                'close_before' => (float) $row->close_price,
+                'close_after' => round((float) $row->close_price / $divisor, 4),
+                'volume_before' => (int) $row->volume,
+                'volume_after' => (int) round((int) $row->volume * $divisor),
+            ])->values(),
+            'writes_prices' => false,
+        ]]);
+    }
+
+    /** Create a human-entered pending issue; approval remains a separate confirmed action. */
+    public function createManualCorporateAction(Request $request): JsonResponse
+    {
+        $payload = $request->validate([
+            'stock_id' => ['required', 'integer', 'exists:portfolio_stocks,id'],
+            'corporate_action_type' => ['required', Rule::in(['split', 'bonus'])],
+            'ex_date' => ['required', 'date_format:Y-m-d'],
+            'applied_ratio' => ['required', 'numeric', 'gt:0', 'max:10000'],
+            'record_date' => ['nullable', 'date_format:Y-m-d'],
+            'source_reference' => ['nullable', 'string', 'max:500'],
+            'justification' => ['nullable', 'string', 'max:2000'],
+            'preview_confirmed' => ['required', 'boolean', 'accepted'],
+            'preview_token' => ['required', 'string', 'size:64'],
+        ]);
+        $stock = Stock::query()->findOrFail($payload['stock_id']);
+        $digest = $this->manualPriceRowsDigest($stock, $payload['ex_date']);
+        $expectedPreview = hash_hmac('sha256', implode('|', [$stock->id, $payload['corporate_action_type'], $payload['ex_date'], (string) (float) $payload['applied_ratio'], $digest['rows_sha256'], auth()->id()]), (string) config('app.key'));
+        if (! hash_equals($expectedPreview, $payload['preview_token'])) {
+            throw ValidationException::withMessages(['preview_token' => ['Price preview is stale or does not match this action. Preview again before creating the issue.']]);
+        }
+        if (DataQualityIssue::query()->where('manual_preview_token', $payload['preview_token'])->exists()) {
+            return response()->json(['message' => 'This confirmed preview has already created a corporate-action issue.'], 409);
+        }
+        try {
+        $issue = DataQualityIssue::query()->create([
+            'stock_id' => $stock->id,
+            'symbol' => $stock->symbol,
+            'issue_type' => DataQualityIssue::TYPE_CORPORATE_ACTION,
+            'issue_status' => DataQualityIssue::STATUS_PENDING_REVIEW,
+            'detection_method' => DataQualityIssue::DETECTION_METHOD_LEGACY_MANUAL,
+            'detection_source' => 'admin_manual_entry',
+            'suggested_ratio' => $payload['applied_ratio'],
+            'latest_suggested_ratio' => $payload['applied_ratio'],
+            'confidence' => null,
+            'corporate_action_type' => $payload['corporate_action_type'],
+            'ex_date' => $payload['ex_date'],
+            'record_date' => $payload['record_date'] ?? null,
+            'exchange_match' => false,
+            'detection_payload' => ['provenance' => 'admin_manual_entry', 'source_reference' => isset($payload['source_reference']) ? trim($payload['source_reference']) : null, 'justification' => isset($payload['justification']) ? trim($payload['justification']) : null, 'entered_by' => auth()->id(), 'entered_at' => now()->toIso8601String()],
+            'raw_payload' => ['origin' => 'authorized_admin_manual_entry', 'evidence_collected_by_stox' => false],
+            'detected_at' => now(),
+            'auto_resolved' => false,
+            'manual_preview_token' => $payload['preview_token'],
+        ]);
+        } catch (QueryException $exception) {
+            if (str_starts_with((string) $exception->getCode(), '23')) {
+                return response()->json(['message' => 'This confirmed preview has already created a corporate-action issue.'], 409);
+            }
+            throw $exception;
+        }
+
+        return response()->json(['data' => $issue->load(['stock', 'evidences'])], 201);
+    }
+
+    /** @return array{count:int,first_date:?string,last_date:?string,rows_sha256:string} */
+    private function manualPriceRowsDigest(Stock $stock, string $exDate): array
+    {
+        $query = StockPrice::query()->where('stock_id', $stock->id)->whereDate('price_date', '<', $exDate)->orderBy('id');
+        $hash = hash_init('sha256');
+        $count = 0;
+        $firstDate = null;
+        $lastDate = null;
+        $query->chunkById(1000, function ($rows) use ($hash, &$count, &$firstDate, &$lastDate): void {
+            foreach ($rows as $row) {
+                $date = $row->price_date->toDateString();
+                $firstDate ??= $date;
+                $lastDate = $date;
+                $count++;
+                hash_update($hash, json_encode([
+                    $row->id, $date, $row->open_price, $row->high_price, $row->low_price,
+                    $row->close_price, $row->adjusted_close_price, $row->volume,
+                ], JSON_THROW_ON_ERROR));
+            }
+        });
+
+        return ['count' => $count, 'first_date' => $firstDate, 'last_date' => $lastDate, 'rows_sha256' => hash_final($hash)];
+    }
+
     public function accept(Request $request, DataQualityIssue $issue): JsonResponse
     {
         $reResolve = $request->boolean('re_resolve');
@@ -93,6 +220,8 @@ class DataQualityController extends Controller
             'confirm_manual_evidence_override' => [$manualOverride ? 'required' : 'sometimes', 'boolean', 'accepted'],
             'manual_source_reference' => ['nullable', 'string', 'max:500'],
             'manual_justification' => ['nullable', 'string', 'max:2000'],
+            'historical_isin' => ['nullable', 'regex:/^INE[A-Z0-9]{9}$/'],
+            'historical_valid_from' => ['nullable', 'date', 'before_or_equal:'.($issue->ex_date?->toDateString() ?? 'today')],
         ]);
 
         $notes = $this->normalizedNotes($payload['notes'] ?? null, $reResolve);
@@ -109,6 +238,8 @@ class DataQualityController extends Controller
                 'source_reference' => isset($payload['manual_source_reference']) ? trim($payload['manual_source_reference']) : null,
                 'justification' => isset($payload['manual_justification']) ? trim($payload['manual_justification']) : null,
                 'confirmed' => $manualOverride,
+                'historical_isin' => isset($payload['historical_isin']) ? strtoupper($payload['historical_isin']) : null,
+                'historical_valid_from' => $payload['historical_valid_from'] ?? null,
             ],
         );
 

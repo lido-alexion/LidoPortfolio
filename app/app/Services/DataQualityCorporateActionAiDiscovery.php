@@ -65,9 +65,13 @@ class DataQualityCorporateActionAiDiscovery
             $response = Http::timeout(12)->withoutRedirecting()->withHeaders(['Accept' => 'application/pdf,application/json,text/html'])->get($url);
             if (! $response->successful() || strlen($response->body()) === 0 || strlen($response->body()) > 5_000_000) continue;
             $sha = hash('sha256', $response->body());
+            $receipt = app(CorporateActionSourceReceiptStore::class)->capture(
+                'ai_suggested_official_url', $url, $response->status(), $response->header('Content-Type'), $response->body(), $issue->id,
+                ['provider' => $provider, 'model' => $model, 'detection_run_id' => $detectionRunId, 'ai_authority' => false],
+            );
             DataQualityIssueEvidence::query()->create([
                 'issue_id' => $issue->id, 'evidence_key' => 'ai_official_proposal', 'evidence_label' => 'AI suggested official source; independently fetched',
-                'evidence_value' => $url, 'evidence_payload' => ['source' => 'ai_untrusted_proposal', 'url' => $url, 'sha256' => $sha, 'bytes' => strlen($response->body()), 'http_status' => $response->status(), 'content_type' => $response->header('Content-Type'), 'captured_at' => now()->toIso8601String(), 'provider' => $provider, 'model' => $model, 'detection_run_id' => $detectionRunId, 'ai_authority' => false], 'captured_at' => now(),
+                'evidence_value' => $url, 'evidence_payload' => ['source' => 'ai_untrusted_proposal', 'url' => $url, 'sha256' => $sha, 'receipt_id' => $receipt->id, 'bytes' => strlen($response->body()), 'http_status' => $response->status(), 'content_type' => $response->header('Content-Type'), 'captured_at' => now()->toIso8601String(), 'provider' => $provider, 'model' => $model, 'detection_run_id' => $detectionRunId, 'ai_authority' => false], 'captured_at' => now(),
             ]);
             $verified++;
         }

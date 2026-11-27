@@ -33,9 +33,15 @@ class DataQualityResolutionService
             throw new \InvalidArgumentException('Manual evidence override requires an authenticated human corporate-action review.');
         }
 
+        $this->assertValidHistoricalIsinTransition($issue, $adminManualOverride, $manualOverrideContext);
+
         return DB::transaction(function () use ($issue, $appliedRatio, $notes, $userId, $auto, $requirePendingReview, $adminManualOverride, $manualOverrideContext) {
             $issue = DataQualityIssue::query()->lockForUpdate()->findOrFail($issue->id);
             $this->lockIssueStock($issue);
+            $issue->unsetRelation('stock');
+            $issue->load('stock');
+            // Recheck against the stock-master identity while its row is locked.
+            $this->assertValidHistoricalIsinTransition($issue, $adminManualOverride, $manualOverrideContext);
             $this->assertNoCompletedPriceRepair($issue);
 
             if ($requirePendingReview && $issue->issue_status !== DataQualityIssue::STATUS_PENDING_REVIEW) {
@@ -93,6 +99,31 @@ class DataQualityResolutionService
 
             return $issue->fresh(['stock', 'evidences', 'resolutions.resolver']);
         });
+    }
+
+    private function validIsoDate(string $date): bool
+    {
+        $parsed = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+        return $parsed !== false && $parsed->format('Y-m-d') === $date;
+    }
+
+    private function assertValidHistoricalIsinTransition(DataQualityIssue $issue, bool $adminManualOverride, array $context): void
+    {
+        if (($context['historical_isin'] ?? null) === null) {
+            if (($context['historical_valid_from'] ?? null) !== null) {
+                throw new \InvalidArgumentException('Historical transition start date requires an old ISIN.');
+            }
+            return;
+        }
+
+        $historicalIsin = strtoupper((string) $context['historical_isin']);
+        $stockIsin = strtoupper(trim((string) $issue->stock?->isin));
+        $from = (string) ($context['historical_valid_from'] ?? '');
+        if (! $adminManualOverride || ! preg_match('/\AINE[A-Z0-9]{9}\z/', $historicalIsin)
+            || ! preg_match('/\AINE[A-Z0-9]{9}\z/', $stockIsin) || $historicalIsin === $stockIsin
+            || ! $this->validIsoDate($from) || $issue->ex_date === null || $from >= $issue->ex_date->toDateString()) {
+            throw new \InvalidArgumentException('Historical ISIN transition requires a valid distinct old ISIN and start date before the approved ex-date.');
+        }
     }
 
     public function reject(

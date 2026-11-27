@@ -43,6 +43,10 @@ class DataQualityCorporateActionSyncService
             'User-Agent' => 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/152 Safari/537.36 StoX/1.0',
         ])->retry(3, 1000)->timeout(45);
         $response = $query === [] ? $client->get($url) : $client->get($url, $query);
+        $rawReceipt = app(CorporateActionSourceReceiptStore::class)->capture(
+            'exchange_feed', $url, $response->status(), $response->header('Content-Type'), $response->body(),
+            metadata: ['detection_run_id' => $detectionRunId],
+        );
         if (! $response->ok()) {
             $checkpoint->forceFill(['last_error' => 'HTTP '.$response->status()])->save();
             return [
@@ -123,6 +127,7 @@ class DataQualityCorporateActionSyncService
                             'source_receipt' => [
                                 'url' => $url,
                                 'sha256' => $receiptSha256,
+                                'receipt_id' => $rawReceipt->id,
                                 'row_index' => $rowIndex,
                                 'received_at' => now()->toIso8601String(),
                             ],

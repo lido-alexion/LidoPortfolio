@@ -607,8 +607,6 @@ class UniverseDailyBhavcopySyncTest extends TestCase
         $receipts = json_decode((string) Setting::getValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS), true);
         $receipts['entries']['NSE:2026-11-13']['retry_after'] = '2026-11-30T20:00:00+05:30';
         Setting::setValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS, json_encode($receipts, JSON_THROW_ON_ERROR));
-        config(['universe_nse_price_identities.version' => 2]);
-
         $stillRaw = $run();
         $this->assertSame(1, $stillRaw['bulk']['backoff_skips']);
         $this->assertSame('2026-11-30T20:00:00+05:30', $stillRaw['bulk']['files'][0]['retry_after']);
