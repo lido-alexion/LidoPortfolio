@@ -147,9 +147,15 @@ class TransactionStockResolverTest extends TestCase
         $first = $this->withHeader('Idempotency-Key', 'tx-retry-key-00000001')->postJson('/api/transactions', $payload)
             ->assertCreated()->assertJsonPath('cash', null);
         $transactionId = $first->json('data.id');
-        $this->withHeader('Idempotency-Key', 'tx-retry-key-00000001')->postJson('/api/transactions', $payload)
-            ->assertOk()->assertJsonPath('data.id', $transactionId)
-            ->assertJsonPath('data', $first->json('data'));
+        $replay = $this->withHeader('Idempotency-Key', 'tx-retry-key-00000001')->postJson('/api/transactions', $payload)
+            ->assertOk()->assertJsonPath('data.id', $transactionId);
+        $firstData = json_decode($first->getContent(), flags: JSON_THROW_ON_ERROR)->data;
+        $replayData = json_decode($replay->getContent(), flags: JSON_THROW_ON_ERROR)->data;
+        $this->assertSame(
+            self::normalizeJsonValue($firstData),
+            self::normalizeJsonValue($replayData),
+            'The created transaction and its idempotent replay must match in every JSON field and value.',
+        );
         $this->assertSame(1, \App\Models\Transaction::query()->where('profile_id', $profile->id)->count());
         $this->assertDatabaseHas('portfolio_transaction_request_receipts', [
             'profile_id' => $profile->id, 'actor_user_id' => $user->id, 'transaction_id' => $transactionId,
@@ -292,5 +298,25 @@ class TransactionStockResolverTest extends TestCase
         $this->assertSame('default', $job->queue);
         $this->assertSame(1, \App\Models\Transaction::query()->where('profile_id', $profile->id)->whereKey($first->json('data.id'))->count());
         $this->assertSame(1, \Illuminate\Support\Facades\DB::table('portfolio_transaction_request_receipts')->where('transaction_id', $first->json('data.id'))->count());
+    }
+
+    /** Sort object properties recursively while tagging object/array shape and preserving scalar types. */
+    private static function normalizeJsonValue(mixed $value): mixed
+    {
+        if ($value instanceof \stdClass) {
+            $properties = get_object_vars($value);
+            uksort($properties, fn ($left, $right) => strcmp((string) $left, (string) $right));
+            $normalized = [];
+            foreach ($properties as $key => $child) {
+                $normalized[] = [(string) $key, self::normalizeJsonValue($child)];
+            }
+
+            return ['json-object', $normalized];
+        }
+        if (is_array($value)) {
+            return ['json-array', array_map(self::normalizeJsonValue(...), $value)];
+        }
+
+        return $value;
     }
 }

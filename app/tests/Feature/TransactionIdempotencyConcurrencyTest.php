@@ -173,13 +173,35 @@ class TransactionIdempotencyConcurrencyTest extends TestCase
         foreach ($processes as $process) {
             $process->wait();
             self::assertTrue($process->isSuccessful(), $process->getErrorOutput().$process->getOutput());
-            $responses[] = json_decode(trim($process->getOutput()), true, flags: JSON_THROW_ON_ERROR);
+            $responses[] = json_decode(trim($process->getOutput()), flags: JSON_THROW_ON_ERROR);
         }
-        self::assertEqualsCanonicalizing([200, 201], array_column($responses, 'status'));
-        self::assertSame($responses[0]['body']['data']['id'], $responses[1]['body']['data']['id']);
-        self::assertSame($responses[0]['body']['data'], $responses[1]['body']['data']);
-        self::assertSame(['recommendation_id' => $recommendation->id, 'recommendation_status' => 'executed'], $responses[0]['body']['tos']);
-        self::assertSame($responses[0]['body']['tos'], $responses[1]['body']['tos']);
+        self::assertEqualsCanonicalizing([200, 201], array_map(fn ($response) => $response->status, $responses));
+        self::assertSame($responses[0]->body->data->id, $responses[1]->body->data->id);
+        self::assertSame(
+            self::normalizeJsonValue($responses[0]->body->data),
+            self::normalizeJsonValue($responses[1]->body->data),
+            'The created transaction and its idempotent replay must match in every JSON field and value.',
+        );
+        self::assertSame(
+            self::normalizeJsonValue((object) ['recommendation_id' => $recommendation->id, 'recommendation_status' => 'executed']),
+            self::normalizeJsonValue($responses[0]->body->tos),
+        );
+        self::assertSame(self::normalizeJsonValue($responses[0]->body->tos), self::normalizeJsonValue($responses[1]->body->tos));
+        self::assertSame(
+            self::normalizeJsonValue((object) ['outer' => (object) ['b' => 2, 'a' => [1, '2']]]),
+            self::normalizeJsonValue((object) ['outer' => (object) ['a' => [1, '2'], 'b' => 2]]),
+            'Object key order alone is ignored recursively.',
+        );
+        self::assertNotSame(
+            self::normalizeJsonValue((object) ['values' => [1, 2]]),
+            self::normalizeJsonValue((object) ['values' => [2, 1]]),
+            'JSON array order remains significant.',
+        );
+        self::assertNotSame(
+            self::normalizeJsonValue((object) ['value' => 1]),
+            self::normalizeJsonValue((object) ['value' => '1']),
+            'JSON scalar types remain significant.',
+        );
         $transaction = Transaction::query()->where('profile_id', $profile->id)->where('recommendation_id', $recommendation->id)->firstOrFail();
         self::assertSame(1, Transaction::query()->where('profile_id', $profile->id)->where('recommendation_id', $recommendation->id)->count());
         self::assertSame(1, DB::table('portfolio_transaction_request_receipts')->where('profile_id', $profile->id)->where('actor_user_id', $user->id)->count());
@@ -199,6 +221,26 @@ class TransactionIdempotencyConcurrencyTest extends TestCase
             : 'select count(*) as waiting from performance_schema.data_lock_waits';
 
         return (int) DB::selectOne($sql)->waiting;
+    }
+
+    /** Sort object properties recursively while tagging object/array shape and preserving scalar types. */
+    private static function normalizeJsonValue(mixed $value): mixed
+    {
+        if ($value instanceof \stdClass) {
+            $properties = get_object_vars($value);
+            uksort($properties, fn ($left, $right) => strcmp((string) $left, (string) $right));
+            $normalized = [];
+            foreach ($properties as $key => $child) {
+                $normalized[] = [(string) $key, self::normalizeJsonValue($child)];
+            }
+
+            return ['json-object', $normalized];
+        }
+        if (is_array($value)) {
+            return ['json-array', array_map(self::normalizeJsonValue(...), $value)];
+        }
+
+        return $value;
     }
 
     private function databaseEnvironment(): array

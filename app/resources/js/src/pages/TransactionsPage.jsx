@@ -649,7 +649,7 @@ export default function TransactionsPage() {
             if (current()) setTransactionSaveError(createWasConfirmed
                 ? 'The transaction was saved, but the Transactions list could not be refreshed. Reload the list to confirm it.'
                 : form.id
-                ? 'The transaction update could not be confirmed. Review the saved transaction before deciding whether to retry.'
+                ? `Transaction save could not be confirmed. Your correction draft is preserved for transaction #${form.id}. Review the saved transaction before deciding whether to retry.`
                 : requestWasPersisted
                     ? 'The transaction create could not be confirmed. Retry the exact same details in this Portfolio; the saved request key makes that retry idempotent.'
                     : 'The transaction create could not be confirmed. Retry the exact same details only while this page remains open; a reload may lose its key. Review Transactions before retrying after a reload.');
@@ -1666,7 +1666,9 @@ export default function TransactionsPage() {
 
                                 {submitting
                                     ? (form.id ? 'Updating...' : 'Adding...')
-                                    : (form.id ? 'Update Transaction' : 'Save Transaction')}
+                                    : (form.id
+                                        ? (transactionSaveError ? 'Retry Update' : 'Update Transaction')
+                                        : 'Save Transaction')}
 
                             </button>
 
