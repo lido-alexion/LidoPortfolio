@@ -32,8 +32,49 @@ class KiteSessionEvidenceShadowTest extends TestCase
     private function service(array $snapshot): KiteSessionEvidenceService
     {
         $gateway = Mockery::mock(BrokerGateway::class);
-        $gateway->shouldReceive('portfolioSnapshot')->andReturn($snapshot);
+        $gateway->shouldReceive('portfolioSnapshot')->andReturnUsing(function (int $userId) use ($snapshot) {
+            return $snapshot + ['broker_account_id' => (string) BrokerConnection::query()
+                ->where('user_id', $userId)->where('provider', 'kite')->value('broker_user_id')];
+        });
         return new KiteSessionEvidenceService($gateway, app(CashManagementService::class));
+    }
+
+    public function test_snapshot_from_another_account_is_not_bound_to_the_active_account(): void
+    {
+        [$user] = $this->userWithLiveProfile('kite-account-a');
+        $result = $this->service([
+            'broker_account_id' => 'kite-account-old', 'captured_at' => now()->toISOString(),
+            'current_cash' => 2500, 'holdings' => [], 'positions' => [],
+        ])->capture($user);
+
+        $row = KiteSessionEvidence::query()->firstOrFail();
+        $this->assertSame('unknown', $result['status']);
+        $this->assertSame('kite-account-a', $row->broker_account_id);
+        $this->assertSame('unknown', $row->session_status);
+        $this->assertNull($row->evidence['kite_buying_power']['equity_available']);
+        $this->assertContains('broker_snapshot_account_mismatch', $row->blocking_reasons);
+    }
+
+    public function test_session_replaced_after_snapshot_is_not_persisted_as_new_account_evidence(): void
+    {
+        [$user] = $this->userWithLiveProfile('kite-account-a');
+        $gateway = Mockery::mock(BrokerGateway::class);
+        $gateway->shouldReceive('portfolioSnapshot')->once()->andReturnUsing(function (int $userId) {
+            $snapshot = ['broker_account_id' => 'kite-account-a', 'captured_at' => now()->toISOString(),
+                'current_cash' => 2500, 'holdings' => [], 'positions' => []];
+            BrokerConnection::query()->where('user_id', $userId)->where('provider', 'kite')
+                ->update(['broker_user_id' => 'kite-account-b', 'updated_at' => now()->addSecond()]);
+            return $snapshot;
+        });
+
+        $result = (new KiteSessionEvidenceService($gateway, app(CashManagementService::class)))->capture($user);
+
+        $row = KiteSessionEvidence::query()->firstOrFail();
+        $this->assertSame('unknown', $result['status']);
+        $this->assertSame('kite-account-a', $row->broker_account_id);
+        $this->assertSame('unknown', $row->session_status);
+        $this->assertNull($row->evidence['kite_buying_power']['equity_available']);
+        $this->assertContains('broker_session_changed_during_capture', $row->blocking_reasons);
     }
 
     public function test_cash_and_buying_power_are_separate_and_unprovable_sources_remain_incomplete(): void
