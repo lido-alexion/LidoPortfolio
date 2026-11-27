@@ -17,6 +17,115 @@ class BnagrochemF042EvidenceStager
 
     public function __construct(private DataQualityIssueService $issues) {}
 
+    /**
+     * Discover the single retained historical event through the normal DQ issue
+     * service. The stock row lock serializes concurrent first discoveries;
+     * evidence verification and issue creation/staging commit atomically.
+     *
+     * @param array{listing_circular:UploadedFile,clearing_circular:UploadedFile,bhavcopy_archive:UploadedFile} $files
+     */
+    public function discoverBnagrochemHistorical(array $files): DataQualityIssue
+    {
+        // Verify bytes before taking database locks or creating any issue.
+        $payloads = $this->verifiedPayloads($files);
+        $runId = DataQualityIssueService::newDetectionRunId('data-quality:discover-official-history');
+
+        return DB::transaction(function () use ($payloads, $runId, $files): DataQualityIssue {
+            $stock = \App\Models\Stock::query()->whereKey(7096)->lockForUpdate()->first();
+            if ($stock === null || $stock->symbol !== 'BNAGROCHEM' || $stock->exchange !== 'NSE'
+                || $stock->isin !== 'INE00HZ01029') {
+                throw new DomainException('The configured BNAGROCHEM listing identity is unavailable.', 'DATA_QUALITY_SOURCE_EVIDENCE_REQUIRED', 422);
+            }
+
+            $transition = config('universe_nse_price_identities.transitions.CML77412');
+            if (($transition['symbol'] ?? null) !== 'BNAGROCHEM'
+                || ($transition['old_isin'] ?? null) !== 'INE00HZ01011'
+                || ($transition['new_isin'] ?? null) !== $stock->isin
+                || ($transition['effective_on'] ?? null) !== '2026-11-16'
+                || (float) ($transition['price_divisor'] ?? 0) !== 10.0) {
+                throw new DomainException('The retained official identity transition does not match the bounded discovery.', 'DATA_QUALITY_SOURCE_EVIDENCE_REQUIRED', 422);
+            }
+
+            $matches = DataQualityIssue::query()->where('stock_id', $stock->id)
+                ->where('issue_type', DataQualityIssue::TYPE_CORPORATE_ACTION)
+                ->whereDate('ex_date', '2026-11-16')->lockForUpdate()->get();
+            if ($matches->count() > 1) {
+                throw new DomainException('Multiple historical corporate-action records exist for this event; discovery stopped for manual reconciliation.', 'DATA_QUALITY_SOURCE_EVIDENCE_CONFLICT', 409);
+            }
+            $prior = $matches->first();
+            if ($prior !== null && $prior->detection_method !== DataQualityIssue::DETECTION_METHOD_EXCHANGE_FEED) {
+                throw new DomainException('Historical discovery cannot merge with a non-exchange-feed event record.', 'DATA_QUALITY_SOURCE_EVIDENCE_CONFLICT', 409);
+            }
+            if ($prior !== null && $prior->issue_status !== DataQualityIssue::STATUS_PENDING_REVIEW) {
+                throw new DomainException('Historical discovery cannot reopen a resolved corporate-action issue.', 'DATA_QUALITY_STALE_RESOLUTION', 409);
+            }
+            if ($prior !== null && ($prior->corporate_action_type !== 'split'
+                || abs((float) $prior->suggested_ratio - 10.0) >= 0.000001)) {
+                throw new DomainException('Existing pending issue differs from the verified historical action.', 'DATA_QUALITY_SOURCE_EVIDENCE_REQUIRED', 422);
+            }
+
+            $ratioEvidence = [[
+                'evidence_key' => 'exchange_ratio',
+                'evidence_label' => 'Official historical NSE corporate-action discovery',
+                'evidence_value' => '1:10',
+                'evidence_payload' => [
+                    'source' => 'official_historical_discovery',
+                    'transition_document' => 'CML77412',
+                    'corroborating_document' => 'CMPT77438',
+                    'historical_trade_date' => '2026-11-13',
+                    'historical_isin' => 'INE00HZ01011',
+                    'current_isin' => 'INE00HZ01029',
+                    'ex_date' => '2026-11-16',
+                    'ratio' => '1:10',
+                    'source_bundle_sha256' => hash('sha256', implode('', array_map(
+                        fn (array $payload): string => (string) ($payload['sha256'] ?? $payload['source_archive_sha256'] ?? ''),
+                        array_values($payloads),
+                    ))),
+                ],
+                'captured_at' => now(),
+            ]];
+            $auditRows = $prior?->evidences()->where('evidence_key', 'exchange_ratio')
+                ->where('evidence_payload->source', 'official_historical_discovery')->get() ?? collect();
+            if ($auditRows->count() > 1) {
+                throw new DomainException('Duplicate historical discovery audit evidence exists; discovery stopped for manual reconciliation.', 'DATA_QUALITY_SOURCE_EVIDENCE_CONFLICT', 409);
+            }
+            if ($auditRows->isNotEmpty()) {
+                // Run IDs differ between attempts and are attached by the DQ service,
+                // so compare the immutable source identity after removing that metadata.
+                $actual = $auditRows->first()->evidence_payload ?? [];
+                $expected = $ratioEvidence[0]['evidence_payload'];
+                unset($actual['detection_run_id'], $actual['detection_method']);
+                if (! $this->samePayload($actual, $expected)) {
+                    throw new DomainException('Existing historical discovery audit evidence differs from the verified bundle.', 'DATA_QUALITY_SOURCE_EVIDENCE_CONFLICT', 409);
+                }
+            }
+            $hasDiscoveryAudit = $auditRows->isNotEmpty();
+            $issue = $this->issues->createOrRefreshPendingIssueForStock(
+                $stock,
+                DataQualityIssue::TYPE_CORPORATE_ACTION,
+                DataQualityIssue::DETECTION_METHOD_EXCHANGE_FEED,
+                [
+                    'detection_source' => 'official_historical_discovery',
+                    'corporate_action_type' => 'split',
+                    'suggested_ratio' => 10.0,
+                    'latest_suggested_ratio' => 10.0,
+                    'ex_date' => '2026-11-16',
+                    'raw_payload' => ['source' => 'official_historical_discovery', 'transition' => 'CML77412'],
+                    'detection_payload' => ['detector' => 'official_historical_discovery', 'transition' => 'CML77412'],
+                    'exchange_match' => true,
+                    'confidence' => 1.0,
+                    'detected_at' => now(),
+                ],
+                $hasDiscoveryAudit ? [] : $ratioEvidence,
+                $runId,
+            );
+
+            // Reuse the same idempotent stager and exact evidence contract as
+            // the existing authenticated issue-level staging endpoint.
+            return $this->stage($issue, $files);
+        }, 3);
+    }
+
     /** @param array{listing_circular:UploadedFile,clearing_circular:UploadedFile,bhavcopy_archive:UploadedFile} $files */
     public function stage(DataQualityIssue $issue, array $files): DataQualityIssue
     {

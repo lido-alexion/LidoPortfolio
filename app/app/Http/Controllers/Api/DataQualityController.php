@@ -122,6 +122,24 @@ class DataQualityController extends Controller
         return response()->json(['data' => $updated]);
     }
 
+    /** Bounded recovery for the retained Nov. 2026 NSE source bundle; creates pending review only. */
+    public function discoverBnagrochemHistoricalAction(Request $request, BnagrochemF042EvidenceStager $stager): JsonResponse
+    {
+        $request->validate([
+            'listing_circular' => ['required', 'file', 'mimes:pdf', 'max:512'],
+            'clearing_circular' => ['required', 'file', 'mimes:pdf', 'max:512'],
+            'bhavcopy_archive' => ['required', 'file', 'mimes:zip', 'max:2048'],
+        ]);
+
+        $issue = $stager->discoverBnagrochemHistorical([
+            'listing_circular' => $request->file('listing_circular'),
+            'clearing_circular' => $request->file('clearing_circular'),
+            'bhavcopy_archive' => $request->file('bhavcopy_archive'),
+        ]);
+
+        return response()->json(['data' => $issue]);
+    }
+
     public function reject(Request $request, DataQualityIssue $issue): JsonResponse
     {
         $reResolve = $request->boolean('re_resolve');
