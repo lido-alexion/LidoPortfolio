@@ -38,7 +38,26 @@ describe('VPS health metric tips', () => {
 
         render(<VpsHealthAdminPage />);
 
-        expect(await screen.findAllByRole('button', { name: /^Tips for / })).toHaveLength(6);
+        expect(await screen.findAllByRole('button', { name: /^Tips for / })).toHaveLength(9);
+        expect(within(screen.getByText('Root disk used').closest('.card')).getByText('70.0%')).toBeInTheDocument();
+        for (const label of ['Root inode usage', 'Disk I/O', 'Disk I/O wait']) {
+            expect(within(screen.getByText(label).closest('.card')).getByText('Unavailable')).toBeInTheDocument();
+        }
+        expect(screen.getByText('Waiting for a usable consecutive sample or block-device counters.')).toBeInTheDocument();
+        expect(screen.getByText('Unavailable until consecutive /proc/stat counters are readable.')).toBeInTheDocument();
+
+        for (const [label, title, uniqueText] of [
+            ['Root disk used', 'Root disk used tips', 'Filesystem capacity'],
+            ['Root inode usage', 'Root inode usage tips', 'Filesystem inode capacity'],
+            ['Disk I/O', 'Disk I/O tips', 'Block device counters'],
+            ['Disk I/O wait', 'Disk I/O wait tips', 'Host-wide signal'],
+        ]) {
+            fireEvent.click(screen.getByRole('button', { name: `Tips for ${label}` }));
+            const tipDialog = screen.getByRole('dialog', { name: title });
+            expect(within(tipDialog).getByText(new RegExp(uniqueText, 'i'))).toBeInTheDocument();
+            fireEvent.click(within(tipDialog).getByRole('button', { name: 'Close tips' }));
+        }
+
         fireEvent.click(screen.getByRole('button', { name: 'Tips for Swap used' }));
 
         const dialog = screen.getByRole('dialog', { name: 'Swap used tips' });

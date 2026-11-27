@@ -58,6 +58,42 @@ const METRIC_TIPS = {
             { label: 'Largest directories on the root filesystem', command: 'sudo du -xhd1 /var /home /tmp 2>/dev/null | sort -h' },
         ],
     },
+    inode: {
+        title: 'Root inode usage',
+        summary: 'Inodes track filesystem entries such as files and directories. A filesystem can run out of inodes while byte capacity remains available.',
+        steps: [
+            'Check inode capacity and compare it with byte capacity.',
+            'If inode use is high, locate directories with many entries and review retention before removing anything.',
+        ],
+        commands: [
+            { label: 'Filesystem inode capacity', command: 'df -i /' },
+            { label: 'Count entries in a directory', command: 'sudo find /var -xdev -type f -printf . | wc -c' },
+        ],
+    },
+    diskIo: {
+        title: 'Disk I/O',
+        summary: 'Read and write rates describe observed throughput for the root block device. They do not by themselves show whether storage is overloaded.',
+        steps: [
+            'Compare read and write rates across consecutive samples.',
+            'Correlate sustained activity with I/O wait and application symptoms before investigating storage changes.',
+        ],
+        commands: [
+            { label: 'Block device counters', command: 'cat /proc/diskstats' },
+            { label: 'I/O activity (if installed)', command: 'iostat -xz 1 5' },
+        ],
+    },
+    iowait: {
+        title: 'Disk I/O wait',
+        summary: 'I/O wait estimates the share of CPU time spent idle while disk I/O is outstanding. It is a host-wide signal and can be unavailable until consecutive counters are readable.',
+        steps: [
+            'Check whether the reading is available and compare it with disk throughput over several samples.',
+            'If elevated, inspect device latency and correlate the time with workload symptoms; a single value does not identify the cause.',
+        ],
+        commands: [
+            { label: 'CPU and I/O activity (if installed)', command: 'iostat -xz 1 5' },
+            { label: 'Recent kernel storage messages', command: 'sudo journalctl -k -n 100 --no-pager' },
+        ],
+    },
     swap: {
         title: 'Swap used',
         summary: 'Swap can stay occupied after an earlier memory spike even when RAM is available again. Check active swap-in and swap-out before treating the percentage as a current problem.',
@@ -156,9 +192,9 @@ function MetricCard({ label, value, detail, status = 'unknown', threshold, tipId
                     </div>
                     <div className={`fs-4 fw-semibold ${severity.color === 'warning' ? 'text-warning-emphasis' : `text-${severity.color}`}`}>{value}</div>
                     {detail && <div className="small text-muted mt-1">{detail}</div>}
-                    <button type="button" className="btn btn-sm btn-link px-0 pb-0 mt-2" onClick={() => onShowTips(tipId)} aria-haspopup="dialog" aria-label={`Tips for ${label}`}>
+                    {tipId && onShowTips && <button type="button" className="btn btn-sm btn-link px-0 pb-0 mt-2" onClick={() => onShowTips(tipId)} aria-haspopup="dialog" aria-label={`Tips for ${label}`}>
                         Tips
-                    </button>
+                    </button>}
                 </div>
             </div>
         </div>
@@ -409,9 +445,9 @@ export default function VpsHealthAdminPage() {
                                 <MetricCard tipId="load" onShowTips={setActiveTip} label="Load per core" value={number(metrics.load_per_core, 2)} status={getVpsHealthMetricStatus('loadPerCore', metrics.load_per_core)} threshold="Green <1.0 · Amber 1.0–<2.0 · Red ≥2.0" detail={`1 min ${number(metrics.load1, 2)} · ${metrics.cpus ?? '—'} CPUs`} />
                                 <MetricCard tipId="ram" onShowTips={setActiveTip} label="Available RAM" value={`${number(metrics.ram_available_percent)}%`} status={getVpsHealthMetricStatus('ramAvailable', metrics.ram_available_percent)} threshold="Green ≥20% · Amber 10–<20% · Red <10%" detail={`${number(metrics.ram_available_bytes == null ? null : metrics.ram_available_bytes / (1024 ** 3), 2)} GiB available`} />
                                 <MetricCard tipId="disk" onShowTips={setActiveTip} label="Root disk used" value={metrics.root_used_percent == null ? 'Unavailable' : `${number(metrics.root_used_percent)}%`} status={getVpsHealthMetricStatus('rootDiskUsed', metrics.root_used_percent, metrics.root_disk_critical_percent ?? 90)} threshold={`Normal <75% · Warning 75% until critical threshold (${number(metrics.root_disk_critical_percent ?? 90, 0)}%, default 90%)`} detail={`${bytes(metrics.root_used_bytes)} used of ${bytes(metrics.root_total_bytes)} · ${bytes(metrics.root_available_bytes)} available (${number(metrics.root_available_percent)}%)`} />
-                                <MetricCard tipId="disk" onShowTips={setActiveTip} label="Root inode usage" value={metrics.root_inode?.used_percent == null ? 'Unavailable' : `${number(metrics.root_inode.used_percent)}%`} status={getVpsHealthMetricStatus('inodeUsed', metrics.root_inode?.used_percent)} threshold="Normal <75% · Warning 75–<90% · Critical ≥90%" detail={`${number(metrics.root_inode?.used, 0)} used of ${number(metrics.root_inode?.total, 0)} · ${number(metrics.root_inode?.available, 0)} available`} />
-                                <MetricCard tipId="disk" onShowTips={setActiveTip} label="Disk I/O" value={metrics.disk_io?.status === 'available' ? `Read ${bytes(metrics.disk_io.read_bytes_per_second)}/s` : 'Unavailable'} status={metrics.disk_io?.status === 'available' ? 'normal' : 'unknown'} threshold="Read-only root block device rates between consecutive samples" detail={metrics.disk_io?.status === 'available' ? `Write ${bytes(metrics.disk_io.write_bytes_per_second)}/s` : 'Waiting for a usable consecutive sample or block-device counters.'} />
-                                <MetricCard label="Disk I/O wait" value={metrics.disk_iowait_percent == null ? 'Unavailable' : `${number(metrics.disk_iowait_percent)}%`} status={metrics.disk_iowait_percent == null ? 'unknown' : metrics.disk_iowait_percent >= 20 ? 'warning' : 'normal'} threshold="Share of CPU time waiting on I/O since the prior sample" detail="Unavailable until consecutive /proc/stat counters are readable." />
+                                <MetricCard tipId="inode" onShowTips={setActiveTip} label="Root inode usage" value={metrics.root_inode?.used_percent == null ? 'Unavailable' : `${number(metrics.root_inode.used_percent)}%`} status={getVpsHealthMetricStatus('inodeUsed', metrics.root_inode?.used_percent)} threshold="Normal <75% · Warning 75–<90% · Critical ≥90%" detail={`${number(metrics.root_inode?.used, 0)} used of ${number(metrics.root_inode?.total, 0)} · ${number(metrics.root_inode?.available, 0)} available`} />
+                                <MetricCard tipId="diskIo" onShowTips={setActiveTip} label="Disk I/O" value={metrics.disk_io?.status === 'available' ? `Read ${bytes(metrics.disk_io.read_bytes_per_second)}/s` : 'Unavailable'} status={metrics.disk_io?.status === 'available' ? 'normal' : 'unknown'} threshold="Read-only root block device rates between consecutive samples" detail={metrics.disk_io?.status === 'available' ? `Write ${bytes(metrics.disk_io.write_bytes_per_second)}/s` : 'Waiting for a usable consecutive sample or block-device counters.'} />
+                                <MetricCard tipId="iowait" onShowTips={setActiveTip} label="Disk I/O wait" value={metrics.disk_iowait_percent == null ? 'Unavailable' : `${number(metrics.disk_iowait_percent)}%`} status={metrics.disk_iowait_percent == null ? 'unknown' : metrics.disk_iowait_percent >= 20 ? 'warning' : 'normal'} threshold="Share of CPU time waiting on I/O since the prior sample" detail={metrics.disk_iowait_percent == null ? 'Unavailable until consecutive /proc/stat counters are readable.' : 'Host-wide CPU time waiting on I/O.'} />
                                 <MetricCard tipId="swap" onShowTips={setActiveTip} label="Swap used" value={`${number(metrics.swap_used_percent)}%`} status={getVpsHealthMetricStatus('swapUsed', metrics.swap_used_percent)} threshold="Green <50% · Amber 50–80% · Red >80%" />
                                 <MetricCard tipId="fpm" onShowTips={setActiveTip} label="FPM workers" value={`${fpm['active processes'] ?? '—'} / ${fpm['max children'] ?? '—'}`} status={getVpsFpmStatus({ queue: fpm['listen queue'], active: fpm['active processes'], maxChildren: fpm['max children'] })} threshold="Green: queue 0 and workers below 90% capacity · Amber: queue 0 and workers ≥90% · Red: any queued request" detail={`Idle ${fpm['idle processes'] ?? '—'} · Queue ${fpm['listen queue'] ?? '—'}`} />
                                 <MetricCard tipId="nginx" onShowTips={setActiveTip} label="Nginx errors (5 min)" value={(nginx['502'] ?? 0) + (nginx['503'] ?? 0) + (nginx['504'] ?? 0)} status={getVpsHealthMetricStatus('nginx5xx', (nginx['502'] ?? 0) + (nginx['503'] ?? 0) + (nginx['504'] ?? 0))} threshold="Green 0 · Amber 1–4 · Red ≥5" detail={`499 client closes: ${nginx['499'] ?? 0}`} />
