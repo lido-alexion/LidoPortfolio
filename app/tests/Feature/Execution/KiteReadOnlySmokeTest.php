@@ -26,7 +26,10 @@ class KiteReadOnlySmokeTest extends TestCase
     private function connectedUser(bool $expired = false): User
     {
         $user = User::factory()->create();
-        $connection = new BrokerConnection(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => $expired ? now()->subMinute() : now()->addHour()]);
+        $connection = new BrokerConnection([
+            'user_id' => $user->id, 'provider' => 'kite', 'broker_user_id' => 'synthetic-kite-account',
+            'connected_at' => now(), 'expires_at' => $expired ? now()->subMinute() : now()->addHour(),
+        ]);
         $connection->access_token = 'synthetic-token-never-print';
         $connection->save();
         return $user;
@@ -58,6 +61,8 @@ class KiteReadOnlySmokeTest extends TestCase
         $this->assertArrayNotHasKey('current_cash', $report);
         Http::assertSentCount(3);
         Http::assertSent(fn ($request) => $request->method() === 'GET' && $request->url() === 'https://api.kite.trade/portfolio/holdings');
+        Http::assertSent(fn ($request) => $request->method() === 'GET' && $request->url() === 'https://api.kite.trade/portfolio/positions');
+        Http::assertSent(fn ($request) => $request->method() === 'GET' && $request->url() === 'https://api.kite.trade/user/margins/equity');
         foreach (DB::getQueryLog() as $query) {
             $this->assertMatchesRegularExpression('/^select\b/i', ltrim($query['query']));
         }
@@ -77,7 +82,10 @@ class KiteReadOnlySmokeTest extends TestCase
         $user = $this->connectedUser();
         $this->providerResponses(500);
         $this->artisan('stox:kite-read-only-smoke', ['user_id' => $user->id])->expectsOutputToContain('"passed":false')->assertFailed();
-        Http::assertSentCount(3);
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($request) => $request->url() === 'https://api.kite.trade/portfolio/holdings');
+        Http::assertSent(fn ($request) => $request->url() === 'https://api.kite.trade/portfolio/positions');
+        Http::assertNotSent(fn ($request) => $request->url() === 'https://api.kite.trade/user/margins/equity');
     }
 
     public function test_success_status_with_malformed_positions_cannot_be_qualified(): void
@@ -85,7 +93,10 @@ class KiteReadOnlySmokeTest extends TestCase
         $user = $this->connectedUser();
         $this->providerResponses(malformedPositions: true);
         $this->artisan('stox:kite-read-only-smoke', ['user_id' => $user->id])->expectsOutputToContain('"passed":false')->assertFailed();
-        Http::assertSentCount(3);
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($request) => $request->url() === 'https://api.kite.trade/portfolio/holdings');
+        Http::assertSent(fn ($request) => $request->url() === 'https://api.kite.trade/portfolio/positions');
+        Http::assertNotSent(fn ($request) => $request->url() === 'https://api.kite.trade/user/margins/equity');
     }
 
     public function test_nonofficial_configuration_stops_before_provider_requests(): void

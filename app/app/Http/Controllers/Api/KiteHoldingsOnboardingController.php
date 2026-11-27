@@ -51,6 +51,10 @@ class KiteHoldingsOnboardingController extends Controller
         if (! $snapshot) {
             return response()->json(['message' => 'Kite holdings could not be fetched. Reconnect Kite and retry.'], 422);
         }
+        if (isset($snapshot['broker_account_id'])
+            && ! hash_equals((string) $connection->broker_user_id, (string) $snapshot['broker_account_id'])) {
+            return response()->json(['message' => 'Kite snapshot account changed while holdings were fetched. Nothing was staged; retry with the current account.'], 409);
+        }
         $afterFetch = BrokerConnection::query()->where('user_id', $profile->user_id)->where('provider', BrokerConnection::PROVIDER_KITE)->first();
         if (! $afterFetch?->isUsable() || $afterFetch->broker_user_id !== $connection->broker_user_id || $afterFetch->updated_at?->toISOString() !== $connection->updated_at?->toISOString()) {
             return response()->json(['message' => 'Kite connection changed while holdings were fetched. Nothing was staged; retry with the current account.'], 409);
