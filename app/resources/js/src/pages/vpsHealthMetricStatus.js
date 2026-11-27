@@ -11,7 +11,7 @@ function numericValue(value) {
     return Number.isFinite(parsed) ? parsed : null;
 }
 
-export function getVpsHealthMetricStatus(metric, value) {
+export function getVpsHealthMetricStatus(metric, value, criticalThreshold = 90) {
     const number = numericValue(value);
     if (number === null) return 'unknown';
 
@@ -23,8 +23,11 @@ export function getVpsHealthMetricStatus(metric, value) {
             if (number < 10) return 'critical';
             return number < 20 ? 'warning' : 'normal';
         case 'rootDiskUsed':
+            if (number >= criticalThreshold) return 'critical';
+            return number >= 75 ? 'warning' : 'normal';
+        case 'inodeUsed':
             if (number >= 90) return 'critical';
-            return number >= 80 ? 'warning' : 'normal';
+            return number >= 75 ? 'warning' : 'normal';
         case 'swapUsed':
             if (number > 80) return 'critical';
             return number >= 50 ? 'warning' : 'normal';

@@ -17,6 +17,8 @@ const RANGE_OPTIONS = [
     { hours: 6, label: '6 hours' },
     { hours: 24, label: '24 hours' },
     { hours: 72, label: '3 days' },
+    { hours: 168, label: '7 days' },
+    { hours: 720, label: '30 days' },
 ];
 
 const METRIC_TIPS = {
@@ -118,6 +120,18 @@ function number(value, digits = 1) {
     return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))
         ? Number(value).toFixed(digits)
         : '—';
+}
+
+function bytes(value) {
+    if (value === null || value === undefined || value === '') return 'Unavailable';
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0) return 'Unavailable';
+    if (parsed < 1024) return `${parsed} B`;
+    const units = ['KiB', 'MiB', 'GiB', 'TiB'];
+    let size = parsed / 1024;
+    let unit = 0;
+    while (size >= 1024 && unit < units.length - 1) { size /= 1024; unit += 1; }
+    return `${size.toFixed(2)} ${units[unit]}`;
 }
 
 function MetricCard({ label, value, detail, status = 'unknown', threshold, tipId, onShowTips }) {
@@ -230,11 +244,12 @@ function MetricTipsModal({ tip, onClose }) {
 }
 
 function TrendChart({ title, data, lines, ySuffix = '' }) {
+    const hasValues = data.some((row) => lines.some((line) => row[line.key] !== null && row[line.key] !== undefined && row[line.key] !== '' && Number.isFinite(Number(row[line.key]))));
     return (
         <div className="card h-100">
             <div className="card-header fw-semibold">{title}</div>
             <div className="card-body" style={{ height: 260 }}>
-                {data.length === 0 ? <div className="text-muted small">No samples in this range.</div> : (
+                {data.length === 0 ? <div className="text-muted small">No samples in this range.</div> : !hasValues ? <div className="text-muted small">Unavailable: no supported measurements in this range.</div> : (
                     <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={data} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
                             <CartesianGrid stroke="var(--bs-border-color)" strokeDasharray="3 3" />
@@ -294,22 +309,55 @@ export default function VpsHealthAdminPage() {
             load: metric.load_per_core,
             ram: metric.ram_available_percent,
             disk: metric.root_used_percent,
+            inode: metric.root_inode?.used_percent,
+            diskRead: metric.disk_io?.status === 'available' ? metric.disk_io.read_bytes_per_second : null,
+            diskWrite: metric.disk_io?.status === 'available' ? metric.disk_io.write_bytes_per_second : null,
+            diskIowait: metric.disk_iowait_percent,
             swap: metric.swap_used_percent,
-            nginx499: metric.nginx?.['499'] ?? 0,
-            nginx5xx: (metric.nginx?.['502'] ?? 0) + (metric.nginx?.['503'] ?? 0) + (metric.nginx?.['504'] ?? 0),
-            fpmQueue: metric.fpm?.['listen queue'] ?? 0,
+            nginx499: data?.history_granularity === 'hour' ? null : (metric.nginx?.['499'] ?? 0),
+            nginx5xx: data?.history_granularity === 'hour' ? null : ((metric.nginx?.['502'] ?? 0) + (metric.nginx?.['503'] ?? 0) + (metric.nginx?.['504'] ?? 0)),
+            fpmQueue: data?.history_granularity === 'hour' ? null : (metric.fpm?.['listen queue'] ?? 0),
         };
     }), [data]);
     const stale = data?.last_sample_age_seconds == null || data.last_sample_age_seconds > 180;
-    const healthStatus = !latest ? 'No data' : stale ? 'Stale data' : latest.status === 'critical' ? 'Critical' : 'Healthy';
-    const statusClass = !latest || stale ? 'bg-warning text-dark' : latest.status === 'critical' ? 'bg-danger' : 'bg-success';
-    const summaryBorder = !latest || stale ? 'warning' : latest.status === 'critical' ? 'danger' : 'success';
+    const diskGrowth = useMemo(() => {
+        const rows = (data?.samples ?? []).filter((row) => row.metrics?.root_available_bytes != null && Number.isFinite(Number(row.metrics.root_available_bytes)));
+        const first = rows[0]?.metrics;
+        const last = rows.at(-1)?.metrics;
+        if (rows.length < 2 || !first || !last) return null;
+        const elapsedHours = (new Date(rows.at(-1).sampled_at).getTime() - new Date(rows[0].sampled_at).getTime()) / 3600000;
+        if (!(elapsedHours >= 1)) return null;
+        if (first.root_available_bytes === null || first.root_available_bytes === undefined || last.root_available_bytes === null || last.root_available_bytes === undefined) return null;
+        const firstAvailable = Number(first.root_available_bytes);
+        const lastAvailable = Number(last.root_available_bytes);
+        const consumedPerDay = (firstAvailable - lastAvailable) * 24 / elapsedHours;
+        if (!(consumedPerDay > 0) || !Number.isFinite(consumedPerDay) || !Number.isFinite(firstAvailable) || !Number.isFinite(lastAvailable) || !(lastAvailable >= 0)) return null;
+        return { consumedPerDay, daysToFull: lastAvailable / consumedPerDay };
+    }, [data]);
+    const hourlyBreakdown = useMemo(() => {
+        const buckets = new Map();
+        for (const sample of data?.samples ?? []) {
+            const date = new Date(sample.sampled_at);
+            if (!Number.isFinite(date.getTime())) continue;
+            const hour = date.toISOString().slice(0, 13);
+            const bucket = buckets.get(hour) ?? { hour, count: 0, latest: sample };
+            bucket.count += 1;
+            bucket.latest = sample;
+            buckets.set(hour, bucket);
+        }
+        return [...buckets.values()].sort((a, b) => b.hour.localeCompare(a.hour)).slice(0, data?.history_granularity === 'hour' ? 720 : 72);
+    }, [data]);
+    const healthStatus = !latest ? 'No data' : stale ? 'Stale data' : latest.status === 'critical' ? 'Critical' : latest.status === 'warning' ? 'Warning' : 'Healthy';
+    const statusClass = !latest || stale || latest.status === 'warning' ? 'bg-warning text-dark' : latest.status === 'critical' ? 'bg-danger' : 'bg-success';
+    const summaryBorder = !latest || stale || latest.status === 'warning' ? 'warning' : latest.status === 'critical' ? 'danger' : 'success';
     const sampleAgeStatus = getVpsSampleAgeStatus(data?.last_sample_age_seconds);
     const sampleAgeClass = sampleAgeStatus === 'normal' ? 'text-success' : sampleAgeStatus === 'critical' ? 'text-danger' : 'text-muted';
     const summaryTint = !latest || stale
         ? 'rgba(var(--bs-warning-rgb), 0.07)'
         : latest.status === 'critical'
             ? 'rgba(var(--bs-danger-rgb), 0.045)'
+            : latest.status === 'warning'
+                ? 'rgba(var(--bs-warning-rgb), 0.07)'
             : 'rgba(var(--bs-success-rgb), 0.045)';
 
     return (
@@ -317,7 +365,7 @@ export default function VpsHealthAdminPage() {
             <div className="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
                 <div>
                     <h1 className="h3 mb-1">VPS Health</h1>
-                    <div className="text-muted small">Host, PHP-FPM, and Nginx samples from the StoX health monitor.</div>
+                    <div className="text-muted small">Host, disk, PHP-FPM, and Nginx samples from the StoX health monitor.</div>
                 </div>
                 <div className="d-flex align-items-center gap-2">
                     <div className="btn-group" role="group" aria-label="History range">
@@ -351,7 +399,7 @@ export default function VpsHealthAdminPage() {
                     ) : (
                         <>
                             {latest.issues?.length > 0 && (
-                                <div className={`alert ${stale ? 'alert-warning' : 'alert-danger'}`}>
+                                <div className={`alert ${stale || latest.status === 'warning' ? 'alert-warning' : 'alert-danger'}`}>
                                     <div className="fw-semibold mb-1">Latest monitor findings</div>
                                     <ul className="mb-0">{latest.issues.map((issue, index) => <li key={`${index}-${issue}`}>{issue}</li>)}</ul>
                                 </div>
@@ -360,7 +408,10 @@ export default function VpsHealthAdminPage() {
                             <div className="row g-3 mb-2">
                                 <MetricCard tipId="load" onShowTips={setActiveTip} label="Load per core" value={number(metrics.load_per_core, 2)} status={getVpsHealthMetricStatus('loadPerCore', metrics.load_per_core)} threshold="Green <1.0 · Amber 1.0–<2.0 · Red ≥2.0" detail={`1 min ${number(metrics.load1, 2)} · ${metrics.cpus ?? '—'} CPUs`} />
                                 <MetricCard tipId="ram" onShowTips={setActiveTip} label="Available RAM" value={`${number(metrics.ram_available_percent)}%`} status={getVpsHealthMetricStatus('ramAvailable', metrics.ram_available_percent)} threshold="Green ≥20% · Amber 10–<20% · Red <10%" detail={`${number(metrics.ram_available_bytes == null ? null : metrics.ram_available_bytes / (1024 ** 3), 2)} GiB available`} />
-                                <MetricCard tipId="disk" onShowTips={setActiveTip} label="Root disk used" value={`${number(metrics.root_used_percent)}%`} status={getVpsHealthMetricStatus('rootDiskUsed', metrics.root_used_percent)} threshold="Green <80% · Amber 80–<90% · Red ≥90%" />
+                                <MetricCard tipId="disk" onShowTips={setActiveTip} label="Root disk used" value={metrics.root_used_percent == null ? 'Unavailable' : `${number(metrics.root_used_percent)}%`} status={getVpsHealthMetricStatus('rootDiskUsed', metrics.root_used_percent, metrics.root_disk_critical_percent ?? 90)} threshold={`Normal <75% · Warning 75% until critical threshold (${number(metrics.root_disk_critical_percent ?? 90, 0)}%, default 90%)`} detail={`${bytes(metrics.root_used_bytes)} used of ${bytes(metrics.root_total_bytes)} · ${bytes(metrics.root_available_bytes)} available (${number(metrics.root_available_percent)}%)`} />
+                                <MetricCard tipId="disk" onShowTips={setActiveTip} label="Root inode usage" value={metrics.root_inode?.used_percent == null ? 'Unavailable' : `${number(metrics.root_inode.used_percent)}%`} status={getVpsHealthMetricStatus('inodeUsed', metrics.root_inode?.used_percent)} threshold="Normal <75% · Warning 75–<90% · Critical ≥90%" detail={`${number(metrics.root_inode?.used, 0)} used of ${number(metrics.root_inode?.total, 0)} · ${number(metrics.root_inode?.available, 0)} available`} />
+                                <MetricCard tipId="disk" onShowTips={setActiveTip} label="Disk I/O" value={metrics.disk_io?.status === 'available' ? `Read ${bytes(metrics.disk_io.read_bytes_per_second)}/s` : 'Unavailable'} status={metrics.disk_io?.status === 'available' ? 'normal' : 'unknown'} threshold="Read-only root block device rates between consecutive samples" detail={metrics.disk_io?.status === 'available' ? `Write ${bytes(metrics.disk_io.write_bytes_per_second)}/s` : 'Waiting for a usable consecutive sample or block-device counters.'} />
+                                <MetricCard label="Disk I/O wait" value={metrics.disk_iowait_percent == null ? 'Unavailable' : `${number(metrics.disk_iowait_percent)}%`} status={metrics.disk_iowait_percent == null ? 'unknown' : metrics.disk_iowait_percent >= 20 ? 'warning' : 'normal'} threshold="Share of CPU time waiting on I/O since the prior sample" detail="Unavailable until consecutive /proc/stat counters are readable." />
                                 <MetricCard tipId="swap" onShowTips={setActiveTip} label="Swap used" value={`${number(metrics.swap_used_percent)}%`} status={getVpsHealthMetricStatus('swapUsed', metrics.swap_used_percent)} threshold="Green <50% · Amber 50–80% · Red >80%" />
                                 <MetricCard tipId="fpm" onShowTips={setActiveTip} label="FPM workers" value={`${fpm['active processes'] ?? '—'} / ${fpm['max children'] ?? '—'}`} status={getVpsFpmStatus({ queue: fpm['listen queue'], active: fpm['active processes'], maxChildren: fpm['max children'] })} threshold="Green: queue 0 and workers below 90% capacity · Amber: queue 0 and workers ≥90% · Red: any queued request" detail={`Idle ${fpm['idle processes'] ?? '—'} · Queue ${fpm['listen queue'] ?? '—'}`} />
                                 <MetricCard tipId="nginx" onShowTips={setActiveTip} label="Nginx errors (5 min)" value={(nginx['502'] ?? 0) + (nginx['503'] ?? 0) + (nginx['504'] ?? 0)} status={getVpsHealthMetricStatus('nginx5xx', (nginx['502'] ?? 0) + (nginx['503'] ?? 0) + (nginx['504'] ?? 0))} threshold="Green 0 · Amber 1–4 · Red ≥5" detail={`499 client closes: ${nginx['499'] ?? 0}`} />
@@ -370,7 +421,8 @@ export default function VpsHealthAdminPage() {
                                 <ul className="mt-2 mb-1">
                                     <li>Load per core: green below 1.0; amber from 1.0 to below 2.0; red at 2.0 or higher.</li>
                                     <li>Available RAM: green at 20% or more; amber from 10% to below 20%; red below 10%.</li>
-                                    <li>Root disk used: green below 80%; amber from 80% to below 90%; red at 90% or more.</li>
+                                    <li>Root disk warnings are raised at 75% and 85%; the critical threshold remains configurable (default 90%). Notifications use the existing cooldown.</li>
+                                    <li>Inodes show filesystem file-entry capacity; unavailable values mean the filesystem does not report an inode total.</li>
                                     <li>Swap used: green below 50%; amber from 50% through 80%; red above 80%.</li>
                                     <li>FPM: green with no queue and workers below 90% of capacity; amber with no queue and workers at 90% or more; red if any request is queued.</li>
                                     <li>Nginx 5xx errors in 5 minutes: green at 0; amber from 1–4; red at 5 or more.</li>
@@ -383,12 +435,19 @@ export default function VpsHealthAdminPage() {
                                     <TrendChart title="Resource trends" data={samples} ySuffix="%" lines={[
                                         { key: 'ram', name: 'RAM available', color: '#0d6efd' },
                                         { key: 'disk', name: 'Disk used', color: '#dc3545' },
+                                        { key: 'inode', name: 'Inodes used', color: '#6f42c1' },
                                         { key: 'swap', name: 'Swap used', color: '#fd7e14' },
                                     ]} />
                                 </div>
                                 <div className="col-xl-6">
                                     <TrendChart title="Load per core" data={samples} lines={[
                                         { key: 'load', name: 'Load per core', color: '#6f42c1' },
+                                    ]} />
+                                </div>
+                                <div className="col-xl-6">
+                                    <TrendChart title="Disk I/O (bytes per second)" data={samples} ySuffix=" B/s" lines={[
+                                        { key: 'diskRead', name: 'Read', color: '#0d6efd' },
+                                        { key: 'diskWrite', name: 'Write', color: '#fd7e14' },
                                     ]} />
                                 </div>
                                 <div className="col-xl-6">
@@ -403,7 +462,32 @@ export default function VpsHealthAdminPage() {
                                     ]} />
                                 </div>
                             </div>
-                            <div className="small text-muted">Samples are retained for 96 hours (4 days). Detailed process and log excerpts remain on the VPS and are not exposed in this dashboard.</div>
+                            <div className="card mb-3">
+                                <div className="card-header fw-semibold">Disk growth and capacity forecast</div>
+                                <div className="card-body small">
+                                    {diskGrowth ? <><span>Available capacity is declining by about {bytes(diskGrowth.consumedPerDay)} per day. </span><span>At this rate, available space reaches zero in about {number(diskGrowth.daysToFull, 1)} days.</span><div className="text-muted mt-1">Linear estimate from available-byte samples over the selected range; shown only with at least one hour of measurable decline.</div></> : <span className="text-muted">Unavailable: need at least one hour of history and measurable decline in available bytes.</span>}
+                                </div>
+                            </div>
+                            <div className="card mb-3">
+                                <div className="card-header fw-semibold">Hourly directory size hints</div>
+                                <div className="card-body small">
+                                    <div className="text-muted mb-2">Shallow file sizes include files directly under each category and one directory level; maximum 500 entries or 250 ms. The restricted monitor may not see some paths. Latest scan: {metrics.directory_breakdown?.scanned_at ? new Date(metrics.directory_breakdown.scanned_at).toLocaleString() : 'Unavailable'} · {metrics.directory_breakdown?.status ?? 'unavailable'}.</div>
+                                    <div>Reclaimable candidates (not guaranteed safe to delete): {(metrics.directory_breakdown?.reclaimable_candidates ?? []).length ? metrics.directory_breakdown.reclaimable_candidates.map((item) => `${item.kind}: ${bytes(item.bytes)} (${item.status})`).join(' · ') : 'Unavailable'}</div>
+                                    <div className="text-muted">Namespace visibility: host /home unavailable (ProtectHome=yes); host /tmp unavailable (PrivateTmp=yes).</div>
+                                    <div className="table-responsive mt-2"><table className="table table-sm mb-0"><thead><tr><th>Path</th><th>Shallow file bytes</th></tr></thead><tbody>
+                                        {(metrics.directory_breakdown?.paths ?? []).length ? metrics.directory_breakdown.paths.map((item) => { const size = item.shallow_file_bytes ?? item.direct_file_bytes; return <tr key={item.path}><td>{item.path}</td><td>{item.status === 'unavailable' || size == null ? 'Unavailable' : item.status === 'partial' ? `${bytes(size)} (partial lower bound)` : bytes(size)}</td></tr>; }) : <tr><td colSpan="2">Unavailable</td></tr>}
+                                    </tbody></table></div>
+                                </div>
+                            </div>
+                            <div className="card mb-3">
+                                <div className="card-header fw-semibold">{data?.history_granularity === 'hour' ? 'Hourly disk history' : 'Hourly disk view'} <span className="text-muted fw-normal">({hours > 168 ? 'up to 30 days' : hours > 72 ? 'up to 7 days' : 'up to 72 hours'})</span></div>
+                                <div className="table-responsive" style={{ maxHeight: 360 }}>
+                                    <table className="table table-sm table-striped mb-0"><thead className="sticky-top"><tr><th scope="col">Hour (UTC)</th><th scope="col">{data?.history_granularity === 'hour' ? 'Record' : 'Minute samples'}</th><th scope="col">Used</th><th scope="col">Available</th><th scope="col">Inodes</th><th scope="col">Read / write</th><th scope="col">Shallow directory sizes</th></tr></thead><tbody>
+                                        {hourlyBreakdown.length ? hourlyBreakdown.map(({ hour, count, latest: sample }) => { const disk = sample.metrics ?? {}; const io = disk.disk_io ?? {}; const dirs = disk.directory_breakdown ?? {}; const candidates = (dirs.reclaimable_candidates ?? []).map((item) => `${item.kind}: ${bytes(item.bytes)} candidate (${item.status})`).join(' · '); return <tr key={hour}><td>{hour}:00</td><td>{data?.history_granularity === 'hour' ? 'Latest hourly rollup' : count}</td><td>{disk.root_used_percent == null ? 'Unavailable' : `${number(disk.root_used_percent)}%`}</td><td>{bytes(disk.root_available_bytes)}</td><td>{disk.root_inode?.used_percent == null ? 'Unavailable' : `${number(disk.root_inode.used_percent)}%`}</td><td>{io.status === 'available' ? `${bytes(io.read_bytes_per_second)}/s · ${bytes(io.write_bytes_per_second)}/s` : 'Unavailable'}</td><td>{dirs.status === 'unavailable' ? 'Unavailable' : <>{`${dirs.status === 'partial' ? 'Partial · ' : ''}${(dirs.paths ?? []).map((item) => { const size = item.shallow_file_bytes ?? item.direct_file_bytes; return `${item.path}: ${item.status === 'unavailable' || size == null ? 'Unavailable' : bytes(size)} (${item.status ?? dirs.status})`; }).join(' · ') || 'No visible entries'}`}{candidates && <div>{candidates}</div>}</>}</td></tr>; }) : <tr><td colSpan="7" className="text-muted">No hourly samples available.</td></tr>}
+                                    </tbody></table>
+                                </div>
+                            </div>
+                            <div className="small text-muted">Minute samples are retained for 96 hours; disk-only hourly rollups are retained for 30 days. Long ranges contain one latest disk sample per hour. Cache and rotated-log figures are identifiable candidates only, never guaranteed safe deletion. The monitor cannot see host /home (ProtectHome=yes) or the host /tmp (PrivateTmp=yes); partial and unavailable values are not whole-host totals. Detailed process and log excerpts remain on the VPS and are not exposed in this dashboard.</div>
                         </>
                     )}
                 </>
