@@ -15,6 +15,7 @@ use App\Services\TransactionWriteService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class TransactionController extends Controller
@@ -84,109 +85,217 @@ class TransactionController extends Controller
     public function store(Request $request): JsonResponse
     {
         $profile = \activePortfolio();
+        $actor = $request->user();
+        $key = $request->header('Idempotency-Key');
+        if ($key !== null && (! is_string($key) || ! preg_match('/^[A-Za-z0-9._:-]{16,128}$/', $key))) {
+            throw ValidationException::withMessages(['Idempotency-Key' => ['A valid Idempotency-Key header is required.']]);
+        }
+        $payload = $request->except('_token');
+        $payloadHash = hash('sha256', json_encode($this->canonicalPayload($payload), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+        // Legacy clients remain accepted, but only callers that supply a key can retry safely.
+        $key ??= bin2hex(random_bytes(24));
+        $keyHash = hash('sha256', $key);
+        $existing = DB::table('portfolio_transaction_request_receipts')
+            ->where('profile_id', $profile->id)->where('actor_user_id', $actor->id)
+            ->where('idempotency_key_hash', $keyHash)->first();
+        if ($existing) {
+            return $this->idempotentTransactionResponse($existing, $payloadHash, $profile);
+        }
+        // Keep provider-backed stock validation outside the profile ledger lock. First
+        // check the receipt above; the transaction below checks it again after locking
+        // the portfolio, so a racing request that resolves successfully becomes a replay.
+        // The preliminary paper gate avoids unnecessary provider work for known-paused
+        // portfolios; the authoritative gate remains under lock before any ledger write.
+        $profile->refresh();
         if ($profile->isPaper() && $profile->simulation_state !== \App\Models\PortfolioProfile::SIMULATION_ACTIVE) {
-            throw ValidationException::withMessages([
-                'portfolio' => ['Paper interventions are blocked while simulation is paused or catching up.'],
-            ]);
+            $receipt = $this->findLockedRequestReceipt($profile, $actor, $keyHash);
+            if ($receipt) {
+                return $this->idempotentTransactionResponse($receipt, $payloadHash, $profile);
+            }
+            $profile->refresh();
+            if ($profile->isPaper() && $profile->simulation_state !== \App\Models\PortfolioProfile::SIMULATION_ACTIVE) {
+                throw ValidationException::withMessages([
+                    'portfolio' => ['Paper interventions are blocked while simulation is paused or catching up.'],
+                ]);
+            }
         }
-        $stock = $this->stocks->resolve($request);
         $validated = $this->validateTransaction($request);
-
-        if (! empty($validated['recommendation_id'])) {
-            $rec = \App\Models\TradingRecommendation::query()
-                ->forProfile($profile)
-                ->where('id', (int) $validated['recommendation_id'])
-                ->first();
-            if (! $rec) {
-                throw ValidationException::withMessages([
-                    'recommendation_id' => ['Recommendation not found for this portfolio.'],
-                ]);
+        try {
+            // The financial unit inserts the single durable enrichment job atomically.
+            $stock = $this->stocks->resolve($request, enqueueHistoricalBackfill: false);
+        } catch (\Throwable $resolutionError) {
+            // A concurrent same-key request may have committed while this request was
+            // resolving an unknown symbol. Prefer its receipt if present; otherwise
+            // preserve the stock resolver's original validation/provider failure.
+            $receipt = $this->findLockedRequestReceipt($profile, $actor, $keyHash);
+            if ($receipt) {
+                return $this->idempotentTransactionResponse($receipt, $payloadHash, $profile);
             }
-            if ((int) $rec->security_id !== (int) $stock->id) {
-                throw ValidationException::withMessages([
-                    'recommendation_id' => ['Recommendation security does not match transaction stock.'],
-                ]);
-            }
-            if (! $rec->canExecuteManually()) {
-                throw ValidationException::withMessages([
-                    'recommendation_id' => ['Recommendation is not pending execution (status: '.$rec->status.').'],
-                ]);
-            }
+            throw $resolutionError;
         }
-
-        $input = [
-            'type' => $validated['type'],
-            'execution_exchange' => $validated['execution_exchange'] ?? (strtoupper((string) $stock->exchange) === 'BSE' && ! $stock->is_dual_listed ? 'BSE' : 'NSE'),
-            'quantity' => $validated['quantity'],
-            'price' => $validated['price'],
-            'fees' => $validated['fees'] ?? 0,
-            'transaction_date' => $validated['transaction_date'],
-            'notes' => $validated['notes'] ?? null,
-            'source' => $validated['source'] ?? null,
-            'recommendation_id' => $validated['recommendation_id'] ?? null,
-            'owner_key' => $validated['owner_key'] ?? null,
-            'strategy_id' => $validated['strategy_id'] ?? null,
-        ];
-        if ($profile->isPaper()) {
-            $input += [
-                'simulation_origin' => 'investor_intervention',
-                'simulation_effective_session_date' => $validated['transaction_date'],
-                'simulation_processed_at' => now(),
-                'simulation_evidence' => [
-                    'provenance' => 'paper_simulation',
-                    'intervention' => true,
-                    'actor_user_id' => $request->user()->id,
-                ],
-            ];
-        }
-
         $tos = null;
-        // WSB-D3 (low-risk): when linking a recommendation, keep create + completion
-        // inside one DB transaction so cash and reservation convert commit together.
-        if (! empty($validated['recommendation_id'])) {
-            $transaction = DB::transaction(function () use ($profile, $stock, $input, $request) {
-                $tx = $this->writes->createFinancialUnit(
-                    $profile,
-                    $stock,
-                    $input,
-                    $request->user(),
-                    applyCash: true,
-                );
-                $this->execution->completeRecommendationFromTransaction(
-                    $profile,
-                    $tx,
-                    $request->user(),
-                );
+        $wasReplay = false;
+        $responseData = null;
+        // Provider resolution is complete before taking the profile lock. The locked
+        // receipt check still precedes mutable paper/recommendation state and all ledger
+        // work, so concurrent successful resolutions converge on one committed request.
+        $transaction = DB::transaction(function () use ($profile, $request, $actor, $keyHash, $payloadHash, &$tos, &$wasReplay, $stock, &$responseData, $validated) {
+            $profile = \App\Models\PortfolioProfile::query()->whereKey($profile->id)->lockForUpdate()->firstOrFail();
+            $receipt = DB::table('portfolio_transaction_request_receipts')
+                ->where('profile_id', $profile->id)->where('actor_user_id', $actor->id)
+                ->where('idempotency_key_hash', $keyHash)->lockForUpdate()->first();
+            if ($receipt) {
+                if (! hash_equals($receipt->payload_hash, $payloadHash)) {
+                    abort(409, 'Idempotency key was already used for a different transaction request.');
+                }
+                $wasReplay = true;
+                $transaction = $this->findReceiptTransaction($receipt, $profile);
+                $metadata = is_string($receipt->response_metadata) ? json_decode($receipt->response_metadata, true) : null;
+                $tos = is_array($metadata) ? ($metadata['tos'] ?? null) : null;
+                $responseData = is_array($metadata) ? ($metadata['data'] ?? null) : null;
+                return $transaction;
+            }
 
-                return $tx;
-            });
-            $this->writes->applyPostCommitSideEffects($profile, $stock, $transaction, softFailSnapshots: true);
-            $rec = \App\Models\TradingRecommendation::query()->find((int) $validated['recommendation_id']);
-            if ($rec) {
-                $tos = [
-                    'recommendation_id' => $rec->id,
-                    'recommendation_status' => $rec->status,
+            if ($profile->isPaper() && $profile->simulation_state !== \App\Models\PortfolioProfile::SIMULATION_ACTIVE) {
+                throw ValidationException::withMessages([
+                    'portfolio' => ['Paper interventions are blocked while simulation is paused or catching up.'],
+                ]);
+            }
+
+            $rec = null;
+            if (! empty($validated['recommendation_id'])) {
+                $rec = \App\Models\TradingRecommendation::query()
+                    ->forProfile($profile)
+                    ->where('id', (int) $validated['recommendation_id'])
+                    ->lockForUpdate()
+                    ->first();
+                if (! $rec) {
+                    throw ValidationException::withMessages([
+                        'recommendation_id' => ['Recommendation not found for this portfolio.'],
+                    ]);
+                }
+                if ((int) $rec->security_id !== (int) $stock->id) {
+                    throw ValidationException::withMessages([
+                        'recommendation_id' => ['Recommendation security does not match transaction stock.'],
+                    ]);
+                }
+                if (! $rec->canExecuteManually()) {
+                    throw ValidationException::withMessages([
+                        'recommendation_id' => ['Recommendation is not pending execution (status: '.$rec->status.').'],
+                    ]);
+                }
+            }
+
+            $input = [
+                'type' => $validated['type'],
+                'execution_exchange' => $validated['execution_exchange'] ?? (strtoupper((string) $stock->exchange) === 'BSE' && ! $stock->is_dual_listed ? 'BSE' : 'NSE'),
+                'quantity' => $validated['quantity'], 'price' => $validated['price'],
+                'fees' => $validated['fees'] ?? 0, 'transaction_date' => $validated['transaction_date'],
+                'notes' => $validated['notes'] ?? null, 'source' => $validated['source'] ?? null,
+                'recommendation_id' => $validated['recommendation_id'] ?? null,
+                'owner_key' => $validated['owner_key'] ?? null, 'strategy_id' => $validated['strategy_id'] ?? null,
+            ];
+            if ($profile->isPaper()) {
+                $input += [
+                    'simulation_origin' => 'investor_intervention',
+                    'simulation_effective_session_date' => $validated['transaction_date'],
+                    'simulation_processed_at' => now(),
+                    'simulation_evidence' => ['provenance' => 'paper_simulation', 'intervention' => true, 'actor_user_id' => $actor->id],
                 ];
             }
-        } else {
-            $transaction = $this->writes->create(
-                $profile,
-                $stock,
-                $input,
-                softFailSnapshots: true,
-                user: $request->user(),
-                applyCash: true,
+
+            $receiptId = DB::table('portfolio_transaction_request_receipts')->insertGetId([
+                'profile_id' => $profile->id, 'actor_user_id' => $actor->id,
+                'idempotency_key_hash' => $keyHash, 'payload_hash' => $payloadHash,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $tx = $this->writes->createFinancialUnit(
+                $profile, $stock, $input, $actor, applyCash: true, enqueuePriceEnrichment: true,
             );
+            if (! empty($validated['recommendation_id'])) {
+                $this->execution->completeRecommendationFromTransaction($profile, $tx, $actor);
+                $rec = \App\Models\TradingRecommendation::query()->find((int) $validated['recommendation_id']);
+                if ($rec) {
+                    $tos = ['recommendation_id' => $rec->id, 'recommendation_status' => $rec->status];
+                }
+            }
+            $responseData = $tx->fresh()->load('stock')->toArray();
+            $message = $tos ? 'Transaction saved; recommendation marked executed.' : null;
+            $responseMetadata = json_encode([
+                'data' => $responseData, 'tos' => $tos, 'message' => $message,
+            ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+            DB::table('portfolio_transaction_request_receipts')->where('id', $receiptId)->update([
+                'transaction_id' => $tx->id, 'response_metadata' => $responseMetadata, 'updated_at' => now(),
+            ]);
+            return $tx;
+        });
+        $stock ??= $transaction->stock;
+        if (! $wasReplay) {
+            $this->writes->applyPostCommitSideEffects($profile, $stock, $transaction, softFailSnapshots: true);
+            $this->writes->notifyCommittedTransaction($profile, $stock, $transaction);
         }
 
         return response()->json([
-            'data' => $transaction->fresh()->load('stock'),
+            'data' => $responseData ?? $transaction->fresh()->load('stock'),
             'tos' => $tos,
-            'cash' => $this->cash->summary($profile),
-            'message' => $tos
-                ? 'Transaction saved; recommendation marked executed.'
-                : null,
-        ], 201);
+            'cash' => $this->committedCashSummary($profile),
+            'message' => $tos ? 'Transaction saved; recommendation marked executed.' : null,
+        ], $wasReplay ? 200 : 201);
+    }
+
+    private function idempotentTransactionResponse(object $receipt, string $payloadHash, $profile): JsonResponse
+    {
+        if (! hash_equals($receipt->payload_hash, $payloadHash)) {
+            abort(409, 'Idempotency key was already used for a different transaction request.');
+        }
+        $transaction = $this->findReceiptTransaction($receipt, $profile);
+        $metadata = is_string($receipt->response_metadata) ? json_decode($receipt->response_metadata, true) : null;
+        $tos = is_array($metadata) ? ($metadata['tos'] ?? null) : null;
+        return response()->json([
+            'data' => is_array($metadata) ? ($metadata['data'] ?? $transaction->load('stock')) : $transaction->load('stock'), 'tos' => $tos,
+            'cash' => $this->committedCashSummary($profile),
+            'message' => is_array($metadata) ? ($metadata['message'] ?? null) : null,
+        ], 200);
+    }
+
+    private function findLockedRequestReceipt($profile, $actor, string $keyHash): ?object
+    {
+        return DB::transaction(function () use ($profile, $actor, $keyHash) {
+            \App\Models\PortfolioProfile::query()->whereKey($profile->id)->lockForUpdate()->firstOrFail();
+
+            return DB::table('portfolio_transaction_request_receipts')
+                ->where('profile_id', $profile->id)->where('actor_user_id', $actor->id)
+                ->where('idempotency_key_hash', $keyHash)->lockForUpdate()->first();
+        });
+    }
+
+    private function findReceiptTransaction(object $receipt, $profile): Transaction
+    {
+        if ($receipt->transaction_id === null) {
+            abort(410, 'This transaction request committed, but its transaction was later deleted. The request key remains reserved.');
+        }
+        $transaction = Transaction::query()
+            ->where('profile_id', $profile->id)
+            ->find($receipt->transaction_id);
+        if (! $transaction) {
+            abort(410, 'This transaction request committed, but its transaction is no longer available. The request key remains reserved.');
+        }
+        return $transaction->load('stock');
+    }
+
+    private function canonicalPayload(mixed $payload): mixed
+    {
+        if (! is_array($payload)) {
+            return $payload;
+        }
+        if (array_is_list($payload)) {
+            return array_map(fn ($value) => $this->canonicalPayload($value), $payload);
+        }
+        ksort($payload);
+        foreach ($payload as $key => $value) {
+            $payload[$key] = $this->canonicalPayload($value);
+        }
+        return $payload;
     }
 
     public function show(Request $request, Transaction $transaction): JsonResponse
@@ -259,6 +368,19 @@ class TransactionController extends Controller
             'data' => $updated->fresh()->load('stock'),
             'cash' => $this->cash->summary($profile),
         ]);
+    }
+
+    private function committedCashSummary($profile): ?array
+    {
+        try {
+            return $this->cash->summary($profile);
+        } catch (\Throwable $e) {
+            // Cash display enrichment cannot turn an already committed ledger POST into an apparent failure.
+            Log::warning('Transaction response cash summary failed after committed write.', [
+                'profile_id' => $profile->id, 'failure' => $e->getMessage(),
+            ]);
+            return null;
+        }
     }
 
     public function destroy(Request $request, Transaction $transaction): JsonResponse

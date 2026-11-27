@@ -86,6 +86,7 @@ class BulkTransactionImportService
                     $item['input'],
                     $user,
                     applyCash: true,
+                    enqueuePriceEnrichment: true,
                 );
 
                 TransactionImportBatchItem::query()->create([
@@ -182,7 +183,7 @@ class BulkTransactionImportService
                     'exchange' => $row['exchange'] ?? 'NSE',
                     'execution_exchange' => $row['execution_exchange'] ?? 'NSE',
                     'name' => $row['name'] ?? null,
-                ], allowCreate: true);
+                ], allowCreate: true, enqueueHistoricalBackfill: false);
             } catch (ValidationException $e) {
                 throw $this->mapRowValidation($index, $rowId, $e);
             }

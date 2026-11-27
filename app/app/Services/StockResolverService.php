@@ -16,7 +16,7 @@ class StockResolverService
     /**
      * Resolve stock from stock_id or symbol (validated against master / providers).
      */
-    public function resolve(Request $request, bool $allowCreate = true): Stock
+    public function resolve(Request $request, bool $allowCreate = true, bool $enqueueHistoricalBackfill = true): Stock
     {
         if ($request->filled('stock_id')) {
             return $this->resolveByStockId((int) $request->input('stock_id'));
@@ -35,7 +35,7 @@ class StockResolverService
             'exchange' => $request->input('exchange'),
             'isin' => $request->input('isin'),
             'sector' => $request->input('sector'),
-        ], $allowCreate);
+        ], $allowCreate, $enqueueHistoricalBackfill);
     }
 
     public function resolveByStockId(int $stockId): Stock
@@ -57,7 +57,7 @@ class StockResolverService
     /**
      * @param  array{symbol?: string, name?: ?string, exchange?: ?string, isin?: ?string, sector?: ?string, stock_id?: int|null}  $attrs
      */
-    public function resolveFromAttributes(array $attrs, bool $allowCreate = true): Stock
+    public function resolveFromAttributes(array $attrs, bool $allowCreate = true, bool $enqueueHistoricalBackfill = true): Stock
     {
         if (! empty($attrs['stock_id'])) {
             return $this->resolveByStockId((int) $attrs['stock_id']);
@@ -98,6 +98,7 @@ class StockResolverService
             $attrs['name'] ?? null,
             $attrs['isin'] ?? null,
             $attrs['sector'] ?? null,
+            $enqueueHistoricalBackfill,
         );
 
         if (! $result->valid || ! $result->stock) {

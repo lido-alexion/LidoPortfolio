@@ -90,7 +90,7 @@ final class InternalRecommendationMatcher
                 'source' => Transaction::SOURCE_RECOMMENDATION,
                 'recommendation_id' => $lockedBuy->id,
                 'owner_key' => Holding::ownerKeyFor($lockedBuy->owningStrategyId()),
-            ], applyCash: false);
+            ], applyCash: false, enqueuePriceEnrichment: true);
 
             $amount = round($quantity * $price, 4);
             $this->recordProgress($lockedSell, $amount, $sellTx->id);
