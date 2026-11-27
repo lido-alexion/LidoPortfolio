@@ -26,7 +26,10 @@ class KiteReadOnlySmokeTest extends TestCase
     private function connectedUser(bool $expired = false): User
     {
         $user = User::factory()->create();
-        $connection = new BrokerConnection(['user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => $expired ? now()->subMinute() : now()->addHour()]);
+        $connection = new BrokerConnection([
+            'user_id' => $user->id, 'provider' => 'kite', 'broker_user_id' => 'synthetic-kite-account',
+            'connected_at' => now(), 'expires_at' => $expired ? now()->subMinute() : now()->addHour(),
+        ]);
         $connection->access_token = 'synthetic-token-never-print';
         $connection->save();
         return $user;

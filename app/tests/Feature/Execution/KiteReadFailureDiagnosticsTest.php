@@ -90,6 +90,70 @@ class KiteReadFailureDiagnosticsTest extends TestCase
         $this->assertFalse($snapshot['cash_comparable']);
     }
 
+    public function test_portfolio_snapshot_fails_closed_if_connection_is_replaced_mid_read(): void
+    {
+        $user = $this->connectedUser();
+        config(['broker.kite.api_key' => 'synthetic-key']);
+        $connection = BrokerConnection::query()->where('user_id', $user->id)->firstOrFail();
+        Http::fake(function ($request) use ($connection) {
+            if (str_ends_with($request->url(), '/portfolio/positions')) {
+                $connection->forceFill([
+                    'access_token' => 'replacement-session',
+                    'broker_user_id' => 'replacement-account',
+                ])->save();
+                return Http::response(['data' => ['net' => []]]);
+            }
+            if (str_ends_with($request->url(), '/portfolio/holdings')) return Http::response(['data' => []]);
+            if (str_ends_with($request->url(), '/user/margins/equity')) return Http::response(['data' => ['net' => 100]]);
+            return Http::response([], 404);
+        });
+
+        $snapshot = app(KiteBrokerGateway::class)->portfolioSnapshot($user->id);
+
+        $this->assertNull($snapshot);
+        $requests = Http::recorded()->map(fn ($pair) => $pair[0]);
+        $this->assertCount(3, $requests);
+        foreach ($requests as $request) {
+            $this->assertTrue($request->hasHeader('Authorization', 'token synthetic-key:synthetic-token'));
+        }
+    }
+
+    public function test_portfolio_snapshot_reports_the_account_captured_for_its_session(): void
+    {
+        $user = $this->connectedUser();
+        $connection = BrokerConnection::query()->where('user_id', $user->id)->firstOrFail();
+        $connection->forceFill(['broker_user_id' => 'synthetic-account'])->save();
+        Http::fake(function ($request) {
+            return match (true) {
+                str_ends_with($request->url(), '/portfolio/holdings') => Http::response(['data' => []]),
+                str_ends_with($request->url(), '/portfolio/positions') => Http::response(['data' => ['net' => []]]),
+                str_ends_with($request->url(), '/user/margins/equity') => Http::response(['data' => ['net' => 100]]),
+                default => Http::response([], 404),
+            };
+        });
+
+        $snapshot = app(KiteBrokerGateway::class)->portfolioSnapshot($user->id);
+
+        $this->assertSame('synthetic-account', $snapshot['broker_account_id']);
+        $this->assertSame(100.0, $snapshot['current_cash']);
+    }
+
+    public function test_portfolio_snapshot_fails_closed_without_account_identity(): void
+    {
+        $user = $this->connectedUser();
+        BrokerConnection::query()->where('user_id', $user->id)->update(['broker_user_id' => null]);
+        Http::fake();
+        $logger = Mockery::mock(PortfolioLoggerService::class);
+        $logger->shouldReceive('event')->once()->with(
+            'KiteBrokerGateway', 'broker.read_failed', 'warning', 'Kite read failed',
+            ['endpoint' => 'portfolio', 'failure' => 'account_identity'],
+        );
+        $this->app->instance(PortfolioLoggerService::class, $logger);
+
+        $this->assertNull(app(KiteBrokerGateway::class)->portfolioSnapshot($user->id));
+        Http::assertNothingSent();
+    }
+
     public function test_positions_require_identity_and_finite_quantity_but_allow_signed_provider_quantity(): void
     {
         $user = $this->connectedUser();
@@ -291,7 +355,8 @@ class KiteReadFailureDiagnosticsTest extends TestCase
     {
         $user = User::factory()->create();
         BrokerConnection::query()->create([
-            'user_id' => $user->id, 'provider' => 'kite', 'connected_at' => now(), 'expires_at' => null,
+            'user_id' => $user->id, 'provider' => 'kite', 'broker_user_id' => 'synthetic-account',
+            'connected_at' => now(), 'expires_at' => null,
         ])->forceFill(['access_token' => 'synthetic-token'])->save();
 
         return $user;
