@@ -31,6 +31,16 @@ final class KiteSessionEvidenceService
             // Keep diagnostics credential-safe; provider exception text is intentionally not persisted.
         }
 
+        $afterFetchConnection = BrokerConnection::query()->where('user_id', $user->id)->where('provider', 'kite')->first();
+        $connectionStillMatches = $afterFetchConnection?->isUsable()
+            && $afterFetchConnection->getKey() === $connection->getKey()
+            && (string) $afterFetchConnection->broker_user_id === (string) $connection->broker_user_id
+            && $afterFetchConnection->updated_at?->toISOString() === $connection->updated_at?->toISOString()
+            && hash_equals((string) $afterFetchConnection->access_token, (string) $connection->access_token);
+        if (! $connectionStillMatches) {
+            $snapshot = null;
+        }
+
         $now = now();
         $sessionDate = $now->copy()->timezone('Asia/Kolkata')->toDateString();
         try {
@@ -43,7 +53,10 @@ final class KiteSessionEvidenceService
         // snapshot without a timestamp: the gateway should supply one explicitly.
         $fresh = $snapshot !== null && $captured !== null && ! $captured->isFuture()
             && $captured->diffInSeconds($now) <= 300;
-        $usableSnapshot = $fresh ? $snapshot : null;
+        $snapshotAccountMatches = $snapshot !== null
+            && isset($snapshot['broker_account_id'])
+            && hash_equals((string) $connection->broker_user_id, (string) $snapshot['broker_account_id']);
+        $usableSnapshot = $fresh && $snapshotAccountMatches ? $snapshot : null;
         $profiles = PortfolioProfile::query()->where('user_id', $user->id)
             ->where('portfolio_type', PortfolioProfile::TYPE_LIVE)->get();
         $results = [];
@@ -57,7 +70,9 @@ final class KiteSessionEvidenceService
             } catch (Throwable) {}
             $reasons = [];
             if (! $snapshot) $reasons[] = 'broker_snapshot_missing';
+            if (! $connectionStillMatches) $reasons[] = 'broker_session_changed_during_capture';
             if ($snapshot && ! $fresh) $reasons[] = $captured === null ? 'broker_snapshot_timestamp_invalid' : 'broker_snapshot_stale';
+            if ($snapshot && ! $snapshotAccountMatches) $reasons[] = 'broker_snapshot_account_mismatch';
             $reasons[] = 'order_book_api_not_captured';
             $reasons[] = 'trade_book_api_not_captured';
             $reasons[] = 'settlement_comparability_unproven';
@@ -76,7 +91,7 @@ final class KiteSessionEvidenceService
                 ['profile_id' => $profile->id, 'session_date' => $sessionDate, 'broker_account_id' => (string) $connection->broker_user_id],
                 [
                     'user_id' => $user->id, 'broker_account_id' => (string) $connection->broker_user_id,
-                    'provider' => 'kite', 'session_status' => $fresh ? 'incomplete' : 'unknown',
+                    'provider' => 'kite', 'session_status' => $usableSnapshot !== null ? 'incomplete' : 'unknown',
                     'ledger_status' => $ledgerCash === null ? 'unknown' : 'incomplete',
                     'buying_power_status' => isset($usableSnapshot['current_cash']) ? 'incomplete' : 'unknown',
                     'holdings_status' => isset($usableSnapshot['holdings']) ? 'incomplete' : 'unknown',
@@ -88,7 +103,7 @@ final class KiteSessionEvidenceService
             );
             $results[] = $row;
         }
-        return ['status' => $snapshot && $fresh ? 'incomplete' : 'unknown', 'records' => $results];
+        return ['status' => $usableSnapshot !== null ? 'incomplete' : 'unknown', 'records' => $results];
     }
 
     public function latest(User $user): array
