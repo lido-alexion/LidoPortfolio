@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\DiscoverCorporateActionSources;
 use App\Models\CorporateAction;
 use App\Models\DataQualityIssue;
 use App\Models\PortfolioProfile;
@@ -15,6 +16,7 @@ use App\Services\DataQualityResolutionService;
 use App\Services\Bhavcopy\NsePriceIdentityEvidence;
 use App\Services\Bhavcopy\BhavcopyStockMatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -571,6 +573,23 @@ class DataQualityApiTest extends TestCase
             'exchange_match' => true, 'detected_at' => now(),
         ]);
         return [$stock, $issue];
+    }
+
+    public function test_ai_source_discovery_is_queued_as_supplementary_work(): void
+    {
+        Bus::fake();
+        config(['queue.default' => 'database']);
+        [$stock, , $sync] = $this->syncBnagrochemIssueFromFeed();
+
+        $this->assertSame('queued', $sync['ai_evidence_discovery']['status']);
+        Bus::assertDispatched(DiscoverCorporateActionSources::class, fn ($job) =>
+            $job->events === [[
+                'symbol' => 'BNAGROCHEM', 'ex_date' => '2026-11-16', 'action_type' => 'face_value_split',
+            ]]
+        );
+        $this->assertDatabaseHas('portfolio_data_quality_issues', [
+            'stock_id' => $stock->id, 'issue_status' => DataQualityIssue::STATUS_PENDING_REVIEW,
+        ]);
     }
 
     /** @return array{0:Stock,1:DataQualityIssue,2:array<string,mixed>} */

@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\CalendarEvent;
+use App\Models\DataQualityIssue;
+use App\Models\User;
 use App\Models\PriceAdjustmentFactor;
 use App\Models\Setting;
 use App\Models\Stock;
@@ -12,6 +14,7 @@ use App\Services\BenchmarkPriceSyncService;
 use App\Services\Bhavcopy\UdiffBhavcopyParser;
 use App\Services\BseBhavcopyService;
 use App\Services\CorporateActionPriceRepairService;
+use App\Services\DataQualityResolutionService;
 use App\Services\NseBhavcopyService;
 use App\Services\PriceFetchService;
 use App\Services\SyncLogService;
@@ -657,6 +660,54 @@ class UniverseDailyBhavcopySyncTest extends TestCase
             'is_active' => true, 'applied_at' => now(),
             'metadata' => ['source' => 'test_reviewed_evidence', 'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_PENDING],
         ]);
+    }
+
+    public function test_current_vgl_conflict_receipt_retries_after_approved_isin_transition(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-27 14:30:00', 'UTC'));
+        $fixture = json_decode((string) file_get_contents(__DIR__.'/../Fixtures/vgl-nse-bhavcopy-2026-11-27.json'), true, flags: JSON_THROW_ON_ERROR);
+        $sourceRow = $fixture['row'];
+        $stock = Stock::query()->forceCreate([
+            'id' => 2030, 'symbol' => 'VGL', 'name' => 'VARVEE GLOBAL LIMITED', 'exchange' => 'NSE',
+            'series' => 'EQ', 'isin' => 'INE273D01035', 'is_active' => true, 'is_benchmark' => false,
+        ]);
+        $this->source('NSE', [[
+            'TradDt' => '2026-11-27', 'FinInstrmId' => $sourceRow['instrument_id'], 'ISIN' => $sourceRow['isin'],
+            'TckrSymb' => $sourceRow['symbol'], 'SctySrs' => $sourceRow['series'],
+            'OpnPric' => $sourceRow['open'], 'HghPric' => $sourceRow['high'], 'LwPric' => $sourceRow['low'],
+            'ClsPric' => $sourceRow['close'], 'TtlTradgVol' => $sourceRow['volume'],
+        ]], calls: 2);
+        $runId = app(SyncLogService::class)->beginRun('universe-price-sync');
+        $service = app(UniverseDailyBhavcopySyncService::class);
+        $first = $service->run(collect([$stock]), Carbon::parse('2026-11-27'), Carbon::parse('2026-11-27'), $runId, 'universe-price-sync', $this->initialStats())['stats'];
+        $this->assertSame(0, $first['bulk']['identity_conflicts']);
+        $saved = json_decode((string) Setting::getValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS), true);
+        $receipt = $saved['entries']['NSE:2026-11-27'];
+        $receipt['identity_conflicts'] = 1;
+        $receipt['identity_conflict_samples'] = [['stock_id' => 2030, 'reason' => 'conflicting_identity_or_rows']];
+        $receipt['retry_attempt'] = 4;
+        $receipt['retry_after'] = '2026-12-04T20:00:00+05:30';
+        $saved['entries']['NSE:2026-11-27'] = $receipt;
+        Setting::setValue(UniverseDailyBhavcopySyncService::KEY_RECEIPTS, json_encode($saved, JSON_THROW_ON_ERROR));
+
+        $issue = DataQualityIssue::query()->create([
+            'stock_id' => 2030, 'symbol' => 'VGL', 'issue_type' => DataQualityIssue::TYPE_CORPORATE_ACTION,
+            'issue_status' => DataQualityIssue::STATUS_PENDING_REVIEW, 'detection_method' => DataQualityIssue::DETECTION_METHOD_LEGACY_MANUAL,
+            'detection_source' => 'test_admin_review', 'suggested_ratio' => 2.5, 'corporate_action_type' => 'split',
+            'ex_date' => '2026-11-16', 'detected_at' => now(),
+        ]);
+        $admin = User::factory()->create(['is_admin' => true]);
+        app(DataQualityResolutionService::class)->accept(
+            $issue, 2.5, 'Independent review test', $admin->id, adminManualOverride: true,
+            manualOverrideContext: ['historical_isin' => 'INE273D01027', 'historical_valid_from' => '2026-01-01'],
+        );
+
+        $second = $service->run(collect([$stock]), Carbon::parse('2026-11-27'), Carbon::parse('2026-11-27'), $runId, 'universe-price-sync', $this->initialStats())['stats'];
+        $this->assertSame(0, $second['bulk']['backoff_skips']);
+        $this->assertSame(1, $second['bulk']['files_downloaded']);
+        $this->assertSame(0, $second['bulk']['identity_conflicts']);
+        $this->assertSame('applied', $second['bulk']['files'][0]['status']);
+        $this->assertSame(1, $second['bulk']['files'][0]['matched_rows']);
     }
 
     public function test_identity_conflicts_are_logged_as_bounded_stock_id_reasons_and_never_assigned(): void

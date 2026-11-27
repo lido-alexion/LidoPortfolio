@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\DataQualityIssue;
+use App\Jobs\DiscoverCorporateActionSources;
 use App\Models\Stock;
 use App\Models\CorporateActionFeedCheckpoint;
 use Carbon\Carbon;
@@ -141,9 +142,18 @@ class DataQualityCorporateActionSyncService
         }
 
         $checkpoint->forceFill(['last_successful_at' => now(), 'payload_hash' => $receiptSha256, 'rows_seen' => count($rows), 'last_error' => null])->save();
-        // Supplementary only: deterministic collection and checkpointing have
-        // completed, and the AI adapter is explicitly failure-isolated.
-        $aiDiscovery = app(DataQualityCorporateActionAiDiscovery::class)->discover($eligibleAiEvents, $detectionRunId);
+        // AI source discovery is supplementary and must not add provider latency
+        // to deterministic sync. A synchronous queue is deliberately treated as
+        // unavailable; queue connection failures cannot fail this core path.
+        $aiDiscovery = ['status' => 'unavailable', 'verified' => 0];
+        if ($eligibleAiEvents !== [] && config('queue.default') !== 'sync') {
+            try {
+                DiscoverCorporateActionSources::dispatch(array_slice($eligibleAiEvents, 0, 100), $detectionRunId);
+                $aiDiscovery = ['status' => 'queued', 'verified' => 0];
+            } catch (\Throwable) {
+                // Queue health and AI credits are not prerequisites for feed sync.
+            }
+        }
 
         return [
             'synced' => count($rows),

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\DataQualityIssue;
+use App\Jobs\DiscoverCorporateActionSources;
 use App\Models\CorporateActionSourceReceipt;
 use App\Models\StockPrice;
 use App\Services\DataQualityCorporateActionHeuristicService;
@@ -59,6 +60,7 @@ class DataQualityDetectionTest extends TestCase
 
     public function test_ai_official_source_discovery_runs_after_deterministic_feed_and_stages_untrusted_hashed_evidence(): void
     {
+        config(['queue.default' => 'database']);
         $this->createDataQualityStock('TCS');
         config(['services.data_quality.corporate_actions_feed_url' => 'https://example.test/ca.json']);
         config(['fundamentals_ai.enabled' => true, 'fundamentals_ai.primary_provider' => 'codex', 'fundamentals_ai.codex.api_key' => 'test-only', 'fundamentals_ai.codex.model' => 'test-model']);
@@ -72,8 +74,8 @@ class DataQualityDetectionTest extends TestCase
         $result = app(DataQualityCorporateActionSyncService::class)->syncFromExchangeFeed();
 
         $this->assertSame(1, $result['created']);
-        $this->assertSame('ok', $result['ai_evidence_discovery']['status']);
-        $this->assertSame(1, $result['ai_evidence_discovery']['verified']);
+        $this->assertSame('queued', $result['ai_evidence_discovery']['status']);
+        app(DiscoverCorporateActionSources::class, ['events' => [['symbol' => 'TCS', 'ex_date' => '2026-05-01', 'action_type' => 'split']], 'detectionRunId' => $result['detection_run_id']])->handle(app(\App\Services\DataQualityCorporateActionAiDiscovery::class));
         $issue = DataQualityIssue::query()->firstOrFail();
         $this->assertSame(DataQualityIssue::STATUS_PENDING_REVIEW, $issue->issue_status);
         $evidence = $issue->evidences()->where('evidence_key', 'ai_official_proposal')->firstOrFail();
@@ -87,30 +89,14 @@ class DataQualityDetectionTest extends TestCase
         $this->assertSame(1, $issue->fresh()->evidences()->where('evidence_key', 'ai_official_proposal')->count(), 'Repeated discovery must not duplicate the same AI source URL.');
     }
 
-    public function test_ai_failure_does_not_block_deterministic_collection(): void
+    public function test_synchronous_queue_never_runs_ai_inline_or_blocks_deterministic_feed(): void
     {
-        $this->createDataQualityStock('TCS');
-        config(['services.data_quality.corporate_actions_feed_url' => 'https://example.test/ca.json']);
+        config(['queue.default' => 'sync', 'services.data_quality.corporate_actions_feed_url' => 'https://example.test/ca.json']);
         config(['fundamentals_ai.enabled' => true, 'fundamentals_ai.primary_provider' => 'codex', 'fundamentals_ai.codex.api_key' => 'test-only']);
+        $this->createDataQualityStock('TCS');
         Http::fake([
             'https://example.test/ca.json' => Http::response([['symbol' => 'TCS', 'action_type' => 'split', 'ratio' => '1:2', 'ex_date' => '2026-05-01']], 200),
-            'api.openai.com/v1/chat/completions' => Http::response([], 503),
         ]);
-        $result = app(DataQualityCorporateActionSyncService::class)->syncFromExchangeFeed();
-        $this->assertSame(1, $result['created']);
-        $this->assertSame('unavailable', $result['ai_evidence_discovery']['status']);
-        $this->assertSame(DataQualityIssue::STATUS_PENDING_REVIEW, DataQualityIssue::query()->firstOrFail()->issue_status);
-    }
-
-    public function test_ai_zero_credit_budget_does_not_block_feed_or_admin_queue(): void
-    {
-        $this->createDataQualityStock('TCS');
-        config(['services.data_quality.corporate_actions_feed_url' => 'https://example.test/ca.json']);
-        config(['fundamentals_ai.enabled' => true]);
-        Http::fake(['https://example.test/ca.json' => Http::response([['symbol' => 'TCS', 'action_type' => 'split', 'ratio' => '1:2', 'ex_date' => '2026-05-01']], 200)]);
-        $usage = \Mockery::mock(FundamentalAiUsageService::class);
-        $usage->shouldReceive('allowInvocation')->once()->with(null)->andReturn(false);
-        $this->app->instance(FundamentalAiUsageService::class, $usage);
 
         $result = app(DataQualityCorporateActionSyncService::class)->syncFromExchangeFeed();
 
@@ -120,8 +106,45 @@ class DataQualityDetectionTest extends TestCase
         Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.openai.com'));
     }
 
+    public function test_ai_failure_does_not_block_deterministic_collection(): void
+    {
+        config(['queue.default' => 'database']);
+        $this->createDataQualityStock('TCS');
+        config(['services.data_quality.corporate_actions_feed_url' => 'https://example.test/ca.json']);
+        config(['fundamentals_ai.enabled' => true, 'fundamentals_ai.primary_provider' => 'codex', 'fundamentals_ai.codex.api_key' => 'test-only']);
+        Http::fake([
+            'https://example.test/ca.json' => Http::response([['symbol' => 'TCS', 'action_type' => 'split', 'ratio' => '1:2', 'ex_date' => '2026-05-01']], 200),
+            'api.openai.com/v1/chat/completions' => Http::response([], 503),
+        ]);
+        $result = app(DataQualityCorporateActionSyncService::class)->syncFromExchangeFeed();
+        $this->assertSame(1, $result['created']);
+        $this->assertSame('queued', $result['ai_evidence_discovery']['status']);
+        $this->runAiJob($result);
+        $this->assertSame(DataQualityIssue::STATUS_PENDING_REVIEW, DataQualityIssue::query()->firstOrFail()->issue_status);
+    }
+
+    public function test_ai_zero_credit_budget_does_not_block_feed_or_admin_queue(): void
+    {
+        config(['queue.default' => 'database']);
+        $this->createDataQualityStock('TCS');
+        config(['services.data_quality.corporate_actions_feed_url' => 'https://example.test/ca.json']);
+        config(['fundamentals_ai.enabled' => true]);
+        Http::fake(['https://example.test/ca.json' => Http::response([['symbol' => 'TCS', 'action_type' => 'split', 'ratio' => '1:2', 'ex_date' => '2026-05-01']], 200)]);
+        $usage = \Mockery::mock(FundamentalAiUsageService::class);
+        $usage->shouldReceive('allowInvocation')->once()->with(null)->andReturn(false);
+        $this->app->instance(FundamentalAiUsageService::class, $usage);
+
+        $result = app(DataQualityCorporateActionSyncService::class)->syncFromExchangeFeed();
+        $this->assertSame(1, $result['created']);
+        $this->assertSame('queued', $result['ai_evidence_discovery']['status']);
+        app(DiscoverCorporateActionSources::class, ['events' => [['symbol' => 'TCS', 'ex_date' => '2026-05-01', 'action_type' => 'split']], 'detectionRunId' => $result['detection_run_id']])->handle(app(\App\Services\DataQualityCorporateActionAiDiscovery::class));
+        $this->assertSame(DataQualityIssue::STATUS_PENDING_REVIEW, DataQualityIssue::query()->firstOrFail()->issue_status);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.openai.com'));
+    }
+
     public function test_ai_provider_timeout_does_not_block_deterministic_collection(): void
     {
+        config(['queue.default' => 'database']);
         $this->createDataQualityStock('TCS');
         config(['services.data_quality.corporate_actions_feed_url' => 'https://example.test/ca.json']);
         config(['fundamentals_ai.enabled' => true, 'fundamentals_ai.primary_provider' => 'codex', 'fundamentals_ai.codex.api_key' => 'test-only']);
@@ -131,12 +154,14 @@ class DataQualityDetectionTest extends TestCase
         ]);
         $result = app(DataQualityCorporateActionSyncService::class)->syncFromExchangeFeed();
         $this->assertSame(1, $result['created']);
-        $this->assertSame('unavailable', $result['ai_evidence_discovery']['status']);
+        $this->assertSame('queued', $result['ai_evidence_discovery']['status']);
+        $this->runAiJob($result);
         $this->assertSame(DataQualityIssue::STATUS_PENDING_REVIEW, DataQualityIssue::query()->firstOrFail()->issue_status);
     }
 
     public function test_ai_candidate_url_outside_official_allowlist_is_never_fetched_or_staged(): void
     {
+        config(['queue.default' => 'database']);
         $this->createDataQualityStock('TCS');
         config(['services.data_quality.corporate_actions_feed_url' => 'https://example.test/ca.json']);
         config(['fundamentals_ai.enabled' => true, 'fundamentals_ai.primary_provider' => 'codex', 'fundamentals_ai.codex.api_key' => 'test-only']);
@@ -144,9 +169,18 @@ class DataQualityDetectionTest extends TestCase
             'https://example.test/ca.json' => Http::response([['symbol' => 'TCS', 'action_type' => 'split', 'ratio' => '1:2', 'ex_date' => '2026-05-01']], 200),
             'api.openai.com/v1/chat/completions' => Http::response(['choices' => [['message' => ['content' => json_encode(['candidates' => [['symbol' => 'TCS', 'ex_date' => '2026-05-01', 'url' => 'https://evil.test/evidence']]])]]]], 200),
         ]);
-        app(DataQualityCorporateActionSyncService::class)->syncFromExchangeFeed();
+        $result = app(DataQualityCorporateActionSyncService::class)->syncFromExchangeFeed();
+        $this->runAiJob($result);
         $this->assertSame(1, DataQualityIssue::query()->firstOrFail()->evidences()->count());
         Http::assertNotSent(fn ($request) => str_contains($request->url(), 'evil.test'));
+    }
+
+    private function runAiJob(array $result): void
+    {
+        (new DiscoverCorporateActionSources(
+            [['symbol' => 'TCS', 'ex_date' => '2026-05-01', 'action_type' => 'split']],
+            $result['detection_run_id'] ?? null,
+        ))->handle(app(\App\Services\DataQualityCorporateActionAiDiscovery::class));
     }
 
     public function test_exchange_feed_skips_rights_issues(): void
