@@ -67,6 +67,7 @@ class DataQualityCorporateActionSyncService
         $created = 0;
         $skipped = 0;
         $errors = [];
+        $eligibleAiEvents = [];
         $receiptSha256 = hash('sha256', $response->body());
         foreach ($rows as $rowIndex => $payload) {
             if (! is_array($payload)) {
@@ -78,6 +79,7 @@ class DataQualityCorporateActionSyncService
                 $skipped++;
                 continue;
             }
+            $eligibleAiEvents[] = ['symbol' => $mapped['symbol'], 'ex_date' => $mapped['ex_date'], 'action_type' => $mapped['action_type']];
 
             $stock = Stock::query()
                 ->where('symbol', $mapped['symbol'])
@@ -134,6 +136,9 @@ class DataQualityCorporateActionSyncService
         }
 
         $checkpoint->forceFill(['last_successful_at' => now(), 'payload_hash' => $receiptSha256, 'rows_seen' => count($rows), 'last_error' => null])->save();
+        // Supplementary only: deterministic collection and checkpointing have
+        // completed, and the AI adapter is explicitly failure-isolated.
+        $aiDiscovery = app(DataQualityCorporateActionAiDiscovery::class)->discover($eligibleAiEvents, $detectionRunId);
 
         return [
             'synced' => count($rows),
@@ -141,6 +146,7 @@ class DataQualityCorporateActionSyncService
             'skipped' => $skipped,
             'errors' => $errors,
             'detection_run_id' => $detectionRunId,
+            'ai_evidence_discovery' => $aiDiscovery,
         ];
     }
 
