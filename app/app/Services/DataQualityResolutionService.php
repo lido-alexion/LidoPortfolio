@@ -233,6 +233,13 @@ class DataQualityResolutionService
             return false;
         }
 
+        // Corporate-action approval can create an OHLCV adjustment factor.
+        // Keep that decision with an authenticated human reviewer; age and
+        // exchange-feed confidence are not approval for a price mutation.
+        if ($issue->issue_type === DataQualityIssue::TYPE_CORPORATE_ACTION) {
+            return false;
+        }
+
         // The #383 BNAGROCHEM factor requires a named human review of its exact source bundle.
         if (app(BnagrochemF042EvidenceValidator::class)->appliesTo($issue)) {
             return false;
