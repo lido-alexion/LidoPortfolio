@@ -98,6 +98,12 @@ class KiteBrokerGateway implements BrokerGateway
     public function availableEquityFunds(int $userId): ?float
     {
         $token = $this->readAccessToken($userId, 'user/margins/equity');
+        return $this->availableEquityFundsWithToken($token);
+    }
+
+    /** Read funds with the session already selected by a parent snapshot. */
+    private function availableEquityFundsWithToken(string $token): ?float
+    {
         try {
             $response = Http::timeout(20)
                 ->withHeaders($this->headers($token))
@@ -155,7 +161,23 @@ class KiteBrokerGateway implements BrokerGateway
 
     public function portfolioSnapshot(int $userId): ?array
     {
-        $token = $this->readAccessToken($userId, 'portfolio');
+        $connection = BrokerConnection::query()
+            ->where('user_id', $userId)
+            ->where('provider', BrokerConnection::PROVIDER_KITE)
+            ->first();
+        if (! $connection?->isUsable()) {
+            // Keep the normal session-expired contract and diagnostics.
+            $token = $this->readAccessToken($userId, 'portfolio');
+        } else {
+            $token = (string) $connection->access_token;
+        }
+        $accountId = trim((string) ($connection?->broker_user_id ?? ''));
+        if ($accountId === '') {
+            $this->logReadFailure('portfolio', 'account_identity');
+            return null;
+        }
+        $connectionId = $connection?->getKey();
+        $connectionUpdatedAt = $connection?->updated_at?->toISOString();
         try {
             $holdingsResponse = Http::timeout(20)->withHeaders($this->headers($token))
                 ->get(rtrim((string) config('broker.kite.api_base'), '/').'/portfolio/holdings');
@@ -188,12 +210,27 @@ class KiteBrokerGateway implements BrokerGateway
             $this->logReadFailure('portfolio/positions', 'schema', $positionsResponse->status());
             return null;
         }
-        $cash = $this->availableEquityFunds($userId);
+        // Keep all requests on one selected token and reject a connection that
+        // changed while the provider reads were in flight.
+        $cash = $this->availableEquityFundsWithToken($token);
         if ($cash === null) {
             return null;
         }
+        $currentConnection = BrokerConnection::query()
+            ->where('user_id', $userId)
+            ->where('provider', BrokerConnection::PROVIDER_KITE)
+            ->first();
+        if (! $currentConnection?->isUsable()
+            || $connectionId === null
+            || $currentConnection->getKey() !== $connectionId
+            || trim((string) $currentConnection->broker_user_id) !== $accountId
+            || $currentConnection->updated_at?->toISOString() !== $connectionUpdatedAt
+            || ! hash_equals($token, (string) $currentConnection->access_token)) {
+            $this->logReadFailure('portfolio', 'session_changed');
+            return null;
+        }
         return [
-            'provider' => 'kite', 'captured_at' => now()->toISOString(),
+            'provider' => 'kite', 'broker_account_id' => $accountId, 'captured_at' => now()->toISOString(),
             'holdings' => collect($holdings)->map(fn (array $row): array => [
                 'symbol' => (string) ($row['tradingsymbol'] ?? ''),
                 'exchange' => (string) ($row['exchange'] ?? ''),
