@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\CorporateAction;
 use App\Models\DataQualityIssue;
+use App\Models\DataQualityIssueResolution;
 use App\Models\PriceAdjustmentFactor;
 use App\Models\Stock;
 use App\Models\StockPrice;
@@ -294,6 +295,7 @@ class CorporateActionPriceRepairService
         ?int $factorId = null,
         bool $dryRun = true,
         string $repairSource = 'portfolio:repair-corporate-action-prices',
+        ?string $expectedPreflightSha256 = null,
     ): array {
         $findings = $this->scanPendingFactors($stockId, $factorId);
         $details = [];
@@ -331,6 +333,22 @@ class CorporateActionPriceRepairService
                 continue;
             }
 
+            if ($expectedPreflightSha256 !== null
+                && (! preg_match('/^[a-f0-9]{64}$/', $expectedPreflightSha256)
+                    || ! isset($finding['preflight_sha256'])
+                    || ! hash_equals($expectedPreflightSha256, $finding['preflight_sha256']))) {
+                $skipped++;
+                $details[] = [
+                    'factor_id' => $factorIdValue,
+                    'issue_id' => $finding['issue_id'] ?? null,
+                    'action' => 'skipped',
+                    'status' => self::STATUS_INVALID_FACTOR,
+                    'reason' => 'The supplied preflight fingerprint does not match the current factor and affected price rows.',
+                    'preflight_sha256' => $finding['preflight_sha256'] ?? null,
+                ];
+                continue;
+            }
+
             if ($dryRun) {
                 $details[] = [
                     'factor_id' => $factorIdValue,
@@ -346,6 +364,8 @@ class CorporateActionPriceRepairService
                     'volume_multiplier' => $finding['volume_multiplier'],
                     'samples' => $finding['samples'] ?? [],
                     'ohlcv_repair_status' => $finding['ohlcv_repair_status'],
+                    'preflight_sha256' => $finding['preflight_sha256'] ?? null,
+                    'protected_rows_sha256' => $finding['protected_rows_sha256'] ?? null,
                     'already_completed' => false,
                 ];
                 $repaired++;
@@ -353,7 +373,29 @@ class CorporateActionPriceRepairService
             }
 
             try {
-                $result = $this->applyFactorRepair($factorIdValue, $repairSource);
+                // A broad run may have already applied an earlier factor whose
+                // date overlaps this factor's row set. Refresh this factor's
+                // baseline after that committed change; explicit preflight
+                // fingerprints remain valid only for their one exact factor.
+                $applyFinding = $finding;
+                if ($expectedPreflightSha256 === null) {
+                    $currentFinding = $this->scanPendingFactors($stockId, $factorIdValue)[0] ?? null;
+                    if ($currentFinding !== null) {
+                        $applyFinding = $currentFinding;
+                    }
+                }
+                if (($applyFinding['status'] ?? null) !== self::STATUS_PENDING) {
+                    $skipped++;
+                    $details[] = [
+                        'factor_id' => $factorIdValue,
+                        'issue_id' => $finding['issue_id'] ?? null,
+                        'action' => 'skipped',
+                        'status' => $applyFinding['status'] ?? self::STATUS_INVALID_FACTOR,
+                        'reason' => $applyFinding['message'] ?? 'Factor is no longer eligible after a preceding repair.',
+                    ];
+                    continue;
+                }
+                $result = $this->applyFactorRepair($factorIdValue, $repairSource, (string) ($applyFinding['preflight_sha256'] ?? ''));
             } catch (\Throwable $e) {
                 $skipped++;
                 $details[] = [
@@ -618,30 +660,54 @@ class CorporateActionPriceRepairService
         }
 
         $appliedRatio = (float) $factor->applied_ratio;
-        $expectedDivisor = $actionType === 'bonus' ? 1 + $appliedRatio : $appliedRatio;
-        if ($appliedRatio <= 0 || abs($priceDivisor - $expectedDivisor) > 0.000001
-            || abs($volumeMultiplier - $expectedDivisor) > 0.000001) {
+        // Newly approved F042 factors must retain the formula bound to the
+        // accepted ratio. Only explicitly tagged legacy factors without an
+        // approval link may use historical stored-divisor semantics.
+        if ($appliedRatio <= 0 || ! is_finite($appliedRatio)
+            || ! is_finite($priceDivisor) || ! is_finite($volumeMultiplier)) {
             return array_merge($base, [
                 'status' => self::STATUS_INVALID_FACTOR,
-                'message' => 'Stored F042 divisors do not exactly match the approved action ratio.',
-                'errors' => ['factor_ratio_divisor_mismatch'],
+                'message' => 'Stored F042 ratio and divisors must be finite positive values.',
+                'errors' => ['factor_non_finite_values'],
             ]);
         }
 
         if ($factor->issue_id !== null) {
             $issue = $factor->issue;
+            $approvedDivisor = $actionType === 'bonus' ? 1 + $appliedRatio : $appliedRatio;
+            $approvalResolution = $issue?->linkedResolution;
+            $resolutionMismatch = $issue?->latest_resolution_id !== null
+                && ($approvalResolution === null
+                    || (int) $approvalResolution->issue_id !== (int) $issue->id
+                    || $approvalResolution->resolution_status !== DataQualityIssue::STATUS_ACCEPTED
+                    || ! in_array($approvalResolution->resolution_type, [
+                        DataQualityIssueResolution::TYPE_ACCEPTED,
+                        DataQualityIssueResolution::TYPE_MODIFIED_ACCEPTED,
+                        DataQualityIssueResolution::TYPE_AUTO_ACCEPTED,
+                        DataQualityIssueResolution::TYPE_MIGRATED,
+                    ], true)
+                    || abs((float) $approvalResolution->applied_ratio - $appliedRatio) > 0.000001);
             if ($issue === null || $issue->issue_type !== DataQualityIssue::TYPE_CORPORATE_ACTION
                 || $issue->issue_status !== DataQualityIssue::STATUS_ACCEPTED
                 || (int) $issue->stock_id !== (int) $factor->stock_id
                 || $issue->ex_date?->toDateString() !== $exDate
                 || strtolower((string) $issue->corporate_action_type) !== $actionType
-                || abs((float) $issue->applied_ratio - $appliedRatio) > 0.000001) {
+                || abs((float) $issue->applied_ratio - $appliedRatio) > 0.000001
+                || abs($priceDivisor - $approvedDivisor) > 0.000001
+                || abs($volumeMultiplier - $approvedDivisor) > 0.000001
+                || $resolutionMismatch) {
                 return array_merge($base, [
                     'status' => self::STATUS_INVALID_FACTOR,
-                    'message' => 'Linked Data Quality approval no longer matches this F042 factor.',
+                    'message' => 'Linked Data Quality approval or its approved factors no longer match this F042 factor.',
                     'errors' => ['factor_approval_binding_mismatch'],
                 ]);
             }
+        } elseif (($metadata['divisor_provenance'] ?? null) !== 'legacy_stored_factors') {
+            return array_merge($base, [
+                'status' => self::STATUS_INVALID_FACTOR,
+                'message' => 'Unlinked factor lacks explicit legacy stored-divisor provenance.',
+                'errors' => ['legacy_divisor_provenance_missing'],
+            ]);
         }
 
         $key = $this->stockExDateKey((int) $factor->stock_id, (string) $exDate);
@@ -781,6 +847,7 @@ class CorporateActionPriceRepairService
                 'from' => $oldest ? (string) $oldest : null,
                 'before' => $exDate,
             ],
+            ...$this->factorPreflightEvidence($factor, $exDate),
             'warnings' => [
                 'F042 acceptance already unblocked pipelines; OHLCV may still be unrestated until apply.',
             ],
@@ -790,13 +857,13 @@ class CorporateActionPriceRepairService
     /**
      * @return array<string, mixed>
      */
-    protected function applyFactorRepair(int $factorId, string $repairSource): array
+    protected function applyFactorRepair(int $factorId, string $repairSource, string $expectedPreflightSha256): array
     {
         // This lookup must stay outside the transaction: a consistent read
         // inside it could establish a stale REPEATABLE READ snapshot before
         // waiting on the stock lock.
-        $candidateStockId = PriceAdjustmentFactor::query()->whereKey($factorId)->value('stock_id');
-        if ($candidateStockId === null) {
+        $candidate = PriceAdjustmentFactor::query()->whereKey($factorId)->first(['stock_id', 'issue_id']);
+        if ($candidate === null) {
             return [
                 'factor_id' => $factorId,
                 'action' => 'skipped',
@@ -805,10 +872,16 @@ class CorporateActionPriceRepairService
             ];
         }
 
-        return DB::transaction(function () use ($factorId, $repairSource, $candidateStockId) {
+        return DB::transaction(function () use ($factorId, $repairSource, $candidate, $expectedPreflightSha256) {
             /** @var PriceAdjustmentFactor|null $factor */
-            // Keep writer lock order stock → factor, matching direct and repair F020.
-            $stock = Stock::query()->whereKey($candidateStockId)->lockForUpdate()->first();
+            // F042 approval/rollback uses issue → stock → factor. Take that
+            // same order here; unlinked legacy factors start at stock. F020's
+            // independent stock → action path never requests an issue lock.
+            $lockedIssue = null;
+            if ($candidate->issue_id !== null) {
+                $lockedIssue = DataQualityIssue::query()->whereKey($candidate->issue_id)->lockForUpdate()->first();
+            }
+            $stock = Stock::query()->whereKey($candidate->stock_id)->lockForUpdate()->first();
             if ($stock === null) {
                 return [
                     'factor_id' => $factorId,
@@ -817,7 +890,7 @@ class CorporateActionPriceRepairService
                     'reason' => 'Factor stock no longer exists.',
                 ];
             }
-            $factor = PriceAdjustmentFactor::query()->with('issue')->whereKey($factorId)->lockForUpdate()->first();
+            $factor = PriceAdjustmentFactor::query()->whereKey($factorId)->lockForUpdate()->first();
 
             if ($factor === null) {
                 return [
@@ -827,8 +900,30 @@ class CorporateActionPriceRepairService
                     'reason' => 'Factor not found.',
                 ];
             }
+            // Lock the current linked resolution and every protected price row before any
+            // consistent read establishes a MariaDB REPEATABLE READ snapshot.
+            // This fences both approval changes and direct price writers that
+            // do not participate in the stock-row mutex convention.
+            if ((int) ($factor->issue_id ?? 0) !== (int) ($candidate->issue_id ?? 0)) {
+                return [
+                    'factor_id' => $factor->id,
+                    'issue_id' => $factor->issue_id,
+                    'action' => 'skipped',
+                    'status' => self::STATUS_INVALID_FACTOR,
+                    'reason' => 'Factor approval link changed while acquiring repair locks.',
+                ];
+            }
+            if ($lockedIssue !== null && $lockedIssue->latest_resolution_id !== null) {
+                DataQualityIssueResolution::query()->whereKey($lockedIssue->latest_resolution_id)->lockForUpdate()->first();
+            }
+            $factor->setRelation('issue', $lockedIssue);
+            if ($factor->effective_ex_date !== null) {
+                DB::table('portfolio_stock_prices')->where('stock_id', $factor->stock_id)
+                    ->where('price_date', '<', $factor->effective_ex_date->toDateString())
+                    ->orderBy('id')->lockForUpdate()->get(['id']);
+            }
 
-            if ((int) $factor->stock_id !== (int) $candidateStockId) {
+            if ((int) $factor->stock_id !== (int) $candidate->stock_id) {
                 return [
                     'factor_id' => $factor->id,
                     'issue_id' => $factor->issue_id,
@@ -862,6 +957,17 @@ class CorporateActionPriceRepairService
                     'status' => $inspection['status'],
                     'reason' => $inspection['message'],
                     'errors' => $inspection['errors'] ?? [],
+                ];
+            }
+
+            if ($expectedPreflightSha256 === ''
+                || ! hash_equals($expectedPreflightSha256, (string) ($inspection['preflight_sha256'] ?? ''))) {
+                return [
+                    'factor_id' => $factor->id,
+                    'issue_id' => $factor->issue_id,
+                    'action' => 'skipped',
+                    'status' => self::STATUS_INVALID_FACTOR,
+                    'reason' => 'Factor or affected price rows changed after preview; generate a new preflight before applying.',
                 ];
             }
 
@@ -1015,6 +1121,35 @@ class CorporateActionPriceRepairService
     {
         ksort($row);
         return hash('sha256', json_encode($row, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+    }
+
+    private function factorPreflightEvidence(PriceAdjustmentFactor $factor, string $exDate): array
+    {
+        $rows = DB::table('portfolio_stock_prices')
+            ->where('stock_id', $factor->stock_id)
+            ->where('price_date', '<', $exDate)
+            ->orderBy('id')
+            ->get()
+            ->map(fn ($row) => (array) $row)
+            ->all();
+        $issue = $factor->issue;
+
+        $protectedRowsSha256 = hash('sha256', implode('', array_map(fn (array $row) => $this->rowHash($row), $rows)));
+        return [
+            'preflight_sha256' => hash('sha256', json_encode([
+            'factor' => $factor->getAttributes(),
+            'approval' => $issue === null ? null : [
+                'issue' => $issue->getAttributes(),
+                'resolution' => $issue->linkedResolution?->getAttributes(),
+            ],
+            'rows' => [
+                'count' => count($rows),
+                'sha256' => $protectedRowsSha256,
+            ],
+            ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)),
+            'protected_rows_count' => count($rows),
+            'protected_rows_sha256' => $protectedRowsSha256,
+        ];
     }
 
     /**
