@@ -180,7 +180,7 @@ class DataQualityResolutionServiceTest extends TestCase
         $result = app(CorporateActionPriceRepairService::class)->repairPendingFactors($stock->id, $factor->id, false);
 
         $this->assertSame('invalid_factor', $result['details'][0]['status']);
-        $this->assertContains('factor_ratio_divisor_mismatch', $result['details'][0]['errors']);
+        $this->assertContains('factor_approval_binding_mismatch', $result['details'][0]['errors']);
         $this->assertSame($before, StockPrice::query()->where('stock_id', $stock->id)->orderBy('id')->get()->toArray());
     }
 
