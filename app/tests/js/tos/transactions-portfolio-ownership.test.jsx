@@ -439,7 +439,17 @@ it('preserves same-scope recommendation create payload, success feedback, and re
             : path === '/settings' ? Promise.resolve({ data: { data: { fee_components: DEFAULT_FEE_COMPONENTS } } })
                 : path === '/stocks/search' ? Promise.resolve({ data: { data: [{ id: 42, symbol: 'BETA', name: 'Beta Corp', exchange: 'NSE' }] } })
                 : Promise.resolve({ data: { data: [] } }));
-    api.post.mockResolvedValue({ data: { message: 'Transaction saved compatibly' } });
+    let createAttempts = 0;
+    api.post.mockImplementation((url) => {
+        if (url === '/stocks/validate') return Promise.resolve({ data: { data: { id: 42, symbol: 'BETA', name: 'Beta Corp', exchange: 'NSE' }, source: 'test' } });
+        if (url === '/transactions') {
+            createAttempts += 1;
+            return createAttempts === 1
+                ? Promise.reject(new Error('Synthetic transport failure'))
+                : Promise.resolve({ data: { message: 'Transaction saved compatibly' } });
+        }
+        throw new Error(`Unexpected POST ${url}`);
+    });
     mount({ extra: <CurrentPortfolioPrefill /> });
     await screen.findByText('ALPHA');
     fireEvent.click(screen.getByRole('button', { name: 'Prefill current Portfolio' }));
@@ -447,13 +457,23 @@ it('preserves same-scope recommendation create payload, success feedback, and re
     fireEvent.click(screen.getByRole('button', { name: 'Validate symbol' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save Transaction' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Save Transaction' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Retry the exact same details');
+    fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'Changed after uncertain save' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Transaction' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('previous create request');
+    expect(api.post.mock.calls.filter(([url]) => url === '/transactions')).toHaveLength(1);
+    fireEvent.change(screen.getByLabelText('Notes'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Transaction' }));
     const expectedFees = calculateTransactionFees({
         quantity: 2, price: 10, type: 'buy', exchange: 'NSE', feeComponents: DEFAULT_FEE_COMPONENTS,
     }).total;
     await waitFor(() => expect(api.post).toHaveBeenCalledWith('/transactions', {
         type: 'buy', quantity: 2, price: 10, fees: expectedFees, execution_exchange: 'NSE', transaction_date: getLocalTodayDateString(),
         notes: '', recommendation_id: 77, source: 'recommendation', stock_id: 42,
-    }));
+    }, { headers: { 'Idempotency-Key': expect.any(String) } }));
+    const createCalls = api.post.mock.calls.filter(([url]) => url === '/transactions');
+    expect(createCalls).toHaveLength(2);
+    expect(createCalls[0][2].headers['Idempotency-Key']).toBe(createCalls[1][2].headers['Idempotency-Key']);
     await waitFor(() => expect(api.get.mock.calls.filter(([path]) => path === '/transactions')).toHaveLength(2));
     expect(showToast).toHaveBeenCalledWith('Transaction saved compatibly', 'success');
 });

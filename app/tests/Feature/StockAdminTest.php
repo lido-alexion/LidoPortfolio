@@ -410,6 +410,8 @@ class StockAdminTest extends TestCase
         $fresh = $stock->fresh();
         $this->assertTrue($fresh->admin_deactivated);
         $this->assertTrue($fresh->is_active);
+        $this->assertSame(1, \Illuminate\Support\Facades\DB::table('portfolio_jobs')
+            ->where('queue', 'default')->where('payload', 'like', '%BackfillHistoricalDataJob%')->count());
     }
 
     public function test_resolve_canonical_stock_still_finds_admin_deactivated_row_for_transactions(): void
