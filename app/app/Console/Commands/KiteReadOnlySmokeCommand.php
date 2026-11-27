@@ -80,7 +80,7 @@ class KiteReadOnlySmokeCommand extends Command
             });
             $report['stage'] = 'provider_reads';
             $snapshot = $kite->portfolioSnapshot($user->id);
-            // portfolioSnapshot treats failed positions as empty; the smoke must not.
+            // The snapshot fails closed before funds when holdings or positions are invalid.
             if ($paths !== self::PATHS || $responses !== [true, true, true] || $snapshot === null) {
                 throw new RuntimeException();
             }
