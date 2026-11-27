@@ -113,6 +113,29 @@ Run these against the isolated CI test database and a network-enabled build/brow
 
 ## Live backend/browser assurance additions (2026-11-26)
 
+Phase 1 release preparation continued at exact head `944e4f930127a6aa94b2a0b371d1ebe0d59a9d26`.
+The owner reported hosted exact-head CI run `45988921402` green. Additional focused
+SQLite regressions cover two synthetic investor owners for transaction update and
+emergency cancel/disconnect isolation, administrator denial on a transaction route
+and a route without active-portfolio resolution, and successful Kite reconnect for
+the same initiating StoX owner when Kite returns a different broker account ID.
+That reconnect deliberately retains current replacement behavior; the callback
+continues to bind to the initiating StoX user and consume its state once. The
+deployment rollback and mixed-version cookie procedure is in
+[`authentication-upgrade-phase1-release-runbook.md`](authentication-upgrade-phase1-release-runbook.md).
+
+These are additional local regression results, not a rerun of hosted CI. The
+production-safe-account smoke and any actual release/rollback remain supervisor
+gates; no production system was touched.
+
+Focused command from `app/`, using a temporary `LIDO_ENV_PATH`, fake app key,
+disabled telemetry, and SQLite `:memory:`:
+
+```bash
+php artisan test --filter='test_reconnect_replaces_kite_account_for_the_same_initiating_stox_owner|test_admin_context_cannot_write_investor_transactions_with_or_without_portfolio_resolution|test_transaction_update_changes_only_the_initiating_investors_portfolio|test_emergency_cancel_disconnect_changes_only_initiating_investor_state_connection_and_orders|test_callback_binds_to_the_initiating_user_even_when_another_user_has_a_browser_session|test_kite_login_state_is_consumed_by_the_first_callback'
+# 6 tests passed / 34 assertions
+```
+
 Added an additive live Playwright harness, `npm run test:e2e:auth-live`. It starts Laravel against a newly created SQLite database in a temporary directory, inserts synthetic investor/admin users and paper portfolios, and proxies browser requests to that Laravel process. It explicitly sets `LIDO_ENV_PATH` to a temporary test-only environment file, uses a fake app key, database sessions, array cache, synchronous queue, four PHP development-server workers, and disabled telemetry. Playwright results also stay in that temporary directory. It makes no broker API calls and creates no orders. The browser case uses one Chromium context with two real pages and exercises independent HttpOnly investor/admin cookies, simultaneous portfolio writes sharing a CSRF session, page refresh, same-role stale identity rejection, foreign portfolio denial, role restrictions, and context-specific logout. Existing focused backend tests cover session expiry/revocation, CSRF context separation, and Kite callback state binding/replay.
 
 The new expiry feature regression resets Laravel's retained in-memory session between test requests, ages the disposable database session row, and verifies the cookie is rejected. Focused backend verification passed **37 tests / 144 assertions**, including auth contexts, sessions, CSRF login, Kite callbacks, and portfolio middleware. TypeScript typecheck, JavaScript syntax checks, Playwright test discovery, and `git diff --check` passed. The live browser harness successfully ran `migrate:fresh` against its temporary SQLite file and created fixtures, then stopped because this sandbox denies listening on `127.0.0.1:8001`; the browser test did not run here. The hosted frontend verifier now provisions PHP/SQLite and runs this live test before the existing mocked journeys. Hosted CI must still provide the browser execution evidence.

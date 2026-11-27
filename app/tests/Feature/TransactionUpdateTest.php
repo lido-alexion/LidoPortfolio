@@ -208,5 +208,78 @@ class TransactionUpdateTest extends TestCase
         $this->deleteJson("/api/transactions/{$transaction->id}")->assertNotFound();
         $this->assertDatabaseHas('portfolio_transactions', ['id' => $transaction->id]);
     }
-}
 
+    public function test_admin_context_cannot_write_investor_transactions_with_or_without_portfolio_resolution(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $investor = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($investor);
+        $stock = Stock::query()->create([
+            'symbol' => 'ADM1', 'exchange' => 'NSE', 'name' => 'Admin denial fixture',
+            'is_active' => true, 'is_benchmark' => false,
+        ]);
+        $transaction = Transaction::query()->create([
+            'profile_id' => $profile->id,
+            'stock_id' => $stock->id,
+            'type' => 'buy', 'quantity' => 1, 'price' => 50, 'fees' => 0,
+            'transaction_date' => '2026-03-03',
+        ]);
+
+        $this->actingAs($admin, 'web')
+            ->withHeader('X-Stox-Auth-Context', 'admin')
+            ->withHeader('X-Stox-Auth-User', (string) $admin->id)
+            ->withHeader('X-Profile-Id', (string) $profile->id)
+            ->deleteJson("/api/transactions/{$transaction->id}")
+            ->assertForbidden();
+
+        // This authenticated investor route deliberately omits active portfolio resolution.
+        $this->withHeader('X-Stox-Auth-Context', 'investor')
+            ->withHeader('X-Stox-Auth-User', (string) $admin->id)
+            ->getJson('/api/notification-settings')
+            ->assertUnauthorized();
+
+        $this->assertDatabaseHas('portfolio_transactions', [
+            'id' => $transaction->id,
+            'profile_id' => $profile->id,
+            'price' => 50,
+        ]);
+    }
+
+    public function test_transaction_update_changes_only_the_initiating_investors_portfolio(): void
+    {
+        $initiator = User::factory()->create();
+        $other = User::factory()->create();
+        $initiatorProfile = $this->defaultPortfolioFor($initiator);
+        $otherProfile = $this->defaultPortfolioFor($other);
+        app(CashManagementService::class)->deposit($initiatorProfile, 10_000, 'synthetic owner isolation seed', $initiator);
+        $stock = Stock::query()->create([
+            'symbol' => 'OWN1', 'exchange' => 'NSE', 'name' => 'Owner isolation fixture',
+            'is_active' => true, 'is_benchmark' => false,
+        ]);
+        $initiatorTransaction = Transaction::query()->create([
+            'profile_id' => $initiatorProfile->id, 'stock_id' => $stock->id,
+            'type' => 'buy', 'quantity' => 1, 'price' => 50, 'fees' => 0,
+            'transaction_date' => '2026-03-04',
+        ]);
+        $otherTransaction = Transaction::query()->create([
+            'profile_id' => $otherProfile->id, 'stock_id' => $stock->id,
+            'type' => 'buy', 'quantity' => 2, 'price' => 75, 'fees' => 0,
+            'transaction_date' => '2026-03-04',
+        ]);
+        \Illuminate\Support\Facades\Bus::fake([\App\Jobs\BackfillHistoricalDataJob::class]);
+
+        $this->actingAs($initiator, 'web')->withProfileHeader($initiator, $initiatorProfile)
+            ->putJson("/api/transactions/{$initiatorTransaction->id}", [
+                'stock_id' => $stock->id, 'type' => 'buy', 'quantity' => 1,
+                'price' => 55, 'fees' => 0, 'transaction_date' => '2026-03-04',
+            ])->assertOk();
+
+        $this->assertDatabaseHas('portfolio_transactions', [
+            'id' => $initiatorTransaction->id, 'profile_id' => $initiatorProfile->id, 'price' => 55,
+        ]);
+        $this->assertDatabaseHas('portfolio_transactions', [
+            'id' => $otherTransaction->id, 'profile_id' => $otherProfile->id,
+            'quantity' => 2, 'price' => 75,
+        ]);
+    }
+}
