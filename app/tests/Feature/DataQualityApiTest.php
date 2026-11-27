@@ -90,11 +90,25 @@ class DataQualityApiTest extends TestCase
             ->assertCreated()->assertJsonPath('data.issue_status', DataQualityIssue::STATUS_PENDING_REVIEW)
             ->assertJsonPath('data.detection_source', 'admin_manual_entry');
         $this->actingAs($admin)->postJson('/api/data-quality/manual-corporate-actions', $createPayload)->assertStatus(409);
+        $newPreview = $this->actingAs($admin)->postJson('/api/data-quality/manual-corporate-actions/preview', $request)->assertOk();
+        $this->actingAs($admin)->postJson('/api/data-quality/manual-corporate-actions', $request + [
+            'preview_confirmed' => true, 'preview_token' => $newPreview->json('data.preview_token'),
+        ])->assertStatus(409);
         $issue = DataQualityIssue::query()->where('stock_id', $stock->id)->firstOrFail();
         $this->assertSame(0, $issue->evidences()->count());
         $this->assertSame('External circular', $issue->detection_payload['source_reference']);
         $this->assertSame($admin->id, $issue->detection_payload['entered_by']);
         $this->assertDatabaseMissing('portfolio_price_adjustment_factors', ['issue_id' => $issue->id]);
+    }
+
+    public function test_manual_corporate_action_ratio_must_fit_factor_precision(): void
+    {
+        $stock = $this->createDataQualityStock('MANUALPRECISION');
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin)->postJson('/api/data-quality/manual-corporate-actions/preview', [
+            'stock_id' => $stock->id, 'corporate_action_type' => 'split',
+            'ex_date' => '2026-02-01', 'applied_ratio' => '0.0000001',
+        ])->assertUnprocessable()->assertJsonValidationErrors(['applied_ratio']);
     }
 
     public function test_manual_corporate_action_requires_preview_confirmation_and_admin(): void

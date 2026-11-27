@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 
 class DataQualityController extends Controller
 {
@@ -86,7 +87,7 @@ class DataQualityController extends Controller
             'stock_id' => ['required', 'integer', 'exists:portfolio_stocks,id'],
             'corporate_action_type' => ['required', Rule::in(['split', 'bonus'])],
             'ex_date' => ['required', 'date_format:Y-m-d'],
-            'applied_ratio' => ['required', 'numeric', 'gt:0', 'max:10000'],
+            'applied_ratio' => ['required', 'numeric', 'decimal:0,6', 'gt:0', 'max:10000'],
         ]);
         $stock = Stock::query()->findOrFail($payload['stock_id']);
         $divisor = $payload['corporate_action_type'] === 'bonus'
@@ -132,7 +133,7 @@ class DataQualityController extends Controller
             'stock_id' => ['required', 'integer', 'exists:portfolio_stocks,id'],
             'corporate_action_type' => ['required', Rule::in(['split', 'bonus'])],
             'ex_date' => ['required', 'date_format:Y-m-d'],
-            'applied_ratio' => ['required', 'numeric', 'gt:0', 'max:10000'],
+            'applied_ratio' => ['required', 'numeric', 'decimal:0,6', 'gt:0', 'max:10000'],
             'record_date' => ['nullable', 'date_format:Y-m-d'],
             'source_reference' => ['nullable', 'string', 'max:500'],
             'justification' => ['nullable', 'string', 'max:2000'],
@@ -145,11 +146,22 @@ class DataQualityController extends Controller
         if (! hash_equals($expectedPreview, $payload['preview_token'])) {
             throw ValidationException::withMessages(['preview_token' => ['Price preview is stale or does not match this action. Preview again before creating the issue.']]);
         }
-        if (DataQualityIssue::query()->where('manual_preview_token', $payload['preview_token'])->exists()) {
-            return response()->json(['message' => 'This confirmed preview has already created a corporate-action issue.'], 409);
-        }
         try {
-        $issue = DataQualityIssue::query()->create([
+        $issue = DB::transaction(function () use ($payload, $stock): ?DataQualityIssue {
+            $stock = Stock::query()->whereKey($stock->id)->lockForUpdate()->firstOrFail();
+            $lockedDigest = $this->manualPriceRowsDigest($stock, $payload['ex_date']);
+            $lockedToken = hash_hmac('sha256', implode('|', [$stock->id, $payload['corporate_action_type'], $payload['ex_date'], (string) (float) $payload['applied_ratio'], $lockedDigest['rows_sha256'], auth()->id()]), (string) config('app.key'));
+            if (! hash_equals($lockedToken, $payload['preview_token'])) {
+                throw ValidationException::withMessages(['preview_token' => ['Price preview is stale or does not match this action. Preview again before creating the issue.']]);
+            }
+            if (DataQualityIssue::query()->where('manual_preview_token', $payload['preview_token'])->exists()
+                || DataQualityIssue::query()->where('stock_id', $stock->id)
+                    ->where('issue_type', DataQualityIssue::TYPE_CORPORATE_ACTION)
+                    ->whereDate('ex_date', $payload['ex_date'])
+                    ->whereIn('issue_status', [DataQualityIssue::STATUS_PENDING_REVIEW, DataQualityIssue::STATUS_ACCEPTED])
+                    ->exists()) return null;
+
+            return DataQualityIssue::query()->create([
             'stock_id' => $stock->id,
             'symbol' => $stock->symbol,
             'issue_type' => DataQualityIssue::TYPE_CORPORATE_ACTION,
@@ -169,11 +181,16 @@ class DataQualityController extends Controller
             'auto_resolved' => false,
             'manual_preview_token' => $payload['preview_token'],
         ]);
+        });
         } catch (QueryException $exception) {
             if (str_starts_with((string) $exception->getCode(), '23')) {
                 return response()->json(['message' => 'This confirmed preview has already created a corporate-action issue.'], 409);
             }
             throw $exception;
+        }
+
+        if ($issue === null) {
+            return response()->json(['message' => 'A pending or accepted corporate action already exists for this stock and ex-date, or this preview was already used.'], 409);
         }
 
         return response()->json(['data' => $issue->load(['stock', 'evidences'])], 201);
@@ -208,7 +225,7 @@ class DataQualityController extends Controller
         $reResolve = $request->boolean('re_resolve');
         $manualOverride = $request->boolean('manual_evidence_override');
         $payload = $request->validate([
-            'applied_ratio' => ['nullable', 'numeric', 'gt:0', 'max:10000'],
+            'applied_ratio' => ['nullable', 'numeric', 'decimal:0,6', 'gt:0', 'max:10000'],
             'notes' => [
                 Rule::requiredIf($reResolve),
                 'nullable',

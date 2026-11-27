@@ -25,8 +25,8 @@ class DataQualityResolutionService
         array $manualOverrideContext = [],
     ): DataQualityIssue {
         $appliedRatio = $ratio ?? (float) ($issue->suggested_ratio ?? 0);
-        if (! is_finite($appliedRatio) || $appliedRatio <= 0 || $appliedRatio > 10000) {
-            throw new \InvalidArgumentException('Applied ratio must be finite, positive, and no greater than 10000.');
+        if (! is_finite($appliedRatio) || $appliedRatio !== round($appliedRatio, 6) || $appliedRatio <= 0 || $appliedRatio > 10000) {
+            throw new \InvalidArgumentException('Applied ratio must be finite, positive, no greater than 10000, and representable to six decimal places.');
         }
 
         if ($adminManualOverride && ($auto || $userId === null || $issue->issue_type !== DataQualityIssue::TYPE_CORPORATE_ACTION)) {
