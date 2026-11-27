@@ -169,6 +169,29 @@ class RecommendationMarkExecutedTest extends TestCase
         ]);
     }
 
+    public function test_recommendation_request_replays_after_status_becomes_executed(): void
+    {
+        [$user, $profile, $stock] = $this->seedUserStock();
+        $rec = $this->makePendingBuyRecommendation($profile, $stock, 500);
+        $this->actingAs($user)->withProfileHeader($user, $profile);
+        $payload = [
+            'stock_id' => $stock->id, 'type' => 'buy', 'quantity' => 2, 'price' => 100,
+            'fees' => 1, 'transaction_date' => now()->toDateString(), 'recommendation_id' => $rec->id,
+        ];
+
+        $first = $this->withHeader('Idempotency-Key', 'recommendation-request-0001')
+            ->postJson('/api/transactions', $payload)->assertCreated();
+        $this->assertSame('executed', $first->json('tos.recommendation_status'));
+
+        $replay = $this->withHeader('Idempotency-Key', 'recommendation-request-0001')
+            ->postJson('/api/transactions', $payload)->assertOk();
+        $replay->assertJsonPath('data.id', $first->json('data.id'))
+            ->assertJsonPath('tos.recommendation_id', $rec->id)
+            ->assertJsonPath('tos.recommendation_status', 'executed')
+            ->assertJsonPath('message', 'Transaction saved; recommendation marked executed.');
+        $this->assertSame(1, Transaction::query()->where('profile_id', $profile->id)->where('recommendation_id', $rec->id)->count());
+    }
+
     /**
      * @return array{0: User, 1: \App\Models\PortfolioProfile, 2: Stock}
      */

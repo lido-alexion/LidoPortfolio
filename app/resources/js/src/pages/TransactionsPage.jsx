@@ -14,6 +14,12 @@ import StockAutocomplete from '../components/StockAutocomplete';
 import { showToast } from '../toast';
 
 import { notifyPortfolioDashboardRefresh } from '../utils/portfolioEvents';
+import {
+    clearPendingTransactionRequest,
+    getOrCreateTransactionRequest,
+    getPendingTransactionRequest,
+    transactionRequestFingerprint,
+} from '../utils/transactionRequestIdentity';
 
 import {
 
@@ -589,6 +595,8 @@ export default function TransactionsPage() {
 
         setTransactionSaveError('');
         setSubmitting(true);
+        let requestWasPersisted = false;
+        let createWasConfirmed = false;
 
         try {
 
@@ -609,8 +617,22 @@ export default function TransactionsPage() {
                 setSymbolValidation(null);
 
             } else {
-                const { data } = await api.post('/transactions', payload);
+                const requestIdentity = getOrCreateTransactionRequest(userId, portfolioId, payload);
+                if (requestIdentity.blocked) {
+                    setTransactionSaveError('A previous create request in this Portfolio is still unconfirmed. Restore its exact details and retry, or review Transactions before starting another request.');
+                    return;
+                }
+                if (!requestIdentity.key) {
+                    setTransactionSaveError('A create request key could not be established for this user and Portfolio. Select the Portfolio again before saving; no request was sent.');
+                    return;
+                }
+                requestWasPersisted = requestIdentity.persisted === true;
+                const { data } = await api.post('/transactions', payload, {
+                    headers: requestIdentity.key ? { 'Idempotency-Key': requestIdentity.key } : {},
+                });
                 if (!current()) return;
+                clearPendingTransactionRequest(userId, portfolioId);
+                createWasConfirmed = true;
                 showToast(data?.message || 'Transaction saved', 'success');
                 setForm(emptyForm());
                 setSelectedStock(null);
@@ -624,7 +646,13 @@ export default function TransactionsPage() {
             if (current()) notifyPortfolioDashboardRefresh();
 
         } catch {
-            if (current()) setTransactionSaveError('Transaction save could not be confirmed. Review existing evidence before retrying.');
+            if (current()) setTransactionSaveError(createWasConfirmed
+                ? 'The transaction was saved, but the Transactions list could not be refreshed. Reload the list to confirm it.'
+                : form.id
+                ? 'The transaction update could not be confirmed. Review the saved transaction before deciding whether to retry.'
+                : requestWasPersisted
+                    ? 'The transaction create could not be confirmed. Retry the exact same details in this Portfolio; the saved request key makes that retry idempotent.'
+                    : 'The transaction create could not be confirmed. Retry the exact same details only while this page remains open; a reload may lose its key. Review Transactions before retrying after a reload.');
         } finally {
 
             if (current()) setSubmitting(false);
@@ -1627,6 +1655,13 @@ export default function TransactionsPage() {
 
 
                             {transactionSaveError && <div className="alert alert-danger py-2" role="alert">{transactionSaveError}</div>}
+                            {!form.id && transactionSaveError && getPendingTransactionRequest(userId, portfolioId)
+                                && getPendingTransactionRequest(userId, portfolioId).fingerprint !== transactionRequestFingerprint({ ...buildPayload(), transaction_date: parseTransactionDateDisplay(transactionDateInput) }) && (
+                                <button className="btn btn-sm btn-outline-danger" type="button" onClick={() => {
+                                    clearPendingTransactionRequest(userId, portfolioId);
+                                    setTransactionSaveError('The prior request key was cleared after you confirmed the transaction did not save.');
+                                }}>I reviewed Transactions; start a new request</button>
+                            )}
                             <button className="btn btn-primary" type="submit" disabled={!canSubmit || submitting}>
 
                                 {submitting

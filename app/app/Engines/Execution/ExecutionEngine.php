@@ -266,6 +266,9 @@ class ExecutionEngine
             return $transaction;
         });
 
+        // The broker has already executed this fill. Enrichment is best-effort and
+        // must not participate in (or make the caller perceive failure of) the fill.
+        $this->writes->enqueueCommittedPriceEnrichment($transaction, $stock);
         $this->writes->applyPostCommitSideEffects($profile, $stock, $transaction, softFailSnapshots: true);
 
         try {
@@ -273,8 +276,12 @@ class ExecutionEngine
                 app(PositionProtectionService::class)
                     ->afterCommittedFill($profile, $stock, (string) $order->side, $transaction->source);
             }
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
             // Protection sync must not roll back a committed fill.
+            $this->logger->event('ExecutionEngine', 'execution.protection_sync_failed', 'warning', 'Position protection sync failed after committed fill', [
+                'profile_id' => $profile->id, 'stock_id' => $stock->id,
+                'transaction_id' => $transaction->id, 'failure' => $e->getMessage(),
+            ]);
         }
 
         $this->logger->event('ExecutionEngine', 'execution.broker_fill_applied', 'info', 'Broker fill applied to ledger', [
@@ -447,7 +454,7 @@ class ExecutionEngine
                 'source' => Transaction::SOURCE_RECOMMENDATION,
                 'recommendation_id' => $recommendation?->id,
                 'owner_key' => $this->fillOwnerKey($recommendation, null),
-            ], user: null, applyCash: true);
+            ], user: null, applyCash: true, enqueuePriceEnrichment: true);
 
             OrderTransaction::query()->create([
                 'order_id' => $order->id,
