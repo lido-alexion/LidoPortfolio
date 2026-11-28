@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Stox /api/v1",
-        "description": "Machine-readable contract for the existing Stox (Stox by Lido Alexion) `/api/v1` HTTP API.\n\nThis documents current behaviour. It is not an API redesign.\n\nAuthentication is Laravel Sanctum **SPA session cookies**, not JWT and not a Bearer token in localStorage. Login lives on the legacy `/api/auth/*` surface (outside `/api/v1`). Call `GET /sanctum/csrf-cookie` (or `GET /api/auth/csrf-token`) before cookie-authenticated mutating requests.\n\nPortfolio-scoped routes resolve the active portfolio from header `X-Profile-Id` (legacy alias `X-Portfolio-Id`), query `portfolio_id`, or the user default portfolio.\n\nSuccessful `/api/v1` JSON uses `ApiEnvelope`: `{success: true, data, meta}`. Domain failures use `{success: false, error: {code, message}, meta}`. Laravel validation may still return the framework 422 `{message, errors}` shape.\n\nStandalone Discovery / Evaluation / Recommendation endpoints are **not** gated by dataset freshness. `POST /api/v1/pipeline/run` **is** gated (V4-FEAT-022): last successful market sync must be ≤ 24 hours old, or ≤ 72 hours when the pipeline instant is Monday in `cron_timezone`. A missing/stale timestamp returns envelope error `DATASET_NOT_FRESH` (422) and does not run Discovery.\n\n`GET /api/v1/dataset/status` `data.dataset_version` is the current immutable dataset version key (V4-FEAT-023), or `none`. `data.published` still means successfully synced today (inspection only; the pipeline does not gate on that boolean).\n\n`POST /api/v1/evaluation/runs` resolves Strategy catalogue indicator parameters over Evaluation globals (V4-FEAT-021). Evaluation `market_regime` is Bullish→100 / Neutral→50 / Bearish→0 from Market Analysis (V4-FEAT-005).\n\nRecording a ledger fill that completes a recommendation still goes through `POST /api/transactions` (legacy `/api`, not `/api/v1`). Sells that could affect more than one owner require `owner_key` or `strategy_id` (V4-SPEC-005); a linked `recommendation_id` identifies the Strategy. Recommendation `executed` status is owned by RecommendationEngine::markExecuted (V4-FEAT-024).\n\nPaginated TOS lists (V4-FEAT-028) accept `page` (default 1) and `pageSize` (alias `per_page`). Meta is `{page, pageSize, total, lastPage}`. Maximum page size is 200 except `GET /price-bars` (500). Defaults match the previous implicit first-page caps. Not paginated (intentionally bounded): candidates, evaluations, positions, pending-execution, review dashboard/outcomes.\n\nStrategy-position GTT Target / Stop-Loss (V4-FEAT-002): `GET/POST /api/v1/protections`, `POST /protections/{id}/cancel`, `POST /protections/{id}/reconcile`. Only one open protection per Strategy position. Prices come from Strategy `target_amount/quantity` or OD-13 stop. Broker acceptance is not a fill.",
+        "description": "Machine-readable contract for the existing Stox (Stox by Lido Alexion) `/api/v1` HTTP API.\n\nThis documents current behaviour. It is not an API redesign.\n\nAuthentication is Laravel Sanctum **SPA session cookies**, not JWT and not a Bearer token in localStorage. Login lives on the legacy `/api/auth/*` surface (outside `/api/v1`). Call `GET /sanctum/csrf-cookie` (or `GET /api/auth/csrf-token`) before cookie-authenticated mutating requests.\n\nBrowser cookie clients send `X-Stox-Auth-Context: investor` (default) or `admin` on every API and CSRF bootstrap request. These select independent HttpOnly session and remember-me cookies; an authenticated browser session must match the selected role context.\n\nPortfolio-scoped routes resolve the active portfolio from header `X-Profile-Id` (legacy alias `X-Portfolio-Id`), query `portfolio_id`, or the user default portfolio.\n\nSuccessful `/api/v1` JSON uses `ApiEnvelope`: `{success: true, data, meta}`. Domain failures use `{success: false, error: {code, message}, meta}`. Laravel validation may still return the framework 422 `{message, errors}` shape.\n\nStandalone Discovery / Evaluation / Recommendation endpoints are **not** gated by dataset freshness. `POST /api/v1/pipeline/run` **is** gated (V4-FEAT-022): last successful market sync must be ≤ 24 hours old, or ≤ 72 hours when the pipeline instant is Monday in `cron_timezone`. A missing/stale timestamp returns envelope error `DATASET_NOT_FRESH` (422) and does not run Discovery.\n\n`GET /api/v1/dataset/status` `data.dataset_version` is the current immutable dataset version key (V4-FEAT-023), or `none`. `data.published` still means successfully synced today (inspection only; the pipeline does not gate on that boolean).\n\n`POST /api/v1/evaluation/runs` resolves Strategy catalogue indicator parameters over Evaluation globals (V4-FEAT-021). Evaluation `market_regime` is Bullish→100 / Neutral→50 / Bearish→0 from Market Analysis (V4-FEAT-005).\n\nRecording a ledger fill that completes a recommendation still goes through `POST /api/transactions` (legacy `/api`, not `/api/v1`). Sells that could affect more than one owner require `owner_key` or `strategy_id` (V4-SPEC-005); a linked `recommendation_id` identifies the Strategy. Recommendation `executed` status is owned by RecommendationEngine::markExecuted (V4-FEAT-024).\n\nPaginated TOS lists (V4-FEAT-028) accept `page` (default 1) and `pageSize` (alias `per_page`). Meta is `{page, pageSize, total, lastPage}`. Maximum page size is 200 except `GET /price-bars` (500). Defaults match the previous implicit first-page caps. Not paginated (intentionally bounded): candidates, evaluations, positions, pending-execution, review dashboard/outcomes.\n\nStrategy-position GTT Target / Stop-Loss (V4-FEAT-002): `GET/POST /api/v1/protections`, `POST /protections/{id}/cancel`, `POST /protections/{id}/reconcile`. Only one open protection per Strategy position. Prices come from Strategy `target_amount/quantity` or OD-13 stop. Broker acceptance is not a fill.",
         "version": "1.0.0"
     },
     "servers": [
@@ -172,6 +172,9 @@
                 "operationId": "get_admin_fundamentals",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -215,6 +218,9 @@
                 "description": "Live route: `POST /api/v1/admin/fundamentals/ai-insights/test`. Action: `App\\Http\\Controllers\\Api\\V1\\FundamentalDataController@testAiInsights`. Requires admin (`is_admin`).",
                 "operationId": "post_admin_fundamentals_ai-insights_test",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -272,6 +278,9 @@
                 "operationId": "get_admin_fundamentals_bootstrap",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -316,6 +325,9 @@
                 "operationId": "get_admin_fundamentals_bootstrap-operations_coverage",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -359,6 +371,9 @@
                 "description": "Admin-only stock/metric/cadence gap occurrences with deterministic reason, state, bounded acknowledgement history, and observation count. period_end is null where no expected-period evidence exists.",
                 "operationId": "get_admin_fundamentals_bootstrap-operations_gaps",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -449,6 +464,9 @@
                 "operationId": "post_admin_fundamentals_bootstrap-operations_gaps_acknowledge",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -523,6 +541,9 @@
                 "operationId": "get_admin_fundamentals_bootstrap-operations_health",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -567,6 +588,9 @@
                 "operationId": "get_bootstrap_schedule_31f1eb7469",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -608,6 +632,9 @@
                 "description": "Create a shared Admin preset for the whole eligible universe or explicit eligible stocks. This reuses the existing scope and stock selection only; it does not accept cadence or provider overrides.",
                 "operationId": "post_bootstrap_schedule_31f1eb7469",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -710,6 +737,9 @@
                 "operationId": "delete_bootstrap_schedule_00a24c53f0",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -759,6 +789,9 @@
                 "description": "Revise a preset; existing schedules retain their snapshots.",
                 "operationId": "put_bootstrap_schedule_00a24c53f0",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -869,6 +902,9 @@
                 "operationId": "post_bootstrap_schedule_1ba68859fe",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -941,6 +977,9 @@
                 "operationId": "post_admin_fundamentals_bootstrap-operations_reconcile",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -1004,6 +1043,9 @@
                 "operationId": "get_admin_fundamentals_bootstrap-operations_runs",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -1045,6 +1087,9 @@
                 "description": "Queues eligible active equities in FIFO order. A scheduler advances durable slices. Forced targeted reruns use the existing governed source resolver and preserve prior run/job history.",
                 "operationId": "post_admin_fundamentals_bootstrap-operations_runs",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -1133,6 +1178,9 @@
                 "operationId": "post_admin_fundamentals_bootstrap-operations_runs_from-gaps",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -1203,6 +1251,9 @@
                 "operationId": "get_admin_fundamentals_bootstrap-operations_runs_run",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -1254,6 +1305,9 @@
                 "description": "Live route: `POST /api/v1/admin/fundamentals/bootstrap-operations/runs/{run}/cancel`. Action: `App\\Http\\Controllers\\Api\\V1\\BootstrapOperationsController@cancel`. Requires admin (`is_admin`).",
                 "operationId": "post_admin_fundamentals_bootstrap-operations_runs_run_cancel",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -1323,6 +1377,9 @@
                 "operationId": "get_admin_fundamentals_bootstrap-operations_runs_run_export.csv",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -1389,6 +1446,9 @@
                 "description": "Creates a new run and preserves the source run and its job history.",
                 "operationId": "post_admin_fundamentals_bootstrap-operations_runs_run_retry-failed",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -1464,6 +1524,9 @@
                 "operationId": "get_bootstrap_schedule_9a664933a9",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -1505,6 +1568,9 @@
                 "description": "Create a disabled daily, weekly, or monthly schedule over the whole eligible universe or explicit eligible stocks. Bootstrap configuration does not accept cadence or provider overrides.",
                 "operationId": "post_bootstrap_schedule_9a664933a9",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -1669,6 +1735,9 @@
                 "operationId": "put_bootstrap_schedule_f810731869",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -1823,6 +1892,9 @@
                 "operationId": "post_bootstrap_schedule_ca74ab1bb0",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -1895,6 +1967,9 @@
                 "operationId": "put_bootstrap_schedule_b6a53cefb8",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -1966,6 +2041,9 @@
                 "operationId": "get_bootstrap_schedule_ba9a6a22e9",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -2017,6 +2095,9 @@
                 "description": "Queue one manual run without advancing the recurring schedule.",
                 "operationId": "post_bootstrap_schedule_cab972cf2e",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -2093,6 +2174,9 @@
                 "operationId": "get_admin_fundamentals_bootstrap-operations_warnings",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -2163,6 +2247,9 @@
                 "description": "Atomic bulk acknowledgement records Admin, time, and optional note.",
                 "operationId": "post_admin_fundamentals_bootstrap-operations_warnings_acknowledge",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -2238,6 +2325,9 @@
                 "operationId": "post_admin_fundamentals_manual-import",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -2294,6 +2384,9 @@
                 "operationId": "get_admin_fundamentals_metric-catalog",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -2337,6 +2430,9 @@
                 "description": "Live route: `POST /api/v1/admin/fundamentals/runs`. Action: `App\\Http\\Controllers\\Api\\V1\\FundamentalDataController@startRun`. Requires admin (`is_admin`).",
                 "operationId": "post_admin_fundamentals_runs",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -2393,6 +2489,9 @@
                 "description": "Live route: `POST /api/v1/admin/fundamentals/runs/{run}/process`. Action: `App\\Http\\Controllers\\Api\\V1\\FundamentalDataController@processRun`. Requires admin (`is_admin`).",
                 "operationId": "post_admin_fundamentals_runs_run_process",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -2458,6 +2557,9 @@
                 "operationId": "put_admin_fundamentals_settings",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -2514,6 +2616,9 @@
                 "operationId": "delete_admin_fundamentals_yahoo-no-data-skips_stock",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -2565,6 +2670,9 @@
                 "description": "Runs one admin-initiated fundamentals fetch for a skipped issuer. The skip remains active even when facts are returned; remove the skip explicitly to resume scheduled attempts. Requires admin access.",
                 "operationId": "post_admin_fundamentals_yahoo-no-data-skips_stock_fetch",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -2618,6 +2726,9 @@
                 "operationId": "get_admin_ml",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -2661,6 +2772,9 @@
                 "description": "Live route: `GET /api/v1/admin/ml/acceptance`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@report`. Requires admin (`is_admin`).",
                 "operationId": "get_admin_ml_acceptance",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -2745,6 +2859,9 @@
                 "description": "Live route: `POST /api/v1/admin/ml/acceptance/backfills/preview`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@preview`. Requires admin (`is_admin`).",
                 "operationId": "post_admin_ml_acceptance_backfills_preview",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -2861,6 +2978,9 @@
                 "operationId": "get_admin_ml_acceptance_backfills_backfill",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -2971,6 +3091,9 @@
                 "description": "Live route: `POST /api/v1/admin/ml/acceptance/backfills/{backfill}/{action}`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@backfillAction`. Requires admin (`is_admin`).",
                 "operationId": "post_admin_ml_acceptance_backfills_backfill_action",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -3096,6 +3219,9 @@
                 "operationId": "post_admin_ml_acceptance_campaigns",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -3209,6 +3335,9 @@
                 "operationId": "get_admin_ml_acceptance_campaigns_campaign",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -3320,6 +3449,9 @@
                 "description": "Live route: `POST /api/v1/admin/ml/acceptance/campaigns/{campaign}/{action}`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@campaignAction`. Requires admin (`is_admin`).",
                 "operationId": "post_admin_ml_acceptance_campaigns_campaign_action",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -3446,6 +3578,9 @@
                 "operationId": "get_admin_ml_acceptance_sources",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -3535,6 +3670,9 @@
                 "description": "Live route: `POST /api/v1/admin/ml/acceptance/sources`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@createSource`. Requires admin (`is_admin`).",
                 "operationId": "post_admin_ml_acceptance_sources",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -3672,6 +3810,9 @@
                 "operationId": "get_admin_ml_acceptance_sources_source",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -3783,6 +3924,9 @@
                 "description": "Live route: `PUT /api/v1/admin/ml/acceptance/sources/{source}/chunks`. Action: `App\\Http\\Controllers\\Api\\V1\\MlAcceptanceController@chunk`. Requires admin (`is_admin`).",
                 "operationId": "put_admin_ml_acceptance_sources_source_chunks",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -3921,6 +4065,9 @@
                 "operationId": "post_admin_ml_acceptance_sources_source_action",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -4046,6 +4193,9 @@
                 "operationId": "get_admin_ml_acceptance_wizard",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -4130,6 +4280,9 @@
                 "operationId": "get_admin_ml_dataset-plan",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -4174,6 +4327,9 @@
                 "operationId": "get_admin_ml_features",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -4217,6 +4373,9 @@
                 "description": "Evaluates the selected model over the requested rolling window. Matured non-shadow predictions are required for a healthy result; insufficient evidence is reported explicitly. This operation never retrains, promotes, deactivates, or places orders.",
                 "operationId": "post_admin_ml_models_model_drift-check",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -4291,6 +4450,9 @@
                 "operationId": "post_admin_ml_models_model_promote",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -4355,6 +4517,9 @@
                 "operationId": "get_admin_ml_models_model_promotion-review",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -4407,6 +4572,9 @@
                 "operationId": "get_admin_ml_retention-plan",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -4450,6 +4618,9 @@
                 "description": "Live route: `POST /api/v1/admin/ml/retrain`. Action: `App\\Http\\Controllers\\Api\\V1\\MlScoringController@retrain`. Requires admin (`is_admin`).",
                 "operationId": "post_admin_ml_retrain",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -4507,6 +4678,9 @@
                 "operationId": "post_admin_ml_retrain-queue",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -4562,6 +4736,9 @@
                 "description": "Live route: `POST /api/v1/admin/ml/rollback`. Action: `App\\Http\\Controllers\\Api\\V1\\MlScoringController@rollback`. Requires admin (`is_admin`).",
                 "operationId": "post_admin_ml_rollback",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -4619,6 +4796,9 @@
                 "operationId": "get_admin_ml_runs",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -4662,6 +4842,9 @@
                 "description": "Live route: `GET /api/v1/admin/ml/runs/{run}`. Action: `App\\Http\\Controllers\\Api\\V1\\MlScoringController@trainingRun`. Requires admin (`is_admin`).",
                 "operationId": "get_admin_ml_runs_run",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -4714,6 +4897,9 @@
                 "description": "Live route: `POST /api/v1/admin/ml/runs/{run}/cancel`. Action: `App\\Http\\Controllers\\Api\\V1\\MlScoringController@cancelTrainingRun`. Requires admin (`is_admin`).",
                 "operationId": "post_admin_ml_runs_run_cancel",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -4779,6 +4965,9 @@
                 "operationId": "get_admin_ml_runs_run_stream",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -4830,6 +5019,9 @@
                 "description": "Live route: `PUT /api/v1/admin/ml/schedules/{horizon}`. Action: `App\\Http\\Controllers\\Api\\V1\\MlScoringController@updateSchedule`. Requires admin (`is_admin`).",
                 "operationId": "put_admin_ml_schedules_horizon",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -4895,6 +5087,9 @@
                 "operationId": "get_admin_strategy-provenance_migration-report",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -4938,6 +5133,9 @@
                 "description": "Per-user, disabled by default. Required for Semi-Automatic and Automatic broker submission. Not inferred from portfolio mode.",
                 "operationId": "put_admin_users_user_automated-execution-entitlement",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -5009,6 +5207,9 @@
                 "operationId": "get_admin_vps-health",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -5070,6 +5271,9 @@
                 "operationId": "get_analytics_dashboard",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -5109,6 +5313,9 @@
                 "description": "Live route: `GET /api/v1/analytics/market`. Action: `App\\Http\\Controllers\\Api\\V1\\AnalyticsArchitectureController@market`.",
                 "operationId": "get_analytics_market",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -5150,6 +5357,9 @@
                 "operationId": "get_analytics_portfolio",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -5189,6 +5399,9 @@
                 "description": "Live route: `GET /api/v1/analytics/stocks/{stock}`. Action: `App\\Http\\Controllers\\Api\\V1\\AnalyticsArchitectureController@stock`.",
                 "operationId": "get_analytics_stocks_stock",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -5238,6 +5451,9 @@
                 "operationId": "get_analytics_stocks_stock_evaluation-profile",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -5285,6 +5501,9 @@
                 "description": "Live route: `GET /api/v1/analytics/stocks/{stock}/recommendation-preview`. Action: `App\\Http\\Controllers\\Api\\V1\\AnalyticsArchitectureController@recommendationPreview`.",
                 "operationId": "get_analytics_stocks_stock_recommendation-preview",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -5343,6 +5562,9 @@
                 "operationId": "get_analytics_stocks_stock_research",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -5390,6 +5612,9 @@
                 "description": "Live route: `PUT /api/v1/artifact-bindings/{uuid}/enabled`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactActionController@enable`.",
                 "operationId": "put_artifact-bindings_uuid_enabled",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -5451,6 +5676,9 @@
                 "operationId": "put_artifact-bindings_uuid_settings",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -5510,6 +5738,9 @@
                 "description": "Live route: `PUT /api/v1/artifact-bindings/{uuid}/upgrade`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactActionController@upgrade`.",
                 "operationId": "put_artifact-bindings_uuid_upgrade",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -5571,6 +5802,9 @@
                 "operationId": "get_artifact-library",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -5610,6 +5844,9 @@
                 "description": "Reads the exact Bundle deployment for the authenticated requester and active Portfolio. Returns allowlisted status and member revision evidence; performs no mutation.",
                 "operationId": "get_artifact-library_bundle-deployments_uuid",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -5661,6 +5898,9 @@
                 "description": "Live route: `POST /api/v1/artifact-library/bundle-deployments/{uuid}/deploy`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactActionController@deployBundle`.",
                 "operationId": "post_artifact-library_bundle-deployments_uuid_deploy",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -5722,6 +5962,9 @@
                 "operationId": "post_artifact-library_drafts",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -5774,6 +6017,9 @@
                 "operationId": "post_artifact-library_import",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -5825,6 +6071,9 @@
                 "description": "Live route: `PUT /api/v1/artifact-library/versions/{version}`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactLibraryController@updateDraft`.",
                 "operationId": "put_artifact-library_versions_version",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -5886,6 +6135,9 @@
                 "operationId": "post_artifact-library_versions_version_bind",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -5945,6 +6197,9 @@
                 "description": "Live route: `POST /api/v1/artifact-library/versions/{version}/bundle-plan`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactActionController@planBundle`.",
                 "operationId": "post_artifact-library_versions_version_bundle-plan",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -6006,6 +6261,9 @@
                 "operationId": "post_artifact-library_versions_version_export",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -6065,6 +6323,9 @@
                 "description": "Live route: `POST /api/v1/artifact-library/versions/{version}/fork`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactLibraryController@fork`.",
                 "operationId": "post_artifact-library_versions_version_fork",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -6126,6 +6387,9 @@
                 "operationId": "post_artifact-library_versions_version_next-draft",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -6185,6 +6449,9 @@
                 "description": "Live route: `POST /api/v1/artifact-library/versions/{version}/publish`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactLibraryController@publish`.",
                 "operationId": "post_artifact-library_versions_version_publish",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -6246,6 +6513,9 @@
                 "operationId": "post_artifact-library_versions_version_share",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -6306,6 +6576,9 @@
                 "operationId": "get_artifact-library_uuid",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -6353,6 +6626,9 @@
                 "description": "Live route: `POST /api/v1/artifact-library/{uuid}/archive`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactLibraryController@archive`.",
                 "operationId": "post_artifact-library_uuid_archive",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -6414,6 +6690,9 @@
                 "operationId": "get_artifact-library_uuid_diff",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -6461,6 +6740,9 @@
                 "description": "Live route: `POST /api/v1/artifact-share-grants/{uuid}/adopt`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactActionController@adopt`.",
                 "operationId": "post_artifact-share-grants_uuid_adopt",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -6522,6 +6804,9 @@
                 "operationId": "post_artifact-share-grants_uuid_revoke",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -6582,6 +6867,9 @@
                 "operationId": "get_artifacts",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -6621,6 +6909,9 @@
                 "description": "Live route: `POST /api/v1/artifacts/export`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactRegistryController@exportPackage`.",
                 "operationId": "post_artifacts_export",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -6701,6 +6992,9 @@
                 "operationId": "post_artifacts_import",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -6752,6 +7046,9 @@
                 "description": "Live route: `POST /api/v1/artifacts/validate`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactRegistryController@validatePackage`.",
                 "operationId": "post_artifacts_validate",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -6805,6 +7102,9 @@
                 "operationId": "get_artifacts_type",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -6850,6 +7150,9 @@
                 "description": "Indicator create requires admin. Success 201.",
                 "operationId": "post_artifacts_type",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -6911,6 +7214,9 @@
                 "operationId": "post_artifacts_type_validate",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -6971,6 +7277,9 @@
                 "operationId": "get_artifacts_type_id",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -7024,6 +7333,9 @@
                 "description": "Live route: `PUT /api/v1/artifacts/{type}/{id}`. Action: `App\\Http\\Controllers\\Api\\V1\\ArtifactRegistryController@update`.",
                 "operationId": "put_artifacts_type_id",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -7093,6 +7405,9 @@
                 "operationId": "post_artifacts_type_id_export",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -7161,6 +7476,9 @@
                 "operationId": "get_backtests",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -7198,6 +7516,9 @@
                 "description": "Live route: `POST /api/v1/backtests`. Action: `App\\Http\\Controllers\\Api\\V1\\BacktestController@store`.",
                 "operationId": "post_backtests",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -7293,6 +7614,9 @@
                 "operationId": "post_backtests_compare",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -7345,6 +7669,9 @@
                 "operationId": "get_backtests_meta",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -7384,6 +7711,9 @@
                 "description": "Live route: `DELETE /api/v1/backtests/{id}`. Action: `App\\Http\\Controllers\\Api\\V1\\BacktestController@destroy`.",
                 "operationId": "delete_backtests_id",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -7431,6 +7761,9 @@
                 "operationId": "get_backtests_id",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -7476,6 +7809,9 @@
                 "description": "Live route: `PUT /api/v1/backtests/{id}`. Action: `App\\Http\\Controllers\\Api\\V1\\BacktestController@update`.",
                 "operationId": "put_backtests_id",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -7551,6 +7887,9 @@
                 "operationId": "post_backtests_id_cancel",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -7610,6 +7949,9 @@
                 "description": "Live route: `POST /api/v1/backtests/{id}/continue`. Action: `App\\Http\\Controllers\\Api\\V1\\BacktestController@continue`.",
                 "operationId": "post_backtests_id_continue",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -7671,6 +8013,9 @@
                 "operationId": "post_backtests_id_strategy-draft",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -7730,6 +8075,9 @@
                 "description": "Live route: `GET /api/v1/backtests/{id}/timeline`. Action: `App\\Http\\Controllers\\Api\\V1\\BacktestController@timeline`.",
                 "operationId": "get_backtests_id_timeline",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -7832,6 +8180,9 @@
                 "operationId": "post_broker_kite_disconnect",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -7871,6 +8222,9 @@
                 "description": "Live route: `POST /api/v1/broker/kite/emergency-cancel-open-orders-disconnect`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\ExecutionSafetyController@cancelOpenOrdersAndDisconnect`.",
                 "operationId": "post_broker_kite_emergency-cancel-open-orders-disconnect",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -7924,6 +8278,9 @@
                 "operationId": "post_broker_kite_emergency-disconnect",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -7976,6 +8333,9 @@
                 "operationId": "get_broker_kite_login-url",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -8015,6 +8375,9 @@
                 "description": "Live route: `POST /api/v1/broker/kite/session`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\BrokerController@kiteSession`.",
                 "operationId": "post_broker_kite_session",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -8074,6 +8437,9 @@
                 "operationId": "post_broker_session-evidence_refresh",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -8126,6 +8492,9 @@
                 "operationId": "get_broker_status",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -8165,6 +8534,9 @@
                 "description": "Latest completed discovery run for the portfolio (optional discovery_run_id). Intentionally bounded (strategy max_candidates); not paginated (V4-FEAT-028). Rank-sorted in PHP after Evaluation.",
                 "operationId": "get_candidates",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -8233,6 +8605,9 @@
                 "operationId": "get_capital",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -8272,6 +8647,9 @@
                 "description": "Requires every enabled strategy; sum must be 100 ± 0.01. No auto-normalize.",
                 "operationId": "put_capital_allocations",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -8349,6 +8727,9 @@
                 "operationId": "get_capital_bridge-loans",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -8386,6 +8767,9 @@
                 "description": "Always 405. Bridge loans are created only by the recall settlement workflow.",
                 "operationId": "post_capital_bridge-loans",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -8426,6 +8810,9 @@
                 "description": "Live route: `GET /api/v1/capital/bridge-loans/{bridgeLoan}`. Action: `App\\Http\\Controllers\\Api\\V1\\RecallBridgeLoanController@show`.",
                 "operationId": "get_capital_bridge-loans_bridgeLoan",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -8475,6 +8862,9 @@
                 "operationId": "get_capital_pending-sale-proceeds",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -8514,6 +8904,9 @@
                 "description": "Live route: `GET /api/v1/capital/pending-sale-proceeds/{proceeds}`. Action: `App\\Http\\Controllers\\Api\\V1\\PendingSaleProceedsController@show`.",
                 "operationId": "get_capital_pending-sale-proceeds_proceeds",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -8563,6 +8956,9 @@
                 "operationId": "post_capital_pending-sale-proceeds_proceeds_mark-available",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -8611,6 +9007,9 @@
                 "operationId": "get_capital_recall-period",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -8648,6 +9047,9 @@
                 "description": "Live route: `PUT /api/v1/capital/recall-period`. Action: `App\\Http\\Controllers\\Api\\V1\\RecallPeriodController@update`.",
                 "operationId": "put_capital_recall-period",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -8710,6 +9112,9 @@
                 "operationId": "get_capital_recalls",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -8747,6 +9152,9 @@
                 "description": "Live route: `POST /api/v1/capital/recalls`. Action: `App\\Http\\Controllers\\Api\\V1\\CapitalRecallController@store`.",
                 "operationId": "post_capital_recalls",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -8822,6 +9230,9 @@
                 "operationId": "get_capital_recalls_recall",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -8869,6 +9280,9 @@
                 "description": "Live route: `POST /api/v1/capital/requests/{capitalRequest}/approve`. Action: `App\\Http\\Controllers\\Api\\V1\\CapitalLendingController@approve`.",
                 "operationId": "post_capital_requests_capitalRequest_approve",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -8936,6 +9350,9 @@
                 "operationId": "get_capital_requests_capitalRequest_lenders",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -8983,6 +9400,9 @@
                 "description": "Live route: `POST /api/v1/capital/requests/{capitalRequest}/reject`. Action: `App\\Http\\Controllers\\Api\\V1\\CapitalLendingController@reject`.",
                 "operationId": "post_capital_requests_capitalRequest_reject",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -9044,6 +9464,9 @@
                 "operationId": "put_capital_reserve-pct",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -9103,6 +9526,9 @@
                 "description": "Live route: `POST /api/v1/capital/resolve`. Action: `App\\Http\\Controllers\\Api\\V1\\CapitalResolutionController@resolve`.",
                 "operationId": "post_capital_resolve",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -9174,6 +9600,9 @@
                 "operationId": "get_dataset_status",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -9214,6 +9643,9 @@
                 "operationId": "post_discovery_runs",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -9253,6 +9685,9 @@
                 "description": "Returns newest-first portfolio-scoped run history for the merged Discovery/Evaluation UX (V4-FEAT-034). Bounded to 50 runs.",
                 "operationId": "get_evaluation_runs",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -9300,6 +9735,9 @@
                 "description": "Uses ensureActive Strategy config_json via EvaluationParameterResolver (V4-FEAT-021). Factor market_regime is 100/50/0 from Market Analysis categorical regime (V4-FEAT-005). Not freshness-gated.",
                 "operationId": "post_evaluation_runs",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -9349,6 +9787,9 @@
                 "operationId": "get_evaluations",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -9397,6 +9838,9 @@
                 "description": "Live route: `POST /api/v1/execution/halt`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\ExecutionSafetyController@halt`.",
                 "operationId": "post_execution_halt",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -9450,6 +9894,9 @@
                 "operationId": "get_execution_mode",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -9487,6 +9934,9 @@
                 "description": "Manual requires no StoX execution code. Semi-Automatic and Automatic require entitlement plus a valid StoX execution code or StoX recovery code. Manual→Automatic also requires confirm_automatic. Automatic→Manual does not cancel in-flight broker orders.",
                 "operationId": "put_execution_mode",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -9560,6 +10010,9 @@
                 "operationId": "put_execution_quote-policy",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -9611,6 +10064,9 @@
                 "description": "Requires confirmation and exactly one proof: a rotating StoX execution code — {Authenticator App Name} in totp, or a single-use StoX recovery code in recovery_code. Never send both fields.",
                 "operationId": "post_execution_recover",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -9678,6 +10134,9 @@
                 "operationId": "get_execution_state",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -9717,6 +10176,9 @@
                 "description": "Explicit Accept/Execute Selected. Server enforces user, portfolio, entitlement, StoX execution code, eligibility, capital/reservation, and Kite session, then submits to Kite. Broker acceptance is not a ledger fill.",
                 "operationId": "post_execution_submit-selected",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -9785,6 +10247,9 @@
                 "operationId": "get_fundamentals_metric-catalog",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -9824,6 +10289,9 @@
                 "description": "Wraps DailyMarketSyncService::runDailySyncIfNeeded. Successful sync records an immutable dataset version. Incomplete/failed sync does not.",
                 "operationId": "post_imports",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -9891,6 +10359,9 @@
                 "operationId": "get_imports_id",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -9939,6 +10410,9 @@
                 "operationId": "get_indicators",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -9983,6 +10457,9 @@
                 "operationId": "get_indicators_meta",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -10026,6 +10503,9 @@
                 "description": "Live route: `GET /api/v1/indicators/{id}`. Action: `App\\Http\\Controllers\\Api\\V1\\IndicatorRegistryController@show`. Requires admin (`is_admin`).",
                 "operationId": "get_indicators_id",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -10079,6 +10559,9 @@
                 "operationId": "get_market-analysis",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -10118,6 +10601,9 @@
                 "description": "Live route: `GET /api/v1/market-analysis/explainability`. Action: `App\\Http\\Controllers\\Api\\V1\\MarketAnalysisController@explainability`.",
                 "operationId": "get_market-analysis_explainability",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -10159,6 +10645,9 @@
                 "operationId": "get_market-analysis_history",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -10198,6 +10687,9 @@
                 "description": "Live route: `GET /api/v1/market-analysis/phase`. Action: `App\\Http\\Controllers\\Api\\V1\\MarketAnalysisController@phase`.",
                 "operationId": "get_market-analysis_phase",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -10239,6 +10731,9 @@
                 "operationId": "get_market-analysis_sentiment",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -10279,6 +10774,9 @@
                 "operationId": "get_market-analysis_timeline",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -10318,6 +10816,9 @@
                 "description": "Paginated (V4-FEAT-028). Default pageSize 50 (previous implicit cap), maximum 200.",
                 "operationId": "get_notifications",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -10386,6 +10887,9 @@
                 "operationId": "post_notifications_id_retry",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -10445,6 +10949,9 @@
                 "description": "Paginated (V4-FEAT-028). Default pageSize 50 (previous implicit cap), maximum 200. Optional status filter preserved.",
                 "operationId": "get_orders",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -10519,6 +11026,9 @@
                 "description": "Prefer recording a ledger transaction with recommendation_id. Default execute_now is false.",
                 "operationId": "post_orders",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -10629,6 +11139,9 @@
                 "operationId": "post_orders_id_cancel",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -10688,6 +11201,9 @@
                 "description": "Marks the recommendation executed via RecommendationEngine::markExecuted when the order is linked to an actionable recommendation (V4-FEAT-024).",
                 "operationId": "post_orders_id_execute",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -10768,6 +11284,9 @@
                 "operationId": "post_orders_id_reconcile",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -10815,6 +11334,9 @@
                 "description": "Discovery → Evaluation → Recommendations (optional notify/review). Hard-gated by dataset freshness (DatasetFreshnessGate) before Discovery (V4-FEAT-022). Stale/missing last-successful-sync timestamp → 422 DATASET_NOT_FRESH, no Discovery. Evaluation uses Strategy indicator parameter overrides (V4-FEAT-021) and Market Analysis regime mapping (V4-FEAT-005).",
                 "operationId": "post_pipeline_run",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -10902,6 +11424,9 @@
                 "operationId": "get_positions",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -10941,6 +11466,9 @@
                 "description": "Paginated (V4-FEAT-028). Default pageSize 100, maximum 500. Meta `{page, pageSize, total, lastPage}`.",
                 "operationId": "get_price-bars",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -11045,6 +11573,9 @@
                 "operationId": "get_protections",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -11100,6 +11631,9 @@
                 "description": "Semi-Automatic attended placement. Requires automated-execution entitlement, a StoX execution code, and a usable Kite session. Price is taken from Strategy target (target_amount/quantity) or stop (OD-13). Placing one type replaces the other. Does not write ledger, cash, capital, or lending. Manual mode is rejected.",
                 "operationId": "post_protections",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -11177,6 +11711,9 @@
                 "operationId": "get_protections_id",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -11224,6 +11761,9 @@
                 "description": "Semi-Automatic attended cancel. Cancels the broker GTT when known. Does not create a ledger fill.",
                 "operationId": "post_protections_id_cancel",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -11293,6 +11833,9 @@
                 "operationId": "post_protections_id_reconcile",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -11340,6 +11883,9 @@
                 "description": "Paginated (V4-FEAT-028). Default pageSize 100 (the previous implicit cap). Query `page` / `pageSize` (alias `per_page`); meta `{page, pageSize, total, lastPage}`. Filtering/open-default statuses unchanged. `GET /recommendations/pending-execution` is not paginated.",
                 "operationId": "get_recommendations",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -11435,6 +11981,9 @@
                 "operationId": "post_recommendations_generate",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -11475,6 +12024,9 @@
                 "operationId": "get_recommendations_pending-execution",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -11514,6 +12066,9 @@
                 "description": "Live route: `GET /api/v1/recommendations/{id}`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\RecommendationController@recommendationsShow`.",
                 "operationId": "get_recommendations_id",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -11562,6 +12117,9 @@
                 "description": "Live route: `POST /api/v1/recommendations/{id}/cancel-execution`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\RecommendationController@recommendationsCancelExecution`.",
                 "operationId": "post_recommendations_id_cancel-execution",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -11631,6 +12189,9 @@
                 "operationId": "post_recommendations_id_expire",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -11696,6 +12257,9 @@
                 "operationId": "post_recommendations_id_reopen",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -11760,6 +12324,9 @@
                 "description": "Live route: `POST /api/v1/recommendations/{id}/review`. Action: `App\\Http\\Controllers\\Api\\V1\\TradingOs\\RecommendationController@recommendationsReview`.",
                 "operationId": "post_recommendations_id_review",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -11860,6 +12427,9 @@
                 "operationId": "get_recommendations_id_reviews",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -11907,6 +12477,9 @@
                 "description": "Live route: `GET /api/v1/recommendations/{recommendation}/capital-resolution`. Action: `App\\Http\\Controllers\\Api\\V1\\CapitalResolutionController@forRecommendation`.",
                 "operationId": "get_recommendations_recommendation_capital-resolution",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -11956,6 +12529,9 @@
                 "operationId": "get_review_dashboard",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -11996,6 +12572,9 @@
                 "operationId": "get_review_outcomes",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -12035,6 +12614,9 @@
                 "description": "Paginated (V4-FEAT-028). Default pageSize 20 (previous implicit cap), maximum 200. Dashboard/outcomes remain unpaginated aggregates.",
                 "operationId": "get_reviews",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -12103,6 +12685,9 @@
                 "operationId": "post_reviews_generate",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -12161,6 +12746,9 @@
                 "operationId": "get_reviews_id",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -12209,6 +12797,9 @@
                 "operationId": "get_screener-registry",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -12246,6 +12837,9 @@
                 "description": "Live route: `POST /api/v1/screener-registry`. Action: `App\\Http\\Controllers\\Api\\V1\\ScreenerRegistryController@store`.",
                 "operationId": "post_screener-registry",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -12299,6 +12893,9 @@
                 "operationId": "post_screener-registry_import",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -12351,6 +12948,9 @@
                 "operationId": "get_screener-registry_meta",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -12390,6 +12990,9 @@
                 "description": "Live route: `POST /api/v1/screener-registry/shared/{sourceId}/import`. Action: `App\\Http\\Controllers\\Api\\V1\\ScreenerRegistryController@importShared`.",
                 "operationId": "post_screener-registry_shared_sourceId_import",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -12451,6 +13054,9 @@
                 "operationId": "post_screener-registry_validate",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -12503,6 +13109,9 @@
                 "operationId": "get_screener-registry_id",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -12548,6 +13157,9 @@
                 "description": "Live route: `PUT /api/v1/screener-registry/{id}`. Action: `App\\Http\\Controllers\\Api\\V1\\ScreenerRegistryController@update`.",
                 "operationId": "put_screener-registry_id",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -12609,6 +13221,9 @@
                 "operationId": "post_screener-registry_id_export",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -12669,6 +13284,9 @@
                 "operationId": "get_screener-registry_id_versions",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -12716,6 +13334,9 @@
                 "description": "Paginated (V4-FEAT-028). Default pageSize 50, maximum 200. Meta `{page, pageSize, total, lastPage}`.",
                 "operationId": "get_securities",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -12793,6 +13414,9 @@
                 "operationId": "get_securities_id",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -12841,6 +13465,9 @@
                 "operationId": "get_stock_details_combo_chart_preference",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -12878,6 +13505,9 @@
                 "description": "Sets one catalogue preset as the authenticated user's account-wide default.",
                 "operationId": "put_stock_details_combo_chart_preference",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -12946,6 +13576,9 @@
                 "operationId": "get_stocks_stock_fundamentals",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -12994,6 +13627,9 @@
                 "operationId": "get_stocks_stock_fundamentals_history",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -13041,6 +13677,9 @@
                 "description": "Live route: `POST /api/v1/stocks/{stock}/fundamentals/manual-fetch`. Action: `App\\Http\\Controllers\\Api\\V1\\FundamentalDataController@manualFetch`.",
                 "operationId": "post_stocks_stock_fundamentals_manual-fetch",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -13102,6 +13741,9 @@
                 "operationId": "get_stocks_stock_fundamentals_metrics_metric_history",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -13158,6 +13800,9 @@
                 "operationId": "get_stocks_stock_ml-insights",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -13205,6 +13850,9 @@
                 "description": "Live route: `POST /api/v1/stocks/{stock}/ml-insights/refresh`. Action: `App\\Http\\Controllers\\Api\\V1\\MlScoringController@refreshStockMlInsights`.",
                 "operationId": "post_stocks_stock_ml-insights_refresh",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -13266,6 +13914,9 @@
                 "operationId": "post_stocks_stock_ml-predictions",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -13326,6 +13977,9 @@
                 "operationId": "post_strategies",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -13378,6 +14032,9 @@
                 "operationId": "get_strategy",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -13424,6 +14081,9 @@
                 "description": "Live route: `PUT /api/v1/strategy`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyController@update`.",
                 "operationId": "put_strategy",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -13500,6 +14160,9 @@
                 "operationId": "get_strategy-registry",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -13537,6 +14200,9 @@
                 "description": "Body `{name, description}` (no JSON pack) clones the factory/default as a draft. Artifact envelope import remains supported on this same path when a pack is posted.",
                 "operationId": "post_strategy-registry",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -13598,6 +14264,9 @@
                 "operationId": "post_strategy-registry_import",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -13650,6 +14319,9 @@
                 "operationId": "get_strategy-registry_meta",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -13690,6 +14362,9 @@
                 "operationId": "get_strategy-registry_selection",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -13729,6 +14404,9 @@
                 "description": "Live route: `POST /api/v1/strategy-registry/validate`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyRegistryController@validateEnvelope`.",
                 "operationId": "post_strategy-registry_validate",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -13782,6 +14460,9 @@
                 "operationId": "get_strategy-registry_id",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -13827,6 +14508,9 @@
                 "description": "Live route: `PUT /api/v1/strategy-registry/{id}`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyRegistryController@update`.",
                 "operationId": "put_strategy-registry_id",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -13888,6 +14572,9 @@
                 "operationId": "post_strategy-registry_id_activate",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -13947,6 +14634,9 @@
                 "description": "Requires a user reason. Archives only when no strategy-owned holdings, actionable recommendations, pending executions/orders, reserved funds, or unsettled obligations remain. Returns HTTP 409 with exact blockers otherwise.",
                 "operationId": "post_strategy-registry_id_archive",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -14027,6 +14717,9 @@
                 "operationId": "get_strategy-registry_id_archive-blockers",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -14085,6 +14778,9 @@
                 "operationId": "post_strategy-registry_id_disable",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -14132,6 +14828,9 @@
                 "description": "Live route: `POST /api/v1/strategy-registry/{id}/export`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyRegistryController@export`.",
                 "operationId": "post_strategy-registry_id_export",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -14193,6 +14892,9 @@
                 "operationId": "post_strategy-registry_id_restore",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     },
                     {
@@ -14240,6 +14942,9 @@
                 "description": "Live route: `GET /api/v1/strategy-registry/{id}/versions`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyRegistryController@versions`.",
                 "operationId": "get_strategy-registry_id_versions",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -14289,6 +14994,9 @@
                 "operationId": "get_strategy_capital-allocation",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -14328,6 +15036,9 @@
                 "description": "Live route: `GET /api/v1/strategy/catalogue`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyController@catalogue`.",
                 "operationId": "get_strategy_catalogue",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -14369,6 +15080,9 @@
                 "operationId": "get_strategy_eligibility",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -14408,6 +15122,9 @@
                 "description": "Live route: `GET /api/v1/strategy/exit`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyController@exitStrategy`.",
                 "operationId": "get_strategy_exit",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -14449,6 +15166,9 @@
                 "operationId": "get_strategy_factors",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -14488,6 +15208,9 @@
                 "description": "Live route: `GET /api/v1/strategy/indicators`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyController@factors`.",
                 "operationId": "get_strategy_indicators",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -14529,6 +15252,9 @@
                 "operationId": "get_strategy_portfolio-rules",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -14568,6 +15294,9 @@
                 "description": "Live route: `GET /api/v1/strategy/recommendation-rules`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyController@recommendationRules`.",
                 "operationId": "get_strategy_recommendation-rules",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -14609,6 +15338,9 @@
                 "operationId": "get_strategy_scoring",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -14648,6 +15380,9 @@
                 "description": "Live route: `PUT /api/v1/strategy/screeners`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyController@assignScreeners`.",
                 "operationId": "put_strategy_screeners",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -14730,6 +15465,9 @@
                 "operationId": "get_strategy_summary",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -14769,6 +15507,9 @@
                 "description": "Live route: `GET /api/v1/strategy/thresholds`. Action: `App\\Http\\Controllers\\Api\\V1\\StrategyController@thresholds`.",
                 "operationId": "get_strategy_thresholds",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -14810,6 +15551,9 @@
                 "operationId": "get_totp",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -14850,6 +15594,9 @@
                 "operationId": "post_totp_begin",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -14889,6 +15636,9 @@
                 "description": "Activates the StoX execution code after a valid rotating code from the named authenticator app. Returns one-time StoX recovery codes. The stored secret and entered code are not returned.",
                 "operationId": "post_totp_confirm",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -14954,6 +15704,9 @@
                 "operationId": "post_totp_disable",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -15015,6 +15768,9 @@
                 "operationId": "post_totp_recover",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
+                    {
                         "$ref": "#/components/parameters/XProfileId"
                     }
                 ],
@@ -15072,6 +15828,9 @@
                 "description": "Rate-limited. Replay of a used StoX execution code inside the validity window is rejected. A StoX recovery code is single-use when recovery=true.",
                 "operationId": "post_totp_verify",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     }
@@ -15133,6 +15892,9 @@
                 "description": "Paginated (V4-FEAT-028). Default pageSize 100 (previous implicit cap), maximum 200. Distinct from legacy `GET /api/transactions`. Ledger rows may include `owner_key` when SELL attribution was stored (V4-SPEC-005).",
                 "operationId": "get_transactions",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XAuthSessionContext"
+                    },
                     {
                         "$ref": "#/components/parameters/XProfileId"
                     },
@@ -15209,6 +15971,20 @@
                 "description": "Active portfolio id. Legacy alias: `X-Portfolio-Id`. Query `portfolio_id` is also accepted. Omitted → user default portfolio.",
                 "schema": {
                     "type": "integer"
+                }
+            },
+            "XAuthSessionContext": {
+                "name": "X-Stox-Auth-Context",
+                "in": "header",
+                "required": false,
+                "description": "Browser session context: `investor` (default, preserves native login cookie) or `admin` (isolated administrator session). Send the same value to `/sanctum/csrf-cookie` and `/api/auth/csrf-token`.",
+                "schema": {
+                    "type": "string",
+                    "enum": [
+                        "investor",
+                        "admin"
+                    ],
+                    "default": "investor"
                 }
             }
         },

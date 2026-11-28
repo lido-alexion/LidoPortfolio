@@ -116,6 +116,13 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
+      - name: Set up PHP for isolated live-auth browser fixture
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: curl, fileinfo, mbstring, opentelemetry, pdo_sqlite, xml, zlib
+          coverage: none
+          tools: composer
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:

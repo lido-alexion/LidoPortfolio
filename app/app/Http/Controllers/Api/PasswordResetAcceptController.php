@@ -51,6 +51,12 @@ class PasswordResetAcceptController extends Controller
             'remember' => ['sometimes', 'boolean'],
         ]);
 
+        $link = $this->resetLinks->findByToken($validated['token']);
+        $expectedAdmin = $request->attributes->get('auth_session_context') === 'admin';
+        if ($link?->user !== null && (bool) $link->user->is_admin !== $expectedAdmin) {
+            return response()->json(['message' => 'Use the matching sign-in context for this account.'], 403);
+        }
+
         $user = $this->resetLinks->accept($validated['token'], $validated['password']);
         $remember = $request->boolean('remember');
 

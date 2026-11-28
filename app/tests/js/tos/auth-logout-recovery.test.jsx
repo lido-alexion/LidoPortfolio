@@ -4,18 +4,19 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { AuthProvider, useAuth } from '../../../resources/js/src/context/AuthContext';
 import api from '../../../resources/js/src/api';
 import { resetCsrfCookie } from '../../../resources/js/src/auth/csrf';
-import { clearAllDashboardCaches } from '../../../resources/js/src/utils/dashboardCache';
+import { clearDashboardCachesForUser } from '../../../resources/js/src/utils/dashboardCache';
 
 vi.mock('../../../resources/js/src/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }));
 vi.mock('../../../resources/js/src/auth/csrf', () => ({ ensureCsrfCookie: vi.fn().mockResolvedValue(undefined), resetCsrfCookie: vi.fn() }));
-vi.mock('../../../resources/js/src/utils/dashboardCache', () => ({ clearAllDashboardCaches: vi.fn() }));
+vi.mock('../../../resources/js/src/utils/dashboardCache', () => ({ clearDashboardCachesForUser: vi.fn() }));
 
 function AuthProbe() {
-    const { user, logout } = useAuth();
+    const { user, logout, refreshUser, sessionExpired } = useAuth();
     const [result, setResult] = React.useState('');
     return (
         <div>
             <span data-testid="identity">{user?.email || 'signed out'}</span>
+            <span data-testid="expired">{String(sessionExpired)}</span>
             <span data-testid="result">{result}</span>
             <button type="button" onClick={async () => {
                 try {
@@ -25,6 +26,7 @@ function AuthProbe() {
                     setResult('rejected');
                 }
             }}>Invoke logout</button>
+            <button type="button" onClick={() => refreshUser()}>Refresh identity</button>
         </div>
     );
 }
@@ -53,7 +55,8 @@ it('clears local auth and user caches only after confirmed logout', async () => 
     expect(api.post).toHaveBeenCalledWith('/auth/logout', {}, { skipErrorToast: true });
     expect(api.get).toHaveBeenCalledTimes(1);
     expect(resetCsrfCookie).toHaveBeenCalledTimes(1);
-    expect(clearAllDashboardCaches).toHaveBeenCalledTimes(1);
+    expect(clearDashboardCachesForUser).toHaveBeenCalledWith(7);
+    expect(clearDashboardCachesForUser).toHaveBeenCalledTimes(1);
 });
 
 it('treats a definitive 401 as already unauthenticated and clears local auth', async () => {
@@ -67,7 +70,8 @@ it('treats a definitive 401 as already unauthenticated and clears local auth', a
     expect(screen.getByTestId('identity')).toHaveTextContent('signed out');
     expect(api.get).toHaveBeenCalledTimes(1);
     expect(resetCsrfCookie).toHaveBeenCalledTimes(1);
-    expect(clearAllDashboardCaches).toHaveBeenCalledTimes(1);
+    expect(clearDashboardCachesForUser).toHaveBeenCalledWith(7);
+    expect(clearDashboardCachesForUser).toHaveBeenCalledTimes(1);
 });
 
 it.each([
@@ -87,7 +91,7 @@ it.each([
     expect(api.post).toHaveBeenCalledTimes(1);
     expect(api.get).toHaveBeenCalledTimes(1);
     expect(resetCsrfCookie).not.toHaveBeenCalled();
-    expect(clearAllDashboardCaches).not.toHaveBeenCalled();
+    expect(clearDashboardCachesForUser).not.toHaveBeenCalled();
 });
 
 it('keeps auth state until a pending logout is confirmed', async () => {
@@ -100,12 +104,24 @@ it('keeps auth state until a pending logout is confirmed', async () => {
     expect(api.post).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('identity')).toHaveTextContent('investor@example.test');
     expect(resetCsrfCookie).not.toHaveBeenCalled();
-    expect(clearAllDashboardCaches).not.toHaveBeenCalled();
+    expect(clearDashboardCachesForUser).not.toHaveBeenCalled();
     expect(screen.queryByText('resolved', { exact: true })).toBeNull();
 
     await act(async () => finishLogout({ status: 204 }));
     expect(await screen.findByText('resolved', { exact: true })).toBeVisible();
     expect(screen.getByTestId('identity')).toHaveTextContent('signed out');
     expect(resetCsrfCookie).toHaveBeenCalledTimes(1);
-    expect(clearAllDashboardCaches).toHaveBeenCalledTimes(1);
+    expect(clearDashboardCachesForUser).toHaveBeenCalledWith(7);
+    expect(clearDashboardCachesForUser).toHaveBeenCalledTimes(1);
+});
+
+it('does not adopt another same-role principal during a background identity refresh', async () => {
+    renderProvider();
+    expect(await screen.findByText('investor@example.test')).toBeVisible();
+    api.get.mockResolvedValueOnce({ data: { user: { id: 8, email: 'different@example.test' } } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh identity' }));
+
+    expect(await screen.findByTestId('identity')).toHaveTextContent('signed out');
+    expect(screen.getByTestId('expired')).toHaveTextContent('true');
 });

@@ -788,6 +788,48 @@ class LiveExecutionFeatureTest extends TestCase
         $this->assertSame(User::EXECUTION_STATE_EMERGENCY_HALT, $user->fresh()->executionState());
     }
 
+    public function test_emergency_cancel_disconnect_changes_only_initiating_investor_state_connection_and_orders(): void
+    {
+        [$initiator, $initiatorProfile] = $this->actingReadyUser();
+        $other = User::factory()->create();
+        $otherProfile = $this->defaultPortfolioFor($other);
+        $this->connectKite($other);
+
+        $initiatorRecommendation = $this->pendingBuy($initiatorProfile);
+        $otherRecommendation = $this->pendingBuy($otherProfile);
+        $initiatorOrder = TradingOrder::query()->create([
+            'profile_id' => $initiatorProfile->id,
+            'recommendation_id' => $initiatorRecommendation->id,
+            'security_id' => $initiatorRecommendation->security_id,
+            'side' => 'buy', 'quantity' => 1, 'status' => TradingOrder::STATUS_PENDING,
+            'broker_provider' => 'kite', 'broker_order_id' => 'owner-a-order',
+            'broker_status' => TradingOrder::BROKER_OPEN,
+        ]);
+        $otherOrder = TradingOrder::query()->create([
+            'profile_id' => $otherProfile->id,
+            'recommendation_id' => $otherRecommendation->id,
+            'security_id' => $otherRecommendation->security_id,
+            'side' => 'buy', 'quantity' => 1, 'status' => TradingOrder::STATUS_PENDING,
+            'broker_provider' => 'kite', 'broker_order_id' => 'owner-b-order',
+            'broker_status' => TradingOrder::BROKER_OPEN,
+        ]);
+        $otherStateBefore = $other->fresh()->only(['execution_state', 'execution_halted_at', 'execution_halt_reason']);
+
+        $this->actingAs($initiator, 'web')->withProfileHeader($initiator, $initiatorProfile)
+            ->postJson('/api/v1/broker/kite/emergency-cancel-open-orders-disconnect', [
+                'confirm' => true,
+                'reason' => 'synthetic owner isolation regression',
+            ])->assertOk()->assertJsonPath('data.cancelled_orders', 1);
+
+        $this->assertSame(User::EXECUTION_STATE_EMERGENCY_HALT, $initiator->fresh()->executionState());
+        $this->assertDatabaseMissing('portfolio_broker_connections', ['user_id' => $initiator->id]);
+        $this->assertSame(TradingOrder::BROKER_CANCELLED, $initiatorOrder->fresh()->broker_status);
+        $this->assertSame($otherStateBefore, $other->fresh()->only(['execution_state', 'execution_halted_at', 'execution_halt_reason']));
+        $this->assertDatabaseHas('portfolio_broker_connections', ['user_id' => $other->id, 'broker_user_id' => 'AB1234']);
+        $this->assertSame(TradingOrder::BROKER_OPEN, $otherOrder->fresh()->broker_status);
+        $this->assertSame(['owner-a-order'], array_keys(app(FakeBrokerGateway::class)->orders));
+    }
+
     public function test_live_quote_strict_policy_blocks_and_fallback_policy_uses_latest_close(): void
     {
         [$user, $profile] = $this->actingReadyUser();

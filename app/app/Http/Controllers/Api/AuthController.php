@@ -61,6 +61,15 @@ class AuthController extends Controller
 
         /** @var User $user */
         $user = Auth::guard('web')->user();
+        $expectedAdmin = $request->attributes->get('auth_session_context') === 'admin';
+        if ((bool) $user->is_admin !== $expectedAdmin) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+            Auth::forgetGuards();
+            Auth::shouldUse('web');
+            return response()->json(['message' => 'Use the matching sign-in context for this account.'], 403);
+        }
         $request->session()->put('logged_in_at', now()->timestamp);
         $request->session()->regenerate();
 
@@ -98,6 +107,10 @@ class AuthController extends Controller
     public function me(Request $request): JsonResponse
     {
         $user = $request->user();
+        $isAdminContext = $request->attributes->get('auth_session_context') === 'admin';
+        if ($user !== null && (bool) $user->is_admin !== $isAdminContext) {
+            $user = null;
+        }
 
         return response()->json([
             'user' => $user ? $this->userPayload($user) : null,

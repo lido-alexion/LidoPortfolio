@@ -211,6 +211,22 @@ export function clearAllDashboardCaches() {
     }
 }
 
+export function clearDashboardCachesForUser(userId) {
+    if (userId == null) return;
+    const prefix = `${CACHE_KEY_PREFIX}_${userId}_`;
+    if (memoryCache?.key.startsWith(prefix)) memoryCache = null;
+    try {
+        const keys = [];
+        for (let i = 0; i < localStorage.length; i += 1) {
+            const key = localStorage.key(i);
+            if (key?.startsWith(prefix)) keys.push(key);
+        }
+        keys.forEach((key) => localStorage.removeItem(key));
+    } catch {
+        // Ignore storage failures.
+    }
+}
+
 /**
  * @param {string} iso
  * @returns {string}

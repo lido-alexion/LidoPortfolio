@@ -4,6 +4,7 @@ import React, {
     useContext,
     useEffect,
     useMemo,
+    useRef,
     useState,
 } from 'react';
 import api from '../api';
@@ -26,6 +27,11 @@ export function PortfolioProvider({ children }) {
     const [portfolios, setPortfolios] = useState([]);
     const [activePortfolioId, setActivePortfolioIdState] = useState(() => getActivePortfolioId());
     const [loading, setLoading] = useState(false);
+    const ownerIdRef = useRef(user?.id ?? null);
+
+    useEffect(() => {
+        ownerIdRef.current = user?.id ?? null;
+    }, [user?.id]);
 
     const resolveActiveId = useCallback((list, preferredId) => {
         if (!list.length) {
@@ -40,16 +46,18 @@ export function PortfolioProvider({ children }) {
     }, []);
 
     const refreshPortfolios = useCallback(async () => {
+        const ownerId = user?.id ?? null;
         const res = await api.get('/portfolios', { skipErrorToast: true });
         const list = res.data?.data ?? [];
-        setPortfolios(list);
+        if (ownerIdRef.current === ownerId) setPortfolios(list);
         return list;
-    }, []);
+    }, [user?.id]);
 
     const bootstrap = useCallback(async () => {
         setLoading(true);
         try {
             const list = await refreshPortfolios();
+            if (ownerIdRef.current !== (user?.id ?? null)) return null;
             const stored = getActivePortfolioId();
             const fallback = user?.default_portfolio_id ?? null;
             const nextId = resolveActiveId(list, stored ?? fallback);
@@ -58,7 +66,7 @@ export function PortfolioProvider({ children }) {
                 setActivePortfolioId(nextId);
                 setActivePortfolioIdState(nextId);
                 if (storedWasStale) {
-                    notifyPortfolioChanged(nextId);
+                    notifyPortfolioChanged(nextId, user?.id);
                 }
             } else {
                 clearActivePortfolioId();
@@ -66,10 +74,10 @@ export function PortfolioProvider({ children }) {
             }
             return nextId;
         } catch {
-            setPortfolios([]);
+            if (ownerIdRef.current === (user?.id ?? null)) setPortfolios([]);
             return null;
         } finally {
-            setLoading(false);
+            if (ownerIdRef.current === (user?.id ?? null)) setLoading(false);
         }
     }, [refreshPortfolios, resolveActiveId, user?.default_portfolio_id]);
 
@@ -81,6 +89,7 @@ export function PortfolioProvider({ children }) {
         }
         if (!isAuthenticated) {
             setPortfolios([]);
+            setLoading(false);
             clearActivePortfolioId();
             setActivePortfolioIdState(null);
             return;
@@ -97,12 +106,12 @@ export function PortfolioProvider({ children }) {
         if (!isAuthenticated) {
             return undefined;
         }
-        return subscribePortfolioCrossTab((message) => {
+        return subscribePortfolioCrossTab(user?.id, (message) => {
             if (message?.type === 'deleted') {
                 bootstrap();
             }
         });
-    }, [isAuthenticated, bootstrap]);
+    }, [isAuthenticated, user?.id, bootstrap]);
 
     useEffect(() => {
         if (!isAuthenticated) {
@@ -126,8 +135,8 @@ export function PortfolioProvider({ children }) {
         }
         setActivePortfolioId(id);
         setActivePortfolioIdState(id);
-        notifyPortfolioChanged(id);
-    }, []);
+        notifyPortfolioChanged(id, user?.id);
+    }, [user?.id]);
 
     const activePortfolio = useMemo(
         () => portfolios.find((p) => String(p.id) === String(activePortfolioId)) ?? null,

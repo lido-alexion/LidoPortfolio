@@ -41,10 +41,7 @@ class AdminGlobalSettingsTest extends TestCase
 
     protected function actingAsUser(User $user): self
     {
-        $this->postJson('/api/auth/login', [
-            'email' => $user->email,
-            'password' => 'password123',
-        ])->assertOk();
+        $this->loginAs($user)->assertOk();
 
         return $this;
     }

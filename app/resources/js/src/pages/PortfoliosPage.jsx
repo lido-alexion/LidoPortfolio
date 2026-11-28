@@ -5,6 +5,7 @@ import { showToast } from '../toast';
 import { validatePortfolioName } from '../utils/portfolioName';
 import { notifyPortfolioDeleted } from '../utils/portfolioEvents';
 import PortfolioReplayPanel from '../components/portfolio/PortfolioReplayPanel';
+import { useAuth } from '../context/AuthContext';
 
 function validationMessage(error) {
     const errors = error?.response?.data?.errors;
@@ -18,6 +19,7 @@ function validationMessage(error) {
 }
 
 export default function PortfoliosPage() {
+    const { user } = useAuth();
     const {
         portfolios,
         activePortfolio,
@@ -160,7 +162,7 @@ export default function PortfoliosPage() {
         setDeletingId(portfolio.id);
         try {
             await api.delete(`/portfolios/${portfolio.id}`);
-            notifyPortfolioDeleted(portfolio.id);
+            notifyPortfolioDeleted(portfolio.id, user?.id);
             await bootstrap();
             showToast('Portfolio deleted');
         } catch (error) {

@@ -112,4 +112,20 @@ class V6PersonalApiTokenTest extends TestCase
 
         $this->assertDatabaseMissing('portfolio_profiles', ['user_id' => $admin->id]);
     }
+
+    public function test_full_scope_bearer_write_remains_stateless_under_strict_browser_csrf_validation(): void
+    {
+        $user = User::factory()->create();
+        $profile = $this->defaultPortfolioFor($user);
+        $token = $user->createToken('Portfolio writer', ['portfolio:read', 'portfolio:write'])->plainTextToken;
+
+        $this->withToken($token)
+            ->withHeader('X-Profile-Id', (string) $profile->id)
+            ->postJson('/api/portfolios', [
+                'name' => 'Bearer client write',
+                'portfolio_type' => 'live',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.name', 'Bearer client write');
+    }
 }

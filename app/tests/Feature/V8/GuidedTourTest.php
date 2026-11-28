@@ -46,6 +46,8 @@ class GuidedTourTest extends TestCase
 
     protected function actingAsUser(User $user): self
     {
+        $this->withHeader('X-Stox-Auth-Context', $user->is_admin ? 'admin' : 'investor');
+
         $this->postJson('/api/auth/login', [
             'email' => $user->email,
             'password' => 'password123',

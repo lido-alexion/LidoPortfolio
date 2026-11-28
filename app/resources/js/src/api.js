@@ -10,6 +10,7 @@ import { isBrowserOpenTelemetryRegistered } from './telemetry/otelBrowser';
 import { getTraceparent } from './telemetry/lidoTelemetry';
 import { showToast } from './toast';
 import { appUrl } from './appBase';
+import { getAuthSessionContext, getAuthSessionUserId, isCurrentAuthSessionUserId } from './auth/sessionContext';
 
 const api = axios.create({
     headers: {
@@ -37,6 +38,7 @@ function shouldAttachProfileHeader(url, method) {
 
 api.interceptors.request.use((config) => {
     config.baseURL = appUrl('/api');
+    config.headers['X-Stox-Auth-Context'] = getAuthSessionContext();
 
     const csrf = getCsrfToken();
     if (csrf) {
@@ -49,6 +51,8 @@ api.interceptors.request.use((config) => {
 
     const requestId = createRequestId();
     config.headers['X-Request-ID'] = requestId;
+    const authSessionUserId = getAuthSessionUserId();
+    config.headers['X-Stox-Auth-User'] = authSessionUserId ?? 'guest';
     if (isBrowserOpenTelemetryRegistered()) {
         // XHR setRequestHeader appends: let the SDK inject the actual client
         // span once, including on Axios retries or caller-supplied headers.
@@ -58,7 +62,7 @@ api.interceptors.request.use((config) => {
         const traceparent = getTraceparent();
         if (traceparent) config.headers.traceparent = traceparent;
     }
-    config.metadata = { requestId };
+    config.metadata = { requestId, authSessionUserId, authSessionContext: getAuthSessionContext() };
 
     const portfolioId = getActivePortfolioId();
     if (portfolioId && shouldAttachProfileHeader(config.url, config.method)) {
@@ -152,6 +156,10 @@ function resolveApiErrorMessage(error) {
 
 api.interceptors.response.use(
     (response) => {
+        if (!isCurrentAuthSessionUserId(response.config?.metadata?.authSessionUserId)
+            || response.config?.metadata?.authSessionContext !== getAuthSessionContext()) {
+            return Promise.reject(new axios.CanceledError('Discarded response from a previous sign-in identity.'));
+        }
         logger.debug('API response', {
             category: 'API',
             requestId: response.config?.metadata?.requestId,
@@ -161,6 +169,11 @@ api.interceptors.response.use(
         return response;
     },
     async (error) => {
+        if (axios.isCancel(error)) return Promise.reject(error);
+        if (!isCurrentAuthSessionUserId(error?.config?.metadata?.authSessionUserId)
+            || error?.config?.metadata?.authSessionContext !== getAuthSessionContext()) {
+            return Promise.reject(new axios.CanceledError('Discarded response from a previous sign-in identity.'));
+        }
         const requestId = error?.config?.metadata?.requestId;
         const status = error?.response?.status;
         const url = error?.config?.url || '';

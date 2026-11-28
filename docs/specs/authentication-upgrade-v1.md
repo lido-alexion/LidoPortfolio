@@ -1,0 +1,27 @@
+# StoX authentication upgrade — frozen requirements v1.0
+Approved scope: 2026-11-26. Owner requirement baseline; implementation choices subject to security review.
+
+## Goals and scope
+- Allow one administrator session and one regular investor session concurrently in the same browser, with independent tabs, login, logout, expiry and renewal. No general unlimited multi-account feature required. Ordinary single-account UX remains unchanged.
+- Add optional Sign in with Google (OIDC/Google Identity Services) alongside native email/password. No self-hosted IdP, shared cross-app database, or Google Gmail/Drive permissions. Other Lido applications on other servers may adopt the same design independently later; their implementation is out of scope.
+- One internal user ID per person/account within StoX, regardless of login method; preserve all existing roles, settings, portfolio and broker data. Do not merge distinct admin and investor accounts.
+
+## Identity linking
+- Google login validates signature, issuer, audience, expiry, nonce/state as applicable and verified email; use authorization code flow with PKCE where appropriate, exact HTTPS callbacks, server-held secrets, minimal openid/email/profile scopes.
+- First Google sign-in matching an existing email must lead to the existing account, never a duplicate. Require proof of existing account control before linking (mandatory for admin; safe default for all existing accounts); subsequent sign-in resolves by issuer + immutable subject. Do not trust email alone for privilege or silently link unverified/ambiguous email. Unmatched identities follow existing registration/approval rules; never grant admin by email or Google claims alone.
+- Enforce transactional uniqueness of provider identity and existing email identity; retain existing password/recovery and ensure at least one usable login method before unlinking. Account linking/unlinking audited; reauthentication required for sensitive changes. No automatic Gmail alias normalization beyond established email policy.
+
+## Concurrent sessions
+- Preserve current Sanctum native cookie security. Implement independent admin/investor contexts with explicit trusted route or equivalent context resolution, separate cookie/session/CSRF handling or equally secure mechanism. Determine exact design after auditing shared routes; no fallback from expired/missing context to another user. Rotate sessions, protect CSRF, secure HttpOnly session cookies, remember-me and revocation isolation. Admin permissions remain enforced server-side. Avoid globally shared bearer tokens in localStorage.
+- Keep current single-user login experience; provide discoverable admin entry and clear active identity. Independent session logout/expiry must not impact other role. Do not weaken existing MFA/access approvals, session management or emergency controls.
+- Bind Google and Kite callbacks to initiating account/session and validated state; reject mismatches. Broker login remains separate and daily reconnect still required. Ensure trading, emergency stop, background jobs and notifications use explicit intended owner.
+
+## Existing portfolio contract (mandatory)
+Baseline inspected at 6ebfe5a404de0443d869b508ac4df06e98f7ae33: app/resources/js/src/portfolio/activePortfolioStorage.js, context/PortfolioContext.jsx, api.js, context/AuthContext.jsx, utils/portfolioEvents.js; app/app/Http/Middleware/ResolveActivePortfolio.php; app/API_DOCUMENTATION.md.
+- Preserve tab-local sessionStorage selection (portfolio_active_id semantics), X-Profile-Id API header, existing default portfolio behaviour and server-side ownership validation. No global active portfolio in auth session. Admin remains barred from investor routes. Resolve authentication before portfolio.
+- Scope portfolio state to user, cache invalidation, BroadcastChannel events, unauthorized handling and CSRF to correct account/context. Prevent stale in-flight responses on identity changes. Preserve same-user cross-tab deletion recovery and refresh selection.
+
+## Acceptance and release gates
+Automated browser + backend tests: native single-account regression; admin and investor concurrently plus two investor portfolio tabs; independent portfolio switch/refresh/duplicate tab; independent login/logout/expiry and session revocation; concurrent writes and CSRF refresh; cross-account portfolio ID rejection, admin access restrictions, cache/event isolation; stale response/identity change; portfolio deletion recovery; Google existing-account linking and subsequent native/Google equivalence, new/unverified/conflicting identities, invalid token/state/replay, no privilege escalation, unlink/recovery; Kite callback owner mismatch/reconnect; transaction and emergency stop correct owner, no real-money test orders. Preserve existing API contracts and CI/CD gates.
+- Stage implementation in isolated worktree/branch; update architecture/API/security/user docs and migrations. Feature flag Google login until credentials/callback configuration and security tests verified; no secrets in Git. Use existing CI/CD; staged deployment, rollback plan and production smoke with safe test accounts. No production authentication cutover without verified readiness. Report any required owner action (Google OAuth console configuration or interactive acceptance); never request passwords or secrets in chat.
+- Deliver in stages: concurrent sessions and regression coverage first; Google identity integration second; verified deployment and acceptance. Reusable design, not a new central service.

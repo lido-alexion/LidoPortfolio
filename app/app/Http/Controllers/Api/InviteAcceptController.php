@@ -44,6 +44,10 @@ class InviteAcceptController extends Controller
 
     public function accept(Request $request): JsonResponse
     {
+        if ($request->attributes->get('auth_session_context', 'investor') !== 'investor') {
+            return response()->json(['message' => 'Account invitations must be accepted in the investor sign-in context.'], 403);
+        }
+
         $validated = $request->validate([
             'token' => ['required', 'string', 'size:64'],
             'name' => ['nullable', 'string', 'max:255'],

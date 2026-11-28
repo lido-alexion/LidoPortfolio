@@ -4,6 +4,7 @@ import {
     buildDashboardCacheKey,
     clearAllDashboardCaches,
     clearDashboardCache,
+    clearDashboardCachesForUser,
     flattenPatternScanResults,
     readDashboardCache,
     stripDashboardPayloadForCache,
@@ -98,4 +99,15 @@ test('clearDashboardCache removes one portfolio entry', () => {
     clearDashboardCache(5, 6);
     assert.equal(readDashboardCache(5, 6), null);
     assert.ok(readDashboardCache(5, 7));
+});
+
+test('clearDashboardCachesForUser preserves another account cache', () => {
+    mockLocalStorage();
+    writeDashboardCache(7, 1, { dashboard: { portfolio_value: 1 }, patternRows: [] });
+    writeDashboardCache(8, 2, { dashboard: { portfolio_value: 2 }, patternRows: [] });
+
+    clearDashboardCachesForUser(7);
+
+    assert.equal(readDashboardCache(7, 1), null);
+    assert.equal(readDashboardCache(8, 2)?.dashboard.portfolio_value, 2);
 });

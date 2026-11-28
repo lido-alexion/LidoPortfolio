@@ -9,6 +9,7 @@ use App\Services\PortfolioLoggerService;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
 class BrokerConnectionService
@@ -54,9 +55,15 @@ class BrokerConnectionService
             'user_id' => $user->id,
         ]);
 
+        $stateId = bin2hex(random_bytes(32));
+        $expiresAt = now()->addSeconds(self::LOGIN_STATE_TTL_SECONDS)->getTimestamp();
+        if (! Cache::put($this->loginStateCacheKey($stateId), (int) $user->id, self::LOGIN_STATE_TTL_SECONDS)) {
+            throw new DomainException('Secure broker login state could not be created. Try again.', 'BROKER_LOGIN_STATE_UNAVAILABLE', 503);
+        }
         $state = Crypt::encryptString(json_encode([
             'user_id' => $user->id,
-            'expires_at' => now()->addSeconds(self::LOGIN_STATE_TTL_SECONDS)->getTimestamp(),
+            'expires_at' => $expiresAt,
+            'state_id' => $stateId,
             'return_to' => in_array($returnTo, ['dashboard', 'account'], true) ? $returnTo : 'account',
         ], JSON_THROW_ON_ERROR));
         $redirectParams = http_build_query(['state' => $state], '', '&', PHP_QUERY_RFC3986);
@@ -80,11 +87,35 @@ class BrokerConnectionService
 
         $userId = filter_var($payload['user_id'] ?? null, FILTER_VALIDATE_INT);
         $expiresAt = filter_var($payload['expires_at'] ?? null, FILTER_VALIDATE_INT);
-        if ($userId === false || $expiresAt === false || $expiresAt < now()->getTimestamp()) {
+        $stateId = $payload['state_id'] ?? null;
+        if ($userId === false || $expiresAt === false || $expiresAt < now()->getTimestamp()
+            || ! is_string($stateId) || ! preg_match('/^[a-f0-9]{64}$/D', $stateId)) {
+            return null;
+        }
+
+        // Consume before resolving the owner so concurrent or repeated callbacks
+        // cannot exchange the same broker request token twice.
+        $cacheKey = $this->loginStateCacheKey($stateId);
+        try {
+            $consumedUserId = Cache::lock($cacheKey.':consume-lock', 10)->block(5, function () use ($cacheKey) {
+                return Cache::pull($cacheKey);
+            });
+        } catch (\Throwable $error) {
+            report($error);
+
+            return null;
+        }
+        $consumedUserId = filter_var($consumedUserId, FILTER_VALIDATE_INT);
+        if ($consumedUserId === false || $consumedUserId !== (int) $userId) {
             return null;
         }
 
         return User::query()->find($userId);
+    }
+
+    private function loginStateCacheKey(string $stateId): string
+    {
+        return 'broker:kite:login-state:'.hash('sha256', $stateId);
     }
 
     public function returnToFromLoginState(?string $state): string

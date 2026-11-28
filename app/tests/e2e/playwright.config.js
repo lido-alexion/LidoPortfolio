@@ -19,7 +19,7 @@ export default defineConfig({
     projects: [
         {
             name: 'chromium',
-            testIgnore: /responsive-shell\.spec\.js/,
+            testIgnore: [/responsive-shell\.spec\.js/, /auth-context-live\.spec\.js/],
             use: { ...devices['Desktop Chrome'] },
         },
         {

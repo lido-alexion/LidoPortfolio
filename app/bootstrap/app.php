@@ -8,9 +8,11 @@ use App\Http\Middleware\AssignRequestId;
 use App\Http\Middleware\LidoTelemetryHttpMiddleware;
 use App\Http\Middleware\DebugAgentToken;
 use App\Http\Middleware\EnsurePersonalApiTokenScope;
+use App\Http\Middleware\EnsureAuthSessionRole;
 use App\Http\Middleware\EnsureAiRuntimeServiceKey;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\ResolveActivePortfolio;
+use App\Http\Middleware\SelectAuthSessionContext;
 use App\Services\PortfolioLoggerService;
 use App\Services\Operations\ApiFailureReporter;
 use App\Support\ApiErrorMessage;
@@ -44,6 +46,8 @@ $application = Application::configure(basePath: dirname(__DIR__))
             return route('login');
         });
         $middleware->statefulApi();
+        // Must run before EncryptCookies and StartSession to select the isolated cookie.
+        $middleware->prepend(SelectAuthSessionContext::class);
         $middleware->prependToGroup('api', DebugAgentToken::class);
         $middleware->appendToGroup('api', AssignRequestId::class);
         $middleware->appendToGroup('api', LidoTelemetryHttpMiddleware::class);
@@ -57,6 +61,8 @@ $application = Application::configure(basePath: dirname(__DIR__))
         ]);
         $middleware->appendToGroup('api', ResolveActivePortfolio::class);
         $middleware->priority([
+            \Illuminate\Auth\Middleware\Authenticate::class,
+            EnsureAuthSessionRole::class,
             ResolveActivePortfolio::class,
             SubstituteBindings::class,
         ]);
