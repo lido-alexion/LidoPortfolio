@@ -16,7 +16,10 @@ class VpsHealthController extends Controller
             'hours' => ['sometimes', 'integer', 'in:1,6,24,72,168,720'],
         ]);
         $hours = (int) ($validated['hours'] ?? 24);
-        $since = now()->subHours($hours);
+        $now = now();
+        $since = $now->copy()->subHours($hours);
+        $currentHour = $now->copy()->startOfHour();
+        $firstHour = $currentHour->copy()->subHours($hours - 1);
         $latest = VpsHealthSample::query()
             ->orderByDesc('sampled_at')
             ->first(['sampled_at', 'status', 'issues', 'metrics']);
@@ -25,7 +28,9 @@ class VpsHealthController extends Controller
                 ->orderBy('sampled_at')->get(['sampled_at', 'status', 'issues', 'metrics']);
             $granularity = 'minute';
         } else {
-            $samples = VpsHealthDiskHourlyRollup::query()->where('sampled_at', '>=', $since)
+            // Long history is a sparse series of hour buckets. Include at most
+            // the current bucket plus the preceding hours - 1 buckets.
+            $samples = VpsHealthDiskHourlyRollup::query()->whereBetween('hour_start', [$firstHour, $currentHour])
                 ->orderBy('hour_start')->get(['sampled_at', 'metrics'])
                 ->map(fn ($row) => ['sampled_at' => $row->sampled_at, 'status' => null, 'issues' => [], 'metrics' => $row->metrics]);
             $granularity = 'hour';
