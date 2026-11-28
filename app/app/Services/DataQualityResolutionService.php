@@ -35,9 +35,16 @@ class DataQualityResolutionService
 
         $this->assertValidHistoricalIsinTransition($issue, $adminManualOverride, $manualOverrideContext);
 
-        return DB::transaction(function () use ($issue, $appliedRatio, $notes, $userId, $auto, $requirePendingReview, $adminManualOverride, $manualOverrideContext) {
+        // Resolve the parent key before the transaction, then take the shared
+        // writer mutex before the issue lock (F020/F042/F043 order).
+        $candidateStockId = DataQualityIssue::query()->whereKey($issue->id)->value('stock_id');
+
+        return DB::transaction(function () use ($issue, $candidateStockId, $appliedRatio, $notes, $userId, $auto, $requirePendingReview, $adminManualOverride, $manualOverrideContext) {
+            Stock::query()->whereKey($candidateStockId)->lockForUpdate()->firstOrFail();
             $issue = DataQualityIssue::query()->lockForUpdate()->findOrFail($issue->id);
-            $this->lockIssueStock($issue);
+            if ((int) $issue->stock_id !== (int) $candidateStockId) {
+                throw new DomainException('Issue stock changed while acquiring resolution locks.', 'DATA_QUALITY_STALE_RESOLUTION', 409);
+            }
             $issue->unsetRelation('stock');
             $issue->load('stock');
             // Recheck against the stock-master identity while its row is locked.
@@ -98,7 +105,7 @@ class DataQualityResolutionService
             ]);
 
             return $issue->fresh(['stock', 'evidences', 'resolutions.resolver']);
-        });
+        }, 3);
     }
 
     private function validIsoDate(string $date): bool
@@ -132,9 +139,13 @@ class DataQualityResolutionService
         ?int $userId = null,
         bool $requirePendingReview = true,
     ): DataQualityIssue {
-        return DB::transaction(function () use ($issue, $notes, $userId, $requirePendingReview) {
+        $candidateStockId = DataQualityIssue::query()->whereKey($issue->id)->value('stock_id');
+        return DB::transaction(function () use ($issue, $candidateStockId, $notes, $userId, $requirePendingReview) {
+            Stock::query()->whereKey($candidateStockId)->lockForUpdate()->firstOrFail();
             $issue = DataQualityIssue::query()->lockForUpdate()->findOrFail($issue->id);
-            $this->lockIssueStock($issue);
+            if ((int) $issue->stock_id !== (int) $candidateStockId) {
+                throw new DomainException('Issue stock changed while acquiring resolution locks.', 'DATA_QUALITY_STALE_RESOLUTION', 409);
+            }
             $this->assertNoCompletedPriceRepair($issue);
 
             if ($requirePendingReview && $issue->issue_status !== DataQualityIssue::STATUS_PENDING_REVIEW) {
@@ -172,15 +183,19 @@ class DataQualityResolutionService
             ]);
 
             return $issue->fresh(['stock', 'evidences', 'resolutions.resolver']);
-        });
+        }, 3);
     }
 
     /** Exact F042 price restoration and linked issue reversal in one transaction. */
     public function rollbackCompletedRepair(DataQualityIssue $issue, string $notes, ?int $userId): DataQualityIssue
     {
-        return DB::transaction(function () use ($issue, $notes, $userId) {
+        $candidateStockId = DataQualityIssue::query()->whereKey($issue->id)->value('stock_id');
+        return DB::transaction(function () use ($issue, $candidateStockId, $notes, $userId) {
+            $stock = Stock::query()->whereKey($candidateStockId)->lockForUpdate()->firstOrFail();
             $issue = DataQualityIssue::query()->lockForUpdate()->findOrFail($issue->id);
-            $stock = Stock::query()->whereKey($issue->stock_id)->lockForUpdate()->firstOrFail();
+            if ((int) $issue->stock_id !== (int) $stock->id) {
+                throw new DomainException('Issue stock changed while acquiring rollback locks.', 'DATA_QUALITY_STALE_RESOLUTION', 409);
+            }
             $factors = \App\Models\PriceAdjustmentFactor::query()->where('issue_id', $issue->id)->orderBy('id')->lockForUpdate()->get();
             $completed = $factors->filter(fn ($factor) => (($factor->metadata ?? [])['ohlcv_repair_status'] ?? null) === \App\Models\PriceAdjustmentFactor::REPAIR_STATUS_COMPLETED)->values();
             if ($completed->isEmpty()) {
@@ -216,7 +231,7 @@ class DataQualityResolutionService
             $issue->update(['issue_status' => DataQualityIssue::STATUS_REJECTED, 'resolved_at' => now(), 'applied_ratio' => null, 'latest_resolution_id' => $resolution->id]);
             app(MetricsUpdateService::class)->updateStock($stock);
             return $issue->fresh(['stock', 'evidences', 'resolutions.resolver']);
-        });
+        }, 3);
     }
 
     public function autoAcceptStaleIssues(?int $pendingDays = null): int
@@ -322,12 +337,6 @@ class DataQualityResolutionService
         }
 
         return abs($suggested - $appliedRatio) < 0.000001;
-    }
-
-    /** Serialize factor activation/deactivation with stock-global F020/F042 OHLCV writers. */
-    private function lockIssueStock(DataQualityIssue $issue): void
-    {
-        Stock::query()->whereKey($issue->stock_id)->lockForUpdate()->first();
     }
 
     /**

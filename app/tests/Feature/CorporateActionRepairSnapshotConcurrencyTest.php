@@ -126,14 +126,30 @@ class CorporateActionRepairSnapshotConcurrencyTest extends TestCase
                 $this->assertTrue($worker->isSuccessful(), $worker->getErrorOutput().$worker->getOutput());
             }
             $workerResult = json_decode((string) file_get_contents($result), true, flags: JSON_THROW_ON_ERROR);
-            $this->assertSame(1, $workerResult['repaired']);
+            $this->assertSame(0, $workerResult['repaired']);
+            $this->assertSame(1, $workerResult['skipped']);
+            $this->assertSame(CorporateActionPriceRepairService::STATUS_INVALID_FACTOR, $workerResult['details'][0]['status']);
+            $this->assertStringContainsString('changed after preview', $workerResult['details'][0]['reason']);
         });
 
-        // The worker must see F020's committed 50 before applying F042's /10.
+        // Stale preflight rejected without touching OHLCV. A new explicit
+        // preflight binds the approved factor to F020's committed price rows.
+        $this->assertSame(50.0, $this->closeOn($stock->id, '2026-11-11'));
+        $freshPreflight = app(CorporateActionPriceRepairService::class)->repairPendingFactors(
+            factorId: (int) $factor->id, dryRun: true,
+        );
+        $fingerprint = $freshPreflight['details'][0]['preflight_sha256'];
+        $repair = app(CorporateActionPriceRepairService::class)->repairPendingFactors(
+            factorId: (int) $factor->id, dryRun: false, expectedPreflightSha256: $fingerprint,
+        );
+        $this->assertSame(1, $repair['repaired'], json_encode($repair['details'] ?? $repair, JSON_THROW_ON_ERROR));
+        // The fresh preflight must apply F042's /10 to F020's already
+        // committed 50, and retain an exact rollback image for the resulting rows.
         $this->assertSame(5.0, $this->closeOn($stock->id, '2026-11-11'));
         $this->assertSame(10.0, $this->closeOn($stock->id, '2026-11-12'));
         $this->assertSame(10.0, $this->closeOn($stock->id, '2026-11-15'));
         $this->assertSame(PriceAdjustmentFactor::REPAIR_STATUS_COMPLETED, $factor->fresh()->metadata['ohlcv_repair_status']);
+        $this->assertSame(3, DB::table('portfolio_price_adjustment_repair_snapshots')->where('factor_id', $factor->id)->count());
     }
 
     public function test_metadata_only_repair_rechecks_factor_state_after_stock_lock(): void
@@ -200,9 +216,7 @@ class CorporateActionRepairSnapshotConcurrencyTest extends TestCase
         foreach ([['2026-11-11', 100], ['2026-11-12', 100], ['2026-11-15', 100], ['2026-11-16', 10]] as [$date, $close]) {
             $this->price($stock->id, $date, $close);
         }
-        $issue = $this->pendingIssue($stock, '2026-11-16');
-        $factor = $this->pendingFactor($stock, '2026-11-16', 10.0);
-        $factor->update(['issue_id' => $issue->id]);
+        [$issue, $factor] = $this->approvedFactor($stock, '2026-11-16', 10.0);
         $this->assertSame(PriceAdjustmentFactor::REPAIR_STATUS_PENDING, $factor->fresh()->metadata['ohlcv_repair_status']);
         $before = DB::table('portfolio_stock_prices')->where('stock_id', $stock->id)
             ->where('price_date', '<', '2026-11-16')->orderBy('id')->get()->map(fn ($row) => (array) $row)->all();
@@ -214,7 +228,7 @@ class CorporateActionRepairSnapshotConcurrencyTest extends TestCase
                 $repair = app(CorporateActionPriceRepairService::class)->repairPendingFactors(
                     factorId: (int) $factor->id, dryRun: false,
                 );
-                $this->assertSame(1, $repair['repaired']);
+                $this->assertSame(1, $repair['repaired'], json_encode($repair['details'] ?? $repair, JSON_THROW_ON_ERROR));
                 $this->assertSame(PriceAdjustmentFactor::REPAIR_STATUS_COMPLETED, $factor->fresh()->metadata['ohlcv_repair_status']);
 
                 $rolledBack = app(DataQualityResolutionService::class)->rollbackCompletedRepair(
@@ -272,9 +286,7 @@ class CorporateActionRepairSnapshotConcurrencyTest extends TestCase
         foreach ([['2026-11-11', 100], ['2026-11-12', 100], ['2026-11-15', 100], ['2026-11-16', 10]] as [$date, $close]) {
             $this->price($stock->id, $date, $close);
         }
-        $issue = $this->pendingIssue($stock, '2026-11-16');
-        $factor = $this->pendingFactor($stock, '2026-11-16', 10.0);
-        $factor->update(['issue_id' => $issue->id]);
+        [$issue, $factor] = $this->approvedFactor($stock, '2026-11-16', 10.0);
         app(CorporateActionPriceRepairService::class)->repairPendingFactors(factorId: (int) $factor->id, dryRun: false);
 
         $this->withStockLock($stock, function (string $ready, string $result) use ($factor, $issue, $stock): void {
@@ -304,9 +316,7 @@ class CorporateActionRepairSnapshotConcurrencyTest extends TestCase
         foreach ([['2026-11-11', 100], ['2026-11-12', 100], ['2026-11-15', 100], ['2026-11-16', 10]] as [$date, $close]) {
             $this->price($stock->id, $date, $close);
         }
-        $issue = $this->pendingIssue($stock, '2026-11-16');
-        $factor = $this->pendingFactor($stock, '2026-11-16', 10.0);
-        $factor->update(['issue_id' => $issue->id]);
+        [$issue, $factor] = $this->approvedFactor($stock, '2026-11-16', 10.0);
         app(CorporateActionPriceRepairService::class)->repairPendingFactors(factorId: (int) $factor->id, dryRun: false);
 
         $this->withStockLock($stock, function (string $ready, string $result) use ($factor, $issue, $profile, $stock): void {
@@ -386,8 +396,30 @@ class CorporateActionRepairSnapshotConcurrencyTest extends TestCase
             'action_type' => 'face_value_split', 'effective_ex_date' => $exDate,
             'applied_ratio' => $factor, 'price_divisor' => $factor, 'volume_multiplier' => $factor,
             'is_active' => true, 'applied_at' => now(),
-            'metadata' => ['source' => 'concurrency-test', 'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_PENDING],
+            'metadata' => [
+                'source' => 'concurrency-test',
+                'divisor_provenance' => 'legacy_stored_factors',
+                'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_PENDING,
+            ],
         ]);
+    }
+
+    /** Create the exact issue → accepted resolution → factor binding required by F042. */
+    private function approvedFactor(Stock $stock, string $exDate, float $ratio): array
+    {
+        $issue = $this->pendingIssue($stock, $exDate);
+        $reviewer = User::query()->create([
+            'name' => 'Corporate Action Reviewer', 'email' => 'ca-review-'.Str::random(10).'@example.com',
+            'password' => 'password123',
+        ]);
+        $this->userIds[] = (int) $reviewer->id;
+        $accepted = app(DataQualityResolutionService::class)->accept(
+            $issue, $ratio, 'Concurrency approval fixture.', (int) $reviewer->id,
+        );
+        $factor = PriceAdjustmentFactor::query()->where('issue_id', $accepted->id)->firstOrFail();
+        $this->assertSame($reviewer->id, $accepted->resolutions()->latest('resolved_at')->firstOrFail()->resolved_by);
+
+        return [$accepted, $factor];
     }
 
     private function price(int $stockId, string $date, float $close): void

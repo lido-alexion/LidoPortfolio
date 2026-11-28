@@ -874,13 +874,9 @@ class CorporateActionPriceRepairService
 
         return DB::transaction(function () use ($factorId, $repairSource, $candidate, $expectedPreflightSha256) {
             /** @var PriceAdjustmentFactor|null $factor */
-            // F042 approval/rollback uses issue → stock → factor. Take that
-            // same order here; unlinked legacy factors start at stock. F020's
-            // independent stock → action path never requests an issue lock.
-            $lockedIssue = null;
-            if ($candidate->issue_id !== null) {
-                $lockedIssue = DataQualityIssue::query()->whereKey($candidate->issue_id)->lockForUpdate()->first();
-            }
+            // All F020/F042 writers serialize by stock first, then issue and
+            // factor. Locking issue first here can deadlock with a writer that
+            // already owns the stock row and then resolves the same issue.
             $stock = Stock::query()->whereKey($candidate->stock_id)->lockForUpdate()->first();
             if ($stock === null) {
                 return [
@@ -888,6 +884,19 @@ class CorporateActionPriceRepairService
                     'action' => 'skipped',
                     'status' => self::STATUS_INVALID_FACTOR,
                     'reason' => 'Factor stock no longer exists.',
+                ];
+            }
+            $lockedIssue = null;
+            if ($candidate->issue_id !== null) {
+                $lockedIssue = DataQualityIssue::query()->whereKey($candidate->issue_id)->lockForUpdate()->first();
+            }
+            if ($lockedIssue !== null && (int) $lockedIssue->stock_id !== (int) $stock->id) {
+                return [
+                    'factor_id' => $factorId,
+                    'issue_id' => $lockedIssue->id,
+                    'action' => 'skipped',
+                    'status' => self::STATUS_INVALID_FACTOR,
+                    'reason' => 'Factor issue stock changed while acquiring repair locks.',
                 ];
             }
             $factor = PriceAdjustmentFactor::query()->whereKey($factorId)->lockForUpdate()->first();
@@ -1058,10 +1067,10 @@ class CorporateActionPriceRepairService
                 'volume_multiplier' => $adjustment['volume_multiplier'],
                 'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_COMPLETED,
             ];
-        });
+        }, 3);
     }
 
-    /** Restore exact captured rows. Caller holds issue → stock → factor locks and transaction. */
+    /** Restore exact captured rows. Caller holds stock → issue → factor locks and transaction. */
     public function restoreCompletedFactor(PriceAdjustmentFactor $factor): array
     {
         $meta = $factor->metadata ?? [];

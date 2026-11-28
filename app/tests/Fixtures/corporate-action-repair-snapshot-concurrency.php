@@ -44,7 +44,12 @@ $table = match ($mode) {
 // after this signal, so the worker must re-read application state after locking.
 DB::listen(static function (\Illuminate\Database\Events\QueryExecuted $query) use ($table, $readyPath): void {
     $sql = strtolower(preg_replace('/\s+/', ' ', trim($query->sql)));
-    if (preg_match('/^select [`"]?stock_id[`"]? from [`"]?'.preg_quote($table, '/').'[`"]?\b/', $sql) === 1) {
+    // Eloquent may qualify stock_id and the factor lookup selects stock_id
+    // alongside issue_id. Require stock_id in the SELECT list and the exact
+    // parent table so unrelated queries cannot release the race.
+    $parentTable = preg_quote($table, '/');
+    if (preg_match('/^select\s+(.*?)\s+from\s+[`"]?'.$parentTable.'[`"]?(?:\s|$)/', $sql, $matches) === 1
+        && preg_match('/(?:^|[,.\s])stock_id(?:$|[,.\s])/i', str_replace(['`', '"'], '', $matches[1])) === 1) {
         file_put_contents($readyPath, 'parent-key-read', LOCK_EX);
     }
 });
