@@ -233,12 +233,12 @@ class DataQualityController extends Controller
                 'max:2000',
             ],
             're_resolve' => ['sometimes', 'boolean'],
-            'manual_evidence_override' => ['sometimes', 'boolean'],
+            'manual_evidence_override' => ['sometimes', 'boolean', Rule::prohibitedIf($issue->issue_type !== DataQualityIssue::TYPE_CORPORATE_ACTION && $manualOverride)],
             'confirm_manual_evidence_override' => [$manualOverride ? 'required' : 'sometimes', 'boolean', 'accepted'],
             'manual_source_reference' => ['nullable', 'string', 'max:500'],
             'manual_justification' => ['nullable', 'string', 'max:2000'],
-            'historical_isin' => ['nullable', 'regex:/^INE[A-Z0-9]{9}$/'],
-            'historical_valid_from' => ['nullable', 'date', 'before_or_equal:'.($issue->ex_date?->toDateString() ?? 'today')],
+            'historical_isin' => [Rule::prohibitedIf(! $manualOverride || $issue->issue_type !== DataQualityIssue::TYPE_CORPORATE_ACTION || $issue->ex_date === null), 'nullable', 'required_with:historical_valid_from', 'regex:/^INE[A-Z0-9]{9}$/'],
+            'historical_valid_from' => [Rule::prohibitedIf(! $manualOverride || $issue->issue_type !== DataQualityIssue::TYPE_CORPORATE_ACTION || $issue->ex_date === null), 'nullable', 'required_with:historical_isin', 'date', 'before:'.($issue->ex_date?->toDateString() ?? 'today')],
         ]);
 
         $notes = $this->normalizedNotes($payload['notes'] ?? null, $reResolve);

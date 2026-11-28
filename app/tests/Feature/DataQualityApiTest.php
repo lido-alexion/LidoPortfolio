@@ -186,6 +186,45 @@ class DataQualityApiTest extends TestCase
         self::assertSame([], $matched['historical_stock_ids'], 'The official current ISIN row is ordinary membership, not retroactive historical authorization.');
     }
 
+    public function test_historical_isin_transition_inputs_are_rejected_as_validation_errors_before_resolution(): void
+    {
+        [, $issue] = $this->createBnagrochemIssue();
+        $admin = $this->createAdminUser();
+        $base = [
+            'manual_evidence_override' => true,
+            'confirm_manual_evidence_override' => true,
+        ];
+
+        $this->actingAs($admin)->postJson("/api/data-quality/issues/{$issue->id}/accept", $base + [
+            'historical_isin' => 'INE273D01027',
+            'historical_valid_from' => $issue->ex_date->toDateString(),
+        ])->assertUnprocessable()->assertJsonValidationErrors(['historical_valid_from']);
+
+        $this->actingAs($admin)->postJson("/api/data-quality/issues/{$issue->id}/accept", $base + [
+            'historical_valid_from' => $issue->ex_date->copy()->subDay()->toDateString(),
+        ])->assertUnprocessable()->assertJsonValidationErrors(['historical_isin']);
+
+        $this->actingAs($admin)->postJson("/api/data-quality/issues/{$issue->id}/accept", $base + [
+            'historical_isin' => 'INE273D01027',
+        ])->assertUnprocessable()->assertJsonValidationErrors(['historical_valid_from']);
+
+        $this->assertSame(DataQualityIssue::STATUS_PENDING_REVIEW, $issue->fresh()->issue_status);
+        $this->assertDatabaseMissing('portfolio_price_adjustment_factors', ['issue_id' => $issue->id]);
+        $this->assertSame(0, $issue->fresh()->resolutions()->count());
+
+        $nonCorporateIssue = $this->createPendingExchangeIssue($this->createDataQualityStock('DQGAP1'), ['issue_type' => 'price_gap']);
+        $this->actingAs($admin)->postJson("/api/data-quality/issues/{$nonCorporateIssue->id}/accept", $base + [
+            'historical_isin' => 'INE273D01027',
+            'historical_valid_from' => '2026-01-01',
+        ])->assertUnprocessable()->assertJsonValidationErrors(['manual_evidence_override', 'historical_isin', 'historical_valid_from']);
+        $this->assertSame(DataQualityIssue::STATUS_PENDING_REVIEW, $nonCorporateIssue->fresh()->issue_status);
+
+        $ordinaryIssue = $this->createPendingExchangeIssue($this->createDataQualityStock('DQGAP2'), ['issue_type' => 'price_gap']);
+        $this->actingAs($admin)->postJson("/api/data-quality/issues/{$ordinaryIssue->id}/accept", [
+            'manual_evidence_override' => false,
+        ])->assertOk()->assertJsonPath('data.issue_status', DataQualityIssue::STATUS_ACCEPTED);
+    }
+
     public function test_manual_evidence_override_requires_explicit_confirmation_and_bounded_ratio(): void
     {
         [, $issue] = $this->createBnagrochemIssue();
