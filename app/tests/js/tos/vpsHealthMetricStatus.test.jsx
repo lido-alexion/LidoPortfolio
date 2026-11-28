@@ -9,9 +9,14 @@ describe('VPS health metric severity thresholds', () => {
         ['ramAvailable', 20, 'normal'],
         ['ramAvailable', 19.9, 'warning'],
         ['ramAvailable', 9.9, 'critical'],
-        ['rootDiskUsed', 79.9, 'normal'],
-        ['rootDiskUsed', 80, 'warning'],
+        ['rootDiskUsed', 74.9, 'normal'],
+        ['rootDiskUsed', 75, 'warning'],
+        ['rootDiskUsed', 85, 'warning'],
         ['rootDiskUsed', 90, 'critical'],
+        ['rootDiskUsed', 80, 'critical', 80],
+        ['inodeUsed', 74.9, 'normal'],
+        ['inodeUsed', 75, 'warning'],
+        ['inodeUsed', 90, 'critical'],
         ['swapUsed', 49.9, 'normal'],
         ['swapUsed', 50, 'warning'],
         ['swapUsed', 80, 'warning'],
@@ -19,8 +24,8 @@ describe('VPS health metric severity thresholds', () => {
         ['nginx5xx', 0, 'normal'],
         ['nginx5xx', 1, 'warning'],
         ['nginx5xx', 5, 'critical'],
-    ])('classifies %s=%s as %s', (metric, value, expected) => {
-        expect(getVpsHealthMetricStatus(metric, value)).toBe(expected);
+    ])('classifies %s=%s as %s', (metric, value, expected, threshold) => {
+        expect(getVpsHealthMetricStatus(metric, value, threshold)).toBe(expected);
     });
 
     it('marks missing and non-numeric metrics as unknown', () => {
