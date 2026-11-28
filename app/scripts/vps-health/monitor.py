@@ -147,7 +147,11 @@ def bounded_directory_breakdown(budget_entries=500, budget_seconds=0.25):
     entries = 0
     roots = ("/var/log", "/var/lib", "/var/cache", "/var/tmp", "/tmp", "/home", "/opt")
     totals = {root: 0 for root in roots}
-    states = {root: "available" for root in roots}
+    states = {root: "unavailable" for root in roots}
+    visible_roots = [root for root in roots if root not in ("/home", "/tmp")]
+    # Reserve a share for every visible category so a large early tree cannot
+    # consume the global cap before later categories are visited.
+    per_root_budget = max(1, budget_entries // max(1, len(visible_roots)))
     candidate_bytes = {"cache": 0, "rotated_logs": 0}
     candidate_states = {"cache": "available", "rotated_logs": "available"}
     # The service unit intentionally hides home and gives the process a private /tmp.
@@ -158,12 +162,12 @@ def bounded_directory_breakdown(budget_entries=500, budget_seconds=0.25):
         if root in ("/home", "/tmp"):
             continue
         if entries >= budget_entries or time.monotonic() - started >= budget_seconds:
-            for pending in roots[roots.index(root):]: states[pending] = "partial"
             break
         try:
             with os.scandir(root) as children:
+                states[root] = "available"
                 for child in children:
-                    if entries >= budget_entries or time.monotonic() - started >= budget_seconds:
+                    if entries >= budget_entries or entries >= per_root_budget * (visible_roots.index(root) + 1) or time.monotonic() - started >= budget_seconds:
                         states[root] = "partial"
                         break
                     entries += 1
@@ -183,7 +187,7 @@ def bounded_directory_breakdown(budget_entries=500, budget_seconds=0.25):
                             try:
                                 with os.scandir(child.path) as files:
                                     for file in files:
-                                        if entries >= budget_entries or time.monotonic() - started >= budget_seconds:
+                                        if entries >= budget_entries or entries >= per_root_budget * (visible_roots.index(root) + 1) or time.monotonic() - started >= budget_seconds:
                                             states[root] = "partial"
                                             break
                                         entries += 1
@@ -201,6 +205,8 @@ def bounded_directory_breakdown(budget_entries=500, budget_seconds=0.25):
                         states[root] = "partial"
         except OSError:
             states[root] = "unavailable"
+    # Roots not reached under the wall-clock/global cap stay unavailable; zero
+    # is meaningful only after opening and fully scanning that category.
     results = [{"path": path, "shallow_file_bytes": totals[path] if states[path] != "unavailable" else None, "status": states[path]} for path in roots]
     candidate_states["cache"] = states["/var/cache"]
     candidate_states["rotated_logs"] = states["/var/log"]
