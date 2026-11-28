@@ -17,7 +17,7 @@ Application code under `app/` is deployed by the normal GitHub production workfl
 ## Dashboard access and behavior
 
 - **Page:** `/settings/vps-health` in StoX.
-- **Access:** sign in as a StoX admin. The route and API require admin access; investors do not see or access this page.
+- **Access:** sign in as a StoX admin. The route and API require admin access; a guest receives `401 Unauthorized`, and an authenticated Investor receives `403 Forbidden` from the API. Investors do not see or access this page.
 - **API:** `GET /api/v1/admin/vps-health`. The `hours` query parameter accepts `1`, `6`, `24`, `72`, `168`, or `720`; the default is `24`. For example: `GET /api/v1/admin/vps-health?hours=720` returns up to 30 days of disk-only hourly data.
 - **Ranges:** 1 hour, 6 hours, 24 hours, and 3 days use minute samples; 7 and 30 days use disk-only hourly rollups.
 - **Refresh:** the page refreshes every minute. A sample appears after the first successful service run and database write.
@@ -26,6 +26,12 @@ Application code under `app/` is deployed by the normal GitHub production workfl
 - **Diagnostic retention:** local detailed snapshots use a separate 14-day retention in `/var/lib/vps-health`. The two retention periods serve different purposes.
 
 The overall **Healthy/Warning/Critical** badge comes from the latest aggregate sample. Stale samples are shown separately.
+
+## Release and acceptance evidence
+
+The VPS disk health delivery was merged in PRs [#434](https://github.com/lido-alexion/LidoPortfolio/pull/434), [#437](https://github.com/lido-alexion/LidoPortfolio/pull/437), [#439](https://github.com/lido-alexion/LidoPortfolio/pull/439), and [#440](https://github.com/lido-alexion/LidoPortfolio/pull/440). The accepted production release on 2026-11-28 was commit [`78479bc6d92d68bcdb35ff0647c5b742c0b4972b`](https://github.com/lido-alexion/LidoPortfolio/commit/78479bc6d92d68bcdb35ff0647c5b742c0b4972b), with production workflow run [46124375238](https://github.com/lido-alexion/LidoPortfolio/actions/runs/46124375238). The product owner confirmed the Admin dashboard acceptance on 2026-11-28 at 14:02 IST. See the [recorded final acceptance](https://github.com/lido-alexion/LidoPortfolio/pull/440#issuecomment-7237098247).
+
+The authenticated production smoke distinguishes roles: an Investor identity must receive HTTP 403 from `GET /api/v1/admin/vps-health`; an Admin identity reports that VPS-health acceptance is outside that automated smoke, so the owner-confirmed dashboard acceptance above is the Admin evidence. The feature endpoint returns HTTP 401 to guests. PR #439 only corrected the unrelated fundamentals provider retry test to freeze the attempt clock and assert exact `last_attempted_at` and `next_attempt_at` timestamps; it changes test determinism, not VPS-health behavior.
 
 ## Metric colors shown in the dashboard
 
@@ -39,7 +45,7 @@ The overall **Healthy/Warning/Critical** badge comes from the latest aggregate s
 | FPM workers | No queue and below 90% of configured capacity | No queue and at least 90% of capacity | Any queued request |
 | Nginx 5xx errors | 0 in the last 5 minutes | 1–4 | 5 or more |
 
-Nginx 5xx counts combine 502, 503, and 504 responses. Nginx 499 client closes are shown separately. Disk capacity alerts are deduplicated at 75%, 85%, and the configured critical threshold (90% default) while each threshold remains active; failed deliveries remain eligible for retry. The API supports up to 30 days; ranges over 72 hours return only disk metrics at hourly granularity, with a maximum of 720 rows. Directory sizes and candidate estimates are shallow best-effort readings bounded by 500 entries/250 ms and refreshed hourly. Cache files and recognizable rotated logs are candidates only, never guaranteed safe deletions. Host `/home` is unavailable under `ProtectHome=yes`; host `/tmp` is unavailable under `PrivateTmp=yes`. Permission gaps and scan limits are labeled partial/unavailable, and no whole-host or zero-size claim should be inferred from those readings. Growth and time-to-full are linear estimates from available-capacity samples and require at least one hour of positive observed growth. I/O rates and wait require usable consecutive counters; unavailable inputs are labeled. The monitor’s other server-side alert thresholds are documented in [README.md](README.md); for example, a high load or FPM saturation alert requires two consecutive checks.
+Nginx 5xx counts combine 502, 503, and 504 responses. Nginx 499 client closes are shown separately. Disk capacity alerts are deduplicated at 75%, 85%, and the configured critical threshold (90% default) while each threshold remains active; failed deliveries remain eligible for retry. The API supports up to 30 days; ranges over 72 hours return only disk metrics at hourly granularity, with a maximum of 168 or 720 rows respectively (current UTC hour plus the preceding 167 or 719 hour buckets). Directory sizes and candidate estimates are shallow best-effort readings bounded by 500 entries/250 ms and refreshed hourly. Cache files and recognizable rotated logs are candidates only, never guaranteed safe deletions. Host `/home` is unavailable under `ProtectHome=yes`; host `/tmp` is unavailable under `PrivateTmp=yes`. Permission gaps and scan limits are labeled partial/unavailable, and no whole-host or zero-size claim should be inferred from those readings. Growth and time-to-full are linear estimates from available-capacity samples and require at least one hour of positive observed growth. I/O rates and wait require usable consecutive counters; unavailable inputs are labeled. The monitor’s other server-side alert thresholds are documented in [README.md](README.md); for example, a high load or FPM saturation alert requires two consecutive checks.
 
 ## One-time VPS setup
 

@@ -9,6 +9,7 @@ This is the repository documentation entry point.
 - Debugging notes: [debugging.md](debugging.md)
 - Deployment planning: [deploy/STOXLA-VPS-DEPLOY.md](deploy/STOXLA-VPS-DEPLOY.md)
 - Deployment runbooks: [deploy/README.md](deploy/README.md)
+- VPS health operator guides: [monitor reference](ops/vps-health/README.md) and [dashboard and operations](ops/vps-health/DASHBOARD-OPERATIONS.md)
 - Product-served static help: [app/public/docs/](app/public/docs/)
 
 ## Current Product Docs

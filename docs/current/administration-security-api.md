@@ -159,7 +159,7 @@ Shared wiki tokens are hashed for lookup and revoked tokens cease access. Public
 
 ## 18. Administration Capabilities
 
-Admin operates global/system resources: user/role/session management, invites, reset links, stock administration, sync controls, data quality, operational alerts, audit explorer, tax rule versions, fundamentals, ML, and automated-execution entitlement. These are Admin resources, not an alternative route to Investor cash, holdings, strategies, recommendations, or broker accounts.
+Admin operates global/system resources: user/role/session management, invites, reset links, stock administration, sync controls, data quality, operational alerts, audit explorer, tax rule versions, fundamentals, ML, automated-execution entitlement, and the VPS health dashboard. These are Admin resources, not an alternative route to Investor cash, holdings, strategies, recommendations, or broker accounts. The VPS health API returns `401` to guests and `403` to authenticated non-admin Investors; the dashboard and aggregate history are read-only.
 
 Administrative mutations should retain actor context, target/resource identifiers, and useful outcome/error evidence. Admin operational logs are diagnostic/audit evidence, not financial source-of-truth.
 
