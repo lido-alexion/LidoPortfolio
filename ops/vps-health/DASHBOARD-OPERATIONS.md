@@ -18,14 +18,14 @@ Application code under `app/` is deployed by the normal GitHub production workfl
 
 - **Page:** `/settings/vps-health` in StoX.
 - **Access:** sign in as a StoX admin. The route and API require admin access; investors do not see or access this page.
-- **API:** `GET /api/v1/admin/vps-health`. The `hours` query parameter accepts `1`, `6`, `24`, or `72`; the default is `24`. For example: `GET /api/v1/admin/vps-health?hours=72`.
-- **Ranges:** 1 hour, 6 hours, 24 hours, and 3 days.
+- **API:** `GET /api/v1/admin/vps-health`. The `hours` query parameter accepts `1`, `6`, `24`, `72`, `168`, or `720`; the default is `24`. For example: `GET /api/v1/admin/vps-health?hours=720` returns up to 30 days of disk-only hourly data.
+- **Ranges:** 1 hour, 6 hours, 24 hours, and 3 days use minute samples; 7 and 30 days use disk-only hourly rollups.
 - **Refresh:** the page refreshes every minute. A sample appears after the first successful service run and database write.
 - **Display:** timestamps use `DD-Mmm-YYYY hh:mm:ss AM/PM`; sample age is shown in rounded words, such as “24 seconds ago.”
-- **Database retention:** dashboard samples older than 96 hours (4 days) are deleted during the hourly pruning pass. If the timer or database write is failing, pruning will not run.
+- **Database retention:** minute samples older than 96 hours (4 days) are deleted during the hourly pruning pass. Disk-only hourly rollups are retained for 30 days. The migration backfills at most the existing 96-hour raw window; later hourly samples update that hour's rollup.
 - **Diagnostic retention:** local detailed snapshots use a separate 14-day retention in `/var/lib/vps-health`. The two retention periods serve different purposes.
 
-The overall **Healthy/Critical** badge comes from the monitor’s alert result. Metric card colors are quick guidance for the latest sample and can differ from that badge, especially when a monitor alert requires repeated checks.
+The overall **Healthy/Warning/Critical** badge comes from the latest aggregate sample. Stale samples are shown separately.
 
 ## Metric colors shown in the dashboard
 
@@ -33,12 +33,13 @@ The overall **Healthy/Critical** badge comes from the monitor’s alert result. 
 | --- | --- | --- | --- |
 | Load per core | Below 1.0 | 1.0 to below 2.0 | 2.0 or higher |
 | Available RAM | 20% or more | 10% to below 20% | Below 10% |
-| Root disk used | Below 80% | 80% to below 90% | 90% or more |
+| Root disk used | Below 75% | 75% until configured critical threshold | At configured threshold (90% default) |
+| Inode use | Below 75% | 75% to below 90% | 90% or more |
 | Swap used | Below 50% | 50% through 80% | Above 80% |
 | FPM workers | No queue and below 90% of configured capacity | No queue and at least 90% of capacity | Any queued request |
 | Nginx 5xx errors | 0 in the last 5 minutes | 1–4 | 5 or more |
 
-Nginx 5xx counts combine 502, 503, and 504 responses. Nginx 499 client closes are shown separately. These UI thresholds do not change alert delivery. The monitor’s server-side critical defaults are documented in [README.md](README.md); for example, a high load or FPM saturation alert requires two consecutive checks.
+Nginx 5xx counts combine 502, 503, and 504 responses. Nginx 499 client closes are shown separately. Disk capacity alerts are deduplicated at 75%, 85%, and the configured critical threshold (90% default) while each threshold remains active; failed deliveries remain eligible for retry. The API supports up to 30 days; ranges over 72 hours return only disk metrics at hourly granularity, with a maximum of 720 rows. Directory sizes and candidate estimates are shallow best-effort readings bounded by 500 entries/250 ms and refreshed hourly. Cache files and recognizable rotated logs are candidates only, never guaranteed safe deletions. Host `/home` is unavailable under `ProtectHome=yes`; host `/tmp` is unavailable under `PrivateTmp=yes`. Permission gaps and scan limits are labeled partial/unavailable, and no whole-host or zero-size claim should be inferred from those readings. Growth and time-to-full are linear estimates from available-capacity samples and require at least one hour of positive observed growth. I/O rates and wait require usable consecutive counters; unavailable inputs are labeled. The monitor’s other server-side alert thresholds are documented in [README.md](README.md); for example, a high load or FPM saturation alert requires two consecutive checks.
 
 ## One-time VPS setup
 
