@@ -4,6 +4,7 @@ namespace Tests\Feature\Execution;
 
 use App\Models\BrokerConnection;
 use App\Models\User;
+use App\Exceptions\BrokerReadAuthenticationException;
 use App\Services\Broker\KiteBrokerGateway;
 use App\Services\PortfolioLoggerService;
 use Illuminate\Http\Client\ConnectionException;
@@ -32,18 +33,32 @@ class KiteReadFailureDiagnosticsTest extends TestCase
         $this->assertNull(app(KiteBrokerGateway::class)->trades($user->id));
     }
 
-    public function test_trades_auth_failure_uses_the_same_auth_category_as_other_reads(): void
+    public function test_trades_401_and_403_are_typed_without_retaining_provider_text(): void
     {
-        $user = $this->connectedUser();
-        Http::fake(['https://api.kite.trade/trades' => Http::response(['message' => 'private detail'], 401)]);
         $logger = Mockery::mock(PortfolioLoggerService::class);
-        $logger->shouldReceive('event')->once()->with(
-            'KiteBrokerGateway', 'broker.read_failed', 'warning', 'Kite read failed',
-            ['endpoint' => 'trades', 'failure' => 'auth', 'http_status' => 401],
-        );
+        foreach ([401, 403] as $status) {
+            $logger->shouldReceive('event')->once()->with(
+                'KiteBrokerGateway', 'broker.read_failed', 'warning', 'Kite read failed',
+                ['endpoint' => 'trades', 'failure' => 'auth', 'http_status' => $status],
+            );
+        }
         $this->app->instance(PortfolioLoggerService::class, $logger);
+        $statuses = [401, 403];
+        Http::fake(function () use (&$statuses) {
+            return Http::response(['message' => 'private detail'], array_shift($statuses));
+        });
 
-        $this->assertNull(app(KiteBrokerGateway::class)->trades($user->id));
+        foreach ([401, 403] as $status) {
+            $user = $this->connectedUser();
+
+            try {
+                app(KiteBrokerGateway::class)->trades($user->id);
+                $this->fail("An explicit trades HTTP {$status} rejection must be typed.");
+            } catch (BrokerReadAuthenticationException $error) {
+                $this->assertSame('Kite trades read was rejected.', $error->getMessage());
+                $this->assertStringNotContainsString('private detail', $error->getMessage());
+            }
+        }
     }
 
     public function test_positions_http_failure_fails_closed_instead_of_returning_empty_snapshot(): void

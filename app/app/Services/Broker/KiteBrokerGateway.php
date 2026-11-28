@@ -3,6 +3,7 @@
 namespace App\Services\Broker;
 
 use App\Exceptions\DomainException;
+use App\Exceptions\BrokerReadAuthenticationException;
 use App\Models\BrokerConnection;
 use App\Models\Stock;
 use App\Services\PortfolioLoggerService;
@@ -264,6 +265,9 @@ class KiteBrokerGateway implements BrokerGateway
         if (! $response->successful()) {
             $failure = in_array($response->status(), [401, 403], true) ? 'auth' : 'http';
             $this->logReadFailure('trades', $failure, $response->status());
+            if ($failure === 'auth') {
+                throw new BrokerReadAuthenticationException('Kite trades read was rejected.');
+            }
             return null;
         }
         if (! is_array($rows) || ! array_is_list($rows)) {

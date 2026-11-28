@@ -11,6 +11,7 @@ use App\Models\PortfolioReconciliationRun;
 use App\Models\Stock;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Exceptions\BrokerReadAuthenticationException;
 use App\Services\Broker\FakeBrokerGateway;
 use App\Services\Reconciliation\KiteCncTradeSyncService;
 use App\Services\Reconciliation\PortfolioReconciliationService;
@@ -844,6 +845,150 @@ class KiteCncTradeSyncTest extends TestCase
             $this->assertSame('Kite CNC sync did not complete. Check the connection and retry.', $error->getMessage());
         }
         $this->assertDatabaseHas('kite_cnc_trade_sync_runs', ['profile_id' => $profile->id, 'status' => 'sync_failed']);
+    }
+
+    public function test_explicit_auth_rejection_gets_typed_safe_failure_marker_and_unknown_failures_stay_generic(): void
+    {
+        [$profile] = $this->portfolioAndStock();
+        $fake = app(FakeBrokerGateway::class);
+        $fake->tradeRowsUnavailable = false;
+        $gateway = \Mockery::mock(\App\Services\Broker\BrokerGateway::class);
+        $gateway->shouldReceive('provider')->andReturn('kite');
+        $gateway->shouldReceive('trades')->once()->andThrow(new BrokerReadAuthenticationException('provider token raw secret'));
+        $this->app->instance(\App\Services\Broker\BrokerGateway::class, $gateway);
+        try {
+            app(KiteCncTradeSyncService::class)->sync($profile);
+            $this->fail('Expected auth rejection.');
+        } catch (\RuntimeException $error) {
+            $this->assertSame('Kite CNC sync did not complete. Check the connection and retry.', $error->getMessage());
+        }
+        $run = KiteCncTradeSyncRun::query()->latest('id')->firstOrFail();
+        $this->assertSame('kite_trades_auth_rejected', $run->failure);
+        $this->assertStringNotContainsString('secret', $run->failure);
+
+        $unknownFailure = \Mockery::mock(\App\Services\Broker\BrokerGateway::class);
+        $unknownFailure->shouldReceive('provider')->andReturn('kite');
+        $unknownFailure->shouldReceive('trades')->once()->andThrow(new \RuntimeException('private upstream response secret'));
+        $this->app->instance(\App\Services\Broker\BrokerGateway::class, $unknownFailure);
+        try {
+            app(KiteCncTradeSyncService::class)->sync($profile, 'manual');
+            $this->fail('Expected generic broker failure.');
+        } catch (\RuntimeException $error) {
+            $this->assertSame('Kite CNC sync did not complete. Check the connection and retry.', $error->getMessage());
+        }
+        $run = KiteCncTradeSyncRun::query()->latest('id')->firstOrFail();
+        $this->assertSame('Kite CNC sync did not complete. Check the connection and retry.', $run->failure);
+        $this->assertStringNotContainsString('secret', $run->failure);
+    }
+
+    public function test_scheduled_auth_retry_cooldown_is_account_scoped_and_manual_retry_remains_immediate(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-25 11:00:00', 'UTC'));
+        [$profile] = $this->portfolioAndStock();
+        \App\Models\Setting::setValue('cron_timezone', 'UTC');
+        \App\Models\Setting::setValue('market_close_time', '10:00');
+        \App\Models\Setting::setValue('reconciliation_delay_minutes', '30');
+        $account = (string) BrokerConnection::query()->where('user_id', $profile->user_id)->value('broker_user_id');
+        $connection = BrokerConnection::query()->where('user_id', $profile->user_id)->where('provider', 'kite')->firstOrFail();
+        $connection->forceFill(['access_token' => 'test-access-token', 'connected_at' => now()->subHour(),
+            'expires_at' => now()->addDay()])->save();
+        $this->assertTrue($connection->fresh()->isUsable(), 'connection must be usable during the cooldown check');
+        $this->assertSame('UTC', app(\App\Services\SettingsService::class)->get('cron_timezone'));
+        $this->assertSame('10:00', app(\App\Services\SettingsService::class)->get('market_close_time'));
+        $this->assertSame('30', (string) app(\App\Services\SettingsService::class)->get('reconciliation_delay_minutes'));
+        $this->assertTrue(\App\Support\TradingCalendar::isEquitySessionDate(Carbon::now('UTC')));
+        $this->assertTrue(Carbon::now('UTC')->gte(Carbon::parse('2026-11-25 10:00:00', 'UTC')->addMinutes(30)));
+        $authRun = KiteCncTradeSyncRun::query()->create(['profile_id' => $profile->id, 'user_id' => $profile->user_id,
+            'broker_account_id' => $account, 'trading_date' => '2026-11-25', 'trigger' => 'scheduled',
+            'status' => 'sync_failed', 'failure' => 'kite_trades_auth_rejected',
+            'started_at' => now()->subMinutes(2), 'completed_at' => now()->subMinute()]);
+        KiteCncTradeSyncRun::query()->create(['profile_id' => $profile->id, 'user_id' => $profile->user_id,
+            'broker_account_id' => 'OTHER-ACCOUNT', 'trading_date' => '2026-11-25', 'trigger' => 'scheduled',
+            'status' => 'sync_failed', 'failure' => 'kite_trades_auth_rejected',
+            'started_at' => now()->subMinutes(2), 'completed_at' => now()->subMinute()]);
+        KiteCncTradeSyncRun::query()->create(['profile_id' => $profile->id, 'user_id' => $profile->user_id,
+            'broker_account_id' => $account, 'trading_date' => '2026-11-24', 'trigger' => 'scheduled',
+            'status' => 'sync_failed', 'failure' => 'kite_trades_auth_rejected',
+            'started_at' => now()->subMinutes(2), 'completed_at' => now()->subMinute()]);
+        $otherUser = User::factory()->create();
+        $otherProfile = $this->defaultPortfolioFor($otherUser);
+        $otherProfile->forceFill(['portfolio_type' => PortfolioProfile::TYPE_LIVE,
+            'execution_mode' => PortfolioProfile::EXECUTION_MODE_AUTOMATIC])->save();
+        KiteCncTradeSyncRun::query()->create(['profile_id' => $otherProfile->id, 'user_id' => $otherUser->id,
+            'broker_account_id' => $account, 'trading_date' => '2026-11-25', 'trigger' => 'scheduled',
+            'status' => 'sync_failed', 'failure' => 'kite_trades_auth_rejected',
+            'started_at' => now()->subMinutes(2), 'completed_at' => now()->subMinute()]);
+
+        $this->artisan('portfolio:sync-kite-cnc', ['--profile' => $profile->id])->assertSuccessful();
+        $this->assertDatabaseCount('kite_cnc_trade_sync_runs', 4);
+
+        app(FakeBrokerGateway::class)->tradeRowsUnavailable = true;
+        foreach (['manual', 'reconnect'] as $trigger) {
+            try {
+                app(KiteCncTradeSyncService::class)->sync($profile, $trigger);
+                $this->fail("Expected {$trigger} retry to preserve the unavailable result.");
+            } catch (\RuntimeException $error) {
+                $this->assertSame('Kite CNC sync did not complete. Check the connection and retry.', $error->getMessage());
+            }
+        }
+        $this->assertDatabaseCount('kite_cnc_trade_sync_runs', 6);
+
+        $authRun->forceFill(['completed_at' => now()->subMinutes(61)])->save();
+        $connection->forceFill(['access_token' => 'test-access-token', 'connected_at' => now()->subHour(),
+            'expires_at' => now()->addDay()])->save();
+        $connection = $connection->fresh();
+        $this->assertTrue(\App\Support\TradingCalendar::isEquitySessionDate(Carbon::now('UTC')));
+        $this->assertTrue($connection->isUsable(), 'connection must remain usable after the cooldown expires');
+        $cooldownQuery = KiteCncTradeSyncRun::query()->where('profile_id', $profile->id)
+            ->where('broker_account_id', $account)->whereDate('trading_date', '2026-11-25')
+            ->where('trigger', 'scheduled')->where('status', 'sync_failed')
+            ->where('failure', 'kite_trades_auth_rejected')->where('completed_at', '>', now()->subMinutes(60));
+        $this->assertFalse($cooldownQuery->exists(), 'the target auth rejection must be outside the cooldown');
+        $this->assertSame(0, $cooldownQuery->count());
+        $this->artisan('portfolio:sync-kite-cnc', ['--profile' => $profile->id])->assertFailed();
+        $this->assertDatabaseCount('kite_cnc_trade_sync_runs', 7);
+        $retryRun = KiteCncTradeSyncRun::query()->where('profile_id', $profile->id)->where('broker_account_id', $account)
+            ->whereDate('trading_date', '2026-11-25')->where('trigger', 'scheduled')->latest('id')->firstOrFail();
+        $this->assertSame('sync_failed', $retryRun->status);
+        $this->assertSame('Kite CNC sync did not complete. Check the connection and retry.', $retryRun->failure);
+
+        $this->artisan('portfolio:sync-kite-cnc', ['--profile' => $profile->id])->assertFailed();
+        $this->assertDatabaseCount('kite_cnc_trade_sync_runs', 8);
+
+        try {
+            app(KiteCncTradeSyncService::class)->sync($profile, 'manual');
+        } catch (\RuntimeException $error) {
+            $this->assertSame('Kite CNC sync did not complete. Check the connection and retry.', $error->getMessage());
+        }
+        $this->assertDatabaseCount('kite_cnc_trade_sync_runs', 9);
+    }
+
+    public function test_reconciliation_controller_exposes_fixed_auth_and_generic_summaries_without_raw_failure(): void
+    {
+        [$profile] = $this->portfolioAndStock();
+        $account = (string) BrokerConnection::query()->where('user_id', $profile->user_id)->value('broker_user_id');
+        foreach ([
+            ['sync_failed', 'kite_trades_auth_rejected'],
+            ['sync_failed', 'legacy provider body: private account token'],
+            ['completed', null],
+        ] as [$status, $failure]) {
+            KiteCncTradeSyncRun::query()->create([
+                'profile_id' => $profile->id, 'user_id' => $profile->user_id,
+                'broker_account_id' => $account, 'trading_date' => '2026-11-20',
+                'trigger' => 'manual', 'status' => $status, 'failure' => $failure,
+                'started_at' => now(), 'completed_at' => now(),
+            ]);
+        }
+
+        $response = $this->actingAs($profile->user)->withProfileHeader($profile->user, $profile)
+            ->getJson('/api/reconciliation')->assertOk();
+        $runs = $response->json('data.trade_sync_runs');
+        $this->assertCount(3, $runs);
+        $this->assertSame('Kite rejected access to trades. Check your Kite connection and reconnect, or review the account permissions.', $runs[2]['failure_summary']);
+        $this->assertSame('Sync did not complete. Check the Kite connection and retry when available.', $runs[1]['failure_summary']);
+        $this->assertNull($runs[0]['failure_summary']);
+        $this->assertArrayNotHasKey('failure', $runs[2]);
+        $this->assertStringNotContainsString('kite_trades_auth_rejected', json_encode($runs));
     }
 
     public function test_order_timestamp_alone_is_not_execution_evidence(): void
