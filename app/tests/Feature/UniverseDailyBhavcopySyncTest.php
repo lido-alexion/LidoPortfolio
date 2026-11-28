@@ -440,7 +440,7 @@ class UniverseDailyBhavcopySyncTest extends TestCase
         $repair = app(CorporateActionPriceRepairService::class);
 
         $firstResult = $repair->repairPendingFactors(factorId: $first->id, dryRun: false);
-        $this->assertSame(1, $firstResult['repaired']);
+        $this->assertSame(1, $firstResult['repaired'], json_encode($firstResult, JSON_THROW_ON_ERROR));
         $this->assertSame(16.266, (float) StockPrice::query()->where('stock_id', $stock->id)
             ->whereDate('price_date', '2026-11-13')->value('close_price'));
 
@@ -449,7 +449,11 @@ class UniverseDailyBhavcopySyncTest extends TestCase
             'action_type' => 'split', 'effective_ex_date' => '2026-11-16',
             'applied_ratio' => 10, 'price_divisor' => 10, 'volume_multiplier' => 10,
             'is_active' => true, 'applied_at' => now(),
-            'metadata' => ['source' => 'duplicate_test_factor', 'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_PENDING],
+            'metadata' => [
+                'source' => 'duplicate_test_factor',
+                'divisor_provenance' => 'legacy_stored_factors',
+                'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_PENDING,
+            ],
         ]);
         $duplicateResult = $repair->repairPendingFactors(factorId: $duplicate->id, dryRun: false);
         $this->assertSame(0, $duplicateResult['repaired']);
@@ -462,7 +466,11 @@ class UniverseDailyBhavcopySyncTest extends TestCase
             'action_type' => 'split', 'effective_ex_date' => '2026-11-24',
             'applied_ratio' => 2, 'price_divisor' => 2, 'volume_multiplier' => 2,
             'is_active' => true, 'applied_at' => now(),
-            'metadata' => ['source' => 'test_reviewed_evidence', 'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_PENDING],
+            'metadata' => [
+                'source' => 'test_reviewed_evidence',
+                'divisor_provenance' => 'legacy_stored_factors',
+                'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_PENDING,
+            ],
         ]);
 
         $laterResult = $repair->repairPendingFactors(factorId: $later->id, dryRun: false);
@@ -499,7 +507,11 @@ class UniverseDailyBhavcopySyncTest extends TestCase
             'action_type' => 'split', 'effective_ex_date' => '2026-11-24',
             'applied_ratio' => 2, 'price_divisor' => 2, 'volume_multiplier' => 2,
             'is_active' => true, 'applied_at' => now(),
-            'metadata' => ['source' => 'stale_overlap_test', 'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_PENDING],
+            'metadata' => [
+                'source' => 'stale_overlap_test',
+                'divisor_provenance' => 'legacy_stored_factors',
+                'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_PENDING,
+            ],
         ]);
 
         $result = $repair->repairPendingFactors(factorId: $later->id, dryRun: false);
@@ -658,7 +670,14 @@ class UniverseDailyBhavcopySyncTest extends TestCase
             'action_type' => 'face_value_split', 'effective_ex_date' => '2026-11-16',
             'applied_ratio' => 10, 'price_divisor' => 10, 'volume_multiplier' => 10,
             'is_active' => true, 'applied_at' => now(),
-            'metadata' => ['source' => 'test_reviewed_evidence', 'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_PENDING],
+            // This unlinked factor deliberately exercises the explicitly
+            // supported legacy stored-divisor path. Production-approved
+            // factors must be linked to a human accepted issue instead.
+            'metadata' => [
+                'source' => 'test_reviewed_evidence',
+                'divisor_provenance' => 'legacy_stored_factors',
+                'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_PENDING,
+            ],
         ]);
     }
 
