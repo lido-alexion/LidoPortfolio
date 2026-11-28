@@ -13,6 +13,7 @@ use Throwable;
 
 class SyncKiteCncTradesCommand extends Command
 {
+    private const AUTH_RETRY_COOLDOWN_MINUTES = 60;
     protected $signature = 'portfolio:sync-kite-cnc {--profile= : Reconcile one portfolio}';
     protected $description = 'Sync current-day executed Kite CNC trades after market close';
 
@@ -48,6 +49,12 @@ class SyncKiteCncTradesCommand extends Command
                 ->whereNotNull('started_at')->where('started_at', '>=', $dueUtc)
                 ->exists();
             if ($alreadyCompleted) continue;
+            $recentAuthRejection = \App\Models\KiteCncTradeSyncRun::query()->where('profile_id', $profile->id)
+                ->where('broker_account_id', $brokerAccountId)->whereDate('trading_date', $tradingDate)
+                ->where('trigger', 'scheduled')->where('status', 'sync_failed')
+                ->where('failure', 'kite_trades_auth_rejected')
+                ->where('completed_at', '>', now()->subMinutes(self::AUTH_RETRY_COOLDOWN_MINUTES))->exists();
+            if ($recentAuthRejection) continue;
             try {
                 $result = $sync->sync($profile, 'scheduled');
                 if ($result['run']->status === 'sync_failed') $failed++;

@@ -3,6 +3,7 @@
 namespace App\Services\Reconciliation;
 
 use App\Models\KiteCncTradeImport;
+use App\Exceptions\BrokerReadAuthenticationException;
 use App\Models\KiteCncTradeSyncRun;
 use App\Models\BrokerConnection;
 use App\Models\PortfolioProfile;
@@ -336,7 +337,10 @@ final class KiteCncTradeSyncService
         } catch (Throwable $error) {
             // Provider exceptions can contain credentials, personal details or
             // complete response bodies. Persist only a fixed safe summary.
-            $run->forceFill(['status' => 'sync_failed', 'failure' => 'Kite CNC sync did not complete. Check the connection and retry.', 'completed_at' => now()])->save();
+            $authRejected = $error instanceof BrokerReadAuthenticationException;
+            $run->forceFill(['status' => 'sync_failed', 'failure' => $authRejected
+                ? 'kite_trades_auth_rejected'
+                : 'Kite CNC sync did not complete. Check the connection and retry.', 'completed_at' => now()])->save();
             throw new \RuntimeException('Kite CNC sync did not complete. Check the connection and retry.');
         }
     }

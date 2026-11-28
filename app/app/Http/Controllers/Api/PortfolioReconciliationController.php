@@ -26,11 +26,15 @@ class PortfolioReconciliationController extends Controller
             ->where('provider', \App\Models\BrokerConnection::PROVIDER_KITE)->whereNotNull('broker_user_id'));
         $tradeRuns = $tradeRunQuery->latest('id')->limit(100)
             ->get(['id', 'profile_id', 'trading_date', 'trigger', 'status', 'received_count', 'eligible_count',
-                'imported_count', 'matched_count', 'review_count', 'started_at', 'completed_at'])
+                'imported_count', 'matched_count', 'review_count', 'started_at', 'completed_at', 'failure'])
             ->map(function ($run): array {
-                return [...$run->toArray(), 'failure_summary' => match ($run->status) {
+                $payload = $run->toArray();
+                unset($payload['failure']);
+                return [...$payload, 'failure_summary' => match ($run->status) {
                     'gap_unavailable' => 'Kite does not provide arbitrary past trading days. Check the broker tradebook to recover this date.',
-                    'sync_failed' => 'Sync did not complete. Check the Kite connection and retry when available.',
+                    'sync_failed' => $run->failure === 'kite_trades_auth_rejected'
+                        ? 'Kite rejected access to trades. Check your Kite connection and reconnect, or review the account permissions.'
+                        : 'Sync did not complete. Check the Kite connection and retry when available.',
                     default => null,
                 }];
             });
