@@ -11,6 +11,15 @@ These rules apply equally to Codex, ChatGPT Work, ChatGPT Chat, human contributo
 
 ## CI-parity verification
 
+For routine local changes, start with the focused contract or unit tests that
+cover the edited scope. Run the complete local CI-parity verifier when the
+change affects a high-risk contract (including CI orchestration, release gates,
+deployment, migrations, security, or financial integrity) and the required
+services/toolchains are available and safe in this environment. If they are not
+available or appropriate, run the comprehensive relevant offline contracts
+and report the limitation. This local focus does not replace canonical hosted
+checks, protected-branch requirements, or production release gates.
+
 Use the shared verifier from the repository root:
 
 ```bash
@@ -31,7 +40,7 @@ The backend mode intentionally requires MySQL and the PHP extensions declared by
 ## Commit and push discipline
 
 1. Keep commits narrow, scoped, and independently verifiable.
-2. Before each push: fetch `origin`, inspect `HEAD...origin/master`, reconcile normally, run the relevant verifier mode, and run `git diff --check`.
+2. Before each push: fetch `origin`, inspect `HEAD...origin/master`, reconcile normally, run the focused relevant checks or full local CI-parity verification as required above, and run `git diff --check`. Record tests and any local environment limitations; required hosted CI remains mandatory.
 3. Never push a change that skips required CI unless the Product Owner explicitly authorizes the exception and the commit records why.
 4. Do not deploy manually to bypass GitHub Actions. Production releases must remain tied to the exact verified commit SHA and pass the post-deploy SHA health check.
 

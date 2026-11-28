@@ -50,6 +50,27 @@ class WorkflowGraphTests(unittest.TestCase):
         change_detector = "\n".join(step.get("run", "") for step in JOBS["changes"]["steps"])
         self.assertIn('git diff --name-only "${{ github.event.before }}" HEAD', change_detector)
 
+    def test_readiness_gate_is_additive_and_runs_on_explicit_pr_lifecycle_events(self):
+        self.assertEqual(WORKFLOW["on"]["pull_request"]["types"],
+                         ["opened", "reopened", "synchronize", "ready_for_review", "converted_to_draft"])
+        self.assertEqual(JOBS["readiness"]["name"], "Candidate readiness")
+        self.assertEqual(JOBS["readiness"]["if"], "always()")
+        self.assertEqual(JOBS["readiness"]["steps"][0]["with"]["fetch-depth"], "2")
+        self.assertEqual(JOBS["readiness"]["needs"],
+                         ["changes", "backend", "frontend", "vps-health", "ci-followup-watcher", "ai-runtime", "package"])
+        self.assertEqual(JOBS["readiness"]["permissions"], {"contents": "read", "pull-requests": "read"})
+        command = "\n".join(step.get("run", "") for step in JOBS["readiness"]["steps"])
+        self.assertIn("/pulls/$PR_NUMBER", command)
+        self.assertIn("ci_release_contract.py readiness", command)
+        self.assertIn('git rev-parse HEAD', command)
+        self.assertIn('git show -s --format=%P HEAD', command)
+        self.assertNotIn('pull_request.merge_commit_sha', str(JOBS["readiness"]))
+        self.assertIn('needs.changes.result', str(JOBS["readiness"]))
+        # Existing canonical check names and full PR conditions stay intact until owner-managed
+        # required-check rollout proves compatibility of the new status gate.
+        self.assertIn("github.event_name == 'pull_request'", JOBS["backend"]["if"])
+        self.assertIn("github.event_name == 'pull_request'", JOBS["frontend"]["if"])
+
     def test_watcher_tests_use_exact_path_scope_and_gate_packaging(self):
         watcher = JOBS["ci-followup-watcher"]
         self.assertEqual(watcher["if"], "needs.changes.outputs.ci_watcher == 'true'")
