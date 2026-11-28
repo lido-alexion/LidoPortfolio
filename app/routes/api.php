@@ -555,6 +555,8 @@ Route::middleware(['auth:sanctum', 'active.portfolio'])->group(function () {
         Route::get('/data-quality/dashboard', [DataQualityController::class, 'dashboard']);
         Route::get('/data-quality/issues/unresolved', [DataQualityController::class, 'unresolved']);
         Route::get('/data-quality/issues/history', [DataQualityController::class, 'history']);
+        Route::post('/data-quality/manual-corporate-actions/preview', [DataQualityController::class, 'previewManualCorporateAction']);
+        Route::post('/data-quality/manual-corporate-actions', [DataQualityController::class, 'createManualCorporateAction']);
         Route::get('/data-quality/issues/{issue}', [DataQualityController::class, 'show']);
         Route::post('/data-quality/issues/{issue}/stage-bnagrochem-f042-evidence', [DataQualityController::class, 'stageBnagrochemF042Evidence']);
         Route::post('/data-quality/discover-bnagrochem-historical-action', [DataQualityController::class, 'discoverBnagrochemHistoricalAction']);

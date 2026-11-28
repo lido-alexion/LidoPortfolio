@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Models\DataQualityIssue;
+use App\Models\DataQualityIssueResolution;
 use App\Models\Holding;
 use App\Models\PriceAdjustmentFactor;
 use App\Models\Stock;
@@ -98,6 +99,79 @@ class CorporateActionFactorPriceRepairTest extends TestCase
         $this->assertSame(DataQualityIssue::STATUS_ACCEPTED, $issue->issue_status);
     }
 
+    public function test_apply_rejects_price_row_drift_since_exact_factor_preflight(): void
+    {
+        [$stock, $factor] = $this->seedPendingSplitFactor();
+        $service = app(CorporateActionPriceRepairService::class);
+        $preview = $service->scanPendingFactors(stockId: $stock->id, factorId: $factor->id)[0];
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $preview['preflight_sha256']);
+
+        StockPrice::query()->where('stock_id', $stock->id)
+            ->whereDate('price_date', '2026-01-10')->update(['close_price' => 99]);
+
+        $result = $service->repairPendingFactors(
+            stockId: $stock->id,
+            factorId: $factor->id,
+            dryRun: false,
+            expectedPreflightSha256: $preview['preflight_sha256'],
+        );
+
+        $this->assertSame(0, $result['repaired']);
+        $this->assertSame('skipped', $result['details'][0]['action']);
+        $this->assertSame(99.0, (float) StockPrice::query()->where('stock_id', $stock->id)
+            ->whereDate('price_date', '2026-01-10')->value('close_price'));
+        $this->assertSame(PriceAdjustmentFactor::REPAIR_STATUS_PENDING, $factor->fresh()->metadata['ohlcv_repair_status']);
+    }
+
+    public function test_linked_approval_rejects_tampered_stored_divisors(): void
+    {
+        [$stock, $factor] = $this->seedPendingSplitFactor(withIssue: true);
+        $factor->update(['price_divisor' => 4.0, 'volume_multiplier' => 4.0]);
+
+        $result = app(CorporateActionPriceRepairService::class)->repairPendingFactors(
+            factorId: $factor->id,
+            dryRun: false,
+        );
+
+        $this->assertSame(0, $result['repaired']);
+        $this->assertSame(CorporateActionPriceRepairService::STATUS_INVALID_FACTOR, $result['details'][0]['status']);
+        $this->assertSame(100.0, (float) StockPrice::query()->where('stock_id', $stock->id)
+            ->whereDate('price_date', '2026-01-10')->value('close_price'));
+        $this->assertSame(PriceAdjustmentFactor::REPAIR_STATUS_PENDING, $factor->fresh()->metadata['ohlcv_repair_status']);
+    }
+
+    public function test_apply_rejects_approval_resolution_drift_since_preflight(): void
+    {
+        [$stock, $factor, $issue] = $this->seedPendingSplitFactor(withIssue: true);
+        $resolution = DataQualityIssueResolution::query()->create([
+            'issue_id' => $issue->id,
+            'resolution_type' => DataQualityIssueResolution::TYPE_ACCEPTED,
+            'resolution_status' => DataQualityIssue::STATUS_ACCEPTED,
+            'applied_ratio' => 2.0,
+            'suggested_ratio_snapshot' => 2.0,
+            'is_reversal' => false,
+            'notes' => 'reviewed original approval',
+            'resolved_at' => now(),
+        ]);
+        $issue->update(['latest_resolution_id' => $resolution->id]);
+        $service = app(CorporateActionPriceRepairService::class);
+        $preview = $service->scanPendingFactors(stockId: $stock->id, factorId: $factor->id)[0];
+
+        $resolution->update(['notes' => 'approval binding changed']);
+        $result = $service->repairPendingFactors(
+            stockId: $stock->id,
+            factorId: $factor->id,
+            dryRun: false,
+            expectedPreflightSha256: $preview['preflight_sha256'],
+        );
+
+        $this->assertSame(0, $result['repaired']);
+        $this->assertSame('skipped', $result['details'][0]['action']);
+        $this->assertSame(100.0, (float) StockPrice::query()->where('stock_id', $stock->id)
+            ->whereDate('price_date', '2026-01-10')->value('close_price'));
+        $this->assertSame(PriceAdjustmentFactor::REPAIR_STATUS_PENDING, $factor->fresh()->metadata['ohlcv_repair_status']);
+    }
+
     public function test_uses_stored_divisor_not_recalculated_from_action_type(): void
     {
         $stock = $this->createDataQualityStock('STOR'.Str::random(3));
@@ -118,6 +192,7 @@ class CorporateActionFactorPriceRepairTest extends TestCase
             'applied_at' => now(),
             'metadata' => [
                 'source' => 'data_quality_center',
+                'divisor_provenance' => 'legacy_stored_factors',
                 'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_PENDING,
             ],
         ]);
@@ -340,6 +415,7 @@ class CorporateActionFactorPriceRepairTest extends TestCase
         if ($withIssue) {
             $issue = $this->createPendingExchangeIssue($stock, [
                 'issue_status' => DataQualityIssue::STATUS_ACCEPTED,
+                'applied_ratio' => 2.0,
                 'ex_date' => '2026-03-01',
                 'corporate_action_type' => 'split',
                 'suggested_ratio' => 2.0,
@@ -375,6 +451,7 @@ class CorporateActionFactorPriceRepairTest extends TestCase
                 'source' => 'data_quality_center',
                 'detection_method' => 'exchange_feed',
                 'detection_source' => 'exchange_feed',
+                'divisor_provenance' => $overrides['issue_id'] ?? null ? null : 'legacy_stored_factors',
                 'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_PENDING,
             ],
         ], $overrides));

@@ -81,6 +81,21 @@ class FundamentalInsightsAiOrchestrator
         ]);
     }
 
+    /** @param list<array<string,mixed>> $events @return array<string,mixed> */
+    public function discoverCorporateActionSources(array $events): array
+    {
+        $errors = [];
+        foreach ($this->providerOrder() as $providerId) {
+            $provider = $this->providers[$providerId] ?? null;
+            if ($provider === null || ! $provider->isConfigured()) continue;
+            $result = $provider->discoverCorporateActionSources($events);
+            if ($result['ok'] ?? false) return array_merge($result, ['provider' => $providerId, 'failover_from' => $errors]);
+            $errors[] = $providerId;
+            Log::info('fundamentals_ai.provider_failed', ['provider' => $providerId, 'feature' => 'corporate_action_evidence_discovery', 'code' => $result['error_code'] ?? 'provider_failed']);
+        }
+        return ['ok' => false, 'error_code' => 'all_providers_unavailable', 'failover_from' => $errors];
+    }
+
     /**
      * Admin connectivity probe for a single provider (FEAT-062 §8.3).
      *
