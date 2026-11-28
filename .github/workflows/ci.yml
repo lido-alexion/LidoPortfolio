@@ -4,6 +4,7 @@ on:
   push:
     branches: [master]
   pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, converted_to_draft]
   workflow_dispatch:
 
 permissions:
@@ -343,6 +344,76 @@ jobs:
           path: stoxla-release.tgz
           if-no-files-found: error
           retention-days: 14
+
+  readiness:
+    name: Candidate readiness
+    runs-on: ubuntu-latest
+    # A skipped required job is considered successful by GitHub. Always
+    # publish an explicit non-success for draft and invalid candidates.
+    if: always()
+    timeout-minutes: 5
+    needs:
+      - changes
+      - backend
+      - frontend
+      - vps-health
+      - ci-followup-watcher
+      - ai-runtime
+      - package
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+          # The default depth of one hides the synthetic merge parents.
+          fetch-depth: 2
+      - name: Verify current candidate and required check evidence
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref }}
+          PR_ACTION: ${{ github.event.action }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          WORKFLOW_SHA: ${{ github.sha }}
+          CANDIDATE_SHA: ${{ github.sha }}
+          DEPLOYABLE: ${{ needs.changes.outputs.deployable }}
+          BACKEND_APPLICABLE: ${{ needs.changes.outputs.backend }}
+          FRONTEND_APPLICABLE: ${{ needs.changes.outputs.frontend }}
+          VPS_HEALTH_APPLICABLE: ${{ needs.changes.outputs.vps_health }}
+          CI_WATCHER_APPLICABLE: ${{ needs.changes.outputs.ci_watcher }}
+          BACKEND_RESULT: ${{ needs.backend.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          VPS_HEALTH_RESULT: ${{ needs['vps-health'].result }}
+          CI_WATCHER_RESULT: ${{ needs['ci-followup-watcher'].result }}
+          AI_RUNTIME_RESULT: ${{ needs['ai-runtime'].result }}
+          PACKAGE_RESULT: ${{ needs.package.result }}
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            response="$(curl --fail --silent --show-error \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+            export CURRENT_HEAD_SHA="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["head"]["sha"])' <<<"$response")"
+            export CURRENT_BASE_SHA="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["base"]["sha"])' <<<"$response")"
+            export CURRENT_BASE_REF="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["base"]["ref"])' <<<"$response")"
+            export CURRENT_BASE_REPO="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["base"]["repo"]["full_name"])' <<<"$response")"
+            export CURRENT_PR_NUMBER="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["number"])' <<<"$response")"
+            export CURRENT_PR_STATE="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["state"])' <<<"$response")"
+            export CURRENT_PR_DRAFT="$(python3 -c 'import json,sys; print(str(json.load(sys.stdin)["draft"]).lower())' <<<"$response")"
+          fi
+          CHECKED_OUT_SHA="$(git rev-parse HEAD)" \
+          CHECKED_OUT_PARENTS="$(git show -s --format=%P HEAD)" \
+            python3 scripts/ci_release_contract.py readiness
 
   deploy:
     name: Deploy to VPS
