@@ -20,7 +20,7 @@ class DataQualityAutoAcceptTest extends TestCase
         config(['services.data_quality.auto_accept_days' => 15]);
     }
 
-    public function test_eligible_exchange_feed_issue_after_threshold_is_auto_accepted(): void
+    public function test_exchange_feed_corporate_action_requires_human_approval_after_threshold(): void
     {
         $stock = $this->createDataQualityStock();
         $issue = $this->createPendingExchangeIssue($stock, [
@@ -29,13 +29,11 @@ class DataQualityAutoAcceptTest extends TestCase
 
         $count = app(DataQualityResolutionService::class)->autoAcceptStaleIssues(15);
 
-        $this->assertSame(1, $count);
+        $this->assertSame(0, $count);
         $fresh = $issue->fresh();
-        $this->assertSame(DataQualityIssue::STATUS_ACCEPTED, $fresh->issue_status);
-        $this->assertTrue($fresh->auto_resolved);
-        $latest = $fresh->resolutions()->latest('resolved_at')->first();
-        $this->assertSame('auto_accepted', $latest->resolution_type);
-        $this->assertNotNull($latest->metadata['auto_accept_policy'] ?? null);
+        $this->assertSame(DataQualityIssue::STATUS_PENDING_REVIEW, $fresh->issue_status);
+        $this->assertFalse($fresh->auto_resolved);
+        $this->assertSame(0, $fresh->resolutions()->count());
     }
 
     public function test_exchange_feed_issue_before_threshold_remains_pending(): void
@@ -97,7 +95,7 @@ class DataQualityAutoAcceptTest extends TestCase
         $this->assertSame(0, app(DataQualityResolutionService::class)->autoAcceptStaleIssues(15));
     }
 
-    public function test_configurable_threshold_is_honoured(): void
+    public function test_corporate_action_auto_accept_remains_disabled_regardless_of_threshold(): void
     {
         config(['services.data_quality.auto_accept_days' => 7]);
         $stock = $this->createDataQualityStock();
@@ -105,10 +103,10 @@ class DataQualityAutoAcceptTest extends TestCase
             'detected_at' => now()->subDays(8),
         ]);
 
-        $this->assertSame(1, app(DataQualityResolutionService::class)->autoAcceptStaleIssues(null));
+        $this->assertSame(0, app(DataQualityResolutionService::class)->autoAcceptStaleIssues(null));
     }
 
-    public function test_auto_accept_creates_repair_pending_factor_without_ohlcv_mutation(): void
+    public function test_auto_accept_does_not_create_a_factor_for_corporate_actions(): void
     {
         $stock = $this->createDataQualityStock();
         $this->seedGapPrices($stock, 200.0, 100.0);
@@ -116,10 +114,11 @@ class DataQualityAutoAcceptTest extends TestCase
             'detected_at' => now()->subDays(30),
         ]);
 
-        app(DataQualityResolutionService::class)->autoAcceptStaleIssues(15);
+        $count = app(DataQualityResolutionService::class)->autoAcceptStaleIssues(15);
 
         $factor = PriceAdjustmentFactor::query()->where('issue_id', $issue->id)->first();
-        $this->assertNotNull($factor);
-        $this->assertSame(PriceAdjustmentFactor::REPAIR_STATUS_PENDING, $factor->metadata['ohlcv_repair_status'] ?? null);
+        $this->assertSame(0, $count);
+        $this->assertNull($factor);
+        $this->assertSame(DataQualityIssue::STATUS_PENDING_REVIEW, $issue->fresh()->issue_status);
     }
 }

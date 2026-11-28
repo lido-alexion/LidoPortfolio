@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\DataQualityIssue;
+use App\Jobs\DiscoverCorporateActionSources;
 use App\Models\Stock;
 use App\Models\CorporateActionFeedCheckpoint;
 use Carbon\Carbon;
@@ -43,6 +44,10 @@ class DataQualityCorporateActionSyncService
             'User-Agent' => 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/152 Safari/537.36 StoX/1.0',
         ])->retry(3, 1000)->timeout(45);
         $response = $query === [] ? $client->get($url) : $client->get($url, $query);
+        $rawReceipt = app(CorporateActionSourceReceiptStore::class)->capture(
+            'exchange_feed', $url, $response->status(), $response->header('Content-Type'), $response->body(),
+            metadata: ['detection_run_id' => $detectionRunId],
+        );
         if (! $response->ok()) {
             $checkpoint->forceFill(['last_error' => 'HTTP '.$response->status()])->save();
             return [
@@ -67,7 +72,9 @@ class DataQualityCorporateActionSyncService
         $created = 0;
         $skipped = 0;
         $errors = [];
-        foreach ($rows as $payload) {
+        $eligibleAiEvents = [];
+        $receiptSha256 = hash('sha256', $response->body());
+        foreach ($rows as $rowIndex => $payload) {
             if (! is_array($payload)) {
                 $skipped++;
                 continue;
@@ -77,6 +84,7 @@ class DataQualityCorporateActionSyncService
                 $skipped++;
                 continue;
             }
+            $eligibleAiEvents[] = ['symbol' => $mapped['symbol'], 'ex_date' => $mapped['ex_date'], 'action_type' => $mapped['action_type']];
 
             $stock = Stock::query()
                 ->where('symbol', $mapped['symbol'])
@@ -113,7 +121,18 @@ class DataQualityCorporateActionSyncService
                         'evidence_key' => 'exchange_ratio',
                         'evidence_label' => 'Exchange ratio',
                         'evidence_value' => $mapped['ratio_label'],
-                        'evidence_payload' => $payload,
+                        // Keep the source row intact while binding it to the exact
+                        // response receipt and its position. The checkpoint hash
+                        // alone cannot identify which receipt produced an issue.
+                        'evidence_payload' => array_merge($payload, [
+                            'source_receipt' => [
+                                'url' => $url,
+                                'sha256' => $receiptSha256,
+                                'receipt_id' => $rawReceipt->id,
+                                'row_index' => $rowIndex,
+                                'received_at' => now()->toIso8601String(),
+                            ],
+                        ]),
                         'captured_at' => now(),
                     ],
                 ],
@@ -122,7 +141,19 @@ class DataQualityCorporateActionSyncService
             $created++;
         }
 
-        $checkpoint->forceFill(['last_successful_at' => now(), 'payload_hash' => hash('sha256', $response->body()), 'rows_seen' => count($rows), 'last_error' => null])->save();
+        $checkpoint->forceFill(['last_successful_at' => now(), 'payload_hash' => $receiptSha256, 'rows_seen' => count($rows), 'last_error' => null])->save();
+        // AI source discovery is supplementary and must not add provider latency
+        // to deterministic sync. A synchronous queue is deliberately treated as
+        // unavailable; queue connection failures cannot fail this core path.
+        $aiDiscovery = ['status' => 'unavailable', 'verified' => 0];
+        if ($eligibleAiEvents !== [] && config('queue.default') !== 'sync') {
+            try {
+                DiscoverCorporateActionSources::dispatch(array_slice($eligibleAiEvents, 0, 100), $detectionRunId);
+                $aiDiscovery = ['status' => 'queued', 'verified' => 0];
+            } catch (\Throwable) {
+                // Queue health and AI credits are not prerequisites for feed sync.
+            }
+        }
 
         return [
             'synced' => count($rows),
@@ -130,6 +161,7 @@ class DataQualityCorporateActionSyncService
             'skipped' => $skipped,
             'errors' => $errors,
             'detection_run_id' => $detectionRunId,
+            'ai_evidence_discovery' => $aiDiscovery,
         ];
     }
 

@@ -3,6 +3,7 @@
 namespace App\Services\UniversePrice;
 
 use App\Models\IgnoredPriceGap;
+use App\Models\DataQualityIssue;
 use App\Models\Setting;
 use App\Models\StockPrice;
 use App\Services\Bhavcopy\BhavcopyStockMatcher;
@@ -143,13 +144,50 @@ class UniverseDailyBhavcopySyncService
                 $receiptPriceTrustHash = is_array($receipt)
                     ? $this->priceTrustHash($receipt['historical_stock_ids'] ?? [], $day)
                     : null;
-                $retryNowTrustedHistoricalCoverage = $preservingRetryAfterEvidenceChange
-                    && is_array($receipt)
-                    && collect($receipt['identity_conflict_samples'] ?? [])->contains(fn ($sample) =>
-                        is_array($sample)
-                        && ($sample['reason'] ?? null) === 'historical_adjustment_required'
-                        && isset($trustedCoverage[(int) ($sample['stock_id'] ?? 0)])
-                    );
+                // A completed, approved corporate-action repair can make a
+                // previously blocked historical bar eligible without any
+                // change to the identity catalogue or exchange source. Let
+                // that exact stock retry naturally; unrelated coverage and
+                // unresolved identity conflicts keep their normal backoff.
+                $approvedIdentityRetryResolutionIds = [];
+                if (is_array($receipt)) {
+                    $conflictStockIds = collect($receipt['identity_conflict_samples'] ?? [])
+                        ->filter(fn ($sample) => is_array($sample)
+                            && ($sample['reason'] ?? null) === 'conflicting_identity_or_rows'
+                            && isset($sample['stock_id']))
+                        ->pluck('stock_id')->map(fn ($id) => (int) $id)->unique()->values();
+                    if ($conflictStockIds->isNotEmpty()) {
+                        $approvedIdentityRetryResolutionIds = DataQualityIssue::query()
+                            ->whereIn('stock_id', $conflictStockIds)
+                            ->where('issue_type', DataQualityIssue::TYPE_CORPORATE_ACTION)
+                            ->where('issue_status', DataQualityIssue::STATUS_ACCEPTED)
+                            ->whereDate('ex_date', '<=', $day->toDateString())
+                            ->whereHas('linkedResolution', function ($query) {
+                                $query->whereNotNull('resolved_by')
+                                    ->where('resolution_status', DataQualityIssue::STATUS_ACCEPTED)
+                                    ->where('metadata->human_approval_required', true)
+                                    ->where('metadata->auto_resolved', false)
+                                    ->whereNotNull('metadata->manual_override_context->historical_isin')
+                                    ->whereNotNull('metadata->manual_override_context->historical_valid_from');
+                            })->pluck('latest_resolution_id', 'stock_id')
+                            ->mapWithKeys(fn ($resolutionId, $stockId) => [(int) $stockId => (int) $resolutionId])->all();
+                    }
+                }
+                $retryNowTrustedHistoricalCoverage = is_array($receipt)
+                    && collect($receipt['identity_conflict_samples'] ?? [])->contains(function ($sample) use ($trustedCoverage, $approvedIdentityRetryResolutionIds, $receipt): bool {
+                        if (! is_array($sample) || ! isset($sample['stock_id'])) return false;
+                        $stockId = (int) $sample['stock_id'];
+                        if (($sample['reason'] ?? null) === 'historical_adjustment_required'
+                            && isset($trustedCoverage[$stockId])) return true;
+
+                        // The live VGL receipt is a current-date identity/row conflict.
+                        // Retry only that stock after an accepted human ISIN transition.
+                        $resolutionId = $approvedIdentityRetryResolutionIds[$stockId] ?? null;
+                        $alreadyConsumed = $resolutionId !== null
+                            && (int) ($receipt['approved_identity_retry_resolution_ids'][$stockId] ?? 0) === $resolutionId;
+                        return ($sample['reason'] ?? null) === 'conflicting_identity_or_rows'
+                            && $resolutionId !== null && ! $alreadyConsumed;
+                    });
                 if (! $force && is_array($receipt) && empty($receipt['retry_after'])
                     && ($receipt['coverage_hash'] ?? null) === $coverageHash
                     && is_string($receipt['price_trust_sha256'] ?? null)
@@ -285,6 +323,12 @@ class UniverseDailyBhavcopySyncService
                             : $this->nextRetrySchedule($receipt, $day);
                         $file['coverage_hash'] = $coverageHash;
                         $file['price_trust_sha256'] = $this->priceTrustHash($file['historical_stock_ids'], $day);
+                        if ($approvedIdentityRetryResolutionIds !== []) {
+                            $file['approved_identity_retry_resolution_ids'] = array_merge(
+                                $receipt['approved_identity_retry_resolution_ids'] ?? [],
+                                $approvedIdentityRetryResolutionIds,
+                            );
+                        }
                         $file['retry_attempt'] = $attempt;
                         $file['retry_after'] = $this->retryTimestamp($retryAfter);
                         $entries[$key] = $file;
