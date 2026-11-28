@@ -332,22 +332,31 @@ class FundamentalUpdateLifecycleTest extends TestCase
 
     public function test_provider_failure_retries_without_writing_zero_valued_facts(): void
     {
-        $stock = Stock::query()->create(['symbol' => 'SBIN', 'exchange' => 'NSE', 'name' => 'State Bank']);
-        $provider = Mockery::mock(FundamentalDataProvider::class);
-        $provider->shouldReceive('fetch')->once()->andThrow(new \RuntimeException('Yahoo fundamentals authentication failed after session refresh.'));
-        $this->app->instance(FundamentalDataProvider::class, $provider);
-        $alerts = Mockery::mock(AdminOperationalAlertService::class);
-        $alerts->shouldNotReceive('recordUnattendedFailure');
-        $alerts->shouldNotReceive('syncAndNotify');
-        $this->app->instance(AdminOperationalAlertService::class, $alerts);
+        $attemptedAt = Carbon::parse('2026-11-28 12:00:00', 'UTC');
+        Carbon::setTestNow($attemptedAt);
 
-        $result = app(FundamentalUpdateService::class)->processScheduledIncremental(1);
+        try {
+            $stock = Stock::query()->create(['symbol' => 'SBIN', 'exchange' => 'NSE', 'name' => 'State Bank']);
+            $provider = Mockery::mock(FundamentalDataProvider::class);
+            $provider->shouldReceive('fetch')->once()->andThrow(new \RuntimeException('Yahoo fundamentals authentication failed after session refresh.'));
+            $this->app->instance(FundamentalDataProvider::class, $provider);
+            $alerts = Mockery::mock(AdminOperationalAlertService::class);
+            $alerts->shouldNotReceive('recordUnattendedFailure');
+            $alerts->shouldNotReceive('syncAndNotify');
+            $this->app->instance(AdminOperationalAlertService::class, $alerts);
 
-        $this->assertSame('running', $result['status']);
-        $this->assertSame(0, \App\Models\V7\FundamentalFact::query()->count());
-        $job = FundamentalUpdateJob::query()->firstOrFail();
-        $this->assertSame('retry', $job->status);
-        $this->assertSame(86400.0, abs($job->next_attempt_at->diffInSeconds($job->last_attempted_at)));
+            $result = app(FundamentalUpdateService::class)->processScheduledIncremental(1);
+
+            $this->assertSame('running', $result['status']);
+            $this->assertSame(0, \App\Models\V7\FundamentalFact::query()->count());
+            $job = FundamentalUpdateJob::query()->firstOrFail();
+            $this->assertSame('retry', $job->status);
+            $this->assertSame($attemptedAt->toDateTimeString(), $job->last_attempted_at->toDateTimeString());
+            $this->assertSame($attemptedAt->copy()->addDay()->toDateTimeString(), $job->next_attempt_at->toDateTimeString());
+            $this->assertSame(86400.0, $job->last_attempted_at->diffInSeconds($job->next_attempt_at));
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_third_failed_attempt_is_actionable(): void
