@@ -35,6 +35,7 @@ const AUTHENTICATED_SMOKE_STAGES = new Set([
     'dashboard_kite_feature',
     'dashboard_document_navigation',
     'dashboard_identity_response',
+    'dashboard_vps_health_investor_forbidden',
     'dashboard_header_visible',
     'dashboard_kite_admin_ineligible',
     'dashboard_kite_status_response',
@@ -159,13 +160,16 @@ export function readSafeAuthenticatedSmokeMarkers(stdout) {
         return matches.length === 1 && values.includes(matches[0][1]) ? matches[0][1] : null;
     };
     const identity = one(/^AUTHENTICATED_SMOKE_IDENTITY:(admin|investor)$/, ['admin', 'investor']);
+    const vpsHealth = one(/^AUTHENTICATED_SMOKE_VPS_HEALTH:(investor_forbidden_verified|admin_acceptance_unavailable)$/, ['investor_forbidden_verified', 'admin_acceptance_unavailable']);
     const kiteCoverage = one(/^AUTHENTICATED_SMOKE_KITE_COVERAGE:(verified|not_eligible_admin)$/, ['verified', 'not_eligible_admin']);
     const kiteStatus = one(/^AUTHENTICATED_SMOKE_KITE_STATUS:(usable|connected_not_usable|configured_disconnected|unconfigured|unavailable)$/, ['usable', 'connected_not_usable', 'configured_disconnected', 'unconfigured', 'unavailable']);
     const reconciliation = one(/^AUTHENTICATED_SMOKE_RECONCILIATION:(eligible_card_verified|not_eligible_card_absent)$/, ['eligible_card_verified', 'not_eligible_card_absent']);
-    if (!identity || !kiteCoverage || !kiteStatus || !reconciliation) return null;
+    if (!identity || !vpsHealth || !kiteCoverage || !kiteStatus || !reconciliation) return null;
+    if (identity === 'investor' && vpsHealth !== 'investor_forbidden_verified') return null;
+    if (identity === 'admin' && vpsHealth !== 'admin_acceptance_unavailable') return null;
     if (identity === 'admin' && (kiteCoverage !== 'not_eligible_admin' || kiteStatus !== 'unavailable')) return null;
     if (identity === 'investor' && kiteCoverage !== 'verified') return null;
-    return { identity, kiteCoverage, kiteStatus, reconciliation };
+    return { identity, vpsHealth, kiteCoverage, kiteStatus, reconciliation };
 }
 
 // Return only fixed categories; never propagate browser error text or response data.
