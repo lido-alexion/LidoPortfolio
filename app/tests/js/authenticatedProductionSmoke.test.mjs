@@ -19,6 +19,9 @@ for (const baseURL of ['', 'http://example.test']) {
 test('production dashboard smoke inspects only status UI and never activates financial controls', async () => {
     const source = await (await import('node:fs/promises')).readFile(script, 'utf8');
     assert.match(source, /pathname === '\/api\/v1\/broker\/status'/);
+    assert.match(source, /fetch\('\/api\/v1\/admin\/vps-health'/);
+    assert.match(source, /vpsHealthResponse !== 403/);
+    assert.match(source, /AUTHENTICATED_SMOKE_VPS_HEALTH/);
     assert.match(source, /\.lido-kite-header-control/);
     assert.match(source, /DOCUMENT_POSITION_FOLLOWING/);
     // Safety controls load asynchronously; the physical order must only be
@@ -38,6 +41,34 @@ test('production dashboard smoke inspects only status UI and never activates fin
     assert.match(source, /stage = 'combo_preference_response_status'/);
     assert.match(source, /target\.origin === baseOrigin/);
     assert.doesNotMatch(source, /(?:\.click\(\)|\.check\(|\.fill\()[^\n]*(?:Reconcile|Disconnect|Emergency|Recover|Cancel)/i);
+});
+
+test('VPS health smoke markers preserve investor denial and report unavailable admin acceptance safely', async () => {
+    const diagnostics = await import('../e2e/productionSmokeDiagnostics.js');
+    const common = [
+        'AUTHENTICATED_SMOKE_KITE_COVERAGE:verified',
+        'AUTHENTICATED_SMOKE_KITE_STATUS:unconfigured',
+        'AUTHENTICATED_SMOKE_RECONCILIATION:not_eligible_card_absent',
+    ];
+    const investor = diagnostics.readSafeAuthenticatedSmokeMarkers([
+        'AUTHENTICATED_SMOKE_IDENTITY:investor',
+        'AUTHENTICATED_SMOKE_VPS_HEALTH:investor_forbidden_verified',
+        ...common,
+    ].join('\n'));
+    assert.equal(investor?.vpsHealth, 'investor_forbidden_verified');
+    const admin = diagnostics.readSafeAuthenticatedSmokeMarkers([
+        'AUTHENTICATED_SMOKE_IDENTITY:admin',
+        'AUTHENTICATED_SMOKE_VPS_HEALTH:admin_acceptance_unavailable',
+        'AUTHENTICATED_SMOKE_KITE_COVERAGE:not_eligible_admin',
+        'AUTHENTICATED_SMOKE_KITE_STATUS:unavailable',
+        'AUTHENTICATED_SMOKE_RECONCILIATION:not_eligible_card_absent',
+    ].join('\n'));
+    assert.equal(admin?.vpsHealth, 'admin_acceptance_unavailable');
+    assert.equal(diagnostics.readSafeAuthenticatedSmokeMarkers([
+        'AUTHENTICATED_SMOKE_IDENTITY:investor',
+        'AUTHENTICATED_SMOKE_VPS_HEALTH:admin_acceptance_unavailable',
+        ...common,
+    ].join('\n')), null);
 });
 
 test('production smoke request policy blocks all financial and Kite mutation endpoints', () => {

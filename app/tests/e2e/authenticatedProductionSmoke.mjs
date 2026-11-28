@@ -265,6 +265,20 @@ try {
     const isAdmin = authenticatedUserPayload?.user?.is_admin;
     if (typeof isAdmin !== 'boolean') throw new Error();
     const identityClass = isAdmin ? 'admin' : 'investor';
+    let vpsHealthCoverage = 'admin_acceptance_unavailable';
+    if (!isAdmin) {
+        stage = 'dashboard_vps_health_investor_forbidden';
+        const vpsHealthResponse = await page.evaluate(async () => {
+            const response = await fetch('/api/v1/admin/vps-health', {
+                method: 'GET',
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json' },
+            });
+            return response.status;
+        });
+        if (vpsHealthResponse !== 403) throw new Error();
+        vpsHealthCoverage = 'investor_forbidden_verified';
+    }
     const header = page.locator('.lido-header');
     stage = 'dashboard_header_visible';
     await header.waitFor({ state: 'visible' });
@@ -439,6 +453,7 @@ try {
     page.off('response', capturePhysicalBrokerStatusResponse);
     clearTimeout(statusResponseWatchdog);
     console.log(`AUTHENTICATED_SMOKE_IDENTITY:${identityClass}`);
+    console.log(`AUTHENTICATED_SMOKE_VPS_HEALTH:${vpsHealthCoverage}`);
     console.log(`AUTHENTICATED_SMOKE_KITE_COVERAGE:${kiteCoverage}`);
     console.log(`AUTHENTICATED_SMOKE_KITE_STATUS:${brokerStatusPayload ? brokerStatusPayload.usable ? 'usable' : brokerStatusPayload.connected ? 'connected_not_usable' : brokerStatusPayload.configured ? 'configured_disconnected' : 'unconfigured' : 'unavailable'}`);
     console.log(`AUTHENTICATED_SMOKE_RECONCILIATION:${await reconciliationCard.count() ? 'eligible_card_verified' : 'not_eligible_card_absent'}`);
