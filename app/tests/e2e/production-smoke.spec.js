@@ -42,6 +42,7 @@ test('dedicated smoke identity reports read-only feature eligibility honestly', 
         expect(markers).not.toBeNull();
         // Reconstruct only fixed enum output. Never forward child stdout.
         console.log(`AUTHENTICATED_SMOKE_IDENTITY:${markers.identity}`);
+        console.log(`AUTHENTICATED_SMOKE_VPS_HEALTH:${markers.vpsHealth}`);
         console.log(`AUTHENTICATED_SMOKE_KITE_COVERAGE:${markers.kiteCoverage}`);
         console.log(`AUTHENTICATED_SMOKE_KITE_STATUS:${markers.kiteStatus}`);
         console.log(`AUTHENTICATED_SMOKE_RECONCILIATION:${markers.reconciliation}`);

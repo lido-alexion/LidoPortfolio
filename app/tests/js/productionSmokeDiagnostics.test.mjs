@@ -14,7 +14,7 @@ test('authenticated smoke reports only fixed, stage-level diagnostics', () => {
         'combo_default_selection', 'combo_default_options', 'combo_default_resolution', 'combo_default_precedence', 'combo_chart_data_rendered', 'combo_keyboard_navigation',
         'combo_legend_control', 'combo_legend_read', 'combo_legend_toggle_off',
         'account_onboarding_prompt', 'combo_legend_toggle_restore', 'combo_legend_verify_restore',
-        'combo_selection_restore', 'dashboard_document_navigation', 'dashboard_identity_response', 'dashboard_header_visible',
+        'combo_selection_restore', 'dashboard_document_navigation', 'dashboard_identity_response', 'dashboard_vps_health_investor_forbidden', 'dashboard_header_visible',
         'dashboard_kite_admin_ineligible', 'dashboard_kite_status_response', 'dashboard_kite_status_shape',
         'dashboard_kite_control_visible', 'dashboard_kite_header_order', 'dashboard_kite_accessible_label',
         'dashboard_kite_safety_controls', 'request_safety',
@@ -30,25 +30,27 @@ test('safe authenticated outcome markers distinguish native admin ineligibility 
     const investor = [
         'private email or portfolio data',
         'AUTHENTICATED_SMOKE_IDENTITY:investor',
+        'AUTHENTICATED_SMOKE_VPS_HEALTH:investor_forbidden_verified',
         'AUTHENTICATED_SMOKE_KITE_COVERAGE:verified',
         'AUTHENTICATED_SMOKE_KITE_STATUS:configured_disconnected',
         'AUTHENTICATED_SMOKE_RECONCILIATION:not_eligible_card_absent',
         'private raw response body',
     ].join('\n');
     assert.deepEqual(readSafeAuthenticatedSmokeMarkers(investor), {
-        identity: 'investor', kiteCoverage: 'verified', kiteStatus: 'configured_disconnected', reconciliation: 'not_eligible_card_absent',
+        identity: 'investor', vpsHealth: 'investor_forbidden_verified', kiteCoverage: 'verified', kiteStatus: 'configured_disconnected', reconciliation: 'not_eligible_card_absent',
     });
     const admin = [
         'AUTHENTICATED_SMOKE_IDENTITY:admin',
+        'AUTHENTICATED_SMOKE_VPS_HEALTH:admin_acceptance_unavailable',
         'AUTHENTICATED_SMOKE_KITE_COVERAGE:not_eligible_admin',
         'AUTHENTICATED_SMOKE_KITE_STATUS:unavailable',
         'AUTHENTICATED_SMOKE_RECONCILIATION:not_eligible_card_absent',
     ].join('\n');
     assert.deepEqual(readSafeAuthenticatedSmokeMarkers(admin), {
-        identity: 'admin', kiteCoverage: 'not_eligible_admin', kiteStatus: 'unavailable', reconciliation: 'not_eligible_card_absent',
+        identity: 'admin', vpsHealth: 'admin_acceptance_unavailable', kiteCoverage: 'not_eligible_admin', kiteStatus: 'unavailable', reconciliation: 'not_eligible_card_absent',
     });
     assert.equal(readSafeAuthenticatedSmokeMarkers(admin.replace('not_eligible_admin', 'verified')), null);
-    assert.equal(readSafeAuthenticatedSmokeMarkers(investor.replace('verified', 'not_eligible_admin')), null);
+    assert.equal(readSafeAuthenticatedSmokeMarkers(investor.replace('KITE_COVERAGE:verified', 'KITE_COVERAGE:not_eligible_admin')), null);
     assert.equal(readSafeAuthenticatedSmokeMarkers(`${investor}\nAUTHENTICATED_SMOKE_IDENTITY:admin`), null);
     assert.equal(JSON.stringify(readSafeAuthenticatedSmokeMarkers(investor)).includes('private'), false);
 });
