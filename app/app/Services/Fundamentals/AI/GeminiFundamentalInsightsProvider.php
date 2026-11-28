@@ -93,6 +93,22 @@ class GeminiFundamentalInsightsProvider implements FundamentalInsightsAiProvider
         ];
     }
 
+    public function discoverCorporateActionSources(array $events): array
+    {
+        if (! $this->isConfigured()) return ['ok' => false, 'error_code' => 'not_configured'];
+        $model = (string) config('fundamentals_ai.gemini.model', 'gemini-2.0-flash');
+        $prompt = 'Identify possible official exchange circular or filing URLs that may corroborate these corporate-action rows. Return JSON only as {"candidates":[{"symbol":"","ex_date":"YYYY-MM-DD","url":"https://..."}]}. Do not claim verification; do not invent uncertain URLs. Rows: '.json_encode(array_slice($events, 0, 30), JSON_UNESCAPED_SLASHES);
+        try {
+            $url = sprintf('https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s', rawurlencode($model), rawurlencode((string) config('fundamentals_ai.gemini.api_key')));
+            $response = Http::timeout((float) config('fundamentals_ai.timeout_seconds', 30))->acceptJson()->post($url, ['contents' => [['parts' => [['text' => $prompt]]]], 'generationConfig' => ['responseMimeType' => 'application/json', 'temperature' => 0]]);
+            $text = data_get($response->json(), 'candidates.0.content.parts.0.text');
+            $payload = is_string($text) ? json_decode($text, true) : null;
+            if (! $response->successful() || ! is_array($payload) || ! is_array($payload['candidates'] ?? null)) return ['ok' => false, 'error_code' => 'provider_contract_invalid'];
+            $usage = $response->json('usageMetadata', []);
+            return ['ok' => true, 'candidates' => array_slice($payload['candidates'], 0, 30), 'telemetry' => ['model' => $model, 'input_tokens' => $usage['promptTokenCount'] ?? null, 'output_tokens' => $usage['candidatesTokenCount'] ?? null]];
+        } catch (\Throwable) { return ['ok' => false, 'error_code' => 'provider_request_failed']; }
+    }
+
     /**
      * @param  array<string, mixed>  $deterministic
      */

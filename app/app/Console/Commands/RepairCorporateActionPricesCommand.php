@@ -14,6 +14,7 @@ class RepairCorporateActionPricesCommand extends Command
         {--factor= : Limit F042 factor path to a price adjustment factor id}
         {--factors-only : Process only F042 pending PriceAdjustmentFactor repairs}
         {--ca-only : Process only F020 applied CorporateAction repairs}
+        {--expected-preflight-sha256= : Require this exact F042 dry-run fingerprint before apply}
         {--apply : Write repairs (default is dry-run scan only)}
         {--force : Repair ambiguous F020 cases when applying}';
 
@@ -29,11 +30,20 @@ class RepairCorporateActionPricesCommand extends Command
         $caOnly = (bool) $this->option('ca-only');
         $dryRun = ! $this->option('apply');
         $force = (bool) $this->option('force');
+        $expectedPreflightSha256 = $this->option('expected-preflight-sha256');
 
         if ($factorsOnly && $caOnly) {
             $this->error('Use only one of --factors-only or --ca-only.');
 
             return self::FAILURE;
+        }
+
+        if ($expectedPreflightSha256 !== null && $expectedPreflightSha256 !== '') {
+            if (! $this->option('apply') || ! $factorsOnly || $stockId === null || $factorId === null
+                || ! preg_match('/^[a-f0-9]{64}$/', (string) $expectedPreflightSha256)) {
+                $this->error('--expected-preflight-sha256 requires --apply, --factors-only, --stock, one --factor, and a lowercase SHA-256 value.');
+                return self::FAILURE;
+            }
         }
 
         $runFactors = ! $caOnly;
@@ -45,7 +55,7 @@ class RepairCorporateActionPricesCommand extends Command
                 $this->info(sprintf('Scanned %d F042 price adjustment factor(s).', count($factorFindings)));
                 if ($factorFindings !== []) {
                     $this->table(
-                        ['Factor', 'Issue', 'Symbol', 'Type', 'Ex-date', 'Status', 'Rows', 'Message'],
+                        ['Factor', 'Issue', 'Symbol', 'Type', 'Ex-date', 'Status', 'Rows', 'Preflight SHA-256', 'Protected rows SHA-256', 'Message'],
                         collect($factorFindings)->map(fn (array $row) => [
                             $row['factor_id'],
                             $row['issue_id'] ?? '—',
@@ -54,6 +64,8 @@ class RepairCorporateActionPricesCommand extends Command
                             $row['ex_date'] ?? '—',
                             $row['status'],
                             $row['rows_to_adjust'] ?? 0,
+                            $row['preflight_sha256'] ?? '—',
+                            $row['protected_rows_sha256'] ?? '—',
                             $row['message'],
                         ])->all(),
                     );
@@ -100,6 +112,9 @@ class RepairCorporateActionPricesCommand extends Command
                 factorId: $factorId,
                 dryRun: false,
                 repairSource: 'portfolio:repair-corporate-action-prices',
+                expectedPreflightSha256: $expectedPreflightSha256 !== null && $expectedPreflightSha256 !== ''
+                    ? (string) $expectedPreflightSha256
+                    : null,
             );
             $this->info(sprintf(
                 'F042 factor repair: scanned %d, repaired %d, skipped %d.',

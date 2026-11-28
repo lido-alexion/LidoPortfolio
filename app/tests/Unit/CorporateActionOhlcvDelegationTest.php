@@ -629,6 +629,7 @@ class CorporateActionOhlcvDelegationTest extends TestCase
             'applied_at' => now(),
             'metadata' => [
                 'source' => 'data_quality_center',
+                'divisor_provenance' => 'legacy_stored_factors',
                 'ohlcv_repair_status' => PriceAdjustmentFactor::REPAIR_STATUS_PENDING,
             ],
         ], $overrides));
