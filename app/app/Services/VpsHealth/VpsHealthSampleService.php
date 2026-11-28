@@ -90,6 +90,7 @@ class VpsHealthSampleService
             if (is_numeric($pathBytes) || $pathBytes === null) {
                 $pathStatus = in_array($path['status'] ?? null, ['available', 'partial', 'unavailable'], true) ? $path['status'] : 'unavailable';
                 if ($pathBytes === null) $pathStatus = 'unavailable';
+                if ($pathStatus === 'unavailable') $pathBytes = null;
                 $paths[] = [
                     'path' => $path['path'],
                     'shallow_file_bytes' => is_numeric($pathBytes) ? $pathBytes + 0 : null,
@@ -103,8 +104,8 @@ class VpsHealthSampleService
             'entries_scanned' => is_numeric($breakdown['entries_scanned'] ?? null) ? (int) $breakdown['entries_scanned'] : 0,
             'paths' => $paths,
             'reclaimable_candidates' => array_values(array_map(static function ($candidate) {
-                $bytes = is_numeric($candidate['bytes'] ?? null) ? $candidate['bytes'] + 0 : null;
                 $status = in_array($candidate['status'] ?? null, ['available', 'partial', 'unavailable'], true) ? $candidate['status'] : 'unavailable';
+                $bytes = $status !== 'unavailable' && is_numeric($candidate['bytes'] ?? null) ? $candidate['bytes'] + 0 : null;
                 return [
                     'kind' => in_array($candidate['kind'] ?? null, ['cache_files', 'rotated_log_files'], true) ? $candidate['kind'] : 'unknown',
                     'bytes' => $bytes,

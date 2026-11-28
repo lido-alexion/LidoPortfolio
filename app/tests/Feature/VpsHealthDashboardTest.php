@@ -98,6 +98,51 @@ class VpsHealthDashboardTest extends TestCase
             ->assertOk()->assertJsonPath('data.range_hours', 720);
     }
 
+    public function test_long_range_includes_exactly_the_requested_hour_buckets_and_keeps_sparse_history(): void
+    {
+        $this->travelTo(now()->startOfHour()->addMinutes(30));
+        $admin = User::factory()->admin()->create();
+        $outside = now()->startOfHour()->subHours(720);
+        $inside = now()->startOfHour()->subHours(719);
+        foreach ([[$outside, 11], [$inside, 22]] as [$hour, $percent]) {
+            VpsHealthDiskHourlyRollup::query()->create([
+                'hour_start' => $hour,
+                'sampled_at' => $hour->copy()->addMinutes(59),
+                'metrics' => ['root_used_percent' => $percent],
+            ]);
+        }
+
+        $this->actingAs($admin)->getJson('/api/v1/admin/vps-health?hours=720')
+            ->assertOk()
+            ->assertJsonPath('data.sample_count', 1)
+            ->assertJsonPath('data.samples.0.metrics.root_used_percent', 22);
+    }
+
+    public function test_directory_normalization_preserves_measured_zero_and_unavailable_null(): void
+    {
+        app(VpsHealthSampleService::class)->record([
+            'time' => now()->toIso8601String(), 'status' => 'ok', 'issues' => [],
+            'metrics' => ['directory_breakdown' => [
+                'status' => 'partial',
+                'paths' => [
+                    ['path' => '/var/tmp', 'shallow_file_bytes' => 0, 'status' => 'available'],
+                    ['path' => '/var/cache', 'shallow_file_bytes' => 0, 'status' => 'unavailable'],
+                ],
+                'reclaimable_candidates' => [
+                    ['kind' => 'cache_files', 'bytes' => 0, 'status' => 'unavailable'],
+                ],
+            ]],
+        ]);
+
+        $breakdown = VpsHealthSample::query()->sole()->metrics['directory_breakdown'];
+        $this->assertSame(0, $breakdown['paths'][0]['shallow_file_bytes']);
+        $this->assertSame('available', $breakdown['paths'][0]['status']);
+        $this->assertNull($breakdown['paths'][1]['shallow_file_bytes']);
+        $this->assertSame('unavailable', $breakdown['paths'][1]['status']);
+        $this->assertNull($breakdown['reclaimable_candidates'][0]['bytes']);
+        $this->assertSame('unavailable', $breakdown['reclaimable_candidates'][0]['status']);
+    }
+
     public function test_record_updates_one_disk_only_rollup_for_each_hour(): void
     {
         $time = now()->startOfHour()->addMinutes(2);
