@@ -167,6 +167,40 @@ class DataQualityResolutionServiceTest extends TestCase
         $this->assertSame('100.0000', number_format((float) $price->open_price, 4, '.', ''));
     }
 
+    public function test_f042_repair_refuses_factor_divisors_that_differ_from_admin_approved_ratio(): void
+    {
+        $stock = $this->createDataQualityStock();
+        $this->seedGapPrices($stock, 200.0, 100.0);
+        $issue = $this->createPendingExchangeIssue($stock, ['ex_date' => '2026-01-02', 'suggested_ratio' => 2.0]);
+        $accepted = app(DataQualityResolutionService::class)->accept($issue, 2.0, 'approved', $this->createAdminUser()->id);
+        $factor = PriceAdjustmentFactor::query()->where('issue_id', $accepted->id)->firstOrFail();
+        $factor->update(['price_divisor' => 3, 'volume_multiplier' => 3]);
+        $before = StockPrice::query()->where('stock_id', $stock->id)->orderBy('id')->get()->toArray();
+
+        $result = app(CorporateActionPriceRepairService::class)->repairPendingFactors($stock->id, $factor->id, false);
+
+        $this->assertSame('invalid_factor', $result['details'][0]['status']);
+        $this->assertContains('factor_approval_binding_mismatch', $result['details'][0]['errors']);
+        $this->assertSame($before, StockPrice::query()->where('stock_id', $stock->id)->orderBy('id')->get()->toArray());
+    }
+
+    public function test_f042_repair_requires_linked_data_quality_issue_to_remain_approved(): void
+    {
+        $stock = $this->createDataQualityStock();
+        $this->seedGapPrices($stock, 200.0, 100.0);
+        $issue = $this->createPendingExchangeIssue($stock, ['ex_date' => '2026-01-02', 'suggested_ratio' => 2.0]);
+        $accepted = app(DataQualityResolutionService::class)->accept($issue, 2.0, 'approved', $this->createAdminUser()->id);
+        $factor = PriceAdjustmentFactor::query()->where('issue_id', $accepted->id)->firstOrFail();
+        $accepted->update(['issue_status' => DataQualityIssue::STATUS_REJECTED]);
+        $before = StockPrice::query()->where('stock_id', $stock->id)->orderBy('id')->get()->toArray();
+
+        $result = app(CorporateActionPriceRepairService::class)->repairPendingFactors($stock->id, $factor->id, false);
+
+        $this->assertSame('invalid_factor', $result['details'][0]['status']);
+        $this->assertContains('factor_approval_binding_mismatch', $result['details'][0]['errors']);
+        $this->assertSame($before, StockPrice::query()->where('stock_id', $stock->id)->orderBy('id')->get()->toArray());
+    }
+
     public function test_completed_repair_can_be_rolled_back_exactly_and_idempotently(): void
     {
         $stock = $this->createDataQualityStock();

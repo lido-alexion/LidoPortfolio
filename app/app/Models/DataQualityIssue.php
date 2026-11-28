@@ -49,6 +49,7 @@ class DataQualityIssue extends Model
         'applied_ratio',
         'latest_suggested_ratio',
         'latest_resolution_id',
+        'manual_preview_token',
     ];
 
     protected function casts(): array

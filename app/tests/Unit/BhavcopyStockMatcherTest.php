@@ -117,6 +117,26 @@ class BhavcopyStockMatcherTest extends TestCase
         }
     }
 
+    public function test_verified_vgl_current_isin_row_matches_stock_2030_without_historical_interval(): void
+    {
+        $fixture = json_decode((string) file_get_contents(dirname(__DIR__).'/Fixtures/vgl-nse-bhavcopy-2026-11-27.json'), true, flags: JSON_THROW_ON_ERROR);
+        $source = $fixture['row'];
+        $stock = $this->stock(2030, ['symbol' => 'VGL', 'name' => 'VARVEE GLOBAL LIMITED', 'isin' => 'INE273D01035']);
+        $row = $this->row([
+            'symbol' => $source['symbol'], 'series' => $source['series'], 'isin' => $source['isin'],
+            'price_date' => $source['trade_date'], 'open' => (float) $source['open'],
+            'high' => (float) $source['high'], 'low' => (float) $source['low'],
+            'close' => (float) $source['close'], 'volume' => (int) $source['volume'],
+        ]);
+        $result = (new BhavcopyStockMatcher(new ProviderResolverService, $this->emptyEvidence()))
+            ->match(collect([$stock]), [$row], 'NSE');
+
+        $this->assertSame([2030], array_keys($result['rows_by_stock_id']));
+        $this->assertSame([], $result['conflicts']);
+        $this->assertSame([], $result['historical_stock_ids']);
+        $this->assertSame('INE273D01035', $result['rows_by_stock_id'][2030]['isin']);
+    }
+
     public function test_historical_evidence_never_overrides_ambiguous_or_reused_current_identity(): void
     {
         $row = $this->row(['symbol' => 'AZADIND', 'isin' => 'INE566M01017', 'price_date' => '2026-10-22']);

@@ -40,6 +40,10 @@ return [
         // The adapter validates and normalizes this response before queuing
         // any reviewable data-quality issue; it never repairs accounting data.
         'corporate_actions_feed_url' => env('CORPORATE_ACTIONS_FEED_URL', 'https://www.nseindia.com/api/corporates-corporateActions?index=equities'),
+        // Policy mode is intentionally always for this feature; off remains an operator kill switch.
+        'corporate_actions_ai_mode' => env('CORPORATE_ACTIONS_AI_MODE', 'always'),
+        'corporate_actions_ai_enabled' => (bool) env('CORPORATE_ACTIONS_AI_ENABLED', true),
+        'corporate_actions_ai_allowed_hosts' => ['www.nseindia.com', 'nsearchives.nseindia.com', 'www.bseindia.com'],
         'corporate_actions_feed_supports_window' => (bool) env('CORPORATE_ACTIONS_FEED_SUPPORTS_WINDOW', false),
         'corporate_actions_overlap_days' => (int) env('CORPORATE_ACTIONS_OVERLAP_DAYS', 7),
         'auto_accept_days' => (int) env('DATA_QUALITY_AUTO_ACCEPT_DAYS', 15),
